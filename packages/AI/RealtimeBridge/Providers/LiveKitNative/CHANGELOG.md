@@ -1,5 +1,12 @@
 # @memberjunction/ai-bridge-livekit-native
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai-bridge-livekit@5.45.1
+- @memberjunction/core@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes

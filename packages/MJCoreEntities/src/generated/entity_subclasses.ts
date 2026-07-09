@@ -26869,6 +26869,167 @@ export const MJSchemaInfoSchema = z.object({
 export type MJSchemaInfoEntityType = z.infer<typeof MJSchemaInfoSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Scoped Prompt Configs
+ */
+export const MJScopedPromptConfigSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    PromptID: z.string().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: The AIPrompt whose run settings this row overrides.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional human-readable note about this override (authoring aid; not sent to the model).`),
+    PrimaryScopeEntityID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeEntityID
+        * * Display Name: Primary Scope Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    PrimaryScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeRecordID
+        * * Display Name: Primary Scope Record ID
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The record ID within the primary scope entity that this override is scoped to. NULL = global (applies regardless of scope). When set with empty SecondaryScopes, the override is primary-scope-only (e.g. org-level).`),
+    SecondaryScopes: z.string().nullable().describe(`
+        * * Field Name: SecondaryScopes
+        * * Display Name: Secondary Scopes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object of additional scope dimensions (e.g. {"ChannelID":"..."}). Empty/NULL with PrimaryScopeRecordID set = primary-scope-only; populated = fully-scoped. Matched (cascading or strict) against the run's SecondaryScopes.`),
+    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Provisional')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Archived
+    *   * Provisional
+        * * Description: Lifecycle: Active (live), Provisional (staged; eligible but flaggable as not-yet-final), Archived (excluded from resolution). Only Active and Provisional are eligible for resolution.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Precedence / tie-break for resolution. Higher wins when two rows tie on scope specificity. Default 0.`),
+    ModelID: z.string().nullable().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: Optional model override for this scope. NULL = use the prompt's own model selection. Applied as AIPromptParams.override.modelId.`),
+    VendorID: z.string().nullable().describe(`
+        * * Field Name: VendorID
+        * * Display Name: Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+        * * Description: Optional vendor override paired with ModelID (which inference provider serves the model). NULL = let MJ pick. Applied as AIPromptParams.override.vendorId.`),
+    ConfigurationID: z.string().nullable().describe(`
+        * * Field Name: ConfigurationID
+        * * Display Name: Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: Optional AI Configuration (environment) override for this scope. NULL = inherit. Applied as AIPromptParams.configurationId.`),
+    Temperature: z.number().nullable().describe(`
+        * * Field Name: Temperature
+        * * Display Name: Temperature
+        * * SQL Data Type: decimal(3, 2)
+        * * Description: Sampling temperature override. NULL = inherit the prompt default. Applied via AIPromptParams.additionalParameters.`),
+    TopP: z.number().nullable().describe(`
+        * * Field Name: TopP
+        * * Display Name: Top P
+        * * SQL Data Type: decimal(3, 2)
+        * * Description: Nucleus-sampling (top-p) override. NULL = inherit. Applied via additionalParameters.`),
+    TopK: z.number().nullable().describe(`
+        * * Field Name: TopK
+        * * Display Name: Top K
+        * * SQL Data Type: int
+        * * Description: Top-k sampling override. NULL = inherit. Applied via additionalParameters.`),
+    MinP: z.number().nullable().describe(`
+        * * Field Name: MinP
+        * * Display Name: Min P
+        * * SQL Data Type: decimal(3, 2)
+        * * Description: Min-p sampling override. NULL = inherit. Applied via additionalParameters.`),
+    FrequencyPenalty: z.number().nullable().describe(`
+        * * Field Name: FrequencyPenalty
+        * * Display Name: Frequency Penalty
+        * * SQL Data Type: decimal(3, 2)
+        * * Description: Frequency-penalty override. NULL = inherit. Applied via additionalParameters.`),
+    PresencePenalty: z.number().nullable().describe(`
+        * * Field Name: PresencePenalty
+        * * Display Name: Presence Penalty
+        * * SQL Data Type: decimal(3, 2)
+        * * Description: Presence-penalty override. NULL = inherit. Applied via additionalParameters.`),
+    Seed: z.number().nullable().describe(`
+        * * Field Name: Seed
+        * * Display Name: Seed
+        * * SQL Data Type: int
+        * * Description: Deterministic sampling seed override. NULL = inherit. Applied via additionalParameters.`),
+    StopSequences: z.string().nullable().describe(`
+        * * Field Name: StopSequences
+        * * Display Name: Stop Sequences
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Comma-delimited stop sequences override. NULL = inherit. Applied via additionalParameters.`),
+    ResponseFormat: z.union([z.literal('Any'), z.literal('JSON'), z.literal('Markdown'), z.literal('ModelSpecific'), z.literal('Text')]).nullable().describe(`
+        * * Field Name: ResponseFormat
+        * * Display Name: Response Format
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Any
+    *   * JSON
+    *   * Markdown
+    *   * ModelSpecific
+    *   * Text
+        * * Description: Response-format override: Any, JSON, Markdown, ModelSpecific, or Text. NULL = inherit. Applied via additionalParameters.`),
+    EffortLevel: z.number().nullable().describe(`
+        * * Field Name: EffortLevel
+        * * Display Name: Effort Level
+        * * SQL Data Type: int
+        * * Description: Reasoning/effort level override (1-100). NULL = inherit the prompt default. Applied as AIPromptParams.effortLevel.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Prompt: z.string().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt Name
+        * * SQL Data Type: nvarchar(255)`),
+    PrimaryScopeEntity: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeEntity
+        * * Display Name: Primary Scope Entity
+        * * SQL Data Type: nvarchar(255)`),
+    Model: z.string().nullable().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(50)`),
+    Vendor: z.string().nullable().describe(`
+        * * Field Name: Vendor
+        * * Display Name: Vendor
+        * * SQL Data Type: nvarchar(50)`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJScopedPromptConfigEntityType = z.infer<typeof MJScopedPromptConfigSchema>;
+
+/**
  * zod schema definition for the entity MJ: Scoped Prompt Parts
  */
 export const MJScopedPromptPartSchema = z.object({
@@ -102651,6 +102812,394 @@ export class MJSchemaInfoEntity extends BaseEntity<MJSchemaInfoEntityType> {
     }
     set CanonicalSchemaName(value: string | null) {
         this.Set('CanonicalSchemaName', value);
+    }
+}
+
+
+/**
+ * MJ: Scoped Prompt Configs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ScopedPromptConfig
+ * * Base View: vwScopedPromptConfigs
+ * * @description A scope-aware override of an AIPrompt's RUN SETTINGS (model/vendor, AI configuration, sampling knobs, response format, effort level). The run-settings sibling of ScopedPromptPart. Narrowed by a polymorphic scope (PrimaryScopeEntity/Record + SecondaryScopes). Resolved by a cached engine via a specificity cascade per PromptID — the most-specific in-scope row wins as a whole row (tie-broken by Priority); each non-null column overrides the prompt default, a NULL column inherits it. Runtime-explicit overrides on the agent run still win. Lets any MJ app tune model/generation behavior per scope by editing rows, not code.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Scoped Prompt Configs')
+export class MJScopedPromptConfigEntity extends BaseEntity<MJScopedPromptConfigEntityType> {
+    /**
+    * Loads the MJ: Scoped Prompt Configs record from the database
+    * @param ID: string - primary key value to load the MJ: Scoped Prompt Configs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJScopedPromptConfigEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: The AIPrompt whose run settings this row overrides.
+    */
+    get PromptID(): string {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional human-readable note about this override (authoring aid; not sent to the model).
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeEntityID
+    * * Display Name: Primary Scope Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get PrimaryScopeEntityID(): string | null {
+        return this.Get('PrimaryScopeEntityID');
+    }
+    set PrimaryScopeEntityID(value: string | null) {
+        this.Set('PrimaryScopeEntityID', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeRecordID
+    * * Display Name: Primary Scope Record ID
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The record ID within the primary scope entity that this override is scoped to. NULL = global (applies regardless of scope). When set with empty SecondaryScopes, the override is primary-scope-only (e.g. org-level).
+    */
+    get PrimaryScopeRecordID(): string | null {
+        return this.Get('PrimaryScopeRecordID');
+    }
+    set PrimaryScopeRecordID(value: string | null) {
+        this.Set('PrimaryScopeRecordID', value);
+    }
+
+    /**
+    * * Field Name: SecondaryScopes
+    * * Display Name: Secondary Scopes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object of additional scope dimensions (e.g. {"ChannelID":"..."}). Empty/NULL with PrimaryScopeRecordID set = primary-scope-only; populated = fully-scoped. Matched (cascading or strict) against the run's SecondaryScopes.
+    */
+    get SecondaryScopes(): string | null {
+        return this.Get('SecondaryScopes');
+    }
+    set SecondaryScopes(value: string | null) {
+        this.Set('SecondaryScopes', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Archived
+    *   * Provisional
+    * * Description: Lifecycle: Active (live), Provisional (staged; eligible but flaggable as not-yet-final), Archived (excluded from resolution). Only Active and Provisional are eligible for resolution.
+    */
+    get Status(): 'Active' | 'Archived' | 'Provisional' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Archived' | 'Provisional') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Precedence / tie-break for resolution. Higher wins when two rows tie on scope specificity. Default 0.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: Optional model override for this scope. NULL = use the prompt's own model selection. Applied as AIPromptParams.override.modelId.
+    */
+    get ModelID(): string | null {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string | null) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: VendorID
+    * * Display Name: Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    * * Description: Optional vendor override paired with ModelID (which inference provider serves the model). NULL = let MJ pick. Applied as AIPromptParams.override.vendorId.
+    */
+    get VendorID(): string | null {
+        return this.Get('VendorID');
+    }
+    set VendorID(value: string | null) {
+        this.Set('VendorID', value);
+    }
+
+    /**
+    * * Field Name: ConfigurationID
+    * * Display Name: Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional AI Configuration (environment) override for this scope. NULL = inherit. Applied as AIPromptParams.configurationId.
+    */
+    get ConfigurationID(): string | null {
+        return this.Get('ConfigurationID');
+    }
+    set ConfigurationID(value: string | null) {
+        this.Set('ConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: Temperature
+    * * Display Name: Temperature
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Sampling temperature override. NULL = inherit the prompt default. Applied via AIPromptParams.additionalParameters.
+    */
+    get Temperature(): number | null {
+        return this.Get('Temperature');
+    }
+    set Temperature(value: number | null) {
+        this.Set('Temperature', value);
+    }
+
+    /**
+    * * Field Name: TopP
+    * * Display Name: Top P
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Nucleus-sampling (top-p) override. NULL = inherit. Applied via additionalParameters.
+    */
+    get TopP(): number | null {
+        return this.Get('TopP');
+    }
+    set TopP(value: number | null) {
+        this.Set('TopP', value);
+    }
+
+    /**
+    * * Field Name: TopK
+    * * Display Name: Top K
+    * * SQL Data Type: int
+    * * Description: Top-k sampling override. NULL = inherit. Applied via additionalParameters.
+    */
+    get TopK(): number | null {
+        return this.Get('TopK');
+    }
+    set TopK(value: number | null) {
+        this.Set('TopK', value);
+    }
+
+    /**
+    * * Field Name: MinP
+    * * Display Name: Min P
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Min-p sampling override. NULL = inherit. Applied via additionalParameters.
+    */
+    get MinP(): number | null {
+        return this.Get('MinP');
+    }
+    set MinP(value: number | null) {
+        this.Set('MinP', value);
+    }
+
+    /**
+    * * Field Name: FrequencyPenalty
+    * * Display Name: Frequency Penalty
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Frequency-penalty override. NULL = inherit. Applied via additionalParameters.
+    */
+    get FrequencyPenalty(): number | null {
+        return this.Get('FrequencyPenalty');
+    }
+    set FrequencyPenalty(value: number | null) {
+        this.Set('FrequencyPenalty', value);
+    }
+
+    /**
+    * * Field Name: PresencePenalty
+    * * Display Name: Presence Penalty
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Presence-penalty override. NULL = inherit. Applied via additionalParameters.
+    */
+    get PresencePenalty(): number | null {
+        return this.Get('PresencePenalty');
+    }
+    set PresencePenalty(value: number | null) {
+        this.Set('PresencePenalty', value);
+    }
+
+    /**
+    * * Field Name: Seed
+    * * Display Name: Seed
+    * * SQL Data Type: int
+    * * Description: Deterministic sampling seed override. NULL = inherit. Applied via additionalParameters.
+    */
+    get Seed(): number | null {
+        return this.Get('Seed');
+    }
+    set Seed(value: number | null) {
+        this.Set('Seed', value);
+    }
+
+    /**
+    * * Field Name: StopSequences
+    * * Display Name: Stop Sequences
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Comma-delimited stop sequences override. NULL = inherit. Applied via additionalParameters.
+    */
+    get StopSequences(): string | null {
+        return this.Get('StopSequences');
+    }
+    set StopSequences(value: string | null) {
+        this.Set('StopSequences', value);
+    }
+
+    /**
+    * * Field Name: ResponseFormat
+    * * Display Name: Response Format
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Any
+    *   * JSON
+    *   * Markdown
+    *   * ModelSpecific
+    *   * Text
+    * * Description: Response-format override: Any, JSON, Markdown, ModelSpecific, or Text. NULL = inherit. Applied via additionalParameters.
+    */
+    get ResponseFormat(): 'Any' | 'JSON' | 'Markdown' | 'ModelSpecific' | 'Text' | null {
+        return this.Get('ResponseFormat');
+    }
+    set ResponseFormat(value: 'Any' | 'JSON' | 'Markdown' | 'ModelSpecific' | 'Text' | null) {
+        this.Set('ResponseFormat', value);
+    }
+
+    /**
+    * * Field Name: EffortLevel
+    * * Display Name: Effort Level
+    * * SQL Data Type: int
+    * * Description: Reasoning/effort level override (1-100). NULL = inherit the prompt default. Applied as AIPromptParams.effortLevel.
+    */
+    get EffortLevel(): number | null {
+        return this.Get('EffortLevel');
+    }
+    set EffortLevel(value: number | null) {
+        this.Set('EffortLevel', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string {
+        return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: PrimaryScopeEntity
+    * * Display Name: Primary Scope Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PrimaryScopeEntity(): string | null {
+        return this.Get('PrimaryScopeEntity');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string | null {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: Vendor
+    * * Display Name: Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Vendor(): string | null {
+        return this.Get('Vendor');
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
     }
 }
 

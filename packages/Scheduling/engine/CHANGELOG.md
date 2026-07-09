@@ -1,5 +1,26 @@
 # @memberjunction/scheduling-engine
 
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ai-agents@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/record-set-processor@5.45.1
+  - @memberjunction/templates@5.45.1
+  - @memberjunction/sqlserver-dataprovider@5.45.1
+  - @memberjunction/notifications@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/actions@5.45.1
+  - @memberjunction/integration-engine@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/scheduling-engine-base@5.45.1
+  - @memberjunction/scheduling-base-types@5.45.1
+
 ## 5.45.0
 
 ### Minor Changes
