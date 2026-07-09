@@ -165,6 +165,51 @@ jobs:
             fi
           done
 
+      - name: Check migration ID determinism (hard-coded UUIDs, not NEWID())
+        if: steps.check_migrations.outputs.has_migrations == 'true'
+        run: |
+          # Deterministic replacement for the former Opus-powered "Claude Code Review"
+          # migration check (removed .github/workflows/claude.yml). Migrations must be
+          # immutable + deterministic: a raw INSERT / spCreate* that mints its ID with
+          # NEWID() produces a different key on every apply. We flag NEWID() on the lines
+          # this PR ADDS to changed migration files, allowing the known-legit patterns:
+          #   - the CodeGen spCreate fallback `ISNULL(@ID, NEWID())`
+          #   - column defaults `DEFAULT (NEWID())` / `DEFAULT NEWSEQUENTIALID()`
+          #   - quoted metadata values, e.g. EntityField DefaultValue N'(newid())'
+          #   - comment lines
+          # NEWSEQUENTIALID() is never flagged — it's the standard table default.
+          # Advisory (::warning), matching the non-blocking COMMENT review it replaces;
+          # promote to a hard failure (exit 1) once the team agrees the signal is clean.
+          BASE='${{ github.event.pull_request.base.sha }}'
+          HEAD='${{ github.sha }}'
+          FOUND=0
+          for file in $(git diff --name-only "$BASE" "$HEAD" | grep -E '^migrations/.*\.sql$' || true); do
+            # Only the lines this PR ADDS (leading '+', excluding the '+++' file header).
+            added=$(git diff "$BASE" "$HEAD" -- "$file" | grep -E '^\+' | grep -vE '^\+\+\+' | sed -E 's/^\+//')
+            [ -n "$added" ] || continue
+            hits=$(printf '%s\n' "$added" \
+              | grep -iP 'NEWID\s*\(\s*\)' \
+              | grep -viP '^\s*--' \
+              | grep -viP 'ISNULL\s*\(\s*@\w+\s*,\s*NEWID' \
+              | grep -viP 'DEFAULT\s*\(?\s*NEWID' \
+              | grep -viP "'\s*\(?\s*newid\s*\(\s*\)" \
+              || true)
+            if [ -n "$hits" ]; then
+              FOUND=1
+              echo "::warning file=$file::Added line(s) use NEWID() to generate an ID — migrations must use hard-coded UUIDs so replays are immutable and deterministic. Offending lines:"
+              printf '%s\n' "$hits" | sed 's/^/    /'
+              {
+                echo "### ⚠️ Non-deterministic ID in \`$file\`"
+                echo '```sql'
+                printf '%s\n' "$hits"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          if [ "$FOUND" -eq 0 ]; then
+            echo "No non-deterministic NEWID() ID generation found in added migration lines."
+          fi
+
       - name: Check for minor version change
         if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
