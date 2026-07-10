@@ -19196,6 +19196,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "54191892-C80C-4DCC-AE98-BACD70D4DF27"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.448Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
           }
         },
         {
@@ -19212,6 +19219,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6BAD9951-BE26-4933-9F91-E6B18033F178"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.466Z",
+            "checksum": "74ed58958ad39dc21b879bf87f08f64bdd13b3756f3da7051f106f38b8aa7a3d"
           }
         }
       ],
@@ -19231,9 +19245,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT 5.6 (gpt-5.6 alias -> sol) pricing on OpenAI as of July 2026. $5.00/$30.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+          },
+          "primaryKey": {
+            "ID": "FA7A4744-FAD8-43FC-A5F6-9D029101C0B5"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.479Z",
+            "checksum": "e08205ce10ae3da82c4184bc749be9c406066dc320e485b7d65a03acc0487943"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "E22BB8F0-46CB-4964-AEB0-A2C74148656C"
+    },
+    "sync": {
+      "lastModified": "2026-07-10T23:26:27.429Z",
+      "checksum": "07a8f481ac3f298d7c56d7af92e5bfeb5d80e0df2be6dc2c5f42a0529d795255"
     }
   },
   {
@@ -19259,6 +19287,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C1EA27BC-3BEA-4D40-94DE-5228AAAD072A"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.281Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
           }
         },
         {
@@ -19275,6 +19310,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "CF744E6E-D1A7-4EF2-BC00-CEEDCA3B5660"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.295Z",
+            "checksum": "190abef76346267b7c96754461e788247f2bc305b670d894628b8db5197803fe"
           }
         }
       ],
@@ -19294,9 +19336,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT 5.6-terra pricing on OpenAI as of July 2026. $2.50/$15.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+          },
+          "primaryKey": {
+            "ID": "60C58C8B-B5A4-4335-BCFD-2D2A65AD7DEA"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.328Z",
+            "checksum": "44b1fde790395dc54655b036a3b39cbba0fe707f517bc2b1079b691cb2925460"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "8C7874CD-ACC1-41F5-BC21-F4BD608DAE4C"
+    },
+    "sync": {
+      "lastModified": "2026-07-10T23:26:27.040Z",
+      "checksum": "f19897a0442c805f4ee5616e5a25af303aee42fc434fb33d95a2b885ea503502"
     }
   },
   {
@@ -19322,6 +19378,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A2166020-12A2-41F0-BCCF-5775F2675285"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.342Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
           }
         },
         {
@@ -19338,6 +19401,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7E8A9F69-805F-42C5-AB6E-5CD2AB71DBCC"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.355Z",
+            "checksum": "881afe572f7234b8da3bd42589d25bfc37fee8c76bc517f776ac4947a76559de"
           }
         }
       ],
@@ -19357,9 +19427,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT 5.6-luna pricing on OpenAI as of July 2026. $1.00/$6.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+          },
+          "primaryKey": {
+            "ID": "5121599E-71C3-46AB-9AA5-43006565F2B7"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.366Z",
+            "checksum": "192525b926019a8b136c342dcf1507fddcf574987b6480ea8fba36507e20ef4b"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "3D2A79B9-745E-4005-8440-5FB62CA61448"
+    },
+    "sync": {
+      "lastModified": "2026-07-10T23:26:27.052Z",
+      "checksum": "580740414c9a234fc14641c1abfb079e5576a5c721bbb1434ad50140312ccf16"
     }
   }
 ]
