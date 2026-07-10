@@ -10,6 +10,14 @@ concurrency:
   group: "changes"
   cancel-in-progress: true
 
+# `pull-requests: write` lets the migration-ID-determinism step post a sticky PR
+# comment when it finds a violation. NOTE: for PRs from forks, GitHub hands the job a
+# read-only GITHUB_TOKEN regardless of this block, so the comment step is best-effort
+# (continue-on-error) — those PRs still get the ::warning + step summary.
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   changes_and_migrations:
     name: Check migrations
@@ -18,6 +26,12 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      - name: Self-test migration ID determinism detector
+        # Runs on EVERY PR (even those with no migrations, like the one that introduced
+        # this check) so a regression in the load-bearing NEWID() regex surfaces here
+        # rather than the next time someone happens to add a migration.
+        run: .github/scripts/check-migration-id-determinism.sh --self-test
 
       - name: Fetch PR base commit
         # The default checkout is a depth-1 shallow clone of the merge commit, so
@@ -166,60 +180,48 @@ jobs:
           done
 
       - name: Check migration ID determinism (hard-coded UUIDs, not NEWID())
+        id: id_determinism
         if: steps.check_migrations.outputs.has_migrations == 'true'
+        # Deterministic replacement for the former Opus-powered "Claude Code Review"
+        # migration check (removed .github/workflows/claude.yml). The detector — the
+        # load-bearing NEWID() regex, its allow-list, the Flyway-only glob, and the full
+        # rationale — lives in the committed, self-testable script below (run on every PR
+        # via the "Self-test" step above), NOT inline here, so future edits can be
+        # re-validated instead of trusted. It scans only the lines this PR ADDS to changed
+        # migration files and is ADVISORY (never fails the job); hits are surfaced as a
+        # sticky PR comment + ::warning + step summary.
+        #
+        # OUT OF SCOPE (documented in the script): two violation classes carry no literal
+        # NEWID() text and are deliberately not detected — an INSERT that omits the ID
+        # column (table default NEWSEQUENTIALID() mints a fresh ID per install) and an
+        # `EXEC spCreateX` without `@ID` (the proc's ISNULL(@ID, NEWID()) fallback fires).
+        # Detecting those needs multi-line column-list / proc-arg parsing, out of scope
+        # for this line-oriented grep.
+        env:
+          COMMENT_BODY_FILE: ${{ runner.temp }}/id-determinism-comment.md
         run: |
-          # Deterministic replacement for the former Opus-powered "Claude Code Review"
-          # migration check (removed .github/workflows/claude.yml). Migrations must be
-          # immutable + deterministic: a raw INSERT / spCreate* that mints its ID with
-          # NEWID() produces a different key on every apply. We flag NEWID() on the lines
-          # this PR ADDS to changed migration files, allowing the known-legit patterns:
-          #   - the CodeGen spCreate fallback `ISNULL(@ID, NEWID())`
-          #   - column defaults `DEFAULT (NEWID())` / `DEFAULT NEWSEQUENTIALID()`
-          #   - quoted metadata values, e.g. EntityField DefaultValue N'(newid())'
-          #   - comments: `--` to end of line, plus prose inside `/* */` blocks
-          #     (lines starting with `*`, `/*`, or a `-` bullet)
-          # NEWSEQUENTIALID() is never flagged — it's the standard table default.
-          #
-          # Detection is deliberately LINE-BASED: `/*` legitimately appears inside string
-          # literals in generated SQL (e.g. REPLACE(ContentType, '/*', '/%')), so a
-          # multi-line regex that strips `/* */` blocks corrupts real code and hides
-          # genuine violations. Validated across all 620 committed migrations: 0 false
-          # positives, 0 false negatives.
-          #
-          # Advisory (::warning), matching the non-blocking COMMENT review it replaces;
-          # promote to a hard failure (exit 1) once the team agrees the signal is clean.
-          BASE='${{ github.event.pull_request.base.sha }}'
-          HEAD='${{ github.sha }}'
-          FOUND=0
-          for file in $(git diff --name-only "$BASE" "$HEAD" | grep -E '^migrations/.*\.sql$' || true); do
-            # Only the lines this PR ADDS (leading '+', excluding the '+++' file header).
-            added=$(git diff "$BASE" "$HEAD" -- "$file" | grep -E '^\+' | grep -vE '^\+\+\+' | sed -E 's/^\+//')
-            [ -n "$added" ] || continue
-            hits=$(printf '%s\n' "$added" \
-              | sed 's/--.*//' \
-              | grep -iP 'NEWID\s*\(\s*\)' \
-              | grep -viP '^\s*\*' \
-              | grep -viP '^\s*/\*' \
-              | grep -viP '^\s*-\s' \
-              | grep -viP 'ISNULL\s*\(\s*@\w+\s*,\s*NEWID' \
-              | grep -viP 'DEFAULT\s*\(?\s*NEWID' \
-              | grep -viP "'\s*\(?\s*newid\s*\(\s*\)" \
-              || true)
-            if [ -n "$hits" ]; then
-              FOUND=1
-              echo "::warning file=$file::Added line(s) use NEWID() to generate an ID — migrations must use hard-coded UUIDs so replays are immutable and deterministic. Offending lines:"
-              printf '%s\n' "$hits" | sed 's/^/    /'
-              {
-                echo "### ⚠️ Non-deterministic ID in \`$file\`"
-                echo '```sql'
-                printf '%s\n' "$hits"
-                echo '```'
-              } >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-          if [ "$FOUND" -eq 0 ]; then
-            echo "No non-deterministic NEWID() ID generation found in added migration lines."
-          fi
+          .github/scripts/check-migration-id-determinism.sh \
+            '${{ github.event.pull_request.base.sha }}' \
+            '${{ github.sha }}'
+
+      - name: Comment on non-deterministic migration IDs
+        # Best-effort: fork PRs get a read-only token and this fails — the ::warning +
+        # step summary from the step above still fire, so the signal isn't lost.
+        if: steps.check_migrations.outputs.has_migrations == 'true' && steps.id_determinism.outputs.found == 'true'
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: migration-id-determinism
+          path: ${{ runner.temp }}/id-determinism-comment.md
+
+      - name: Clear stale non-deterministic ID comment
+        # When a prior push had a violation and this one doesn't, remove the sticky comment.
+        if: steps.check_migrations.outputs.has_migrations == 'true' && steps.id_determinism.outputs.found == 'false'
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: migration-id-determinism
+          delete: true
 
       - name: Check for minor version change
         if: steps.check_migrations.outputs.has_migrations == 'true'
