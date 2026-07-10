@@ -55,8 +55,14 @@
     <div class="header-actions">
       <!-- Universal Search — icon opens the palette (omnibar on) or the search overlay (omnibar off) -->
       @if (ShowSearchBar) {
-        <button class="icon-btn desktop-only search-btn" [title]="'Search everything (' + OmnibarShortcutLabel + ')'" (click)="OnHeaderSearchClick()">
+        <!-- No desktop-only on the button: search stays in the header on mobile too.
+             The kbd chip reveals on hover (desktop) — the shortcut hint lost its
+             permanent home when the inline search bar was removed. -->
+        <button class="icon-btn search-btn" title="Search everything"
+          [attr.aria-label]="'Search everything (' + OmnibarShortcutLabel + ')'"
+          (click)="OnHeaderSearchClick()">
           <i class="fa-solid fa-magnifying-glass"></i>
+          <kbd class="search-btn-kbd desktop-only" aria-hidden="true">{{ OmnibarShortcutLabel }}</kbd>
         </button>
       }
       <!-- Global Activity indicator -->
