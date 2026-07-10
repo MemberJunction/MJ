@@ -17432,68 +17432,79 @@ WHERE vf."IsVirtual" = true
 /* SQL text to insert entity field value with ID 52bbf2ba-9efb-4b0b-a5d7-cc60c11026d3 */
 INSERT INTO ${flyway:defaultSchema}."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('52bbf2ba-9efb-4b0b-a5d7-cc60c11026d3', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 1, 'AngularExcludesUpdated', 'AngularExcludesUpdated', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'));
+                                    SELECT
+                                       '52bbf2ba-9efb-4b0b-a5d7-cc60c11026d3', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 1, 'AngularExcludesUpdated', 'AngularExcludesUpdated', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC')
+                                    WHERE NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}."EntityFieldValue" WHERE "EntityFieldID" = 'c2a8b40a-272c-40e1-875d-71b59df51ffe' AND "Value" = 'AngularExcludesUpdated');
 
 /* SQL text to insert entity field value with ID bf10459e-aed5-4a76-9aac-ccc86b0ca942 */
 INSERT INTO ${flyway:defaultSchema}."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('bf10459e-aed5-4a76-9aac-ccc86b0ca942', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 2, 'ConfigUpdated', 'ConfigUpdated', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'));
+                                    SELECT
+                                       'bf10459e-aed5-4a76-9aac-ccc86b0ca942', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 2, 'ConfigUpdated', 'ConfigUpdated', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC')
+                                    WHERE NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}."EntityFieldValue" WHERE "EntityFieldID" = 'c2a8b40a-272c-40e1-875d-71b59df51ffe' AND "Value" = 'ConfigUpdated');
 
 /* SQL text to insert entity field value with ID 69909667-3212-4f70-9b39-c23ad475d404 */
 INSERT INTO ${flyway:defaultSchema}."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('69909667-3212-4f70-9b39-c23ad475d404', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 3, 'DbCleanupDone', 'DbCleanupDone', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'));
+                                    SELECT
+                                       '69909667-3212-4f70-9b39-c23ad475d404', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 3, 'DbCleanupDone', 'DbCleanupDone', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC')
+                                    WHERE NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}."EntityFieldValue" WHERE "EntityFieldID" = 'c2a8b40a-272c-40e1-875d-71b59df51ffe' AND "Value" = 'DbCleanupDone');
 
 /* SQL text to insert entity field value with ID e4616132-ddec-4313-8190-721a2e87eb9c */
 INSERT INTO ${flyway:defaultSchema}."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('e4616132-ddec-4313-8190-721a2e87eb9c', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 4, 'DependenciesReplaced', 'DependenciesReplaced', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'));
+                                    SELECT
+                                       'e4616132-ddec-4313-8190-721a2e87eb9c', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 4, 'DependenciesReplaced', 'DependenciesReplaced', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC')
+                                    WHERE NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}."EntityFieldValue" WHERE "EntityFieldID" = 'c2a8b40a-272c-40e1-875d-71b59df51ffe' AND "Value" = 'DependenciesReplaced');
 
 /* SQL text to insert entity field value with ID 13a18d86-f337-4683-bf85-e5bdec5393e9 */
 INSERT INTO ${flyway:defaultSchema}."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('13a18d86-f337-4683-bf85-e5bdec5393e9', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 5, 'FilesRemoved', 'FilesRemoved', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'));
+                                    SELECT
+                                       '13a18d86-f337-4683-bf85-e5bdec5393e9', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 5, 'FilesRemoved', 'FilesRemoved', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC')
+                                    WHERE NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}."EntityFieldValue" WHERE "EntityFieldID" = 'c2a8b40a-272c-40e1-875d-71b59df51ffe' AND "Value" = 'FilesRemoved');
 
 /* SQL text to insert entity field value with ID 07bf921a-b33c-4d93-b72c-6935ced5b438 */
 INSERT INTO ${flyway:defaultSchema}."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('07bf921a-b33c-4d93-b72c-6935ced5b438', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 6, 'Finalized', 'Finalized', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'));
+                                    SELECT
+                                       '07bf921a-b33c-4d93-b72c-6935ced5b438', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 6, 'Finalized', 'Finalized', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC')
+                                    WHERE NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}."EntityFieldValue" WHERE "EntityFieldID" = 'c2a8b40a-272c-40e1-875d-71b59df51ffe' AND "Value" = 'Finalized');
 
 /* SQL text to insert entity field value with ID 3f7437d9-bece-47cd-9e91-432d8d99f419 */
 INSERT INTO ${flyway:defaultSchema}."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('3f7437d9-bece-47cd-9e91-432d8d99f419', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 7, 'HooksRun', 'HooksRun', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'));
+                                    SELECT
+                                       '3f7437d9-bece-47cd-9e91-432d8d99f419', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 7, 'HooksRun', 'HooksRun', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC')
+                                    WHERE NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}."EntityFieldValue" WHERE "EntityFieldID" = 'c2a8b40a-272c-40e1-875d-71b59df51ffe' AND "Value" = 'HooksRun');
 
 /* SQL text to insert entity field value with ID 9b9faf78-3a8e-4ec4-996a-8154f2931743 */
 INSERT INTO ${flyway:defaultSchema}."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('9b9faf78-3a8e-4ec4-996a-8154f2931743', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 8, 'MigrationsApplied', 'MigrationsApplied', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'));
+                                    SELECT
+                                       '9b9faf78-3a8e-4ec4-996a-8154f2931743', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 8, 'MigrationsApplied', 'MigrationsApplied', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC')
+                                    WHERE NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}."EntityFieldValue" WHERE "EntityFieldID" = 'c2a8b40a-272c-40e1-875d-71b59df51ffe' AND "Value" = 'MigrationsApplied');
 
 /* SQL text to insert entity field value with ID cd31c9fb-f8fd-4630-9441-8ce5d33f3ae2 */
 INSERT INTO ${flyway:defaultSchema}."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('cd31c9fb-f8fd-4630-9441-8ce5d33f3ae2', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 9, 'PackagesInstalled', 'PackagesInstalled', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'));
+                                    SELECT
+                                       'cd31c9fb-f8fd-4630-9441-8ce5d33f3ae2', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 9, 'PackagesInstalled', 'PackagesInstalled', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC')
+                                    WHERE NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}."EntityFieldValue" WHERE "EntityFieldID" = 'c2a8b40a-272c-40e1-875d-71b59df51ffe' AND "Value" = 'PackagesInstalled');
 
 /* SQL text to insert entity field value with ID a913582d-c8b8-46bc-bcee-ea81bce74ac5 */
 INSERT INTO ${flyway:defaultSchema}."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('a913582d-c8b8-46bc-bcee-ea81bce74ac5', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 10, 'RecordCreated', 'RecordCreated', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'));
+                                    SELECT
+                                       'a913582d-c8b8-46bc-bcee-ea81bce74ac5', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 10, 'RecordCreated', 'RecordCreated', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC')
+                                    WHERE NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}."EntityFieldValue" WHERE "EntityFieldID" = 'c2a8b40a-272c-40e1-875d-71b59df51ffe' AND "Value" = 'RecordCreated');
 
 /* SQL text to insert entity field value with ID 8ef6f480-7c75-4a8d-9005-7079c38b4690 */
 INSERT INTO ${flyway:defaultSchema}."EntityFieldValue"
                                        ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('8ef6f480-7c75-4a8d-9005-7079c38b4690', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 11, 'RecordUpdated', 'RecordUpdated', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'));
+                                    SELECT
+                                       '8ef6f480-7c75-4a8d-9005-7079c38b4690', 'c2a8b40a-272c-40e1-875d-71b59df51ffe', 11, 'RecordUpdated', 'RecordUpdated', (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC')
+                                    WHERE NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}."EntityFieldValue" WHERE "EntityFieldID" = 'c2a8b40a-272c-40e1-875d-71b59df51ffe' AND "Value" = 'RecordUpdated');
 
 /* SQL text to update ValueListType for entity field ID c2a8b40a-272c-40e1-875d-71b59df51ffe */
 UPDATE ${flyway:defaultSchema}."EntityField" SET "ValueListType"='List' WHERE "ID"='c2a8b40a-272c-40e1-875d-71b59df51ffe';
