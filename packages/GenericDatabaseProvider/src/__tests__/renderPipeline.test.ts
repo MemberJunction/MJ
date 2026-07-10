@@ -1077,6 +1077,81 @@ describe('RenderTrace', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
+// RenderTrace — verifying trace captures the SQL state at each pipeline stage
+// ════════════════════════════════════════════════════════════════════
+
+describe('RenderTrace — pipeline stage visibility', () => {
+
+    it('AfterComposition preserves Nunjucks tokens, AfterTemplates resolves them', () => {
+        stubMetadata();
+        const sql = `SELECT * FROM [dbo].[vwMembers] WHERE [Status] = {{ Status | sqlString }}`;
+        const result = RenderPipeline.Run(sql, {
+            Platform: 'sqlserver',
+            UsesTemplate: true,
+            Parameters: { Status: 'Active' },
+        });
+        // AfterComposition still has the Nunjucks token (composition runs before templates)
+        expect(result.Trace.AfterComposition).toContain('{{ Status | sqlString }}');
+        // AfterTemplates has the resolved value
+        expect(result.Trace.AfterTemplates).toContain("'Active'");
+        expect(result.Trace.AfterTemplates).not.toContain('{{ Status');
+    });
+
+    it('MaxRows wrapping is visible in FinalSQL but not in AfterTemplates', () => {
+        stubMetadata();
+        const sql = `SELECT * FROM [dbo].[vwMembers]`;
+        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
+        // AfterTemplates is the SQL BEFORE MaxRows wrapping
+        expect(result.Trace.AfterTemplates).not.toMatch(/_mj_capped/);
+        expect(result.Trace.AfterTemplates).not.toMatch(/\bTOP\b/i);
+        // FinalSQL has the cap applied
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
+    });
+
+    it('trace captures every stage for TRY_CAST query with MaxRows (the Skip failure case)', () => {
+        stubMetadata();
+        const sql = `SELECT t.ID, COUNT(DISTINCT mel.ID) AS Cnt
+FROM [document].[vwMemberEngagementLogs] mel
+INNER JOIN [__mj].[vwTaggedItems] ti ON mel.ID = TRY_CAST(ti.RecordID AS INT)
+INNER JOIN [__mj].[vwTags] t ON ti.TagID = t.ID
+WHERE mel.IsMemberInitiated = 1
+  AND mel.[Date] >= {{ StartDate | sqlDate }}
+GROUP BY t.ID
+ORDER BY Cnt DESC`;
+        const result = RenderPipeline.Run(sql, {
+            Platform: 'sqlserver',
+            MaxRows: 10,
+            UsesTemplate: true,
+            Parameters: { StartDate: '2024-01-01' },
+        });
+        // AfterComposition: Nunjucks tokens still present
+        expect(result.Trace.AfterComposition).toContain('{{ StartDate | sqlDate }}');
+        expect(result.Trace.AfterComposition).toContain('TRY_CAST');
+        // AfterTemplates: Nunjucks resolved, but no MaxRows wrapping yet
+        expect(result.Trace.AfterTemplates).toMatch(/2024-01-01/);
+        expect(result.Trace.AfterTemplates).not.toMatch(/_mj_capped/);
+        // FinalSQL: MaxRows applied (outer wrap with ORDER BY moved outside)
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
+        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        // The trace makes it possible to diagnose the transformation
+        expect(result.Trace.AfterTemplates).toMatch(/ORDER\s+BY\s+Cnt\s+DESC/i);
+    });
+
+    it('FinalSQL differs from AfterTemplates when MaxRows is applied', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('SELECT * FROM t', {
+            Platform: 'sqlserver',
+            MaxRows: 5,
+        });
+        // AfterTemplates is the pre-cap SQL
+        expect(result.Trace.AfterTemplates).toBe('SELECT * FROM t');
+        // FinalSQL has the cap
+        expect(result.FinalSQL).not.toBe(result.Trace.AfterTemplates);
+        expect(result.FinalSQL).toMatch(/\bTOP\s+5\b/i);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
 // Lexical disguise — keyword-looking content in literals/identifiers/comments
 // ════════════════════════════════════════════════════════════════════
 
