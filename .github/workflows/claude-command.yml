@@ -8,10 +8,21 @@ on:
 
 jobs:
   claude:
+    # Gated to repo insiders (drive-by commenters on public issues/PRs can't spend
+    # API budget) and non-bot authors (prevents bot-to-bot trigger loops).
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+      ((github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))) &&
+      contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+      github.event.comment.user.type != 'Bot'
     runs-on: ubuntu-latest
+    # Hard wall-clock cap — the GitHub default is 6 hours of billable agent time.
+    timeout-minutes: 20
+    # Rapid follow-up @claude comments on the same thread cancel the superseded run.
+    # issue.number is empty on pull_request_review_comment events, hence the fallback.
+    concurrency:
+      group: claude-cmd-${{ github.event.issue.number || github.event.pull_request.number }}
+      cancel-in-progress: true
     permissions:
       contents: read
       pull-requests: read
@@ -29,8 +40,15 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
-          # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4)
-          # model: "claude-opus-4-8"
+          # Pinned so the tier can't drift with the action's default (this workflow
+          # rides the moving @beta tag). Interactive agent work stays on Sonnet.
+          model: claude-sonnet-4-6
+
+          # Web tools disabled: they inflate context/turn count and aren't needed
+          # for repo-scoped @claude requests. (Bash is already NOT granted by
+          # default — do not uncomment the allowed_tools Bash example below unless
+          # you intend to WIDEN the tool surface.)
+          disallowed_tools: 'WebSearch,WebFetch'
 
           # Optional: Customize the trigger phrase (default: @claude)
           # trigger_phrase: "/claude"
