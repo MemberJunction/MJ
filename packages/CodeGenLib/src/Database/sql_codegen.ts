@@ -860,20 +860,22 @@ export class SQLCodeGenBase {
             return false;
         }
 
-        // PostgreSQL: pg_get_viewdef() returns a heavily reformatted definition (re-qualified
-        // columns, normalized whitespace/casing, re-ordered expressions) that never byte-matches
-        // our generated CREATE VIEW text. The SELECT-body text comparison below therefore yields a
-        // false "changed" verdict for nearly every view, force-logging all of them and turning every
-        // PG CodeGen run into a full ~380-entity regeneration. Genuine column/structure changes are
-        // already caught reliably by the metadata-driven modifiedEntityList (checked above), so on
-        // PostgreSQL we skip this text heuristic and rely on that. (SQL Server's view definition is
-        // stored verbatim, so the comparison remains valid there.)
-        if (configInfo.dbPlatform === 'postgresql') {
-            return false;
-        }
-
         try {
             const viewName = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
+
+            // PostgreSQL: pg_get_viewdef() returns a heavily reformatted definition (re-qualified
+            // columns, normalized whitespace/casing, re-ordered expressions) that never byte-matches
+            // our generated CREATE VIEW text — so the SELECT-body text comparison below falsely flags
+            // nearly every view "changed", turning each PG CodeGen run into a full ~380-entity
+            // regeneration. Instead compare the view's EXPOSED COLUMN SET against the entity's expected
+            // fields: deterministic, immune to pg_get_viewdef reformatting, and it still catches a
+            // stale view whose columns drifted from metadata (e.g. a migration that adds a column but
+            // doesn't bake the view — the v5.46 OpenApp outage), including the missing-view self-heal.
+            // SQL Server stores the view definition verbatim, so its text comparison stays valid.
+            if (configInfo.dbPlatform === 'postgresql') {
+                return await this.checkBaseViewColumnsChangedPG(pool, entity, viewName);
+            }
+
             const viewDefSQL = this._dbProvider.getViewDefinitionSQL(entity.SchemaName, viewName);
             const result = await pool.query(viewDefSQL);
             const dbDefinition = result.recordset?.[0]?.ViewDefinition;
@@ -901,6 +903,40 @@ export class SQLCodeGenBase {
             logIf(configInfo.verboseOutput, `Could not compare base view for ${entity.Name}: ${e}`);
             return false;
         }
+    }
+
+    /**
+     * PostgreSQL base-view change detection by COLUMN SET rather than text.
+     *
+     * pg_get_viewdef() re-qualifies columns and normalizes whitespace/casing, so the SELECT-body
+     * text comparison used on SQL Server never byte-matches on PG and false-flags nearly every view.
+     * The base view exposes exactly the entity's fields, so comparing the view's live column set
+     * (information_schema.columns) against the entity's expected field set is deterministic, immune
+     * to that reformatting, and still catches the cases that matter:
+     *   - a stale view missing a field that metadata now declares (the v5.46 OpenApp outage: a
+     *     migration added the column + EntityField but never re-baked the view), and
+     *   - a missing view entirely (empty column set → force-recreate; the documented self-heal for a
+     *     view that a prior run dropped but failed to recreate).
+     * A pure Sequence renumber does not change the column set, so it correctly does NOT flag.
+     * @returns true if the view's column set differs from the entity's fields (or the view is missing)
+     */
+    protected async checkBaseViewColumnsChangedPG(pool: CodeGenConnection, entity: EntityInfo, viewName: string): Promise<boolean> {
+        const sql = `SELECT column_name FROM information_schema.columns WHERE table_schema = '${entity.SchemaName}' AND table_name = '${viewName}'`;
+        const result = await pool.query(sql);
+        const dbCols = new Set((result.recordset ?? []).map((r: { column_name: string }) => r.column_name.toLowerCase()));
+
+        // Empty set = the view does not exist → force-recreate (missing-view self-heal).
+        if (dbCols.size === 0) {
+            return true;
+        }
+
+        // The base view exposes exactly the entity's fields; compare the two sets.
+        const expectedCols = entity.Fields.map(f => f.Name.toLowerCase());
+        const changed = expectedCols.length !== dbCols.size || expectedCols.some(c => !dbCols.has(c));
+        if (changed) {
+            logStatus(`  Base view columns changed for ${entity.Name} — logging view SQL`);
+        }
+        return changed;
     }
 
     /**
