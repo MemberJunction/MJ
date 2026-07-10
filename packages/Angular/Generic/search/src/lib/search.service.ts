@@ -388,6 +388,20 @@ export class SearchService {
         this.recentSearchesLoaded = true;
     }
 
+    /**
+     * Record a query into recent searches WITHOUT running a search. For surfaces
+     * (e.g. the omnibar palette) where the user types a query but executes a
+     * suggestion that navigates directly — no full ExecuteSearch ever runs, so
+     * the automatic recording inside ExecuteSearch never fires for that query.
+     * Deduplicates by query text and persists via UserInfoEngine like all recents.
+     */
+    public RecordRecentSearch(query: string, resultCount = 0): void {
+        const trimmed = query.trim();
+        if (trimmed.length > 0) {
+            this.addToRecentSearches(trimmed, resultCount);
+        }
+    }
+
     private addToRecentSearches(query: string, resultCount: number): void {
         const current = this.RecentSearches$.value;
         const filtered = current.filter(s => s.Query !== query);

@@ -9,7 +9,7 @@ import { NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { SearchService, SearchScopeInfo } from '@memberjunction/ng-search';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
-import { firstValueFrom } from 'rxjs';
+import { Subscription, firstValueFrom, skip } from 'rxjs';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import {
     DiscoverOmnibarProviders, GetOmnibarNavPayload, OmnibarProvider,
@@ -48,6 +48,7 @@ const MAX_RESULTS = 9;
 })
 export class OmnibarPaletteComponent implements OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private host = inject<ElementRef<HTMLElement>>(ElementRef);
     private navigation = inject(NavigationService);
     private appManager = inject(ApplicationManager);
     private search = inject(SearchService);
@@ -75,6 +76,9 @@ export class OmnibarPaletteComponent implements OnDestroy {
     private byTrigger = new Map<string, OmnibarProvider>();
     private queryGeneration = 0;
     private debounceHandle: ReturnType<typeof setTimeout> | null = null;
+    /** Element focused before the palette opened — restored on close (a11y). */
+    private previousFocus: HTMLElement | null = null;
+    private recentsSub: Subscription | null = null;
 
     // ---------------------------------------------------------------
     // Derived view state
@@ -129,6 +133,14 @@ export class OmnibarPaletteComponent implements OnDestroy {
         return this.Rows.length > 0 ? this.Rows : this.RecentRows;
     }
 
+    /**
+     * ARIA combobox wiring: the input keeps DOM focus while this points at the
+     * virtually-highlighted option row, so screen readers announce selection moves.
+     */
+    public get ActiveDescendantId(): string | null {
+        return this.selectableRows.length > 0 ? `ob-opt-${this.SelectedIndex}` : null;
+    }
+
     // ---------------------------------------------------------------
     // Public API
     // ---------------------------------------------------------------
@@ -136,6 +148,7 @@ export class OmnibarPaletteComponent implements OnDestroy {
     /** Opens the palette, optionally pre-seeded (e.g. '/' from the legacy Ctrl+/ path). */
     public Open(initialQuery = ''): void {
         this.ensureProviders();
+        this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         this.IsOpen = true;
         this.Query = initialQuery;
         this.Rows = [];
@@ -160,6 +173,11 @@ export class OmnibarPaletteComponent implements OnDestroy {
         this.Rows = [];
         this.Closed.emit();
         this.cdr.markForCheck();
+        // Return focus to where the user was (skip if that element left the DOM).
+        if (this.previousFocus?.isConnected) {
+            this.previousFocus.focus();
+        }
+        this.previousFocus = null;
     }
 
     public Toggle(initialQuery = ''): void {
@@ -174,6 +192,7 @@ export class OmnibarPaletteComponent implements OnDestroy {
         if (this.debounceHandle != null) {
             clearTimeout(this.debounceHandle);
         }
+        this.recentsSub?.unsubscribe();
     }
 
     // ---------------------------------------------------------------
@@ -191,13 +210,11 @@ export class OmnibarPaletteComponent implements OnDestroy {
         switch (event.key) {
             case 'ArrowDown':
                 event.preventDefault();
-                this.SelectedIndex = Math.min(this.SelectedIndex + 1, Math.max(rows.length - 1, 0));
-                this.cdr.markForCheck();
+                this.moveSelection(1);
                 break;
             case 'ArrowUp':
                 event.preventDefault();
-                this.SelectedIndex = Math.max(this.SelectedIndex - 1, 0);
-                this.cdr.markForCheck();
+                this.moveSelection(-1);
                 break;
             case 'Enter': {
                 event.preventDefault();
@@ -210,10 +227,81 @@ export class OmnibarPaletteComponent implements OnDestroy {
                 }
                 break;
             }
-            case 'Escape':
+        }
+    }
+
+    /**
+     * Dialog-level keys (bubbled from anywhere inside the palette):
+     * - Escape closes from any focused element, not just the input.
+     * - Tab follows the natural visual order — input → scope pills → mode chips →
+     *   the selected result row (roving tabindex) — and TRAPS at the ends so focus
+     *   cycles inside the dialog instead of escaping to the page underneath.
+     *   (Design review: Tab must reach the three mode chips, not skip them.)
+     */
+    public OnPaletteKeydown(event: KeyboardEvent): void {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            this.Close();
+            return;
+        }
+        if (event.key !== 'Tab') {
+            return;
+        }
+        const root = this.host.nativeElement.querySelector('.omnibar-palette') as HTMLElement | null;
+        if (!root) {
+            return;
+        }
+        const focusables = Array.from(root.querySelectorAll<HTMLElement>('input, button, .ob-row[tabindex="0"]'))
+            .filter((el) => el.offsetParent !== null);
+        if (focusables.length === 0) {
+            return;
+        }
+        const active = document.activeElement as HTMLElement | null;
+        if (!event.shiftKey && active === focusables[focusables.length - 1]) {
+            event.preventDefault();
+            focusables[0].focus();
+        } else if (event.shiftKey && active === focusables[0]) {
+            event.preventDefault();
+            focusables[focusables.length - 1].focus();
+        }
+    }
+
+    /** Keys on a focused result row (rows are real focus stops via roving tabindex). */
+    public OnRowKeydown(event: KeyboardEvent, suggestion: MentionSuggestion): void {
+        switch (event.key) {
+            case 'ArrowDown':
                 event.preventDefault();
-                this.Close();
+                this.moveSelection(1, true);
                 break;
+            case 'ArrowUp':
+                event.preventDefault();
+                this.moveSelection(-1, true);
+                break;
+            case 'Enter':
+                event.preventDefault();
+                this.Execute(suggestion);
+                break;
+        }
+    }
+
+    /**
+     * Keyboard-driven selection move: wraps at both ends (standard picker behavior)
+     * and keeps the highlighted row visible. Mouse hover sets SelectedIndex directly
+     * in the template and deliberately does NOT scroll — auto-scrolling under the
+     * pointer would fight the user's hand. When the move originates from a focused
+     * row (roving tabindex), DOM focus follows the selection.
+     */
+    private moveSelection(delta: 1 | -1, focusRow = false): void {
+        const count = this.selectableRows.length;
+        if (count === 0) {
+            return;
+        }
+        this.SelectedIndex = (this.SelectedIndex + delta + count) % count;
+        this.cdr.markForCheck();
+        const row = this.host.nativeElement.querySelector<HTMLElement>(`#ob-opt-${this.SelectedIndex}`);
+        row?.scrollIntoView({ block: 'nearest' });
+        if (focusRow) {
+            row?.focus();
         }
     }
 
@@ -254,6 +342,15 @@ export class OmnibarPaletteComponent implements OnDestroy {
         const nav = GetOmnibarNavPayload(suggestion);
         if (!nav) {
             return; // foreign suggestion with no navigation — nothing to execute
+        }
+        // Default-mode queries count as "searches" even when the user executes a
+        // suggestion that navigates directly (no full ExecuteSearch downstream to
+        // record them). Trigger-mode fragments ('#accounts ac…') are NOT searches —
+        // recording those would pollute recents. 'search' payloads skip too: the
+        // results page records them with the real result count.
+        const typed = this.EffectiveQuery.trim();
+        if (this.ActiveTriggerChar === '' && typed.length > 0 && nav.kind !== 'search') {
+            this.search.RecordRecentSearch(typed);
         }
         switch (nav.kind) {
             case 'record':
@@ -315,6 +412,19 @@ export class OmnibarPaletteComponent implements OnDestroy {
         if (this.providers.length > 0) {
             return;
         }
+        // Kick off the persisted-recents load (idempotent; resolves via LoggedIn
+        // replay). The legacy search composite used to be the only caller — with
+        // the omnibar enabled it never renders, so prior-session recents were
+        // invisible until the palette started requesting them itself.
+        void this.search.LoadRecentSearches();
+        // Refresh the empty-state Recent rows whenever recents change while the
+        // palette is idle-open (skip(1): BehaviorSubject replays its current
+        // value on subscribe, which loadRecents already read directly).
+        this.recentsSub = this.search.RecentSearches$.pipe(skip(1)).subscribe(() => {
+            if (this.IsOpen && this.Query.length === 0) {
+                void this.loadRecents();
+            }
+        });
         LoadOmnibarProviders();
         this.providers = DiscoverOmnibarProviders();
         const context = {

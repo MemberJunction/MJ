@@ -137,6 +137,11 @@
     cursor: pointer;
 }
 
+/* Rows are focus stops (roving tabindex): the --sel background tracks focus, so
+   suppress the default outline but keep a ring for keyboard :focus-visible. */
+.ob-row:focus { outline: none; }
+.ob-row:focus-visible { outline: 2px solid var(--mj-border-focus); outline-offset: -2px; }
+
 .ob-row--sel {
     background: color-mix(in srgb, var(--mj-brand-primary) 9%, transparent);
     box-shadow: inset 3px 0 0 var(--mj-brand-primary);

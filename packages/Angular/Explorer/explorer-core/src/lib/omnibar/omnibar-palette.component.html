@@ -1,6 +1,7 @@
 @if (IsOpen) {
   <div class="omnibar-overlay" (click)="Close()"></div>
-  <div class="omnibar-palette" role="dialog" aria-modal="true" aria-label="Command palette">
+  <div class="omnibar-palette" role="dialog" aria-modal="true" aria-label="Command palette"
+    (keydown)="OnPaletteKeydown($event)">
 
     <div class="ob-input-row">
       <span class="ob-lead" [class.ob-lead--trigger]="ActiveTriggerChar.length > 0">
@@ -11,6 +12,8 @@
         }
       </span>
       <input #paletteInput class="ob-input" type="text" autocomplete="off" spellcheck="false"
+        role="combobox" aria-expanded="true" aria-controls="ob-listbox" aria-autocomplete="list"
+        [attr.aria-activedescendant]="ActiveDescendantId"
         [placeholder]="ActivePlaceholder"
         [ngModel]="Query" (ngModelChange)="OnQueryChange($event)"
         (keydown)="OnInputKeydown($event)" />
@@ -29,7 +32,7 @@
       </div>
     }
 
-    <div class="ob-body">
+    <div class="ob-body" id="ob-listbox" role="listbox" aria-label="Suggestions">
       @if (IsLoading) {
         <div class="ob-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Searching…</div>
       } @else if (Rows.length === 0 && Query.length === 0) {
@@ -41,9 +44,14 @@
           }
         </div>
         @if (RecentRows.length > 0) {
-          <div class="ob-group-label">Recent</div>
+          <div class="ob-group-label" role="presentation">Recent</div>
           @for (row of RecentRows; track row.Suggestion.id; let i = $index) {
-            <div class="ob-row" [class.ob-row--sel]="RecentBaseIndex + i === SelectedIndex"
+            <div class="ob-row" role="option" [attr.id]="'ob-opt-' + (RecentBaseIndex + i)"
+              [attr.tabindex]="RecentBaseIndex + i === SelectedIndex ? 0 : -1"
+              [attr.aria-selected]="RecentBaseIndex + i === SelectedIndex"
+              [class.ob-row--sel]="RecentBaseIndex + i === SelectedIndex"
+              (focus)="SelectedIndex = RecentBaseIndex + i"
+              (keydown)="OnRowKeydown($event, row.Suggestion)"
               (mouseenter)="SelectedIndex = RecentBaseIndex + i" (click)="Execute(row.Suggestion)">
               <span class="ob-ric"><i [class]="row.Suggestion.icon || 'fa-solid fa-clock-rotate-left'"></i></span>
               <span class="ob-rmain">
@@ -59,9 +67,14 @@
       } @else {
         @for (row of Rows; track row.Suggestion.id; let i = $index) {
           @if (row.GroupLabel) {
-            <div class="ob-group-label">{{ row.GroupLabel }}</div>
+            <div class="ob-group-label" role="presentation">{{ row.GroupLabel }}</div>
           }
-          <div class="ob-row" [class.ob-row--sel]="i === SelectedIndex"
+          <div class="ob-row" role="option" [attr.id]="'ob-opt-' + i"
+            [attr.tabindex]="i === SelectedIndex ? 0 : -1"
+            [attr.aria-selected]="i === SelectedIndex"
+            [class.ob-row--sel]="i === SelectedIndex"
+            (focus)="SelectedIndex = i"
+            (keydown)="OnRowKeydown($event, row.Suggestion)"
             (mouseenter)="SelectedIndex = i" (click)="Execute(row.Suggestion)">
             <span class="ob-ric"><i [class]="row.Suggestion.icon || 'fa-solid fa-circle'"></i></span>
             <span class="ob-rmain">
