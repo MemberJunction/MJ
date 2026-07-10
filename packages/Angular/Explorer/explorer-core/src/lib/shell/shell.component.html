@@ -46,36 +46,19 @@
       </mj-app-nav>
     }
 
-    <!-- Universal Search Bar — omnibar palette (flag ON) or legacy composite (flag OFF) -->
-    @if (ShowSearchBar) {
-      @if (UseOmnibar) {
-        <div class="shell-search-bar desktop-only">
-          <button type="button" class="shell-omnibar-affordance" (click)="OpenOmnibar()" title="Search everything (Ctrl+K)">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <span>Search everything...</span>
-            <kbd class="shell-omnibar-kbd">Ctrl+K</kbd>
-          </button>
-        </div>
-      } @else {
-        <div class="shell-search-bar desktop-only">
-          <mj-search-composite
-            #shellSearchComposite
-            Placeholder="Search everything..."
-            [ShowShortcutHint]="true"
-            [EnablePreview]="ShowSearchPreview"
-            [EnableRecent]="true"
-            [MaxPreviewResults]="8"
-            (ResultSelected)="OnSearchResultSelected($event)"
-            (SearchSubmitted)="OnSearchSubmitted($event)"
-            (SeeAllRequested)="OnSeeAllSearch($event)">
-          </mj-search-composite>
-        </div>
-      }
-    }
+    <!-- Universal Search moved to an icon in header-actions: BOTH experiences open
+         as overlays now (omnibar palette when opted in, mj-search-overlay otherwise),
+         so the header layout no longer changes with the omnibar opt-in. -->
     <!-- Spacer -->
     <div class="spacer"></div>
     <!-- Actions (activity, notifications, user menu) -->
     <div class="header-actions">
+      <!-- Universal Search — icon opens the palette (omnibar on) or the search overlay (omnibar off) -->
+      @if (ShowSearchBar) {
+        <button class="icon-btn desktop-only search-btn" [title]="'Search everything (' + OmnibarShortcutLabel + ')'" (click)="OnHeaderSearchClick()">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
+      }
       <!-- Global Activity indicator -->
       @if (activityItems.length > 0) {
         <div class="activity-wrap">
@@ -329,6 +312,16 @@
 
 <!-- Unified command palette (Shell.Omnibar.Enabled) -->
 <mj-omnibar-palette #omnibarPalette></mj-omnibar-palette>
+
+<!-- Legacy universal search as a Spotlight-style overlay (omnibar opt-out path).
+     The shell owns the Ctrl/Cmd+K chord, so the overlay's own global shortcut is off. -->
+@if (ShowSearchBar && !UseOmnibar) {
+  <mj-search-overlay
+    [(IsOpen)]="LegacySearchOpen"
+    [EnableGlobalShortcut]="false"
+    (ResultSelected)="OnOverlayResultSelected($event)">
+  </mj-search-overlay>
+}
 
 <!-- Pin Progress Overlay -->
 @if (PinProgressVisible) {

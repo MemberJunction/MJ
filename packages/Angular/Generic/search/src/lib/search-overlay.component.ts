@@ -116,6 +116,14 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
      */
     @Input() EnableStreaming = false;
 
+    /**
+     * When false, the overlay does NOT claim the global Ctrl/Cmd+K chord. For hosts
+     * (e.g. the Explorer shell) that own that shortcut themselves and open the
+     * overlay programmatically — two listeners on the same chord would double-toggle.
+     * Escape/arrow handling while open is unaffected.
+     */
+    @Input() EnableGlobalShortcut = true;
+
     // --- Outputs ---
 
     @Output() IsOpenChange = new EventEmitter<boolean>();
@@ -169,7 +177,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
 
     @HostListener('document:keydown', ['$event'])
     HandleGlobalKeydown(event: KeyboardEvent): void {
-        if (this.isToggleShortcut(event)) {
+        if (this.EnableGlobalShortcut && this.isToggleShortcut(event)) {
             event.preventDefault();
             this.ToggleOverlay();
             return;

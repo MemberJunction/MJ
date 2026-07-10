@@ -763,20 +763,8 @@ mj-tab-container ::ng-deep .lm_stack {
   display: none !important;
 }
 
-/* ========================================
-   UNIVERSAL SEARCH BAR
-   ======================================== */
-.shell-search-bar {
-    flex: 0 1 420px;
-    min-width: 200px;
-    max-width: 520px;
-    margin: 0 12px;
-    position: relative;
-    z-index: 99999;
-}
-@media (max-width: 768px) {
-    .shell-search-bar { display: none; }
-}
+/* Universal search collapsed to a header-actions icon (2026-07 design review):
+   both experiences open as overlays, so no inline bar chrome remains. */
 
 /* ========================================
    SEARCH POPUP
@@ -1045,41 +1033,3 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 .activity-bar-fill { height: 100%; background: var(--mj-brand-primary); transition: width 0.3s ease; }
 
-/* Omnibar affordance — the flag-ON replacement for the header search composite */
-.shell-omnibar-affordance {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 340px;
-    padding: 8px 12px;
-    background: var(--mj-bg-surface-sunken);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 10px;
-    color: var(--mj-text-muted);
-    font-size: 13px;
-    font-family: inherit;
-    cursor: pointer;
-    text-align: left;
-}
-
-.shell-omnibar-affordance:hover {
-    border-color: var(--mj-border-strong);
-}
-
-.shell-omnibar-affordance span {
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-}
-
-.shell-omnibar-kbd {
-    font-family: inherit;
-    font-size: 10.5px;
-    font-weight: 600;
-    color: var(--mj-text-muted);
-    background: var(--mj-bg-surface);
-    border: 1px solid var(--mj-border-strong);
-    border-bottom-width: 2px;
-    border-radius: 5px;
-    padding: 1.5px 6px;
-}

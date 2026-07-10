@@ -26,6 +26,7 @@ import { UserSharingCenterDialogService } from './services/user-sharing-center-d
 import { AboutDialogService } from './services/about-dialog.service';
 import { ProfileDialogService } from './services/profile-dialog.service';
 import { IsOmnibarEnabledForUser } from '../omnibar/omnibar-user-setting';
+import { GetOmnibarShortcutLabel } from '../omnibar/omnibar-shortcut';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
@@ -122,19 +123,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
-  // Universal search bar
-  @ViewChild('shellSearchComposite') shellSearchComposite: {
-    Focus?(): void;
-    MinRelevancePercent?: number;
-    SelectedScopeIDs?: string[];
-  } | undefined;
+  // Legacy universal search overlay (omnibar opt-out path) — opened by the
+  // header search icon or Ctrl/Cmd+K when the user hasn't opted into the omnibar.
+  LegacySearchOpen = false;
 
   // Instance configuration feature flags
   get ShowSearchBar(): boolean {
       return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.Enabled', true);
-  }
-  get ShowSearchPreview(): boolean {
-      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.EnablePreview', true);
   }
   /**
    * Two-layer gate for the unified Ctrl+K command palette (omnibar):
@@ -148,6 +143,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   get UseOmnibar(): boolean {
       return IsOmnibarEnabledForUser();
+  }
+
+  /** Platform-correct summon-shortcut label ('⌘K' on Mac, 'Ctrl+K' elsewhere). */
+  get OmnibarShortcutLabel(): string {
+      return GetOmnibarShortcutLabel();
   }
 
   @ViewChild('omnibarPalette') omnibarPalette?: { Open(initialQuery?: string): void };
@@ -2679,22 +2679,24 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   @HostListener('document:keydown', ['$event'])
   OnGlobalKeydown(event: KeyboardEvent): void {
-      const target = event.target as HTMLElement;
-      const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-      // Omnibar mode: Ctrl/Cmd+K summons the modal palette from anywhere, even while
-      // typing (it's an explicit chord, not a plain keystroke). Legacy mode keeps the
-      // guard — focusing the header search box mid-typing would be hostile.
-      if (inEditable && !this.UseOmnibar) return;
+      // Ctrl/Cmd+K summons the search surface from anywhere, even while typing —
+      // it's an explicit chord and both experiences are modal overlays now
+      // (omnibar palette when opted in, mj-search-overlay otherwise).
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
       if (isCtrlOrCmd && event.key === 'k') {
           event.preventDefault();
           event.stopPropagation();
-          if (this.UseOmnibar) {
-              this.OpenOmnibar();
-          } else if (this.shellSearchComposite?.Focus) {
-              this.shellSearchComposite.Focus();
-          }
+          this.OnHeaderSearchClick();
+      }
+  }
+
+  /** Header search icon / Ctrl+K: open whichever search surface the user is on. */
+  OnHeaderSearchClick(): void {
+      if (this.UseOmnibar) {
+          this.OpenOmnibar();
+      } else {
+          this.LegacySearchOpen = true;
       }
   }
 
@@ -2713,19 +2715,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.navigationService.OpenEntityRecord(result.EntityName, pkey);
   }
 
-  OnSearchSubmitted(query: string): void {
-      if (query && query.trim().length >= 2) {
-          const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
-          const scopeIDs = this.shellSearchComposite?.SelectedScopeIDs;
-          const opts: { minRelevance?: number; scopeIDs?: string[] } = {};
-          if (minRelevance) opts.minRelevance = minRelevance;
-          if (scopeIDs && scopeIDs.length > 0) opts.scopeIDs = scopeIDs;
-          this.navigationService.OpenSearch(query, Object.keys(opts).length > 0 ? opts : undefined);
-      }
-  }
-
-  OnSeeAllSearch(query: string): void {
-      this.OnSearchSubmitted(query);
+  /** Legacy search overlay selection → same navigation path as the old composite. */
+  OnOverlayResultSelected(event: { Result: { EntityName: string; RecordID: string; ResultType?: string; RawMetadata?: string } }): void {
+      this.LegacySearchOpen = false;
+      this.OnSearchResultSelected(event.Result);
   }
 
   // ========================================
