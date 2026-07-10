@@ -44,8 +44,7 @@
 .ps-card {
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
-  border-radius: 10px;
-  box-shadow: var(--mj-shadow-sm);
+  border-radius: 8px;
   overflow: hidden;
 }
 .ps-card-head {
@@ -58,7 +57,7 @@
 /* ---- KPI tiles ---- */
 .ps-kpi {
   background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);
-  border-radius: 10px; padding: 16px 18px; box-shadow: var(--mj-shadow-sm);
+  border-radius: 8px; padding: 16px 18px;
 }
 .ps-kpi .label { font-size: 12px; color: var(--mj-text-muted); font-weight: 600; }
 .ps-kpi .val { font-size: 26px; font-weight: 720; letter-spacing: -.02em; margin-top: 2px; color: var(--mj-text-primary); }
@@ -119,11 +118,13 @@
 .ps-bar.warn > span { background: var(--mj-status-warning); }
 .ps-bar.run > span { background: var(--mj-brand-primary); }
 
-.ps-fbar { display: grid; grid-template-columns: 150px 1fr 48px; align-items: center; gap: 10px; padding: 5px 0; }
-.ps-fbar .track { height: 14px; border-radius: 5px; background: var(--mj-bg-surface-sunken); overflow: hidden; }
-.ps-fbar .track > span { display: block; height: 100%; background: var(--mj-brand-primary); }
+.ps-fbar { display: grid; grid-template-columns: minmax(150px, 1.3fr) 2fr 56px; align-items: center; gap: 14px; padding: 8px 0; }
+.ps-fbar + .ps-fbar { border-top: 1px solid var(--mj-border-subtle); }
+.ps-fbar .track { height: 10px; border-radius: var(--mj-radius-full); background: var(--mj-bg-surface-sunken); overflow: hidden; }
+.ps-fbar .track > span { display: block; height: 100%; border-radius: var(--mj-radius-full); background: var(--mj-brand-primary); }
 .ps-fbar .track > span.warn { background: var(--mj-status-warning); }
-.ps-fbar .name { color: var(--mj-text-secondary); }
+.ps-fbar .name { color: var(--mj-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-fbar > .ps-mono { text-align: right; color: var(--mj-text-secondary); font-variant-numeric: tabular-nums; }
 
 /* gauge */
 .ps-gauge {
@@ -166,8 +167,8 @@
 }
 .ps-node {
   position: absolute; width: 190px; background: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-strong); border-left-width: 3px; border-radius: 10px;
-  box-shadow: var(--mj-shadow-sm); cursor: pointer;
+  border: 1px solid var(--mj-border-strong); border-left-width: 3px; border-radius: 8px;
+  cursor: pointer;
 }
 .ps-node .nh {
   display: flex; align-items: center; gap: 8px; padding: 9px 11px;
