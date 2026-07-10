@@ -3,11 +3,13 @@
 **Reviewer:** Matt Chriest (design lead) · **Date:** 2026-07-07 · **Branch:** `omnibar-command-palette`
 
 First hands-on design review of the Ctrl+K omnibar. Items are numbered in the order raised.
-Status: `open` = not yet addressed · `deferred` = consciously out of scope for this PR · `decided` = design decision recorded, no code change.
+Status: `fixed` = implemented on this branch (2026-07-07 pass) · `open` = not yet addressed · `deferred` = consciously out of scope for this PR · `decided` = design decision recorded, no code change.
+
+**Implementation pass 2026-07-07:** items 1, 2, 4, 5, 6, 7, 8 fixed. Item 3 (mobile) deferred by decision. Notes: item 7 reuses the previously-unwired `mj-search-overlay` from `@memberjunction/ng-search` (Spotlight-style dialog) for the omnibar-off path, with a new `EnableGlobalShortcut` input so the shell owns the Ctrl/Cmd+K chord; item 4's empty state surfaces recently-opened records from `UserInfoEngine.UserRecordLogs`; item 8 adds `SearchService.RecordRecentSearch()` and has the palette load + reactively refresh persisted recents.
 
 ---
 
-## 1. Platform-aware shortcut label — `open`
+## 1. Platform-aware shortcut label — `fixed`
 
 The UI hardcodes "Ctrl+K" everywhere. On macOS the convention is **⌘K**.
 
@@ -18,7 +20,7 @@ The UI hardcodes "Ctrl+K" everywhere. On macOS the convention is **⌘K**.
   3. My Profile → Command Palette hint — `profile-dialog.component.ts` (~line 127)
 - **Fix direction:** one platform-aware `ShortcutLabel` getter, consumed by all three sites. Render `⌘K` on Mac, `Ctrl+K` elsewhere (same pattern as VS Code / Slack / Linear).
 
-## 2. Keyboard/tab accessibility through the suggestion list — `open`
+## 2. Keyboard/tab accessibility through the suggestion list — `fixed`
 
 Tabbing into the omnibar stops at the "Talk to an Agent" chip and cannot reach the suggestion rows. Accessibility concern.
 
@@ -37,27 +39,27 @@ Two possible directions (decision deferred, noted for later):
 
 Interacts with item 7 — an icon-only header affordance is also the right mobile header treatment.
 
-## 4. `#` empty state shows nothing — reads as broken — `open`
+## 4. `#` empty state shows nothing — reads as broken — `fixed`
 
 Typing `#` alone renders an empty panel. The provider deliberately returns `[]` for empty queries (avoiding a ~375-entity dump) but — unlike `@` (full agent list) and `/` (recent apps) — `OmnibarRecordProvider` has no `EmptyStateSuggestions` override. To a user this reads as "no results / broken."
 
 - **Fix direction:** real empty state — recently opened records and/or most-used entities, plus a syntax-hint row teaching the two-phase pattern (`#accounts acme` → entity, then record term). At minimum, never a bare empty panel for a just-activated mode.
 - File: `providers/omnibar-record.provider.ts` (+ empty-state rendering in `omnibar-palette.component.html`).
 
-## 5. "Commands" label is misleading — `open`
+## 5. "Commands" label is misleading — `fixed` (renamed "Go to App")
 
 The `/` mode is labeled **Commands** but only navigates (switch apps, jump to nav items) — it executes nothing. The label sets a verb expectation; the design reviewer couldn't tell what the mode was for. Rename to match behavior — candidates: "Go to App" / "Navigate" / "Apps & Pages" (final label: Matt's call).
 
 - Touch points: `OmnibarCommandProvider.ModeLabel` + `Placeholder`, the empty-state hint chip, doc references.
 - Future note: if the mode later grows real executable commands (MJ Actions would be the natural backing), revisit the name then — don't ship a mislabel now.
 
-## 6. Arrow-key selection doesn't scroll the list — `open`
+## 6. Arrow-key selection doesn't scroll the list — `fixed`
 
 When suggestions overflow the scrollable body, ArrowDown moves the highlight out of view — the list doesn't follow.
 
 - **Fix direction:** `scrollIntoView({ block: 'nearest' })` on the selected row after keyboard-driven selection changes. Mouse-driven (`mouseenter`) selection must NOT auto-scroll (it would fight the pointer). Implement together with item 2 — both need per-row DOM ids.
 
-## 7. Header redesign: search collapses to an icon; both experiences open as overlays — `open` (design direction)
+## 7. Header redesign: search collapses to an icon; both experiences open as overlays — `fixed`
 
 The header hosts a full search input bar that consumes real estate — yet with omnibar enabled, interacting with it just opens the palette dialog anyway. Direction:
 
@@ -67,7 +69,7 @@ The header hosts a full search input bar that consumes real estate — yet with 
 
 Net effect: the header layout is stable regardless of opt-in — the toggle changes *what the overlay is*, not the chrome. Frees real estate for everyone; also the right mobile treatment (item 3). The meatier half is re-housing the legacy search composite into a dialog presentation.
 
-## 8. Recent searches don't appear after searching — `open` (bug, two-part root cause identified)
+## 8. Recent searches don't appear after searching — `fixed`
 
 Search something, reopen the palette: the recent area doesn't show it. Investigation found two stacked causes:
 
