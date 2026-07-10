@@ -20,6 +20,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ThemeService, SharedService, ThemeDefinition } from '@memberjunction/ng-shared';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { IsOmnibarAvailable, IsOmnibarEnabledForUser, OMNIBAR_USER_SETTING_KEY } from '../omnibar/omnibar-user-setting';
+import { GetOmnibarShortcutLabel } from '../omnibar/omnibar-shortcut';
 import { Subscription } from 'rxjs';
 
 interface NotificationChannel {
@@ -124,7 +125,7 @@ type ProfilePanel = 'none' | 'photo' | 'theme';
                         <div class="mj-profile__channel-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
                         <div class="mj-profile__channel-label">
                             Unified command palette
-                            <div class="mj-profile__channel-hint">Ctrl+K — search, records, agents &amp; commands in one bar</div>
+                            <div class="mj-profile__channel-hint">{{ OmnibarShortcutLabel }} — search, records, agents &amp; commands in one bar</div>
                         </div>
                         <div class="mj-profile__channel-state">
                             @if (SavingOmnibar) {
@@ -782,6 +783,11 @@ export class ProfileDialogComponent extends BaseAngularComponent implements OnIn
     public OmnibarAvailable = false;
     public OmnibarEnabled = false;
     public SavingOmnibar = false;
+
+    /** Platform-correct summon-shortcut label ('⌘K' on Mac, 'Ctrl+K' elsewhere). */
+    public get OmnibarShortcutLabel(): string {
+        return GetOmnibarShortcutLabel();
+    }
 
     // Slide-in panel state
     public ActivePanel: ProfilePanel = 'none';

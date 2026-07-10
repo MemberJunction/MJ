@@ -5,6 +5,7 @@ export * from './providers/omnibar-command.provider';
 export * from './providers/omnibar-agent.provider';
 export * from './omnibar-palette.component';
 export * from './omnibar-user-setting';
+export * from './omnibar-shortcut';
 
 import { LoadOmnibarSearchProvider } from './providers/omnibar-search.provider';
 import { LoadOmnibarRecordProvider } from './providers/omnibar-record.provider';
