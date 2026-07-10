@@ -1,5 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, RunView, EntityInfo, IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
+import { CompositeKey, Metadata, RunView, EntityInfo, IMetadataProvider, IRunViewProvider, UserInfo } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import type { MentionSuggestion, ComposerSuggestionRequest } from '@memberjunction/ng-composer';
 import { OmnibarProvider, OMNIBAR_NAV_KEY, OmnibarNavPayload } from '../omnibar-provider';
 
@@ -19,7 +20,72 @@ export class OmnibarRecordProvider extends OmnibarProvider {
     public readonly Key = 'omnibar-records';
     public override readonly Priority = 50;
     public readonly ModeLabel = 'Jump to Record';
-    public override readonly Placeholder = 'Entity or record name…';
+    // Placeholder doubles as syntax education — the two-phase '#<entity> <record>'
+    // pattern wasn't discoverable from a generic hint (design-review finding).
+    public override readonly Placeholder = 'Type an entity, then a record — e.g. #accounts acme';
+
+    /**
+     * Bare '#' empty state: the user's recently OPENED records (from the
+     * UserInfoEngine's cached 'MJ: User Record Logs'), newest first. Previously
+     * this returned nothing — deliberate (avoid a full-entity dump) but it read
+     * as "no results / broken" in the design review. Fail-soft throughout:
+     * any error just yields an empty list, never blocks the palette.
+     */
+    public override async EmptyStateSuggestions(request: ComposerSuggestionRequest): Promise<MentionSuggestion[]> {
+        try {
+            const md: IMetadataProvider = request.Provider ?? Metadata.Provider;
+            const user = request.ContextUser ?? md.CurrentUser;
+            const engine = UserInfoEngine.Instance;
+            await engine.Config(false, user ?? undefined); // no-op when already loaded
+            const logs = [...engine.UserRecordLogs]
+                .sort((a, b) => new Date(b.LatestAt).getTime() - new Date(a.LatestAt).getTime())
+                .slice(0, request.MaxResults);
+            if (logs.length === 0) {
+                return [];
+            }
+            const names = await this.resolveRecordNames(
+                md,
+                logs.map((l) => ({ entityName: l.Entity, recordId: l.RecordID })),
+                user ?? undefined,
+            );
+            return logs.map((log) => {
+                const nav: OmnibarNavPayload = { kind: 'record', entityName: log.Entity, recordId: log.RecordID };
+                const display = names.get(`${log.Entity}||${log.RecordID}`) ?? log.RecordID;
+                return {
+                    type: 'record',
+                    id: `recent-record:${log.Entity}:${log.RecordID}`,
+                    name: display,
+                    displayName: display,
+                    description: log.Entity,
+                    icon: 'fa-solid fa-clock-rotate-left',
+                    data: { [OMNIBAR_NAV_KEY]: nav, group: 'Recently opened' },
+                } satisfies MentionSuggestion;
+            });
+        } catch {
+            return [];
+        }
+    }
+
+    /** Batch display-name lookup; entries that fail resolve to absent (caller falls back to the ID). */
+    private async resolveRecordNames(
+        md: IMetadataProvider,
+        targets: Array<{ entityName: string; recordId: string }>,
+        user?: UserInfo,
+    ): Promise<Map<string, string>> {
+        const resolved = new Map<string, string>();
+        try {
+            const inputs = targets.map((t) => ({ EntityName: t.entityName, CompositeKey: CompositeKey.FromID(t.recordId) }));
+            const results = await md.GetEntityRecordNames(inputs, user);
+            for (const r of results ?? []) {
+                if (r.Success && r.RecordName) {
+                    resolved.set(`${r.EntityName}||${r.CompositeKey.GetValueByIndex(0)}`, r.RecordName);
+                }
+            }
+        } catch {
+            // name lookup is cosmetic — IDs are an acceptable fallback
+        }
+        return resolved;
+    }
 
     public async GetSuggestions(request: ComposerSuggestionRequest): Promise<MentionSuggestion[]> {
         const query = request.Query.trim().toLowerCase();
