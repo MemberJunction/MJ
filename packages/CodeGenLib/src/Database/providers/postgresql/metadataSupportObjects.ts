@@ -241,6 +241,7 @@ BEGIN
 
   DROP TABLE IF EXISTS _uef_filtered;
   CREATE TEMP TABLE _uef_filtered AS
+  SELECT * FROM (
   SELECT
     e."ID"   AS entity_id,
     e."Name" AS entity_name,
@@ -265,7 +266,38 @@ BEGIN
     re."ID" AS related_entity_id,
     fk."referenced_column"::text AS related_entity_field_name,
     (pk."ColumnName" IS NOT NULL) AS new_is_primary_key,
-    (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL) AS new_is_unique
+    (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL) AS new_is_unique,
+    -- is_material_change = a change that actually affects the generated view/sproc SQL. This is the
+    -- SINGLE definition of "material" — the row filter (outer WHERE) and the modified-entity RETURN
+    -- both derive from it, so there is no duplicated predicate to keep in sync. A pure Sequence
+    -- renumber is deliberately excluded here (tracked as is_sequence_change): the renumber is still
+    -- persisted by the UPDATE below, but must NOT flag its entity as "modified", or every fresh PG
+    -- CodeGen run re-emits byte-identical views + sprocs for dozens of entities.
+    (
+         COALESCE(TRIM(ef."Description"), '') <>
+           COALESCE(TRIM(CASE WHEN ef."AutoUpdateDescription" THEN sq."Description" ELSE ef."Description" END), '')
+      OR (sq."IsVirtual" = 0 AND (
+              (ef."Type" <> sq."Type" AND NOT (ef."Type" = 'numeric' AND sq."Type" = 'decimal'))
+           OR ef."Length" <> sq."Length"
+           OR ef."Precision" <> sq."Precision"
+           OR ef."Scale" <> sq."Scale"
+           OR ef."AllowsNull" <> sq."AllowsNull"
+         ))
+      OR __mj."fnNormalizeDefaultValue"(ef."DefaultValue") IS DISTINCT FROM __mj."fnNormalizeDefaultValue"(sq."DefaultValue")
+      OR ef."AutoIncrement" <> (sq."AutoIncrement" <> 0)
+      OR ef."IsVirtual" <> (sq."IsVirtual" <> 0)
+      OR ef."IsComputed" <> (sq."IsComputed" <> 0)
+      OR COALESCE(ef."RelatedEntityID", '00000000-0000-0000-0000-000000000000'::uuid) <>
+         COALESCE(re."ID", '00000000-0000-0000-0000-000000000000'::uuid)
+      OR COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '')
+      OR ef."IsPrimaryKey" <> (pk."ColumnName" IS NOT NULL)
+      OR ef."IsUnique" <> (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL)
+      OR (ef."AllowUpdateAPI" = TRUE AND sq."IsVirtual" <> 0 AND ef."IsVirtual" = FALSE)
+    ) AS is_material_change,
+    -- A pure Sequence renumber: persisted by the UPDATE below (renumbering is real) but NOT
+    -- material for regeneration. Tracked as its own flag so the row filter is "material OR
+    -- sequence" while the modified-entity RETURN stays material-only.
+    (ef."Sequence" <> sq."Sequence") AS is_sequence_change
   FROM __mj."EntityField" ef
   INNER JOIN __mj."vwSQLColumnsAndEntityFields" sq
     ON ef."EntityID" = sq."EntityID" AND ef."Name"::text = sq."FieldName"::text
@@ -282,34 +314,11 @@ BEGIN
   WHERE e."VirtualEntity" = FALSE
     AND ex.schema_name IS NULL
     AND (NOT v_is_scoped OR e."ID" IN (SELECT s.entity_id FROM _uef_scope s))
-    AND (
-      COALESCE(TRIM(ef."Description"), '') <>
-        COALESCE(TRIM(CASE WHEN ef."AutoUpdateDescription" THEN sq."Description" ELSE ef."Description" END), '')
-      -- Physical attributes are only compared for REAL columns. PG cannot
-      -- derive type facts for view-only (virtual) columns the way SQL Server
-      -- can (view columns are unbounded/nullable in pg_attribute), so virtual
-      -- fields keep their metadata values; the CodeGen TS pipeline's
-      -- getFixVirtualFieldNullabilitySQL step owns virtual-field nullability.
-      OR (sq."IsVirtual" = 0 AND (
-           (ef."Type" <> sq."Type" AND NOT (ef."Type" = 'numeric' AND sq."Type" = 'decimal'))
-        OR ef."Length" <> sq."Length"
-        OR ef."Precision" <> sq."Precision"
-        OR ef."Scale" <> sq."Scale"
-        OR ef."AllowsNull" <> sq."AllowsNull"
-      ))
-      OR __mj."fnNormalizeDefaultValue"(ef."DefaultValue") IS DISTINCT FROM __mj."fnNormalizeDefaultValue"(sq."DefaultValue")
-      OR ef."AutoIncrement" <> (sq."AutoIncrement" <> 0)
-      OR ef."IsVirtual" <> (sq."IsVirtual" <> 0)
-      OR ef."IsComputed" <> (sq."IsComputed" <> 0)
-      OR ef."Sequence" <> sq."Sequence"
-      OR COALESCE(ef."RelatedEntityID", '00000000-0000-0000-0000-000000000000'::uuid) <>
-         COALESCE(re."ID", '00000000-0000-0000-0000-000000000000'::uuid)
-      OR COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '')
-      OR ef."IsPrimaryKey" <> (pk."ColumnName" IS NOT NULL)
-      OR ef."IsUnique" <> (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL)
-      -- AllowUpdateAPI needs clearing on a real->virtual transition
-      OR (ef."AllowUpdateAPI" = TRUE AND sq."IsVirtual" <> 0 AND ef."IsVirtual" = FALSE)
-    );
+  ) chg
+  -- Single source of truth for "this row changed": derived from the two flag columns computed
+  -- above (no duplicated predicate to drift). A material change OR a Sequence renumber makes the
+  -- row eligible for the UPDATE below; only is_material_change feeds the modified-entity RETURN.
+  WHERE chg.is_material_change OR chg.is_sequence_change;
 
   -- PG checks UNIQUE row-by-row (SQL Server checks at statement end), so an
   -- in-place renumber can transiently collide on UQ_EntityField_EntityID_Sequence.
@@ -353,7 +362,11 @@ BEGIN
     fr.new_is_virtual, fr.new_is_computed, fr.new_sequence::integer,
     fr.related_entity_id, fr.related_entity_field_name::text,
     fr.new_is_primary_key, fr.new_is_unique
-  FROM _uef_filtered fr;
+  FROM _uef_filtered fr
+  -- Only material changes flag the entity as modified (for regen). Sequence-only
+  -- renumbers were still applied by the UPDATE above but must not trigger a full
+  -- byte-identical view+sproc regeneration.
+  WHERE fr.is_material_change;
 
   DROP TABLE IF EXISTS _uef_filtered;
   DROP TABLE IF EXISTS _uef_scope;
