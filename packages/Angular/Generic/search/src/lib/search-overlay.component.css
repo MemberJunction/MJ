@@ -398,20 +398,39 @@
         top: 0;
         left: 0;
         right: 0;
+        bottom: 0;
         transform: none;
         width: 100%;
         max-width: 100%;
-        max-height: 100vh;
+        height: 100dvh;
+        max-height: 100dvh;
         border-radius: 0;
+        animation: none; /* spotlightIn animates a translateX(-50%) that no longer applies */
     }
 
+    /* Full-height sheet: results absorb all remaining space (container is flex-column). */
     .search-results-area {
-        max-height: calc(100vh - 56px);
+        flex: 1;
+        min-height: 0;
+        max-height: none;
     }
 
+    /* Filter chips: single scrollable row with breathing room — desktop spacing
+       reads cramped and tall at phone widths. */
     .search-filter-bar {
         overflow-x: auto;
         flex-wrap: nowrap;
         -webkit-overflow-scrolling: touch;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        align-items: center;
+    }
+
+    .search-filter-bar .filter-chip,
+    .search-filter-bar .filter-clear-btn {
+        flex-shrink: 0;          /* no squishing inside the scroll row */
+        padding: 0.25rem 0.7rem;
+        line-height: 1.2;
+        font-size: 0.75rem;
     }
 }

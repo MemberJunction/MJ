@@ -255,3 +255,38 @@
 .ob-reg { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 10.5px; }
 .ob-reg i { color: var(--mj-brand-primary); }
 .ob-reg code { font-family: ui-monospace, monospace; font-size: 10px; }
+
+/* ========================================
+   MOBILE (matches mj-search-overlay's 640px sheet treatment so the two search
+   surfaces sit identically on small viewports)
+   ======================================== */
+@media (max-width: 640px) {
+    .omnibar-palette {
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        transform: none;
+        width: 100%;
+        height: 100dvh;
+        border-radius: 0;
+        animation: none; /* ob-pop animates a translateX(-50%) that no longer applies */
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Full-height sheet: the results area absorbs all remaining space. */
+    .ob-body {
+        flex: 1;
+        min-height: 0;
+        max-height: none;
+    }
+
+    /* Keyboard chrome is meaningless on touch: esc/↵ chips, per-row 'open ↵'
+       hints, and the footer (nav hints + provider-registry note). */
+    .ob-kbd,
+    .ob-go,
+    .ob-foot {
+        display: none;
+    }
+}
