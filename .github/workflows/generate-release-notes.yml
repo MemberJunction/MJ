@@ -38,9 +38,15 @@ jobs:
           COUNT=$(find .changeset -maxdepth 1 -name '*.md' ! -iname 'readme.md' | wc -l | tr -d ' ')
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
 
+      # The changeset gate applies only to the automated PR path. A manual
+      # workflow_dispatch is an explicit human ask — honor it even at 0 pending
+      # changesets (e.g. right after a release, when `changeset version` has
+      # consumed the .md files). Note the dispatch path has a pre-existing
+      # caveat regardless of this gate: the prompt calls get_pull_request with
+      # no PR context, so dispatch runs are only useful alongside an open PR.
       - name: Generate Release Notes with Claude
         id: claude-release-notes
-        if: steps.cs.outputs.count != '0'
+        if: github.event_name == 'workflow_dispatch' || steps.cs.outputs.count != '0'
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}

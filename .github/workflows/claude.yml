@@ -6,13 +6,12 @@ on:
     # Not re-running review on updates
     # types: [opened, synchronize]
     branches: [next]
-    # The review prompt below only covers migrations/*.sql — skip the whole run
-    # (zero runner minutes, zero API tokens) when a PR touches no migration SQL.
-    # NOTE: keep `claude-review` a NON-required status check. A paths-skipped run
-    # reports "pending" forever; if this check were ever made required it would
-    # block every non-migration PR from merging.
-    paths:
-      - 'migrations/**/*.sql'
+    # Optional: Only run on specific file changes
+    # paths:
+    #   - "src/**/*.ts"
+    #   - "src/**/*.tsx"
+    #   - "src/**/*.js"
+    #   - "src/**/*.jsx"
 
 jobs:
   claude-review:
@@ -35,9 +34,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
-          # Haiku is ~5x cheaper per token than Opus and sufficient for this
-          # deterministic SQL rule-check (hardcoded UUIDs in INSERT/spCreate*).
-          model: claude-haiku-4-5
+          model: claude-opus-4-8
 
           direct_prompt: |
             Please review this PR and provide inline feedback using the GitHub review system. Follow these steps:
