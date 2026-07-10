@@ -64,6 +64,18 @@ describe('SQLServerExternalDataSourceDriver — Fabric / Entra service-principal
       expect(cfg.user).toBe('u');
       expect(cfg.authentication).toBeUndefined();
     });
+
+    it('suppresses SET XACT_ABORT on the Entra path (Fabric rejects it): abortTransactionOnError=null', () => {
+      const cfg = d.cfg(ds(), { host: 'fabric', authMode: 'entra-service-principal' }, creds({ tenantId: 't', clientId: 'c', clientSecret: 's' }));
+      // null tells tedious to emit neither `set xact_abort on` nor `off` — Fabric Warehouse
+      // errors (15869) on the statement in any form.
+      expect(cfg.options?.abortTransactionOnError).toBeNull();
+    });
+
+    it('leaves abortTransactionOnError unset for SQL auth (preserves default tedious behavior)', () => {
+      const cfg = d.cfg(ds(), { host: 'h', ssl: true }, creds({ username: 'u', password: 'p' }));
+      expect(cfg.options?.abortTransactionOnError).toBeUndefined();
+    });
   });
 
   describe('isAuthError (Entra self-heal signatures)', () => {

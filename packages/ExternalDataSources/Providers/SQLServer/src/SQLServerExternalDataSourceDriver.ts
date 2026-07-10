@@ -142,20 +142,23 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
   ): sql.config {
     const useEntra = (config.authMode ?? (cred?.values.clientId ? 'entra-service-principal' : 'sql')) === 'entra-service-principal';
     const encrypt = useEntra ? true : !!config.ssl;
+    const options: NonNullable<sql.config['options']> = {
+      encrypt,
+      // Secure by default: verify the server cert unless the config explicitly opts out.
+      trustServerCertificate: config.sslRejectUnauthorized === false,
+      ...(config.instanceName ? { instanceName: config.instanceName } : {}),
+    };
     const poolConfig: sql.config = {
       server: config.server ?? config.host ?? 'localhost',
       port: config.port,
       database: dataSource.DefaultDatabase ?? config.database,
-      options: {
-        encrypt,
-        // Secure by default: verify the server cert unless the config explicitly opts out.
-        trustServerCertificate: config.sslRejectUnauthorized === false,
-        ...(config.instanceName ? { instanceName: config.instanceName } : {}),
-      },
+      options,
       pool: { max: config.maxPoolSize ?? 5 },
     };
     if (useEntra) {
       // Microsoft Entra service principal — tedious authenticates the SPN; no user/password.
+      // Requires tedious >= 19.2.1 (the FeatureExt/fedauth fix, tediousjs/tedious#1718),
+      // pulled via mssql >= 12.7.0 — older tedious silently drops the Fabric login after LOGIN7.
       poolConfig.authentication = {
         type: 'azure-active-directory-service-principal-secret',
         options: {
@@ -164,6 +167,13 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
           tenantId: cred?.values.tenantId ?? '',
         },
       };
+      // Microsoft Fabric Warehouse rejects `SET XACT_ABORT` entirely. tedious emits
+      // `set xact_abort off` on connect by default (and `on` when abortTransactionOnError
+      // is true); only `null` makes it emit neither. This read-only driver never needs
+      // XACT_ABORT, so suppress it on the Entra/Fabric path. The mssql/tedious public types
+      // model this field as boolean|undefined, so set null through a widened view of options.
+      const entraOptions: { abortTransactionOnError?: boolean | null } = options;
+      entraOptions.abortTransactionOnError = null;
     } else {
       poolConfig.user = cred?.values.username;
       poolConfig.password = cred?.values.password;
