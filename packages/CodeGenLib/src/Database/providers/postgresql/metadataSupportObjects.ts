@@ -265,7 +265,34 @@ BEGIN
     re."ID" AS related_entity_id,
     fk."referenced_column"::text AS related_entity_field_name,
     (pk."ColumnName" IS NOT NULL) AS new_is_primary_key,
-    (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL) AS new_is_unique
+    (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL) AS new_is_unique,
+    -- Whether this field has a change that actually affects the generated view/sproc SQL.
+    -- A pure Sequence renumber (e.g. a freshly-added field's temp 100037 -> 19) is NOT
+    -- material: the field is still applied/renumbered by the UPDATE below, but it must NOT
+    -- flag its entity as "modified" for regeneration, or every fresh PG CodeGen run re-emits
+    -- byte-identical views + sprocs for dozens of entities (the ~42k-line over-regen). This
+    -- mirrors the WHERE predicate below MINUS the Sequence term.
+    (
+         COALESCE(TRIM(ef."Description"), '') <>
+           COALESCE(TRIM(CASE WHEN ef."AutoUpdateDescription" THEN sq."Description" ELSE ef."Description" END), '')
+      OR (sq."IsVirtual" = 0 AND (
+              (ef."Type" <> sq."Type" AND NOT (ef."Type" = 'numeric' AND sq."Type" = 'decimal'))
+           OR ef."Length" <> sq."Length"
+           OR ef."Precision" <> sq."Precision"
+           OR ef."Scale" <> sq."Scale"
+           OR ef."AllowsNull" <> sq."AllowsNull"
+         ))
+      OR __mj."fnNormalizeDefaultValue"(ef."DefaultValue") IS DISTINCT FROM __mj."fnNormalizeDefaultValue"(sq."DefaultValue")
+      OR ef."AutoIncrement" <> (sq."AutoIncrement" <> 0)
+      OR ef."IsVirtual" <> (sq."IsVirtual" <> 0)
+      OR ef."IsComputed" <> (sq."IsComputed" <> 0)
+      OR COALESCE(ef."RelatedEntityID", '00000000-0000-0000-0000-000000000000'::uuid) <>
+         COALESCE(re."ID", '00000000-0000-0000-0000-000000000000'::uuid)
+      OR COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '')
+      OR ef."IsPrimaryKey" <> (pk."ColumnName" IS NOT NULL)
+      OR ef."IsUnique" <> (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL)
+      OR (ef."AllowUpdateAPI" = TRUE AND sq."IsVirtual" <> 0 AND ef."IsVirtual" = FALSE)
+    ) AS is_material_change
   FROM __mj."EntityField" ef
   INNER JOIN __mj."vwSQLColumnsAndEntityFields" sq
     ON ef."EntityID" = sq."EntityID" AND ef."Name"::text = sq."FieldName"::text
@@ -353,7 +380,11 @@ BEGIN
     fr.new_is_virtual, fr.new_is_computed, fr.new_sequence::integer,
     fr.related_entity_id, fr.related_entity_field_name::text,
     fr.new_is_primary_key, fr.new_is_unique
-  FROM _uef_filtered fr;
+  FROM _uef_filtered fr
+  -- Only material changes flag the entity as modified (for regen). Sequence-only
+  -- renumbers were still applied by the UPDATE above but must not trigger a full
+  -- byte-identical view+sproc regeneration.
+  WHERE fr.is_material_change;
 
   DROP TABLE IF EXISTS _uef_filtered;
   DROP TABLE IF EXISTS _uef_scope;

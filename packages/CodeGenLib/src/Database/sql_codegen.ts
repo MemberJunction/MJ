@@ -860,6 +860,18 @@ export class SQLCodeGenBase {
             return false;
         }
 
+        // PostgreSQL: pg_get_viewdef() returns a heavily reformatted definition (re-qualified
+        // columns, normalized whitespace/casing, re-ordered expressions) that never byte-matches
+        // our generated CREATE VIEW text. The SELECT-body text comparison below therefore yields a
+        // false "changed" verdict for nearly every view, force-logging all of them and turning every
+        // PG CodeGen run into a full ~380-entity regeneration. Genuine column/structure changes are
+        // already caught reliably by the metadata-driven modifiedEntityList (checked above), so on
+        // PostgreSQL we skip this text heuristic and rely on that. (SQL Server's view definition is
+        // stored verbatim, so the comparison remains valid there.)
+        if (configInfo.dbPlatform === 'postgresql') {
+            return false;
+        }
+
         try {
             const viewName = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
             const viewDefSQL = this._dbProvider.getViewDefinitionSQL(entity.SchemaName, viewName);
