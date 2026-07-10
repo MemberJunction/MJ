@@ -3,7 +3,7 @@ import { ComponentFixture } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { MarkdownComponent } from './markdown.component';
-import { MarkdownRenderEvent } from '../types/markdown.types';
+import { MarkdownRenderEvent } from '@memberjunction/markdown-core';
 
 /**
  * DOM-level spec for <mj-markdown>. The component is module-declared

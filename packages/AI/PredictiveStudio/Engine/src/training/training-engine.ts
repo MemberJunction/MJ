@@ -122,12 +122,19 @@ export class TrainingEngine {
     if (!pipeline) {
       throw new Error(`TrainingEngine: ML Training Pipeline '${pipelineId}' not found.`);
     }
+    // `pipeline.Algorithm` is the algorithm's display *Name* (e.g. "XGBoost") from
+    // the pipeline view — NOT the sidecar driver key. Resolve the real `DriverClass`
+    // (e.g. "xgboost") by id; fall back to the display name only when the loader
+    // can't resolve it (e.g. in-memory test fakes that set the driver key directly).
+    const resolvedDriverKey =
+      (await deps.recordLoader.resolveAlgorithmDriverKey?.(pipeline.AlgorithmID, deps.contextUser, deps.provider)) ??
+      pipeline.Algorithm;
     return {
       pipeline,
       targetEntityName: pipeline.TargetEntity,
       targetVariable: pipeline.TargetVariable,
       problemType: pipeline.ProblemType,
-      algorithmDriverKey: pipeline.Algorithm,
+      algorithmDriverKey: resolvedDriverKey,
       hyperparameters: parseJson<Record<string, unknown>>(pipeline.Hyperparameters, {}),
       sourceBindings: parseJson<SourceBinding[]>(pipeline.SourceBindings, []),
       featureSteps: parseJson<FeatureStepGraph>(pipeline.FeatureSteps, { Steps: [] }),

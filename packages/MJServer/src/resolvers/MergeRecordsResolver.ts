@@ -137,8 +137,9 @@ export class RecordMergeDetailResult {
   @Field(() => Boolean)
   Success: boolean;
 
-  @Field(() => Int, { nullable: true })
-  RecordMergeDeletionLogID?: number;
+  // Record Merge Deletion Log IDs are uniqueidentifiers since the v2 GUID migration
+  @Field(() => String, { nullable: true })
+  RecordMergeDeletionLogID?: string;
 
   @Field(() => String, { nullable: true })
   Message?: string;
@@ -152,8 +153,10 @@ export class RecordMergeResult {
   @Field(() => String, { nullable: true })
   OverallStatus: string;
 
-  @Field(() => Int, { nullable: true })
-  RecordMergeLogID: number;
+  // Record Merge Log IDs are uniqueidentifiers since the v2 GUID migration —
+  // core's RecordMergeResult.RecordMergeLogID is string | null
+  @Field(() => String, { nullable: true })
+  RecordMergeLogID: string;
 
   @Field(() => [RecordMergeDetailResult])
   RecordStatus: RecordMergeDetailResult[];
@@ -176,7 +179,17 @@ export class RecordMergeResolver extends ResolverBase {
     try {
       const md = GetReadWriteProvider(providers);
       const options = {};
-      const result = await md.MergeRecords(request, userPayload.userRecord, options);
+      // Rehydrate the GraphQL input's plain { KeyValuePairs } objects into CompositeKey
+      // class instances — the provider calls CompositeKey methods (.Values(), .GetValueByIndex())
+      // on them, so passing the raw input throws
+      // "request.SurvivingRecordCompositeKey.Values is not a function".
+      const mergeRequest = {
+        EntityName: request.EntityName,
+        SurvivingRecordCompositeKey: new CompositeKey(request.SurvivingRecordCompositeKey.KeyValuePairs),
+        RecordsToMerge: request.RecordsToMerge.map((k) => new CompositeKey(k.KeyValuePairs)),
+        ...(request.FieldMap ? { FieldMap: request.FieldMap.map((f) => ({ FieldName: f.FieldName, Value: f.Value })) } : {}),
+      };
+      const result = await md.MergeRecords(mergeRequest, userPayload.userRecord, options);
       return result;
     } catch (e) {
       LogError(e);

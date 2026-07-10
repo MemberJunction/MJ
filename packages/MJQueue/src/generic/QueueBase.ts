@@ -195,12 +195,15 @@ export abstract class QueueBase implements IShutdownable {
       await task.TaskRecord.Save();
 
       // update the task status
-      task.Status = result.success ? TaskStatus.Complete : TaskStatus.Failed; 
+      task.Status = result.success ? TaskStatus.Complete : TaskStatus.Failed;
 
       return result;
     }
     catch (e) {
       console.log(e);
+      // Without this, a task whose ProcessTask() rejects stays stuck at InProgress
+      // forever, permanently occupying one of the queue's _maxTasks concurrency slots.
+      task.Status = TaskStatus.Failed;
       return {
         success: false,
         output: null,
@@ -208,6 +211,26 @@ export abstract class QueueBase implements IShutdownable {
         exception: e
       }
     }
+    finally {
+      // Terminal tasks are no longer picked up by ProcessTasks(); drop them from
+      // _queue so a long-lived queue doesn't retain every task it has ever run.
+      this.removeCompletedTask(task);
+    }
+  }
+
+  private removeCompletedTask(task: TaskBase): void {
+    const idx = this._queue.indexOf(task);
+    if (idx !== -1) {
+      this._queue.splice(idx, 1);
+    }
+  }
+
+  /**
+   * Current number of tasks retained in the in-memory queue (pending + in-progress).
+   * Completed/failed tasks are removed once terminal, so this does not grow unbounded.
+   */
+  public get QueueSize(): number {
+    return this._queue.length;
   }
 
   public FindTask(ID: string): TaskBase {

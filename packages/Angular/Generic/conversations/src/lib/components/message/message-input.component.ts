@@ -15,12 +15,13 @@ import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-da
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
-import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
+import { PendingAttachment } from '@memberjunction/ng-composer';
+import { AiComposerComponent } from '../composer/ai-composer.component';
+import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
 import { PlanModePreference } from '../../utils/plan-mode-preference';
-import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
@@ -33,7 +34,6 @@ import {
   PairingsAllowTarget
 } from '../../services/realtime-pairing';
 import { Subscription } from 'rxjs';
-import { MessageInputBoxComponent } from './message-input-box.component';
 import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
 
 @Component({
@@ -258,7 +258,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Output() emptyStateSubmit = new EventEmitter<{text: string; attachments: PendingAttachment[]}>(); // Emitted when in emptyStateMode
   @Output() uploadStateChanged = new EventEmitter<{isUploading: boolean; message: string}>(); // Emits when attachment upload state changes
 
-  @ViewChild('inputBox') inputBox!: MessageInputBoxComponent;
+  @ViewChild('inputBox') inputBox!: AiComposerComponent;
 
   public messageText: string = '';
   public isSending: boolean = false;
@@ -277,6 +277,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private pendingAttachments: PendingAttachment[] = [];
 
   private engine = ConversationEngine.Instance;
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocomplete = MentionAutocompleteService.Instance;
 
   constructor(
     private dialogService: DialogService,
@@ -286,7 +288,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     private activeTasks: ActiveTasksService,
     private streamingService: ConversationStreamingService,
     private mentionParser: MentionParserService,
-    private mentionAutocomplete: MentionAutocompleteService,
     private attachmentService: ConversationAttachmentService,
     private bridge: ConversationBridgeService,
     private realtimeSession: RealtimeSessionService
@@ -703,10 +704,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * This callback will be invoked by the streaming service when progress updates arrive.
    */
   private createMessageProgressCallback(messageId: string): (progress: MessageProgressUpdate) => Promise<void> {
+    // Resolve the message once and reuse it for the callback's lifetime: streamed
+    // final-response updates arrive per content delta, and re-awaiting the cache on
+    // every delta both wastes work and (on a cold cache) races concurrent loads.
+    let resolvedMessage: Awaited<ReturnType<DataCacheService['getConversationDetail']>> = null;
     return async (progress: MessageProgressUpdate) => {
       try {
         // Get message from cache (single source of truth)
-        const message = await this.dataCache.getConversationDetail(messageId, this.currentUser);
+        const message = (resolvedMessage ??= await this.dataCache.getConversationDetail(messageId, this.currentUser));
 
         if (!message) {
           console.warn(`[StreamingCallback] Message ${messageId} not found in cache`);
@@ -723,6 +728,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         const completionTime = this.completionTimestamps.get(messageId);
         if (completionTime) {
           console.log(`[StreamingCallback] Message ${messageId} marked complete at ${new Date(completionTime).toISOString()}, ignoring late progress update`);
+          return;
+        }
+
+        // Streamed final-response content: the service accumulates deltas, so
+        // progress.streaming.content is always the full reply text so far — assign it.
+        // The completion flow (above guards + the 'complete' path) reconciles the
+        // bubble with the server-saved final message, so no append/merge is needed here.
+        if (progress.streaming) {
+          message.Message = progress.streaming.content;
+          this.messageSent.emit(message);
+          // Keep the tasks dropdown on a stable status line rather than the growing reply text.
+          this.activeTasks.updateStatusByConversationDetailId(message.ID, 'Responding…');
           return;
         }
 

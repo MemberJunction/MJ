@@ -1,0 +1,138 @@
+[
+  {
+    "_comments": [
+      "SkillSmith — top-level skill-authoring meta-agent (the *Smith family, alongside ActionSmith).",
+      "Pure metadata, no DriverClass: composes existing catalog members into MJ: AI Skills records",
+      "via the generic CRUD actions. CreatedByUserID is defaulted server-side by",
+      "MJAISkillEntityServer, so the agent never has to know the acting user's ID.",
+      "Persists new skills as Status=Pending by default; a human activates after review."
+    ],
+    "fields": {
+      "Name": "SkillSmith",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
+      "Description": "Meta-agent that authors AI Skills for the skill catalog. Interviews the user about the capability, discovers bundle members with Find Candidate Actions/Agents, checks for overlapping existing skills, drafts agent-agnostic instructions with confirm-before-acting guardrails, gates on user approval, and persists the skill with its action and sub-agent junctions (default Status=Pending for human review).",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ModelSelectionMode": "Agent",
+      "ExposeAsAction": true,
+      "InvocationMode": "Any",
+      "IconClass": "fa-solid fa-hat-wizard",
+      "PayloadSelfWritePaths": "[\"name\", \"description\", \"category\", \"iconClass\", \"color\", \"instructions\", \"bundledActions\", \"bundledSubAgents\", \"existingSkillCheck\", \"skillId\", \"status\", \"message\"]",
+      "FinalPayloadValidation": "{\"skillId\": \"any\", \"status\": \"string:!empty\", \"message\": \"string:!empty\"}",
+      "FinalPayloadValidationMode": "Warn",
+      "MaxIterationsPerRun": 15
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=SkillSmith Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "562F5AD5-9F55-4D40-B11C-7B52A397B574"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:39.064Z",
+            "checksum": "510af3dca7642b4a7e2d1a85c0b9d9a127fc16e3c5afb96cabc96c54b244b4a1"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Actions",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "690D2C04-FBB8-489B-B415-A9029C05C3B5"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:39.074Z",
+            "checksum": "150413eed758e353aadcc3e6186c81a82876c19538ea49d97bd562cbfe8a2759"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Agents",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "849D120B-DB89-42F8-A0AE-7C173BE4EB01"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:39.084Z",
+            "checksum": "8594e4c41f8dafa6b3254ca8ede1a7094801a11ada29a9aa2a8738be0c309067"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Records",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BB236357-3FB5-4250-9591-F839BDB0DCCC"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:39.093Z",
+            "checksum": "22ccac041b88df949b0a93683bc446c159f9ba31e52f7d35dfbfc6162352962f"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A49BA4DA-6200-4A25-A87B-99AAFCC22762"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:39.103Z",
+            "checksum": "d621ad2bc5b1f007109b35d60afe54d21b4f3cfedf42b242ca44d15785e6e6a5"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "80DB73FF-C02D-482E-AF1D-3F0F5B222598"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:39.114Z",
+            "checksum": "f677b284d019d5cf93ba0125433e3f29cb520831c238683cf1303d6ca4ae1cf4"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Update Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6E5100E3-53E5-4592-B404-A5AB765510A0"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:39.125Z",
+            "checksum": "ba214e4880b2c5272046116869798e9c65b9d2e3c16d9576af8d264ebfe09095"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "BB5654A1-2F1F-49B3-8278-1C414E72A6D5"
+    },
+    "sync": {
+      "lastModified": "2026-07-07T15:18:39.047Z",
+      "checksum": "818747f2de848ba20625f9a2bbdb623b993b0a33c2f05c67254ab8e88455370f"
+    }
+  }
+]

@@ -1,5 +1,102 @@
 # @memberjunction/metadata-sync
 
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/core-entities-server@5.46.0
+  - @memberjunction/postgresql-dataprovider@5.46.0
+  - @memberjunction/sqlserver-dataprovider@5.46.0
+  - @memberjunction/server-bootstrap-lite@5.46.0
+  - @memberjunction/cli-core@5.46.0
+  - @memberjunction/config@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.45.1
+- @memberjunction/core-entities-server@5.45.1
+- @memberjunction/server-bootstrap-lite@5.45.1
+- @memberjunction/generic-database-provider@5.45.1
+- @memberjunction/sqlserver-dataprovider@5.45.1
+- @memberjunction/postgresql-dataprovider@5.45.1
+- @memberjunction/cli-core@5.45.1
+- @memberjunction/config@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/sql-dialect@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- 21e33fe: Move Skip to a client-side Open App and remove server-embedded agent; scope-gate query/view/search resolvers with API-key scope authorization; add credential-store fallback for component registry keys; support Open App in-process lifecycle hooks with interactive prompts.
+- 037f3af: Fix: honor the configured request timeout on the MetadataSync/OpenApp provider pool. `mj app remove` (and other `mj app …` / `mj sync` commands sharing this provider) built the SQL Server connection without `requestTimeout`, so it silently fell back to mssql's 15s default — dropping a large app schema could time out regardless of `dbRequestTimeout` config. The configured value now flows through `toMJConfig` → `MJConfig.dbRequestTimeout` → the mssql pool's `requestTimeout` (and the PostgreSQL client's `statement_timeout` for parity). When unset, each driver's own default still applies.
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [19ec4b0]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/server-bootstrap-lite@5.45.0
+  - @memberjunction/graphql-dataprovider@5.45.0
+  - @memberjunction/core-entities-server@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/postgresql-dataprovider@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/cli-core@5.45.0
+  - @memberjunction/config@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/graphql-dataprovider@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core-entities-server@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/server-bootstrap-lite@5.44.0
+  - @memberjunction/generic-database-provider@5.44.0
+  - @memberjunction/sqlserver-dataprovider@5.44.0
+  - @memberjunction/postgresql-dataprovider@5.44.0
+  - @memberjunction/cli-core@5.44.0
+  - @memberjunction/config@5.44.0
+  - @memberjunction/sql-dialect@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

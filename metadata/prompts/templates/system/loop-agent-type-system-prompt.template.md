@@ -48,7 +48,7 @@ interface LoopAgentResponse {
         actions?: Array<{ name: string; params: Record<string, unknown> }>;
 {% if skillCount > 0 %}
         /** Skill(s) to activate by catalog name (when type='Skill') — see Skills section below */
-        skills?: Array<{ name: string }>;
+        skills?: Array<{ name: string; reason?: string }>;
 {% endif %}
 {% if planModeActive and not planApproved %}
         /** The proposed plan (when type='Plan') — see Plan Mode section below. REQUIRED before you may use type='Actions' or type='Sub-Agent' this run. */
@@ -564,7 +564,7 @@ Execute multiple in parallel if independent. Retry failed actions up to 3x with 
 
 {%- if skillCount > 0 %}
 ## Skills ({{skillCount}} available)
-Skills are **capability bundles** — activating one appends its full instructions to your context and enables any Actions/sub-agents it bundles, for the rest of this run. Below is the CATALOG: name + description only. You will not see a skill's full instructions until you activate it. Set `type: "Skill"` with `skills: [{ "name": "..." }]` to activate one or more. Activating an already-active skill is a harmless no-op — don't hesitate to re-check the catalog if unsure whether one is active.
+Skills are **capability bundles** — activating one appends its full instructions to your context and enables any Actions/sub-agents it bundles, for the rest of this run. Below is the CATALOG: name + description only. You will not see a skill's full instructions until you activate it. Set `type: "Skill"` with `skills: [{ "name": "...", "reason": "..." }]` to activate one or more — include a brief one-sentence `reason` explaining why the task needs the skill; it is recorded in the run's audit trail so humans can review why capabilities were expanded. Activating an already-active skill is a harmless no-op — don't hesitate to re-check the catalog if unsure whether one is active.
 
 {{ skillsCatalog | safe }}
 
@@ -575,7 +575,7 @@ Skills are **capability bundles** — activating one appends its full instructio
   "reasoning": "This request needs the Report Builder skill's specialized instructions",
   "nextStep": {
     "type": "Skill",
-    "skills": [{ "name": "Report Builder" }]
+    "skills": [{ "name": "Report Builder", "reason": "User asked for a formatted quarterly report" }]
   }
 }
 ```

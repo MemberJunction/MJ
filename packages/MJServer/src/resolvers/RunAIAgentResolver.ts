@@ -4,7 +4,7 @@ import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo,
 import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, AgentExecutionStreamingCallback } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -12,6 +12,7 @@ import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
+import { resolveWidgetGuestRunContext, elevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -77,6 +78,17 @@ export class AgentStreamingContent {
 
     @Field({ nullable: true })
     agentName?: string;
+
+    /**
+     * Content discriminator passed through from the agent's streaming chunk (see
+     * `AgentExecutionStreamingCallback` in @memberjunction/ai-core-plus).
+     * 'final-response' marks user-facing reply deltas the conversation client
+     * accumulates + renders into the message bubble; chunks without a kind are
+     * raw prompt output (e.g. a Loop agent's JSON turn envelope) and are not
+     * rendered by the conversation client.
+     */
+    @Field({ nullable: true })
+    kind?: string;
 }
 
 @ObjectType()
@@ -321,8 +333,8 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Create streaming content callback
      */
-    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: any }) {
-        return (chunk: any) => {
+    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: MJAIAgentRunEntityExtended | null }): AgentExecutionStreamingCallback {
+        return (chunk) => {
             // Use the agent run from the ref
             const agentRun = agentRunRef.current;
             if (!agentRun) {
@@ -340,7 +352,8 @@ export class RunAIAgentResolver extends ResolverBase {
                     content: chunk.content,
                     isPartial: !chunk.isComplete,
                     stepName: chunk.stepType,
-                    agentName: chunk.modelName
+                    agentName: chunk.modelName,
+                    kind: chunk.kind
                 },
                 timestamp: new Date()
             };
@@ -974,6 +987,17 @@ export class RunAIAgentResolver extends ResolverBase {
             };
         }
 
+        // PUBLIC WEB-WIDGET PRIVILEGED DISPATCH (public-web-widget.md Phase 0): when the request is a
+        // widget guest, the agent runs under a TRUSTED SERVER PRINCIPAL and the agent id is taken
+        // AUTHORITATIVELY from the widget instance (never the client-supplied arg) — so a guest needs
+        // no grants to WRITE the AI run entities and cannot run an arbitrary agent under elevation.
+        // Conversation OWNERSHIP is still enforced under the guest principal below: the guest loads its
+        // own ConversationDetail through the Widget Guest RLS filters, so a detail id from another
+        // session resolves to "not found" before any elevated work happens.
+        const widgetElevation = await resolveWidgetGuestRunContext(userPayload, p);
+        const effectiveAgentId = widgetElevation ? widgetElevation.pinnedAgentId : agentId;
+        const effectiveUserPayload = widgetElevation ? elevateUserPayload(userPayload, widgetElevation.elevatedUser) : userPayload;
+
         try {
             // LATENCY OPTIMIZATION (Opt #2 + #3): Load ConversationDetail once here to extract
             // conversationId, then pass it downstream. Previously this record was loaded multiple
@@ -1004,13 +1028,13 @@ export class RunAIAgentResolver extends ResolverBase {
                 // Fire-and-forget mode: start execution in background, return immediately.
                 // The client will receive the result via WebSocket PubSub completion event.
                 this.executeAgentInBackground(
-                    p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
+                    p, dataSource, effectiveAgentId, effectiveUserPayload, messagesJson, sessionId, pubSub,
                     data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                     conversationDetailId, createArtifacts || false, createNotification || false,
                     sourceArtifactId, sourceArtifactVersionId, conversationId, planMode, requestedSkillIDs
                 );
 
-                LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
+                LogStatus(`🔥 Fire-and-forget: Agent ${effectiveAgentId} execution started in background for session ${sessionId}`);
 
                 return {
                     success: true,
@@ -1022,8 +1046,8 @@ export class RunAIAgentResolver extends ResolverBase {
             return this.executeAIAgent(
                 p,
                 dataSource,
-                agentId,
-                userPayload,
+                effectiveAgentId,
+                effectiveUserPayload,
                 messagesJson,
                 sessionId,
                 pubSub,
