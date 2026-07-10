@@ -15,7 +15,10 @@ export class OmnibarCommandProvider extends OmnibarProvider {
     public readonly TriggerChar = '/';
     public readonly Key = 'omnibar-commands';
     public override readonly Priority = 40;
-    public readonly ModeLabel = 'Commands';
+    // 'Go to App', not 'Commands': this mode only NAVIGATES (apps + their nav
+    // items) — a verb-of-execution label misled the first design review. Revisit
+    // if the mode ever grows real executable commands (MJ Actions would back it).
+    public readonly ModeLabel = 'Go to App';
     public override readonly Placeholder = 'App or destination…';
 
     public async GetSuggestions(request: ComposerSuggestionRequest): Promise<MentionSuggestion[]> {
