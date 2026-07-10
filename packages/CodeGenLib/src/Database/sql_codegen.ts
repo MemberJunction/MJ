@@ -918,6 +918,13 @@ export class SQLCodeGenBase {
      *   - a missing view entirely (empty column set → force-recreate; the documented self-heal for a
      *     view that a prior run dropped but failed to recreate).
      * A pure Sequence renumber does not change the column set, so it correctly does NOT flag.
+     *
+     * NOT caught (by design — a tradeoff vs. SQL Server's text comparison): a view-BODY change that
+     * leaves the exposed column NAMES identical — e.g. a `RelatedEntityNameFieldMap` re-pointed to a
+     * different source column under the same output alias, or a codegen view-template change that
+     * rewrites the SELECT without renaming columns. Those alter the SELECT text but not the column set,
+     * so they must be forced through the metadata-driven modifiedEntityList (or an explicit
+     * EntitiesRequiringViewRegen entry), not this column-set check.
      * @returns true if the view's column set differs from the entity's fields (or the view is missing)
      */
     protected async checkBaseViewColumnsChangedPG(pool: CodeGenConnection, entity: EntityInfo, viewName: string): Promise<boolean> {
