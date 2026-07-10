@@ -270,6 +270,12 @@ export class FeatureAssemblyExecutor {
     if (params.targetVariable) {
       cols.add(params.targetVariable);
     }
+    // AsOfStrategy 'column' mode reads its cutoff date off each record — a narrow
+    // scope projection that drops it fails every record at resolveAsOfDate, so it
+    // must be hydrated (and asserted) exactly like a feature column.
+    if (params.asOf?.Mode === 'column' && params.asOf.Column) {
+      cols.add(params.asOf.Column);
+    }
     return [...cols];
   }
 

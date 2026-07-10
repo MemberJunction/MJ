@@ -16,22 +16,35 @@ import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import type { PredictiveStudioBuilderPayload, PredictiveStudioBuildOutcome } from './pipeline-builder-agent';
 
 /** The minimal payload slice the build decision reads (so it's callable with a partial in tests). */
-type BuildDecisionState = { Approved?: boolean; BuildResult?: PredictiveStudioBuildOutcome };
+type BuildDecisionState = { Approved?: boolean; BuildResult?: PredictiveStudioBuildOutcome; BuildAttemptUserMessageCount?: number };
 
 /** The sub-agent NAME the orchestrator forces to once the plan is approved (matches the metadata). */
 export const PIPELINE_BUILDER_SUBAGENT_NAME = 'Pipeline Builder';
 const BUILD_MESSAGE = 'The plan is approved — build the pipeline, train it, and apply the publish gate now.';
 
 /**
- * The deterministic decision: should the orchestrator force the build right now? True when the plan is
- * approved (an explicit `Approved` flag OR a "build it" intent in the last user message) AND it hasn't
- * been built yet (`BuildResult` absent). Pure → unit-testable without the agent framework.
+ * The deterministic decision: should the orchestrator force the build right now? Pure → unit-testable
+ * without the agent framework.
+ *
+ * - **Not built yet** → force when the plan is approved (an explicit `Approved` flag OR a "build it"
+ *   intent in the last user message).
+ * - **Built successfully** → never re-force (the no-loop guard).
+ * - **Build FAILED** → the stale "build it" message that triggered the failed attempt must NOT
+ *   immediately re-force (that's the loop the guard exists for) — but a FRESH user message with build
+ *   intent (userMessageCount above the stamp taken when the failed build was forced) gets a
+ *   deterministic retry. Without a stamp (e.g. the builder was LLM-routed), we stay conservative and
+ *   fall back to LLM-driven routing.
  */
-export function shouldForceBuild(payload: BuildDecisionState | undefined, lastUserText: string | null): boolean {
-  if (payload?.BuildResult) return false; // already built — don't loop
-  if (payload?.Approved === true) return true;
+export function shouldForceBuild(payload: BuildDecisionState | undefined, lastUserText: string | null, userMessageCount?: number): boolean {
   const t = (lastUserText ?? '').toLowerCase();
-  return t.includes('build it') || t.includes('create it') || t.includes('build the prediction') || t.includes('build_now');
+  const buildIntent = t.includes('build it') || t.includes('create it') || t.includes('build the prediction') || t.includes('build_now');
+  if (payload?.BuildResult) {
+    if (payload.BuildResult.success) return false; // built — don't loop
+    const stampedAt = payload.BuildAttemptUserMessageCount;
+    return buildIntent && stampedAt !== undefined && (userMessageCount ?? 0) > stampedAt;
+  }
+  if (payload?.Approved === true) return true;
+  return buildIntent;
 }
 
 @RegisterClass(BaseAgent, 'PredictiveStudioModelDevAgent')
@@ -47,8 +60,13 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     currentPayload: P,
   ): Promise<BaseAgentNextStep<P>> {
     const payload = currentPayload as PredictiveStudioBuilderPayload | undefined;
-    if (shouldForceBuild(payload, this.lastUserMessageText(params))) {
-      return this.buildSubAgentStep(PIPELINE_BUILDER_SUBAGENT_NAME, BUILD_MESSAGE, currentPayload);
+    const userMessageCount = this.userMessageCount(params);
+    if (shouldForceBuild(payload, this.lastUserMessageText(params), userMessageCount)) {
+      // Stamp the user-message count so a FAILED build can distinguish the stale triggering message
+      // (no re-force → no loop) from a fresh retry request (deterministic rebuild). The builder spreads
+      // the incoming payload into its result, so the stamp survives the round trip.
+      const stamped = { ...(payload ?? {}), BuildAttemptUserMessageCount: userMessageCount } as unknown as P;
+      return this.buildSubAgentStep(PIPELINE_BUILDER_SUBAGENT_NAME, BUILD_MESSAGE, stamped);
     }
     return super.determineNextStep(params, agentType, promptResult, currentPayload);
   }
@@ -62,6 +80,11 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
       }
     }
     return null;
+  }
+
+  /** Count of user messages — the freshness clock for the failed-build retry stamp. */
+  private userMessageCount(params: ExecuteAgentParams): number {
+    return (params.conversationMessages ?? []).filter((m) => m.role === 'user').length;
   }
 
   /** Force a routed sub-agent step (the orchestrator runs again after the sub-agent returns). */

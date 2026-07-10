@@ -1,5 +1,50 @@
 # Change Log - @memberjunction/cli
 
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/open-app-engine@5.46.0
+  - @memberjunction/ai-cli@5.46.0
+  - @memberjunction/codegen-lib@5.46.0
+  - @memberjunction/db-auto-doc@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/metadata-sync@5.46.0
+  - @memberjunction/query-gen@5.46.0
+  - @memberjunction/sqlserver-dataprovider@5.46.0
+  - @memberjunction/server-bootstrap-lite@5.46.0
+  - @memberjunction/testing-cli@5.46.0
+  - @memberjunction/cli-core@5.46.0
+  - @memberjunction/config@5.46.0
+  - @memberjunction/installer@5.46.0
+  - @memberjunction/sql-converter@5.46.0
+  - @memberjunction/sqlglot-ts@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.45.1
+- @memberjunction/codegen-lib@5.45.1
+- @memberjunction/query-gen@5.45.1
+- @memberjunction/server-bootstrap-lite@5.45.1
+- @memberjunction/generic-database-provider@5.45.1
+- @memberjunction/sqlserver-dataprovider@5.45.1
+- @memberjunction/metadata-sync@5.45.1
+- @memberjunction/db-auto-doc@5.45.1
+- @memberjunction/testing-cli@5.45.1
+- @memberjunction/cli-core@5.45.1
+- @memberjunction/config@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/installer@5.45.1
+- @memberjunction/open-app-engine@5.45.1
+- @memberjunction/sql-converter@5.45.1
+- @memberjunction/sqlglot-ts@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes
