@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Microsoft Fabric SQL Endpoint (External)",
-      "Description": "Live, read-only proxied access to a Microsoft Fabric SQL analytics endpoint or Fabric Warehouse. Speaks the SQL Server (TDS) protocol via the node-mssql driver but authenticates with a Microsoft Entra service principal (Fabric refuses SQL auth). T-SQL dialect with TOP / OFFSET-FETCH paging and INFORMATION_SCHEMA introspection.",
+      "Description": "Live, read-only proxied access to a Microsoft Fabric SQL analytics endpoint or Fabric Warehouse. Speaks the SQL Server (TDS) protocol via the node-mssql driver but authenticates with a Microsoft Entra service principal (Fabric refuses SQL auth). T-SQL dialect with TOP / OFFSET-FETCH paging and INFORMATION_SCHEMA + sys.* introspection (tables, columns, primary keys, and foreign keys — on Fabric, constraints must be declared NOT ENFORCED).",
       "DriverClass": "SQLServerExternalDriver",
       "MetadataIntrospectionStrategy": "InformationSchema",
       "FilterDialect": "tsql",

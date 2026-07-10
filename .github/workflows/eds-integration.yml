@@ -296,6 +296,9 @@ jobs:
   fabric-integration:
     name: Microsoft Fabric (integration, manual)
     runs-on: ubuntu-latest
+    # This is the one job that connects to a live external cloud endpoint (Entra + Fabric),
+    # so bound it explicitly — a hung handshake shouldn't burn the default 6-hour cap.
+    timeout-minutes: 15
     if: github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout repo

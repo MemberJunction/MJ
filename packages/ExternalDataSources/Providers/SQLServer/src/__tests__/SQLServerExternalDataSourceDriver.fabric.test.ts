@@ -86,6 +86,12 @@ describe('SQLServerExternalDataSourceDriver — Fabric / Entra service-principal
       expect(d.authErr(new Error('The access token is expired'))).toBe(true);
       expect(d.authErr(new Error('Failed to authenticate the service principal'))).toBe(true);
     });
+    it('recognizes bare invalid-secret / invalid_client phrases (no AADSTS prefix)', () => {
+      // These substrings are unreachable via an "AADSTS..." message (it matches 'aadsts' first),
+      // so exercise them directly to lock in the self-heal on secret-rotation errors.
+      expect(d.authErr(new Error('invalid client secret'))).toBe(true);
+      expect(d.authErr(new Error('OAuth token request failed: invalid_client'))).toBe(true);
+    });
     it('still honors the base auth signals (login failed / SQL Server 18456)', () => {
       expect(d.authErr(new Error('Login failed for user'))).toBe(true);
       expect(d.authErr({ code: 18456 })).toBe(true);

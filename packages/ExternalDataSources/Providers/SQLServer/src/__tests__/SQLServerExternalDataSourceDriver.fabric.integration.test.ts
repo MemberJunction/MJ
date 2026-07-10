@@ -132,6 +132,7 @@ describe.runIf(RUN)('SQLServerExternalDataSourceDriver — Fabric FK introspecti
     const orders = schema.Objects.find((o) => o.Name === 'orders');
     expect(orders).toBeTruthy();
     const fk = orders?.Relationships?.find((r) => r.ReferencedObject === 'customers');
+    expect(fk).toBeTruthy();
     expect(fk?.Columns).toEqual([{ Column: 'customer_id', ReferencedColumn: 'id' }]);
   }, 30000);
 });
