@@ -158,7 +158,9 @@ Example `ConnectionConfig` for a Fabric warehouse:
 }
 ```
 
-with `DefaultDatabase` set to the warehouse name and a credential carrying `tenantId`/`clientId`/`clientSecret`. Everything else — introspection (`INFORMATION_SCHEMA`, incl. FKs), paging, read-only enforcement, caching — behaves exactly as the SQL Server driver.
+with `DefaultDatabase` set to the warehouse name and a credential carrying `tenantId`/`clientId`/`clientSecret`. Everything else — introspection (`INFORMATION_SCHEMA` + `sys.*`, incl. FKs), paging, read-only enforcement, caching — behaves exactly as the SQL Server driver.
+
+> **FK introspection on Fabric.** Fabric Warehouse supports `PRIMARY KEY` / `FOREIGN KEY` constraints only as **`NOT ENFORCED`**, and only when added via `ALTER TABLE` (inline constraints in `CREATE TABLE` error with *"…not supported in this edition"*). When such constraints exist, the driver's `sys.foreign_keys` introspection surfaces them into MJ `Relationships` exactly as for SQL Server — verified by a live integration test that seeds a `NOT ENFORCED` FK and asserts it's introspected. A Fabric source with no declared constraints simply yields empty `Relationships` (the query returns gracefully, it doesn't error).
 
 ---
 

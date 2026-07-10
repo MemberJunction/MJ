@@ -1,4 +1,5 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import sql from 'mssql';
 import type { MJExternalDataSourceEntity } from '@memberjunction/core-entities';
 import type { ResolvedCredential } from '@memberjunction/credentials';
 import { SQLServerExternalDataSourceDriver } from '../SQLServerExternalDataSourceDriver';
@@ -78,4 +79,59 @@ describe.runIf(RUN)('SQLServerExternalDataSourceDriver — Microsoft Fabric (liv
     console.log(`[FABRIC] read ${res.rows.length} row(s) from ${CONN.schema}.${table}`);
     expect(res.rows.length).toBeLessThanOrEqual(5);
   });
+});
+
+/**
+ * FK introspection on Fabric. Fabric Warehouse accepts PRIMARY KEY / FOREIGN KEY constraints only
+ * as `NOT ENFORCED`, and only via `ALTER TABLE` — inline constraints in `CREATE TABLE` error with
+ * "PRIMARY KEY keyword is not supported ... in this edition". Once created, they surface through the
+ * same `sys.foreign_keys` path the driver uses for SQL Server. We self-seed a tiny customers/orders
+ * fixture (raw mssql, since the driver is read-only) and confirm the FK is introspected into
+ * `Relationships`, then drop the fixture.
+ */
+describe.runIf(RUN)('SQLServerExternalDataSourceDriver — Fabric FK introspection (live)', () => {
+  const FK_SCHEMA = 'eds_fk_it';
+  const driver = new FabricTestDriver();
+  let raw: sql.ConnectionPool;
+  const drops = [
+    `DROP TABLE IF EXISTS ${FK_SCHEMA}.orders`,
+    `DROP TABLE IF EXISTS ${FK_SCHEMA}.customers`,
+    `DROP SCHEMA IF EXISTS ${FK_SCHEMA}`,
+  ];
+
+  beforeAll(async () => {
+    raw = await new sql.ConnectionPool({
+      server: CONN.host,
+      database: CONN.database,
+      options: { encrypt: true, trustServerCertificate: false, abortTransactionOnError: null },
+      authentication: {
+        type: 'azure-active-directory-service-principal-secret',
+        options: { clientId: CONN.clientId, clientSecret: CONN.clientSecret, tenantId: CONN.tenantId },
+      },
+    }).connect();
+    const run = (q: string) => raw.request().query(q);
+    for (const q of drops) { await run(q).catch(() => { /* no prior fixture */ }); }
+    await run(`CREATE SCHEMA ${FK_SCHEMA}`);
+    await run(`CREATE TABLE ${FK_SCHEMA}.customers (id INT NOT NULL, name VARCHAR(100))`);
+    await run(`CREATE TABLE ${FK_SCHEMA}.orders (id INT NOT NULL, customer_id INT)`);
+    await run(`ALTER TABLE ${FK_SCHEMA}.customers ADD CONSTRAINT pk_eds_it_cust PRIMARY KEY NONCLUSTERED (id) NOT ENFORCED`);
+    await run(`ALTER TABLE ${FK_SCHEMA}.orders ADD CONSTRAINT fk_eds_it_ord_cust FOREIGN KEY (customer_id) REFERENCES ${FK_SCHEMA}.customers(id) NOT ENFORCED`);
+  }, 60000);
+
+  afterAll(async () => {
+    if (raw) {
+      const run = (q: string) => raw.request().query(q);
+      for (const q of drops) { await run(q).catch(() => { /* best-effort */ }); }
+      await raw.close().catch(() => { /* best-effort */ });
+    }
+    await driver.closeAll(dataSource).catch(() => { /* best-effort */ });
+  });
+
+  it('introspects a NOT ENFORCED foreign key into Relationships', async () => {
+    const schema = await driver.IntrospectSchema(dataSource, FK_SCHEMA);
+    const orders = schema.Objects.find((o) => o.Name === 'orders');
+    expect(orders).toBeTruthy();
+    const fk = orders?.Relationships?.find((r) => r.ReferencedObject === 'customers');
+    expect(fk?.Columns).toEqual([{ Column: 'customer_id', ReferencedColumn: 'id' }]);
+  }, 30000);
 });
