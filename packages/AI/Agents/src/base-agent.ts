@@ -1643,6 +1643,20 @@ export class BaseAgent {
             // consumers that re-read `params` after the call see what they
             // passed in, not our chained signal.
             params.cancellationToken = upstreamToken;
+            this.releasePerRunDataCache();
+        }
+    }
+
+    /**
+     * Releases this run's PerRun-scoped preloaded-data cache entry. `preloadAgentData()`
+     * (Phase 2 of `Execute()`) may have populated one keyed by `this._agentRun.ID`; without
+     * this call it is never reclaimed and grows unbounded for the life of the process.
+     * Called from `Execute()`'s top-level `finally` block so it runs on every exit path
+     * (success, failure, or cancellation).
+     */
+    private releasePerRunDataCache(): void {
+        if (this._agentRun?.ID) {
+            AgentDataPreloader.Instance.clearRunCache(this._agentRun.ID);
         }
     }
 
