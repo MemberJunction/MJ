@@ -1,5 +1,18 @@
 # @memberjunction/database-designer-core
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-agents@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/schema-engine@5.47.0
+  - @memberjunction/global@5.47.0
+
 ## 5.46.0
 
 ### Patch Changes
