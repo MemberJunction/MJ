@@ -36,11 +36,12 @@ import { RegisterClass } from '@memberjunction/global';
 export const HUGGINGFACE_DEFAULT_REALTIME_URL = 'ws://localhost:8000/v1/realtime';
 
 /**
- * Default PCM16 sample rate (mono) for the audio plane, both directions. OpenAI-Realtime clients
- * default to 24 kHz; the value is surfaced in the client pact so a deployment whose pipeline runs at a
- * different rate (HuggingFace's cascade is natively 16 kHz) can override via `params.Config.sampleRate`.
+ * Default PCM16 sample rate (mono) for the audio plane, both directions. HuggingFace's speech-to-speech
+ * cascade runs natively at **16 kHz** (fixed int16 mono), so that is the correct default here — the reused
+ * PCM plane must capture AND play out at the endpoint's rate or audio is pitch/speed-distorted. Surfaced in
+ * the client pact so a deployment whose pipeline runs at a different rate can override via `params.Config.sampleRate`.
  */
-export const HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE = 24000;
+export const HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE = 16000;
 
 /** Connect-window TTL for the one-time proxy ticket minted for a browser-direct session. */
 export const HUGGINGFACE_PROXY_TICKET_TTL_SECONDS = 300;

@@ -29,7 +29,7 @@ All deployment config — no `mj.config.cjs` changes required:
 | Upstream endpoint | `params.Config.endpoint` → `HUGGINGFACE_REALTIME_URL` env | `ws://localhost:8000/v1/realtime` |
 | Upstream auth | `AI_VENDOR_API_KEY__HuggingFaceRealtime` env | none (sentinels `none`/`self-hosted`/`local`/`n/a` ⇒ unauthenticated) |
 | Browser proxy origin | `params.Config.proxyBaseUrl` → `MJAPI_PUBLIC_URL` → `GRAPHQL_BASE_URL`+`GRAPHQL_PORT` | `http://localhost:4000` |
-| PCM sample rate | `params.Config.sampleRate` | 24000 (HuggingFace's cascade is natively 16 kHz — override if needed) |
+| PCM sample rate | `params.Config.sampleRate` | 16000 (HuggingFace's cascade is natively 16 kHz — capture + playout both use this) |
 
 > The realtime resolver requires a *resolvable* API key for a model to be selectable, so a keyless endpoint should set `AI_VENDOR_API_KEY__HuggingFaceRealtime=none`.
 

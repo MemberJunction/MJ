@@ -10,9 +10,10 @@ import { createPcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
 
 /**
  * Default PCM16 sample rate (mono) both directions, used when the server pact omits `sampleRate`.
- * Matches the server driver's {@link HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE}.
+ * HuggingFace's speech-to-speech cascade is natively **16 kHz**, so capture AND playout default to that
+ * (a wrong rate pitch/speed-distorts audio). Matches the server driver's {@link HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE}.
  */
-export const HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE = 24000;
+export const HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE = 16000;
 
 // ── Inbound OpenAI-Realtime wire events (only the fields this client reads are typed) ──
 
