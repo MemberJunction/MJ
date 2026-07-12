@@ -7,7 +7,7 @@ import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, MJLruCache } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -234,7 +234,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _localMetadata: AllMetadata = new AllMetadata();
     private _entityMapByName = new Map<string, EntityInfo>();
     private _entityMapByID = new Map<string, EntityInfo>();
-    private _entityRecordNameCache = new Map<string, string>();
+    // Bounded LRU (unlike its siblings above, this cache holds one entry per distinct
+    // *record* touched via Load()/Save()/LoadFromData() — not per entity definition — so
+    // it can't be reset on metadata refresh; it needs its own eviction policy.
+    private _entityRecordNameCache = new MJLruCache<string, string>({ maxSize: 10000, ttlMs: 60 * 60 * 1000 });
 
     private _refresh = false;
 
@@ -447,7 +450,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The cached display name, or undefined if not in cache
      */
     public async GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined> {
-        let cachedEntry = this._entityRecordNameCache.get(this.getCacheKey(entityName, compositeKey));
+        let cachedEntry = this._entityRecordNameCache.Get(this.getCacheKey(entityName, compositeKey));
         if (!cachedEntry && loadIfNeeded) {
             cachedEntry = await this.GetEntityRecordName(entityName, compositeKey);
         }
@@ -462,7 +465,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param recordName - The display name to cache
      */
     public SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void {
-        this._entityRecordNameCache.set(this.getCacheKey(entityName, compositeKey), recordName);
+        this._entityRecordNameCache.Set(this.getCacheKey(entityName, compositeKey), recordName);
     }
 
     /**
@@ -479,7 +482,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Check cache unless forceRefresh
         if (!forceRefresh) {
-            const cached = this._entityRecordNameCache.get(cacheKey);
+            const cached = this._entityRecordNameCache.Get(cacheKey);
             if (cached !== undefined) {
                 return cached;
             }
@@ -488,7 +491,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Fetch from database via provider-specific implementation
         const name = await this.InternalGetEntityRecordName(entityName, compositeKey, contextUser);
         if (name) {
-            this._entityRecordNameCache.set(cacheKey, name);
+            this._entityRecordNameCache.Set(cacheKey, name);
         }
         return name;
     }
@@ -511,7 +514,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             for (let i = 0; i < info.length; i++) {
                 const item = info[i];
                 const cacheKey = this.getCacheKey(item.EntityName, item.CompositeKey);
-                const cached = this._entityRecordNameCache.get(cacheKey);
+                const cached = this._entityRecordNameCache.Get(cacheKey);
 
                 if (cached !== undefined) {
                     // Cache hit
@@ -542,7 +545,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // Cache successful results
                     if (result.Success && result.RecordName) {
                         const cacheKey = this.getCacheKey(result.EntityName, result.CompositeKey);
-                        this._entityRecordNameCache.set(cacheKey, result.RecordName);
+                        this._entityRecordNameCache.Set(cacheKey, result.RecordName);
                     }
                 }
             }
@@ -556,7 +559,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             for (const result of results) {
                 if (result.Success && result.RecordName) {
                     const cacheKey = this.getCacheKey(result.EntityName, result.CompositeKey);
-                    this._entityRecordNameCache.set(cacheKey, result.RecordName);
+                    this._entityRecordNameCache.Set(cacheKey, result.RecordName);
                 }
             }
 
