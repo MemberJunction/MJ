@@ -1,5 +1,0 @@
----
-"@memberjunction/core": patch
----
-
-Fix: a failed `TransactionGroup` no longer crashes the host process. **Both** `BaseEntity.Save()`'s and `BaseEntity.Delete()`'s `TransactionNotifications$` subscribers mishandled failure in an async rxjs `next`-handler that runs after the enclosing `try/catch` has unwound — `Save()` threw the notification error outright, and `Delete()` dereferenced `error.Errors` unguarded, a `TypeError` when the transaction group signals failure via returned per-item results with no error object (the GraphQL-client transaction group's shape). rxjs re-throws either on a fresh macrotask → `uncaughtException` → process exit (MJServer guards `unhandledRejection` but not `uncaughtException`). Both subscribers now record a failed `BaseEntityResult` on the entity's `ResultHistory` — null-safely, and guarded so a provider that already recorded the failure isn't double-recorded. The transaction still rolls back, `Submit()` still returns `false`, and each entity's `LatestResult.Success === false`.

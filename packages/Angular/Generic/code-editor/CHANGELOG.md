@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-code-editor
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-container-directives@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/global@5.47.0
+
 ## 5.46.0
 
 ### Patch Changes

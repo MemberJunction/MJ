@@ -1,5 +1,13 @@
 # @memberjunction/ai-bridge-livekit-native
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-bridge-livekit@5.47.0
+
 ## 5.46.0
 
 ### Patch Changes
