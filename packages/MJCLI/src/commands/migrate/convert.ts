@@ -422,7 +422,7 @@ export default class MigrateConvert extends Command {
    * matching `import type` at the top is erased at runtime, so it does not defeat the deferral.
    */
   private async buildBaker(transpiler: MJPostgresTranspiler, schema: string): Promise<IncrementalBaker> {
-    const { RunCodeGenBase, SQLCodeGenBase, initializeConfig, dbPlatform } = await import('@memberjunction/codegen-lib');
+    const { RunCodeGenBase, SQLCodeGenBase, initializeConfig, dbPlatform, configInfo } = await import('@memberjunction/codegen-lib');
 
     if (dbPlatform() !== 'postgresql') {
       this.error('--bake-codegen requires DB_PLATFORM=postgresql with PG_* connection env (the working DB CodeGen objects are captured from).');
@@ -459,6 +459,17 @@ export default class MigrateConvert extends Command {
           skipExecution: false, // execute → keep the working DB current for later migrations
         });
         return { sql: r.sql ?? '', permissionsSQL: r.permissionsSQL ?? '' };
+      },
+      // The full CodeGen entity set — mirrors sql_codegen.ts's baseline filter
+      // (`IncludeInAPI`, minus configured excludeSchemas). Per-object guards
+      // (VirtualEntity / AllowCreate|Update|DeleteAPI / spXGenerated) live inside
+      // generateSingleEntitySQLToSeparateFiles, so this only gates at the entity level.
+      // Provider order is name-sorted (PostProcessEntityMetadata), matching a full run.
+      listBakeableEntities: async () => {
+        const excluded = new Set((configInfo.excludeSchemas ?? []).map((s: string) => s.toLowerCase()));
+        return ds.provider.Entities
+          .filter((e) => e.IncludeInAPI && !excluded.has(e.SchemaName.toLowerCase()))
+          .map((e) => e.Name);
       },
     };
     return new IncrementalBaker({ transpiler, db, schema });

@@ -11,11 +11,11 @@ import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass } from '@memberjunction/global';
 import { RunActionParams, ActionResultSimple } from '@memberjunction/actions-base';
 import {
-    CodeExecutionService,
     CodeExecutionParams,
     CodeExecutionResult
 } from '@memberjunction/code-execution';
 import { LogError } from '@memberjunction/core';
+import { ExecuteCodeServiceProvider } from './execute-code-service-provider';
 
 /**
  * Action for executing JavaScript code in a sandboxed environment
@@ -84,7 +84,10 @@ export class ExecuteCodeAction extends BaseAction {
             }
 
             // 2. Delegate to service (DIRECT IMPORT - not another action!)
-            const executionService = new CodeExecutionService();
+            // Reuse the shared, process-lifetime CodeExecutionService instead of
+            // `new CodeExecutionService()` per call — that used to fork a fresh
+            // worker-process pool on every invocation and never shut it down.
+            const executionService = ExecuteCodeServiceProvider.Instance.GetService();
 
             const executionParams: CodeExecutionParams = {
                 code,
