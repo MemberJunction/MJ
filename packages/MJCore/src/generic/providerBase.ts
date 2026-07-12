@@ -1122,7 +1122,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     private findBestField(entity: EntityInfo, preferredNames: string[]): string {
         for (const name of preferredNames) {
-            const field = entity.Fields.find(f => f.Name === name);
+            const field = entity.FieldByName(name);
             if (field) return field.Name;
         }
         // Fallback to first text field
