@@ -105,6 +105,26 @@ The "who's speaking" spotlight/header didn't show *other* agents even though the
 
 ---
 
+## 🎙️ Self-hosted HuggingFace speech-to-speech provider (PR #3011) — ⏳ IN REVIEW, fine subject to testing
+
+**Verdict (2026-07-12 review): the approach is fundamentally right. We're fine, subject to live testing.** PR #3011 adds a **5th** realtime provider — HuggingFace `speech-to-speech` (VAD → STT → LLM → TTS) running **on infrastructure you own** — for regulated / private / air-gapped deployments where audio must never leave the box.
+
+**It targets the correct protocol at the correct layer.** The HF `speech-to-speech` stack exposes an **OpenAI-Realtime-compatible WebSocket at `/v1/realtime`**, **16 kHz int16 mono PCM** (confirmed against the `huggingface/speech-to-speech` source, the backend that powers the `HuggingFaceM4/hugging-voice` Space). The driver speaks the OpenAI wire, uses PCM16 mono, and treats the model name as bookkeeping (like the AssemblyAI driver). It slots into the documented "add a realtime provider" recipe additively — no host code names the provider; the resolver ranks the model (deliberately **low `PowerRank`** so it never becomes anyone's silent default) and the browser resolves the client half by the stamped `Provider` key.
+
+**The one architecturally novel piece — the MJAPI realtime proxy — is a necessary and well-executed deviation, not a mistake.** Our shipped audio topology is **client-direct** (browser opens the media socket straight to the provider), which is correct for a *cloud* provider but wrong for a *self-hosted* box (you can't expose your internal voice box to every browser). The PR's answer: a provider-agnostic **`RealtimeProxyServer`** — browser connects to `wss://<mjapi-public>/realtime-proxy?ticket=…`, the server consumes a **one-time, TTL, single-use ticket** (`RealtimeProxyRegistry`, a `BaseSingleton` in `@memberjunction/ai` so the minting driver and consuming server share one instance), opens the authenticated upstream leg server-side, and pumps frames byte-transparently. This is *strictly better* than the cloud drivers on security (the internal endpoint + auth never reach the browser) and reuses the **shipped** client-direct plane instead of waiting on the unbuilt server-bridged media plane. The `ws@8.19` upgrade gotcha it dodges (a path-scoped `WebSocketServer` calls `abortHandshake(400)` on non-matching sockets) is real and correctly handled: graphql-ws switched to `noServer`, one path-dispatching `upgrade` router, `TryHandleUpgrade` returns ownership and never destroys a socket it doesn't own.
+
+**🏗️ Layering principle (confirmed correct in the PR — keep it this way): all MJAPI transport/proxy work lives in the `@memberjunction/server` (MJServer) package, NOT in the MJAPI package.** MJAPI is the thinnest-possible executable that *consumes* MJServer; it should carry no logic of its own. The proxy is correctly placed at `packages/MJServer/src/realtimeProxy/RealtimeProxyServer.ts` with the upgrade router wired in `packages/MJServer/src/index.ts` — MJAPI is untouched. Any future self-hosted realtime transport (local vLLM, Ultravox, …) mints a ticket and rides the same tunnel for free, and belongs in the same MJServer package.
+
+**Three things to validate before merge (why this is "subject to testing"):**
+
+1. **⚠️ Tool / function-calling over the wire — the load-bearing risk.** `invoke-target-agent` delegation (the entire point of an MJ co-agent) requires the model to emit function calls **over the realtime socket** (`response.function_call_arguments.*` + `tools` accepted in `session.update`). The PR *asserts* native function tools; HF's LLM stage does produce tool calls internally, but whether they surface on the OpenAI-Realtime wire is an open question (see `huggingface/speech-to-speech` issue #120, "Realtime API with Tool Chaining"). **If they don't, the driver connects and converses but silently can't delegate.** Must be proven end-to-end against a real HF box before we trust the feature.
+2. **16 kHz sample-rate wiring.** HF is fixed 16 kHz; the AssemblyAI driver (whose PCM plane this reuses) is fixed 24 kHz. Confirm `HuggingFaceRealtimeClient` drives `createPcmMicCapture` / `RealtimePcmPlayback` at 16 kHz both directions, or expect pitch/speed distortion. The PR makes `sampleRate` deployment-config (right) — verify the default and the playout clock agree.
+3. **Housekeeping.** Rebase onto `next` (branch is currently conflicted), get CI green (no checks reported yet), and reconcile the `package-lock.json` story (the file list includes it despite the PR body saying it was omitted).
+
+**Recommendation:** keep the design; don't redo it. Prove tool-calling first (make-or-break), then confirm the 16 kHz plane, then land the rebase/CI/lock-file housekeeping.
+
+---
+
 ## ▶️ Next steps (priority order)
 
 ### 1. The 3+-agent free-for-all storm (the open problem)
