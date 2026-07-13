@@ -48,6 +48,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
+import { ConversationCompactionManager, CompactionOutcome, EffectiveContextBudget } from './ConversationCompactionManager';
 import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
 import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
@@ -354,6 +355,29 @@ export class BaseAgent {
      * @private
      */
     private _activeProvider: IMetadataProvider = Metadata.Provider; // global-provider-ok: default until Execute() captures per-request provider
+
+    /**
+     * The (wrapped) params of the run currently executing — captured so lifecycle hooks
+     * that don't receive params (e.g. the post-turn compaction check inside
+     * {@link finalizeAgentRun}) can read conversationId / verbose / provider.
+     * @private
+     */
+    private _executeParams: ExecuteAgentParams | undefined;
+
+    /**
+     * The agent configuration loaded for the current run — captured so the cross-turn
+     * compaction hooks can resolve type-level budget defaults without re-loading.
+     * @private
+     */
+    private _agentConfig: AgentConfiguration | undefined;
+
+    /**
+     * Model selection from the most recent prompt execution of this run. Cross-turn
+     * compaction resolves its effective budget against "the model about to run"; the
+     * last prompt's selection is the best available proxy for the next turn's model.
+     * @private
+     */
+    private _lastModelSelectionInfo: AIModelSelectionInfo | undefined;
 
     /**
      * Returns the active metadata provider for this agent run. Subclasses MUST
@@ -1374,6 +1398,12 @@ export class BaseAgent {
                 onProgress: this.wrapProgressCallback(params.onProgress)
             };
 
+            // Capture for lifecycle hooks that don't receive params (post-turn compaction
+            // inside finalizeAgentRun reads conversationId / verbose / provider from here).
+            this._executeParams = wrappedParams;
+            this._agentConfig = undefined;
+            this._lastModelSelectionInfo = undefined;
+
             // Convert UI markup in conversation messages to plain text if requested (default: true)
             if (params.convertUIMarkupToPlainText !== false) {
                 this.convertUIMarkupInMessages(wrappedParams.conversationMessages);
@@ -1568,6 +1598,7 @@ export class BaseAgent {
             // --- PHASE 3: Agent type initialization (sequential) ---
             // Must wait for config from Phase 2 because it needs the resolved agent type and
             // prompt configuration to initialize the type-specific state machine.
+            this._agentConfig = config;
             await this.initializeAgentType(wrappedParams, config);
 
             // =====================================================================================
@@ -1585,6 +1616,11 @@ export class BaseAgent {
                 this.logStatus(`🎙️ Agent '${params.agent.Name}' is session-driven — routing to RealtimeSessionRunner`, true, params);
                 return await this.executeRealtimeSession<R>(wrappedParams, config);
             }
+
+            // Cross-turn compaction PRE-TURN fallback: only when the assembled window is
+            // ALREADY over the trigger budget before the first prompt (the normal path is
+            // the post-turn fire-and-forget in finalizeAgentRun, which hides the latency).
+            await this.checkPreTurnCompaction(wrappedParams, config);
 
             // Execute the agent's internal logic with wrapped parameters
             this.logStatus(`🚀 Executing agent '${params.agent.Name}' internal logic`, true, params);
@@ -8229,6 +8265,13 @@ The context is now within limits. Please retry your request with the recovered c
                 // don't save here, we save when we call finalizeStepEntity()
             }
 
+            // Remember the most recent model selection — cross-turn compaction resolves its
+            // effective budget against "the model about to run", and the last prompt's
+            // selection is the best available proxy for the next turn's model.
+            if (promptResult.modelSelectionInfo) {
+                this._lastModelSelectionInfo = promptResult.modelSelectionInfo;
+            }
+
             // Check if prompt execution failed
             if (!promptResult.success) {
                 // CRITICAL FIX: Preserve payload before finalizing step
@@ -12571,8 +12614,14 @@ The context is now within limits. Please retry your request with the recovered c
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }
+
+            // Cross-turn compaction (post-turn, the primary path): fire-and-forget AFTER the
+            // run row is final so the summary-LLM latency never delays the caller's
+            // completion event. Errors are contained — a failed pass leaves the conversation
+            // untouched and simply re-triggers on a later turn.
+            this.startPostTurnCompaction();
         }
-        
+
         // Also promote any media from the final step's promoteMediaOutputs
         if (finalStep.promoteMediaOutputs && finalStep.promoteMediaOutputs.length > 0) {
             this.promoteMediaOutputs(finalStep.promoteMediaOutputs);
@@ -12615,7 +12664,7 @@ The context is now within limits. Please retry your request with the recovered c
         // Iterate through the agent run's steps to sum up tokens
         if (this._agentRun?.Steps) {
             for (const step of this._agentRun.Steps) {
-                if (step.StepType === 'Prompt' && step.PromptRun) {
+                if ((step.StepType === 'Prompt' || step.StepType === 'Compaction') && step.PromptRun) {
                     // Add tokens from prompt runs (rollup fields include any nested child prompt runs)
                     totalTokens += step.PromptRun.TokensUsedRollup || 0;
                     promptTokens += step.PromptRun.TokensPromptRollup || 0;
@@ -12894,6 +12943,187 @@ The context is now within limits. Please retry your request with the recovered c
         }
     }
 
+    // =====================================================================================
+    // CROSS-TURN (TIER A) CONVERSATION COMPACTION HOOKS
+    // Durable summary layer per plans/agent-conversation-compaction.md. All hooks are
+    // gated on params.conversationId + root depth — programmatic runs, sub-agents, and
+    // tests without a conversation are untouched. Trigger math / boundary selection /
+    // the boundary-row write live in ConversationCompactionManager; BaseAgent owns
+    // budget resolution (it knows the model) and run-step recording.
+    // =====================================================================================
+
+    /**
+     * Resolves the effective context budget for cross-turn compaction, validated against
+     * the most recent prompt's model when available. Logs the clamp warning once when a
+     * configured budget exceeded the model's MaxInputTokens.
+     * @protected
+     */
+    protected resolveCompactionBudget(params: ExecuteAgentParams, config: AgentConfiguration | undefined): EffectiveContextBudget {
+        const modelMax = this._lastModelSelectionInfo
+            ? this.tryGetModelMaxInputTokens(this._lastModelSelectionInfo)
+            : null;
+        const budget = ConversationCompactionManager.ResolveEffectiveBudget(params.agent, config?.agentType || null, modelMax);
+        if (budget.ClampedToModel) {
+            this.logStatus(`⚠️ [CrossTurnCompaction] Configured ContextWindowMaxTokens exceeds the model's MaxInputTokens — clamped to ${budget.MaxTokens}`, false, params);
+        }
+        return budget;
+    }
+
+    /**
+     * Pre-turn fallback: compacts synchronously when the assembled window is already over
+     * the trigger budget BEFORE the first prompt of this run, then splices the fresh
+     * summary into the live message array. Only runs with an EXPLICIT configured budget
+     * (agent or type ContextWindowMaxTokens) — before the first prompt the model is
+     * unknown, and compacting against the conservative default would over-trigger on
+     * large-context models. The post-turn hook (real model known) covers those.
+     * @protected
+     */
+    protected async checkPreTurnCompaction(params: ExecuteAgentParams, config: AgentConfiguration | undefined): Promise<void> {
+        if (!params.conversationId || this._depth !== 0) {
+            return;
+        }
+        const budget = this.resolveCompactionBudget(params, config);
+        if (budget.BoundedBy !== 'Agent' && budget.BoundedBy !== 'AgentType') {
+            return;
+        }
+        const estimatedTokens = this.estimateConversationTokens(params.conversationMessages);
+        if (estimatedTokens < budget.TriggerTokens) {
+            return;
+        }
+        this.logStatus(`🗜️ [CrossTurnCompaction] Pre-turn window ~${estimatedTokens} tokens ≥ trigger ${budget.TriggerTokens} — compacting before first prompt`, true, params);
+        const outcome = await this.runCrossTurnCompaction('pre-turn', params, config, budget);
+        if (outcome?.Fired && outcome.BoundarySequence !== undefined && outcome.SummaryText) {
+            this.applyCompactionToLiveMessages(params.conversationMessages, outcome.BoundarySequence, outcome.SummaryText);
+        }
+    }
+
+    /**
+     * Post-turn hook (the primary path), called from {@link finalizeAgentRun} after the
+     * run row is saved. Fire-and-forget by design: the caller's completion event never
+     * waits on the summary LLM call. Only fires for successfully completed root runs
+     * with a conversation.
+     * @protected
+     */
+    protected startPostTurnCompaction(): void {
+        const params = this._executeParams;
+        if (!params?.conversationId || this._depth !== 0 || this._agentRun?.Status !== 'Completed') {
+            return;
+        }
+        const config = this._agentConfig;
+        const budget = this.resolveCompactionBudget(params, config);
+        void this.runCrossTurnCompaction('post-turn', params, config, budget).catch(error => {
+            LogError(`Post-turn cross-turn compaction error (contained): ${error instanceof Error ? error.message : error}`);
+        });
+    }
+
+    /**
+     * Runs one compaction pass and records it as a `StepType='Compaction'` run step —
+     * TargetID = the summary prompt, TargetLogID = the summary AIPromptRun (the same ID
+     * written to `ConversationDetail.SummaryPromptRunID`, closing the lineage chain).
+     * Quiet no-ops (window under trigger) record no step; fired passes and failures do.
+     * @protected
+     */
+    protected async runCrossTurnCompaction(
+        phase: 'pre-turn' | 'post-turn',
+        params: ExecuteAgentParams,
+        config: AgentConfiguration | undefined,
+        budget: EffectiveContextBudget
+    ): Promise<CompactionOutcome | undefined> {
+        if (!params.conversationId || !this._agentRun) {
+            return undefined;
+        }
+        const outcome = await ConversationCompactionManager.CompactIfNeeded({
+            ConversationId: params.conversationId,
+            Agent: params.agent,
+            AgentType: config?.agentType || null,
+            Budget: budget,
+            ContextUser: params.contextUser,
+            Provider: this.ProviderToUse,
+            EstimateTokens: (messages) => this.estimateConversationTokens(messages),
+            Verbose: params.verbose
+        });
+
+        if (outcome.Fired || outcome.ErrorMessage) {
+            await this.recordCompactionRunStep(phase, params, budget, outcome);
+        }
+        return outcome;
+    }
+
+    /** Persists the Compaction run step for a fired or failed pass. @private */
+    private async recordCompactionRunStep(
+        phase: 'pre-turn' | 'post-turn',
+        params: ExecuteAgentParams,
+        budget: EffectiveContextBudget,
+        outcome: CompactionOutcome
+    ): Promise<void> {
+        try {
+            const stepEntity = await this.createStepEntity({
+                stepType: 'Compaction',
+                stepName: `Cross-Turn Conversation Compaction (${phase})`,
+                contextUser: params.contextUser,
+                targetId: outcome.PromptId,
+                targetLogId: outcome.PromptRunId,
+                inputData: {
+                    phase,
+                    conversationId: params.conversationId,
+                    budget
+                }
+            });
+            stepEntity.OutputData = JSON.stringify({
+                fired: outcome.Fired,
+                boundarySequence: outcome.BoundarySequence,
+                tokensBefore: outcome.TokensBefore,
+                tokensAfter: outcome.TokensAfter,
+                summaryLength: outcome.SummaryText?.length,
+                promptRunId: outcome.PromptRunId,
+                warnings: outcome.Warnings
+            });
+            await this.finalizeStepEntity(stepEntity, !outcome.ErrorMessage, outcome.ErrorMessage);
+            if (phase === 'post-turn') {
+                // finalizeAgentRun's flush has already run — drain this step's saves now.
+                await this._stepSaveQueue.Flush();
+            }
+        } catch (error) {
+            LogError(`Failed to record Compaction run step (compaction itself ${outcome.Fired ? 'succeeded' : 'failed'}): ${error instanceof Error ? error.message : error}`);
+        }
+    }
+
+    /**
+     * Splices a freshly generated summary into the live message array in place: every
+     * message covered by the new boundary (sequence below it, or a prior summary
+     * message) collapses into one summary message; enrichment-bearing tail messages and
+     * injected messages without sequence metadata are preserved untouched.
+     * @private
+     */
+    private applyCompactionToLiveMessages(messages: ChatMessage[], boundarySequence: number, summaryText: string): void {
+        const retained: ChatMessage[] = [];
+        let summaryInserted = false;
+        for (const message of messages) {
+            const metadata = (message as AgentChatMessage).metadata;
+            const covered = metadata?.isConversationSummary === true
+                || (metadata?.sequence !== undefined && metadata.sequence < boundarySequence);
+            if (covered) {
+                if (!summaryInserted) {
+                    const summaryMessage: AgentChatMessage = {
+                        role: 'user',
+                        content: summaryText,
+                        metadata: {
+                            isConversationSummary: true,
+                            summaryBoundarySequence: boundarySequence,
+                            sequence: boundarySequence
+                        }
+                    };
+                    retained.push(summaryMessage);
+                    summaryInserted = true;
+                }
+            } else {
+                retained.push(message);
+            }
+        }
+        messages.length = 0;
+        messages.push(...retained);
+    }
+
     /**
      * Creates an AIAgentRunStep for message compaction operations.
      * Records the compaction attempt with context about the message being compacted.
@@ -12920,7 +13150,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         step.NewRecord();
         step.AgentRunID = this._agentRun.ID;
-        step.StepType = 'Prompt';
+        step.StepType = 'Compaction';
         step.Status = 'Running';
         step.InputData = JSON.stringify({
             stepName: 'Message Compaction',
@@ -13168,55 +13398,45 @@ The context is now within limits. Please retry your request with the recovered c
     protected getModelContextLimit(modelSelectionInfo?: AIModelSelectionInfo): number {
         // Default conservative limit if we can't determine the actual limit
         const DEFAULT_LIMIT = 8000;
-
-        if (!modelSelectionInfo) {
-            this.logStatus(`No model selection info available, using default limit: ${DEFAULT_LIMIT}`, true);
-            return DEFAULT_LIMIT;
+        const known = modelSelectionInfo ? this.tryGetModelMaxInputTokens(modelSelectionInfo) : null;
+        if (known === null) {
+            this.logStatus(`Could not determine model context limit, using default limit: ${DEFAULT_LIMIT}`, true);
         }
+        return known || DEFAULT_LIMIT;
+    }
 
+    /**
+     * Extracts the vendor-specific MaxInputTokens from model selection info, returning
+     * null when it genuinely cannot be determined. Callers that need a hard number use
+     * {@link getModelContextLimit} (which falls back to a conservative default); callers
+     * for whom a guessed default would be WRONG — e.g. cross-turn compaction budget
+     * clamping, where a bogus 8000 would clamp a configured 200k budget — use this and
+     * handle null explicitly.
+     * @protected
+     */
+    protected tryGetModelMaxInputTokens(modelSelectionInfo: AIModelSelectionInfo): number | null {
         try {
-            // Get the selected model and vendor from the model selection info
             const modelSelected = modelSelectionInfo.modelSelected;
             const vendorSelected = modelSelectionInfo.vendorSelected;
-
-            if (!modelSelected) {
-                this.logStatus(`No model selected in model selection info, using default limit: ${DEFAULT_LIMIT}`, true);
-                return DEFAULT_LIMIT;
+            if (!modelSelected || !vendorSelected) {
+                return null;
             }
 
-            // If no vendor selected, can't determine model-specific limit
-            if (!vendorSelected) {
-                this.logStatus(`No vendor selected, using default limit: ${DEFAULT_LIMIT}`, true);
-                return DEFAULT_LIMIT;
-            }
-
-            // Find the ModelVendor entry that matches the selected vendor
             const modelVendors = modelSelected.ModelVendors;
             if (!modelVendors || modelVendors.length === 0) {
-                this.logStatus(`No ModelVendors array found on model, using default limit: ${DEFAULT_LIMIT}`, true);
-                return DEFAULT_LIMIT;
+                return null;
             }
 
-            // Find the vendor-specific entry
-            const vendorEntry = modelVendors.find((mv: any) => UUIDsEqual(mv.VendorID, vendorSelected.ID));
-            if (!vendorEntry) {
-                this.logStatus(`No matching vendor entry found in ModelVendors, using default limit: ${DEFAULT_LIMIT}`, true);
-                return DEFAULT_LIMIT;
+            const vendorEntry = modelVendors.find((mv: { VendorID: string; MaxInputTokens: number | null }) => UUIDsEqual(mv.VendorID, vendorSelected.ID));
+            if (!vendorEntry || !vendorEntry.MaxInputTokens || vendorEntry.MaxInputTokens <= 0) {
+                return null;
             }
 
-            // Get MaxInputTokens from the vendor-specific entry
-            const maxInputTokens = vendorEntry.MaxInputTokens;
-            if (!maxInputTokens || maxInputTokens <= 0) {
-                this.logStatus(`MaxInputTokens not set or invalid on vendor entry, using default limit: ${DEFAULT_LIMIT}`, true);
-                return DEFAULT_LIMIT;
-            }
-
-            this.logStatus(`Using vendor-specific MaxInputTokens: ${maxInputTokens} (Model: ${modelSelected.Name}, Vendor: ${vendorSelected.Name})`, true);
-            return maxInputTokens;
-
+            this.logStatus(`Using vendor-specific MaxInputTokens: ${vendorEntry.MaxInputTokens} (Model: ${modelSelected.Name}, Vendor: ${vendorSelected.Name})`, true);
+            return vendorEntry.MaxInputTokens;
         } catch (error) {
-            this.logStatus(`Error extracting model context limit: ${error}, using default limit: ${DEFAULT_LIMIT}`, true);
-            return DEFAULT_LIMIT;
+            this.logStatus(`Error extracting model context limit: ${error}`, true);
+            return null;
         }
     }
 
