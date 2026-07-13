@@ -31,6 +31,7 @@ const SCRIPTS = [
     'ai-skills-tests.ts',
     'user-routines-tests.ts',
     'predictive-studio-tests.ts',
+    'conversation-compaction-tests.ts',
     // Predictive Studio integration tier — each SKIPs (exit 0) unless PS_INTEGRATION=1 + AssociationDemo is
     // loaded (the Python sidecar trains/scores). The ps-inproc-* run in-process; the ps-live-* drive the
     // GraphQL wire and additionally SKIP unless a live MJAPI is reachable. See README.md.

@@ -1,4 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { ChatMessage } from "@memberjunction/ai";
 import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
@@ -66,6 +67,37 @@ export interface CreateConversationOptions {
      */
     linkedRecordId?: string | null;
 }
+
+/**
+ * Metadata stamped on messages returned by {@link ConversationEngine.GetAgentContextWindow}.
+ *
+ * Type-locality tradeoff: the agent framework's `AgentChatMessageMetadata` (in
+ * `@memberjunction/ai-core-plus`) carries these same optional fields, but this package
+ * cannot import from ai-core-plus — ai-core-plus depends on core-entities, so importing it
+ * here would create a package cycle. This structural type is therefore defined locally and
+ * kept assignment-compatible with `AgentChatMessageMetadata`; if you add a field here,
+ * mirror it there.
+ */
+export type ConversationContextMetadata = {
+    /** `ConversationDetail.Sequence` of the row this message came from */
+    sequence?: number;
+    /** ID of the `ConversationDetail` row this message came from */
+    conversationDetailId?: string;
+    /** True only on the synthetic first message carrying the persisted conversation summary */
+    isConversationSummary?: boolean;
+    /**
+     * On the summary message: the boundary row's `Sequence`. The summary covers every row
+     * with `Sequence` below this value; the boundary row itself and everything after are
+     * included raw in the window.
+     */
+    summaryBoundarySequence?: number;
+};
+
+/**
+ * A conversation message shaped for agent context assembly — the return element of
+ * {@link ConversationEngine.GetAgentContextWindow}.
+ */
+export type ConversationContextMessage = ChatMessage<ConversationContextMetadata>;
 
 export interface SharedByInfo {
     /** Grantor user ID. Null when the share predates the `SharedByUserID` column. */
@@ -1331,6 +1363,118 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     public HasCachedDetails(conversationId: string): boolean {
         const key = NormalizeUUID(conversationId);
         return this._detailCache.has(key);
+    }
+
+    // ========================================================================
+    // AGENT CONTEXT WINDOW (cross-turn compaction assembly layer)
+    // ========================================================================
+
+    /**
+     * Builds the agent-facing context window for a conversation.
+     *
+     * When a persisted cross-turn summary exists (the row with the highest `Sequence`
+     * whose `SummaryOfEarlierConversation` is non-null), the window is
+     * `[summary-as-message, boundary row (raw), ...tail (raw)]` — the summary covers every
+     * row with `Sequence` below the boundary's, so there is no gap and no overlap. When no
+     * summary exists, the window is all messages, optionally capped to the most recent
+     * `maxTailMessages` (parity with the legacy sliding-window history load).
+     *
+     * Served from the per-conversation `_detailCache`: the first touch of a conversation
+     * pays one `GetConversationComplete` query; every subsequent call is a warm in-memory
+     * slice kept current by the engine's entity-event handlers.
+     *
+     * @param conversationId - The conversation to build the window for
+     * @param contextUser - User context for the (cold-miss) cache load
+     * @param options.excludeDetailIds - Detail rows to omit — e.g. the in-flight
+     *   agent-response placeholder row created before the agent executes
+     * @param options.maxTailMessages - With NO summary boundary present: cap the window to
+     *   the most recent N messages. Ignored when a boundary exists — the summary already
+     *   covers everything before it, and cutting into the post-boundary tail would create
+     *   a coverage gap.
+     * @returns Messages in chronological order, each stamped with
+     *   {@link ConversationContextMetadata}
+     */
+    public async GetAgentContextWindow(
+        conversationId: string,
+        contextUser: UserInfo,
+        options?: {
+            excludeDetailIds?: string[];
+            maxTailMessages?: number;
+        }
+    ): Promise<ConversationContextMessage[]> {
+        await this.Config(false, contextUser);
+        const cache = await this.LoadConversationDetails(conversationId, contextUser);
+
+        const excluded = new Set((options?.excludeDetailIds || []).map(id => NormalizeUUID(id)));
+        const ordered = cache.Details
+            .filter(d => !excluded.has(NormalizeUUID(d.ID)))
+            .sort((a, b) => a.Sequence - b.Sequence);
+
+        const boundary = this.findSummaryBoundary(ordered);
+        if (boundary) {
+            const tail = ordered.filter(d => d.Sequence >= boundary.Sequence);
+            return [this.buildSummaryMessage(boundary), ...tail.map(d => this.detailToContextMessage(d))];
+        }
+
+        const all = ordered.map(d => this.detailToContextMessage(d));
+        const cap = options?.maxTailMessages;
+        return cap && all.length > cap ? all.slice(-cap) : all;
+    }
+
+    /**
+     * Finds the summary boundary: the detail with the HIGHEST `Sequence` whose
+     * `SummaryOfEarlierConversation` is non-blank. Older summaries below it simply stop
+     * being selected (recursive-summary pattern). Returns undefined when no summary exists.
+     */
+    private findSummaryBoundary(orderedDetails: MJConversationDetailEntity[]): MJConversationDetailEntity | undefined {
+        for (let i = orderedDetails.length - 1; i >= 0; i--) {
+            const summary = orderedDetails[i].SummaryOfEarlierConversation;
+            if (summary && summary.trim().length > 0) {
+                return orderedDetails[i];
+            }
+        }
+        return undefined;
+    }
+
+    /** Wraps the boundary row's persisted summary as the window's synthetic first message. */
+    private buildSummaryMessage(boundary: MJConversationDetailEntity): ConversationContextMessage {
+        return {
+            role: 'user',
+            content: boundary.SummaryOfEarlierConversation || '',
+            metadata: {
+                isConversationSummary: true,
+                summaryBoundarySequence: boundary.Sequence,
+                sequence: boundary.Sequence
+            }
+        };
+    }
+
+    /** Converts a raw ConversationDetail row into a context message with sequence metadata. */
+    private detailToContextMessage(detail: MJConversationDetailEntity): ConversationContextMessage {
+        return {
+            role: this.mapDetailRoleToChatRole(detail.Role),
+            content: detail.Message || '',
+            metadata: {
+                sequence: detail.Sequence,
+                conversationDetailId: detail.ID
+            }
+        };
+    }
+
+    /**
+     * Maps `ConversationDetail.Role` values to ChatMessage roles. Mirrors the mapping the
+     * server resolver has always used for history assembly ('AI'/'Agent' → assistant,
+     * unknown → user).
+     */
+    private mapDetailRoleToChatRole(role: string | null): 'user' | 'assistant' | 'system' {
+        const r = (role || '').toLowerCase();
+        if (r === 'assistant' || r === 'agent' || r === 'ai') {
+            return 'assistant';
+        }
+        if (r === 'system') {
+            return 'system';
+        }
+        return 'user';
     }
 
     /**

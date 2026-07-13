@@ -1059,10 +1059,24 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /**
      * Optional conversation detail ID to associate with this agent execution.
      * When provided, this value is stored in the ConversationDetailID column within
-     * the to be created AIAgentRun record. This allows for linking the agent run 
+     * the to be created AIAgentRun record. This allows for linking the agent run
      * to a specific conversation detail for tracking and reporting purposes.
      */
     conversationDetailId?: string;
+
+    /**
+     * Optional conversation ID — the PREFERRED input for conversation-driven runs.
+     * All durable cross-turn context features (persistent summary compaction, the
+     * summary-windowed context assembly via `ConversationEngine.GetAgentContextWindow`,
+     * and conversation-history retrieval tools) are gated on this being present.
+     * When absent, the agent behaves exactly as before: the caller supplies
+     * `conversationMessages` and only in-turn (per-run) context management applies —
+     * programmatic runs, internal sub-agent invocations, and tests need no change.
+     * When present alongside caller-supplied `conversationMessages`, the supplied
+     * messages win (deliberate override/escape hatch); the id still flows to the run
+     * record and gates the compaction/retrieval features.
+     */
+    conversationId?: string;
 
     /**
      * Optional flag to automatically populate the payload from the last run.
@@ -1622,6 +1636,20 @@ export type AgentChatMessageMetadata = {
     subAgentName?: string;
     /** ID of the sub-agent (only for sub-agent-result messages) */
     subAgentId?: string;
+    /**
+     * `ConversationDetail.Sequence` of the row this message came from. Stamped by
+     * `ConversationEngine.GetAgentContextWindow` (kept assignment-compatible with its
+     * locally-defined `ConversationContextMetadata` — that package cannot import this
+     * type without creating a cycle). The symbolic handle for conversation-history
+     * retrieval tools.
+     */
+    sequence?: number;
+    /** ID of the `ConversationDetail` row this message came from (window-assembled messages only) */
+    conversationDetailId?: string;
+    /** True only on the synthetic first message carrying the persisted cross-turn conversation summary */
+    isConversationSummary?: boolean;
+    /** On the summary message: the boundary row's Sequence — the summary covers all rows below it */
+    summaryBoundarySequence?: number;
 }
 
 /**

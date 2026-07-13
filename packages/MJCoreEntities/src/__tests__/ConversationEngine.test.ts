@@ -718,6 +718,112 @@ describe('ConversationEngine', () => {
     // ========================================================================
     // SAVE CONVERSATION
     // ========================================================================
+    describe('GetAgentContextWindow', () => {
+        /**
+         * Enqueue GetConversationComplete rows preserving each row's Role/Sequence/
+         * SummaryOfEarlierConversation (enqueueDetailsResults force-overrides Role).
+         */
+        function enqueueWindowRows(rows: Array<Record<string, unknown>>) {
+            runQueryResultQueue.push({
+                Success: true,
+                Results: rows.map((r) => ({
+                    AgentRunsJSON: null,
+                    ArtifactsJSON: null,
+                    RatingsJSON: null,
+                    SummaryOfEarlierConversation: null,
+                    ...r,
+                })),
+            });
+        }
+
+        function makeRow(id: string, seq: number, role: string, message: string, summary: string | null = null) {
+            return {
+                ID: id,
+                ConversationID: 'conv-1',
+                Sequence: seq,
+                Role: role,
+                Message: message,
+                SummaryOfEarlierConversation: summary,
+            };
+        }
+
+        it('returns all messages chronologically with metadata when no summary exists', async () => {
+            enqueueWindowRows([
+                makeRow('d-2', 2, 'AI', 'answer one'),
+                makeRow('d-1', 1, 'User', 'question one'),
+                makeRow('d-3', 3, 'User', 'question two'),
+            ]);
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser);
+            expect(window).toHaveLength(3);
+            expect(window.map((m) => m.metadata?.sequence)).toEqual([1, 2, 3]);
+            expect(window.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+            expect(window[0].content).toBe('question one');
+            expect(window[0].metadata?.conversationDetailId).toBe('d-1');
+            expect(window.every((m) => !m.metadata?.isConversationSummary)).toBe(true);
+        });
+
+        it('caps to the most recent maxTailMessages when no summary exists', async () => {
+            enqueueWindowRows([1, 2, 3, 4, 5].map((n) => makeRow(`d-${n}`, n, 'User', `msg ${n}`)));
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser, { maxTailMessages: 2 });
+            expect(window.map((m) => m.metadata?.sequence)).toEqual([4, 5]);
+        });
+
+        it('windows at the HIGHEST-sequence summary: summary message + boundary row raw + tail', async () => {
+            enqueueWindowRows([
+                makeRow('d-1', 1, 'User', 'old question'),
+                makeRow('d-2', 2, 'AI', 'old answer', 'stale older summary'),
+                makeRow('d-3', 3, 'User', 'mid question'),
+                makeRow('d-4', 4, 'AI', 'mid answer', 'covers sequences 1-3'),
+                makeRow('d-5', 5, 'User', 'new question'),
+            ]);
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser);
+            expect(window).toHaveLength(3);
+            // Synthetic summary first — carries the boundary's summary text + metadata
+            expect(window[0].role).toBe('user');
+            expect(window[0].content).toBe('covers sequences 1-3');
+            expect(window[0].metadata?.isConversationSummary).toBe(true);
+            expect(window[0].metadata?.summaryBoundarySequence).toBe(4);
+            // Boundary row itself is included RAW (no gap, no overlap), then the tail
+            expect(window[1].metadata?.sequence).toBe(4);
+            expect(window[1].content).toBe('mid answer');
+            expect(window[2].metadata?.sequence).toBe(5);
+        });
+
+        it('ignores maxTailMessages when a summary boundary exists (no coverage gap)', async () => {
+            enqueueWindowRows([
+                makeRow('d-1', 1, 'User', 'old', null),
+                makeRow('d-2', 2, 'AI', 'boundary answer', 'the summary'),
+                makeRow('d-3', 3, 'User', 'tail 1'),
+                makeRow('d-4', 4, 'AI', 'tail 2'),
+            ]);
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser, { maxTailMessages: 1 });
+            // summary + boundary + 2 tail rows — the cap must NOT cut into the tail
+            expect(window).toHaveLength(4);
+        });
+
+        it('excludes rows listed in excludeDetailIds (in-flight placeholder)', async () => {
+            enqueueWindowRows([
+                makeRow('d-1', 1, 'User', 'question'),
+                makeRow('d-2', 2, 'AI', '⏳ Starting...'),
+            ]);
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser, {
+                excludeDetailIds: ['d-2'],
+            });
+            expect(window).toHaveLength(1);
+            expect(window[0].metadata?.conversationDetailId).toBe('d-1');
+        });
+
+        it('treats blank summaries as no boundary', async () => {
+            enqueueWindowRows([
+                makeRow('d-1', 1, 'User', 'q', '   '),
+                makeRow('d-2', 2, 'AI', 'a'),
+            ]);
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser);
+            expect(window).toHaveLength(2);
+            expect(window[0].metadata?.isConversationSummary).toBeUndefined();
+        });
+    });
+
     describe('SaveConversation', () => {
         it('should save updates and update the in-memory list', async () => {
             runViewResultQueue.push({ Success: true, Results: [createMockConversation({ ID: 'c1', Name: 'Original' })] });
