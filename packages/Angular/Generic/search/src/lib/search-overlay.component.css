@@ -25,7 +25,7 @@
     z-index: 99999;
     display: flex;
     flex-direction: column;
-    border-radius: 14px;
+    border-radius: var(--mj-radius-xl);
     background: var(--mj-bg-surface);
     border: 1px solid var(--mj-border-default);
     box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3);
@@ -97,12 +97,12 @@
     height: 28px;
     padding: 0;
     border: none;
-    border-radius: 50%;
+    border-radius: var(--mj-radius-full);
     background: transparent;
     color: var(--mj-text-muted);
-    font-size: 0.9rem;
+    font-size: var(--mj-text-sm);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: var(--mj-transition-colors);
     flex-shrink: 0;
 }
 
@@ -306,6 +306,20 @@
     background: var(--mj-bg-surface-hover);
 }
 
+/* Rows are focus stops (roving tabindex): the highlight background tracks focus,
+   so suppress the default outline but keep a ring for keyboard :focus-visible. */
+.result-item:focus {
+    outline: none;
+}
+.result-item:focus-visible {
+    outline: 2px solid var(--mj-border-focus);
+    outline-offset: -2px;
+}
+.search-recent-item:focus-visible {
+    outline: 2px solid var(--mj-border-focus);
+    outline-offset: -2px;
+}
+
 .result-item-icon {
     width: 2rem;
     height: 2rem;
@@ -392,23 +406,25 @@
 .search-footer-actions {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--mj-space-2);
 }
 
-/* "See all results" — hand-off to the full Search Results workspace */
+/* "See all results" — hand-off to the full Search Results workspace.
+   Padding/font-size mirror the sibling .agent-cta-btn-small so the footer
+   buttons read as one row. */
 .see-all-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: var(--mj-space-1-5);
     padding: 0.35rem 0.8rem;
-    border-radius: 8px;
+    border-radius: var(--mj-radius-md);
     border: 1px solid var(--mj-border-default);
     background: transparent;
     color: var(--mj-brand-primary);
     font-size: 0.78rem;
-    font-weight: 500;
+    font-weight: var(--mj-font-medium);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: var(--mj-transition-colors);
 }
 
 .see-all-btn:hover {

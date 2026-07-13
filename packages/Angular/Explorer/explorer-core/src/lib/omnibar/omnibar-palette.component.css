@@ -21,7 +21,7 @@
     max-height: calc(100vh - 96px - 24px);
     background: var(--mj-bg-surface-elevated);
     border: 1px solid var(--mj-border-default);
-    border-radius: 16px;
+    border-radius: var(--mj-radius-xl);
     box-shadow: var(--mj-shadow-lg, 0 20px 60px color-mix(in srgb, var(--mj-text-primary) 22%, transparent));
     z-index: 1401;
     overflow: hidden;
@@ -95,12 +95,12 @@
     height: 28px;
     padding: 0;
     border: none;
-    border-radius: var(--mj-radius-full, 999px);
+    border-radius: var(--mj-radius-full);
     background: transparent;
     color: var(--mj-text-muted);
-    font-size: 14px;
+    font-size: var(--mj-text-sm);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: var(--mj-transition-colors);
     flex-shrink: 0;
 }
 .ob-close:hover {

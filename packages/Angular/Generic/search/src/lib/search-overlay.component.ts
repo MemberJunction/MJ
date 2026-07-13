@@ -73,11 +73,12 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     @Input() Placeholder = 'Search across all your knowledge...';
 
     /**
-     * Maximum number of results to fetch and display. Deliberately small — the
-     * overlay is a quick-jump surface; "See all results" hands off to the full
-     * Search Results workspace for anything deeper.
+     * Maximum number of results to fetch and display. Deliberately small (and
+     * matched to the omnibar palette's cap) — the overlay is a quick-jump
+     * surface; "See all results" hands off to the full Search Results
+     * workspace for anything deeper.
      */
-    @Input() MaxResults = 10;
+    @Input() MaxResults = 8;
 
     /** Whether the overlay is currently visible */
     private _IsOpen = false;
@@ -167,9 +168,19 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     /** Active stream subscription so we can cancel on a new search or destroy. */
     private currentStream: Subscription | null = null;
 
+    /** Element focused before the overlay opened — restored on close (a11y). */
+    private previousFocus: HTMLElement | null = null;
+
     /** All results flattened for keyboard navigation */
     public get FlatResults(): SearchResultItem[] {
         return this.AllResults;
+    }
+
+    /** id of the highlighted option, announced via aria-activedescendant. */
+    public get ActiveDescendantId(): string | null {
+        return this.HighlightedIndex >= 0 && this.HighlightedIndex < this.FlatResults.length
+            ? `so-opt-${this.HighlightedIndex}`
+            : null;
     }
 
     ngOnInit(): void {
@@ -335,6 +346,11 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
         const maxIndex = this.FlatResults.length - 1;
         if (maxIndex < 0) return;
 
+        // If a result row currently holds DOM focus (roving tabindex), keep focus
+        // travelling with the highlight; from the input, only the highlight moves.
+        const rowHadFocus = document.activeElement instanceof HTMLElement
+            && document.activeElement.classList.contains('result-item');
+
         this.HighlightedIndex += direction;
         if (this.HighlightedIndex < 0) {
             this.HighlightedIndex = maxIndex;
@@ -342,6 +358,71 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
             this.HighlightedIndex = 0;
         }
         this.cdr.detectChanges();
+
+        // Keyboard-driven moves keep the highlighted row visible. Mouse hover sets
+        // HighlightedIndex directly in the template and deliberately does NOT
+        // scroll — auto-scrolling under the pointer fights the user's hand.
+        const row = document.getElementById(`so-opt-${this.HighlightedIndex}`);
+        row?.scrollIntoView({ block: 'nearest' });
+        if (rowHadFocus) {
+            row?.focus();
+        }
+    }
+
+    /**
+     * Tab behavior inside the dialog:
+     * - On a result row, Tab / Shift+Tab step through the RESULTS themselves
+     *   (mirrors ArrowDown/Up) until walking off either end of the list — then
+     *   focus continues to the footer actions / back to the earlier controls.
+     * - Everywhere else, Tab wraps within the dialog (focus trap): input → close
+     *   → filter chips → results → footer actions → back to the input.
+     * Escape is handled by the document-level keydown.
+     */
+    public OnSpotlightKeydown(event: KeyboardEvent): void {
+        if (event.key !== 'Tab') {
+            return;
+        }
+        const activeEl = document.activeElement as HTMLElement | null;
+        if (activeEl?.classList.contains('result-item')) {
+            const last = this.FlatResults.length - 1;
+            if (!event.shiftKey && this.HighlightedIndex < last) {
+                event.preventDefault();
+                this.moveHighlight(1); // row has focus, so focus travels with it
+                return;
+            }
+            if (event.shiftKey && this.HighlightedIndex > 0) {
+                event.preventDefault();
+                this.moveHighlight(-1);
+                return;
+            }
+            // At either end: fall through so Tab leaves the list naturally.
+        }
+        const root = (event.currentTarget as HTMLElement) ?? null;
+        if (!root) {
+            return;
+        }
+        const focusables = Array.from(
+            root.querySelectorAll<HTMLElement>('input, button, .result-item[tabindex="0"], .search-recent-item[tabindex="0"]')
+        ).filter((el) => el.offsetParent !== null);
+        if (focusables.length === 0) {
+            return;
+        }
+        const active = document.activeElement as HTMLElement | null;
+        if (!event.shiftKey && active === focusables[focusables.length - 1]) {
+            event.preventDefault();
+            focusables[0].focus();
+        } else if (event.shiftKey && active === focusables[0]) {
+            event.preventDefault();
+            focusables[focusables.length - 1].focus();
+        }
+    }
+
+    /** Recent-search rows are keyboard-activatable (Enter/Space = click). */
+    public OnRecentKeydown(event: KeyboardEvent, query: string): void {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            this.OnQueryInput(query);
+        }
     }
 
     private setupSearchDebounce(): void {
@@ -501,6 +582,9 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     }
 
     private onOverlayOpened(): void {
+        // Remember what had focus so Close() can hand it back (a11y: the overlay
+        // is a modal dialog — focus must return to the summoning control).
+        this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         // Focus input after view updates
         Promise.resolve().then(() => {
             this.searchInputRef?.nativeElement?.focus();
@@ -510,6 +594,10 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
 
     private onOverlayClosed(): void {
         this.HighlightedIndex = -1;
+        if (this.previousFocus?.isConnected) {
+            this.previousFocus.focus();
+        }
+        this.previousFocus = null;
     }
 
     /** Check if any filters are active (used by template) */

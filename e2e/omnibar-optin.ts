@@ -13,12 +13,18 @@ import { expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 export async function ensureOmnibarEnabled(page: Page): Promise<void> {
-  const affordance = page.locator('.shell-omnibar-affordance');
-  if (await affordance.first().isVisible().catch(() => false)) {
+  // The two opt-in states render DIFFERENT header search affordances on desktop:
+  // omnibar ON → the .search-btn bar (a button that opens the palette);
+  // omnibar OFF → the .shell-search-bar inline composite (a real input with an
+  // attached suggest dropdown). Detect by which one is on screen.
+  const omnibarBar = page.locator('.search-btn');
+  const legacyComposite = page.locator('.shell-search-bar');
+  await expect(omnibarBar.or(legacyComposite).first()).toBeVisible({ timeout: 15_000 });
+  if (await omnibarBar.first().isVisible().catch(() => false)) {
     return; // already opted in
   }
   await setOmnibarEnabled(page, true);
-  await expect(affordance.first()).toBeVisible({ timeout: 15_000 });
+  await expect(omnibarBar.first()).toBeVisible({ timeout: 15_000 });
 }
 
 /**

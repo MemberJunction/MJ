@@ -65,7 +65,6 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: false, // single signed-in profile → run serially to avoid lock contention
-  workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : [['list']],
   use: {

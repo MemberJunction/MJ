@@ -36,8 +36,12 @@ async function gotoHome(page: Page): Promise<void> {
   } catch {
     // no recovery card — normal boot
   }
-  // Shell header present = app booted past the loading screen.
-  await expect(page.locator('.shell-omnibar-affordance, .shell-search-bar').first()).toBeVisible({ timeout: 120_000 });
+  // Shell header present = app booted past the loading screen. Which search
+  // affordance renders depends on omnibar opt-in: the bar button (on) or the
+  // inline composite (off) — wait for either.
+  await expect(
+    page.locator('.search-btn').or(page.locator('.shell-search-bar')).first()
+  ).toBeVisible({ timeout: 120_000 });
   // The omnibar is per-user OPT-IN — enable it for the test user (idempotent).
   await ensureOmnibarEnabled(page);
 }
@@ -57,7 +61,7 @@ test.describe.serial('Unified command palette', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('.omnibar-palette')).toBeHidden();
 
-    await page.locator('.shell-omnibar-affordance').click();
+    await page.locator('.search-btn').click();
     await expect(page.locator('.omnibar-palette')).toBeVisible();
     await page.keyboard.press('Escape');
   });
@@ -145,18 +149,19 @@ test.describe.serial('Unified command palette', () => {
   test('omnibar is per-user opt-in: My Profile toggle turns it off and back on live', async ({ page }) => {
     await gotoHome(page); // ends opted-IN via ensureOmnibarEnabled
 
-    // Opt OUT → affordance disappears live, Ctrl+K falls back to legacy (no palette).
+    // Opt OUT → the header swaps to the inline composite (real input, attached
+    // suggest dropdown); Ctrl+K now FOCUSES it instead of opening the palette.
     await setOmnibarEnabled(page, false);
-    await expect(page.locator('.shell-omnibar-affordance')).toBeHidden({ timeout: 10_000 });
-    await expect(page.locator('.shell-search-bar').first()).toBeVisible({ timeout: 10_000 });
+    const composite = page.locator('.shell-search-bar');
+    await expect(composite.first()).toBeVisible({ timeout: 10_000 });
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
-    await page.waitForTimeout(1_000);
+    await expect(composite.locator('input').first()).toBeFocused({ timeout: 10_000 });
     await expect(page.locator('.omnibar-palette')).toHaveCount(0);
-    await page.keyboard.press('Escape'); // dismiss whatever legacy Ctrl+K focused
+    await page.keyboard.press('Escape');
 
-    // Opt back IN → affordance returns live and Ctrl+K opens the palette again.
+    // Opt back IN → the bar button returns and Ctrl+K opens the palette again.
     await setOmnibarEnabled(page, true);
-    await expect(page.locator('.shell-omnibar-affordance').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.search-btn').first()).toBeVisible({ timeout: 10_000 });
     await openPalette(page);
     await page.keyboard.press('Escape');
   });

@@ -173,39 +173,91 @@ mj-tab-container ::ng-deep .lm_stack {
   background: var(--mj-bg-surface-hover);
 }
 
-/* Search icon: circle at rest, pill on hover revealing the summon shortcut to
-   the right of the glyph. The cluster is right-anchored, so the button expands
-   leftward and its neighbors stay put. */
+/* Universal search: a static-width bar styled as an input, anchored on the
+   right with the action cluster. Deliberately NOT resizable on hover/focus —
+   chrome that shifts on interaction was rejected in the 2026-07 review. It's a
+   button (typing happens in the overlay it opens), so no focus/caret styling. */
 .search-btn {
-  width: auto;
-  min-width: 40px;
-  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  width: 260px;
+  height: 36px;
+  padding: 0 var(--mj-space-2-5) 0 var(--mj-space-3-5);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-sm);
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--mj-transition-colors);
 }
 
-.search-btn .search-btn-kbd {
-  max-width: 0;
-  opacity: 0;
+.search-btn:hover {
+  border-color: var(--mj-border-strong);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+}
+
+.search-btn:focus-visible {
+  outline: none;
+  border-color: var(--mj-border-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+/* Omnibar-off mobile trigger: hidden on desktop (the inline composite renders
+   instead); the 768px block flips it on as the icon circle. */
+.search-btn-mobile {
+  display: none;
+}
+
+/* Omnibar-off desktop: the inline search composite, same slot + width as the
+   omnibar bar so the opt-in toggle doesn't move the header. */
+.shell-search-bar {
+  position: relative;
+  width: 260px;
+  z-index: 99999;
+}
+
+/* The suggest dropdown needs more width than its 260px anchor. Pin it to the
+   anchor's right edge and let it grow leftward — the bar is right-anchored, so
+   leftward growth stays on screen. */
+.shell-search-bar ::ng-deep .suggest-dropdown {
+  left: auto;
+  right: 0;
+  width: min(560px, calc(100vw - var(--mj-space-6)));
+}
+
+.search-btn i {
+  font-size: var(--mj-text-sm);
+  flex-shrink: 0;
+}
+
+.search-btn .search-btn-text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* kbd chip: deliberately mirrors the omnibar palette's .ob-kbd chrome
+   (10.5px / 5px radius / bottom-heavy border) so the affordance and the
+   surface it summons read as one system. */
+.search-btn .search-btn-kbd {
+  flex-shrink: 0;
   white-space: nowrap;
   font-family: inherit;
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-muted);
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-strong);
   border-bottom-width: 2px;
   border-radius: 5px;
-  padding: 1.5px 0;
-  transition: max-width 0.18s ease, opacity 0.15s ease, margin 0.18s ease, padding 0.18s ease;
-}
-
-.search-btn:hover .search-btn-kbd,
-.search-btn:focus-visible .search-btn-kbd {
-  max-width: 64px;
-  opacity: 1;
-  margin-left: 7px;
-  margin-right: 5px;
-  padding: 1.5px 6px;
+  padding: 1.5px var(--mj-space-1-5);
 }
 
 /* Notification button with badge */
@@ -749,6 +801,28 @@ mj-tab-container ::ng-deep .lm_stack {
   .header-actions .search-btn {
     flex-shrink: 0;
   }
+
+  /* Search bar collapses to the icon-only circle on small viewports —
+     the placeholder text + kbd chip are already hidden via .desktop-only.
+     The omnibar-off mobile trigger (.search-btn-mobile) becomes visible here;
+     its .desktop-only composite sibling is hidden by the rule above. */
+  .search-btn {
+    display: flex;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: none;
+  }
+  .search-btn i {
+    font-size: var(--mj-text-lg);
+  }
+  .search-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    border: none;
+  }
 }
 
 /* Settings Full-Screen Window Styles */
@@ -799,8 +873,9 @@ mj-tab-container ::ng-deep .lm_stack {
   display: none !important;
 }
 
-/* Universal search collapsed to a header-actions icon (2026-07 design review):
-   both experiences open as overlays, so no inline bar chrome remains. */
+/* Universal search is a right-anchored bar affordance in header-actions
+   (2026-07 design review round 2): both experiences still open as overlays —
+   the bar is a trigger, not an inline input. Icon-only under 768px. */
 
 /* ========================================
    SEARCH POPUP

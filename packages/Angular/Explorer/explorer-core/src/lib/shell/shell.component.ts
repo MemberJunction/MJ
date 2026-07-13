@@ -123,13 +123,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
-  // Legacy universal search overlay (omnibar opt-out path) — opened by the
-  // header search icon or Ctrl/Cmd+K when the user hasn't opted into the omnibar.
+  // Legacy universal search overlay (omnibar-off MOBILE path) — opened by the
+  // mobile search icon or Ctrl/Cmd+K when the inline composite isn't visible.
+  // Desktop omnibar-off uses the inline header composite instead.
   LegacySearchOpen = false;
 
   // Instance configuration feature flags
   get ShowSearchBar(): boolean {
       return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.Enabled', true);
+  }
+  get ShowSearchPreview(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.EnablePreview', true);
   }
   /**
    * Two-layer gate for the unified Ctrl+K command palette (omnibar):
@@ -151,6 +155,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   }
 
   @ViewChild('omnibarPalette') omnibarPalette?: { Open(initialQuery?: string): void };
+
+  /** Legacy inline search composite (omnibar-off desktop). Structural typing keeps
+      the shell decoupled from the ng-search component class. */
+  @ViewChild('shellSearchComposite') shellSearchComposite: {
+    Focus?(): void;
+    MinRelevancePercent?: number;
+    SelectedScopeIDs?: string[];
+  } | undefined;
 
   /** Header affordance click → open the palette. */
   OpenOmnibar(initialQuery = ''): void {
@@ -2679,9 +2691,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   @HostListener('document:keydown', ['$event'])
   OnGlobalKeydown(event: KeyboardEvent): void {
-      // Ctrl/Cmd+K summons the search surface from anywhere, even while typing —
-      // it's an explicit chord and both experiences are modal overlays now
-      // (omnibar palette when opted in, mj-search-overlay otherwise).
+      // Ctrl/Cmd+K summons search. Omnibar: the modal palette opens from anywhere,
+      // even while typing (explicit chord, Slack/Linear semantics). Legacy: the
+      // chord FOCUSES the inline header composite on desktop (results attach
+      // beneath it), so keep the don't-steal-focus-mid-typing guard; on mobile
+      // (no composite rendered) it opens the Spotlight overlay instead.
+      const target = event.target as HTMLElement;
+      const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      if (inEditable && !this.UseOmnibar) {
+          return;
+      }
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
       if (isCtrlOrCmd && event.key === 'k') {
@@ -2691,11 +2710,20 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }
   }
 
-  /** Header search icon / Ctrl+K: open whichever search surface the user is on. */
+  /** Header search affordance / Ctrl+K: route to whichever search surface applies.
+      The mobile check matters: below the breakpoint the composite is CSS-hidden
+      (.desktop-only) but its ViewChild still exists — focusing an invisible input
+      would silently eat the interaction. */
   OnHeaderSearchClick(): void {
+      const isMobile = window.matchMedia('(max-width: 768px)').matches;
       if (this.UseOmnibar) {
           this.OpenOmnibar();
+      } else if (!isMobile && this.shellSearchComposite?.Focus) {
+          // Omnibar-off desktop: the inline composite is on screen — focus it and
+          // let its attached suggest dropdown do the work.
+          this.shellSearchComposite.Focus();
       } else {
+          // Omnibar-off mobile: no visible inline composite — open the Spotlight overlay.
           this.LegacySearchOpen = true;
       }
   }
@@ -2726,6 +2754,24 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   OnOverlaySeeAll(query: string): void {
       this.LegacySearchOpen = false;
       this.navigationService.OpenSearch(query);
+  }
+
+  /** Inline composite submit (Enter) → full Search Results workspace, carrying the
+      composite's relevance/scope selections. */
+  OnSearchSubmitted(query: string): void {
+      if (query && query.trim().length >= 2) {
+          const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
+          const scopeIDs = this.shellSearchComposite?.SelectedScopeIDs;
+          const opts: { minRelevance?: number; scopeIDs?: string[] } = {};
+          if (minRelevance) opts.minRelevance = minRelevance;
+          if (scopeIDs && scopeIDs.length > 0) opts.scopeIDs = scopeIDs;
+          this.navigationService.OpenSearch(query, Object.keys(opts).length > 0 ? opts : undefined);
+      }
+  }
+
+  /** Inline composite's suggest-dropdown "See all N results" footer. */
+  OnSeeAllSearch(query: string): void {
+      this.OnSearchSubmitted(query);
   }
 
   // ========================================

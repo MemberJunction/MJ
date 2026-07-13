@@ -243,6 +243,24 @@ export class OmnibarPaletteComponent implements OnDestroy {
         if (event.key !== 'Tab') {
             return;
         }
+        // On a result row, Tab / Shift+Tab step through the RESULTS themselves
+        // (mirrors ArrowDown/Up) until walking off either end of the list — then
+        // the trap logic below takes over. Same model as mj-search-overlay.
+        const activeEl = document.activeElement as HTMLElement | null;
+        if (activeEl?.classList.contains('ob-row')) {
+            const last = this.selectableRows.length - 1;
+            if (!event.shiftKey && this.SelectedIndex < last) {
+                event.preventDefault();
+                this.moveSelection(1, true);
+                return;
+            }
+            if (event.shiftKey && this.SelectedIndex > 0) {
+                event.preventDefault();
+                this.moveSelection(-1, true);
+                return;
+            }
+            // At either end: fall through so Tab leaves the list naturally.
+        }
         const root = this.host.nativeElement.querySelector('.omnibar-palette') as HTMLElement | null;
         if (!root) {
             return;
