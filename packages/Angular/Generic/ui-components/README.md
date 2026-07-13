@@ -42,7 +42,6 @@ Components attach styles one of three ways, and one of them needs host cooperati
 @import '@memberjunction/ng-ui-components/dist/lib/splitter/splitter';
 @import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
 @import '@memberjunction/ng-ui-components/dist/lib/window/window';
-@import '@memberjunction/ng-ui-components/dist/lib/page-header/page-header';
 ```
 
 All colors resolve through `--mj-*` semantic tokens, so light/dark theming requires zero component-level work.
