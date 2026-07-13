@@ -23,6 +23,7 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 import { AzureLLM } from '../models/azure';
+import { ChatMessageRole, ChatParams, ChatResult } from '@memberjunction/ai';
 
 describe('AzureLLM', () => {
     let instance: AzureLLM;
@@ -382,6 +383,101 @@ describe('AzureLLM', () => {
         it('should return empty string for non-string non-array content', () => {
             const result = (instance as ReturnType<typeof Object.create>)['getStringFromChatMessageContent'](42);
             expect(result).toBe('');
+        });
+    });
+
+    describe('cancellation (ChatParams.cancellationToken)', () => {
+        /** Typed view of the protected members exercised below — avoids `any`. */
+        type AzureLLMInternals = {
+            nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult>;
+            createStreamingRequest(params: ChatParams): Promise<unknown>;
+            finalizeStreamingResponse(content: string | null, lastChunk: unknown, usage: unknown): ChatResult;
+        };
+
+        let internals: AzureLLMInternals;
+        let mockPost: ReturnType<typeof vi.fn>;
+
+        const buildChatParams = (cancellationToken?: AbortSignal): ChatParams => {
+            const params = new ChatParams();
+            params.model = 'gpt-4o';
+            params.messages = [{ role: ChatMessageRole.user, content: 'hello' }];
+            params.cancellationToken = cancellationToken;
+            return params;
+        };
+
+        beforeEach(() => {
+            mockPost = vi.fn();
+            mockModelClientFn.mockReturnValue({
+                path: vi.fn().mockReturnValue({ post: mockPost }),
+            });
+            instance = new AzureLLM(testApiKey);
+            instance.SetAdditionalSettings({ endpoint: 'https://my-endpoint.azure.com' });
+            internals = instance as unknown as AzureLLMInternals;
+        });
+
+        it('passes the token as the `abortSignal` request option on the non-streaming path', async () => {
+            const controller = new AbortController();
+            mockPost.mockResolvedValueOnce({
+                body: {
+                    choices: [{ message: { content: 'hi' }, finish_reason: 'stop', index: 0 }],
+                    usage: { prompt_tokens: 4, completion_tokens: 1 },
+                },
+            });
+
+            await internals.nonStreamingChatCompletion(buildChatParams(controller.signal));
+
+            expect(mockPost).toHaveBeenCalledWith(
+                expect.objectContaining({ abortSignal: controller.signal })
+            );
+        });
+
+        it('passes the token as the `abortSignal` request option on the streaming path', async () => {
+            const controller = new AbortController();
+            mockPost.mockResolvedValueOnce({ body: {} });
+
+            await internals.createStreamingRequest(buildChatParams(controller.signal));
+
+            expect(mockPost).toHaveBeenCalledWith(
+                expect.objectContaining({ abortSignal: controller.signal })
+            );
+        });
+
+        it('returns a clean, non-failover-able failure when the non-streaming request is aborted', async () => {
+            const controller = new AbortController();
+            const abortError = new Error('The operation was aborted.');
+            abortError.name = 'AbortError';
+            mockPost.mockRejectedValueOnce(abortError);
+            controller.abort();
+
+            const result = await internals.nonStreamingChatCompletion(buildChatParams(controller.signal));
+
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('cancelled');
+            expect(result.errorInfo?.severity).toBe('Fatal');
+            expect(result.errorInfo?.canFailover).toBe(false);
+            expect(result.errorInfo?.providerErrorCode).toBe('request_cancelled');
+        });
+
+        it('finalizes an aborted stream as a cancelled result rather than a truncated success', async () => {
+            const controller = new AbortController();
+            mockPost.mockResolvedValueOnce({ body: {} });
+
+            await internals.createStreamingRequest(buildChatParams(controller.signal));
+            controller.abort();
+
+            const result = internals.finalizeStreamingResponse('partial content', null, null);
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('cancelled');
+            expect(result.errorInfo?.canFailover).toBe(false);
+        });
+
+        it('finalizes a normal stream as a success', async () => {
+            mockPost.mockResolvedValueOnce({ body: {} });
+            await internals.createStreamingRequest(buildChatParams());
+
+            const result = internals.finalizeStreamingResponse('all done', null, null);
+            expect(result.success).toBe(true);
+            expect(result.statusText).toBe('success');
         });
     });
 });
