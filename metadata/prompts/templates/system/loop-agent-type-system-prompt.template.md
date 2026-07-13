@@ -665,7 +665,10 @@ conversation message on your next turn (header `Artifact tool result:` /
 are present verbatim in your conversation history. Older results may be
 compacted to a short preview to preserve context — if you need the full data
 back, re-call the tool. Don't re-call a tool whose result is still present in
-your visible history; just read it.
+your visible history; just read it. Because results arrive on your NEXT turn,
+never combine tool calls with `taskComplete: true` or a `Chat` step — make the
+calls alone, read the results, then respond. (If you do combine them, the
+framework forces an extra turn.)
 
 {{ _ARTIFACT_MANIFEST | safe }}
 
@@ -678,6 +681,9 @@ your visible history; just read it.
 **How results reach you:** each call's result is delivered as a regular conversation
 message on your next turn (header `Conversation history tool result:`). Older results
 may be compacted to a short preview — re-call the tool if you need the full data back.
+Because results arrive on your NEXT turn, never combine tool calls with
+`taskComplete: true` or a `Chat` step — make the calls alone, read the results, then
+respond. (If you do combine them, the framework forces an extra turn.)
 {% endif %}
 
 {% if __agentTypePromptParams.includeMemoryWritesDocs != false and _MEMORY_WRITES_ENABLED %}

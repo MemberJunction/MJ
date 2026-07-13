@@ -133,6 +133,37 @@ export class LoopAgentType extends BaseAgentType {
                 });
             }
 
+            // Inline READ tools (artifact/conversation) are yield/await: results arrive on the
+            // NEXT turn, so a terminal step in the same response would orphan them — the tools
+            // execute and inject their results, but the run ends and the user gets "one
+            // moment…" and silence. Mirror the Pipeline/client-tools pre-emption: force one
+            // more (non-terminal) turn so the LLM responds after reading the results.
+            // taskComplete + clientTools is excluded — the ClientTools path already re-enters
+            // the loop and consumes the injected results. memoryWrites/scratchpad are
+            // fire-and-forget writes and never trigger pre-emption.
+            const hasClientTools = response.nextStep?.clientTools && response.nextStep.clientTools.length > 0;
+            const hasInlineReadTools = (response.artifactToolCalls?.length || 0) + (response.conversationToolCalls?.length || 0) > 0;
+            const wantsTerminalStep = response.nextStep?.type === 'Chat' || (response.taskComplete === true && !hasClientTools);
+            if (hasInlineReadTools && wantsTerminalStep) {
+                LogStatusEx({
+                    message: '🔁 Loop Agent: inline tool call(s) combined with a terminal step — forcing one more turn so the results can be read',
+                    verboseOnly: true
+                });
+                return this.createNextStep('Retry', {
+                    terminate: false,
+                    artifactToolCalls: response.artifactToolCalls,
+                    conversationToolCalls: response.conversationToolCalls,
+                    memoryWrites: response.memoryWrites,
+                    scratchpad: response.scratchpad,
+                    payloadChangeRequest: response.payloadChangeRequest,
+                    reasoning: response.reasoning,
+                    confidence: response.confidence
+                    // deliberately NO errorMessage/message/retryInstructions: that keeps this
+                    // retry "productive" (only errorMessage-bearing retries count toward the
+                    // unproductive-retry limit) and suppresses the "Retrying due to:" message.
+                });
+            }
+
             // Check for Chat nextStep BEFORE checking taskComplete
             // This allows agents to ask for user clarification even when taskComplete=true
             if (response.nextStep?.type === 'Chat') {
@@ -163,8 +194,8 @@ export class LoopAgentType extends BaseAgentType {
             // Client tools are yield/await: the LLM can't know the result until they execute.
             // After tools run, executeClientToolsStep calls executePromptStep which re-enters
             // the LLM loop. If taskComplete was true, the LLM will naturally complete on the
-            // next iteration after seeing tool results.
-            const hasClientTools = response.nextStep?.clientTools && response.nextStep.clientTools.length > 0;
+            // next iteration after seeing tool results. (hasClientTools is computed above,
+            // where the inline read-tool pre-emption also consults it.)
             if (response.taskComplete && !hasClientTools) {
                 LogStatusEx({
                     message: '✅ Loop Agent: Task completed successfully. Message: ' + response.message,

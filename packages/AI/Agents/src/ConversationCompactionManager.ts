@@ -107,6 +107,14 @@ const DEFAULT_TRIGGER_PERCENT = 75;
 const DEFAULT_TARGET_PERCENT = 30;
 /** Tokens reserved for the yet-unwritten new summary when choosing the boundary. */
 const SUMMARY_RESERVE_TOKENS = 1500;
+/**
+ * Minimum projected token relief for a compaction pass to be worth its summary-prompt
+ * LLM call. Also exceeds a typical turn's context growth, so a degenerate budget (a
+ * trigger at or below the steady-state summary size) stops churning — without this,
+ * such a config re-fires a wasted summary call on EVERY turn while advancing the
+ * boundary one message at a time (observed live during contour testing).
+ */
+const MIN_COMPACTION_GAIN_TOKENS = 500;
 /** Below this many raw messages a compaction pass is not worth a prompt run. */
 const MIN_MESSAGES_TO_COMPACT = 4;
 /** Per-message character cap when rendering the delta for the summary prompt. */
@@ -120,6 +128,9 @@ const MAX_DELTA_MESSAGE_CHARS = 10_000;
 export class ConversationCompactionManager {
     /** Conversations with a compaction currently in flight in this process (re-entrancy guard). */
     private static inFlightConversations = new Set<string>();
+
+    /** Conversations already warned (once per process) about an unsatisfiable trigger budget. */
+    private static warnedConversationBudgets = new Set<string>();
 
     /**
      * Resolves the effective context budget for a run.
@@ -224,6 +235,20 @@ export class ConversationCompactionManager {
             && !!m.metadata?.conversationDetailId
         );
 
+        // Unsatisfiable-budget warning: when the prior summary ALONE meets the trigger,
+        // no amount of folding can bring the window back under it — the operator needs a
+        // bigger ContextWindowMaxTokens or a higher CompactionTriggerPercent. Warn once
+        // per conversation per process; the skip paths below stop the per-turn churn.
+        const conversationKey = NormalizeUUID(input.ConversationId);
+        if (priorSummary.length > 0
+            && input.EstimateTokens([window[0]]) >= input.Budget.TriggerTokens
+            && !this.warnedConversationBudgets.has(conversationKey)) {
+            this.warnedConversationBudgets.add(conversationKey);
+            const budgetWarning = `Compaction trigger (~${input.Budget.TriggerTokens} tokens) is at or below the running summary's size — the window can never get under the trigger. Raise ContextWindowMaxTokens or CompactionTriggerPercent for this agent/type.`;
+            warnings.push(budgetWarning);
+            LogStatusEx({ message: `⚠️ [CrossTurnCompaction] Conversation ${input.ConversationId}: ${budgetWarning}` });
+        }
+
         const boundaryIndex = this.selectBoundaryIndex(rawMessages, input);
         if (boundaryIndex === null) {
             // Over the trigger but nothing foldable — either too few addressable messages,
@@ -233,7 +258,16 @@ export class ConversationCompactionManager {
             return { Fired: false, SkippedReason: 'No foldable boundary (too few addressable messages, or the window already fits the target tail)', TokensBefore: tokensBefore, Warnings: warnings };
         }
 
+        // Minimum-gain guard: don't pay a summary-prompt LLM call for negligible relief.
+        // Projected post-compaction size = the summary reserve + the retained tail.
         const boundaryMessage = rawMessages[boundaryIndex];
+        const projectedTokensAfter = SUMMARY_RESERVE_TOKENS + input.EstimateTokens(rawMessages.slice(boundaryIndex));
+        const projectedGain = tokensBefore - projectedTokensAfter;
+        if (projectedGain < MIN_COMPACTION_GAIN_TOKENS) {
+            this.logVerbose(input, `Skipping: projected gain ~${projectedGain} tokens < minimum ${MIN_COMPACTION_GAIN_TOKENS}`);
+            return { Fired: false, SkippedReason: `Projected gain (~${projectedGain} tokens) is under the ${MIN_COMPACTION_GAIN_TOKENS}-token minimum — not worth a summary prompt run`, TokensBefore: tokensBefore, Warnings: warnings };
+        }
+
         const delta = rawMessages.slice(0, boundaryIndex);
         const promptResult = await this.runSummaryPrompt(input, priorSummary, delta);
         if (!promptResult.success) {

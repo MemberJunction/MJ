@@ -216,9 +216,10 @@ describe('ConversationCompactionManager', () => {
         });
 
         it('fires over the trigger: recursive input = prior summary + delta only, boundary row written', async () => {
-            // 6 messages × 100 chars = 600 tokens; trigger 100; target 2000 with reserve 1500
-            // → tail budget 500 → newest 5 fit (500), boundary = index 1 (seq 2), delta = [seq 1]
-            const text = 'x'.repeat(100);
+            // 6 messages × 1000 chars = 6000 tokens; trigger 100; target 2000 with reserve 1500
+            // → tail budget 500 → even one message (1000) exceeds it → boundary = last (seq 6),
+            // delta = seq 1..5; projected gain ≈ 6011 − (1500 + 1000) = 3511 ≥ the 500 minimum
+            const text = 'x'.repeat(1000);
             mockWindow.messages = [
                 summaryMessage(1, 'OLD SUMMARY'),
                 ...[1, 2, 3, 4, 5, 6].map(n => contextMessage(n, n % 2 ? 'user' : 'assistant', text)),
@@ -226,7 +227,7 @@ describe('ConversationCompactionManager', () => {
             const outcome = await ConversationCompactionManager.CompactIfNeeded(baseInput() as never);
 
             expect(outcome.Fired).toBe(true);
-            expect(outcome.BoundarySequence).toBe(2);
+            expect(outcome.BoundarySequence).toBe(6);
             expect(outcome.PromptRunId).toBe('PROMPT-RUN-1');
             expect(outcome.SummaryText).toBe('NEW SUMMARY');
 
@@ -234,13 +235,40 @@ describe('ConversationCompactionManager', () => {
             const promptParams = mockExecutePrompt.mock.calls[0][0];
             expect(promptParams.data.priorSummary).toBe('OLD SUMMARY');
             expect(promptParams.data.deltaMessages).toContain('[seq 1]');
-            expect(promptParams.data.deltaMessages).not.toContain('[seq 2]');
+            expect(promptParams.data.deltaMessages).toContain('[seq 5]');
+            expect(promptParams.data.deltaMessages).not.toContain('[seq 6]');
 
             // Boundary row write: summary + prompt-run linkage through the entity save path
-            expect(mockDetailEntity.Load).toHaveBeenCalledWith('detail-2');
+            expect(mockDetailEntity.Load).toHaveBeenCalledWith('detail-6');
             expect(mockDetailEntity.SummaryOfEarlierConversation).toBe('NEW SUMMARY');
             expect(mockDetailEntity.SummaryPromptRunID).toBe('PROMPT-RUN-1');
             expect(mockDetailEntity.Save).toHaveBeenCalled();
+        });
+
+        it('skips (no LLM call) when the projected gain is under the minimum — the churn guard', async () => {
+            // The live-observed degenerate config: a large prior summary + small tail with a
+            // tiny budget. 5 × 150-char messages → tail budget 500 keeps 3 (450), folding 2:
+            // before ≈ 1300 + 750 = 2050; projected after ≈ 1500 + 450 = 1950 → gain ~100 < 500.
+            mockWindow.messages = [
+                summaryMessage(19, 's'.repeat(1300)),
+                ...[19, 20, 21, 22, 23].map(n => contextMessage(n, 'user', 'y'.repeat(150))),
+            ];
+            const outcome = await ConversationCompactionManager.CompactIfNeeded(baseInput({ ConversationId: 'CONV-CHURN-A' }) as never);
+            expect(outcome.Fired).toBe(false);
+            expect(outcome.SkippedReason).toContain('Projected gain');
+            expect(mockExecutePrompt).not.toHaveBeenCalled();
+            expect(mockDetailEntity.Save).not.toHaveBeenCalled();
+        });
+
+        it('warns exactly once per conversation when the summary alone meets the trigger', async () => {
+            mockWindow.messages = [
+                summaryMessage(19, 's'.repeat(1300)),
+                ...[19, 20, 21, 22, 23].map(n => contextMessage(n, 'user', 'y'.repeat(150))),
+            ];
+            const first = await ConversationCompactionManager.CompactIfNeeded(baseInput({ ConversationId: 'CONV-CHURN-B' }) as never);
+            const second = await ConversationCompactionManager.CompactIfNeeded(baseInput({ ConversationId: 'CONV-CHURN-B' }) as never);
+            expect(first.Warnings.some(w => w.includes('can never get under the trigger'))).toBe(true);
+            expect(second.Warnings.some(w => w.includes('can never get under the trigger'))).toBe(false);
         });
 
         it('skips when there are too few addressable messages to fold', async () => {
@@ -253,7 +281,7 @@ describe('ConversationCompactionManager', () => {
 
         it('contains prompt failures: no write, error surfaced, conversation untouched', async () => {
             mockExecutePrompt.mockResolvedValue({ success: false, errorMessage: 'model exploded', promptRun: { ID: 'RUN-X' } });
-            mockWindow.messages = [1, 2, 3, 4, 5, 6].map(n => contextMessage(n, 'user', 'x'.repeat(100)));
+            mockWindow.messages = [1, 2, 3, 4, 5, 6].map(n => contextMessage(n, 'user', 'x'.repeat(1000)));
             const outcome = await ConversationCompactionManager.CompactIfNeeded(baseInput() as never);
             expect(outcome.Fired).toBe(false);
             expect(outcome.ErrorMessage).toBe('model exploded');
@@ -263,14 +291,14 @@ describe('ConversationCompactionManager', () => {
         it('surfaces a failed boundary-row save as an error outcome', async () => {
             mockDetailEntity.Save.mockResolvedValue(false);
             mockDetailEntity.LatestResult.CompleteMessage = 'FK violation';
-            mockWindow.messages = [1, 2, 3, 4, 5, 6].map(n => contextMessage(n, 'user', 'x'.repeat(100)));
+            mockWindow.messages = [1, 2, 3, 4, 5, 6].map(n => contextMessage(n, 'user', 'x'.repeat(1000)));
             const outcome = await ConversationCompactionManager.CompactIfNeeded(baseInput() as never);
             expect(outcome.Fired).toBe(false);
             expect(outcome.ErrorMessage).toContain('FK violation');
         });
 
         it('uses the agent/type ConversationSummaryPromptID override when set', async () => {
-            mockWindow.messages = [1, 2, 3, 4, 5, 6].map(n => contextMessage(n, 'user', 'x'.repeat(100)));
+            mockWindow.messages = [1, 2, 3, 4, 5, 6].map(n => contextMessage(n, 'user', 'x'.repeat(1000)));
             const outcome = await ConversationCompactionManager.CompactIfNeeded(baseInput({
                 Agent: makeAgent({ ConversationSummaryPromptID: 'PROMPT-OVERRIDE' }) as never,
             }) as never);
@@ -279,7 +307,7 @@ describe('ConversationCompactionManager', () => {
         });
 
         it('serializes concurrent passes for the same conversation (re-entrancy guard)', async () => {
-            mockWindow.messages = [1, 2, 3, 4, 5, 6].map(n => contextMessage(n, 'user', 'x'.repeat(100)));
+            mockWindow.messages = [1, 2, 3, 4, 5, 6].map(n => contextMessage(n, 'user', 'x'.repeat(1000)));
             let releasePrompt: (value: unknown) => void = () => undefined;
             mockExecutePrompt.mockImplementation(() => new Promise(resolve => {
                 releasePrompt = () => resolve({ success: true, result: 'NEW SUMMARY', promptRun: { ID: 'PROMPT-RUN-1' } });

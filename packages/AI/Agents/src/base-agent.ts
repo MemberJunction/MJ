@@ -1586,7 +1586,11 @@ export class BaseAgent {
                     primaryScopeRecordId,
                     secondaryScopes,
                     params.payload
-                )
+                ),
+                // Carry the previous turn's tool results forward (no-op without a
+                // conversationId). Runs here so the results are in the messages before
+                // the pre-turn compaction check and the first prompt.
+                this.injectPriorTurnToolResults(wrappedParams)
             ]);
 
             // Inject scope-resolved prompt parts (role-faithful) for this agent's prompt, alongside
@@ -5498,6 +5502,129 @@ The context is now within limits. Please retry your request with the recovered c
             }),
         );
         return results;
+    }
+
+    /**
+     * Carries the PREVIOUS turn's tool results forward into this run's context.
+     *
+     * Inline tool results (artifact + conversation tools) are injected into the run's
+     * in-memory messages only — the next turn rebuilds messages from the conversation
+     * window, so a result paged in on turn N is gone on turn N+1 and the agent must
+     * re-call the tool. The results already persist in each Tool step's OutputData;
+     * this re-injects the immediately previous completed run's successful results as
+     * one transient message. One-turn memory by construction: each run carries only
+     * its direct predecessor's results, so context never compounds.
+     *
+     * Gated on conversationId + root depth — programmatic runs and sub-agents skip it.
+     * @protected
+     */
+    protected async injectPriorTurnToolResults(params: ExecuteAgentParams): Promise<void> {
+        if (!params.conversationId || this._depth !== 0) {
+            return;
+        }
+        try {
+            const steps = await this.loadPriorTurnToolResultSteps(params);
+            const body = BaseAgent.BuildPriorTurnToolResultsMessage(steps, this.maxStandaloneToolResultChars);
+            if (!body) {
+                return;
+            }
+            const message: AgentChatMessage = {
+                role: 'user',
+                content: body,
+                metadata: {
+                    turnAdded: 0,
+                    messageType: 'tool-result',
+                    expirationTurns: 2,
+                    expirationMode: 'Compact',
+                    compactMode: 'First N Chars',
+                    compactLength: 500,
+                    compactPromptId: '',
+                },
+            };
+            params.conversationMessages.push(message);
+            this.logStatus(`[PriorTurnToolResults] Carried ${steps.length} tool result(s) forward from the previous run`, true, params);
+        } catch (error) {
+            // Carry-forward is an optimization — never let it break the run.
+            this.logStatus(`[PriorTurnToolResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
+        }
+    }
+
+    /**
+     * Loads the previous completed root run's tool-result steps for this conversation.
+     * The 'Conversation Tool:'/'Artifact Tool:' StepName prefixes are load-bearing —
+     * they are the naming convention used by executeConversationToolCallsAsSteps /
+     * executeArtifactToolCallsAsSteps when the steps are created.
+     * @private
+     */
+    private async loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<Array<{ StepName: string; OutputData: string | null }>> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const priorRun = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ConversationID='${params.conversationId}' AND Status='Completed' AND ParentRunID IS NULL`,
+            OrderBy: '__mj_CreatedAt DESC',
+            MaxRows: 1,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        }, params.contextUser);
+        const priorRunId = priorRun.Success ? priorRun.Results?.[0]?.ID : undefined;
+        if (!priorRunId) {
+            return [];
+        }
+
+        const steps = await rv.RunView<{ StepName: string; OutputData: string | null }>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID='${priorRunId}' AND StepType='Tool' AND Status='Completed' AND (StepName LIKE 'Conversation Tool:%' OR StepName LIKE 'Artifact Tool:%')`,
+            OrderBy: 'StartedAt ASC',
+            Fields: ['StepName', 'OutputData'],
+            ResultType: 'simple',
+        }, params.contextUser);
+        return steps.Success ? (steps.Results || []) : [];
+    }
+
+    /**
+     * Renders prior-turn tool-result steps into the carried-forward message body.
+     * Pure and static for testability: tolerant of missing/invalid OutputData JSON,
+     * keeps only successful results, caps each result and the total under `maxChars`
+     * (adding an explicit truncation note when results are dropped). Returns null when
+     * nothing usable remains.
+     */
+    public static BuildPriorTurnToolResultsMessage(
+        steps: Array<{ StepName: string; OutputData: string | null }>,
+        maxChars: number
+    ): string | null {
+        const sections: string[] = [];
+        let usedChars = 0;
+        let dropped = 0;
+        for (const step of steps) {
+            if (!step.OutputData) continue;
+            let parsed: { tool?: string; input?: unknown; result?: { success?: boolean; data?: unknown } };
+            try {
+                parsed = JSON.parse(step.OutputData);
+            } catch {
+                continue;
+            }
+            if (parsed.result?.success !== true) continue;
+
+            const raw = typeof parsed.result.data === 'string'
+                ? parsed.result.data
+                : JSON.stringify(parsed.result.data, null, 2);
+            const section = `### ${parsed.tool || step.StepName}(${JSON.stringify(parsed.input || {})})\n\`\`\`json\n${raw}\n\`\`\``;
+            if (usedChars + section.length > maxChars && sections.length > 0) {
+                dropped++;
+                continue;
+            }
+            const capped = section.length > maxChars
+                ? `${section.slice(0, maxChars)}\n[truncated]`
+                : section;
+            usedChars += capped.length;
+            sections.push(capped);
+        }
+        if (sections.length === 0) {
+            return null;
+        }
+        const header = 'Tool results from your previous turn (still valid — reuse instead of re-calling):';
+        const droppedNote = dropped > 0 ? `\n\n[${dropped} additional result(s) omitted for size — re-call those tools if needed]` : '';
+        return `${header}\n${sections.join('\n\n')}${droppedNote}`;
     }
 
     /**
