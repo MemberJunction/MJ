@@ -19,7 +19,7 @@
     "@memberjunction/global": "5.47.0",
     "@memberjunction/core-entities": "5.47.0",
     "@memberjunction/external-data-sources": "5.47.0",
-    "mssql": "^12.2.0"
+    "mssql": "^12.7.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
