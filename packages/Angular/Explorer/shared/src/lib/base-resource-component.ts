@@ -210,18 +210,19 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         }
         this._lastDeliveredParamsKey = key;
         const source: 'popstate' | 'deeplink' = isInitial ? 'deeplink' : 'popstate';
-        // try/finally ensures the suppression flag is always cleared, even if
-        // OnQueryParamsChanged throws.
+        // try/finally ensures the suppression flag is always cleared, and the view is always
+        // refreshed, even if OnQueryParamsChanged throws.
         this._suppressQueryParamSync = true;
         try {
             this.OnQueryParamsChanged(params, source);
         } finally {
             this._suppressQueryParamSync = false;
+            // Query params arrive via RxJS (workspace stream / popstate), not via a template event —
+            // state a subclass changed in OnQueryParamsChanged needs an explicit re-render request
+            // for dynamically-attached views (see RefreshView). Inside `finally` so a subclass
+            // override that throws still renders whatever partial state it applied before throwing.
+            this.RefreshView();
         }
-        // Query params arrive via RxJS (workspace stream / popstate), not via a template event —
-        // state a subclass changed in OnQueryParamsChanged needs an explicit re-render request
-        // for dynamically-attached views (see RefreshView).
-        this.RefreshView();
     }
 
     /** Stable, order-independent string key for a query param record. */
