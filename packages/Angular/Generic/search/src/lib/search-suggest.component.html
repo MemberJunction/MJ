@@ -113,5 +113,21 @@
                 <span>Type at least {{ MinQueryLength }} characters to search</span>
             </div>
         }
+
+        <!-- Host-supplied promo row (e.g. command palette nudge) -->
+        @if (ShowPromo && PromoText) {
+            <div class="suggest-promo">
+                <i class="fa-solid fa-wand-magic-sparkles suggest-promo-icon"></i>
+                <span class="suggest-promo-text">{{ PromoText }}</span>
+                <button type="button" class="suggest-promo-action"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="OnPromoAccept()">{{ PromoActionLabel }}</button>
+                <button type="button" class="suggest-promo-dismiss" aria-label="Dismiss" title="Dismiss"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="OnPromoDismiss(); $event.stopPropagation()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        }
     </div>
 }

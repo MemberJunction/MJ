@@ -70,6 +70,10 @@ export class OmnibarPaletteComponent implements OnDestroy {
 
     @Output() Opened = new EventEmitter<void>();
     @Output() Closed = new EventEmitter<void>();
+    /** Footer gear clicked — the host opens its settings surface (Explorer: My
+        Profile, where the Command Palette opt-in section lives). The palette
+        closes first so the settings dialog isn't buried under it. */
+    @Output() SettingsRequested = new EventEmitter<void>();
 
     private providers: OmnibarProvider[] = [];
     private defaultProvider: OmnibarProvider | null = null;
@@ -108,6 +112,12 @@ export class OmnibarPaletteComponent implements OnDestroy {
         return this.ActiveTriggerChar === '' && this.EffectiveQuery.trim().length > 0;
     }
 
+    /** Footer gear: close, then let the host present its settings surface. */
+    public RequestSettings(): void {
+        this.Close();
+        this.SettingsRequested.emit();
+    }
+
     /** Hint chips for the empty state — one per non-default provider. */
     public get TriggerHints(): Array<{ Char: string; Label: string }> {
         return this.providers
@@ -135,6 +145,11 @@ export class OmnibarPaletteComponent implements OnDestroy {
      */
     public get ActiveDescendantId(): string | null {
         return this.selectableRows.length > 0 ? `ob-opt-${this.SelectedIndex}` : null;
+    }
+
+    /** Whether any option rows exist — drives the combobox's aria-expanded. */
+    public get HasOptions(): boolean {
+        return this.selectableRows.length > 0;
     }
 
     // ---------------------------------------------------------------

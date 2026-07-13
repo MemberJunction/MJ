@@ -118,7 +118,7 @@
                         @for (recent of searchService.RecentSearches$.value; track recent.Query; let i = $index) {
                             @if (i < 5) {
                                 <div class="search-recent-item" role="button" tabindex="0"
-                                    (click)="OnQueryInput(recent.Query)"
+                                    (click)="OnRecentSelect(recent.Query)"
                                     (keydown)="OnRecentKeydown($event, recent.Query)">
                                     <i class="fa-solid fa-clock search-recent-icon"></i>
                                     <span>{{ recent.Query }}</span>
@@ -202,5 +202,17 @@
                 </div>
             }
         </div>
+
+        <!-- Host-supplied promo strip (e.g. command palette nudge) -->
+        @if (ShowPromo && PromoText) {
+            <div class="search-promo">
+                <i class="fa-solid fa-wand-magic-sparkles search-promo-icon"></i>
+                <span class="search-promo-text">{{ PromoText }}</span>
+                <button type="button" class="search-promo-action" (click)="OnPromoAccept()">{{ PromoActionLabel }}</button>
+                <button type="button" class="search-promo-dismiss" aria-label="Dismiss" title="Dismiss" (click)="OnPromoDismiss()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        }
     </div>
 }

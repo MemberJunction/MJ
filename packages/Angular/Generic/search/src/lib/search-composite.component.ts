@@ -72,6 +72,11 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
      */
     @Input() EnableScopeSelector = true;
 
+    /** Promo row pass-throughs — see SearchSuggestComponent for semantics. */
+    @Input() ShowPromo = false;
+    @Input() PromoText = '';
+    @Input() PromoActionLabel = 'Turn on';
+
     // --- Outputs ---
 
     /** Emitted when a result is selected from the preview dropdown */
@@ -83,12 +88,21 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     /** Emitted when the user clicks "See all N results" */
     @Output() SeeAllRequested = new EventEmitter<string>();
 
+    /** Promo pass-throughs (accept carries the current query). */
+    @Output() PromoAccepted = new EventEmitter<string>();
+    @Output() PromoDismissed = new EventEmitter<void>();
+
     // --- Internal state ---
 
     public Query = '';
     public IsSuggestOpen = false;
 
     /** The current min relevance percent from the suggest dropdown filter */
+    /** Programmatically focus the search input (e.g. a host-owned Ctrl/Cmd+K chord). */
+    public Focus(): void {
+        this.searchInputRef?.Focus();
+    }
+
     public get MinRelevancePercent(): number {
         return this.searchSuggestRef?.MinRelevancePercent ?? 0;
     }

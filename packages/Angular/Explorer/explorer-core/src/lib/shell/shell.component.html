@@ -46,9 +46,6 @@
       </mj-app-nav>
     }
 
-    <!-- Universal Search moved to an icon in header-actions: BOTH experiences open
-         as overlays now (omnibar palette when opted in, mj-search-overlay otherwise),
-         so the header layout no longer changes with the omnibar opt-in. -->
     <!-- Spacer -->
     <div class="spacer"></div>
     <!-- Actions (activity, notifications, user menu) -->
@@ -80,9 +77,13 @@
               [EnablePreview]="ShowSearchPreview"
               [EnableRecent]="true"
               [MaxPreviewResults]="8"
+              [ShowPromo]="ShowOmnibarPromo"
+              [PromoText]="OmnibarPromoText"
               (ResultSelected)="OnSearchResultSelected($event)"
               (SearchSubmitted)="OnSearchSubmitted($event)"
-              (SeeAllRequested)="OnSeeAllSearch($event)">
+              (SeeAllRequested)="OnSeeAllSearch($event)"
+              (PromoAccepted)="OnOmnibarPromoAccepted($event)"
+              (PromoDismissed)="OnOmnibarPromoDismissed()">
             </mj-search-composite>
           </div>
           <button class="search-btn search-btn-mobile" title="Search everything"
@@ -344,7 +345,7 @@
 <mj-command-palette (AppSelected)="onAppSwitch($event)"></mj-command-palette>
 
 <!-- Unified command palette (Shell.Omnibar.Enabled) -->
-<mj-omnibar-palette #omnibarPalette></mj-omnibar-palette>
+<mj-omnibar-palette #omnibarPalette (SettingsRequested)="OnPaletteSettingsRequested()"></mj-omnibar-palette>
 
 <!-- Legacy universal search as a Spotlight-style overlay — omnibar-off MOBILE only
      (on desktop the inline header composite owns the experience; this opens from
@@ -353,9 +354,14 @@
 @if (ShowSearchBar && !UseOmnibar) {
   <mj-search-overlay
     [(IsOpen)]="LegacySearchOpen"
+    Placeholder="Search everything..."
     [EnableGlobalShortcut]="false"
+    [ShowPromo]="ShowOmnibarPromo"
+    [PromoText]="OmnibarPromoText"
     (ResultSelected)="OnOverlayResultSelected($event)"
-    (SeeAllRequested)="OnOverlaySeeAll($event)">
+    (SeeAllRequested)="OnOverlaySeeAll($event)"
+    (PromoAccepted)="OnOmnibarPromoAccepted($event)"
+    (PromoDismissed)="OnOmnibarPromoDismissed()">
   </mj-search-overlay>
 }
 

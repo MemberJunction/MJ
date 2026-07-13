@@ -73,10 +73,11 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     @Input() Placeholder = 'Search across all your knowledge...';
 
     /**
-     * Maximum number of results to fetch and display. Deliberately small (and
-     * matched to the omnibar palette's cap) — the overlay is a quick-jump
-     * surface; "See all results" hands off to the full Search Results
-     * workspace for anything deeper.
+     * Maximum number of results to fetch and display. Deliberately small — the
+     * overlay is a quick-jump surface; "See all results" hands off to the full
+     * Search Results workspace for anything deeper. 8 matches the omnibar
+     * palette's RESULT count (it fetches 9 rows = 8 results + its see-all row;
+     * this overlay's see-all is a footer button, not a row).
      */
     @Input() MaxResults = 8;
 
@@ -129,6 +130,20 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
      */
     @Input() EnableGlobalShortcut = true;
 
+    /**
+     * Optional promo strip pinned to the overlay's bottom edge — a host-supplied
+     * nudge (e.g. Explorer advertising its command palette). The component is
+     * deliberately ignorant of WHAT is being promoted; the host provides the
+     * copy and handles both outcomes.
+     */
+    @Input() ShowPromo = false;
+
+    /** Promo copy (one sentence). Required when ShowPromo is true. */
+    @Input() PromoText = '';
+
+    /** Label for the promo's accept action. */
+    @Input() PromoActionLabel = 'Turn on';
+
     // --- Outputs ---
 
     @Output() IsOpenChange = new EventEmitter<boolean>();
@@ -143,6 +158,10 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
      * capped quick-jump overlay. The overlay closes itself after emitting.
      */
     @Output() SeeAllRequested = new EventEmitter<string>();
+    /** Promo accept — carries the current query so the host can hand it off. */
+    @Output() PromoAccepted = new EventEmitter<string>();
+    /** Promo dismissed — the host should persist this and stop showing it. */
+    @Output() PromoDismissed = new EventEmitter<void>();
 
     // --- Component State ---
 
@@ -283,6 +302,18 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
         this.Close();
     }
 
+    /** Promo accept: emit the current query and close — the host takes over. */
+    public OnPromoAccept(): void {
+        this.PromoAccepted.emit(this.Query.trim());
+        this.Close();
+    }
+
+    /** Promo dismiss: the host persists the dismissal; hide it immediately. */
+    public OnPromoDismiss(): void {
+        this.ShowPromo = false;
+        this.PromoDismissed.emit();
+    }
+
     /** Handle clicking "See all results" — hand off to the full Search workspace */
     public OnSeeAllClick(): void {
         const query = this.Query.trim();
@@ -335,10 +366,22 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
                 event.preventDefault();
                 this.moveHighlight(-1);
                 break;
-            case 'Enter':
+            case 'Enter': {
+                // Only claim Enter when it belongs to the combobox model (typing in
+                // the input / a focused result row). A focused BUTTON (close,
+                // see-all, filter chip, promo) must keep its native Enter
+                // activation — preventDefault here at document level would
+                // silently swallow it, or worse, open the highlighted result.
+                const active = document.activeElement as HTMLElement | null;
+                const inCombobox = active === this.searchInputRef?.nativeElement
+                    || (active?.classList.contains('result-item') ?? false);
+                if (!inCombobox) {
+                    return;
+                }
                 event.preventDefault();
                 this.SelectHighlighted();
                 break;
+            }
         }
     }
 
@@ -417,11 +460,21 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
         }
     }
 
+    /**
+     * Recent-search row activated (click or Enter/Space). Re-runs the search AND
+     * refocuses the input — the activated row leaves the DOM when recents are
+     * replaced by results, which would otherwise drop focus to <body>.
+     */
+    public OnRecentSelect(query: string): void {
+        this.OnQueryInput(query);
+        this.searchInputRef?.nativeElement?.focus();
+    }
+
     /** Recent-search rows are keyboard-activatable (Enter/Space = click). */
     public OnRecentKeydown(event: KeyboardEvent, query: string): void {
         if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            this.OnQueryInput(query);
+            this.OnRecentSelect(query);
         }
     }
 

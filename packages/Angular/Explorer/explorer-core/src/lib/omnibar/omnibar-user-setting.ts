@@ -22,6 +22,12 @@ export const OMNIBAR_INSTANCE_CONFIG_KEY = 'Shell.Omnibar.Enabled';
 export const OMNIBAR_USER_SETTING_KEY = 'mj.shell.omnibar.enabled';
 
 /**
+ * Per-user dismissal of the "try the command palette" promo shown in the legacy
+ * search surfaces. 'true' = never show again (follows the user across devices).
+ */
+export const OMNIBAR_PROMO_DISMISSED_KEY = 'mj.shell.omnibarPromo.dismissed';
+
+/**
  * Pure resolution of the two layers — instance availability gates everything;
  * the user setting must be the exact string 'true' to opt in.
  */

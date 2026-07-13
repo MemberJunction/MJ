@@ -12,7 +12,8 @@
         }
       </span>
       <input #paletteInput class="ob-input" type="text" autocomplete="off" spellcheck="false"
-        role="combobox" aria-expanded="true" aria-controls="ob-listbox" aria-autocomplete="list"
+        role="combobox" aria-controls="ob-listbox" aria-autocomplete="list"
+        [attr.aria-expanded]="HasOptions"
         [attr.aria-activedescendant]="ActiveDescendantId"
         [placeholder]="ActivePlaceholder"
         [ngModel]="Query" (ngModelChange)="OnQueryChange($event)"
@@ -35,7 +36,7 @@
       </div>
     }
 
-    <div class="ob-body" id="ob-listbox" role="listbox" aria-label="Suggestions">
+    <div class="ob-body">
       @if (IsLoading) {
         <div class="ob-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Searching…</div>
       } @else if (Rows.length === 0 && Query.length === 0) {
@@ -48,6 +49,7 @@
         </div>
         @if (RecentRows.length > 0) {
           <div class="ob-group-label" role="presentation">Recent</div>
+          <div id="ob-listbox" role="listbox" aria-label="Suggestions">
           @for (row of RecentRows; track row.Suggestion.id; let i = $index) {
             <div class="ob-row" role="option" [attr.id]="'ob-opt-' + (RecentBaseIndex + i)"
               [attr.tabindex]="RecentBaseIndex + i === SelectedIndex ? 0 : -1"
@@ -64,10 +66,12 @@
               <span class="ob-raux"><span class="ob-rtype">{{ row.Suggestion.type }}</span></span>
             </div>
           }
+          </div>
         }
       } @else if (Rows.length === 0) {
         <div class="ob-empty">No matches — press <kbd class="ob-kbd">↵</kbd> to search everything for “{{ EffectiveQuery }}”.</div>
       } @else {
+        <div id="ob-listbox" role="listbox" aria-label="Suggestions">
         @for (row of Rows; track row.Suggestion.id; let i = $index) {
           @if (row.GroupLabel) {
             <div class="ob-group-label" role="presentation">{{ row.GroupLabel }}</div>
@@ -95,12 +99,17 @@
             </span>
           </div>
         }
+        </div>
       }
     </div>
 
     <div class="ob-foot">
       <span class="ob-k"><kbd class="ob-kbd">↑</kbd><kbd class="ob-kbd">↓</kbd> navigate</span>
       <span class="ob-k"><kbd class="ob-kbd">↵</kbd> open</span>
+      <button type="button" class="ob-settings" aria-label="Command Palette settings"
+        title="Command Palette settings" (click)="RequestSettings()">
+        <i class="fa-solid fa-gear"></i>
+      </button>
     </div>
   </div>
 }

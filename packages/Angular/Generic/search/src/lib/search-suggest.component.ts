@@ -65,6 +65,20 @@ export class SearchSuggestComponent implements OnInit {
     /** Whether to show the recent searches section */
     @Input() ShowRecent = true;
 
+    /**
+     * Optional promo row pinned to the dropdown's bottom edge — a host-supplied
+     * nudge (e.g. Explorer advertising its command palette). The component is
+     * deliberately ignorant of WHAT is being promoted; the host provides the
+     * copy and handles both outcomes.
+     */
+    @Input() ShowPromo = false;
+
+    /** Promo copy (one sentence). Required when ShowPromo is true. */
+    @Input() PromoText = '';
+
+    /** Label for the promo's accept action. */
+    @Input() PromoActionLabel = 'Turn on';
+
     // --- Outputs ---
 
     /** Emitted when the user selects a preview result */
@@ -78,6 +92,12 @@ export class SearchSuggestComponent implements OnInit {
 
     /** Emitted when the user clicks "Clear" on recent searches */
     @Output() ClearRecentRequested = new EventEmitter<void>();
+
+    /** Promo accept — carries the current query so the host can hand it off. */
+    @Output() PromoAccepted = new EventEmitter<string>();
+
+    /** Promo dismissed — the host should persist this and stop showing it. */
+    @Output() PromoDismissed = new EventEmitter<void>();
 
     // --- Internal state ---
 
@@ -206,6 +226,17 @@ export class SearchSuggestComponent implements OnInit {
     /** Handle clicking "See all" */
     public OnSeeAllClick(): void {
         this.SeeAllRequested.emit(this.Query);
+    }
+
+    /** Promo accept — fired on click so keyboard Enter/Space work too; the
+        template's mousedown-preventDefault keeps the input from blurring first. */
+    public OnPromoAccept(): void {
+        this.PromoAccepted.emit(this.Query);
+    }
+
+    /** Promo dismiss. */
+    public OnPromoDismiss(): void {
+        this.PromoDismissed.emit();
     }
 
     /** Handle clicking "Clear" on recent searches */

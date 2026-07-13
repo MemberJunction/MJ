@@ -25,13 +25,13 @@ import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { UserSharingCenterDialogService } from './services/user-sharing-center-dialog.service';
 import { AboutDialogService } from './services/about-dialog.service';
 import { ProfileDialogService } from './services/profile-dialog.service';
-import { IsOmnibarEnabledForUser } from '../omnibar/omnibar-user-setting';
+import { IsOmnibarAvailable, IsOmnibarEnabledForUser, OMNIBAR_PROMO_DISMISSED_KEY, OMNIBAR_USER_SETTING_KEY } from '../omnibar/omnibar-user-setting';
 import { GetOmnibarShortcutLabel } from '../omnibar/omnibar-shortcut';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
-import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
+import { MJUserEntity, InstanceConfigEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
@@ -152,6 +152,58 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /** Platform-correct summon-shortcut label ('⌘K' on Mac, 'Ctrl+K' elsewhere). */
   get OmnibarShortcutLabel(): string {
       return GetOmnibarShortcutLabel();
+  }
+
+  /**
+   * Whether the legacy search surfaces advertise the omnibar: the instance makes
+   * it available, the user hasn't opted in yet, and they haven't dismissed the
+   * promo. Fail-closed (never advertise during boot / permission constraints).
+   */
+  get ShowOmnibarPromo(): boolean {
+      try {
+          return IsOmnibarAvailable()
+              && !IsOmnibarEnabledForUser()
+              && UserInfoEngine.Instance.GetSetting(OMNIBAR_PROMO_DISMISSED_KEY) !== 'true';
+      } catch {
+          return false;
+      }
+  }
+
+  /** Promo copy shown in the legacy search surfaces. */
+  readonly OmnibarPromoText = 'Try the new command palette — search, jump to records, switch apps, and message agents from one box.';
+
+  /**
+   * Promo accepted: opt the user in (same UserInfoEngine setting as the My
+   * Profile toggle, so it follows them across devices), then open the palette
+   * pre-seeded with whatever they were just searching — same query, new
+   * surface, immediate demonstration.
+   */
+  OnOmnibarPromoAccepted(query: string): void {
+      // Demonstration first, persistence second: close the legacy surface and open
+      // the palette with the carried query IMMEDIATELY (the palette element renders
+      // unconditionally, so it doesn't need the setting to have landed). Awaiting
+      // the server write first read as a dead click on slow links.
+      this.LegacySearchOpen = false;
+      this.cdr.detectChanges();
+      this.OpenOmnibar(query?.trim() ?? '');
+      void UserInfoEngine.Instance.SetSetting(OMNIBAR_USER_SETTING_KEY, 'true').then((saved) => {
+          if (!saved) {
+              LogError('Omnibar promo opt-in failed to persist — palette will open for this session only');
+          }
+      });
+  }
+
+  /** Promo dismissed: persist server-side so it never shows again, on any device. */
+  OnOmnibarPromoDismissed(): void {
+      UserInfoEngine.Instance.SetSettingDebounced(OMNIBAR_PROMO_DISMISSED_KEY, 'true');
+  }
+
+  /** Palette footer gear → My Profile (where the Command Palette section lives). */
+  OnPaletteSettingsRequested(): void {
+      this.profileDialogService.open(this.viewContainerRef, {
+          avatarUrl: this.userImageURL || null,
+          avatarIconClass: this.userIconClass || null
+      });
   }
 
   @ViewChild('omnibarPalette') omnibarPalette?: { Open(initialQuery?: string): void };

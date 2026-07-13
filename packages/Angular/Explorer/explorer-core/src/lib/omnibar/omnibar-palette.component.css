@@ -280,6 +280,28 @@
 
 .ob-k { display: flex; align-items: center; gap: 5px; }
 
+/* Footer gear — the reverse door to My Profile → Command Palette. */
+.ob-settings {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    margin-left: auto;
+    border: none;
+    border-radius: var(--mj-radius-full);
+    background: transparent;
+    color: var(--mj-text-muted);
+    font-size: var(--mj-text-xs);
+    cursor: pointer;
+    transition: var(--mj-transition-colors);
+}
+.ob-settings:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
 /* ========================================
    MOBILE (matches mj-search-overlay's 640px sheet treatment so the two search
    surfaces sit identically on small viewports)
@@ -308,10 +330,20 @@
     }
 
     /* Keyboard chrome is meaningless on touch: esc/↵ chips, per-row 'open ↵'
-       hints, and the footer nav hints. The ✕ close button stays. */
+       hints, and the footer's nav-hint spans. The footer itself stays because it
+       carries the settings gear — the only in-surface door to the opt-in toggle,
+       which mobile users need too. The ✕ close button also stays. */
     .ob-kbd,
     .ob-go,
-    .ob-foot {
+    .ob-k {
         display: none;
+    }
+
+    /* Touch-friendly hit areas for the surviving controls. */
+    .ob-close,
+    .ob-settings {
+        width: 40px;
+        height: 40px;
+        font-size: var(--mj-text-base);
     }
 }
