@@ -1,5 +1,12 @@
 # @memberjunction/ai-blackforestlabs
 
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.47.0
+- @memberjunction/global@5.47.0
+
 ## 5.46.0
 
 ### Patch Changes

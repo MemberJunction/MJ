@@ -25,6 +25,7 @@ const SCRIPTS = [
     'api-keys-tests.ts',
     'scheduled-jobs-tests.ts',
     'field-rules-bulk-update-tests.ts',
+    'open-app-teardown-tests.ts',
     'remote-operations-tests.ts',
     'remote-op-wire-progress-tests.ts',
     'ai-skills-tests.ts',

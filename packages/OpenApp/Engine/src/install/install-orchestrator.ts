@@ -6,7 +6,7 @@
  */
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
@@ -19,6 +19,8 @@ import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
+import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.js';
+import { extractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping } from './config-manager.js';
@@ -544,6 +546,12 @@ async function RecordInstallationAtomically(
     const appId = await RecordAppInstallation(contextUser, manifest, callbacks, tg, 'Installing', provider, subpath);
 
     if (manifest.dependencies) {
+      // Reinstall idempotency: `mj app remove` soft-removes (OpenApp.Status='Removed') and keeps the
+      // OpenApp row + its dependency rows, so a reinstall reuses that same appId. A blind insert would
+      // then collide on UQ_OpenAppDep. Clear any pre-existing dependency rows for this appId in the SAME
+      // transaction group before re-recording (delete-then-insert, atomic on Submit — mirrors the
+      // upgrade path's ReplaceAppDependenciesAtomically). No-op on a first install (nothing to delete).
+      // 
       // Delete-then-insert (queued into the SAME transaction group, so both commit together
       // on tg.Submit() below) makes this call idempotent under a full restart: a crash between
       // this transaction committing and the 'RecordCreated' checkpoint being written leaves a
@@ -1034,7 +1042,18 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       let metadataResult: { Success: boolean; ErrorMessage?: string } = { Success: true };
       if (existingApp.SchemaName && !schemaShared) {
         Callbacks?.OnProgress?.('Metadata', `Removing entity metadata for schema '${existingApp.SchemaName}'...`);
-        metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
+        // Applications the app's OWN migrations declare (fixed-GUID spCreateApplication). A nav
+        // Application has no FK to the app's schema and often zero ApplicationEntity links, so the
+        // link-based detector can't see it — the migrations are the authoritative "owned" set.
+        const declaredApplicationIds = await ExtractDeclaredApplicationIds(manifest, context, existingApp.Subpath ?? undefined);
+        // Pass the context's bound provider (not undefined) so the entity-layer fallback + all RunView/
+        // metadata reads inside use THIS provider rather than the process-global `new Metadata()` — the
+        // multi-provider rule. `DatabaseProviderBase` implements `IMetadataProvider`.
+        metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks, context.DatabaseProvider, {
+          DatabaseProvider: context.DatabaseProvider,
+          MJCoreSchema: context.MJCoreSchema,
+          DeclaredApplicationIds: declaredApplicationIds,
+        });
       }
 
       // Teardown — retire the rows this app's seed migrations wrote into the SHARED core schema
@@ -1842,37 +1861,78 @@ async function ExecuteHookModule(specifier: string, payload: AppHookPayload, rep
 }
 
 /**
- * Removes all MJ entity metadata associated with an app's schema.
- * Deletes in FK-dependency order to avoid constraint violations.
- *
- * Exported for unit testing of the atomic-transaction semantics (PG3).
+ * Options for {@link RemoveAppEntityMetadata}. When {@link RemoveAppEntityMetadataOptions.DatabaseProvider}
+ * is supplied, the dialect-driven FK-graph cascade teardown is used — on BOTH SQL Server and PostgreSQL
+ * (identifier quoting + the FK-graph catalog query come from the provider's `SQLDialect`). Only a caller
+ * that passes NO provider falls back to the legacy entity-layer TransactionGroup path (which under-deletes).
  */
-export async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo, callbacks?: AppInstallCallbacks, provider?: IMetadataProvider): Promise<{ Success: boolean; ErrorMessage?: string }> {
+interface RemoveAppEntityMetadataOptions {
+  /** The live DB provider. Its presence selects the dialect-driven FK-graph path (SQL Server or PostgreSQL). */
+  DatabaseProvider?: DatabaseProviderBase;
+  /** MJ core schema name (defaults to `__mj`) — used to root the FK-graph teardown. */
+  MJCoreSchema?: string;
+  /** Application IDs the app's migrations declare (link-less nav Applications the link finder misses). */
+  DeclaredApplicationIds?: string[];
+}
+
+/**
+ * Removes all MJ entity metadata associated with an app's schema.
+ *
+ * Two teardown strategies, chosen by `options`:
+ * - **FK-graph cascade (any provider dialect)** — when `options.DatabaseProvider` is set:
+ *   enumerates the live FK graph and clears every one of `Entity`'s dependents set-based,
+ *   deepest-first, in one atomic transaction ({@link RunFkGraphTeardown}), on BOTH SQL Server and
+ *   PostgreSQL (quoting + the FK-graph catalog query come from the provider's `SQLDialect`). This
+ *   covers dependents the entity-layer path under-deletes (base-view joins hide FK-enforced rows).
+ * - **Entity-layer (no-provider fallback only)** — the legacy hardcoded-list + per-entity
+ *   `Delete()` inside ONE TransactionGroup, committed once (all-or-nothing, PG3). Under-deletes
+ *   (misses dependents like `RecordChange`), so it exists only for 2-arg callers that pass no
+ *   provider; pass a `DatabaseProvider` to get the complete cascade.
+ *
+ * NOTE: the FK-graph path executes raw set-based SQL — it does NOT go through the `BaseEntity`
+ * pipeline, so it emits no RecordChange audit rows, fires no `*EntityServer` delete hooks, and
+ * (most importantly) fires no BaseEntity events, so provider/engine metadata caches are NOT
+ * invalidated. Fine for `mj app remove` (the CLI process exits), but a caller invoking this inside
+ * a long-running process should refresh metadata afterward. See {@link RunFkGraphTeardown}.
+ *
+ * In BOTH paths the app-owned Application rows — the link-detected set unioned with the
+ * migration-declared set — are dropped after teardown (so a re-install's fixed-UUID
+ * `spCreateApplication` doesn't PK-collide). Exported for unit testing of the atomic-transaction
+ * semantics (PG3).
+ */
+export async function RemoveAppEntityMetadata(
+  schemaName: string,
+  contextUser: UserInfo,
+  callbacks?: AppInstallCallbacks,
+  provider?: IMetadataProvider,
+  options?: RemoveAppEntityMetadataOptions,
+): Promise<{ Success: boolean; ErrorMessage?: string }> {
   try {
     const rv = new RunView();
     const escaped = EscapeSqlString(schemaName);
-    // All metadata deletes are queued into ONE TransactionGroup and committed once. MJ
-    // metadata FKs are NO ACTION (not CASCADE), so dependents are queued in dependency order;
-    // the group commits them in that order inside a single DB transaction. On PostgreSQL each
-    // un-grouped delete would otherwise autocommit, so an FK violation partway (e.g. an
-    // un-handled dependent) left partially-committed orphan state with no rollback — now the
-    // whole cleanup is atomic and a failure rolls back cleanly (PG3).
-    const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
-    const tg = await md.CreateTransactionGroup();
 
-    // Helper: queue all matching records of an entity for delete into the shared transaction.
-    const queueDeleteByFilterOrThrow = async (entityName: string, filter: string): Promise<void> => {
-      const r = await QueueDeleteEntitiesByFilter(rv, contextUser, entityName, filter, tg);
-      if (!r.Success) {
-        throw new Error(r.ErrorMessage ?? `Failed to queue delete of ${entityName} records`);
-      }
-    };
+    // Migration-declared Application IDs (normalized). A link-less nav Application can exist even
+    // with zero entities, so these are honored on both the no-entities early-out and after teardown.
+    const declaredAppIds = (options?.DeclaredApplicationIds ?? [])
+      .map((id) => NormalizeUUID(id))
+      .filter((id): id is string => !!id);
+
+    // The dialect-driven FK-graph teardown is used whenever a DatabaseProvider is supplied — it
+    // runs on BOTH SQL Server and PostgreSQL (identifier quoting + the FK-graph catalog query come
+    // from the provider's SQLDialect). Only a caller that passes NO provider falls back to the
+    // legacy entity-layer path below (which under-deletes; see the comment on that branch).
+    const useFkGraph = !!options?.DatabaseProvider?.Dialect;
+
+    const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
 
     // First, find all entity IDs in this schema so we can clean FK-dependent records.
     const entityResult = await rv.RunView<MJEntityEntity>(
       {
         EntityName: 'MJ: Entities',
-        ExtraFilter: `SchemaName = '${escaped}'`,
+        // Case-insensitive: PostgreSQL lowercases the schema identifier at create time, so the Entity
+        // rows carry `__mj_bizappstasks` while `schemaName` (from the OpenApp record) is the manifest's
+        // `__mj_BizAppsTasks`. A case-sensitive `=` finds 0 entities on PG and the teardown no-ops.
+        ExtraFilter: `LOWER(SchemaName) = LOWER('${escaped}')`,
         ResultType: 'entity_object',
       },
       contextUser,
@@ -1882,11 +1942,17 @@ export async function RemoveAppEntityMetadata(schemaName: string, contextUser: U
     }
 
     if (entityResult.Results.length === 0) {
-      // No entities found — just clean up SchemaInfo (still atomic via the group).
-      await queueDeleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
+      // No entities found — clear SchemaInfo (entity-layer TransactionGroup, still atomic via the
+      // group) AND drop any app-declared Application rows (they can exist independently of entities).
+      const tg = await md.CreateTransactionGroup();
+      const r = await QueueDeleteEntitiesByFilter(rv, contextUser, 'MJ: Schema Info', `LOWER(SchemaName) = LOWER('${escaped}')`, tg);
+      if (!r.Success) {
+        throw new Error(r.ErrorMessage ?? 'Failed to queue delete of MJ: Schema Info records');
+      }
       if (!(await tg.Submit())) {
         throw new Error('Transaction failed: schema-info cleanup could not be committed');
       }
+      await DeleteAppOwnedApplications(rv, declaredAppIds, contextUser, callbacks);
       callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
       return { Success: true };
     }
@@ -1894,60 +1960,91 @@ export async function RemoveAppEntityMetadata(schemaName: string, contextUser: U
     const entityIds = entityResult.Results.map((e) => e.ID);
     const idList = entityIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
 
-    // Entity Field Values (FK on EntityFieldID) must go before the Entity Fields they
-    // reference — collect this schema's field IDs first.
-    const fieldResult = await rv.RunView<MJEntityFieldEntity>(
-      {
-        EntityName: 'MJ: Entity Fields',
-        ExtraFilter: `EntityID IN (${idList})`,
-        ResultType: 'entity_object',
-      },
-      contextUser,
-    );
-    if (!fieldResult.Success) {
-      throw new Error(`Failed to query entity fields for schema '${schemaName}': ${fieldResult.ErrorMessage}`);
-    }
-    const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSqlString(f.ID)}'`).join(',');
-
     // Capture the app's OWN Application row(s) NOW — before the ApplicationEntity links below
-    // are deleted — so they can be cleaned up post-commit (see DeleteAppOwnedApplications). An
+    // are torn down — so they can be cleaned up post-teardown (see DeleteAppOwnedApplications). An
     // app's metadata-sync migration registers an Application (fixed UUID) grouping its entities;
     // historically the link rows were removed but the Application itself was orphaned, so a
     // reinstall's migration re-INSERTed the same fixed UUID and failed with a PK collision.
     const ownedAppIds = await FindAppOwnedApplications(rv, contextUser, entityIds, idList);
 
-    // Queue FK-dependent deletes in dependency order (children before parents).
-    if (fieldIdList.length > 0) {
-      await queueDeleteByFilterOrThrow('MJ: Entity Field Values', `EntityFieldID IN (${fieldIdList})`);
+    if (useFkGraph) {
+      // Dynamic, set-based, atomic FK-graph teardown on the base tables — runs on BOTH SQL Server
+      // and PostgreSQL via the provider's SQLDialect (covers ALL of Entity's dependents, incl.
+      // those the entity-layer path under-deletes via base-view joins). Replaces the hardcoded
+      // QueueDeleteEntitiesByFilter list + per-entity Delete + SchemaInfo delete.
+      const dbProvider = options!.DatabaseProvider!;
+      const mjSchema = options?.MJCoreSchema ?? '__mj';
+      const rootPredicate = buildRootDoomedPredicate(dbProvider.Dialect, schemaName);
+      await RunFkGraphTeardown(dbProvider, mjSchema, rootPredicate, callbacks);
+    } else {
+      // LEGACY FALLBACK (no DatabaseProvider passed): entity-layer path — all deletes queued into
+      // ONE TransactionGroup and committed once (all-or-nothing; each un-grouped delete would
+      // otherwise autocommit on PostgreSQL, leaving partial orphan state on an FK violation — PG3).
+      // NOTE: this UNDER-deletes — it clears only the hardcoded dependent list below and misses the
+      // rest of Entity's FK-dependents (e.g. RecordChange). Pass a DatabaseProvider (both SS and PG)
+      // to get the complete, dialect-driven FK-graph cascade above instead.
+      const tg = await md.CreateTransactionGroup();
+      const queueDeleteByFilterOrThrow = async (entityName: string, filter: string): Promise<void> => {
+        const r = await QueueDeleteEntitiesByFilter(rv, contextUser, entityName, filter, tg);
+        if (!r.Success) {
+          throw new Error(r.ErrorMessage ?? `Failed to queue delete of ${entityName} records`);
+        }
+      };
+
+      // Entity Field Values (FK on EntityFieldID) must go before the Entity Fields they
+      // reference — collect this schema's field IDs first.
+      const fieldResult = await rv.RunView<MJEntityFieldEntity>(
+        {
+          EntityName: 'MJ: Entity Fields',
+          ExtraFilter: `EntityID IN (${idList})`,
+          ResultType: 'entity_object',
+        },
+        contextUser,
+      );
+      if (!fieldResult.Success) {
+        throw new Error(`Failed to query entity fields for schema '${schemaName}': ${fieldResult.ErrorMessage}`);
+      }
+      const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSqlString(f.ID)}'`).join(',');
+
+      // Queue FK-dependent deletes in dependency order (children before parents).
+      if (fieldIdList.length > 0) {
+        await queueDeleteByFilterOrThrow('MJ: Entity Field Values', `EntityFieldID IN (${fieldIdList})`);
+      }
+      await queueDeleteByFilterOrThrow('MJ: Entity Permissions', `EntityID IN (${idList})`);
+      await queueDeleteByFilterOrThrow('MJ: Application Entities', `EntityID IN (${idList})`);
+      await queueDeleteByFilterOrThrow('MJ: Entity Settings', `EntityID IN (${idList})`);
+      // Entity Relationships reference EntityID on both sides
+      await queueDeleteByFilterOrThrow('MJ: Entity Relationships', `EntityID IN (${idList}) OR RelatedEntityID IN (${idList})`);
+      // Entity Fields (FK on EntityID)
+      await queueDeleteByFilterOrThrow('MJ: Entity Fields', `EntityID IN (${idList})`);
+
+      // Queue the Entities themselves.
+      for (const entity of entityResult.Results) {
+        entity.TransactionGroup = tg;
+        await entity.Delete();
+      }
+
+      // Queue SchemaInfo last.
+      await queueDeleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
+
+      // Commit everything atomically — all-or-nothing (PG3).
+      if (!(await tg.Submit())) {
+        throw new Error('Transaction failed: entity metadata cleanup could not be committed atomically');
+      }
     }
-    await queueDeleteByFilterOrThrow('MJ: Entity Permissions', `EntityID IN (${idList})`);
-    await queueDeleteByFilterOrThrow('MJ: Application Entities', `EntityID IN (${idList})`);
-    await queueDeleteByFilterOrThrow('MJ: Entity Settings', `EntityID IN (${idList})`);
-    // Entity Relationships reference EntityID on both sides
-    await queueDeleteByFilterOrThrow('MJ: Entity Relationships', `EntityID IN (${idList}) OR RelatedEntityID IN (${idList})`);
-    // Entity Fields (FK on EntityID)
-    await queueDeleteByFilterOrThrow('MJ: Entity Fields', `EntityID IN (${idList})`);
 
-    // Queue the Entities themselves.
-    for (const entity of entityResult.Results) {
-      entity.TransactionGroup = tg;
-      await entity.Delete();
+    // Best-effort (both paths): drop the app's now-childless Application row(s) so a reinstall's
+    // migration doesn't collide on the app's fixed Application PK. Union the link-detected set with
+    // the migration-declared set (catches link-less nav Applications the link finder misses), deduped.
+    const allAppIds: string[] = [];
+    const appSeen = new Set<string>();
+    for (const id of ownedAppIds.map((x) => NormalizeUUID(x)).concat(declaredAppIds)) {
+      if (id && !appSeen.has(id)) {
+        appSeen.add(id);
+        allAppIds.push(id);
+      }
     }
-
-    // Queue SchemaInfo last.
-    await queueDeleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
-
-    // Commit everything atomically — all-or-nothing (PG3).
-    if (!(await tg.Submit())) {
-      throw new Error('Transaction failed: entity metadata cleanup could not be committed atomically');
-    }
-
-    // Best-effort: drop the app's now-entity-less Application row(s) so a reinstall's migration
-    // doesn't collide on the app's fixed Application PK. Done AFTER the atomic metadata commit —
-    // the ApplicationEntity links are gone, so a wholly-owned Application is childless — and it is
-    // best-effort because a user may have added other dependents (dashboards, role/user
-    // assignments); such a row is left intact and simply reused on reinstall.
-    await DeleteAppOwnedApplications(rv, ownedAppIds, contextUser, callbacks);
+    await DeleteAppOwnedApplications(rv, allAppIds, contextUser, callbacks);
 
     callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
     return { Success: true };
@@ -1955,6 +2052,44 @@ export async function RemoveAppEntityMetadata(schemaName: string, contextUser: U
     const message = error instanceof Error ? error.message : String(error);
     callbacks?.OnError?.('Metadata', `Failed to remove entity metadata: ${message}`);
     return { Success: false, ErrorMessage: `Failed to remove entity metadata for schema '${schemaName}': ${message}` };
+  }
+}
+
+/**
+ * Best-effort: extract the Application IDs an app's OWN migrations declare (fixed-GUID
+ * `spCreateApplication`). Downloads the app's migrations to a temp dir via the existing
+ * platform-aware {@link DownloadAppMigrations}, then scans them with {@link extractApplicationIds}.
+ * Returns `[]` on ANY error (or when the manifest declares no migrations/schema) — never throws,
+ * since a missed declared Application only means a link-less nav Application may survive removal.
+ */
+async function ExtractDeclaredApplicationIds(
+  manifest: MJAppManifest,
+  context: OrchestratorContext,
+  subpath?: string,
+): Promise<string[]> {
+  if (!manifest.migrations || !manifest.schema) {
+    return [];
+  }
+  let tempDir: string | undefined;
+  try {
+    tempDir = join(tmpdir(), `mj-app-${manifest.name}-appids-${Date.now()}`);
+    mkdirSync(tempDir, { recursive: true });
+    const download = await DownloadAppMigrations(manifest, context, tempDir, subpath);
+    if (!download.Success) {
+      return [];
+    }
+    return await extractApplicationIds(tempDir);
+  } catch {
+    return [];
+  } finally {
+    // Clean up the downloaded-migrations temp dir (best-effort — never mask the result).
+    if (tempDir) {
+      try {
+        rmSync(tempDir, { recursive: true, force: true });
+      } catch {
+        /* best-effort cleanup */
+      }
+    }
   }
 }
 

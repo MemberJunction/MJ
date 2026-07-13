@@ -70,7 +70,7 @@ interface RunDetailVM {
   selector: 'ps-production',
   imports: [CommonModule, SharedGenericModule, MJButtonDirective, PSOperateDialogComponent],
   encapsulation: ViewEncapsulation.None,
-  styleUrls: ['../predictive-studio.shared.scss', './ps-production.component.scss'],
+  styleUrls: ['../predictive-studio.shared.css', './ps-production.component.css'],
   template: `
     <div class="ps-panel ps-production" data-testid="ps-production-panel">
       @if (models.length === 0) {
