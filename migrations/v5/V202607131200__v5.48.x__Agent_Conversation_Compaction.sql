@@ -159,7 +159,7 @@ GO
 
 ALTER TABLE [${flyway:defaultSchema}].[AIAgentRunStep]
     ADD CONSTRAINT CK_AIAgentRunStep_StepType
-        CHECK ([StepType] IN ('Prompt', 'Actions', 'Sub-Agent', 'Chat', 'Decision', 'Validation', 'ForEach', 'While', 'Tool', 'Compaction'));
+        CHECK ([StepType] IN ('Prompt', 'Actions', 'Sub-Agent', 'Chat', 'Decision', 'Validation', 'ForEach', 'While', 'Tool', 'Plan', 'Skill', 'Compaction'));
 GO
 
 -- =====================================================================================

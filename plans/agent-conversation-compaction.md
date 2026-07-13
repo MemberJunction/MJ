@@ -239,7 +239,10 @@ The `summarizeRange` retrieval tool (§5.3) likewise records an `AIAgentRunStep`
 
 ### 3.4 Migration checklist (single file, `migrations/v5/`)
 
-> **Implemented:** `migrations/v5/V202606012156__v5.40.x__Agent_Conversation_Compaction.sql`
+> **Implemented:** `migrations/v5/V202607131200__v5.48.x__Agent_Conversation_Compaction.sql`
+> *(renamed from `V202606012156__v5.40.x` after merging `next` — the old timestamp was
+> out-of-order vs. `next`'s v5.47.x migrations; the re-added StepType CHECK also now includes
+> `'Plan'` and `'Skill'`, which `next` added in v5.44.)*
 
 - `ALTER TABLE ConversationDetail ADD Sequence INT NULL, SummaryPromptRunID UNIQUEIDENTIFIER NULL` (single consolidated ALTER).
 - Backfill `Sequence` (§3.1).
@@ -356,7 +359,7 @@ them.)
 
 ## 9. Phasing
 
-1. **Migration** ✅ *(done — `V202606012156__v5.40.x__Agent_Conversation_Compaction.sql`)* —
+1. **Migration** ✅ *(done — `V202607131200__v5.48.x__Agent_Conversation_Compaction.sql`)* —
    `Sequence` (+ backfill + trigger), `SummaryPromptRunID`, agent context-control fields on
    `AIAgentType`/`AIAgent`, `StepType='Compaction'`.
 2. **CodeGen** ⏭️ **NEXT — run locally (see §9.1).** Generates entity classes, views, SPs
