@@ -152,6 +152,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Recent records from User Record Logs
   public recentRecords: RecentRecordAccess[] = [];
 
+  // Timer that refreshes the pre-computed relative-time labels on recentRecords (see refreshRecentRecordTimes / NG0100 note)
+  private recentTimeRefreshTimer: ReturnType<typeof setInterval> | null = null;
+
   // Favorite records from User Favorites (non-entity favorites)
   public favoriteRecords: FavoriteRecord[] = [];
 
@@ -499,9 +502,21 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       .pipe(takeUntil(this.destroy$))
       .subscribe(records => {
         this.recentRecords = records;
+        this.refreshRecentRecordTimes(); // pre-compute the "N ago" labels off the CD path (see NG0100 note)
         this.isLoadingRecentRecords = false;
         this.cdr.detectChanges();
       });
+
+    // Refresh the pre-computed relative-time labels on a timer so "Just now" ages into "1m ago"
+    // etc. without the template ever computing time during change detection. Updating the stored
+    // field + running detectChanges here (rather than calling a Date.now()-based method from the
+    // template binding) is what prevents the ExpressionChangedAfterItHasBeenCheckedError (NG0100).
+    this.recentTimeRefreshTimer = setInterval(() => {
+      if (this.recentRecords.length > 0) {
+        this.refreshRecentRecordTimes();
+        this.cdr.detectChanges();
+      }
+    }, 30000);
 
     // Subscribe to favorite records changes
     this.stateService.FavoriteRecords
@@ -1475,6 +1490,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   override ngOnDestroy(): void {
+    if (this.recentTimeRefreshTimer !== null) {
+      clearInterval(this.recentTimeRefreshTimer);
+      this.recentTimeRefreshTimer = null;
+    }
     this.destroy$.next();
     this.destroy$.complete();
     super.ngOnDestroy();
@@ -2591,50 +2610,39 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     return 'fa-solid fa-table';
   }
 
-  // Cache for relative time strings to prevent recalculation during change detection
-  private relativeTimeCache = new Map<number, { formatted: string; cachedAt: number }>();
+  /**
+   * Pre-compute the "N ago" relative-time label for each recent record into its `relativeTime`
+   * field. The template binds `record.relativeTime` (a stable value) instead of calling
+   * {@link formatRelativeTime} — which reads `Date.now()` — during change detection. Recomputing
+   * time inside a template binding is what produced the NG0100
+   * ExpressionChangedAfterItHasBeenCheckedError (the value could differ between the two dev-mode
+   * CD passes when a minute boundary was crossed); binding a stored field cannot. Called when the
+   * record set loads and on a timer so the labels stay current.
+   */
+  private refreshRecentRecordTimes(): void {
+    for (const record of this.recentRecords) {
+      record.relativeTime = this.formatRelativeTime(record.latestAt);
+    }
+  }
 
   /**
-   * Format relative time for display (e.g., "2 hours ago")
-   * Cached to prevent ExpressionChangedAfterItHasBeenCheckedError
+   * Format relative time for display (e.g., "2 hours ago").
+   * NOTE: this reads Date.now(), so it must NOT be called directly from a template binding —
+   * use the pre-computed {@link RecentRecordAccess.relativeTime} field (see refreshRecentRecordTimes).
    */
-  public formatRelativeTime(date: Date): string {
+  private formatRelativeTime(date: Date): string {
     if (!date) return '';
 
-    const timestamp = new Date(date).getTime();
-    const now = Date.now();
-
-    // Check cache - use cached value if less than 10 seconds old
-    const cached = this.relativeTimeCache.get(timestamp);
-    if (cached && (now - cached.cachedAt) < 10000) {
-      return cached.formatted;
-    }
-
-    // Calculate new value
-    const diff = now - timestamp;
+    const diff = Date.now() - new Date(date).getTime();
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
-    let formatted: string;
-    if (minutes < 1) formatted = 'Just now';
-    else if (minutes < 60) formatted = `${minutes}m ago`;
-    else if (hours < 24) formatted = `${hours}h ago`;
-    else if (days < 7) formatted = `${days}d ago`;
-    else formatted = new Date(date).toLocaleDateString();
-
-    // Cache the result
-    this.relativeTimeCache.set(timestamp, { formatted, cachedAt: now });
-
-    // Cleanup old cache entries (keep last 100)
-    if (this.relativeTimeCache.size > 100) {
-      const firstKey = this.relativeTimeCache.keys().next().value;
-      if (firstKey !== undefined) {
-        this.relativeTimeCache.delete(firstKey);
-      }
-    }
-
-    return formatted;
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return new Date(date).toLocaleDateString();
   }
 
   /**
