@@ -19171,5 +19171,279 @@
       "lastModified": "2026-07-07T15:18:22.447Z",
       "checksum": "5d7127c089801cab7c953a31796ef94b540156cd68bcdc0229eda8744ce8bdd2"
     }
+  },
+  {
+    "fields": {
+      "Name": "GPT 5.6",
+      "PowerRank": 15,
+      "Description": "OpenAI's flagship model, successor to GPT 5.5. Sets a new quality and efficiency baseline for complex production workflows. The gpt-5.6 API alias routes to the top-capability gpt-5.6-sol variant. Features a 1,050,000 token (~1M) context window and 128K output capacity. Supports adjustable reasoning via reasoning_effort (none, low, medium, high, xhigh, max) plus a new 'pro mode' that applies more model work before returning a single final answer. Adds Programmatic Tool Calling, multi-agent coordination, explicit prompt caching, and persisted reasoning. Knowledge cutoff February 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.5"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "54191892-C80C-4DCC-AE98-BACD70D4DF27"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.448Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-5.6",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6BAD9951-BE26-4933-9F91-E6B18033F178"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.466Z",
+            "checksum": "74ed58958ad39dc21b879bf87f08f64bdd13b3756f3da7051f106f38b8aa7a3d"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-07-10T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 30,
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.6 (gpt-5.6 alias -> sol) pricing on OpenAI as of July 2026. $5.00/$30.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+          },
+          "primaryKey": {
+            "ID": "FA7A4744-FAD8-43FC-A5F6-9D029101C0B5"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.479Z",
+            "checksum": "e08205ce10ae3da82c4184bc749be9c406066dc320e485b7d65a03acc0487943"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E22BB8F0-46CB-4964-AEB0-A2C74148656C"
+    },
+    "sync": {
+      "lastModified": "2026-07-10T23:26:27.429Z",
+      "checksum": "07a8f481ac3f298d7c56d7af92e5bfeb5d80e0df2be6dc2c5f42a0529d795255"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT 5.6-terra",
+      "PowerRank": 13,
+      "Description": "OpenAI's balanced GPT 5.6 variant that trades some capability for lower cost while retaining the full GPT 5.6 feature set. Features a 1,050,000 token (~1M) context window and 128K output capacity. Supports adjustable reasoning via reasoning_effort (none, low, medium, high, xhigh, max). Knowledge cutoff February 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 8,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C1EA27BC-3BEA-4D40-94DE-5228AAAD072A"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.281Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-5.6-terra",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "CF744E6E-D1A7-4EF2-BC00-CEEDCA3B5660"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.295Z",
+            "checksum": "190abef76346267b7c96754461e788247f2bc305b670d894628b8db5197803fe"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-07-10T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2.5,
+            "OutputPricePerUnit": 15,
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.6-terra pricing on OpenAI as of July 2026. $2.50/$15.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+          },
+          "primaryKey": {
+            "ID": "60C58C8B-B5A4-4335-BCFD-2D2A65AD7DEA"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.328Z",
+            "checksum": "44b1fde790395dc54655b036a3b39cbba0fe707f517bc2b1079b691cb2925460"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8C7874CD-ACC1-41F5-BC21-F4BD608DAE4C"
+    },
+    "sync": {
+      "lastModified": "2026-07-10T23:26:27.040Z",
+      "checksum": "f19897a0442c805f4ee5616e5a25af303aee42fc434fb33d95a2b885ea503502"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT 5.6-luna",
+      "PowerRank": 11,
+      "Description": "OpenAI's efficient GPT 5.6 variant optimized for cost-sensitive, high-volume workloads. Features a 1,050,000 token (~1M) context window and 128K output capacity. Supports adjustable reasoning via reasoning_effort (none, low, medium, high, xhigh, max). Knowledge cutoff February 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 6,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A2166020-12A2-41F0-BCCF-5775F2675285"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.342Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-5.6-luna",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7E8A9F69-805F-42C5-AB6E-5CD2AB71DBCC"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.355Z",
+            "checksum": "881afe572f7234b8da3bd42589d25bfc37fee8c76bc517f776ac4947a76559de"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-07-10T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1,
+            "OutputPricePerUnit": 6,
+            "CacheReadPricePerUnit": 0.1,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.6-luna pricing on OpenAI as of July 2026. $1.00/$6.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+          },
+          "primaryKey": {
+            "ID": "5121599E-71C3-46AB-9AA5-43006565F2B7"
+          },
+          "sync": {
+            "lastModified": "2026-07-10T23:26:27.366Z",
+            "checksum": "192525b926019a8b136c342dcf1507fddcf574987b6480ea8fba36507e20ef4b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3D2A79B9-745E-4005-8440-5FB62CA61448"
+    },
+    "sync": {
+      "lastModified": "2026-07-10T23:26:27.052Z",
+      "checksum": "580740414c9a234fc14641c1abfb079e5576a5c721bbb1434ad50140312ccf16"
+    }
   }
 ]

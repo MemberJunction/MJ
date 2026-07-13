@@ -8,13 +8,13 @@ MemberJunction is an open-source platform for building intelligent, metadata-dri
 
 | Directory | Packages | Description |
 |-----------|----------|-------------|
-| [Actions](./Actions/README.md) | 13 | Metadata-driven action framework for workflows, agents, and automation |
-| [AI](./AI/README.md) | 42 | AI infrastructure — model abstractions, providers, vectors, agents, and tools |
-| [Angular](./Angular/README.md) | 61 | Angular UI framework — Explorer app, reusable components, and Bootstrap |
+| [Actions](./Actions/README.md) | 15 | Metadata-driven action framework for workflows, agents, and automation |
+| [AI](./AI/README.md) | 88 | AI infrastructure — model abstractions, providers, vectors, agents, and tools |
+| [Angular](./Angular/README.md) | 85 | Angular UI framework — Explorer app, reusable components, and Bootstrap |
 | [APIKeys](./APIKeys/README.md) | 2 | Server-side API key authorization with hierarchical scopes and pattern-based access control |
-| [Communication](./Communication/README.md) | 10 | Multi-channel messaging — message composition, delivery, and entity-level integration |
+| [Communication](./Communication/README.md) | 11 | Multi-channel messaging — message composition, delivery, and entity-level integration |
 | [Credentials](./Credentials/) | 1 | Secure credential management with caching, encryption, and audit logging |
-| [React](./React/README.md) | 2 | React component runtime and automated testing infrastructure |
+| [React](./React/README.md) | 4 | React component runtime and automated testing infrastructure |
 | [Scheduling](./Scheduling/README.md) | 4 | Distributed scheduled-jobs system with cron-based scheduling and plugin-based execution |
 | [Templates](./Templates/README.md) | 2 | Extensible templating engine with AI-powered content generation |
 | [TestingFramework](./TestingFramework/README.md) | 3 | Metadata-driven testing framework supporting agent evals and multi-oracle evaluation |
