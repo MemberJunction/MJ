@@ -8,6 +8,7 @@ If you're about to start work in one of the areas below, **read the guide first*
 
 - **[Building Applications on MemberJunction](BUILDING_APPS_ON_MJ.md)** — The hub guide for using MJ as a first-class application development platform. Explains the metadata-driven, schema-to-app model, the unified-TypeScript / isomorphic object model, AI-native app patterns, and links out to the authoritative README/guide for every layer (data modeling, CodeGen, entities, API, UI, Actions, AI, deployment). Start here if you've got data in MJ and want to build on it.
 - **[Framework Comparison](FRAMEWORK_COMPARISON.md)** — Objective comparison of MJ against Next.js/Vercel, Supabase, Rails, Django, and a hand-rolled Node+ORM+SPA stack: where each shines, where MJ differs, and how to choose. Companion to the app-building guide.
+- **[Agent Framework Comparison](AGENT_FRAMEWORK_COMPARISON.md)** — Objective comparison of MJ's AI agent framework and infrastructure against LangGraph, CrewAI, AG2/AutoGen, the vendor agent SDKs, Semantic Kernel, LlamaIndex, and the TypeScript-native frameworks: orchestration paradigms, payload/state governance, HITL, model gateway, observability, memory, permissions, and deployment (self-host or managed via MJ Central). Companion to the app-stack comparison above.
 
 ## Framework fundamentals
 
@@ -22,11 +23,19 @@ If you're about to start work in one of the areas below, **read the guide first*
 - **[Content Autotagging Guide](CONTENT_AUTOTAGGING_GUIDE.md)** — The Knowledge Hub pluggable autotagging pipeline: providers, keyword extraction, taxonomy bridging.
 - **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** — How the tag taxonomy itself is shaped, scoped, governed, grown, embedded, reviewed, and pruned. Companion to the autotagging guide.
 
+## AI and agents
+
+- **[Agent Memory Guide](AGENT_MEMORY_GUIDE.md)** — The complete agent-memory architecture: three-tier mental model (scratchpad → provisional → hardened), note injection (strategies, recency-wins policy, dated rendering, 8-level scoping), in-flight `memoryWrites` (the guard pipeline, `AllowMemoryWrite` gating, `AuthorType` provenance), and the Memory Manager's hardening/consolidation/contradiction/decay pipeline. Includes a configuration reference and troubleshooting queries.
+- **[Real-Time Co-Agents Guide](REALTIME_CO_AGENTS_GUIDE.md)** — Live, low-latency voice agents: the `Realtime` agent type and Realtime Co-Agent (one co-agent voices any target agent), the triple-registry plugin architecture (server/client model drivers + channel plugins), client-direct vs server-bridged topologies, session lifecycle/janitor, interactive channels (the live Whiteboard), narration, observability, and security. Companion to [`plans/ai-agent-sessions.md`](../plans/ai-agent-sessions.md).
+- **[Realtime Session Capture & Recording Guide](REALTIME_SESSION_CAPTURE_GUIDE.md)** — How a voice session is captured: per-turn transcript with start/end timing + speaker identity, and the optional audio recording. Covers the create-on-start/update-on-complete turn lifecycle, recording on both topologies (server-bridged mixer **and** client-direct browser capture via `RealtimeAudioRecorder`), the **seekable 16-bit PCM WAV** + capture-time `peaks.json` waveform sidecar, agent-audio mixing (`AttachRemoteStream` / `OnRemoteMediaStream`), and **streaming playback** via `mj-storage-media-player` → `CreateMediaAccessToken` → the `GET /media/:fileId` Range route. Read before touching `persistRealtimeTranscript`, the recording capture/store, or playback.
+- **[Conversations UX Stack Guide](CONVERSATIONS_UX_STACK_GUIDE.md)** — The 3-layer architecture for every chat surface: pure-TS `@memberjunction/conversations-runtime` (orchestration) ↔ adapters (`INotificationAdapter` / `IActiveTaskTracker` / `ISessionsAdapter`) ↔ `@memberjunction/ng-conversations` (Angular widget). Slot system, Before/After cancelable events, `--mj-chat-*` design tokens, default-agent resolution, sessions adapter bridging to realtime, recipes.
+
 ## Angular / MJExplorer
 
 - **[Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md)** — Architecture, naming, state management with getter/setters, engine class patterns, user preferences, layout, permission checking for MJ dashboards.
 - **[Lazy Loading Guide](LAZY_LOADING_GUIDE.md)** — How MJExplorer's code-split lazy loading works, how to add new dashboard components, how to make a package lazy-loadable, the auto-generated lazy config.
 - **[Navigation and Routing Guide](NAVIGATION_AND_ROUTING_GUIDE.md)** — How the shell owns URL state, back/forward navigation, adding URL-synced sub-navigation to a component.
+- **[Media Player package](../packages/Angular/Generic/media-player/README.md)** — The generic `mj-media-player` (zero-MJ-dep audio/video player: transport, real waveform scrubber, playback speed, ±skip, time-synced transcript, multi-track video grid) and the MJStorage-bound `mj-storage-media-player` wrapper (resolves an `MJ: Files` id to a permission-gated, Range-streamed `/media` URL with server-supplied waveform peaks). Used by the artifact audio/video viewers + previews and the realtime session-review overlay.
 
 ## Theming and visual design
 

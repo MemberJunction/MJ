@@ -19,6 +19,7 @@ import {
     BrowserConfig,
     ActionExecutionResult,
     CookieEntry,
+    KeyModifier,
 } from '../types/browser.js';
 
 export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
@@ -214,23 +215,45 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                     x = (action.BoundingBox.XMin + action.BoundingBox.XMax) / 2;
                     y = (action.BoundingBox.YMin + action.BoundingBox.YMax) / 2;
                 }
-                await page.mouse.click(x, y, {
-                    button: action.Button,
-                    clickCount: action.ClickCount,
-                });
+                // Hold any requested modifiers (e.g. Shift-click) around the coordinate click.
+                const modifiers = action.Modifiers ?? [];
+                for (const modifier of modifiers) {
+                    await page.keyboard.down(this.resolveModifier(modifier));
+                }
+                try {
+                    await page.mouse.click(x, y, {
+                        button: action.Button,
+                        clickCount: action.ClickCount,
+                    });
+                } finally {
+                    for (const modifier of [...modifiers].reverse()) {
+                        await page.keyboard.up(this.resolveModifier(modifier));
+                    }
+                }
                 break;
             }
             case 'Type':
                 await page.keyboard.type(action.Text);
                 break;
             case 'Keypress':
-                await page.keyboard.press(action.Key);
+                await page.keyboard.press(action.Modifiers?.length ? [...action.Modifiers, action.Key].join('+') : action.Key);
                 break;
             case 'KeyDown':
                 await page.keyboard.down(action.Key);
                 break;
             case 'KeyUp':
                 await page.keyboard.up(action.Key);
+                break;
+            case 'MouseMove':
+                await page.mouse.move(action.X, action.Y);
+                break;
+            case 'MouseDown':
+                await page.mouse.move(action.X, action.Y);
+                await page.mouse.down({ button: action.Button });
+                break;
+            case 'MouseUp':
+                await page.mouse.move(action.X, action.Y);
+                await page.mouse.up({ button: action.Button });
                 break;
             case 'Scroll':
                 await page.mouse.wheel(action.DeltaX, action.DeltaY);
@@ -275,6 +298,20 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                 throw new Error(`Unknown browser action type: ${JSON.stringify(_exhaustive)}`);
             }
         }
+    }
+
+    /**
+     * Resolve a {@link KeyModifier} to the concrete key name `page.keyboard.down`/`up` accept.
+     * `'ControlOrMeta'` maps to `'Meta'` on macOS and `'Control'` elsewhere.
+     *
+     * @param modifier The modifier to resolve.
+     * @returns The concrete keyboard key name.
+     */
+    private resolveModifier(modifier: KeyModifier): string {
+        if (modifier === 'ControlOrMeta') {
+            return process.platform === 'darwin' ? 'Meta' : 'Control';
+        }
+        return modifier;
     }
 
     // ─── Auth Support ──────────────────────────────────────

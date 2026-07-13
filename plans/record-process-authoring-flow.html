@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bulk Processes & Field Rules — Authoring Flow Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root{
+    --bg-page:#0c1119; --bg-app:#0f1622; --surface:#161f2d; --surface-2:#1b2636; --surface-3:#212e41;
+    --sunken:#0e151f; --hover:#243246; --border:#2a3a4f; --border-subtle:#1f2c3d; --border-strong:#3a4d66;
+    --text:#e6edf6; --text-2:#9fb0c4; --muted:#6b7d93; --disabled:#4a5970; --inverse:#0c1119;
+    --brand:#3f8cff; --brand-2:#5b9dff; --brand-bg:rgba(63,140,255,.14);
+    --ok:#34d399; --ok-bg:rgba(52,211,153,.13); --ok-text:#6ee7b7;
+    --warn:#fbbf24; --warn-bg:rgba(251,191,36,.13); --warn-text:#fcd34d;
+    --err:#f87171; --err-bg:rgba(248,113,113,.13); --err-text:#fca5a5;
+    --purple:#a78bfa; --purple-bg:rgba(167,139,250,.14);
+    --radius:10px; --radius-sm:7px; --radius-lg:16px;
+    --shadow:0 10px 40px rgba(0,0,0,.45); --shadow-sm:0 4px 16px rgba(0,0,0,.3);
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg-page);color:var(--text);font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.5;padding:0 0 120px}
+  a{color:var(--brand-2)}
+  .wrap{max-width:1340px;margin:0 auto;padding:0 28px}
+
+  /* page intro */
+  .hero{padding:54px 0 30px;border-bottom:1px solid var(--border-subtle);margin-bottom:46px;
+    background:radial-gradient(1200px 380px at 20% -10%,rgba(63,140,255,.12),transparent 60%),
+               radial-gradient(900px 360px at 90% -20%,rgba(167,139,250,.10),transparent 55%)}
+  .hero .eyebrow{color:var(--brand-2);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:12px;margin-bottom:14px}
+  .hero h1{font-size:40px;font-weight:800;letter-spacing:-.02em;margin:0 0 14px;background:linear-gradient(90deg,#fff,#9fb0c4);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p{font-size:17px;color:var(--text-2);max-width:780px;margin:0}
+  .flowbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:26px}
+  .flowbar .step{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);
+    padding:8px 14px;border-radius:999px;font-size:13px;font-weight:600;color:var(--text-2)}
+  .flowbar .step .n{width:20px;height:20px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:800}
+  .flowbar i.sep{color:var(--disabled);font-size:11px}
+
+  /* section + screen frame */
+  .section{margin:64px 0}
+  .section-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+  .section-head .badge{background:var(--brand-bg);color:var(--brand-2);font-weight:800;font-size:12px;
+    padding:4px 11px;border-radius:7px;letter-spacing:.04em;white-space:nowrap}
+  .section-head h2{font-size:24px;font-weight:800;letter-spacing:-.01em;margin:0}
+  .section-sub{color:var(--text-2);font-size:15px;margin:0 0 22px;max-width:860px}
+
+  .frame{background:var(--bg-app);border:1px solid var(--border);border-radius:var(--radius-lg);
+    overflow:hidden;box-shadow:var(--shadow)}
+  .chrome{display:flex;align-items:center;gap:8px;padding:11px 16px;background:var(--sunken);border-bottom:1px solid var(--border-subtle)}
+  .chrome .dot{width:11px;height:11px;border-radius:50%}
+  .chrome .dot.r{background:#ff5f57}.chrome .dot.y{background:#febc2e}.chrome .dot.g{background:#28c840}
+  .chrome .url{margin-left:14px;background:var(--surface);border:1px solid var(--border);border-radius:7px;
+    padding:5px 14px;font-size:12.5px;color:var(--muted);font-family:var(--mono);flex:1;max-width:560px}
+  .chrome .url i{color:var(--ok);margin-right:7px}
+  .stage{padding:0}
+
+  /* app shell pieces */
+  .topbar{display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:1px solid var(--border-subtle)}
+  .topbar .title{display:flex;align-items:center;gap:11px;font-size:18px;font-weight:700}
+  .topbar .title i{color:var(--brand-2)}
+  .topbar .count{color:var(--muted);font-size:13px;font-weight:500}
+  .spacer{flex:1}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--surface-2);
+    color:var(--text);padding:8px 15px;border-radius:var(--radius-sm);font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit}
+  .btn:hover{background:var(--hover)}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn.primary:hover{background:var(--brand-2)}
+  .btn.ghost{background:transparent}
+  .btn.sm{padding:6px 11px;font-size:12.5px}
+  .btn.success{background:var(--ok);border-color:var(--ok);color:#06281d}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;font-size:12px;font-weight:700}
+  .pill.brand{background:var(--brand-bg);color:var(--brand-2)}
+  .pill.ok{background:var(--ok-bg);color:var(--ok-text)}
+  .pill.warn{background:var(--warn-bg);color:var(--warn-text)}
+  .pill.err{background:var(--err-bg);color:var(--err-text)}
+  .pill.muted{background:var(--sunken);color:var(--muted)}
+  .pill.purple{background:var(--purple-bg);color:var(--purple)}
+
+  /* generic inputs */
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:12.5px;font-weight:600;color:var(--text-2)}
+  .input,.select{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);
+    padding:9px 12px;color:var(--text);font-size:13.5px;font-family:inherit;width:100%}
+  .input::placeholder{color:var(--disabled)}
+  .input:focus,.select:focus{outline:none;border-color:var(--brand)}
+  .select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b7d93' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;padding-right:30px;cursor:pointer}
+  .hint{font-size:12px;color:var(--muted)}
+
+  /* hub table */
+  .hub{padding:8px 22px 22px}
+  .toolbar{display:flex;align-items:center;gap:12px;padding:14px 0}
+  .search{flex:1;max-width:380px;position:relative}
+  .search i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px}
+  .search input{padding-left:34px}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;padding:10px 14px;border-bottom:1px solid var(--border-subtle)}
+  td{padding:13px 14px;border-bottom:1px solid var(--border-subtle);font-size:13.5px;vertical-align:middle}
+  tr:hover td{background:rgba(255,255,255,.012)}
+  .ent{display:flex;align-items:center;gap:9px}
+  .ent .ic{width:30px;height:30px;border-radius:8px;background:var(--brand-bg);color:var(--brand-2);display:grid;place-items:center;font-size:13px}
+  .nm{font-weight:600}
+  .sub{color:var(--muted);font-size:12px}
+  .worktype{font-family:var(--mono);font-size:11.5px}
+  .rowact{display:flex;gap:6px;justify-content:flex-end}
+  .iconbtn{width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);display:grid;place-items:center;cursor:pointer;font-size:12.5px}
+  .iconbtn:hover{background:var(--hover);color:var(--text)}
+  .iconbtn.run:hover{color:var(--ok-text);border-color:var(--ok)}
+
+  /* two-col editor layout */
+  .editor{display:grid;grid-template-columns:1fr 360px;gap:0}
+  .editor .main{padding:24px;border-right:1px solid var(--border-subtle)}
+  .editor .side{padding:24px;background:var(--sunken)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid3{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:16px}
+  .block{margin-bottom:26px}
+  .block-h{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .block-h h3{font-size:15px;font-weight:700;margin:0}
+  .block-h .num{width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:800}
+  .block-h .opt{margin-left:auto;font-size:12px;color:var(--muted)}
+
+  /* NL bar */
+  .nlbar{background:linear-gradient(100deg,rgba(167,139,250,.12),rgba(63,140,255,.10));border:1px solid var(--border-strong);
+    border-radius:var(--radius);padding:14px 16px;display:flex;align-items:center;gap:13px;margin-bottom:22px}
+  .nlbar .ai{width:34px;height:34px;border-radius:9px;background:var(--purple-bg);color:var(--purple);display:grid;place-items:center;font-size:15px}
+  .nlbar input{flex:1;background:transparent;border:none;color:var(--text);font-size:14px;outline:none}
+  .nlbar input::placeholder{color:var(--text-2)}
+
+  /* RULE CARD — the centerpiece */
+  .rule{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:0;margin-bottom:14px;overflow:hidden}
+  .rule-top{display:flex;align-items:center;gap:11px;padding:14px 16px;flex-wrap:wrap}
+  .rule .rn{width:24px;height:24px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:800;flex-shrink:0}
+  .kw{color:var(--text-2);font-size:13.5px;font-weight:500}
+  .mini-select{background:var(--surface-3);border:1px solid var(--border-strong);border-radius:7px;padding:6px 26px 6px 11px;
+    font-size:13px;font-weight:600;color:var(--text);appearance:none;cursor:pointer;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%239fb0c4' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
+  .mini-select.field-pick{color:var(--brand-2)}
+  .rule .del{margin-left:auto;color:var(--muted);background:none;border:none;cursor:pointer;font-size:14px;padding:6px}
+  .rule .del:hover{color:var(--err)}
+  .rule-body{padding:0 16px 16px 51px;display:flex;flex-direction:column;gap:12px}
+  .source-val{display:flex;align-items:center;gap:10px}
+  .source-val .input{max-width:340px}
+  .arrow{color:var(--disabled)}
+
+  /* AI prompt source expanded */
+  .promptbox{background:var(--purple-bg);border:1px solid rgba(167,139,250,.3);border-radius:var(--radius-sm);padding:13px}
+  .promptbox .ph{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--purple);margin-bottom:11px}
+  .prompt-select{position:relative}
+  .prompt-trigger{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--border);
+    border-radius:7px;padding:9px 12px;font-size:13.5px;cursor:pointer}
+  .prompt-trigger .lab{display:flex;align-items:center;gap:8px}.prompt-trigger .lab i{color:var(--purple)}
+  .prompt-panel{margin-top:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:var(--shadow-sm)}
+  .prompt-search{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border-subtle);color:var(--muted)}
+  .prompt-search input{background:transparent;border:none;outline:none;color:var(--text);font-size:13px;flex:1}
+  .pgroup{padding:6px 13px 3px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .popt{display:flex;align-items:center;justify-content:space-between;padding:7px 13px 7px 22px;font-size:13.5px;cursor:pointer}
+  .popt:hover{background:var(--hover)}
+  .popt.sel{color:var(--brand-2);font-weight:600}.popt.sel i{color:var(--brand-2)}
+  .promptdata{margin-top:11px;display:flex;flex-direction:column;gap:7px}
+  .promptdata .dh{font-size:11.5px;color:var(--text-2);font-weight:600}
+  .kvrow{display:flex;align-items:center;gap:8px}
+  .kvrow .k{font-family:var(--mono);font-size:12px;color:var(--brand-2);min-width:90px}
+  .kvrow .input{flex:1}
+
+  /* transforms + condition chips */
+  .pipe{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .pipe .lbl{font-size:12.5px;color:var(--muted)}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-3);border:1px solid var(--border-strong);
+    border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600}
+  .chip i{color:var(--muted);font-size:10px;cursor:pointer}
+  .addchip{border-style:dashed;color:var(--text-2);cursor:pointer}
+  .cond{display:flex;align-items:center;gap:10px;background:var(--sunken);border:1px solid var(--border-subtle);border-radius:7px;padding:9px 12px}
+  .cond .cl{font-size:12.5px;color:var(--warn-text);font-weight:600;white-space:nowrap}
+  .cond .input{flex:1;background:transparent;border:none;font-family:var(--mono);font-size:12.5px}
+
+  .addrule{display:flex;align-items:center;gap:8px;justify-content:center;border:1px dashed var(--border-strong);
+    border-radius:var(--radius);padding:13px;color:var(--brand-2);font-weight:600;cursor:pointer;font-size:13.5px;margin-top:4px}
+  .addrule:hover{background:var(--brand-bg)}
+
+  /* side preview */
+  .side h4{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;margin:0 0 14px}
+  .prev-sum{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .prev-card{background:var(--surface);border:1px solid var(--border-subtle);border-radius:8px;padding:11px 13px;margin-bottom:10px}
+  .prev-card .rk{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .prev-card .fl{font-size:12px;font-weight:700;margin-bottom:3px}
+  .prev-card .ov{font-size:12.5px;color:var(--muted);text-decoration:line-through}
+  .prev-card .nv{font-size:12.5px;color:var(--ok-text);font-weight:600;display:flex;align-items:center;gap:6px;margin-top:2px}
+  .prev-card .nv i{color:var(--disabled);font-size:10px}
+  .validation{display:flex;align-items:center;gap:9px;background:var(--ok-bg);color:var(--ok-text);border-radius:8px;padding:10px 12px;font-size:12.5px;font-weight:600;margin-bottom:16px}
+
+  /* dialog (run preview) */
+  .ovl{background:rgba(7,11,17,.72);padding:34px;display:flex;justify-content:center}
+  .dialog{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);width:760px;max-width:100%;box-shadow:var(--shadow);overflow:hidden}
+  .dh-bar{display:flex;align-items:center;padding:18px 22px;border-bottom:1px solid var(--border-subtle)}
+  .dh-bar h3{margin:0;font-size:18px;font-weight:700}
+  .dh-bar .x{margin-left:auto;color:var(--muted);cursor:pointer;font-size:16px}
+  .dbody{padding:20px 22px;max-height:430px;overflow:auto}
+  .diffrec{display:grid;grid-template-columns:180px 1fr;gap:14px;padding:11px 0;border-bottom:1px solid var(--border-subtle)}
+  .diffrec:last-child{border:none}
+  .diffrec .rk2{font-family:var(--mono);font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .diffrec .nmk{font-weight:600;font-size:13px;color:var(--text)}
+  .chg .f{font-weight:700;font-size:13px;margin-bottom:3px}
+  .chg .o{color:var(--muted);text-decoration:line-through;font-size:13px}
+  .chg .nw{color:var(--ok-text);font-weight:600;font-size:13px;display:flex;align-items:center;gap:7px;margin-top:2px}
+  .chg .nw i{color:var(--disabled);font-size:11px}
+  .dfoot{display:flex;gap:10px;padding:16px 22px;border-top:1px solid var(--border-subtle);background:var(--sunken)}
+
+  /* grid invocation */
+  .menu{position:relative;width:300px;margin:0 0 0 auto}
+  .menucard{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+  .menucard .mh{padding:9px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:800;border-bottom:1px solid var(--border-subtle)}
+  .mitem{display:flex;align-items:center;gap:11px;padding:11px 14px;font-size:13.5px;cursor:pointer}
+  .mitem:hover{background:var(--hover)}
+  .mitem i{color:var(--brand-2);width:16px;text-align:center}
+  .mitem .badge2{margin-left:auto;font-size:10px;background:var(--brand-bg);color:var(--brand-2);padding:2px 7px;border-radius:5px;font-weight:700}
+
+  /* publish panel */
+  .publish{display:flex;flex-direction:column;gap:14px}
+  .toggle-row{display:flex;align-items:center;gap:13px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+  .switch{width:42px;height:24px;border-radius:999px;background:var(--brand);position:relative;flex-shrink:0}
+  .switch::after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;right:3px}
+  .switch.off{background:var(--border-strong)}.switch.off::after{right:auto;left:3px}
+
+  /* history */
+  .runrow .st{display:inline-flex;align-items:center;gap:7px;font-weight:600;font-size:13px}
+  .dot-ok{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+  .counts{display:flex;gap:6px}
+  .cbadge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--sunken);color:var(--text-2)}
+  .cbadge.ok{background:var(--ok-bg);color:var(--ok-text)}
+  .cbadge.sk{background:var(--sunken);color:var(--muted)}
+
+  .cap{display:flex;gap:10px;align-items:flex-start;margin-top:14px;color:var(--text-2);font-size:13.5px}
+  .cap i{color:var(--brand-2);margin-top:3px}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:40px;padding:20px;background:var(--surface);border:1px solid var(--border-subtle);border-radius:var(--radius)}
+  .legend div{font-size:13px;color:var(--text-2)}
+  .legend b{color:var(--text)}
+  .foot{text-align:center;color:var(--muted);font-size:13px;margin-top:60px}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="wrap">
+    <div class="eyebrow"><i class="fa-solid fa-wand-magic-sparkles"></i>&nbsp; Self-Service Bulk Operations</div>
+    <h1>Bulk Processes &amp; Field Rules</h1>
+    <p>A business user defines reusable rules to update any entity's records — fixed values, other fields, formulas, lookups, or an <b>AI prompt</b> — then runs them on demand against a view, a list, a filter, or just the rows they've selected. Always with a safe dry-run preview first.</p>
+    <div class="flowbar">
+      <span class="step"><span class="n">1</span> Create process</span><i class="fa-solid fa-chevron-right sep"></i>
+      <span class="step"><span class="n">2</span> Build rules</span><i class="fa-solid fa-chevron-right sep"></i>
+      <span class="step"><span class="n">3</span> Preview (dry-run)</span><i class="fa-solid fa-chevron-right sep"></i>
+      <span class="step"><span class="n">4</span> Publish to grid</span><i class="fa-solid fa-chevron-right sep"></i>
+      <span class="step"><span class="n">5</span> Run anytime</span><i class="fa-solid fa-chevron-right sep"></i>
+      <span class="step"><span class="n">6</span> Run history</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ================= SCREEN 1 — HUB ================= -->
+  <div class="section">
+    <div class="section-head"><span class="badge">SCREEN 1</span><h2>Bulk Processes hub</h2></div>
+    <p class="section-sub">A home for every reusable process across the org. See what exists, who owns it, what it targets, and run or edit it. "New Process" launches the authoring flow.</p>
+    <div class="frame">
+      <div class="chrome"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="url"><i class="fa-solid fa-lock"></i>app.memberjunction.com/bulk-processes</span></div>
+      <div class="stage">
+        <div class="topbar">
+          <div class="title"><i class="fa-solid fa-list-check"></i> Bulk Processes <span class="count">· 12 processes · 348 runs this month</span></div>
+          <div class="spacer"></div>
+          <button class="btn ghost sm"><i class="fa-solid fa-clock-rotate-left"></i> Run history</button>
+          <button class="btn primary"><i class="fa-solid fa-plus"></i> New Process</button>
+        </div>
+        <div class="hub">
+          <div class="toolbar">
+            <div class="search"><i class="fa-solid fa-magnifying-glass"></i><input class="input" placeholder="Search processes…"></div>
+            <div class="spacer"></div>
+            <select class="select" style="max-width:170px"><option>All entities</option></select>
+            <select class="select" style="max-width:150px"><option>All types</option></select>
+          </div>
+          <table>
+            <thead><tr><th>Process</th><th>Target entity</th><th>Type</th><th>Status</th><th>On grid?</th><th>Last run</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td><div class="ent"><div class="ic"><i class="fa-solid fa-pen-to-square"></i></div><div><div class="nm">Stamp "reviewed" on prompts</div><div class="sub">Owner: you · 2 rules</div></div></div></td>
+                <td>AI Prompts</td><td><span class="pill purple">Field Rules</span></td>
+                <td><span class="pill ok"><i class="fa-solid fa-circle" style="font-size:7px"></i> Active</span></td>
+                <td><span class="pill brand"><i class="fa-solid fa-check"></i> ⋮ menu</span></td>
+                <td><span class="sub">2 min ago · 3 ok</span></td>
+                <td><div class="rowact"><div class="iconbtn run" title="Run"><i class="fa-solid fa-play"></i></div><div class="iconbtn" title="Edit"><i class="fa-solid fa-pen"></i></div><div class="iconbtn"><i class="fa-solid fa-ellipsis"></i></div></div></td>
+              </tr>
+              <tr>
+                <td><div class="ent"><div class="ic"><i class="fa-solid fa-robot"></i></div><div><div class="nm">AI-summarize support cases</div><div class="sub">Owner: Dana · 1 rule · uses prompt</div></div></div></td>
+                <td>Cases</td><td><span class="pill purple">Field Rules</span></td>
+                <td><span class="pill ok"><i class="fa-solid fa-circle" style="font-size:7px"></i> Active</span></td>
+                <td><span class="pill brand"><i class="fa-solid fa-check"></i> ⋮ menu</span></td>
+                <td><span class="sub">Yesterday · 1,204 ok</span></td>
+                <td><div class="rowact"><div class="iconbtn run"><i class="fa-solid fa-play"></i></div><div class="iconbtn"><i class="fa-solid fa-pen"></i></div><div class="iconbtn"><i class="fa-solid fa-ellipsis"></i></div></div></td>
+              </tr>
+              <tr>
+                <td><div class="ent"><div class="ic"><i class="fa-solid fa-tags"></i></div><div><div class="nm">Reclassify stale accounts</div><div class="sub">Owner: you · 3 rules · 1 condition</div></div></div></td>
+                <td>Accounts</td><td><span class="pill purple">Field Rules</span></td>
+                <td><span class="pill warn"><i class="fa-solid fa-circle" style="font-size:7px"></i> Draft</span></td>
+                <td><span class="pill muted">Not surfaced</span></td>
+                <td><span class="sub">—</span></td>
+                <td><div class="rowact"><div class="iconbtn run"><i class="fa-solid fa-play"></i></div><div class="iconbtn"><i class="fa-solid fa-pen"></i></div><div class="iconbtn"><i class="fa-solid fa-ellipsis"></i></div></div></td>
+              </tr>
+              <tr>
+                <td><div class="ent"><div class="ic"><i class="fa-solid fa-envelope"></i></div><div><div class="nm">Normalize contact emails</div><div class="sub">Owner: Sam · 1 rule · lowercase + trim</div></div></div></td>
+                <td>Contacts</td><td><span class="pill purple">Field Rules</span></td>
+                <td><span class="pill ok"><i class="fa-solid fa-circle" style="font-size:7px"></i> Active</span></td>
+                <td><span class="pill brand"><i class="fa-solid fa-check"></i> ⋮ menu</span></td>
+                <td><span class="sub">3 days ago · 8,901 ok</span></td>
+                <td><div class="rowact"><div class="iconbtn run"><i class="fa-solid fa-play"></i></div><div class="iconbtn"><i class="fa-solid fa-pen"></i></div><div class="iconbtn"><i class="fa-solid fa-ellipsis"></i></div></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><i class="fa-solid fa-circle-info"></i><div>Each row maps to one <b>Record Process</b>. "On grid?" reflects whether it's been surfaced as a one-click action on that entity's grid (Screen 4). Owners and run counts give governance at a glance.</div></div>
+  </div>
+
+  <!-- ================= SCREEN 2 — CREATE / DEFINE ================= -->
+  <div class="section">
+    <div class="section-head"><span class="badge">SCREEN 2</span><h2>Define the process &amp; its scope</h2></div>
+    <p class="section-sub">Name it, choose the entity it acts on, and the default scope. The right rail is a live, always-on dry-run preview — it updates as you build, so authoring and validation happen together.</p>
+    <div class="frame">
+      <div class="chrome"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="url"><i class="fa-solid fa-lock"></i>app.memberjunction.com/bulk-processes/new</span></div>
+      <div class="stage">
+        <div class="topbar">
+          <div class="title"><i class="fa-solid fa-pen-to-square"></i> New Bulk Process</div>
+          <div class="spacer"></div>
+          <span class="pill warn">Draft — unsaved</span>
+          <button class="btn ghost sm">Cancel</button>
+          <button class="btn primary sm"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+        </div>
+        <div class="editor">
+          <div class="main">
+            <div class="block">
+              <div class="block-h"><span class="num">1</span><h3>Basics</h3></div>
+              <div class="grid2">
+                <div class="field"><label>Process name</label><input class="input" value="Mark idle prompts for review"></div>
+                <div class="field"><label>Status</label><select class="select"><option>Draft</option><option selected>Active</option><option>Disabled</option></select></div>
+              </div>
+              <div class="field" style="margin-top:16px"><label>Description</label><input class="input" value="Appends a [reviewed] tag to AI prompts that don't already have one."></div>
+            </div>
+            <div class="block">
+              <div class="block-h"><span class="num">2</span><h3>What it acts on</h3></div>
+              <div class="grid3">
+                <div class="field"><label>Entity</label><select class="select"><option selected>AI Prompts</option><option>Accounts</option><option>Contacts</option><option>Cases</option></select></div>
+                <div class="field"><label>Default scope</label><select class="select"><option>Selected records</option><option selected>Filter</option><option>A view</option><option>A list</option></select></div>
+                <div class="field"><label>Work type</label><select class="select"><option selected>Field Rules</option><option>Run an Action</option><option>Run an Agent</option></select></div>
+              </div>
+              <div class="field" style="margin-top:16px"><label>Filter (optional — overridden by grid selection at run time)</label>
+                <input class="input" style="font-family:var(--mono);font-size:12.5px" value="Status = 'Active'"></div>
+              <div class="hint" style="margin-top:7px"><i class="fa-solid fa-shield-halved"></i> When launched from a grid, the user's selection is used instead — this filter is only the default for standalone/scheduled runs.</div>
+            </div>
+          </div>
+          <div class="side">
+            <h4>Live preview</h4>
+            <div class="prev-sum"><span class="pill brand">3 of 87 will change</span><span class="pill muted">3 updates</span></div>
+            <div class="validation"><i class="fa-solid fa-circle-check"></i> All rules valid for AI Prompts</div>
+            <div class="hint">Preview reflects the rules you build in the next step. Nothing is written until you run &amp; confirm.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SCREEN 3 — RULES BUILDER (centerpiece) ================= -->
+  <div class="section">
+    <div class="section-head"><span class="badge">SCREEN 3 · ★</span><h2>The visual rules builder</h2></div>
+    <p class="section-sub">The heart of it. Each rule reads like a sentence — <i>“Set [field] from [source]”</i> — with an optional transform pipeline and condition. Sources include a fixed value, another field, a formula, an entity lookup, or an <b>AI prompt</b>. Or just describe what you want and let the assistant draft the rules.</p>
+    <div class="frame">
+      <div class="chrome"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="url"><i class="fa-solid fa-lock"></i>app.memberjunction.com/bulk-processes/new · Rules</span></div>
+      <div class="stage">
+        <div class="editor">
+          <div class="main">
+            <div class="block-h" style="margin-bottom:18px"><span class="num">3</span><h3>Rules</h3><span class="opt">applied top-to-bottom to each record</span></div>
+
+            <!-- NL assistant -->
+            <div class="nlbar">
+              <div class="ai"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+              <input value="Append [reviewed] to the description of prompts that aren't reviewed yet, and set a quality score from the AI grader prompt">
+              <button class="btn sm" style="background:var(--purple);border-color:var(--purple);color:#1a1030"><i class="fa-solid fa-bolt"></i> Draft rules</button>
+            </div>
+
+            <!-- RULE 1 — formula + condition -->
+            <div class="rule">
+              <div class="rule-top">
+                <span class="rn">1</span><span class="kw">Set</span>
+                <select class="mini-select field-pick"><option>Description</option></select>
+                <span class="kw">from</span>
+                <select class="mini-select"><option>a formula</option></select>
+                <button class="del"><i class="fa-solid fa-trash"></i></button>
+              </div>
+              <div class="rule-body">
+                <div class="source-val">
+                  <input class="input" style="max-width:420px;font-family:var(--mono);font-size:12.5px" value="fields.Description + ' [reviewed]'">
+                </div>
+                <div class="pipe"><span class="lbl">then</span>
+                  <span class="chip">trim <i class="fa-solid fa-xmark"></i></span>
+                  <span class="chip addchip"><i class="fa-solid fa-plus"></i> add transform</span>
+                </div>
+                <div class="cond"><span class="cl"><i class="fa-solid fa-filter"></i> Only when</span>
+                  <input class="input cond" value="fields.Description && fields.Description.indexOf('[reviewed]') === -1"></div>
+              </div>
+            </div>
+
+            <!-- RULE 2 — AI PROMPT source (expanded) -->
+            <div class="rule">
+              <div class="rule-top">
+                <span class="rn">2</span><span class="kw">Set</span>
+                <select class="mini-select field-pick"><option>QualityScore</option></select>
+                <span class="kw">from</span>
+                <select class="mini-select"><option>an AI prompt</option></select>
+                <span class="pill purple" style="margin-left:2px"><i class="fa-solid fa-robot"></i> AI</span>
+                <button class="del"><i class="fa-solid fa-trash"></i></button>
+              </div>
+              <div class="rule-body">
+                <div class="promptbox">
+                  <div class="ph"><i class="fa-solid fa-wand-magic-sparkles"></i> Run an AI prompt and use its output as the value</div>
+                  <div class="prompt-select">
+                    <div class="prompt-trigger"><span class="lab"><i class="fa-solid fa-robot"></i> Prompt Quality Grader</span><i class="fa-solid fa-chevron-down" style="color:var(--muted)"></i></div>
+                    <div class="prompt-panel">
+                      <div class="prompt-search"><i class="fa-solid fa-magnifying-glass"></i><input placeholder="Search prompts…" value=""></div>
+                      <div class="pgroup">Content</div>
+                      <div class="popt"><span>Summarize Content</span></div>
+                      <div class="popt"><span>Classify Topic</span></div>
+                      <div class="pgroup">Quality &amp; Scoring</div>
+                      <div class="popt sel"><span>Prompt Quality Grader</span> <i class="fa-solid fa-check"></i></div>
+                      <div class="popt"><span>Sentiment Score</span></div>
+                      <div class="pgroup">Extraction</div>
+                      <div class="popt"><span>Extract Entities</span></div>
+                    </div>
+                  </div>
+                  <div class="promptdata">
+                    <div class="dh">Data passed to the prompt <span style="color:var(--muted);font-weight:400">(defaults to the whole record)</span></div>
+                    <div class="kvrow"><span class="k">promptText</span><input class="input" style="font-family:var(--mono);font-size:12px" value="{{ field: TemplateText }}"></div>
+                    <div class="kvrow"><span class="k">name</span><input class="input" style="font-family:var(--mono);font-size:12px" value="{{ field: Name }}"></div>
+                    <div class="kvrow"><span class="k">rendered</span><input class="input" style="font-family:var(--mono);font-size:12px" value="{{ entityDocument: Default }}"></div>
+                    <span class="chip addchip" style="align-self:flex-start"><i class="fa-solid fa-plus"></i> add field</span>
+                  </div>
+                </div>
+                <div class="cond"><span class="cl"><i class="fa-solid fa-filter"></i> Only when</span>
+                  <input class="input cond" value="(always)" style="color:var(--muted)"></div>
+              </div>
+            </div>
+
+            <!-- RULE 3 collapsed-ish: lookup -->
+            <div class="rule">
+              <div class="rule-top">
+                <span class="rn">3</span><span class="kw">Set</span>
+                <select class="mini-select field-pick"><option>OwnerName</option></select>
+                <span class="kw">from</span>
+                <select class="mini-select"><option>a lookup</option></select>
+                <button class="del"><i class="fa-solid fa-trash"></i></button>
+              </div>
+              <div class="rule-body">
+                <div class="grid2" style="max-width:560px">
+                  <div class="field"><label>Look in entity</label><input class="input" value="Users"></div>
+                  <div class="field"><label>Return field</label><input class="input" value="Name"></div>
+                  <div class="field"><label>Match field</label><input class="input" value="ID"></div>
+                  <div class="field"><label>= this record's</label><input class="input" value="OwnerUserID"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="addrule"><i class="fa-solid fa-plus"></i> Add rule</div>
+          </div>
+
+          <!-- live preview rail -->
+          <div class="side">
+            <h4>Live preview · dry-run</h4>
+            <div class="prev-sum"><span class="pill brand">3 of 87 change</span><span class="pill muted">6 updates</span></div>
+            <div class="validation"><i class="fa-solid fa-circle-check"></i> 3 rules valid</div>
+            <div class="prev-card">
+              <div class="rk">Repair JSON</div>
+              <div class="fl">Description</div>
+              <div class="ov">Repairs malformed JSON strings…</div>
+              <div class="nv"><i class="fa-solid fa-arrow-right-long"></i> Repairs malformed JSON strings… [reviewed]</div>
+              <div class="fl" style="margin-top:9px">QualityScore</div>
+              <div class="ov">—</div>
+              <div class="nv"><i class="fa-solid fa-arrow-right-long"></i> 8.5 <span class="pill purple" style="margin-left:4px"><i class="fa-solid fa-robot"></i></span></div>
+            </div>
+            <div class="prev-card">
+              <div class="rk">Collect User Info</div>
+              <div class="fl">QualityScore</div>
+              <div class="ov">—</div>
+              <div class="nv"><i class="fa-solid fa-arrow-right-long"></i> 7.0 <span class="pill purple" style="margin-left:4px"><i class="fa-solid fa-robot"></i></span></div>
+            </div>
+            <div class="hint" style="margin-top:6px"><i class="fa-solid fa-triangle-exclamation"></i> AI-prompt rules run one model call per record — preview a small sample before a large run.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><i class="fa-solid fa-star"></i><div><b>Source types:</b> fixed value · another field · formula · entity lookup · <span style="color:var(--purple)">AI prompt</span> (whole record or a shaped payload, optionally a rendered Entity Document). <b>Transforms:</b> trim / case / regex / JSONPath / XPath chained. <b>Condition:</b> per-rule guard so it only touches the rows you mean.</div></div>
+  </div>
+
+  <!-- ================= SCREEN 4 — PUBLISH TO GRID ================= -->
+  <div class="section">
+    <div class="section-head"><span class="badge">SCREEN 4</span><h2>Publish — make it runnable anytime</h2></div>
+    <p class="section-sub">One toggle turns the process into a one-click action on the entity's grid. Optionally schedule it or expose it to agents — same engine, no extra setup.</p>
+    <div class="frame">
+      <div class="chrome"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="url"><i class="fa-solid fa-lock"></i>app.memberjunction.com/bulk-processes/new · Publish</span></div>
+      <div class="stage" style="padding:26px">
+        <div class="block-h" style="margin-bottom:18px"><span class="num">4</span><h3>Where can people run this?</h3></div>
+        <div class="publish" style="max-width:760px">
+          <div class="toggle-row">
+            <div class="switch"></div>
+            <div style="flex:1"><div style="font-weight:600;font-size:14px">Show on the AI Prompts grid</div><div class="hint">Appears in the grid's ⋮ menu. Runs against selected rows with a dry-run preview first.</div></div>
+            <select class="select" style="max-width:170px"><option>Selected rows</option><option>Whole view</option></select>
+          </div>
+          <div class="toggle-row">
+            <div class="switch off"></div>
+            <div style="flex:1"><div style="font-weight:600;font-size:14px">Run on a schedule</div><div class="hint">e.g. nightly against the default filter.</div></div>
+            <button class="btn sm ghost">Configure…</button>
+          </div>
+          <div class="toggle-row">
+            <div class="switch"></div>
+            <div style="flex:1"><div style="font-weight:600;font-size:14px">Available to AI agents &amp; workflows</div><div class="hint">Exposed via the “Run Record Process” action for orchestration.</div></div>
+            <span class="pill ok"><i class="fa-solid fa-check"></i> On</span>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:8px">
+            <button class="btn primary"><i class="fa-solid fa-rocket"></i> Publish process</button>
+            <button class="btn ghost"><i class="fa-solid fa-flask"></i> Preview run</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><i class="fa-solid fa-wand-magic-sparkles"></i><div>Behind the toggle, this creates the Entity Action + invocation (pointing the grid at the runtime-UX runner) + the link to this process — the wiring is generated for the user; they never see it.</div></div>
+  </div>
+
+  <!-- ================= SCREEN 5 — RUN FROM GRID ================= -->
+  <div class="section">
+    <div class="section-head"><span class="badge">SCREEN 5</span><h2>Run it from the grid</h2></div>
+    <p class="section-sub">The published process shows up in the grid's ⋮ menu. Select rows → run → a server dry-run computes the exact diff → review → Apply. (This part is already built &amp; working.)</p>
+    <div class="frame">
+      <div class="chrome"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="url"><i class="fa-solid fa-lock"></i>app.memberjunction.com/entity/AI-Prompts</span></div>
+      <div class="stage">
+        <div class="topbar">
+          <div class="title"><i class="fa-solid fa-table-cells"></i> AI Prompts <span class="count">· 3 selected</span></div>
+          <div class="spacer"></div>
+          <button class="btn ghost sm"><i class="fa-solid fa-plus"></i> New</button>
+          <button class="btn ghost sm"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+          <button class="btn ghost sm"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+        </div>
+        <div style="padding:14px 22px">
+          <div class="menu">
+            <div class="menucard">
+              <div class="mh">Bulk processes &amp; actions</div>
+              <div class="mitem"><i class="fa-solid fa-pen-to-square"></i> Mark idle prompts for review <span class="badge2">3 rows</span></div>
+              <div class="mitem"><i class="fa-solid fa-robot"></i> AI-grade prompt quality <span class="badge2">3 rows</span></div>
+              <div class="mitem"><i class="fa-solid fa-file-export"></i> Export selected</div>
+            </div>
+          </div>
+        </div>
+        <!-- runner dialog -->
+        <div class="ovl">
+          <div class="dialog">
+            <div class="dh-bar"><h3>Mark idle prompts for review</h3><i class="fa-solid fa-xmark x"></i></div>
+            <div class="dbody">
+              <div class="prev-sum" style="margin-bottom:18px"><span class="pill brand">3 of 3 will change</span><span class="pill muted">3 field updates</span></div>
+              <div class="diffrec">
+                <div><div class="nmk">Repair JSON</div><div class="rk2">58658DAE-C1CE-4621…</div></div>
+                <div class="chg"><div class="f">Description</div>
+                  <div class="o">Repairs malformed JSON strings by correcting syntax errors…</div>
+                  <div class="nw"><i class="fa-solid fa-arrow-right-long"></i> Repairs malformed JSON strings by correcting syntax errors… [reviewed]</div></div>
+              </div>
+              <div class="diffrec">
+                <div><div class="nmk">Collect User Info</div><div class="rk2">003C2419-899C-48BB…</div></div>
+                <div class="chg"><div class="f">Description</div>
+                  <div class="o">Interactive prompt for collecting user information…</div>
+                  <div class="nw"><i class="fa-solid fa-arrow-right-long"></i> Interactive prompt for collecting user information… [reviewed]</div></div>
+              </div>
+              <div class="diffrec">
+                <div><div class="nmk">Weekly Entity Digest</div><div class="rk2">D635FA71-7FED-464C…</div></div>
+                <div class="chg"><div class="f">Description</div>
+                  <div class="o">Prompt used by the 'Weekly Entity Digest' runtime action…</div>
+                  <div class="nw"><i class="fa-solid fa-arrow-right-long"></i> Prompt used by the 'Weekly Entity Digest' runtime action… [reviewed]</div></div>
+              </div>
+            </div>
+            <div class="dfoot"><button class="btn primary"><i class="fa-solid fa-check"></i> Apply 3 change(s)</button><button class="btn">Cancel</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><i class="fa-solid fa-shield-halved"></i><div>Nothing is written until <b>Apply</b>. Every applied change is captured by MJ's Record Changes versioning, so it's fully recoverable. Names (not raw IDs) label each row.</div></div>
+  </div>
+
+  <!-- ================= SCREEN 6 — RUN HISTORY ================= -->
+  <div class="section">
+    <div class="section-head"><span class="badge">SCREEN 6</span><h2>Run history &amp; audit</h2></div>
+    <p class="section-sub">Every run is recorded — who, when, scope, counts — and drills into the exact per-record outcome. Full accountability for bulk changes.</p>
+    <div class="frame">
+      <div class="chrome"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="url"><i class="fa-solid fa-lock"></i>app.memberjunction.com/bulk-processes/runs</span></div>
+      <div class="stage">
+        <div class="topbar"><div class="title"><i class="fa-solid fa-clock-rotate-left"></i> Run history</div></div>
+        <div class="hub">
+          <table>
+            <thead><tr><th>When</th><th>Process</th><th>By</th><th>Scope</th><th>Result</th><th>Counts</th><th></th></tr></thead>
+            <tbody>
+              <tr class="runrow"><td><span class="sub">2 min ago</span></td><td class="nm">Mark idle prompts for review</td><td>you</td><td><span class="pill muted">3 selected</span></td>
+                <td><span class="st"><span class="dot-ok"></span> Completed</span></td>
+                <td><div class="counts"><span class="cbadge ok">3 ok</span><span class="cbadge">0 err</span><span class="cbadge sk">0 skip</span></div></td>
+                <td><div class="rowact"><div class="iconbtn"><i class="fa-solid fa-eye"></i></div></div></td></tr>
+              <tr class="runrow"><td><span class="sub">Today 09:14</span></td><td class="nm">AI-summarize support cases</td><td>scheduler</td><td><span class="pill muted">View: Open</span></td>
+                <td><span class="st"><span class="dot-ok"></span> Completed</span></td>
+                <td><div class="counts"><span class="cbadge ok">1,204 ok</span><span class="cbadge">2 err</span><span class="cbadge sk">31 skip</span></div></td>
+                <td><div class="rowact"><div class="iconbtn"><i class="fa-solid fa-eye"></i></div></div></td></tr>
+              <tr class="runrow"><td><span class="sub">Yesterday</span></td><td class="nm">Normalize contact emails</td><td>Sam</td><td><span class="pill muted">List: Imports</span></td>
+                <td><span class="st"><span class="dot-ok"></span> Completed</span></td>
+                <td><div class="counts"><span class="cbadge ok">8,901 ok</span><span class="cbadge">0 err</span><span class="cbadge sk">14 skip</span></div></td>
+                <td><div class="rowact"><div class="iconbtn"><i class="fa-solid fa-eye"></i></div></div></td></tr>
+              <tr class="runrow"><td><span class="sub">Yesterday</span></td><td class="nm">Mark idle prompts for review</td><td>you</td><td><span class="pill muted">Dry-run</span></td>
+                <td><span class="st" style="color:var(--text-2)"><i class="fa-solid fa-flask" style="font-size:11px"></i> Preview</span></td>
+                <td><div class="counts"><span class="cbadge">87 would change</span></div></td>
+                <td><div class="rowact"><div class="iconbtn"><i class="fa-solid fa-eye"></i></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- legend -->
+  <div class="legend">
+    <div><b>★ Screen 3</b> is the centerpiece — the visual rules builder (already prototyped as <span style="font-family:var(--mono);font-size:12px">&lt;mj-field-rules-builder&gt;</span>).</div>
+    <div><b>Screen 5</b> is already built &amp; working today (the runner you tested).</div>
+    <div><b>Screens 1, 2, 4, 6</b> are the proposed authoring + management layer to build next.</div>
+    <div><b style="color:var(--purple)">AI prompt source</b> = run any org prompt per-record, output becomes the value.</div>
+  </div>
+
+  <div class="foot">MemberJunction — Bulk Processes &amp; Field Rules · authoring flow concept mockup</div>
+</div>
+</body>
+</html>

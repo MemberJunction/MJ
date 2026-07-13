@@ -424,6 +424,73 @@ describe('FormBuilderBuilderAgent.executeAgentInternal', () => {
             expect(newPayload.BuilderResult?.LintHistory?.[0].ResultCode).toBe('LINT_FAILED');
         });
 
+        it('recovers when the lint-fix prompt returns a ```json-fenced STRING (OutputType=string)', async () => {
+            // Regression: the 'Form Builder - Lint Fix' prompt has OutputType
+            // 'string', so the runner hands back the raw (fenced) text instead of
+            // a parsed object. The Builder must parse it rather than discard a
+            // perfectly good fix and abort the retry loop.
+            mockRunAction.mockResolvedValueOnce({
+                Success: false,
+                Message: "[critical] runview-call-validation: Invalid property 'ResultColumns' on RunView",
+                ResultCode: 'LINT_FAILED',
+            });
+            const fixedSpec = { ...VALID_SPEC, code: 'function TestForm() { /* uses Fields now */ return null; }' };
+            mockExecutePrompt.mockResolvedValueOnce({
+                success: true,
+                // Note: a STRING, wrapped in a markdown fence — exactly what was observed.
+                result: '```json\n' + JSON.stringify({ spec: fixedSpec, notes: 'replaced ResultColumns with Fields' }) + '\n```',
+                promptRun: { ID: 'prompt-run-str' },
+            });
+            mockRunAction.mockResolvedValueOnce({
+                Success: true, Message: '{"ComponentID":"c","OverrideID":"o","Version":"1.0.0"}',
+                ResultCode: 'SUCCESS',
+            });
+
+            const result = await makeBuilder().executeAgentInternal(
+                makeParams({ Intent: VALID_INTENT, Spec: VALID_SPEC }), {} as AgentConfiguration);
+
+            expect(result.finalStep.step).toBe('Success');
+            expect(mockRunAction).toHaveBeenCalledTimes(2);   // retried with the parsed fix
+            expect(mockExecutePrompt).toHaveBeenCalledTimes(1);
+            expect((result.finalStep.newPayload as FormBuilderPayload).BuilderResult?.LintAttempts).toBe(2);
+        });
+
+        it('falls back to rawResult when result is empty but rawResult holds the fenced JSON', async () => {
+            mockRunAction.mockResolvedValueOnce({
+                Success: false, Message: 'lint', ResultCode: 'LINT_FAILED',
+            });
+            mockExecutePrompt.mockResolvedValueOnce({
+                success: true,
+                result: undefined,
+                rawResult: '```json\n' + JSON.stringify({ spec: VALID_SPEC }) + '\n```',
+            });
+            mockRunAction.mockResolvedValueOnce({
+                Success: true, Message: '{"ComponentID":"c","OverrideID":"o","Version":"1.0.0"}',
+                ResultCode: 'SUCCESS',
+            });
+
+            const result = await makeBuilder().executeAgentInternal(
+                makeParams({ Intent: VALID_INTENT, Spec: VALID_SPEC }), {} as AgentConfiguration);
+
+            expect(result.finalStep.step).toBe('Success');
+            expect(mockRunAction).toHaveBeenCalledTimes(2);
+        });
+
+        it('still aborts when the lint-fix prompt returns an unparseable string', async () => {
+            mockRunAction.mockResolvedValueOnce({
+                Success: false, Message: 'lint', ResultCode: 'LINT_FAILED',
+            });
+            mockExecutePrompt.mockResolvedValueOnce({
+                success: true, result: 'I could not fix this, sorry.',
+            });
+
+            const result = await makeBuilder().executeAgentInternal(
+                makeParams({ Intent: VALID_INTENT, Spec: VALID_SPEC }), {} as AgentConfiguration);
+
+            expect(result.finalStep.step).toBe('Failed');
+            expect(mockRunAction).toHaveBeenCalledTimes(1);   // no valid fix → no retry
+        });
+
         it('retries on LINEAGE_NAME_MISMATCH', async () => {
             mockRunAction.mockResolvedValueOnce({
                 Success: false, Message: 'spec.name mismatch', ResultCode: 'LINEAGE_NAME_MISMATCH',

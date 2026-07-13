@@ -3,6 +3,7 @@ import { ResourceData, MJTemplateEntity, MJTemplateContentEntity } from '@member
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 
 interface TemplateCardData {
     Entity: MJTemplateEntity;
@@ -19,7 +20,7 @@ interface TemplateCardData {
       <mj-page-header Title="Templates" Icon="fa-solid fa-file-lines" Subtitle="Manage reusable message templates">
         <div actions>
           <button mjButton variant="primary" size="sm" (click)="addNewTemplate()">
-            <i class="fa-solid fa-plus"></i> New Template
+            <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New Template</span>
           </button>
         </div>
         <div toolbar>
@@ -27,22 +28,17 @@ interface TemplateCardData {
             Placeholder="Search templates..."
             (ValueChange)="onSearchValue($event)">
           </mj-page-search>
-          @if (!isLoading) {
-            <mj-filter-chip
-              Label="All"
-              [Count]="allTemplates.length"
-              [Active]="categoryFilter === ''"
-              (Clicked)="onCategoryFilter('')">
-            </mj-filter-chip>
-            @for (cat of categories; track cat) {
-              <mj-filter-chip
-                [Label]="cat"
-                [Count]="getCategoryCount(cat)"
-                [Active]="categoryFilter === cat"
-                (Clicked)="onCategoryFilter(cat)">
-              </mj-filter-chip>
-            }
-          }
+          <mj-filter-popover
+            [ActiveCount]="ActiveFilterCount"
+            [ShowClearAll]="ActiveFilterCount > 0"
+            (ClearAllRequested)="resetFilters()">
+            <mj-filter-panel
+              [Fields]="filterFields"
+              [Values]="filterValues"
+              (ValuesChange)="onFilterValuesChange($event)"
+              (Reset)="resetFilters()">
+            </mj-filter-panel>
+          </mj-filter-popover>
         </div>
       </mj-page-header>
 
@@ -91,10 +87,8 @@ interface TemplateCardData {
               </div>
             }
             @if (filteredTemplates.length === 0) {
-              <div class="empty-state">
-                <i class="fa-solid fa-file-lines"></i>
-                <p>No templates found matching your criteria</p>
-              </div>
+              <mj-empty-state Variant="no-results" Icon="fa-solid fa-file-lines"
+                Title="No templates found matching your criteria" />
             }
           </div>
         }
@@ -193,14 +187,8 @@ interface TemplateCardData {
     }
 
     /* EMPTY STATE */
-    .empty-state {
-        grid-column: 1 / -1;
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        padding: 64px 0; color: var(--mj-text-muted);
-    }
-    .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
-    .empty-state p { margin: 0; font-size: 13px; }
+    /* Span the full template grid so the placeholder centers. */
+    mj-empty-state { grid-column: 1 / -1; }
   `]
 })
 export class CommunicationTemplatesResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
@@ -210,6 +198,11 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
     public categoryFilter = '';
     public isLoading = false;
     private searchTerm = '';
+
+    /** The current free-text search applied to the template list (read-only, for agent context). */
+    public get SearchText(): string {
+        return this.searchTerm;
+    }
 
     constructor(private cdr: ChangeDetectorRef, private navService: NavigationService) {
         super();
@@ -288,6 +281,36 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
     public onCategoryFilter(category: string): void {
         this.categoryFilter = category;
         this.applyFilter();
+    }
+
+    // -- Concise chrome: Category lives behind the one Filter popover ---------
+
+    public get filterFields(): FilterFieldConfig[] {
+        return [{
+            key: 'category',
+            type: 'chips',
+            label: 'Category',
+            chipOptions: [
+                { text: 'All', value: '' },
+                ...this.categories.map(c => ({ text: c, value: c })),
+            ],
+        }];
+    }
+
+    public get filterValues(): Record<string, unknown> {
+        return { category: this.categoryFilter };
+    }
+
+    public get ActiveFilterCount(): number {
+        return this.categoryFilter ? 1 : 0;
+    }
+
+    public onFilterValuesChange(values: Record<string, unknown>): void {
+        this.onCategoryFilter((values['category'] as string) ?? '');
+    }
+
+    public resetFilters(): void {
+        this.onCategoryFilter('');
     }
 
     private applyFilter(): void {

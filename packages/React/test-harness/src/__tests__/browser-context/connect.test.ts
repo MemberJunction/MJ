@@ -13,31 +13,31 @@ vi.mock('playwright', () => ({
   chromium: { launch, connect, connectOverCDP },
 }));
 
-import { BrowserManager, classifyConnectEndpoint } from '../../lib/browser-context';
+import { BrowserManager, ClassifyConnectEndpoint } from '../../lib/browser-context';
 
 const CONNECT_ENV_VAR = 'MJ_REACT_TEST_HARNESS_CONNECT';
 const REUSE_CONTEXT_ENV_VAR = 'MJ_REACT_TEST_HARNESS_REUSE_CONTEXT';
 
-describe('classifyConnectEndpoint', () => {
+describe('ClassifyConnectEndpoint', () => {
   it('classifies http(s):// endpoints as CDP', () => {
-    expect(classifyConnectEndpoint('http://localhost:9222')).toBe('cdp');
-    expect(classifyConnectEndpoint('https://chrome.example.com')).toBe('cdp');
+    expect(ClassifyConnectEndpoint('http://localhost:9222')).toBe('cdp');
+    expect(ClassifyConnectEndpoint('https://chrome.example.com')).toBe('cdp');
   });
 
   it('classifies ws(s):// endpoints as a Playwright server', () => {
-    expect(classifyConnectEndpoint('ws://localhost:55001/abc')).toBe('server');
-    expect(classifyConnectEndpoint('wss://pw.example.com/abc')).toBe('server');
+    expect(ClassifyConnectEndpoint('ws://localhost:55001/abc')).toBe('server');
+    expect(ClassifyConnectEndpoint('wss://pw.example.com/abc')).toBe('server');
   });
 
   it('honors an explicit hint over the scheme', () => {
     // A raw CDP websocket also starts with ws:// — the override forces CDP.
-    expect(classifyConnectEndpoint('ws://localhost:9222/devtools/browser/x', 'cdp')).toBe('cdp');
-    expect(classifyConnectEndpoint('http://localhost:9222', 'server')).toBe('server');
+    expect(ClassifyConnectEndpoint('ws://localhost:9222/devtools/browser/x', 'cdp')).toBe('cdp');
+    expect(ClassifyConnectEndpoint('http://localhost:9222', 'server')).toBe('server');
   });
 
   it('throws on an unrecognized scheme when auto-detecting', () => {
-    expect(() => classifyConnectEndpoint('localhost:9222')).toThrow(/Unrecognized connect endpoint/);
-    expect(() => classifyConnectEndpoint('tcp://x')).toThrow(/Unrecognized connect endpoint/);
+    expect(() => ClassifyConnectEndpoint('localhost:9222')).toThrow(/Unrecognized connect endpoint/);
+    expect(() => ClassifyConnectEndpoint('tcp://x')).toThrow(/Unrecognized connect endpoint/);
   });
 });
 

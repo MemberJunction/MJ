@@ -1,0 +1,167 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Experiment Monitor</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .live-ticker { display:flex; align-items:center; gap:14px; background:var(--mj-bg-surface); border:1px solid var(--mj-border-default); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:10px 14px; overflow:hidden; }
+  .live-ticker .lead { display:flex; align-items:center; gap:8px; font-weight:700; font-size:12px; color:var(--mj-brand-primary); white-space:nowrap; padding-right:14px; border-right:1px solid var(--mj-border-subtle); }
+  .ticker-rail { display:flex; gap:10px; align-items:center; overflow:hidden; flex:1; }
+  .tick { display:flex; align-items:center; gap:9px; padding:6px 11px; background:var(--mj-bg-surface-card); border:1px solid var(--mj-border-subtle); border-radius:999px; font-size:12px; white-space:nowrap; }
+  .tick .mono { color:var(--mj-text-secondary); }
+  .tick .mini { width:54px; height:6px; }
+  .pulse { width:9px; height:9px; border-radius:50%; background:var(--mj-success); box-shadow:0 0 0 0 rgba(31,157,87,.5); animation:pulse 1.6s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(31,157,87,.45);} 70%{box-shadow:0 0 0 7px rgba(31,157,87,0);} 100%{box-shadow:0 0 0 0 rgba(31,157,87,0);} }
+  .exp-grid { display:grid; grid-template-columns:1fr 318px; gap:16px; margin-top:16px; align-items:start; }
+  .lead-row td { vertical-align:middle; }
+  .algo-cell { display:flex; align-items:center; gap:10px; }
+  .algo-ic { width:30px; height:30px; border-radius:8px; display:grid; place-items:center; color:#fff; font-size:13px; flex:0 0 auto; }
+  .feat-chips { display:flex; gap:5px; flex-wrap:wrap; margin-top:3px; }
+  .auc-cell { display:flex; align-items:center; gap:10px; justify-content:flex-end; }
+  .auc-cell .bar { width:88px; }
+  .auc-val { font-variant-numeric:tabular-nums; font-weight:700; font-size:14px; min-width:48px; text-align:right; }
+  .gold-glow { box-shadow:inset 3px 0 0 #e0a429; }
+  .budget-tile { display:flex; align-items:center; gap:14px; padding:12px 0; }
+  .budget-tile + .budget-tile { border-top:1px solid var(--mj-border-subtle); }
+  .gauge.sm { width:78px; height:78px; }
+  .gauge.sm::after { inset:9px; }
+  .gauge.sm .g-val { font-size:15px; }
+  .gauge.cost { background:conic-gradient(var(--mj-warning) calc(var(--p)*1%), var(--mj-bg-surface-sunken) 0); }
+  .gauge.clock { background:conic-gradient(#7b3ff0 calc(var(--p)*1%), var(--mj-bg-surface-sunken) 0); }
+  .meta-row { display:flex; justify-content:space-between; padding:6px 0; font-size:12.5px; border-bottom:1px solid var(--mj-border-subtle); }
+  .meta-row:last-child { border-bottom:none; }
+  .meta-row .k { color:var(--mj-text-muted); }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav"><div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a><a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a><a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div>
+  <a class="active"><i class="fa-solid fa-flask"></i> Experiments</a>
+  <a><i class="fa-solid fa-cubes"></i> Model Registry</a><a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div><a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main"><div class="ps-topbar">
+  <div><div class="crumb">Experiments / Member Renewal</div><h1>Renewal AUC Search <span class="badge green" style="vertical-align:middle"><span class="pulse" style="width:7px;height:7px"></span> Running</span></h1></div>
+  <div class="spacer"></div>
+  <span class="muted small"><i class="fa-regular fa-clock"></i> started 38 min ago · driven by <b style="color:var(--mj-text-secondary)">Model Dev Agent</b></span>
+  <button class="btn sm"><i class="fa-regular fa-bell"></i> Notify on finish</button>
+  <button class="btn"><i class="fa-solid fa-pause"></i> Pause</button>
+  <button class="btn danger"><i class="fa-solid fa-stop"></i> Cancel</button>
+</div>
+<div class="ps-content">
+
+  <!-- LIVE TICKER -->
+  <div class="live-ticker">
+    <div class="lead"><span class="pulse"></span> LIVE · 3 in flight</div>
+    <div class="ticker-rail">
+      <div class="tick"><span class="algo-ic" style="background:#d98213;width:22px;height:22px;font-size:10px"><i class="fa-solid fa-tree"></i></span><b>CatBoost</b><span class="muted">+ engagement+tenure</span><span class="bar mini"><span style="width:72%"></span></span><span class="mono">72%</span></div>
+      <div class="tick"><span class="algo-ic" style="background:#2050c8;width:22px;height:22px;font-size:10px"><i class="fa-solid fa-bolt"></i></span><b>LightGBM</b><span class="muted">+ interactions</span><span class="bar mini"><span style="width:41%"></span></span><span class="mono">41%</span></div>
+      <div class="tick"><span class="algo-ic" style="background:#1f9d57;width:22px;height:22px;font-size:10px"><i class="fa-solid fa-network-wired"></i></span><b>MLP</b><span class="muted">+ embeddings</span><span class="bar mini"><span style="width:18%"></span></span><span class="mono">18%</span></div>
+    </div>
+  </div>
+
+  <div class="exp-grid">
+
+    <!-- LEADERBOARD -->
+    <div class="card">
+      <div class="card-head">
+        <h3><i class="fa-solid fa-trophy" style="color:#e0a429"></i> Leaderboard</h3>
+        <span class="muted small">14 evaluated · ranked by holdout AUC</span>
+        <div class="spacer"></div>
+        <span class="tag">goal: maximize AUC</span>
+      </div>
+      <table class="table">
+        <thead><tr><th style="width:34px">#</th><th>Algorithm &amp; Feature Set</th><th>Status</th><th class="num">Holdout AUC</th><th class="num">Δ best</th></tr></thead>
+        <tbody>
+          <tr class="lead-row gold-glow">
+            <td><span class="rank gold">1</span></td>
+            <td><div class="algo-cell"><span class="algo-ic" style="background:#d98213"><i class="fa-solid fa-tree"></i></span><div><div style="font-weight:650">XGBoost</div><div class="feat-chips"><span class="tag">engagement</span><span class="tag">recency</span></div></div></div></td>
+            <td><span class="badge green"><i class="fa-solid fa-trophy"></i> Best</span></td>
+            <td class="num"><div class="auc-cell"><span class="bar"><span style="width:96%;background:#1f9d57"></span></span><span class="auc-val">0.864</span></div></td>
+            <td class="num">—</td>
+          </tr>
+          <tr>
+            <td><span class="rank">2</span></td>
+            <td><div class="algo-cell"><span class="algo-ic" style="background:#2050c8"><i class="fa-solid fa-bolt"></i></span><div><div style="font-weight:650">LightGBM</div><div class="feat-chips"><span class="tag">full feature set</span></div></div></div></td>
+            <td><span class="badge gray">Completed</span></td>
+            <td class="num"><div class="auc-cell"><span class="bar"><span style="width:91%"></span></span><span class="auc-val">0.859</span></div></td>
+            <td class="num" style="color:var(--mj-error-text)">−0.005</td>
+          </tr>
+          <tr>
+            <td><span class="rank">3</span></td>
+            <td><div class="algo-cell"><span class="algo-ic" style="background:#1f9d57"><i class="fa-solid fa-trees"></i></span><div><div style="font-weight:650">Random Forest</div><div class="feat-chips"><span class="tag">engagement</span></div></div></div></td>
+            <td><span class="badge gray">Completed</span></td>
+            <td class="num"><div class="auc-cell"><span class="bar"><span style="width:80%"></span></span><span class="auc-val">0.847</span></div></td>
+            <td class="num" style="color:var(--mj-error-text)">−0.017</td>
+          </tr>
+          <tr>
+            <td><span class="rank">4</span></td>
+            <td><div class="algo-cell"><span class="algo-ic" style="background:#7b3ff0"><i class="fa-solid fa-wave-square"></i></span><div><div style="font-weight:650">Logistic Regression</div><div class="feat-chips"><span class="tag">core</span></div></div></div></td>
+            <td><span class="badge amber"><i class="fa-regular fa-hourglass-half"></i> Awaiting approval</span></td>
+            <td class="num"><div class="auc-cell"><span class="bar"><span style="width:55%"></span></span><span class="auc-val">0.812</span></div></td>
+            <td class="num" style="color:var(--mj-error-text)">−0.052</td>
+          </tr>
+          <tr style="opacity:.6">
+            <td><span class="rank">5</span></td>
+            <td><div class="algo-cell"><span class="algo-ic" style="background:#98a4b6"><i class="fa-solid fa-tree"></i></span><div><div style="font-weight:650">XGBoost</div><div class="feat-chips"><span class="tag">geo-heavy</span></div></div></div></td>
+            <td><span class="badge red"><i class="fa-solid fa-scissors"></i> Pruned</span></td>
+            <td class="num"><div class="auc-cell"><span class="bar"><span style="width:34%;background:var(--mj-text-disabled)"></span></span><span class="auc-val">0.790</span></div></td>
+            <td class="num" style="color:var(--mj-error-text)">−0.074</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="card-body" style="border-top:1px solid var(--mj-border-subtle); background:var(--mj-bg-surface-card)">
+        <div class="callout info" style="margin:0">
+          <i class="fa-solid fa-robot"></i>
+          <div><b>Agent rationale — iteration 14:</b> Promoted the leader by adding <b>engagement-recency</b> features and dropping low-importance <b>geo</b> signals (importance &lt; 0.01). Next, probing a CatBoost variant with tenure interactions to chase the 0.87 ceiling.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT RAIL -->
+    <div class="col">
+      <div class="card">
+        <div class="card-head"><h3><i class="fa-solid fa-gauge-high"></i> Budget Burn</h3></div>
+        <div class="card-body" style="padding-top:6px">
+          <div class="budget-tile">
+            <div class="gauge sm cost" style="--p:62"><div class="g-val">62%</div></div>
+            <div><div class="section-title" style="margin:0">Compute cost</div><div style="font-weight:700">$31 / $50 cap</div><div class="muted small">~$0.92 per iteration</div></div>
+          </div>
+          <div class="budget-tile">
+            <div class="gauge sm" style="--p:56"><div class="g-val">14</div></div>
+            <div><div class="section-title" style="margin:0">Iterations</div><div style="font-weight:700">14 / 25</div><div class="muted small">11 trials remaining</div></div>
+          </div>
+          <div class="budget-tile">
+            <div class="gauge sm clock" style="--p:42"><div class="g-val">38<small style="font-size:10px">m</small></div></div>
+            <div><div class="section-title" style="margin:0">Wall-clock</div><div style="font-weight:700">38 / 90 min</div><div class="muted small">~52 min headroom</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3><i class="fa-solid fa-circle-info"></i> Session</h3></div>
+        <div class="card-body" style="padding-top:6px">
+          <div class="meta-row"><span class="k">Goal</span><span style="font-weight:600;text-align:right">Maximize holdout AUC</span></div>
+          <div class="meta-row"><span class="k">Target</span><span style="font-weight:600">Member renewal</span></div>
+          <div class="meta-row"><span class="k">Holdout</span><span style="font-weight:600">20% · stratified</span></div>
+          <div class="meta-row"><span class="k">Strategy</span><span style="font-weight:600">Bayesian + pruning</span></div>
+          <div class="meta-row"><span class="k">Driver</span><span style="font-weight:600"><i class="fa-solid fa-robot" style="color:var(--mj-brand-primary)"></i> Dev Agent</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body" style="display:flex; flex-direction:column; gap:9px">
+          <button class="btn primary" style="justify-content:center"><i class="fa-solid fa-circle-check"></i> Approve &amp; Register Best</button>
+          <div class="row" style="gap:9px">
+            <button class="btn" style="flex:1; justify-content:center"><i class="fa-solid fa-pause"></i> Pause</button>
+            <button class="btn danger" style="flex:1; justify-content:center"><i class="fa-solid fa-stop"></i> Cancel</button>
+          </div>
+          <div class="muted small" style="text-align:center"><i class="fa-regular fa-circle-check"></i> Auto-stop when no AUC gain in 5 trials</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</main>
+</div></body></html>

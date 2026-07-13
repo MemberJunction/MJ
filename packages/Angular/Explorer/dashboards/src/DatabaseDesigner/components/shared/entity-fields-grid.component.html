@@ -2,10 +2,7 @@
 
   <!-- ── Error banner ────────────────────────────────────────────────────── -->
   @if (HasErrors) {
-    <div class="fields-error-banner" role="alert">
-      <i class="fa-solid fa-triangle-exclamation"></i>
-      Remove reserved column names before continuing.
-    </div>
+    <mj-alert Variant="error">Remove reserved column names before continuing.</mj-alert>
   }
 
   <!-- ── Table ───────────────────────────────────────────────────────────── -->

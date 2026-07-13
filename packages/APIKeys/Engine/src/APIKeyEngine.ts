@@ -327,6 +327,7 @@ export class APIKeyEngine {
             const apiKey = await md.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', contextUser);
 
             apiKey.Hash = Hash;
+            apiKey.KeyPrefix = Raw.substring(0, this._keyGenConfig.prefix.length + 4);
             apiKey.UserID = params.UserId;
             apiKey.Label = params.Label;
             apiKey.Description = params.Description ?? null;

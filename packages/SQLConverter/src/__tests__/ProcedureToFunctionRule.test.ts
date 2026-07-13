@@ -36,6 +36,51 @@ END`;
       expect(result).not.toContain('SET NOCOUNT ON');
     });
 
+    it('should declare RETURNS TABLE (not VOID) for a scalar SELECT @var AS Alias result', () => {
+      // A proc that returns a row-count status: `SELECT @RowsAffected AS Extended`.
+      // The body becomes RETURN QUERY, which PG rejects in a VOID function — the
+      // return type MUST be TABLE(...) with the column type inferred from the DECLARE.
+      const input = `CREATE PROCEDURE [__mj].[spExtendLease]
+    @JobID UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @RowsAffected INT;
+    UPDATE [__mj].[ScheduledJob] SET [Foo] = 1 WHERE [ID] = @JobID;
+    SET @RowsAffected = @@ROWCOUNT;
+    SELECT @RowsAffected AS Extended;
+END`;
+      const result = convert(input);
+      expect(result).toContain('RETURNS TABLE("Extended" INTEGER)');
+      expect(result).not.toContain('RETURNS VOID');
+      // The body's RETURN QUERY must now be legal against the SETOF/TABLE return.
+      expect(result).toMatch(/RETURN QUERY\s+SELECT/i);
+    });
+
+    it('JSON-arg CRUD: INSERT omits keys that are absent OR explicitly JSON null (so column DEFAULT applies)', () => {
+      // A wide CRUD sproc (>90 params) is converted to the p_data JSONB shape. A
+      // present-but-null key (e.g. metadata-sync passing OwnerUserID = NULL) must be
+      // treated like an absent key so the column DEFAULT applies — otherwise an
+      // explicit NULL is inserted and a defaulted NOT NULL column blows up.
+      const params = Array.from({ length: 95 }, (_, i) => `    @Field${i} nvarchar(50)`).join(',\n');
+      const cols = Array.from({ length: 95 }, (_, i) => `[Field${i}]`).join(', ');
+      const vals = Array.from({ length: 95 }, (_, i) => `@Field${i}`).join(', ');
+      const input = `CREATE PROCEDURE [__mj].[spCreateWideThing]
+    @ID uniqueidentifier,
+${params}
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO [__mj].[WideThing] ([ID], ${cols}) VALUES (@ID, ${vals});
+    SELECT * FROM [__mj].[vwWideThings] WHERE [ID] = @ID;
+END`;
+      const result = convert(input);
+      expect(result).toContain('p_data JSONB'); // confirms JSON-arg path was taken
+      // The presence test must also exclude JSON null.
+      expect(result).toContain("jsonb_typeof(p_data->v_field_name) <> 'null'");
+      expect(result).toMatch(/IF p_data \? v_field_name AND jsonb_typeof/);
+    });
+
     it('should handle CREATE PROC (short form)', () => {
       const input = `CREATE PROC [__mj].[spGetUser]
     @ID uniqueidentifier
@@ -60,6 +105,42 @@ END`;
 
       const result = convert(input);
       expect(result).toContain('CREATE OR REPLACE FUNCTION __mj."spGetAllUsers"()');
+    });
+  });
+
+  describe('orphaned deprecated-entity sprocs', () => {
+    it('should emit an INTENTIONAL skip for a sproc returning a deprecated/orphaned view', () => {
+      const input = `CREATE PROCEDURE [__mj].[spCreateEntityBehavior]
+    @Name nvarchar(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO [__mj].[EntityBehavior] ([Name]) VALUES (@Name)
+    SELECT * FROM [__mj].[vwEntityBehaviors] WHERE [ID] = SCOPE_IDENTITY()
+END`;
+
+      const result = convert(input);
+      expect(result).toContain('-- SKIPPED (INTENTIONAL)');
+      expect(result).toContain('vwEntityBehaviors');
+      // Must NOT emit a function whose RETURNS SETOF targets the missing view.
+      expect(result).not.toContain('CREATE OR REPLACE FUNCTION');
+      expect(result).not.toMatch(/RETURNS SETOF __mj\."vw/);
+    });
+
+    it('should still emit a normal sproc whose return view is not orphaned', () => {
+      const input = `CREATE PROCEDURE [__mj].[spCreateUser]
+    @Name nvarchar(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO [__mj].[User] ([Name]) VALUES (@Name)
+    SELECT * FROM [__mj].[vwUsers] WHERE [ID] = SCOPE_IDENTITY()
+END`;
+
+      const result = convert(input);
+      expect(result).not.toContain('-- SKIPPED');
+      expect(result).toContain('CREATE OR REPLACE FUNCTION __mj."spCreateUser"');
+      expect(result).toContain('RETURNS SETOF __mj."vwUsers"');
     });
   });
 

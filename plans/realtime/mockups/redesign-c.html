@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-mode="live" data-pip="pip">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redesign C · River — Realtime Co-Agent UI</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+/* ====================================================================
+   REDESIGN C — "RIVER"
+   One chronological river. Transcript, delegations, narration, board
+   writes and artifacts stop being three separate surfaces and become
+   ONE time-ordered stream with a typed event rail — so review reads
+   like a story, not a chat next to an unexplained activity column.
+   The whiteboard floats as picture-in-picture and expands to a split.
+   Review adds a leg-chip transport under the header and ends the
+   river with a "continue" terminus node instead of floating buttons.
+   ==================================================================== */
+
+.frame { position: relative; max-width: 1640px; margin: 0 auto; padding: 16px 20px 48px; }
+.ov {
+  position: relative; height: 846px; display: flex; flex-direction: column;
+  border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-xl);
+  overflow: hidden; background: var(--mj-bg-page); box-shadow: var(--mj-shadow-2xl);
+}
+
+.mode-switch { display: inline-flex; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-full); background: var(--mj-bg-surface); padding: 3px; gap: 3px; }
+.mode-switch button { border: 0; background: transparent; color: var(--mj-text-muted); font-family: inherit; font-size: 12.5px; font-weight: 700; padding: 5px 14px; border-radius: var(--mj-radius-full); cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.mode-switch button.on { background: var(--mj-brand-primary); color: #fff; box-shadow: var(--mj-shadow-brand); }
+html[data-mode="review"] .live-only { display: none !important; }
+html[data-mode="live"] .review-only { display: none !important; }
+
+.dn { position: absolute; z-index: 60; display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.03em; padding: 3px 9px; border-radius: var(--mj-radius-full); pointer-events: none; white-space: nowrap; background: color-mix(in srgb, var(--mj-color-tertiary-500) 16%, var(--mj-bg-surface-sunken)); border: 1px dashed var(--mj-color-tertiary-400); color: var(--mj-color-tertiary-300); box-shadow: var(--mj-shadow-md); }
+.dn i { font-size: 9px; }
+.dn--flow { position: static; pointer-events: auto; }
+
+/* ---------- HEADER ---------- */
+.hdr {
+  position: relative; flex-shrink: 0; display: flex; align-items: center; gap: 13px; height: 58px; padding: 0 16px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)), var(--mj-bg-surface));
+  border-bottom: 1px solid var(--mj-border-default);
+}
+.hdr .agent-orb { --orb-size: 34px; } .hdr .agent-orb::after { inset: -4px; }
+.orb-quiet { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; background: radial-gradient(circle at 35% 30%, var(--mj-color-neutral-500), var(--mj-color-neutral-700) 65%); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-color-neutral-500) 18%, transparent); }
+.hdr-id { display: flex; flex-direction: column; gap: 1px; }
+.hdr-name { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+.hdr-sub { font-size: 11px; color: var(--mj-text-muted); white-space: nowrap; }
+.hdr-sub b { color: var(--mj-text-secondary); }
+.state-chip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 13px; margin-left: 4px; border-radius: var(--mj-radius-full); border: 1px solid var(--mj-color-success-600); background: var(--mj-status-success-bg); color: var(--mj-status-success-text); font-size: 11.5px; font-weight: 700; }
+.state-chip .waveform { height: 13px; } .state-chip .waveform span { width: 2px; background: var(--mj-status-success); }
+.hdr-spacer { flex: 1; }
+.iconb { width: 33px; height: 33px; border-radius: var(--mj-radius-md); display: grid; place-items: center; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); color: var(--mj-text-secondary); cursor: pointer; font-size: 13px; }
+.iconb:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+.iconb.on { background: rgba(38,153,204,0.16); border-color: var(--mj-brand-primary); color: var(--mj-brand-accent); }
+.devlink { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-full); cursor: pointer; background: transparent; color: var(--mj-text-muted); font-family: inherit; }
+.devlink:hover { color: var(--mj-text-secondary); border-color: var(--mj-border-strong); }
+.end-pill { display: inline-flex; align-items: center; gap: 8px; padding: 7px 16px; font-size: 12.5px; font-weight: 700; border-radius: var(--mj-radius-full); border: 1px solid var(--mj-status-error); cursor: pointer; font-family: inherit; background: var(--mj-status-error); color: #fff; box-shadow: 0 4px 16px rgba(239,68,68,0.35); }
+.end-pill:hover { background: #dc2626; }
+.hdr-sep { width: 1px; height: 24px; background: var(--mj-border-default); margin: 0 3px; }
+
+/* review transport row (under header): leg chips + position scrub */
+.transport2 { position: relative; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 8px 18px; background: var(--mj-bg-surface-sunken); border-bottom: 1px solid var(--mj-border-default); }
+.leg-chip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: var(--mj-radius-full); border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); font-size: 11px; font-weight: 700; color: var(--mj-text-secondary); cursor: pointer; font-family: inherit; white-space: nowrap; }
+.leg-chip:hover { border-color: var(--mj-border-strong); color: var(--mj-text-primary); }
+.leg-chip.on { border-color: var(--mj-brand-primary); background: rgba(38,153,204,0.14); color: var(--mj-brand-accent); }
+.leg-chip .reason { font-size: 9px; font-weight: 700; padding: 1px 7px; border-radius: var(--mj-radius-full); background: rgba(100,116,139,0.22); border: 1px solid var(--mj-border-strong); color: var(--mj-text-secondary); }
+.leg-gap { font-size: 9.5px; font-weight: 800; color: var(--mj-text-disabled); text-transform: uppercase; letter-spacing: 0.05em; }
+.t2-scrub { flex: 1; position: relative; height: 6px; border-radius: var(--mj-radius-full); background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); margin: 0 8px; }
+.t2-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 58%; border-radius: inherit; background: linear-gradient(90deg, var(--mj-color-brand-500), var(--mj-color-accent-400)); }
+.t2-dot { position: absolute; top: 50%; left: 58%; transform: translate(-50%,-50%); width: 13px; height: 13px; border-radius: 50%; background: var(--mj-text-primary); box-shadow: 0 0 8px rgba(241,245,249,0.5); }
+.t2-clock { font-family: var(--mj-font-mono); font-size: 11px; color: var(--mj-text-secondary); white-space: nowrap; }
+
+/* ---------- BODY: river + optional split board column ---------- */
+.body2 { flex: 1; min-height: 0; display: flex; }
+.river-col { flex: 1; min-width: 0; display: flex; flex-direction: column; background: color-mix(in srgb, var(--mj-bg-page) 70%, var(--mj-bg-surface-sunken)); }
+.river-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 28px 18px; scrollbar-width: thin; scrollbar-color: var(--mj-border-strong) transparent; }
+.river { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; }
+
+/* event row: [time gutter | typed rail | content] */
+.ev { display: grid; grid-template-columns: 56px 24px 1fr; column-gap: 14px; padding: 8px 0; position: relative; }
+.ev-time { font-family: var(--mj-font-mono); font-size: 10px; color: var(--mj-text-muted); text-align: right; padding-top: 7px; white-space: nowrap; }
+.ev-rail { position: relative; }
+.ev-rail::before { content: ""; position: absolute; left: 50%; transform: translateX(-50%); top: -12px; bottom: -12px; width: 2px; background: var(--mj-border-default); }
+.ev:first-child .ev-rail::before { top: 8px; }
+.ev:last-child .ev-rail::before { bottom: auto; height: 24px; }
+.ev-dot { position: absolute; left: 50%; top: 9px; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 50%; background: var(--mj-bg-surface-elevated); border: 2.5px solid var(--mj-border-strong); z-index: 2; }
+.ev--user .ev-dot { border-color: var(--mj-color-neutral-400); }
+.ev--agent .ev-dot { border-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 35%, var(--mj-bg-surface)); }
+.ev--deleg .ev-dot { border-color: var(--sage); background: color-mix(in srgb, var(--sage) 35%, var(--mj-bg-surface)); box-shadow: 0 0 8px rgba(167,139,250,0.4); }
+.ev--board .ev-dot { border-color: var(--mj-color-tertiary-400); background: color-mix(in srgb, var(--mj-color-tertiary-400) 30%, var(--mj-bg-surface)); }
+.ev--mark .ev-dot { width: 16px; height: 16px; top: 7px; border-color: var(--mj-brand-primary); background: var(--mj-bg-page); }
+
+.ev-body { min-width: 0; }
+.ev-who { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-text-muted); margin-bottom: 4px; display: flex; align-items: center; gap: 7px; }
+.ev-who .via { color: var(--mj-color-violet-300); }
+.ev-who .chip { font-size: 9px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--mj-border-strong); color: var(--mj-text-muted); text-transform: none; letter-spacing: 0; font-weight: 700; }
+.ev .bubble { max-width: 600px; }
+.ev--user .bubble { background: var(--mj-brand-primary); color: #fff; border-top-left-radius: 4px; border-top-right-radius: 14px; }
+.ev--agent .bubble { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-top-left-radius: 4px; }
+.bubble p { margin: 0; } .bubble p + p { margin-top: 7px; }
+
+/* leg marker nodes (review) */
+.mark-card { display: inline-flex; align-items: center; gap: 10px; padding: 7px 14px; border-radius: var(--mj-radius-full); border: 1px solid var(--mj-border-strong); background: var(--mj-bg-surface-card); font-size: 11.5px; font-weight: 700; color: var(--mj-text-secondary); }
+.mark-card .reason { font-size: 10px; padding: 1px 8px; border-radius: var(--mj-radius-full); background: rgba(100,116,139,0.2); border: 1px solid var(--mj-border-strong); }
+.mark-card--resume { border-color: var(--mj-brand-primary); background: rgba(38,153,204,0.1); color: var(--mj-brand-accent); }
+.mark-card--resume .carry { font-size: 10.5px; font-weight: 600; color: var(--mj-text-muted); text-transform: none; }
+.mark-card--resume .carry b { color: var(--mj-brand-accent); }
+
+/* noise fold */
+.noise-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; color: var(--mj-text-muted); cursor: pointer; font-family: inherit; border: 1px dashed var(--mj-border-strong); background: var(--mj-bg-surface); border-radius: var(--mj-radius-full); padding: 4px 12px; }
+.noise-chip:hover { color: var(--mj-text-secondary); }
+
+/* delegation event */
+.work-card { max-width: 600px; }
+.work-card .pill--running { background: var(--sage-bg); color: var(--mj-color-violet-300); border-color: var(--sage-border); margin-left: auto; }
+.work-card .pill--running i { animation: spin 1.1s linear infinite; }
+.work-progress { height: 4px; border-radius: var(--mj-radius-full); margin-top: 12px; background: color-mix(in srgb, var(--sage) 18%, transparent); overflow: hidden; }
+.work-progress__fill { height: 100%; width: 64%; border-radius: inherit; background: linear-gradient(90deg, var(--mj-color-violet-500), var(--mj-color-violet-300)); }
+.live-note { display: flex; align-items: flex-start; gap: 9px; max-width: 560px; margin-top: 8px; padding: 7px 12px; font-size: 12.5px; font-style: italic; color: var(--mj-text-secondary); line-height: 1.5; border-left: 2px solid var(--sage-border); background: color-mix(in srgb, var(--sage) 5%, transparent); border-radius: 0 var(--mj-radius-md) var(--mj-radius-md) 0; }
+.live-note i { color: var(--mj-color-violet-300); font-size: 11px; margin-top: 3px; }
+.done-chip { display: inline-flex; align-items: center; gap: 9px; max-width: 620px; padding: 8px 14px; cursor: pointer; font-family: inherit; border: 1px solid var(--sage-border); background: var(--sage-bg); border-radius: var(--mj-radius-full); font-size: 12.5px; color: var(--mj-text-primary); }
+.done-chip .mark { width: 17px; height: 17px; border-radius: 50%; background: var(--mj-status-success); color: #fff; display: grid; place-items: center; font-size: 9px; flex-shrink: 0; }
+.done-chip b { font-weight: 700; }
+.done-chip .prev { color: var(--mj-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alink { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; border: 1px solid var(--mj-brand-primary); border-radius: var(--mj-radius-full); background: rgba(38,153,204,0.14); color: var(--mj-brand-accent); }
+
+/* board-write event: thumbnails inline in the river */
+.board-ev { display: flex; flex-direction: column; gap: 8px; max-width: 620px; border: 1px solid color-mix(in srgb, var(--mj-color-tertiary-400) 40%, transparent); background: color-mix(in srgb, var(--mj-color-tertiary-500) 7%, var(--mj-bg-surface)); border-radius: var(--mj-radius-lg); padding: 11px 14px; }
+.board-ev .t { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.board-ev .t i { color: var(--mj-color-tertiary-300); }
+.board-ev .t .jump { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--mj-color-tertiary-300); cursor: pointer; border: 0; background: transparent; font-family: inherit; display: inline-flex; gap: 6px; align-items: center; }
+.thumbs { display: flex; gap: 8px; }
+.thumb { width: 118px; border-radius: 8px; border: 1px solid var(--sage-border); background: linear-gradient(180deg, #322a5e, #272050); padding: 7px 9px; box-shadow: var(--mj-shadow-sm); }
+.thumb .h { font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-color-violet-300); margin-bottom: 4px; }
+.thumb .l { font-size: 9px; color: var(--mj-text-secondary); line-height: 1.5; font-family: var(--mj-font-mono); }
+
+/* river terminus (review): resume node */
+.terminus { border: 1px solid var(--mj-brand-primary); background: linear-gradient(135deg, rgba(38,153,204,0.14), rgba(38,153,204,0.04)); border-radius: var(--mj-radius-lg); padding: 16px 18px; max-width: 620px; display: flex; align-items: center; gap: 14px; box-shadow: var(--mj-shadow-md); }
+.terminus .ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: rgba(38,153,204,0.2); color: var(--mj-brand-accent); font-size: 16px; flex-shrink: 0; }
+.terminus .t1 { font-size: 13.5px; font-weight: 700; }
+.terminus .t2 { font-size: 11.5px; color: var(--mj-text-muted); margin-top: 2px; }
+.terminus .t2 b { color: var(--mj-text-secondary); }
+.start-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 17px; font-size: 12.5px; font-weight: 700; border-radius: var(--mj-radius-full); border: 1px solid var(--mj-brand-primary); cursor: pointer; font-family: inherit; background: var(--mj-brand-primary); color: #fff; box-shadow: var(--mj-shadow-brand); white-space: nowrap; margin-left: auto; }
+.start-pill:hover { background: var(--mj-brand-primary-hover); }
+
+/* ---------- composer dock (live) ---------- */
+.dock { flex-shrink: 0; display: flex; justify-content: center; padding: 10px 28px 14px; border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); position: relative; }
+.dock-inner { width: 100%; max-width: 900px; display: flex; align-items: center; gap: 10px; }
+.mini { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; font-size: 13.5px; border: 1px solid var(--mj-border-strong); background: var(--mj-bg-surface-card); color: var(--mj-text-primary); }
+.mini.on { background: rgba(38,153,204,0.16); border-color: var(--mj-brand-primary); color: var(--mj-brand-accent); }
+.dock-compose { flex: 1; display: flex; align-items: center; gap: 9px; padding: 5px 6px 5px 14px; border: 1px solid var(--mj-border-strong); border-radius: var(--mj-radius-full); background: var(--mj-bg-surface-card); }
+.dock-compose:focus-within { border-color: var(--mj-brand-primary); box-shadow: 0 0 0 3px rgba(38,153,204,0.12); }
+.dock-compose input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--mj-text-primary); font-family: inherit; font-size: 13.5px; }
+.dock-compose input::placeholder { color: var(--mj-text-muted); }
+.dock-send { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--mj-brand-primary); color: #fff; display: grid; place-items: center; cursor: pointer; font-size: 12px; }
+
+/* ---------- BOARD: PiP ⇄ split ---------- */
+.board-col { width: 0; flex-shrink: 0; overflow: hidden; border-left: 1px solid transparent; display: flex; flex-direction: column; background: var(--mj-bg-surface); transition: width 240ms ease; }
+html[data-pip="split"] .board-col { width: 600px; border-left-color: var(--mj-border-default); }
+html[data-pip="split"] .pip { display: none; }
+.pip {
+  position: absolute; right: 18px; bottom: 76px; z-index: 30; width: 400px; border-radius: var(--mj-radius-lg);
+  overflow: hidden; border: 1px solid var(--mj-border-strong); background: var(--mj-bg-surface); box-shadow: var(--mj-shadow-2xl);
+}
+html[data-mode="review"] .pip { bottom: 24px; }
+.pip-head, .split-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); flex-shrink: 0; }
+.pip-head .bt, .split-head .bt { font-weight: 700; font-size: 12px; display: flex; align-items: center; gap: 7px; }
+.pip-head .bt i, .split-head .bt i { color: var(--mj-brand-accent); }
+.pip-head .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mj-status-success); box-shadow: 0 0 0 0 rgba(34,197,94,0.5); animation: pulse-ring 1.6s infinite; }
+.ro { font-size: 8.5px; font-weight: 800; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; background: var(--mj-bg-surface-elevated); color: var(--mj-text-muted); }
+.pip-tabs { margin-left: auto; display: flex; gap: 4px; }
+.pip-tab { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); color: var(--mj-text-muted); font-family: inherit; font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: var(--mj-radius-full); cursor: pointer; }
+.pip-tab.on { border-color: var(--mj-brand-primary); background: rgba(38,153,204,0.14); color: var(--mj-brand-accent); }
+.boardc { position: relative; overflow: hidden; background-color: var(--mj-bg-surface-sunken); background-image: radial-gradient(rgba(148,163,184,0.14) 1px, transparent 1px); background-size: 20px 20px; }
+.pip .boardc { height: 252px; }
+.board-col .boardc { flex: 1; }
+.bi { position: absolute; box-shadow: var(--mj-shadow-lg); border-radius: 9px; }
+.author-chip { position: absolute; top: -8px; left: 7px; z-index: 3; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; font-size: 7.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border-radius: var(--mj-radius-full); white-space: nowrap; }
+.author-chip--you { background: var(--mj-color-neutral-700); border: 1px solid var(--mj-border-strong); color: var(--mj-color-neutral-300); }
+.author-chip--sage { background: #2a2150; border: 1px solid var(--sage); color: var(--mj-color-violet-300); }
+.sticky-amber { padding: 9px 10px 8px; border-radius: 3px 3px 10px 3px; font-size: 10px; line-height: 1.4; font-weight: 600; background: linear-gradient(180deg, #fcd34d, #f5b831); color: #3f2d04; transform: rotate(-1.4deg); width: 116px; }
+.scard { background: linear-gradient(180deg, #322a5e, #272050); border: 1px solid var(--sage); color: var(--mj-text-primary); box-shadow: 0 0 0 2px rgba(167,139,250,0.18), var(--mj-shadow-lg); padding: 8px 9px 7px; width: 142px; }
+.scard .h { font-size: 7.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-color-violet-300); margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+.scard .r { display: flex; align-items: baseline; justify-content: space-between; font-size: 9.5px; padding: 1.5px 0; }
+.scard .r b { font-weight: 700; } .scard .r .v { font-family: var(--mj-font-mono); font-size: 9px; }
+.scard .up { color: var(--mj-color-success-400); font-weight: 700; font-size: 8px; }
+.scard .wrow { display: flex; align-items: center; gap: 6px; font-size: 9.5px; padding: 2px 0; }
+.scard .wrow i { width: 12px; text-align: center; color: var(--mj-color-warning-400); font-size: 9px; }
+.scard .wrow .t { margin-left: auto; font-family: var(--mj-font-mono); font-size: 9px; }
+.scard .hl { font-size: 8px; line-height: 1.35; padding: 2.5px 0; border-bottom: 1px dashed color-mix(in srgb, var(--sage) 30%, transparent); color: var(--mj-text-secondary); }
+.scard .hl:last-child { border-bottom: 0; }
+.scard .hl b { color: var(--mj-text-primary); font-weight: 600; display: block; }
+.board-col .sticky-amber { width: 160px; font-size: 12px; padding: 12px 12px 10px; }
+.board-col .scard { width: 200px; padding: 11px 12px 9px; }
+.board-col .scard .h { font-size: 10px; margin-bottom: 7px; }
+.board-col .scard .r { font-size: 12px; padding: 2.5px 0; } .board-col .scard .r .v { font-size: 11.5px; } .board-col .scard .up { font-size: 10px; }
+.board-col .scard .wrow { font-size: 12px; } .board-col .scard .wrow .t { font-size: 11.5px; } .board-col .scard .wrow i { font-size: 11px; }
+.board-col .scard .hl { font-size: 10.5px; padding: 4px 0; }
+.board-col .author-chip { font-size: 8.5px; padding: 1px 7px; top: -9px; }
+.conn { position: absolute; pointer-events: none; overflow: visible; }
+.conn path { stroke: var(--sage); stroke-width: 1.5; fill: none; filter: drop-shadow(0 0 3px rgba(167,139,250,0.3)); }
+.ro-tag { position: absolute; top: 8px; left: 10px; z-index: 8; font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: var(--mj-radius-full); background: rgba(2,6,23,0.6); border: 1px solid var(--mj-border-strong); color: var(--mj-text-secondary); }
+.save-tag { position: absolute; bottom: 8px; right: 10px; z-index: 8; font-size: 9px; color: var(--mj-text-muted); display: inline-flex; gap: 5px; align-items: center; padding: 2px 8px; border-radius: var(--mj-radius-full); background: rgba(2,6,23,0.5); }
+.save-tag i { color: var(--mj-status-success); font-size: 8px; }
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Redesign C · <b style="color:var(--mj-text-secondary)">River</b> — one chronological stream, PiP board</span></div>
+    <div class="topbar-spacer"></div>
+    <div class="mode-switch" role="tablist" aria-label="Mockup state">
+      <button type="button" id="mLive" class="on" onclick="setMode('live')"><span class="dot dot--live"></span> Live</button>
+      <button type="button" id="mReview" onclick="setMode('review')"><i class="fa-solid fa-clock-rotate-left"></i> Review</button>
+    </div>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="frame">
+    <div class="ov">
+
+      <!-- ============ HEADER ============ -->
+      <div class="hdr">
+        <div class="agent-orb live-only" data-state="speaking"></div>
+        <div class="hdr-id live-only">
+          <span class="hdr-name">Voice for Sage <span class="pill pill--sage"><i class="fa-solid fa-feather"></i> Co-Agent</span></span>
+          <span class="hdr-sub">speaking as <b>Sage</b> · gpt-realtime · alloy</span>
+        </div>
+        <span class="state-chip live-only">
+          <span class="waveform"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>
+          Speaking
+        </span>
+
+        <div class="orb-quiet review-only"></div>
+        <div class="hdr-id review-only">
+          <span class="hdr-name">Voice for Sage <span class="pill pill--closed"><i class="fa-solid fa-clock-rotate-left"></i> Session review</span></span>
+          <span class="hdr-sub"><b>Jun 11 · 2:58 → 3:19 PM</b> · 2 legs · the river below tells the whole story in time order</span>
+        </div>
+
+        <div class="hdr-spacer"></div>
+        <button type="button" class="devlink"><i class="fa-solid fa-arrow-up-right-from-square"></i> Session</button>
+        <button type="button" class="iconb on live-only" title="Captions on"><i class="fa-solid fa-closed-captioning"></i></button>
+        <button type="button" class="iconb live-only" title="Mute"><i class="fa-solid fa-microphone"></i></button>
+        <button type="button" class="iconb live-only" title="Developer links"><i class="fa-solid fa-gear"></i></button>
+        <button type="button" class="iconb" title="Minimize to floating pill"><i class="fa-solid fa-down-left-and-up-right-to-center"></i></button>
+        <span class="hdr-sep"></span>
+        <button type="button" class="end-pill live-only"><i class="fa-solid fa-phone-slash"></i> End call</button>
+        <button type="button" class="iconb" title="Close" aria-label="Close session view"><i class="fa-solid fa-xmark"></i></button>
+        <span class="dn" style="bottom:-11px; right:14px"><i class="fa-solid fa-arrow-up"></i> Close (and even mute) live in the header — zero floating controls</span>
+      </div>
+
+      <!-- ============ REVIEW TRANSPORT (leg chips + scrub) ============ -->
+      <div class="transport2 review-only">
+        <button type="button" class="leg-chip"><i class="fa-solid fa-play" style="font-size:9px"></i> Leg 1 · 2:58–3:00 <span class="reason">Ended by user</span></button>
+        <span class="leg-gap">· away 12 min ·</span>
+        <button type="button" class="leg-chip on"><i class="fa-solid fa-rotate-right" style="font-size:9px"></i> Leg 2 · 3:12–3:19 <span class="reason">Idle timeout · janitor</span></button>
+        <div class="t2-scrub"><div class="t2-fill"></div><span class="t2-dot"></span></div>
+        <span class="t2-clock">3:15:42 / 21:00</span>
+        <span class="dn" style="bottom:-12px; left:18px"><i class="fa-solid fa-sliders"></i> leg chips jump the river — scrub follows your scroll position</span>
+      </div>
+
+      <!-- ============ BODY ============ -->
+      <div class="body2">
+        <div class="river-col">
+          <div class="river-scroll">
+            <div class="river">
+
+              <!-- leg start marker (review) -->
+              <div class="ev ev--mark review-only">
+                <div class="ev-time">2:58 PM</div>
+                <div class="ev-rail"><span class="ev-dot"></span></div>
+                <div class="ev-body"><span class="mark-card"><i class="fa-solid fa-play" style="font-size:9px"></i> Leg 1 started</span></div>
+              </div>
+
+              <!-- user turn (merged fragments) -->
+              <div class="ev ev--user">
+                <div class="ev-time">9:31 AM</div>
+                <div class="ev-rail"><span class="ev-dot"></span></div>
+                <div class="ev-body">
+                  <div class="ev-who">You <span class="chip">spoken</span></div>
+                  <div class="bubble"><p>Morning, Sage — give me my market and weather briefing.</p>
+                  <p>Pull quotes for Apple, Microsoft and Nvidia, today's weather for Boston and Chicago, and search for this morning's top AI headlines. Pin everything to the whiteboard.</p></div>
+                </div>
+              </div>
+
+              <!-- folded noise -->
+              <div class="ev">
+                <div class="ev-time"></div>
+                <div class="ev-rail"><span class="ev-dot" style="width:8px;height:8px;top:11px;border-color:var(--mj-border-default)"></span></div>
+                <div class="ev-body">
+                  <button type="button" class="noise-chip"><i class="fa-solid fa-ear-deaf"></i> 2 quiet moments folded <i class="fa-solid fa-chevron-down" style="font-size:8px"></i></button>
+                  <span class="dn dn--flow" style="margin-left:10px"><i class="fa-solid fa-broom"></i> empty "…" bubbles never render as turns</span>
+                </div>
+              </div>
+
+              <!-- agent turn -->
+              <div class="ev ev--agent">
+                <div class="ev-time">9:31 AM</div>
+                <div class="ev-rail"><span class="ev-dot"></span></div>
+                <div class="ev-body">
+                  <div class="ev-who" style="color:var(--mj-brand-accent)">Sage · voice</div>
+                  <div class="bubble">On it. I'll have Sage gather the quotes, both forecasts and the headlines, and pin everything to the board as it lands.</div>
+                </div>
+              </div>
+
+              <!-- delegation event (in flight, live) -->
+              <div class="ev ev--deleg live-only">
+                <div class="ev-time">9:32 AM</div>
+                <div class="ev-rail"><span class="ev-dot"></span></div>
+                <div class="ev-body">
+                  <div class="ev-who"><span class="via"><i class="fa-solid fa-shield-halved"></i> Delegation · via Sage</span></div>
+                  <div class="work-card" role="status">
+                    <div class="work-card__head">
+                      <div class="avatar avatar--sage">S</div>
+                      <div class="work-card__title">Sage is working…</div>
+                      <span class="pill pill--running"><i class="fa-solid fa-spinner"></i> Running</span>
+                    </div>
+                    <div class="work-steps">
+                      <div class="work-step work-step--done"><span class="si"><i class="fa-solid fa-check"></i></span> Get stock quotes — AAPL, MSFT, NVDA</div>
+                      <div class="work-step work-step--done"><span class="si"><i class="fa-solid fa-check"></i></span> Get weather — Boston &amp; Chicago</div>
+                      <div class="work-step work-step--active"><span class="si"><i class="fa-solid fa-rotate"></i></span> Web search — this morning's AI headlines</div>
+                      <div class="work-step work-step--pending"><span class="si"></span> Pin results to the whiteboard</div>
+                    </div>
+                    <div class="work-progress"><div class="work-progress__fill"></div></div>
+                  </div>
+                  <div class="live-note" role="status">
+                    <i class="fa-solid fa-comment-dots"></i>
+                    Quotes and forecasts are in — pinning them while the news search finishes…
+                  </div>
+                </div>
+              </div>
+
+              <!-- delegation done (review shows the same slot, settled) -->
+              <div class="ev ev--deleg review-only">
+                <div class="ev-time">2:59 PM</div>
+                <div class="ev-rail"><span class="ev-dot"></span></div>
+                <div class="ev-body">
+                  <div class="ev-who"><span class="via"><i class="fa-solid fa-shield-halved"></i> Delegation · via Sage</span></div>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+                    <button type="button" class="done-chip"><span class="mark"><i class="fa-solid fa-check"></i></span><b>Sage</b><span class="prev">3 quotes, 2 forecasts &amp; 4 headlines gathered · 41s</span><i class="fa-solid fa-chevron-down" style="font-size:9px; color:var(--mj-text-muted)"></i></button>
+                    <button type="button" class="alink"><i class="fa-solid fa-file-lines"></i> Market briefing</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- board-write event -->
+              <div class="ev ev--board">
+                <div class="ev-time"><span class="live-only">9:32 AM</span><span class="review-only">2:59 PM</span></div>
+                <div class="ev-rail"><span class="ev-dot"></span></div>
+                <div class="ev-body">
+                  <div class="board-ev">
+                    <div class="t"><i class="fa-solid fa-chalkboard"></i> Sage pinned 3 cards to the whiteboard
+                      <button type="button" class="jump" onclick="setPip('split')">show on board <i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+                    <div class="thumbs">
+                      <div class="thumb"><div class="h">Quotes</div><div class="l">AAPL 228.14<br>MSFT 474.96<br>NVDA 186.50</div></div>
+                      <div class="thumb"><div class="h">Weather</div><div class="l">BOS 72° sun<br>CHI 64° rain</div></div>
+                      <div class="thumb"><div class="h">Headlines</div><div class="l">4 stories<br>7:40a–5:48a</div></div>
+                    </div>
+                  </div>
+                  <span class="dn dn--flow" style="margin-top:8px"><i class="fa-solid fa-water"></i> board writes &amp; artifacts are river events — activity column merged into the story</span>
+                </div>
+              </div>
+
+              <!-- delegation done chip (live timeline keeps flowing) -->
+              <div class="ev ev--deleg live-only">
+                <div class="ev-time">9:33 AM</div>
+                <div class="ev-rail"><span class="ev-dot"></span></div>
+                <div class="ev-body">
+                  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+                    <button type="button" class="done-chip"><span class="mark"><i class="fa-solid fa-check"></i></span><b>Sage</b><span class="prev">briefing complete — 4 headlines added</span><i class="fa-solid fa-chevron-down" style="font-size:9px; color:var(--mj-text-muted)"></i></button>
+                    <button type="button" class="alink"><i class="fa-solid fa-file-lines"></i> Market briefing</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- agent closing turn (live) -->
+              <div class="ev ev--agent live-only">
+                <div class="ev-time">9:33 AM</div>
+                <div class="ev-rail"><span class="ev-dot"></span></div>
+                <div class="ev-body">
+                  <div class="ev-who" style="color:var(--mj-brand-accent)">Sage · voice</div>
+                  <div class="bubble">Everything's on the board — Nvidia leads at plus two point one percent, and Chicago turns rainy after 2 PM. Want me to dig into any headline?<span class="caption-cursor"></span></div>
+                </div>
+              </div>
+
+              <!-- leg 1 end + resume + leg 2 (review) -->
+              <div class="ev ev--mark review-only">
+                <div class="ev-time">3:00 PM</div>
+                <div class="ev-rail"><span class="ev-dot" style="border-color:var(--mj-text-muted)"></span></div>
+                <div class="ev-body"><span class="mark-card"><i class="fa-solid fa-flag-checkered" style="font-size:10px"></i> Leg 1 ended <span class="reason">Ended by user</span></span></div>
+              </div>
+              <div class="ev ev--mark review-only">
+                <div class="ev-time">3:12 PM</div>
+                <div class="ev-rail"><span class="ev-dot"></span></div>
+                <div class="ev-body">
+                  <span class="mark-card mark-card--resume"><i class="fa-solid fa-rotate-right" style="font-size:10px"></i> Resumed live <span class="carry">carried: <b>board</b> + <b>briefing artifact</b> + model memory</span></span>
+                </div>
+              </div>
+              <div class="ev ev--user review-only">
+                <div class="ev-time">3:12 PM</div>
+                <div class="ev-rail"><span class="ev-dot"></span></div>
+                <div class="ev-body">
+                  <div class="ev-who">You <span class="chip">spoken</span></div>
+                  <div class="bubble">Back — where did we leave off?</div>
+                </div>
+              </div>
+              <div class="ev ev--agent review-only">
+                <div class="ev-time">3:13 PM</div>
+                <div class="ev-rail"><span class="ev-dot"></span></div>
+                <div class="ev-body">
+                  <div class="ev-who" style="color:var(--mj-brand-accent)">Sage · voice</div>
+                  <div class="bubble">Your briefing board is still up. While you were away I refreshed the quotes — Nvidia extended its gain to two point four percent.</div>
+                </div>
+              </div>
+              <div class="ev ev--board review-only">
+                <div class="ev-time">3:14 PM</div>
+                <div class="ev-rail"><span class="ev-dot"></span></div>
+                <div class="ev-body">
+                  <div class="board-ev">
+                    <div class="t"><i class="fa-solid fa-chalkboard"></i> Sage updated the Quotes card
+                      <button type="button" class="jump" onclick="setPip('split')">show on board <i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="ev ev--mark review-only">
+                <div class="ev-time">3:19 PM</div>
+                <div class="ev-rail"><span class="ev-dot" style="border-color:var(--mj-text-muted)"></span></div>
+                <div class="ev-body"><span class="mark-card"><i class="fa-solid fa-flag-checkered" style="font-size:10px"></i> Leg 2 ended <span class="reason">Idle timeout · janitor</span></span></div>
+              </div>
+
+              <!-- terminus: continue node (review) -->
+              <div class="ev ev--mark review-only">
+                <div class="ev-time">now</div>
+                <div class="ev-rail"><span class="ev-dot" style="border-color:var(--mj-brand-primary); background:var(--mj-brand-primary)"></span></div>
+                <div class="ev-body">
+                  <div class="terminus">
+                    <div class="ic"><i class="fa-solid fa-tower-broadcast"></i></div>
+                    <div><div class="t1">Continue this session</div>
+                    <div class="t2">A new leg picks up right here — <b>board, artifact and memory carry over</b>.</div></div>
+                    <button type="button" class="start-pill"><i class="fa-solid fa-phone"></i> Start live session</button>
+                  </div>
+                  <span class="dn dn--flow" style="margin-top:8px"><i class="fa-solid fa-route"></i> the river ends in a "next leg" node — resume is part of the story, not a floating button</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- composer dock (live) -->
+          <div class="dock live-only">
+            <div class="dock-inner">
+              <button type="button" class="mini" title="Mute"><i class="fa-solid fa-microphone"></i></button>
+              <button type="button" class="mini on" title="Captions on"><i class="fa-solid fa-closed-captioning"></i></button>
+              <div class="dock-compose">
+                <input type="text" placeholder="Type into the live session — your text joins this voice call…">
+                <button type="button" class="dock-send" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SPLIT board column (expanded PiP) -->
+        <div class="board-col">
+          <div class="split-head">
+            <span class="bt"><i class="fa-solid fa-chalkboard"></i> Whiteboard</span>
+            <span class="ro review-only">read-only</span>
+            <span class="muted" style="font-size:10.5px"><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success); font-size:9px"></i> saved</span>
+            <div class="pip-tabs">
+              <button type="button" class="pip-tab on">Board</button>
+              <button type="button" class="pip-tab">Briefing</button>
+            </div>
+            <button type="button" class="iconb" style="width:26px; height:26px; font-size:11px" title="Collapse to picture-in-picture" onclick="setPip('pip')"><i class="fa-solid fa-down-left-and-up-right-to-center"></i></button>
+          </div>
+          <div class="boardc">
+            <div class="bi sticky-amber" style="left:26px; top:40px">
+              <span class="author-chip author-chip--you">You</span>
+              Wed AM briefing — watch: AAPL · MSFT · NVDA
+            </div>
+            <div class="bi scard" style="left:250px; top:30px">
+              <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:6px"></i> Sage</span>
+              <div class="h"><i class="fa-solid fa-arrow-trend-up"></i> Quotes · 9:32</div>
+              <div class="r"><b>AAPL</b><span class="v">$228.14</span><span class="up">+1.2%</span></div>
+              <div class="r"><b>MSFT</b><span class="v">$474.96</span><span class="up">+0.6%</span></div>
+              <div class="r"><b>NVDA</b><span class="v">$186.50</span><span class="up">+2.1%</span></div>
+            </div>
+            <div class="bi scard" style="left:250px; top:230px">
+              <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:6px"></i> Sage</span>
+              <div class="h"><i class="fa-solid fa-cloud-sun"></i> Weather</div>
+              <div class="wrow"><i class="fa-solid fa-sun"></i> Boston <span class="t">72°F</span></div>
+              <div class="wrow"><i class="fa-solid fa-cloud-rain"></i> Chicago <span class="t">64°F</span></div>
+            </div>
+            <div class="bi scard" style="left:26px; top:260px">
+              <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:6px"></i> Sage</span>
+              <div class="h"><i class="fa-solid fa-magnifying-glass"></i> Headlines</div>
+              <div class="hl"><b>Eval-sharing pact</b>Reuters 7:40a</div>
+              <div class="hl"><b>Open-weights tops bench</b>Verge 6:55a</div>
+              <div class="hl"><b>EU agent guidance</b>FT 6:10a</div>
+            </div>
+            <svg class="conn" style="left:188px; top:66px; width:66px; height:24px"><path d="M0,10 C26,10 38,14 60,14"></path></svg>
+            <svg class="conn" style="left:188px; top:90px; width:66px; height:170px"><path d="M0,0 C34,60 36,130 58,156"></path></svg>
+            <div class="ro-tag review-only"><i class="fa-solid fa-lock" style="font-size:8px"></i> read-only</div>
+            <div class="save-tag"><i class="fa-solid fa-circle-check"></i> saved · just now</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PiP board (collapsed) -->
+      <div class="pip">
+        <div class="pip-head">
+          <span class="bt"><i class="fa-solid fa-chalkboard"></i> Whiteboard <span class="live-dot live-only"></span><span class="ro review-only">read-only</span></span>
+          <div class="pip-tabs">
+            <button type="button" class="pip-tab on">Board</button>
+            <button type="button" class="pip-tab">Briefing</button>
+          </div>
+          <button type="button" class="iconb" style="width:24px; height:24px; font-size:10px" title="Expand to split view" onclick="setPip('split')"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+        </div>
+        <div class="boardc">
+          <div class="bi sticky-amber" style="left:14px; top:22px">
+            <span class="author-chip author-chip--you">You</span>
+            Wed AM briefing
+          </div>
+          <div class="bi scard" style="left:150px; top:14px">
+            <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:6px"></i> Sage</span>
+            <div class="h"><i class="fa-solid fa-arrow-trend-up"></i> Quotes</div>
+            <div class="r"><b>AAPL</b><span class="v">228.14</span><span class="up">+1.2%</span></div>
+            <div class="r"><b>MSFT</b><span class="v">474.96</span><span class="up">+0.6%</span></div>
+            <div class="r"><b>NVDA</b><span class="v">186.50</span><span class="up">+2.1%</span></div>
+          </div>
+          <div class="bi scard" style="left:150px; top:140px">
+            <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:6px"></i> Sage</span>
+            <div class="h"><i class="fa-solid fa-cloud-sun"></i> Weather</div>
+            <div class="wrow"><i class="fa-solid fa-sun"></i> BOS <span class="t">72°</span></div>
+            <div class="wrow"><i class="fa-solid fa-cloud-rain"></i> CHI <span class="t">64°</span></div>
+          </div>
+          <div class="bi scard" style="left:14px; top:120px; width:120px">
+            <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:6px"></i> Sage</span>
+            <div class="h"><i class="fa-solid fa-magnifying-glass"></i> News</div>
+            <div class="hl"><b>Eval pact</b></div>
+            <div class="hl"><b>EU guidance</b></div>
+          </div>
+          <div class="ro-tag review-only"><i class="fa-solid fa-lock" style="font-size:8px"></i> read-only</div>
+          <div class="save-tag"><i class="fa-solid fa-circle-check"></i> saved</div>
+        </div>
+        <span class="dn" style="top:-12px; right:8px"><i class="fa-solid fa-clone"></i> board floats PiP · expands to split — "show on board" links jump here</span>
+      </div>
+
+    </div>
+
+    <p class="muted" style="font-size:12.5px; max-width:980px; margin:16px auto 0; text-align:center">
+      <b style="color:var(--mj-text-secondary)">River</b> merges transcript, delegations, narration, board writes and artifacts into one time-ordered
+      stream on a typed event rail — review reads like a story instead of a chat beside an unexplained activity column. The whiteboard floats
+      picture-in-picture and expands to a split (try <b style="color:var(--mj-text-secondary)">show on board</b>), legs become chips in a transport row,
+      and the river ends in a "continue this session" node. Toggle <b style="color:var(--mj-text-secondary)">Live / Review</b> above.
+    </p>
+  </div>
+</div>
+
+<script>
+function setMode(m){
+  document.documentElement.dataset.mode = m;
+  document.getElementById('mLive').classList.toggle('on', m === 'live');
+  document.getElementById('mReview').classList.toggle('on', m === 'review');
+}
+function setPip(p){ document.documentElement.dataset.pip = p; }
+</script>
+</body>
+</html>

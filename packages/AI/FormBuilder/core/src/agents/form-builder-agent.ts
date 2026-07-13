@@ -25,6 +25,7 @@ import type {
     ExecuteAgentParams,
     BaseAgentNextStep,
     AIPromptRunResult,
+    AgentConfiguration,
 } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
@@ -60,12 +61,69 @@ const BUILDER_MESSAGE =
 @RegisterClass(BaseAgent, 'FormBuilderAgent')
 export class FormBuilderAgent extends BaseAgent {
 
-    protected override async determineNextStep<P>(
+    /**
+     * Pure-routing orchestrator override.
+     *
+     * The orchestrator has **no agent-level prompt** (by design — see the module
+     * header). The Loop agent type, however, always executes a prompt on its
+     * first step and again whenever a sub-agent returns. With no child prompt to
+     * fill the Loop system prompt's placeholder, that prompt execution
+     * dereferences an undefined prompt object and crashes
+     * (`Cannot read properties of undefined (reading 'Name')`) — before
+     * `determineNextStep` is ever consulted.
+     *
+     * Overriding the step dispatcher itself is the only way to genuinely skip
+     * prompt execution (the framework's `executePromptStep` is private). We:
+     *   - delegate real **'Sub-Agent'** steps to the base implementation (it runs
+     *     the Designer / Builder child agents and merges their payloads back), and
+     *   - for **every other state** (the initial step, or a child agent that just
+     *     returned) decide the next route deterministically via
+     *     {@link determineRoute} — never running a prompt.
+     *
+     * This mirrors the leaf-agent pattern used by `FormBuilderBuilderAgent`,
+     * `AgentBuilderAgent`, etc. (which override `executeAgentInternal`), adapted
+     * for an orchestrator that still needs the base class to run its sub-agents.
+     */
+    protected override async executeNextStep<P = unknown>(
         params: ExecuteAgentParams,
-        agentType: MJAIAgentTypeEntity,
-        promptResult: AIPromptRunResult,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep<P> | null,
+        stepCount: number = 0,
+    ): Promise<BaseAgentNextStep<P>> {
+        if (previousDecision?.step === 'Sub-Agent') {
+            // Run the requested Designer / Builder sub-agent via the base loop.
+            return super.executeNextStep<P>(params, config, previousDecision, stepCount);
+        }
+
+        // Initial step, or a sub-agent just returned (step 'Success' / 'Failed').
+        // Route deterministically off the current payload — no prompt.
+        const payload = (previousDecision?.newPayload
+            ?? previousDecision?.previousPayload
+            ?? params.payload) as P;
+        return this.determineRoute<P>(payload);
+    }
+
+    /**
+     * Retained for compatibility. With {@link executeNextStep} overridden the
+     * base loop never executes the orchestrator's prompt, so this hook is no
+     * longer reached in normal operation. It defers to the same deterministic
+     * routing and ignores the (never-produced) prompt result.
+     */
+    protected override async determineNextStep<P>(
+        _params: ExecuteAgentParams,
+        _agentType: MJAIAgentTypeEntity,
+        _promptResult: AIPromptRunResult,
         currentPayload: P,
     ): Promise<BaseAgentNextStep<P>> {
+        return this.determineRoute<P>(currentPayload);
+    }
+
+    /**
+     * Deterministic Designer → Builder → terminate routing. The three intercepts
+     * are exhaustive — exactly one always fires — so this always returns a step
+     * and never needs to fall back to an LLM decision.
+     */
+    private determineRoute<P>(currentPayload: P): BaseAgentNextStep<P> {
         const payload = (currentPayload as unknown as FormBuilderPayload | undefined) ?? {};
 
         // Intercept 1 — Builder has run, terminate with its outcome.
@@ -107,6 +165,8 @@ export class FormBuilderAgent extends BaseAgent {
         // where the Designer's previous turn left them present-but-empty
         // (which `designerOutputReady` rejected above). Either way we ask
         // the Designer for another pass instead of burning a Builder attempt.
+        // Reaching here means `designerOutputReady` is false, so this branch is
+        // the guaranteed final route (no LLM fallback needed).
         //
         // Hard budget on Designer routings — if we hit it without ever
         // producing a valid Spec/Intent, terminate with Failed rather than
@@ -114,41 +174,33 @@ export class FormBuilderAgent extends BaseAgent {
         // prompt makes EVERY sub-agent call fail before the LLM even runs,
         // so the payload never gets filled, so `designerOutputReady` stays
         // false, so we'd otherwise route to Designer again forever.
-        if (!this.designerOutputReady(payload)) {
-            const attempts = payload.DesignerAttemptCount ?? 0;
-            if (attempts >= MAX_DESIGNER_ATTEMPTS) {
-                const msg = `Form Builder Designer failed to produce a valid spec after ${attempts} attempts. ` +
-                    `Most likely a prompt-template render error or model failover loop — check the agent run's Designer steps for the actual error message and the cockpit's chat transcript.`;
-                LogStatus(`🔒 FormBuilderAgent: Designer attempt budget exhausted (${attempts}/${MAX_DESIGNER_ATTEMPTS}) — terminating with Failed.`);
-                return {
-                    terminate: true,
-                    step: 'Failed',
-                    reasoning: msg,
-                    message: msg,
-                    errorMessage: msg,
-                    newPayload: payload as unknown as P,
-                };
-            }
-            const nextPayload = { ...payload, DesignerAttemptCount: attempts + 1 };
-            LogStatus(`🔒 FormBuilderAgent: no Designer output yet (attempt ${attempts + 1}/${MAX_DESIGNER_ATTEMPTS}) — routing to "${DESIGNER_AGENT_NAME}".`);
+        const attempts = payload.DesignerAttemptCount ?? 0;
+        if (attempts >= MAX_DESIGNER_ATTEMPTS) {
+            const msg = `Form Builder Designer failed to produce a valid spec after ${attempts} attempts. ` +
+                `Most likely a prompt-template render error or model failover loop — check the agent run's Designer steps for the actual error message and the cockpit's chat transcript.`;
+            LogStatus(`🔒 FormBuilderAgent: Designer attempt budget exhausted (${attempts}/${MAX_DESIGNER_ATTEMPTS}) — terminating with Failed.`);
             return {
-                step: 'Sub-Agent',
-                terminate: false,
-                previousPayload: payload as unknown as P,
-                newPayload: nextPayload as unknown as P,
-                subAgent: {
-                    name: DESIGNER_AGENT_NAME,
-                    message: DESIGNER_MESSAGE,
-                    terminateAfter: false,  // Come back after Designer so we can route to Builder
-                },
+                terminate: true,
+                step: 'Failed',
+                reasoning: msg,
+                message: msg,
+                errorMessage: msg,
+                newPayload: payload as unknown as P,
             };
         }
-
-        // Fallback — defer to the base LLM-driven decision. In practice
-        // this branch shouldn't fire because the three intercepts cover
-        // the lifecycle. If a malformed state arrives the LLM gets a
-        // chance to recover.
-        return super.determineNextStep(params, agentType, promptResult, currentPayload);
+        const nextPayload = { ...payload, DesignerAttemptCount: attempts + 1 };
+        LogStatus(`🔒 FormBuilderAgent: no Designer output yet (attempt ${attempts + 1}/${MAX_DESIGNER_ATTEMPTS}) — routing to "${DESIGNER_AGENT_NAME}".`);
+        return {
+            step: 'Sub-Agent',
+            terminate: false,
+            previousPayload: payload as unknown as P,
+            newPayload: nextPayload as unknown as P,
+            subAgent: {
+                name: DESIGNER_AGENT_NAME,
+                message: DESIGNER_MESSAGE,
+                terminateAfter: false,  // Come back after Designer so we can route to Builder
+            },
+        };
     }
 
     private designerOutputReady(p: FormBuilderPayload): boolean {

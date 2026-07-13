@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "src/lib/file-browser/folder-tree.component.ts",
+    "src/lib/file-browser/folder-tree.component.dom.test.ts",
+    "src/lib/file-browser/file-grid.component.ts",
+    "src/lib/file-browser/file-grid.component.dom.test.ts",
+    "src/lib/file-browser/storage-providers-list.component.ts",
+    "src/lib/file-browser/storage-providers-list.component.dom.test.ts",
+    "src/lib/file-upload/file-upload.ts",
+    "src/lib/file-upload/file-upload.dom.test.ts",
+    "src/__tests__/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

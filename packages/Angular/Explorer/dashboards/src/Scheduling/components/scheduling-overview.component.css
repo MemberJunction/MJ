@@ -237,15 +237,6 @@
     color: var(--mj-status-success);
 }
 
-.all-clear i {
-    color: var(--mj-status-success) !important;
-}
-
-.all-clear span {
-    color: var(--mj-status-success);
-    font-weight: 500;
-}
-
 .panel-title {
     font-size: 0.95rem;
     font-weight: 700;
@@ -335,69 +326,6 @@
 .exec-status-badge.status-error { background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface)); color: var(--mj-status-error); }
 .exec-status-badge.status-warning { background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface)); color: var(--mj-status-warning); }
 
-/* ── Alert Items ─────────────────────────────────────────── */
-.alert-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 12px;
-    border-radius: 10px;
-    margin-bottom: 8px;
-}
-
-.alert-item:last-child {
-    margin-bottom: 0;
-}
-
-.alert-item.alert-error {
-    background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
-}
-
-.alert-item.alert-warning {
-    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-}
-
-.alert-icon {
-    font-size: 1rem;
-    margin-top: 2px;
-}
-
-.alert-error .alert-icon { color: var(--mj-status-error); }
-.alert-warning .alert-icon { color: var(--mj-status-warning); }
-
-.alert-content {
-    flex: 1;
-}
-
-.alert-title {
-    font-weight: 600;
-    font-size: 0.85rem;
-    color: var(--mj-text-primary);
-}
-
-.alert-message {
-    font-size: 0.8rem;
-    color: var(--mj-text-secondary);
-    margin-top: 2px;
-}
-
-.alert-action-btn {
-    padding: 4px 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    background: var(--mj-status-error);
-    color: var(--mj-text-inverse);
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.2s;
-}
-
-.alert-action-btn:hover {
-    background: var(--mj-status-error);
-}
-
 /* ── Upcoming Items ──────────────────────────────────────── */
 .upcoming-item {
     display: flex;
@@ -442,25 +370,6 @@
 
 .upcoming-countdown.soon {
     color: var(--mj-status-warning);
-}
-
-/* ── Empty State ─────────────────────────────────────────── */
-.empty-state-small {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 32px 16px;
-    color: var(--mj-text-muted);
-}
-
-.empty-state-small i {
-    font-size: 2rem;
-    color: var(--mj-border-strong);
-}
-
-.empty-state-small span {
-    font-size: 0.85rem;
 }
 
 /* ── Data Table ──────────────────────────────────────────── */

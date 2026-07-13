@@ -54,10 +54,22 @@ export interface AssembleOptions {
    * fails loudly because you asked for it by name.
    */
   MigrationPlatform?: DbPlatform;
+  /**
+   * Include the Claude Code pack (`templates/claude-pack/dist/v{N}/`) at the target root.
+   * Default (`undefined` / `true`): include if present at the source, silently skip if
+   * not (handles installs from older MJ tags that predate the pack). Pass `false` to
+   * explicitly opt out (`--no-claude-pack` on `mj install` / `mj bundle`).
+   *
+   * The pack is laid down byte-for-byte from the pre-built `dist/v{N}/` directory —
+   * the same content the post-install `mj install:claude` command would land. Honors
+   * Goal #1 of `plans/claude-install-pack.md`: every new install gets a working
+   * Claude Code experience without a second command.
+   */
+  IncludeClaudePack?: boolean;
 }
 
 /** Per-package transform style applied to a directory mapping. */
-type MappingKind = 'server' | 'angular' | 'sqlscripts' | 'migrations';
+type MappingKind = 'server' | 'angular' | 'sqlscripts' | 'migrations' | 'claudePack';
 
 /** One source→dest directory mapping with its transform style. */
 interface DirMapping {
@@ -107,6 +119,18 @@ const SQLSCRIPTS_IGNORE: readonly string[] = ['_all_entities.sql', '_all_entitie
 /** Migrations bundle excludes documentation and backup files. */
 const MIGRATIONS_IGNORE: readonly string[] = [...COMMON_IGNORE, '**/*.md', '**/*.backup'];
 
+/**
+ * The Claude pack is a pre-built dist directory — every file in it is intentional
+ * (CLAUDE.md at root, the dotfile-prefixed `.claude/` tree, the SessionStart hook
+ * helper, etc.). Notably, `COMMON_IGNORE`'s `.*` pattern would block `.claude/`
+ * entirely, so this kind uses an empty ignore set. The build step (`build-pack.mjs`)
+ * already filters anything that shouldn't ship.
+ */
+const CLAUDE_PACK_IGNORE: readonly string[] = [];
+
+/** Repo-relative path to the pack source tree (one subdirectory per MJ major). */
+const CLAUDE_PACK_DIST_ROOT = 'templates/claude-pack/dist';
+
 /** Directory mappings always included in a distribution. */
 const BASE_MAPPINGS: readonly DirMapping[] = [
   { SourceRel: 'SQL Scripts', DestRel: 'SQL Scripts', Kind: 'sqlscripts' },
@@ -150,11 +174,23 @@ function migrationDirsFor(platform?: DbPlatform): string[] {
  * @param includeMigrations - Add the migration tree(s) (offline bundles).
  * @param migrationPlatform - Narrow to one platform's tree; omitted = both
  *   (a sparse fetch tolerates a path that doesn't exist at the ref).
+ * @param includeClaudePack - Add the pre-built Claude pack source. Default `true`
+ *   matches the assembler's auto-include behavior; pass `false` to skip the fetch
+ *   entirely when `IncludeClaudePack: false` was set on the assemble options.
+ *   A sparse fetch tolerates a path that doesn't exist at the ref, so the older-tag
+ *   case (no pack present) is fine either way.
  */
-export function distributionSourcePaths(includeMigrations = false, migrationPlatform?: DbPlatform): string[] {
+export function distributionSourcePaths(
+  includeMigrations = false,
+  migrationPlatform?: DbPlatform,
+  includeClaudePack = true,
+): string[] {
   const dirs = BASE_MAPPINGS.map((mapping) => mapping.SourceRel);
   if (includeMigrations) {
     dirs.push(...migrationDirsFor(migrationPlatform));
+  }
+  if (includeClaudePack) {
+    dirs.push(CLAUDE_PACK_DIST_ROOT);
   }
   return [...dirs, SERVER_BASE_TSCONFIG, ANGULAR_BASE_TSCONFIG, ...ROOT_FILES.map((file) => file.SourceRel)];
 }
@@ -243,19 +279,53 @@ export class DistributionAssembler {
    * {@link assertSourcesPresent}), while the default "both" selection includes only
    * the trees that actually exist at the source — so bundling a ref that predates
    * one platform's tree doesn't fail.
+   *
+   * The Claude pack is auto-included when `IncludeClaudePack !== false` AND a
+   * `templates/claude-pack/dist/v{N}/` directory exists at the source. Missing
+   * pack source is silently skipped (e.g. installing an older MJ tag that predates
+   * the pack) — pass `IncludeClaudePack: false` to suppress even when present.
    */
   private async mappingsFor(opts: AssembleOptions): Promise<DirMapping[]> {
     const mappings = [...BASE_MAPPINGS];
-    if (!(opts.IncludeMigrations ?? false)) {
-      return mappings;
-    }
-    const explicit = opts.MigrationPlatform != null;
-    for (const dir of migrationDirsFor(opts.MigrationPlatform)) {
-      if (explicit || (await this.pathExists(path.join(opts.SourceDir, dir)))) {
-        mappings.push({ SourceRel: dir, DestRel: dir, Kind: 'migrations' });
+
+    if (opts.IncludeMigrations ?? false) {
+      const explicit = opts.MigrationPlatform != null;
+      for (const dir of migrationDirsFor(opts.MigrationPlatform)) {
+        if (explicit || (await this.pathExists(path.join(opts.SourceDir, dir)))) {
+          mappings.push({ SourceRel: dir, DestRel: dir, Kind: 'migrations' });
+        }
       }
     }
+
+    if (opts.IncludeClaudePack !== false) {
+      const packDir = await this.discoverClaudePackDir(opts.SourceDir);
+      if (packDir != null) {
+        mappings.push({ SourceRel: packDir, DestRel: '', Kind: 'claudePack' });
+      }
+    }
+
     return mappings;
+  }
+
+  /**
+   * Find the highest-major `templates/claude-pack/dist/v{N}/` directory at the
+   * source. Returns the repo-relative path (e.g. `templates/claude-pack/dist/v5`)
+   * or `null` if no pack source is present. Matches the design doc §6.1 dynamic-
+   * discovery convention: pick the highest available major rather than coupling
+   * to root `package.json`'s workspace semver (which is 1.x, not user-facing 5.x).
+   */
+  private async discoverClaudePackDir(sourceDir: string): Promise<string | null> {
+    const absRoot = path.join(sourceDir, CLAUDE_PACK_DIST_ROOT);
+    let entries: string[];
+    try {
+      const dirents = await readdir(absRoot, { withFileTypes: true });
+      entries = dirents.filter((d) => d.isDirectory() && /^v\d+$/.test(d.name)).map((d) => d.name);
+    } catch {
+      return null; // dist root absent — older MJ tags or non-MJ source
+    }
+    if (entries.length === 0) return null;
+    entries.sort((a, b) => parseInt(b.slice(1), 10) - parseInt(a.slice(1), 10));
+    return `${CLAUDE_PACK_DIST_ROOT}/${entries[0]}`;
   }
 
   /** Build the write ops for one directory mapping (raw copies + per-kind transforms). */
@@ -327,6 +397,8 @@ export class DistributionAssembler {
         return SQLSCRIPTS_IGNORE;
       case 'migrations':
         return MIGRATIONS_IGNORE;
+      case 'claudePack':
+        return CLAUDE_PACK_IGNORE;
     }
   }
 

@@ -235,13 +235,13 @@ export const verifyUserRecord = async (
           // to init it, including passing in the role list for the user.
           const md: Metadata = new Metadata(); // global-provider-ok: JWT validation + role lookup runs BEFORE AppContext.providers is built — no per-request provider yet
 
-          const initData: MJUserEntityType & { UserRoles: { UserID: string; RoleName: string; RoleID: string }[] } = newUser.GetAll();
+          const initData: MJUserEntityType & { UserRoles: { UserID: string; Role: string; RoleID: string }[] } = newUser.GetAll();
 
           initData.UserRoles = configInfo.userHandling.newUserRoles.map((role) => {
             const roleInfo: RoleInfo | undefined = md.Roles.find((r) => r.Name === role);
             const roleID: string = roleInfo ? roleInfo.ID : '';
 
-            return { UserID: initData.ID, RoleName: role, RoleID: roleID };
+            return { UserID: initData.ID, Role: role, RoleID: roleID };
           });
 
           user = new UserInfo(Metadata.Provider, initData); // global-provider-ok: same JWT-validation context — no per-request provider yet

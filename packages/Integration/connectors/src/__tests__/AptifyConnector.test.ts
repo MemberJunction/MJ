@@ -1,5 +1,58 @@
 import { describe, it, expect } from 'vitest';
+import type { CreateRecordContext, RESTAuthContext, RESTResponse } from '@memberjunction/integration-engine';
 import { AptifyConnector } from '../AptifyConnector.js';
+
+/**
+ * Test connector that short-circuits auth (pre-seeded cache) and stubs the HTTP
+ * transport boundary so CreateRecord runs for real down to the BuildCreatedResult
+ * decision. Lets us assert the create-path behavior without credentials or a live API.
+ */
+class TestAptifyConnector extends AptifyConnector {
+    public NextResponse: RESTResponse = { Status: 201, Body: {}, Headers: {} };
+
+    constructor() {
+        super();
+        // Pre-seed the private auth cache with a far-future expiry so GetAuth() returns immediately.
+        (this as unknown as { authState: RESTAuthContext }).authState = {
+            Token: 'test-token',
+            TokenType: 'Web',
+            ExpiresAt: new Date(Date.now() + 3_600_000),
+            BaseURL: 'https://aptify.test',
+            Config: {},
+        } as RESTAuthContext;
+    }
+
+    protected override async MakeHTTPRequest(): Promise<RESTResponse> {
+        return this.NextResponse;
+    }
+}
+
+function createCtx(objectName: string, attributes: Record<string, unknown>): CreateRecordContext {
+    return { CompanyIntegration: {}, ContextUser: {}, ObjectName: objectName, Attributes: attributes } as unknown as CreateRecordContext;
+}
+
+describe('AptifyConnector CreateRecord (missing-ID guard)', () => {
+    it('returns Success=false when a 2xx create response contains no record ID', async () => {
+        const connector = new TestAptifyConnector();
+        // 2xx but the body carries no Id/ID/id — the silent-loss / duplicate-create case.
+        connector.NextResponse = { Status: 201, Body: { someOtherField: 'value' }, Headers: {} };
+
+        const result = await connector.CreateRecord(createCtx('Persons', { FirstName: 'Ada' }));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('no record ID');
+    });
+
+    it('returns Success=true with the ExternalID when the create response carries an Id', async () => {
+        const connector = new TestAptifyConnector();
+        connector.NextResponse = { Status: 201, Body: { Id: 4242 }, Headers: {} };
+
+        const result = await connector.CreateRecord(createCtx('Persons', { FirstName: 'Ada' }));
+
+        expect(result.Success).toBe(true);
+        expect(result.ExternalID).toBe('4242');
+    });
+});
 
 // Smoke tests — verifies the connector's basic identity + capability surface.
 // These pass without HTTP mocks or credentials. Failures here indicate a

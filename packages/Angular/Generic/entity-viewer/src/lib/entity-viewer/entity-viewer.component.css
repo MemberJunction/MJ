@@ -112,50 +112,79 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* Timeline Date Field Selector */
-.timeline-date-selector {
-  display: flex;
-  align-items: center;
+/* Compact view-type dropdown — used when there are more view types than the strip threshold */
+.view-type-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.view-type-dropdown-trigger {
+  width: auto;
   gap: 6px;
+  padding: 0 10px;
+}
+
+.view-type-dropdown-label {
   font-size: 13px;
-  color: var(--mj-text-secondary);
-}
-
-.timeline-date-selector i {
-  color: var(--mj-text-disabled);
-}
-
-.date-field-label {
-  color: var(--mj-text-secondary);
   font-weight: 500;
 }
 
-.date-field-select {
-  padding: 4px 8px;
+.view-type-dropdown-caret {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.view-type-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 180px;
+  background: var(--mj-bg-surface-elevated);
   border: 1px solid var(--mj-border-default);
-  border-radius: 4px;
-  font-size: 13px;
-  background: var(--mj-bg-surface);
-  color: var(--mj-text-secondary);
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-
-.date-field-select:hover {
-  border-color: var(--mj-border-strong);
-}
-
-.date-field-select:focus {
-  border-color: var(--mj-brand-primary);
-}
-
-/* Timeline Orientation Toggle */
-.timeline-orientation-toggle {
+  border-radius: 8px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--mj-text-primary) 14%, transparent);
+  padding: 4px;
   display: flex;
-  background: var(--mj-bg-surface-card);
+  flex-direction: column;
+}
+
+.view-type-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
   border-radius: 6px;
-  padding: 2px;
+  cursor: pointer;
+  color: var(--mj-text-secondary);
+  font-size: 13px;
+  text-align: left;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.view-type-dropdown-item:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.view-type-dropdown-item.active {
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.view-type-dropdown-item i {
+  width: 16px;
+  text-align: center;
+}
+
+/* Host for dynamically-mounted plug-in view renderers (Cluster, third-party) */
+.dynamic-view-host {
+  height: 100%;
+  width: 100%;
+  overflow: auto;
 }
 
 /* Content */
@@ -195,45 +224,12 @@
   display: none !important;
 }
 
-/* Empty State */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+/* Empty State — fill the content pane vertically */
+.empty-state-fill {
   height: 100%;
-  color: var(--mj-text-disabled);
-  text-align: center;
 }
 
-.empty-state i {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.5;
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-}
-
-/* Hidden components should not display - ensure [hidden] attribute works properly */
-mj-entity-cards[hidden],
-mj-timeline[hidden],
-mj-map-view[hidden] {
-  display: none !important;
-}
-
-/* Visible view components should fill available space */
-mj-entity-cards:not([hidden]),
-mj-timeline:not([hidden]),
-mj-map-view:not([hidden]) {
-  display: block;
-  height: 100%;
-  width: 100%;
-}
-
-/* Hide map toggle when entity does not support geocoding */
-.toggle-btn.geo-hidden {
+/* Hide the dynamic host when no plug-in is mounted (no entity) */
+.dynamic-view-host[hidden] {
   display: none !important;
 }

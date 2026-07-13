@@ -105,7 +105,7 @@ Each provider implements one or more capability interfaces from `@memberjunction
 |----------|-------------|:---:|:----------:|:---------:|:-----:|:-----:|:---------:|
 | **OpenAI** | `@memberjunction/ai-openai` | x | x | x | x | | |
 | **Anthropic** | `@memberjunction/ai-anthropic` | x | | | | | |
-| **Google Gemini** | `@memberjunction/ai-gemini` | x | | x | | | |
+| **Google Gemini** | `@memberjunction/ai-gemini` | x | x | x | | | |
 | **Mistral** | `@memberjunction/ai-mistral` | x | x | | | | |
 | **Groq** | `@memberjunction/ai-groq` | x | | | | | |
 | **xAI (Grok)** | `@memberjunction/ai-xai` | x | | | | | |
@@ -123,7 +123,7 @@ Each provider implements one or more capability interfaces from `@memberjunction
 | **Black Forest Labs** | `@memberjunction/ai-blackforestlabs` | | | x | | | |
 | **ElevenLabs** | `@memberjunction/ai-elevenlabs` | | | | x | | |
 | **HeyGen** | `@memberjunction/ai-heygen` | | | | | x | |
-| **Cohere** | `@memberjunction/ai-cohere` | | | | | | x |
+| **Cohere** | `@memberjunction/ai-cohere` | | x | | | | x |
 | **Local Embeddings** | `@memberjunction/ai-local-embeddings` | | x | | | | |
 | **Pinecone** | `@memberjunction/ai-vectors-pinecone` | | | | | | |
 | **Rex (rasa.io)** | `@memberjunction/ai-recommendations-rex` | | | | | | |

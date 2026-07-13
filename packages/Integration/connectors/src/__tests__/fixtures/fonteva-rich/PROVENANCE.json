@@ -1,0 +1,34 @@
+{
+  "fixtureSet": "fonteva-rich",
+  "provenance": "synthetic",
+  "rationale": "Fonteva publishes no scrapable OpenAPI spec or sample-response corpus (fontevacontext.md §8 — 'I would not assume there is a complete public OpenAPI spec'). These fixtures are therefore fully synthetic test data, not scrubbed real responses. Field API NAMES are docs-derived (the OrderApi__/EventApi__ managed-package namespaces and the documented camelCase service convention, fontevacontext.md §4); all VALUES are invented.",
+  "piiSafety": {
+    "names": "<scrubbed-name-N> placeholders",
+    "emails": "example+N@example.com (RFC 2606 reserved domain)",
+    "phones": "555-01xx (NANP fictional test range)",
+    "addresses": "123/124/125 Test St, Example, XX 00000",
+    "dates": "synthetic 2025-2026 ISO timestamps",
+    "ids": "well-formed but synthetic Salesforce 18-char Ids (object-prefixed + AAA suffix)"
+  },
+  "sources": [
+    {
+      "URL": "fontevacontext.md",
+      "UsedFor": "§4 camelCase mapping convention, §5 Search Request params, §11 fixture dataset shape + edge cases, §6 service areas",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs"
+    }
+  ],
+  "edgeCasesCovered": [
+    "person vs organization account",
+    "member vs nonmember (Is_Member__c + member/list price pair on Item #1)",
+    "duplicate contact (Contact #10 duplicates #2 by case-different email)",
+    "cancelled event registration (REG-0006)",
+    "failed/declined payment (EP-0003)",
+    "expired subscription (S-0003)",
+    "deleted record (IsDeleted=true REG-0099)",
+    "tax order line (SOL-0003, Line_Type=Tax)",
+    "inactive item (Item #5)",
+    "proforma/draft/posted order statuses",
+    "5 unmapped custom __c fields on a Contact"
+  ]
+}

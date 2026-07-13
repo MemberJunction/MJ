@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Get Entity Details",
-      "Description": "Returns complete field information and sample data for a specific entity. Shows field names, types, descriptions, primary keys, related entities, and top 3 rows of actual data. Perfect for understanding entity structure before writing SQL queries.",
+      "Description": "Returns complete field information and sample data for a specific entity. Shows field names, types, descriptions, primary keys, related entities, and a few rows of actual data (3 by default, max 10, long values truncated). Perfect for understanding entity structure before writing SQL queries.",
       "DriverClass": "Get Entity Details",
       "Type": "Custom",
       "Status": "Active",
@@ -18,15 +18,15 @@
             "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the entity to get details for (required). Use 'Get Entity List' to discover available entity names.",
+            "Description": "Exact name of the entity to get details for (required). Must match the entity's full Name exactly, including any 'MJ: ' prefix (e.g., 'MJ: AI Agents', not 'AI Agents'). If unsure, consult your entity catalog or the 'Get Entity List' action if available.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "D776FBCA-C8E4-4C9D-A2B7-433D0489CAD3"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:25.886Z",
-            "checksum": "85bf723eb43d4c4e05978fec8b160a8a0f5da0120daca3a904d230dc6da986ca"
+            "lastModified": "2026-06-16T01:17:12.142Z",
+            "checksum": "3e5fe9b3181e7e77e2b874f426865586d9d45fe3f20ff371ff92fafd2beb9875"
           }
         },
         {
@@ -37,15 +37,15 @@
             "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Number of sample rows to return. Default: 3. Helps understand actual data in the entity.",
+            "Description": "Number of sample rows to return. Default: 3, maximum: 10. Long field values are truncated to keep results compact. Helps understand actual data in the entity.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "2548B13F-1658-4F63-88F5-EC2254AC2408"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:25.887Z",
-            "checksum": "9b761ced7945f51ed53dc74d4fe05c981d071d39aadf00c6eb4ad34337fe244e"
+            "lastModified": "2026-06-16T01:17:12.120Z",
+            "checksum": "8d498f46825fe6197acaba788666a9f4e9584dfd1f56d452696e2a47e9afcaca"
           }
         },
         {
@@ -65,6 +65,25 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:25.889Z",
             "checksum": "878e150eede992c148fd5a7f69d970512e95354b421485ee35bc29fc94a18c5a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UseSemanticSearch",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When the entity is not found and simple name matching yields no suggestions, run a ranked semantic search over the entity catalog and suggest the top 3 conceptually related entities in the error message. Default: false.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "09B57F66-4E92-43B5-A489-289E03296D29"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:12.169Z",
+            "checksum": "069817dbe70c7d4bc7ab8ddfb44662a041670a36680cbec56f2701af52330997"
           }
         },
         {
@@ -284,14 +303,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "ENTITY_NOT_FOUND",
             "IsSuccess": false,
-            "Description": "The specified entity was not found in the metadata. Use 'Get Entity List' to see available entities."
+            "Description": "The specified entity was not found in the metadata. The error message suggests close matches — entity names must match exactly, including any 'MJ: ' prefix."
           },
           "primaryKey": {
             "ID": "A04AE5EA-614D-4EEB-903C-887E57A52817"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:26.021Z",
-            "checksum": "c30be59c1e51dd72849af1d6db34f0dab28a6b8462afe67fac3972306277149f"
+            "lastModified": "2026-06-16T01:17:12.205Z",
+            "checksum": "7ab454c4087a8b24aac364b0c1b94bbb5651a6f317ddf1869b099377683fea47"
           }
         },
         {
@@ -330,8 +349,8 @@
       "ID": "BF084609-3C2B-4FAF-8D4C-598918AB765A"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:10.822Z",
-      "checksum": "962bec4ac6ab81296eb3a8c6ab746a4b1a5ca51526f197f75b26702deb56dd4b"
+      "lastModified": "2026-06-16T01:17:12.085Z",
+      "checksum": "d944b69255450c9482732617fc0059e57044febd79c09fad85b980f40432253d"
     }
   }
 ]

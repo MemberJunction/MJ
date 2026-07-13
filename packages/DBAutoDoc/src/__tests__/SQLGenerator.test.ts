@@ -147,4 +147,46 @@ describe('SQLGenerator', () => {
       expect(sql).toContain("@level1name = N'Users'");
     });
   });
+
+  describe('PostgreSQL provider — COMMENT ON (no sp_addextendedproperty / no GO)', () => {
+    it('emits COMMENT ON SCHEMA/TABLE/COLUMN with double-quoted identifiers', () => {
+      const sql = generator.generate(createState(), { provider: 'postgresql' });
+
+      expect(sql).toContain(`COMMENT ON SCHEMA "dbo" IS 'Default schema';`);
+      expect(sql).toContain(`COMMENT ON TABLE "dbo"."Users" IS 'Stores user accounts';`);
+      expect(sql).toContain(`COMMENT ON COLUMN "dbo"."Users"."ID" IS 'Primary key identifier';`);
+    });
+
+    it('does not emit any SQL Server T-SQL on the PG path', () => {
+      const sql = generator.generate(createState(), { provider: 'postgresql' });
+
+      expect(sql).not.toContain('sp_addextendedproperty');
+      expect(sql).not.toContain('sp_dropextendedproperty');
+      expect(sql).not.toContain('sys.extended_properties');
+      // No GO batch separators on PostgreSQL.
+      expect(sql.split('\n')).not.toContain('GO');
+    });
+
+    it('escapes single quotes in the comment literal', () => {
+      const state = createState();
+      state.schemas[0].tables[0].description = "User's account data";
+      const sql = generator.generate(state, { provider: 'postgresql' });
+
+      expect(sql).toContain(`COMMENT ON TABLE "dbo"."Users" IS 'User''s account data';`);
+    });
+
+    it('escapes embedded double quotes in identifiers', () => {
+      const state = createState();
+      state.schemas[0].tables[0].name = 'We"ird';
+      const sql = generator.generate(state, { provider: 'postgresql' });
+
+      expect(sql).toContain(`COMMENT ON TABLE "dbo"."We""ird"`);
+    });
+
+    it('defaults to the SQL Server form when no provider is given', () => {
+      const sql = generator.generate(createState());
+      expect(sql).toContain('sp_addextendedproperty');
+      expect(sql).not.toContain('COMMENT ON');
+    });
+  });
 });

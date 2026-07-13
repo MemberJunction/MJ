@@ -1,6 +1,6 @@
 {
   "title:string:!empty": "Descriptive title",
-  "plan:string?": "Optional markdown plan",
+  "plan:string:!empty": "Markdown plan — required on every payload (plan-only and results)",
   "source:string?": "query",
   "columns:[0+]?": [
     {

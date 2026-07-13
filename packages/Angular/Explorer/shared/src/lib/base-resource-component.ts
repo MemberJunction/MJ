@@ -4,7 +4,7 @@ import { filter, takeUntil } from "rxjs/operators";
 import { BaseEntity } from "@memberjunction/core";
 import { BaseNavigationComponent } from "./base-navigation-component";
 import { ResourceData } from "@memberjunction/core-entities";
-import { NavigationService } from "./navigation.service";
+import { NavigationService, TabQueryParamUpdateGuard } from "./navigation.service";
 
 @Directive()
 export abstract class BaseResourceComponent extends BaseNavigationComponent implements OnInit, OnDestroy {
@@ -34,6 +34,15 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     public get LoadComplete(): boolean {
         return this._loadComplete;
     }
+
+    /**
+     * Watchdog window: if a resource component hasn't called {@link NotifyLoadComplete} within this
+     * time, we log a warning naming the offending class. The app loading screen waits on
+     * NotifyLoadComplete, so a resource that never calls it hangs the screen forever — this makes the
+     * culprit obvious in the console instead of leaving a mystery "stuck loading" state.
+     */
+    private static readonly LOAD_COMPLETE_WATCHDOG_MS = 15_000;
+    private _loadCompleteWatchdog: ReturnType<typeof setTimeout> | null = null;
 
     private _loadStarted: boolean = false;
     public get LoadStarted(): boolean {
@@ -88,9 +97,26 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         // emission claim the 'deeplink' source before any later popstate event.
         this.setupQueryParamSubscription();
         this.setupInitialParamDelivery();
+
+        // Start the NotifyLoadComplete watchdog (no-op once it fires or load completes).
+        this._loadCompleteWatchdog = setTimeout(() => {
+            if (!this._loadComplete) {
+                // eslint-disable-next-line no-console
+                console.warn(
+                    `[LoadComplete WATCHDOG] ${this.constructor.name} has NOT called NotifyLoadComplete() ` +
+                    `within ${BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS / 1000}s. The app loading screen ` +
+                    `waits on this signal — if the screen is stuck, this resource is the likely cause. ` +
+                    `(tabId=${this.getTabId() || 'n/a'})`
+                );
+            }
+        }, BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS);
     }
 
     ngOnDestroy(): void {
+        if (this._loadCompleteWatchdog) {
+            clearTimeout(this._loadCompleteWatchdog);
+            this._loadCompleteWatchdog = null;
+        }
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -112,7 +138,13 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      */
     protected UpdateQueryParams(params: Record<string, string | null>): void {
         if (this._suppressQueryParamSync) return;
-        this.navigationService.UpdateActiveTabQueryParams(params);
+        const tabId = this.getTabId();
+        if (!tabId) {
+            this.navigationService.UpdateActiveTabQueryParams(params);
+            return;
+        }
+
+        this.navigationService.UpdateTabQueryParams(tabId, params, this.getQueryParamUpdateGuard());
     }
 
     /**
@@ -203,8 +235,23 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         return this.ParentTabId || this.Data?.Configuration?.['tabId'] as string || '';
     }
 
+    private getQueryParamUpdateGuard(): TabQueryParamUpdateGuard {
+        const config = this.Data?.Configuration || {};
+        return {
+            resourceType: config['resourceType'] as string | undefined,
+            driverClass: (config['resourceTypeDriverClass'] || config['driverClass']) as string | undefined,
+            recordId: (this.Data?.ResourceRecordID || config['recordId']) as string | undefined,
+            navItemName: config['navItemName'] as string | undefined,
+            entity: (config['Entity'] || config['entity']) as string | undefined
+        };
+    }
+
     protected NotifyLoadComplete() {
         this._loadComplete = true;
+        if (this._loadCompleteWatchdog) {
+            clearTimeout(this._loadCompleteWatchdog);
+            this._loadCompleteWatchdog = null;
+        }
         if (this._loadCompleteEvent) {
             this._loadCompleteEvent();
         }

@@ -1,41 +1,55 @@
-import { Injectable } from '@angular/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { UserInfo } from '@memberjunction/core';
-import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
+import { MJAISkillEntity } from '@memberjunction/core-entities';
+import { UserInfo, Metadata, EntityInfo, QueryInfo, IMetadataProvider } from '@memberjunction/core';
+import { AIEngineBase, AIAgentPermissionHelper, AISkillPermissionHelper } from '@memberjunction/ai-engine-base';
+import { BaseSingleton } from '@memberjunction/global';
+import { MentionSuggestion, MentionSuggestionPreset } from '@memberjunction/ng-composer';
 
 /**
- * Item in the autocomplete dropdown
+ * Shared engine behind the conversations composer plugins (the agent-mentions /
+ * record-mentions / skill-commands `ComposerTriggerProvider`s) and the mention-parsing
+ * consumers (message routing, saved-message badge rendering). Loads the
+ * permission-filtered agent / user / entity / query / skill caches once per session and
+ * serves ranked `MentionSuggestion` lists per trigger char.
+ *
+ * NOT an Angular DI service — it's a `BaseSingleton` engine so the
+ * ClassFactory-instantiated trigger providers (which live outside Angular DI) and the
+ * Angular components share ONE instance (one cache warm-up) via
+ * `MentionAutocompleteService.Instance`.
  */
-export interface MentionSuggestion {
-  type: 'agent' | 'user';
-  id: string;
-  name: string;
-  displayName: string;
-  description?: string;
-  avatarUrl?: string; // Deprecated, use imageUrl
-  imageUrl?: string; // For agent LogoURL or user avatar
-  icon?: string; // For agents (FontAwesome class)
-}
+export class MentionAutocompleteService extends BaseSingleton<MentionAutocompleteService> {
+  protected constructor() {
+    super();
+  }
 
-/**
- * Service for autocomplete suggestions when typing @mentions
- */
-@Injectable({
-  providedIn: 'root'
-})
-export class MentionAutocompleteService {
+  /** The process-wide shared instance (Global Object Store backed). */
+  public static get Instance(): MentionAutocompleteService {
+    return super.getInstance<MentionAutocompleteService>();
+  }
+
   private agentsCache: MJAIAgentEntityExtended[] = [];
   private usersCache: UserInfo[] = [];
+  private entitiesCache: EntityInfo[] = [];
+  private queriesCache: QueryInfo[] = [];
+  /** Active skills the current user can Run — surfaced under the '/' trigger. */
+  private skillsCache: MJAISkillEntity[] = [];
+  /** Default icon for a skill with no IconClass of its own. */
+  private defaultSkillIcon = 'fa-solid fa-wand-magic-sparkles';
+  /** Generic icon for all query mentions, sourced from the 'MJ: Queries' entity. */
+  private queriesEntityIcon = 'fa-solid fa-database';
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
 
-  constructor() {}
+  /** True once the caches have loaded (agents/users/entities/queries/skills). */
+  public get IsInitialized(): boolean {
+    return this.isInitialized;
+  }
 
   /**
    * Initialize the service by loading agents and users
    * Prevents concurrent initialization with promise lock
    */
-  async initialize(currentUser: UserInfo): Promise<void> {
+  async initialize(currentUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
     // If already initialized, return immediately
     if (this.isInitialized) {
       return;
@@ -47,7 +61,7 @@ export class MentionAutocompleteService {
     }
 
     // Create initialization promise and store it
-    this.initializationPromise = this._initializeInternal(currentUser);
+    this.initializationPromise = this._initializeInternal(currentUser, provider);
 
     try {
       await this.initializationPromise;
@@ -59,7 +73,7 @@ export class MentionAutocompleteService {
   /**
    * Internal initialization logic
    */
-  private async _initializeInternal(currentUser: UserInfo): Promise<void> {
+  private async _initializeInternal(currentUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
     try {
       // Load agents from AIEngineBase
       await AIEngineBase.Instance.Config(false);
@@ -77,6 +91,19 @@ export class MentionAutocompleteService {
       // Load users from the system (optional - can be expanded later)
       // For now, we'll just use the current user
       this.usersCache = [currentUser];
+
+      // Load entities the current user can read (candidates for #entity mentions)
+      this.entitiesCache = this.loadReadableEntities(currentUser, provider);
+
+      // Load queries the current user can run (also surfaced under the '#' trigger)
+      this.queriesCache = this.loadRunnableQueries(currentUser, provider);
+      this.queriesEntityIcon = this.resolveQueriesEntityIcon(provider);
+
+      // Load Active skills the current user can Run (surfaced under the '/' trigger). Mirrors the
+      // agent filter: open-by-default unless a skill has explicit permission rows. The agent's
+      // AcceptsSkills gate is applied server-side at run time, so the picker shows the user's full
+      // run-permitted set regardless of which agent ends up handling the message.
+      this.skillsCache = await this.filterSkillsByRunPermission(currentUser);
 
       this.isInitialized = true;
     } catch (error) {
@@ -109,12 +136,89 @@ export class MentionAutocompleteService {
   }
 
   /**
+   * Filter Active skills to those the current user has 'run' permission for.
+   * Skills with no permission records are open to everyone (canRun = true);
+   * skills with explicit records are checked against the user (open-by-default).
+   */
+  private async filterSkillsByRunPermission(user: UserInfo): Promise<MJAISkillEntity[]> {
+    try {
+      const runnable = await AISkillPermissionHelper.GetAccessibleSkills(user, 'run');
+      return runnable.filter(s => s.Status === 'Active');
+    } catch {
+      // Fail closed — no skills on error.
+      return [];
+    }
+  }
+
+  /**
+   * Load entities the current user has read permission for.
+   * These are the candidates surfaced for #entity mentions.
+   */
+  private loadReadableEntities(user: UserInfo, provider?: IMetadataProvider): EntityInfo[] {
+    try {
+      const md = provider ?? new Metadata();
+      return (md.Entities || []).filter(entity => {
+        try {
+          return entity.GetUserPermisions(user).CanRead;
+        } catch {
+          // Fail closed — exclude entity on permission-check error
+          return false;
+        }
+      });
+    } catch (error) {
+      console.error('Failed to load entities for mention autocomplete:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Load queries the current user has run permission for.
+   * These are the candidates surfaced for #query mentions.
+   */
+  private loadRunnableQueries(user: UserInfo, provider?: IMetadataProvider): QueryInfo[] {
+    try {
+      const md = provider ?? new Metadata();
+      return (md.Queries || []).filter(query => {
+        try {
+          return query.UserCanRun(user);
+        } catch {
+          // Fail closed — exclude query on permission-check error
+          return false;
+        }
+      });
+    } catch (error) {
+      console.error('Failed to load queries for mention autocomplete:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Resolve the generic icon used for all query mentions from the 'MJ: Queries' entity.
+   */
+  private resolveQueriesEntityIcon(provider?: IMetadataProvider): string {
+    try {
+      const md = provider ?? new Metadata();
+      return md.EntityByName('MJ: Queries')?.Icon || 'fa-solid fa-database';
+    } catch {
+      return 'fa-solid fa-database';
+    }
+  }
+
+  /**
    * Get suggestions based on search query
    * @param query The search text after @ symbol
    * @param includeUsers Whether to include users in suggestions
    * @returns Filtered and ranked suggestions
    */
-  getSuggestions(query: string, includeUsers: boolean = true): MentionSuggestion[] {
+  getSuggestions(query: string, includeUsers: boolean = true, trigger: string = '@'): MentionSuggestion[] {
+    // The '#' trigger searches entities + queries; '/' searches skills; '@' searches agents + users
+    if (trigger === '#') {
+      return this.getEntityAndQuerySuggestions(query);
+    }
+    if (trigger === '/') {
+      return this.getSkillSuggestions(query);
+    }
+
     const lowerQuery = query.toLowerCase().trim();
     const suggestions: MentionSuggestion[] = [];
 
@@ -129,7 +233,10 @@ export class MentionAutocompleteService {
           displayName: agent.Name || 'Unknown',
           description: agent.Description || undefined,
           imageUrl: agent.LogoURL || undefined, // Agent logo/avatar image
-          icon: this.getAgentIcon(agent)
+          icon: this.getAgentIcon(agent),
+          // Configuration presets ride on the suggestion — the (AI-blind) composer
+          // renders a preset picker on the inserted chip when there are 2+.
+          presets: this.getAgentPresets(agent.ID)
         });
       }
     }
@@ -144,8 +251,7 @@ export class MentionAutocompleteService {
             id: user.ID,
             name: user.Name,
             displayName: user.Name,
-            description: user.Email || undefined,
-            avatarUrl: undefined // Future: load user avatars
+            description: user.Email || undefined
           });
         }
       }
@@ -163,6 +269,83 @@ export class MentionAutocompleteService {
       // Otherwise alphabetically
       return a.name.localeCompare(b.name);
     });
+  }
+
+  /**
+   * Get entity + query suggestions for #mentions, ranked by query match.
+   * Capped to keep the dropdown light (entity/query sets can be large).
+   */
+  private getEntityAndQuerySuggestions(query: string): MentionSuggestion[] {
+    const lowerQuery = query.toLowerCase().trim();
+    const MAX_SUGGESTIONS = 12;
+
+    const entityItems = this.entitiesCache.map(entity => ({
+      label: entity.DisplayNameOrName,
+      score: Math.max(
+        this.calculateMatchScore(entity.Name || '', lowerQuery),
+        this.calculateMatchScore(entity.DisplayName || '', lowerQuery)
+      ),
+      suggestion: {
+        type: 'entity' as const,
+        id: entity.ID,
+        name: entity.Name,
+        displayName: entity.DisplayNameOrName,
+        description: entity.Description || undefined,
+        icon: entity.Icon || 'fa-solid fa-table'
+      }
+    }));
+
+    const queryItems = this.queriesCache.map(q => ({
+      label: q.Name || '',
+      score: this.calculateMatchScore(q.Name || '', lowerQuery),
+      suggestion: {
+        type: 'query' as const,
+        id: q.ID,
+        name: q.Name || '',
+        displayName: q.Name || '',
+        description: q.Description || undefined,
+        icon: this.queriesEntityIcon
+      }
+    }));
+
+    return [...entityItems, ...queryItems]
+      .filter(x => x.score > 0 || !lowerQuery)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.label.localeCompare(b.label);
+      })
+      .slice(0, MAX_SUGGESTIONS)
+      .map(x => x.suggestion);
+  }
+
+  /**
+   * Get skill suggestions for '/'-mentions, ranked by query match. Each carries the skill's own
+   * IconClass/Color (UX metadata) so the dropdown + inserted chip render distinctly per skill.
+   */
+  private getSkillSuggestions(query: string): MentionSuggestion[] {
+    const lowerQuery = query.toLowerCase().trim();
+    const MAX_SUGGESTIONS = 12;
+
+    return this.skillsCache
+      .map(skill => ({
+        score: this.calculateMatchScore(skill.Name || '', lowerQuery),
+        suggestion: {
+          type: 'skill' as const,
+          id: skill.ID,
+          name: skill.Name || 'Unknown Skill',
+          displayName: skill.Name || 'Unknown Skill',
+          description: skill.Description || undefined,
+          icon: skill.IconClass || this.defaultSkillIcon,
+          color: skill.Color || undefined
+        }
+      }))
+      .filter(x => x.score > 0 || !lowerQuery)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.suggestion.name.localeCompare(b.suggestion.name);
+      })
+      .slice(0, MAX_SUGGESTIONS)
+      .map(x => x.suggestion);
   }
 
   /**
@@ -191,6 +374,33 @@ export class MentionAutocompleteService {
     }
 
     return 0; // No match
+  }
+
+  /**
+   * Map an agent's AI Agent Configuration presets into the composer's generic
+   * `MentionSuggestionPreset` shape so the chip's preset picker works without the
+   * composer knowing anything about agents.
+   *
+   * IMPORTANT: preset.ID is the AIAgentConfiguration.ID (preset ID), not
+   * AIConfigurationID — the backend mapping converts preset ID -> AIConfigurationID.
+   */
+  private getAgentPresets(agentId: string): MentionSuggestionPreset[] | undefined {
+    try {
+      const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(agentId, true);
+      if (!presets || presets.length === 0) {
+        return undefined;
+      }
+      return presets.map(p => ({
+        ID: p.ID,
+        Name: p.Name,
+        DisplayName: p.DisplayName || undefined,
+        Description: p.Description || undefined,
+        IsDefault: p.IsDefault
+      }));
+    } catch {
+      // Presets are a chip nicety — never let them break suggestion building
+      return undefined;
+    }
   }
 
   /**
@@ -223,6 +433,27 @@ export class MentionAutocompleteService {
    */
   getAvailableUsers(): UserInfo[] {
     return this.usersCache;
+  }
+
+  /**
+   * Get available entities for parsing
+   */
+  getAvailableEntities(): EntityInfo[] {
+    return this.entitiesCache;
+  }
+
+  /**
+   * Get available queries for parsing
+   */
+  getAvailableQueries(): QueryInfo[] {
+    return this.queriesCache;
+  }
+
+  /**
+   * Get the generic icon used for all query mentions.
+   */
+  getQueriesEntityIcon(): string {
+    return this.queriesEntityIcon;
   }
 
   /**

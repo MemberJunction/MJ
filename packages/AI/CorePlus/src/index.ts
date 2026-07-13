@@ -10,7 +10,9 @@ export * from './conversation-utility';
 export * from './foreach-operation';
 export * from './while-operation';
 export * from './agent-scratchpad';
+export * from './agent-run-steps';
 export * from './app-context';
+export * from './client-tool-resolver';
 export * from './artifact-tool-library';
 
 export * from './MJAIPromptEntityExtended';

@@ -2,7 +2,8 @@ import { ComponentRef, Injectable, NgModule } from '@angular/core';
 import { Routes, RouterModule, Resolve, ActivatedRouteSnapshot, RouterStateSnapshot, Router } from '@angular/router';
 import {
   SingleRecordComponent,
-  AuthGuardService as AuthGuard
+  AuthGuardService as AuthGuard,
+  AppLockGuardService as AppLockGuard
 } from './public-api';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { LogError, Metadata, StartupManager, IMetadataProvider } from '@memberjunction/core';
@@ -674,77 +675,77 @@ const routes: Routes = [
   {
     path: 'app/:appName/view/dynamic/:param2',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
     data: { resourceType: 'view' }
   },
   {
     path: 'app/:appName/record/:param1/:param2',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
     data: { resourceType: 'record' }
   },
   {
     path: 'app/:appName/:resourceType/:param1',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
   },
   // App navigation routes
   {
     path: 'app/:appName/:navItemName',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
   },
   {
     path: 'app/:appName',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
   },
   // Legacy resource routes (kept for backward compatibility, will redirect in future)
   {
     path: 'resource/record/:entityName/:recordId',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
   },
   {
     path: 'resource/view/dynamic/:entityName',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
   },
   {
     path: 'resource/view/:viewId',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
   },
   {
     path: 'resource/dashboard/:dashboardId',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
   },
   {
     path: 'resource/artifact/:artifactId',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
   },
   {
     path: 'resource/query/:queryId',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
   },
   {
     path: 'resource/search/:searchInput',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
   }
 ];

@@ -132,6 +132,121 @@ describe('DatabaseProvisionPhase', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Built-in sysadmin (`sa`) handling — Msg 15405 guard
+  // -----------------------------------------------------------------------
+
+  describe('built-in sysadmin (sa) handling', () => {
+    // The skip-comments themselves contain phrases like "CREATE LOGIN [sa]" inside `--`
+    // comments, so naive `.toContain('CREATE LOGIN [sa]')` would false-positive. These
+    // regexes use a `^(?!\s*--)\s*` anchor: line-start, NOT a comment line, then DDL.
+    const realDdlCreateLoginSa = /^(?!\s*--)\s*CREATE LOGIN \[sa\]/m;
+    const realDdlCreateUserSa = /^(?!\s*--)\s*CREATE USER \[sa\] FOR LOGIN \[sa\]/m;
+    const realDdlAlterRoleSa = /^(?!\s*--)\s*ALTER ROLE \w+ ADD MEMBER \[sa\]/m;
+    const realDdlGrantExecuteSa = /^(?!\s*--)\s*GRANT EXECUTE TO \[sa\]/m;
+
+    it('skips CREATE LOGIN / CREATE USER / role-grant blocks when CodeGenUser is sa', async () => {
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.CodeGenUser = 'sa';
+      ctx.Config.CodeGenPassword = 'whatever';
+      ctx.Config.APIUser = 'API_User';
+      ctx.Config.APIPassword = 'apipw';
+
+      await phase.Run(ctx);
+
+      const setupScript = mockFs.WriteText.mock.calls[0][1] as string;
+
+      // sa-side: every relevant block should be a skip-comment, NOT a real DDL statement
+      expect(setupScript).toContain('-- Skipping CREATE LOGIN [sa]');
+      expect(setupScript).toContain('-- Skipping CREATE USER [sa]');
+      expect(setupScript).toContain('-- Skipping ALTER ROLE db_owner ADD MEMBER [sa]');
+      expect(setupScript).not.toMatch(realDdlCreateLoginSa);
+      expect(setupScript).not.toMatch(realDdlCreateUserSa);
+      expect(setupScript).not.toMatch(realDdlAlterRoleSa);
+
+      // API user side: unchanged — real DDL still emitted
+      expect(setupScript).toContain('CREATE LOGIN [API_User]');
+      expect(setupScript).toContain('CREATE USER [API_User] FOR LOGIN [API_User]');
+      expect(setupScript).toContain('ALTER ROLE db_datareader ADD MEMBER [API_User]');
+      expect(setupScript).toContain('GRANT EXECUTE TO [API_User]');
+    });
+
+    it('skips role grants and GRANT EXECUTE when APIUser is sa', async () => {
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.CodeGenUser = 'CG_User';
+      ctx.Config.APIUser = 'sa';
+      ctx.Config.APIPassword = 'doesntmatter';
+
+      await phase.Run(ctx);
+
+      const setupScript = mockFs.WriteText.mock.calls[0][1] as string;
+
+      // API side: skip-comments for db_datareader, db_datawriter, and GRANT EXECUTE
+      expect(setupScript).toContain('-- Skipping ALTER ROLE db_datareader ADD MEMBER [sa]');
+      expect(setupScript).toContain('-- Skipping ALTER ROLE db_datawriter ADD MEMBER [sa]');
+      expect(setupScript).toContain('-- Skipping GRANT EXECUTE TO [sa]');
+      expect(setupScript).not.toMatch(realDdlAlterRoleSa);
+      expect(setupScript).not.toMatch(realDdlGrantExecuteSa);
+
+      // CodeGen side: unchanged
+      expect(setupScript).toContain('CREATE LOGIN [CG_User]');
+      expect(setupScript).toContain('ALTER ROLE db_owner ADD MEMBER [CG_User]');
+    });
+
+    it('handles both CodeGen and API as sa (single-user dev / Docker scenario)', async () => {
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.CodeGenUser = 'sa';
+      ctx.Config.APIUser = 'sa';
+
+      await phase.Run(ctx);
+
+      const setupScript = mockFs.WriteText.mock.calls[0][1] as string;
+
+      // No CREATE LOGIN, CREATE USER, ALTER ROLE, or GRANT EXECUTE for sa should be emitted as DDL
+      expect(setupScript).not.toMatch(realDdlCreateLoginSa);
+      expect(setupScript).not.toMatch(realDdlCreateUserSa);
+      expect(setupScript).not.toMatch(realDdlAlterRoleSa);
+      expect(setupScript).not.toMatch(realDdlGrantExecuteSa);
+
+      // Database creation step still runs (this is the whole reason for the fix —
+      // step 1 was already succeeding before, the rest was the cosmetic noise)
+      expect(setupScript).toContain('CREATE DATABASE');
+    });
+
+    it('case-insensitive match — recognises SA, Sa, sA as built-in sysadmin', async () => {
+      for (const variant of ['SA', 'Sa', 'sA', '  sa  ']) {
+        mockFs.WriteText.mockClear();
+        const ctx = makeContext({ Yes: true });
+        ctx.Config.CodeGenUser = variant;
+        ctx.Config.APIUser = 'API_User';
+
+        await phase.Run(ctx);
+
+        const setupScript = mockFs.WriteText.mock.calls[0][1] as string;
+        expect(setupScript).toContain(`-- Skipping CREATE LOGIN [${variant}]`);
+        // Real DDL for this variant should NOT be emitted (escape the printable variant for regex)
+        const escaped = variant.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const realDdlForVariant = new RegExp(`^(?!\\s*--)\\s*CREATE LOGIN \\[${escaped}\\]`, 'm');
+        expect(setupScript).not.toMatch(realDdlForVariant);
+      }
+    });
+
+    it('non-sa principal names get the full normal CREATE/USER/role chain (regression guard)', async () => {
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.CodeGenUser = 'sammie'; // looks like sa but isn't
+      ctx.Config.APIUser = 'salesforce'; // looks like sa-prefix but isn't
+
+      await phase.Run(ctx);
+
+      const setupScript = mockFs.WriteText.mock.calls[0][1] as string;
+      expect(setupScript).toContain('CREATE LOGIN [sammie]');
+      expect(setupScript).toContain('CREATE LOGIN [salesforce]');
+      expect(setupScript).toContain('CREATE USER [sammie] FOR LOGIN [sammie]');
+      expect(setupScript).toContain('CREATE USER [salesforce] FOR LOGIN [salesforce]');
+      expect(setupScript).not.toContain('-- Skipping CREATE');
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // File write paths
   // -----------------------------------------------------------------------
 
@@ -229,6 +344,46 @@ describe('DatabaseProvisionPhase', () => {
         expect(ie.Code).toBe('DB_UNREACHABLE');
         expect(ie.Phase).toBe('database');
       }
+    });
+
+    it('should prefer DB_HOST/DB_PORT from .env over config defaults (Bug #6 fix)', async () => {
+      mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 8 });
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.env'));
+      mockFs.ReadText.mockResolvedValue("DB_HOST='envhost'\nDB_PORT=1444\nDB_USERNAME=sa\n");
+
+      const ctx = makeContext({ Yes: true });
+      await phase.Run(ctx);
+
+      // Connectivity should hit the .env values, not config defaults
+      expect(mockSql.CheckConnectivity).toHaveBeenCalledWith('envhost', 1444);
+    });
+
+    it('should fall back to config when .env is missing', async () => {
+      mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 8 });
+      mockFs.FileExists.mockResolvedValue(false);
+
+      const ctx = makeContext({
+        Config: { DatabaseHost: 'cfg', DatabasePort: 5555 },
+        Yes: true,
+      });
+      await phase.Run(ctx);
+
+      expect(mockSql.CheckConnectivity).toHaveBeenCalledWith('cfg', 5555);
+    });
+
+    it('should prefer PG_HOST/PG_PORT from .env over DB_HOST/DB_PORT (PG install)', async () => {
+      // Mirrors PreflightPhase: codegen-lib's DEFAULT_CODEGEN_CONFIG resolves
+      // PG_* before DB_* on PostgreSQL installs, so the connectivity check
+      // here must follow the same precedence to avoid a false-negative
+      // unreachable error against the stale DB_HOST target.
+      mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 8 });
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.env'));
+      mockFs.ReadText.mockResolvedValue("PG_HOST='pg.docker'\nPG_PORT=5433\nDB_HOST='ignored'\nDB_PORT=1433\n");
+
+      const ctx = makeContext({ Yes: true });
+      await phase.Run(ctx);
+
+      expect(mockSql.CheckConnectivity).toHaveBeenCalledWith('pg.docker', 5433);
     });
   });
 

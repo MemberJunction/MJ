@@ -21,6 +21,7 @@
  * @see FileSystemAdapter — handles ZIP extraction and temp directory management.
  */
 
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { InstallerEventEmitter } from '../events/InstallerEvents.js';
 import { InstallerError } from '../errors/InstallerError.js';
@@ -58,6 +59,14 @@ export interface ScaffoldContext {
   InstallMode?: 'distribution' | 'monorepo';
   /** Canonical repo clone URL for the distribution sparse fetch (defaults to the MJ repo). */
   RepoUrl?: string;
+  /**
+   * Whether to include the Claude Code pack in the scaffold output. Defaults to
+   * `true` so new installs get the pack out of the box (design doc Goal #1).
+   * Pass `false` to honor `--no-claude-pack`. Applies only to `distribution` mode;
+   * `monorepo` mode always extracts the full repo, which already contains the pack
+   * source tree under `templates/claude-pack/`.
+   */
+  IncludeClaudePack?: boolean;
 }
 
 /**
@@ -140,10 +149,17 @@ export class ScaffoldPhase {
    * then assemble the distribution layout (apps/ rename, flattened tsconfigs, root
    * files) into the target dir — the same on-disk shape the bootstrap zip produced,
    * so all downstream phases are unaffected. The temp clone is always cleaned up.
+   *
+   * Also preserves the user's `install.config.json` across the assembly step:
+   * `DistributionAssembler` writes `install.config.json` from the repo's template
+   * (legacy camelCase, empty values), which would clobber a user-populated config
+   * if one already exists in the target dir. Save the user's copy before the
+   * assemble step and restore it afterwards.
    */
   private async fetchAndAssemble(version: VersionInfo, context: ScaffoldContext): Promise<void> {
     const { Emitter: emitter } = context;
     const repoUrl = context.RepoUrl ?? DEFAULT_REPO_URL;
+    const includeClaudePack = context.IncludeClaudePack !== false;
 
     emitter.Emit('step:progress', {
       Type: 'step:progress',
@@ -156,7 +172,7 @@ export class ScaffoldPhase {
       fetched = await this.repoFetcher.FetchPaths({
         RepoUrl: repoUrl,
         Ref: version.Tag,
-        Paths: distributionSourcePaths(false),
+        Paths: distributionSourcePaths(false, undefined, includeClaudePack),
       });
     } catch (err) {
       throw new InstallerError(
@@ -166,6 +182,12 @@ export class ScaffoldPhase {
         'Check network access to GitHub. For an air-gapped install, run "mj bundle" on a connected machine and install from the resulting zip.'
       );
     }
+
+    // Snapshot a user-populated install.config.json before assembly overwrites it.
+    const userConfigPath = path.join(context.Dir, 'install.config.json');
+    const savedUserConfig = (await this.fileSystem.FileExists(userConfigPath))
+      ? await this.fileSystem.ReadText(userConfigPath)
+      : null;
 
     try {
       if (fetched.UsedFallback) {
@@ -180,7 +202,16 @@ export class ScaffoldPhase {
         Phase: 'scaffold',
         Message: 'Assembling distribution layout...',
       });
-      await this.assembler.AssembleToDir({ SourceDir: fetched.Dir }, context.Dir);
+      await this.assembler.AssembleToDir({ SourceDir: fetched.Dir, IncludeClaudePack: includeClaudePack }, context.Dir);
+
+      if (savedUserConfig !== null) {
+        await this.fileSystem.WriteText(userConfigPath, savedUserConfig);
+        emitter.Emit('step:progress', {
+          Type: 'step:progress',
+          Phase: 'scaffold',
+          Message: 'Preserved existing install.config.json across distribution assembly.',
+        });
+      }
     } catch (err) {
       throw new InstallerError(
         'scaffold',
@@ -196,6 +227,10 @@ export class ScaffoldPhase {
   /**
    * Monorepo path: download the full repository zip for the resolved tag and
    * extract it into the target directory. Used by `mj install --monorepo`.
+   *
+   * Also preserves the user's `install.config.json` across `ExtractZip`: the
+   * monorepo zip ships a stub `install.config.json` template that would
+   * otherwise overwrite a user-populated config sitting in the target dir.
    */
   private async downloadAndExtract(version: VersionInfo, context: ScaffoldContext): Promise<void> {
     const { Emitter: emitter } = context;
@@ -206,6 +241,12 @@ export class ScaffoldPhase {
       Phase: 'scaffold',
       Message: 'Extracting release...',
     });
+
+    // Snapshot a user-populated install.config.json before extraction overwrites it.
+    const userConfigPath = path.join(context.Dir, 'install.config.json');
+    const savedUserConfig = (await this.fileSystem.FileExists(userConfigPath))
+      ? await this.fileSystem.ReadText(userConfigPath)
+      : null;
 
     try {
       await this.fileSystem.ExtractZip(zipPath, context.Dir);
@@ -218,11 +259,49 @@ export class ScaffoldPhase {
       );
     }
 
+    if (savedUserConfig !== null) {
+      await this.fileSystem.WriteText(userConfigPath, savedUserConfig);
+      emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'scaffold',
+        Message: 'Preserved existing install.config.json across release extraction.',
+      });
+    }
+
     // Clean up temp ZIP (non-critical).
     try {
       await this.fileSystem.RemoveFile(zipPath);
     } catch {
       // ignore — temp dir is reclaimed by the OS
+    }
+  }
+
+  /**
+   * Read the Claude Code pack version stamp and emit a log or warn accordingly.
+   * Non-fatal — a missing pack is recoverable post-install via `mj install:claude`.
+   */
+  private async reportClaudePack(dir: string, emitter: InstallerEventEmitter): Promise<void> {
+    const versionPath = path.join(dir, '.claude', 'mj', 'VERSION');
+    let packVersion: string | null = null;
+    try {
+      const raw = await fs.readFile(versionPath, 'utf8');
+      packVersion = raw.trim();
+    } catch {
+      // file absent or unreadable — fall through to the warn branch
+    }
+
+    if (packVersion) {
+      emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: `Claude Code pack v${packVersion} installed.`,
+      });
+    } else {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'scaffold',
+        Message: 'Claude Code pack not found in distribution. Run `mj install:claude` to add it.',
+      });
     }
   }
 

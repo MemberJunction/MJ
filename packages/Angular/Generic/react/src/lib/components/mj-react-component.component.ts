@@ -28,12 +28,17 @@ import {
   reactRootManager,
   ResolvedComponents,
   SetupStyles,
-  ComponentRegistryService
+  ComponentRegistryService,
+  resolveUserStateScope,
+  userStateStorageKey,
+  parseStoredUserSettings,
+  mergeUserSettings,
+  applyUserSettingsUpdate
 } from '@memberjunction/react-runtime';
 import { createRuntimeUtilities } from '../utilities/runtime-utilities';
 import { LogError, CompositeKey, KeyValuePair, Metadata, RunView, RunViewParams, RunViewResult, RunQueryParams, RunQueryResult, DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { ComponentMetadataEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { ComponentUtilities, SimpleRunView, SimpleRunQuery } from '@memberjunction/interactive-component-types';
 
 /**
@@ -233,6 +238,26 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   get savedUserSettings(): any {
     return this._savedUserSettings;
   }
+
+  /**
+   * Optional explicit scope for per-user settings persistence. When omitted, the
+   * scope defaults to `<namespace>/<name>` of the component spec. Settings are
+   * stored per-user via `UserInfoEngine` under the key
+   * `InteractiveComponents_UserState_Root/<scope>`. Provide an
+   * explicit scope when a single component spec is rendered in multiple distinct
+   * contexts that should NOT share preferences (e.g. the same form spec used for
+   * different entities) — set it to something stable and unique per context.
+   */
+  @Input() UserStateScope?: string;
+
+  /**
+   * When `true` (default), the host transparently persists `savedUserSettings`
+   * per-user, cross-device via `UserInfoEngine` — seeding the component from
+   * storage on load and saving (debounced) on every `onSaveUserSettings` call,
+   * auto-scoped per component. Set to `false` to opt out and own persistence
+   * yourself by handling the `userSettingsChanged` output instead.
+   */
+  @Input() PersistUserSettings: boolean = true;
 
   /**
    * Host-supplied props spread into the React component's props alongside the
@@ -464,7 +489,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
         (container: HTMLElement) => reactContext.ReactDOM.createRoot(container),
         this.componentId
       );
-      
+
+      // Seed savedUserSettings from durable per-user storage before the first
+      // render so the component mounts with the user's persisted preferences.
+      await this.seedUserSettingsFromStore();
+
       // Initial render
       this.renderComponent();
       this.isInitialized = true;
@@ -1046,21 +1075,108 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   }
 
   /**
-   * Handle onSaveUserSettings from components
-   * This implements the SavedUserSettings pattern
+   * Handle onSaveUserSettings from components.
+   *
+   * This implements the SavedUserSettings pattern: the component owns its single
+   * settings object and hands us the full latest copy whenever it changes. We
+   * (1) **merge** the payload over our in-memory snapshot so any future re-render
+   * passes the latest values, (2) persist the merged snapshot per-user via
+   * UserInfoEngine (debounced, auto-scoped) unless the host opted out, and
+   * (3) still bubble the event up for any parent container that wants to observe
+   * changes — carrying the merged snapshot, so observers and storage agree.
+   *
+   * Merge (not replace) makes the host resilient to a component passing only the
+   * changed keys, and to the stale-prop case: we deliberately never re-render on
+   * save, so the `savedUserSettings` prop a component spreads is frozen at mount
+   * and would otherwise lose earlier same-session changes. Removing a key
+   * requires explicit intent — set it to `null` (see applyUserSettingsUpdate).
    */
   private handleSaveUserSettings(newSettings: Record<string, any>) {
-    // Just bubble the event up to parent containers for persistence
-    // We don't need to store anything here
+    // Keep our snapshot current WITHOUT going through the setter (which would
+    // re-render). The component already holds the correct state — it's the one
+    // that told us about the change — so re-rendering would only cause flicker.
+    this._savedUserSettings = applyUserSettingsUpdate(this._savedUserSettings, newSettings);
+
+    // Durably persist the latest settings for this user, scoped to this component.
+    this.persistUserSettings(this._savedUserSettings);
+
+    // Bubble the event up to parent containers (back-compat; no consumer required).
     this.userSettingsChanged.emit({
-      settings: newSettings,
+      settings: this._savedUserSettings,
       componentName: this.component?.name,
       timestamp: new Date()
     });
-    
-    // DO NOT re-render the component!
-    // The component already has the correct state - it's the one that told us about the change.
-    // Re-rendering would cause unnecessary DOM updates and visual flashing.
+  }
+
+  /**
+   * Resolve the durable storage key for this component's per-user settings, or
+   * null when persistence is disabled or no stable scope can be derived.
+   */
+  private getUserStateStorageKey(): string | null {
+    if (!this.PersistUserSettings) {
+      return null;
+    }
+    const scope = resolveUserStateScope(
+      this.UserStateScope,
+      this._component?.namespace,
+      this._component?.name
+    );
+    return userStateStorageKey(scope);
+  }
+
+  /**
+   * Seed `savedUserSettings` from durable per-user storage (UserInfoEngine),
+   * merging stored values over any host-provided defaults (stored wins). Best
+   * effort — any failure leaves the host-provided / empty settings in place.
+   */
+  private async seedUserSettingsFromStore(): Promise<void> {
+    const key = this.getUserStateStorageKey();
+    if (!key) {
+      return;
+    }
+    try {
+      const provider = this.ProviderToUse;
+      const user = provider?.CurrentUser;
+      if (!user) {
+        return; // No user context — cannot scope settings to a user.
+      }
+      // Idempotent: a no-op when the engine is already loaded for this user.
+      await UserInfoEngine.Instance.Config(false, user, provider);
+      const stored = parseStoredUserSettings(UserInfoEngine.Instance.GetSetting(key));
+      this._savedUserSettings = mergeUserSettings(this._savedUserSettings, stored);
+    } catch (error) {
+      if (this.enableLogging) {
+        console.warn('MJReactComponent: failed to seed user settings from store', error);
+      }
+    }
+  }
+
+  /**
+   * Persist the component's settings object for the current user (debounced,
+   * cross-device). Best effort — failures are logged when logging is enabled and
+   * never surfaced to the component.
+   */
+  private persistUserSettings(settings: Record<string, any> | string): void {
+    const key = this.getUserStateStorageKey();
+    if (!key) {
+      return;
+    }
+    try {
+      const provider = this.ProviderToUse;
+      const user = provider?.CurrentUser;
+      if (!user) {
+        return;
+      }
+      // The component normally hands us an object, but guard against a caller
+      // that already serialized it — double-stringifying would store a quoted
+      // JSON string the seed path could not parse back into settings.
+      const serialized = typeof settings === 'string' ? settings : JSON.stringify(settings);
+      UserInfoEngine.Instance.SetSettingDebounced(key, serialized, user);
+    } catch (error) {
+      if (this.enableLogging) {
+        console.warn('MJReactComponent: failed to persist user settings', error);
+      }
+    }
   }
 
   // =================================================================

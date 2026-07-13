@@ -715,13 +715,14 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewName, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) 
         return null;
 
       const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { Name: input.ViewName }, userPayload.userRecord));
-      const entity = provider.Entities.find((e) => UUIDsEqual(e.ID, viewInfo.EntityID));
+      const entity = provider.EntityByID(viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
         Results: returnData,
@@ -746,13 +747,14 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewID, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) 
         return null;
 
       const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
-      const entity = provider.Entities.find((e) => UUIDsEqual(e.ID, viewInfo.EntityID));
+      const entity = provider.EntityByID(viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
         Results: returnData,
@@ -777,11 +779,12 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:run', input.EntityName, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) return null;
 
-      const entity = provider.Entities.find((e) => e.Name === input.EntityName);
+      const entity = provider.EntityByName(input.EntityName);
       const returnData = this.processRawData(rawData.Results, entity.ID, entity);
       return {
         Results: returnData,
@@ -806,6 +809,7 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:batch', '*', userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       // Note: RunViewsGeneric returns the core RunViewResult type, not the GraphQL type
       const rawData = await super.RunViewsGeneric(input, provider, userPayload);
@@ -816,7 +820,7 @@ export class RunViewResolver extends ResolverBase {
       let results: RunViewGenericResult[] = [];
       for (const [index, data] of rawData.entries()) {
         // EntityName is backfilled by RunViewsGeneric when ViewID/ViewName was used
-        const entity = input[index].EntityName ? provider.Entities.find((e) => e.Name === input[index].EntityName) : null;
+        const entity = input[index].EntityName ? provider.EntityByName(input[index].EntityName) : null;
 
         const returnData: any[] = this.processRawData(data.Results, entity ? entity.ID : null, entity);
 
@@ -860,7 +864,7 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const entity = provider.Entities.find((e) => e.Name === input.ViewName);
+      const entity = provider.EntityByName(input.ViewName);
       const entityId = entity ? entity.ID : null;
       const returnData = this.processRawData(rawData.Results, entityId, entity);
       return {
@@ -908,7 +912,7 @@ export class RunViewResolver extends ResolverBase {
       }
 
       const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
-      const entity = provider.Entities.find((e) => UUIDsEqual(e.ID, viewInfo.EntityID));
+      const entity = provider.EntityByID(viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
         Results: returnData,
@@ -954,7 +958,7 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const entity = provider.Entities.find((e) => e.Name === input.EntityName);
+      const entity = provider.EntityByName(input.EntityName);
       if (!entity) {
         const errorMsg = `Entity ${input.EntityName} not found in metadata`;
         LogError(new Error(errorMsg));
@@ -1007,7 +1011,7 @@ export class RunViewResolver extends ResolverBase {
 
       let results: RunViewGenericResult[] = [];
       for (const [index, data] of rawData.entries()) {
-        const entity = provider.Entities.find((e) => e.Name === input[index].EntityName);
+        const entity = provider.EntityByName(input[index].EntityName);
         if (!entity) {
           LogError(new Error(`Entity with name ${input[index].EntityName} not found`));
           continue;
@@ -1084,7 +1088,7 @@ export class RunViewResolver extends ResolverBase {
       // Transform results to include processed data rows
       const transformedResults: RunViewWithCacheCheckResultOutput[] = response.results.map((result, index) => {
         const inputItem = input[index];
-        const entity = provider.Entities.find(e => e.Name === inputItem.params.EntityName);
+        const entity = inputItem.params.EntityName ? provider.EntityByName(inputItem.params.EntityName) : undefined;
 
         // If we have differential data but no entity, that's a configuration error
         if (result.status === 'differential' && result.differentialData && !entity) {

@@ -1,0 +1,21 @@
+.mj-form-slide-in-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.mj-form-slide-in-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mj-form-slide-in-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+}

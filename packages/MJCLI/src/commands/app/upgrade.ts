@@ -28,6 +28,10 @@ export default class AppUpgrade extends Command {
   static flags = {
     version: Flags.string({ description: 'Specific version to upgrade to (default: latest)' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
+    'non-interactive': Flags.boolean({
+      description: 'Skip interactive prompts; post-upgrade hooks use environment variables / defaults (for CI/headless upgrades)',
+      default: false,
+    }),
     'dangerously-ignore-dbl-underscore-schema-rule': Flags.boolean({
       hidden: true,
       default: false,
@@ -39,7 +43,7 @@ export default class AppUpgrade extends Command {
     const spinner = ora();
 
     try {
-      const context = await buildOrchestratorContext(this, flags.verbose);
+      const context = await buildOrchestratorContext(this, flags.verbose, !flags['non-interactive']);
 
       const result = await UpgradeApp(
         {

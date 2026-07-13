@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-mode="live" data-dock="open">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redesign B · Stage — Realtime Co-Agent UI</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+/* ====================================================================
+   REDESIGN B — "STAGE"
+   The channel surface IS the product. The whiteboard goes full-bleed
+   center stage; the conversation becomes a slim glass dock on the left
+   that fully collapses to captions-over-stage; call controls float in
+   a meeting-app bottom-center bar. Delegation + narration ride the
+   stage edge as a floating stack. Review mode trades the call bar for
+   a scrubbable TRANSPORT strip — leg segments, event markers, close
+   reasons — like a media player over the same stage.
+   ==================================================================== */
+
+.frame { position: relative; max-width: 1640px; margin: 0 auto; padding: 16px 20px 48px; }
+.ov {
+  position: relative; height: 846px; display: flex; flex-direction: column;
+  border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-xl);
+  overflow: hidden; background: var(--mj-bg-page); box-shadow: var(--mj-shadow-2xl);
+}
+
+.mode-switch { display: inline-flex; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-full); background: var(--mj-bg-surface); padding: 3px; gap: 3px; }
+.mode-switch button { border: 0; background: transparent; color: var(--mj-text-muted); font-family: inherit; font-size: 12.5px; font-weight: 700; padding: 5px 14px; border-radius: var(--mj-radius-full); cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.mode-switch button.on { background: var(--mj-brand-primary); color: #fff; box-shadow: var(--mj-shadow-brand); }
+html[data-mode="review"] .live-only { display: none !important; }
+html[data-mode="live"] .review-only { display: none !important; }
+html[data-dock="captions"] .dock-open-only { display: none !important; }
+html[data-dock="open"] .dock-captions-only { display: none !important; }
+
+.dn { position: absolute; z-index: 60; display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.03em; padding: 3px 9px; border-radius: var(--mj-radius-full); pointer-events: none; white-space: nowrap; background: color-mix(in srgb, var(--mj-color-tertiary-500) 16%, var(--mj-bg-surface-sunken)); border: 1px dashed var(--mj-color-tertiary-400); color: var(--mj-color-tertiary-300); box-shadow: var(--mj-shadow-md); }
+.dn i { font-size: 9px; }
+
+/* ---------- THIN TOP BAR ---------- */
+.topbar2 {
+  position: relative; z-index: 20; flex-shrink: 0; height: 50px; display: flex; align-items: center; gap: 12px; padding: 0 14px;
+  background: color-mix(in srgb, var(--mj-bg-surface) 88%, transparent); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+.topbar2 .agent-orb { --orb-size: 26px; } .topbar2 .agent-orb::after { inset: -3px; }
+.tb-id { display: flex; align-items: baseline; gap: 9px; white-space: nowrap; }
+.tb-name { font-weight: 700; font-size: 13.5px; }
+.tb-sub { font-size: 11px; color: var(--mj-text-muted); }
+.tb-state { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--mj-status-success); }
+.tb-review { display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 600; color: var(--mj-text-secondary); }
+.tb-review b { color: var(--mj-text-primary); }
+.tb-review .legs { font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: var(--mj-radius-full); background: rgba(38,153,204,0.16); color: var(--mj-brand-accent); border: 1px solid var(--mj-brand-primary); }
+
+/* center stage tabs */
+.stage-tabs { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; padding: 4px; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-full); background: var(--mj-bg-surface-card); }
+.g-tab { border: 0; background: transparent; font-family: inherit; font-size: 12px; font-weight: 700; color: var(--mj-text-muted); padding: 6px 14px; border-radius: var(--mj-radius-full); cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.g-tab:hover { color: var(--mj-text-secondary); }
+.g-tab.active { background: rgba(38,153,204,0.18); color: var(--mj-brand-accent); }
+.g-tab .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mj-status-success); box-shadow: 0 0 0 0 rgba(34,197,94,0.5); animation: pulse-ring 1.6s infinite; }
+.g-tab .ro { font-size: 8.5px; font-weight: 800; text-transform: uppercase; padding: 1px 5px; border-radius: 4px; background: var(--mj-bg-surface-elevated); color: var(--mj-text-muted); }
+
+.tb-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.iconb { width: 32px; height: 32px; border-radius: var(--mj-radius-md); display: grid; place-items: center; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); color: var(--mj-text-secondary); cursor: pointer; font-size: 12.5px; }
+.iconb:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+.devlink { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-full); cursor: pointer; background: transparent; color: var(--mj-text-muted); font-family: inherit; }
+.devlink:hover { color: var(--mj-text-secondary); border-color: var(--mj-border-strong); }
+.start-pill { display: inline-flex; align-items: center; gap: 8px; padding: 7px 16px; font-size: 12.5px; font-weight: 700; border-radius: var(--mj-radius-full); border: 1px solid var(--mj-brand-primary); cursor: pointer; font-family: inherit; background: var(--mj-brand-primary); color: #fff; box-shadow: var(--mj-shadow-brand); }
+.start-pill:hover { background: var(--mj-brand-primary-hover); }
+
+/* ---------- STAGE ---------- */
+.stage { position: relative; flex: 1; min-height: 0; }
+.s-pane { position: absolute; inset: 0; display: none; }
+.s-pane.active { display: block; }
+.board {
+  position: absolute; inset: 0; overflow: hidden;
+  background-color: var(--mj-bg-surface-sunken);
+  background-image: radial-gradient(rgba(148,163,184,0.14) 1px, transparent 1px); background-size: 24px 24px;
+}
+.board-meta { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: 10px; padding: 5px 14px; border-radius: var(--mj-radius-full); background: color-mix(in srgb, var(--mj-bg-surface) 80%, transparent); border: 1px solid var(--mj-border-default); font-size: 11px; color: var(--mj-text-muted); backdrop-filter: blur(6px); }
+.board-meta i.ok { color: var(--mj-status-success); font-size: 9px; }
+.board-meta .sw { width: 9px; height: 9px; border-radius: 3px; display: inline-block; margin-right: 4px; vertical-align: -1px; }
+.board-meta .sw--you { background: var(--mj-bg-surface-elevated); border: 1px solid var(--mj-border-strong); }
+.board-meta .sw--sage { background: var(--sage-bg); border: 1px solid var(--sage); }
+.ro-tag { position: absolute; top: 12px; right: 16px; z-index: 8; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; padding: 4px 11px; border-radius: var(--mj-radius-full); background: rgba(2,6,23,0.6); border: 1px solid var(--mj-border-strong); color: var(--mj-text-secondary); }
+
+/* board items */
+.bi { position: absolute; box-shadow: var(--mj-shadow-lg); border-radius: 10px; }
+.author-chip { position: absolute; top: -9px; left: 8px; z-index: 3; display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border-radius: var(--mj-radius-full); white-space: nowrap; }
+.author-chip--you { background: var(--mj-color-neutral-700); border: 1px solid var(--mj-border-strong); color: var(--mj-color-neutral-300); }
+.author-chip--sage { background: #2a2150; border: 1px solid var(--sage); color: var(--mj-color-violet-300); }
+.sticky-amber { width: 180px; padding: 14px 13px 12px; border-radius: 4px 4px 14px 4px; font-size: 13px; line-height: 1.45; font-weight: 600; background: linear-gradient(180deg, #fcd34d, #f5b831); color: #3f2d04; transform: rotate(-1.4deg); }
+.scard { width: 230px; background: linear-gradient(180deg, #322a5e, #272050); border: 1px solid var(--sage); color: var(--mj-text-primary); box-shadow: 0 0 0 3px rgba(167,139,250,0.18), var(--mj-shadow-lg); padding: 12px 14px 10px; }
+.scard .h { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-color-violet-300); margin-bottom: 8px; display: flex; align-items: center; gap: 7px; }
+.scard .r { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+.scard .r b { font-weight: 700; } .scard .r .v { font-family: var(--mj-font-mono); font-size: 12.5px; }
+.scard .up { color: var(--mj-color-success-400); font-weight: 700; font-size: 11px; }
+.scard .spark { display: flex; align-items: flex-end; gap: 2px; height: 22px; margin-top: 6px; }
+.scard .spark span { flex: 1; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--mj-color-violet-400) 55%, transparent); }
+.scard .wrow { display: flex; align-items: center; gap: 9px; font-size: 13px; padding: 4px 0; }
+.scard .wrow i { width: 18px; text-align: center; color: var(--mj-color-warning-400); }
+.scard .wrow .t { margin-left: auto; font-family: var(--mj-font-mono); font-size: 12.5px; }
+.scard .hl { font-size: 11.5px; line-height: 1.45; padding: 5px 0; border-bottom: 1px dashed color-mix(in srgb, var(--sage) 30%, transparent); color: var(--mj-text-secondary); }
+.scard .hl:last-child { border-bottom: 0; }
+.scard .hl b { color: var(--mj-text-primary); font-weight: 600; display: block; }
+.pop-in { animation: bi-pop 600ms cubic-bezier(.34,1.4,.64,1) both 0.6s, sage-flash 2.4s ease-out 0.6s; }
+@keyframes bi-pop { 0% { transform: scale(0.55); opacity: 0; } 70% { transform: scale(1.06); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes sage-flash { 0% { box-shadow: 0 0 0 12px rgba(167,139,250,0.45), 0 0 36px rgba(167,139,250,0.5), var(--mj-shadow-lg); } 100% { box-shadow: 0 0 0 3px rgba(167,139,250,0.18), var(--mj-shadow-lg); } }
+.conn { position: absolute; pointer-events: none; overflow: visible; }
+.conn path { stroke: var(--sage); stroke-width: 2; fill: none; filter: drop-shadow(0 0 4px rgba(167,139,250,0.3)); }
+.presence { position: absolute; z-index: 9; display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 800; color: var(--mj-color-violet-300); }
+.presence .cur { width: 14px; height: 14px; transform: rotate(-12deg); color: var(--sage); }
+
+/* ---------- LEFT GLASS DOCK (conversation) ---------- */
+.dock {
+  position: absolute; left: 14px; top: 14px; bottom: 96px; width: 348px; z-index: 15;
+  display: flex; flex-direction: column; border-radius: var(--mj-radius-lg); overflow: hidden;
+  background: color-mix(in srgb, var(--mj-bg-surface-card) 92%, transparent); backdrop-filter: blur(10px);
+  border: 1px solid var(--mj-border-default); box-shadow: var(--mj-shadow-xl);
+}
+html[data-mode="review"] .dock { bottom: 110px; }
+.dock-head { flex-shrink: 0; display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-bottom: 1px solid var(--mj-border-default); font-size: 12px; font-weight: 700; color: var(--mj-text-secondary); }
+.dock-head i.lead { color: var(--mj-brand-accent); }
+.dock-head .min { margin-left: auto; }
+.dock-thread { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; scrollbar-width: thin; scrollbar-color: var(--mj-border-strong) transparent; }
+.dock-thread .thread { gap: 12px; }
+.dock-thread .bubble { font-size: 12.5px; padding: 8px 11px; max-width: 246px; }
+.dock-thread .turn { gap: 8px; } .dock-thread .turn-avatar { width: 24px; height: 24px; font-size: 10px; }
+.dock-thread .turn-meta { font-size: 10px; }
+.dock-compose { flex-shrink: 0; display: flex; align-items: center; gap: 8px; margin: 8px 10px 10px; padding: 4px 4px 4px 12px; border: 1px solid var(--mj-border-strong); border-radius: var(--mj-radius-full); background: var(--mj-bg-surface); }
+.dock-compose:focus-within { border-color: var(--mj-brand-primary); box-shadow: 0 0 0 3px rgba(38,153,204,0.12); }
+.dock-compose input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--mj-text-primary); font-family: inherit; font-size: 12px; }
+.dock-compose input::placeholder { color: var(--mj-text-muted); }
+.dock-send { width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--mj-brand-primary); color: #fff; display: grid; place-items: center; cursor: pointer; font-size: 11px; flex-shrink: 0; }
+.leg-divider { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.leg-divider .ln { flex: 1; height: 1px; background: var(--mj-border-default); }
+.leg-divider .lbl { font-size: 9.5px; font-weight: 800; color: var(--mj-text-muted); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.leg-divider .reason { font-size: 9px; font-weight: 700; padding: 1px 7px; border-radius: var(--mj-radius-full); background: rgba(100,116,139,0.18); border: 1px solid var(--mj-border-strong); color: var(--mj-text-secondary); white-space: nowrap; }
+.leg-divider--resume .lbl { color: var(--mj-brand-accent); }
+
+/* captions-over-stage (dock collapsed) */
+.captions-ribbon {
+  position: absolute; left: 14px; bottom: 96px; z-index: 15; max-width: 520px;
+  display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border-radius: var(--mj-radius-lg);
+  background: color-mix(in srgb, var(--mj-bg-surface-sunken) 86%, transparent); backdrop-filter: blur(10px);
+  border: 1px solid var(--mj-border-default); box-shadow: var(--mj-shadow-xl);
+}
+.captions-ribbon .agent-orb { --orb-size: 30px; } .captions-ribbon .agent-orb::after { inset: -3px; }
+.captions-ribbon .who { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-brand-accent); margin-bottom: 3px; }
+.captions-ribbon .line { font-size: 13.5px; line-height: 1.5; color: var(--mj-text-primary); }
+.captions-ribbon .expand { margin-left: 6px; flex-shrink: 0; }
+
+/* ---------- STAGE-EDGE ACTIVITY STACK (delegation + narration) ---------- */
+.edge-stack { position: absolute; right: 16px; top: 16px; z-index: 14; width: 330px; display: flex; flex-direction: column; gap: 10px; }
+.edge-card { border: 1px solid var(--sage-border); background: color-mix(in srgb, var(--sage-bg) 100%, transparent); backdrop-filter: blur(10px); border-radius: var(--mj-radius-lg); padding: 12px 14px; box-shadow: var(--mj-shadow-xl); }
+.edge-card .top { display: flex; align-items: center; gap: 9px; }
+.edge-card .nm { font-weight: 700; font-size: 12.5px; }
+.edge-card .st { margin-left: auto; font-size: 10.5px; font-weight: 800; color: var(--mj-color-violet-300); display: inline-flex; gap: 6px; align-items: center; }
+.edge-card .st i { animation: spin 1.1s linear infinite; }
+.edge-card .step { font-size: 11.5px; color: var(--mj-text-secondary); margin-top: 7px; }
+.edge-card .bar2 { height: 3px; border-radius: var(--mj-radius-full); margin-top: 9px; background: color-mix(in srgb, var(--sage) 18%, transparent); overflow: hidden; }
+.edge-card .bar2 div { height: 100%; width: 64%; background: linear-gradient(90deg, var(--mj-color-violet-500), var(--mj-color-violet-300)); }
+.edge-done { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--mj-radius-full); border: 1px solid var(--sage-border); background: color-mix(in srgb, var(--sage-bg) 100%, transparent); backdrop-filter: blur(10px); font-size: 11.5px; box-shadow: var(--mj-shadow-lg); }
+.edge-done .mark { width: 15px; height: 15px; border-radius: 50%; background: var(--mj-status-success); color: #fff; display: grid; place-items: center; font-size: 8px; flex-shrink: 0; }
+.edge-done b { font-weight: 700; }
+.edge-done .prev { color: var(--mj-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.edge-note { display: flex; gap: 8px; align-items: flex-start; font-size: 11.5px; font-style: italic; color: var(--mj-text-secondary); line-height: 1.5; padding: 7px 11px; border-left: 2px solid var(--sage-border); background: color-mix(in srgb, var(--sage) 6%, transparent); border-radius: 0 var(--mj-radius-md) var(--mj-radius-md) 0; }
+.edge-note i { color: var(--mj-color-violet-300); font-size: 10px; margin-top: 3px; }
+.alink2 { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; border: 1px solid var(--mj-brand-primary); border-radius: var(--mj-radius-full); background: rgba(38,153,204,0.18); color: var(--mj-brand-accent); backdrop-filter: blur(8px); align-self: flex-end; }
+
+/* ---------- FLOATING CALL BAR (live) ---------- */
+.callbar {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 25;
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+  border-radius: var(--mj-radius-full); border: 1px solid var(--mj-border-strong);
+  background: color-mix(in srgb, var(--mj-bg-surface) 88%, transparent); backdrop-filter: blur(12px);
+  box-shadow: var(--mj-shadow-2xl);
+}
+.callbar .id { display: flex; align-items: center; gap: 9px; padding-right: 6px; }
+.callbar .agent-orb { --orb-size: 30px; } .callbar .agent-orb::after { inset: -3px; }
+.callbar .nm { font-size: 12px; font-weight: 700; white-space: nowrap; }
+.callbar .st { font-size: 10px; color: var(--mj-status-success); font-weight: 700; }
+.callbar .sep { width: 1px; height: 26px; background: var(--mj-border-default); }
+.callbar .ctrl { width: 42px; height: 42px; font-size: 15px; }
+.callbar .ctrl--end { width: 48px; height: 48px; font-size: 16px; }
+
+/* ---------- REVIEW TRANSPORT STRIP ---------- */
+.transport {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 25;
+  display: flex; align-items: center; gap: 16px; padding: 14px 18px;
+  background: color-mix(in srgb, var(--mj-bg-surface) 92%, transparent); backdrop-filter: blur(12px);
+  border-top: 1px solid var(--mj-border-default);
+}
+.t-play { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--mj-brand-primary); background: var(--mj-brand-primary); color: #fff; font-size: 15px; display: grid; place-items: center; cursor: pointer; box-shadow: var(--mj-shadow-brand); flex-shrink: 0; }
+.t-track { flex: 1; position: relative; height: 46px; }
+.t-rail { position: absolute; left: 0; right: 0; top: 24px; height: 8px; border-radius: var(--mj-radius-full); background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-subtle); }
+.t-seg { position: absolute; top: 24px; height: 8px; border-radius: var(--mj-radius-full); background: linear-gradient(90deg, var(--mj-color-brand-500), var(--mj-color-accent-400)); }
+.t-gap-label { position: absolute; top: 27px; font-size: 8.5px; font-weight: 800; color: var(--mj-text-disabled); text-transform: uppercase; letter-spacing: 0.06em; transform: translateY(-50%); }
+.t-leg-chip { position: absolute; top: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 9.5px; font-weight: 800; color: var(--mj-text-muted); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.t-leg-chip .reason { font-size: 9px; font-weight: 700; text-transform: none; letter-spacing: 0; padding: 1px 7px; border-radius: var(--mj-radius-full); background: rgba(100,116,139,0.18); border: 1px solid var(--mj-border-strong); color: var(--mj-text-secondary); }
+.t-marker { position: absolute; top: 21px; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--mj-bg-page); cursor: pointer; z-index: 3; }
+.t-marker--deleg { background: var(--sage); box-shadow: 0 0 8px rgba(167,139,250,0.6); }
+.t-marker--board { background: var(--mj-color-tertiary-400); box-shadow: 0 0 8px rgba(34,211,238,0.5); }
+.t-marker--artifact { background: var(--mj-brand-accent); }
+.t-playhead { position: absolute; top: 14px; width: 2.5px; height: 28px; background: var(--mj-text-primary); border-radius: 2px; z-index: 4; box-shadow: 0 0 8px rgba(241,245,249,0.4); }
+.t-playhead::after { content: ""; position: absolute; top: -5px; left: -4.25px; width: 11px; height: 11px; border-radius: 50%; background: var(--mj-text-primary); }
+.t-time { position: absolute; bottom: -3px; font-size: 9.5px; font-family: var(--mj-font-mono); color: var(--mj-text-muted); }
+.t-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.t-clock { font-family: var(--mj-font-mono); font-size: 12px; color: var(--mj-text-secondary); }
+.t-clock b { color: var(--mj-text-primary); }
+
+/* artifact + activity stage panes */
+.center-doc { position: absolute; inset: 0; overflow-y: auto; display: flex; justify-content: center; padding: 30px 20px 120px; background: var(--mj-bg-surface-sunken); }
+.doc-card { width: 620px; height: fit-content; background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg); box-shadow: var(--mj-shadow-xl); padding: 22px 26px; }
+.doc-card h3 { margin: 0 0 4px; font-size: 18px; letter-spacing: -0.01em; }
+.doc-card .cap { font-size: 12px; color: var(--mj-text-muted); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.art-sec { border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md); background: var(--mj-bg-surface); padding: 13px 16px; margin-bottom: 12px; }
+.art-sec .h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-text-muted); margin-bottom: 8px; }
+.art-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 13.5px; padding: 4px 0; }
+.art-row b { font-weight: 700; } .art-row .up { color: var(--mj-status-success); font-weight: 700; font-size: 12px; }
+.art-row .muted2 { color: var(--mj-text-muted); font-size: 12px; }
+.act-card2 { border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg); background: var(--mj-bg-surface-card); padding: 13px 16px; margin-bottom: 10px; }
+.act-card2 .top { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; }
+.act-card2 .st-done { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--mj-status-success); }
+.act-card2 .st-run { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--mj-color-violet-300); }
+.act-card2 .st-run i { animation: spin 1.1s linear infinite; }
+.act-card2 .step { font-size: 12px; color: var(--mj-text-secondary); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Redesign B · <b style="color:var(--mj-text-secondary)">Stage</b> — full-bleed surface, glass dock, transport review</span></div>
+    <div class="topbar-spacer"></div>
+    <div class="mode-switch" role="tablist" aria-label="Mockup state">
+      <button type="button" id="mLive" class="on" onclick="setMode('live')"><span class="dot dot--live"></span> Live</button>
+      <button type="button" id="mReview" onclick="setMode('review')"><i class="fa-solid fa-clock-rotate-left"></i> Review</button>
+    </div>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="frame">
+    <div class="ov">
+
+      <!-- ============ THIN TOP BAR ============ -->
+      <div class="topbar2">
+        <div class="agent-orb live-only" data-state="speaking"></div>
+        <div class="tb-id live-only">
+          <span class="tb-name">Voice for Sage</span>
+          <span class="pill pill--sage" style="font-size:10px; padding:2px 8px"><i class="fa-solid fa-feather"></i> Co-Agent</span>
+          <span class="tb-sub">gpt-realtime · alloy</span>
+          <span class="tb-state"><span class="dot dot--live"></span> Speaking</span>
+        </div>
+        <i class="fa-solid fa-clock-rotate-left review-only" style="color:var(--mj-text-muted); font-size:13px"></i>
+        <div class="tb-review review-only">
+          <span class="tb-name">Voice for Sage</span>
+          <span>· Session review</span>
+          <b>Jun 11, 2:58 → 3:19 PM</b>
+          <span class="legs">2 legs</span>
+        </div>
+
+        <!-- center stage switcher -->
+        <div class="stage-tabs" role="tablist">
+          <button type="button" class="g-tab active" data-tab="board"><i class="fa-solid fa-chalkboard"></i> Whiteboard <span class="live-dot live-only"></span><span class="ro review-only">read-only</span></button>
+          <button type="button" class="g-tab" data-tab="art"><i class="fa-solid fa-file-lines"></i> Market briefing</button>
+          <button type="button" class="g-tab" data-tab="act"><i class="fa-solid fa-list-check"></i> Activity</button>
+        </div>
+
+        <div class="tb-right">
+          <button type="button" class="devlink"><i class="fa-solid fa-arrow-up-right-from-square"></i> Session</button>
+          <button type="button" class="iconb" title="Minimize to floating pill"><i class="fa-solid fa-down-left-and-up-right-to-center"></i></button>
+          <button type="button" class="start-pill review-only"><i class="fa-solid fa-phone"></i> Start live session</button>
+          <button type="button" class="iconb" title="Close" aria-label="Close session view"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <span class="dn" style="bottom:-11px; right:12px"><i class="fa-solid fa-arrow-up"></i> Close always in the bar · stage tabs replace the side-panel tab strip</span>
+      </div>
+
+      <!-- ============ STAGE ============ -->
+      <div class="stage">
+
+        <!-- WHITEBOARD pane (the stage) -->
+        <div class="s-pane active" data-pane="board">
+          <div class="board">
+            <div class="board-meta">
+              <span><i class="fa-solid fa-circle-check ok"></i> saved · just now</span>
+              <span><span class="sw sw--you"></span>You</span><span><span class="sw sw--sage"></span>Sage</span>
+            </div>
+            <span class="ro-tag review-only"><i class="fa-solid fa-lock" style="font-size:9px"></i> read-only · pan &amp; zoom</span>
+
+            <div class="bi sticky-amber" style="left:430px; top:120px">
+              <span class="author-chip author-chip--you"><i class="fa-solid fa-user" style="font-size:7px"></i> You</span>
+              Wed AM briefing<br><span style="font-weight:500">watch: AAPL · MSFT · NVDA</span>
+            </div>
+
+            <div class="bi scard" style="left:700px; top:90px">
+              <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:7px"></i> Sage</span>
+              <div class="h"><i class="fa-solid fa-arrow-trend-up"></i> Quotes · 9:32 AM ET</div>
+              <div class="r"><b>AAPL</b><span class="v">$228.14</span><span class="up">+1.2%</span></div>
+              <div class="r"><b>MSFT</b><span class="v">$474.96</span><span class="up">+0.6%</span></div>
+              <div class="r"><b>NVDA</b><span class="v">$186.50</span><span class="up">+2.1%</span></div>
+              <div class="spark"><span style="height:30%"></span><span style="height:45%"></span><span style="height:38%"></span><span style="height:60%"></span><span style="height:52%"></span><span style="height:74%"></span><span style="height:68%"></span><span style="height:88%"></span><span style="height:100%"></span></div>
+            </div>
+
+            <div class="bi scard" style="left:1010px; top:120px; width:212px">
+              <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:7px"></i> Sage</span>
+              <div class="h"><i class="fa-solid fa-cloud-sun"></i> Weather · today</div>
+              <div class="wrow"><i class="fa-solid fa-sun"></i> Boston <span class="t">72°F</span></div>
+              <div class="wrow"><i class="fa-solid fa-cloud-rain"></i> Chicago <span class="t">64°F</span></div>
+            </div>
+
+            <div class="bi scard pop-in" style="left:760px; top:330px; width:280px">
+              <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:7px"></i> Sage</span>
+              <div class="h"><i class="fa-solid fa-magnifying-glass"></i> AI headlines · this morning</div>
+              <div class="hl"><b>Frontier labs agree on eval-sharing pact</b>Reuters · 7:40 AM</div>
+              <div class="hl"><b>Open-weights model tops coding benchmark</b>The Verge · 6:55 AM</div>
+              <div class="hl"><b>EU publishes realtime-agent guidance</b>FT · 6:10 AM</div>
+              <div class="hl"><b>Chip supply loosens for inference clusters</b>Bloomberg · 5:48 AM</div>
+            </div>
+
+            <svg class="conn" style="left:614px; top:150px; width:86px; height:30px"><path d="M0,12 C36,12 50,16 80,16"></path></svg>
+            <svg class="conn" style="left:614px; top:170px; width:400px; height:40px"><path d="M0,0 C160,40 280,28 392,12"></path></svg>
+            <svg class="conn" style="left:560px; top:210px; width:200px; height:160px"><path d="M0,0 C60,90 120,130 194,148"></path></svg>
+
+            <div class="presence live-only" style="left:1052px; top:316px">
+              <svg class="cur" viewBox="0 0 24 24" fill="currentColor"><path d="M4 2l16 8-7 2-3 7z"/></svg> Sage
+            </div>
+            <span class="dn live-only" style="left:700px; top:560px"><i class="fa-solid fa-wand-magic-sparkles"></i> agent writes pop-in with the violet flash + presence cursor</span>
+          </div>
+        </div>
+
+        <!-- ARTIFACT pane -->
+        <div class="s-pane" data-pane="art">
+          <div class="center-doc">
+            <div class="doc-card">
+              <h3>Market briefing</h3>
+              <div class="cap"><i class="fa-solid fa-shield-halved" style="color:var(--mj-color-violet-300)"></i> produced via Sage · <span class="live-only">v1 · just now</span><span class="review-only">v2 · carried across legs</span></div>
+              <div class="art-sec">
+                <div class="h">Quotes · 9:32 AM ET</div>
+                <div class="art-row"><b>AAPL</b><span class="muted2">Apple</span><span>$228.14 <span class="up">+1.2%</span></span></div>
+                <div class="art-row"><b>MSFT</b><span class="muted2">Microsoft</span><span>$474.96 <span class="up">+0.6%</span></span></div>
+                <div class="art-row"><b>NVDA</b><span class="muted2">Nvidia</span><span>$186.50 <span class="up">+2.1%</span></span></div>
+              </div>
+              <div class="art-sec">
+                <div class="h">Weather</div>
+                <div class="art-row"><b>Boston</b><span class="muted2">Sunny</span><span>72°F</span></div>
+                <div class="art-row"><b>Chicago</b><span class="muted2">Rain after 2 PM</span><span>64°F</span></div>
+              </div>
+              <div class="art-sec">
+                <div class="h">Top AI headlines</div>
+                <div class="art-row" style="display:block"><b>Frontier labs agree on eval-sharing pact</b><span class="muted2" style="display:block">Reuters · 7:40 AM</span></div>
+                <div class="art-row" style="display:block"><b>Open-weights model tops coding benchmark</b><span class="muted2" style="display:block">The Verge · 6:55 AM</span></div>
+                <div class="art-row" style="display:block"><b>EU publishes realtime-agent guidance</b><span class="muted2" style="display:block">FT · 6:10 AM</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACTIVITY pane -->
+        <div class="s-pane" data-pane="act">
+          <div class="center-doc">
+            <div class="doc-card">
+              <h3 style="font-size:15px">Session activity</h3>
+              <div class="cap">delegated runs, tools and artifacts — newest first</div>
+              <div class="act-card2 live-only" style="border-color:var(--sage-border); background:var(--sage-bg)">
+                <div class="top"><div class="avatar avatar--sage" style="width:26px;height:26px;font-size:11px">S</div> Sage <span class="st-run"><i class="fa-solid fa-spinner"></i> Running</span></div>
+                <div class="step">Web search — this morning's AI headlines</div>
+              </div>
+              <div class="act-card2">
+                <div class="top"><div class="avatar avatar--sage" style="width:26px;height:26px;font-size:11px">S</div> Sage <span class="st-done"><i class="fa-solid fa-check"></i> Done · 41s</span></div>
+                <div class="step">3 quotes, 2 forecasts &amp; 4 headlines pinned to the board → <b>Market briefing</b></div>
+              </div>
+              <div class="act-card2 review-only">
+                <div class="top"><div class="avatar avatar--sage" style="width:26px;height:26px;font-size:11px">S</div> Sage <span class="st-done"><i class="fa-solid fa-check"></i> Done · 18s</span></div>
+                <div class="step">Refreshed quotes &amp; updated the board → <b>Market briefing v2</b></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LEFT GLASS DOCK — conversation -->
+        <div class="dock dock-open-only">
+          <div class="dock-head">
+            <i class="fa-solid fa-comments lead"></i> Conversation
+            <span class="muted" style="font-weight:500; font-size:10.5px">captions on</span>
+            <button type="button" class="iconb min" style="width:26px;height:26px;font-size:11px" title="Collapse to captions" onclick="setDock('captions')"><i class="fa-solid fa-compress"></i></button>
+          </div>
+          <span class="dn" style="top:46px; right:-238px"><i class="fa-solid fa-layer-group"></i> conversation = glass dock; collapses to captions-over-stage</span>
+          <div class="dock-thread">
+            <div class="thread">
+              <div class="leg-divider review-only">
+                <span class="ln"></span><span class="lbl">Leg 1 · 2:58 PM</span><span class="ln"></span>
+              </div>
+              <div class="turn turn--user">
+                <div class="turn-avatar">A</div>
+                <div><div class="turn-meta"><span class="typed-tag">spoken</span> You</div>
+                <div class="bubble">Morning, Sage — market and weather briefing. Quotes for Apple, Microsoft, Nvidia; weather for Boston and Chicago; the top AI headlines. Pin it all to the whiteboard.</div></div>
+              </div>
+              <div class="turn turn--agent">
+                <div class="turn-avatar">S</div>
+                <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+                <div class="bubble">On it — gathering quotes, both forecasts and the headlines. They'll land on the board as they come in.</div></div>
+              </div>
+              <div class="leg-divider review-only">
+                <span class="ln"></span><span class="lbl">ended 3:00</span><span class="reason">Ended by user</span><span class="ln"></span>
+              </div>
+              <div class="leg-divider leg-divider--resume review-only">
+                <span class="ln"></span><span class="lbl"><i class="fa-solid fa-rotate-right"></i> resumed 3:12 · board + artifact carried</span><span class="ln"></span>
+              </div>
+              <div class="turn turn--user review-only">
+                <div class="turn-avatar">A</div>
+                <div><div class="turn-meta"><span class="typed-tag">spoken</span> You</div>
+                <div class="bubble">Back — where did we leave off?</div></div>
+              </div>
+              <div class="turn turn--agent review-only">
+                <div class="turn-avatar">S</div>
+                <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+                <div class="bubble">Your briefing board is still up. I refreshed the quotes — Nvidia extended its gain to two point four percent.</div></div>
+              </div>
+              <div class="leg-divider review-only">
+                <span class="ln"></span><span class="lbl">ended 3:19</span><span class="reason">Idle timeout · janitor</span><span class="ln"></span>
+              </div>
+              <div class="turn turn--agent live-only">
+                <div class="turn-avatar">S</div>
+                <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+                <div class="bubble">Quotes and weather are pinned — finishing the news sweep now.<span class="caption-cursor"></span></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="dock-compose live-only">
+            <input type="text" placeholder="Type into the live session…">
+            <button type="button" class="dock-send" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
+          </div>
+        </div>
+
+        <!-- CAPTIONS RIBBON (dock collapsed) -->
+        <div class="captions-ribbon dock-captions-only live-only">
+          <div class="agent-orb" data-state="speaking"></div>
+          <div>
+            <div class="who">Sage · speaking</div>
+            <div class="line">Quotes and weather are pinned — finishing the news sweep now.<span class="caption-cursor"></span></div>
+          </div>
+          <button type="button" class="iconb expand" style="width:26px;height:26px;font-size:11px" title="Expand conversation" onclick="setDock('open')"><i class="fa-solid fa-expand"></i></button>
+        </div>
+        <div class="captions-ribbon dock-captions-only review-only" style="bottom:110px">
+          <i class="fa-solid fa-clock-rotate-left" style="color:var(--mj-text-muted); margin-top:4px"></i>
+          <div>
+            <div class="who" style="color:var(--mj-text-muted)">Transcript hidden</div>
+            <div class="line" style="font-size:12.5px; color:var(--mj-text-secondary)">Expand the conversation dock or scrub the transport to step through turns.</div>
+          </div>
+          <button type="button" class="iconb expand" style="width:26px;height:26px;font-size:11px" title="Expand conversation" onclick="setDock('open')"><i class="fa-solid fa-expand"></i></button>
+        </div>
+
+        <!-- STAGE-EDGE STACK: delegation in flight + done + narration -->
+        <div class="edge-stack live-only">
+          <div class="edge-card">
+            <div class="top">
+              <div class="avatar avatar--sage" style="width:26px; height:26px; font-size:11px">S</div>
+              <span class="nm">Sage is working…</span>
+              <span class="st"><i class="fa-solid fa-spinner"></i> RUNNING</span>
+            </div>
+            <div class="step">Web search — this morning's AI headlines <span class="muted">· step 3 of 4</span></div>
+            <div class="bar2"><div></div></div>
+          </div>
+          <div class="edge-note" role="status">
+            <i class="fa-solid fa-comment-dots"></i>
+            Pinning the quotes and forecasts while the news search finishes…
+          </div>
+          <div class="edge-done">
+            <span class="mark"><i class="fa-solid fa-check"></i></span>
+            <b>Sage</b><span class="prev">quotes + forecasts pinned</span>
+            <span style="margin-left:auto; font-size:9px; font-weight:800; color:var(--mj-color-violet-300); text-transform:uppercase; letter-spacing:0.05em"><i class="fa-solid fa-shield-halved"></i> via Sage</span>
+          </div>
+          <button type="button" class="alink2"><i class="fa-solid fa-file-lines"></i> Market briefing</button>
+          <span class="dn" style="position:static; align-self:flex-end"><i class="fa-solid fa-diagram-project"></i> delegation rides the stage edge — thread stays voice-only</span>
+        </div>
+
+        <!-- FLOATING CALL BAR (live) -->
+        <div class="callbar live-only">
+          <div class="id">
+            <div class="agent-orb" data-state="speaking"></div>
+            <div><div class="nm">Voice for Sage</div><div class="st">Speaking</div></div>
+          </div>
+          <span class="sep"></span>
+          <div class="ctrl-group"><button type="button" class="ctrl" title="Mute"><i class="fa-solid fa-microphone"></i></button></div>
+          <div class="ctrl-group"><button type="button" class="ctrl ctrl--on" title="Captions on"><i class="fa-solid fa-closed-captioning"></i></button></div>
+          <div class="ctrl-group"><button type="button" class="ctrl" title="Conversation dock" onclick="toggleDock()"><i class="fa-solid fa-comments"></i></button></div>
+          <div class="ctrl-group"><button type="button" class="ctrl" title="Developer links"><i class="fa-solid fa-gear"></i></button></div>
+          <span class="sep"></span>
+          <div class="ctrl-group"><button type="button" class="ctrl ctrl--end" title="End call"><i class="fa-solid fa-phone-slash"></i></button></div>
+          <span class="dn" style="top:-13px; left:50%; transform:translateX(-50%)"><i class="fa-solid fa-video"></i> meeting-app call bar — floats over the stage, never owns a row</span>
+        </div>
+
+        <!-- REVIEW TRANSPORT -->
+        <div class="transport review-only">
+          <button type="button" class="t-play" title="Replay the session"><i class="fa-solid fa-play"></i></button>
+          <div class="t-track">
+            <!-- leg 1: 2:58–3:00 -->
+            <span class="t-leg-chip" style="left:0%">Leg 1 <span class="reason">Ended by user</span></span>
+            <div class="t-rail"></div>
+            <div class="t-seg" style="left:0%; width:26%"></div>
+            <!-- gap -->
+            <span class="t-gap-label" style="left:29.5%">away · 12 min</span>
+            <!-- leg 2: 3:12–3:19 -->
+            <span class="t-leg-chip" style="left:44%">Leg 2 <span class="reason">Idle timeout · janitor</span></span>
+            <div class="t-seg" style="left:44%; width:56%"></div>
+            <!-- markers -->
+            <span class="t-marker t-marker--deleg" style="left:9%" title="Delegation · Sage gathered the briefing"></span>
+            <span class="t-marker t-marker--board" style="left:17%" title="Board · Sage pinned 3 cards"></span>
+            <span class="t-marker t-marker--artifact" style="left:21%" title="Artifact · Market briefing v1"></span>
+            <span class="t-marker t-marker--deleg" style="left:58%" title="Delegation · refresh quotes"></span>
+            <span class="t-marker t-marker--board" style="left:66%" title="Board · quotes card updated"></span>
+            <span class="t-playhead" style="left:62%"></span>
+            <span class="t-time" style="left:0%">2:58</span>
+            <span class="t-time" style="left:24%">3:00</span>
+            <span class="t-time" style="left:44%">3:12</span>
+            <span class="t-time" style="right:0%">3:19</span>
+          </div>
+          <div class="t-right">
+            <span class="t-clock"><b>3:15:42</b> / 21:00</span>
+          </div>
+          <span class="dn" style="top:-13px; left:50%; transform:translateX(-50%)"><i class="fa-solid fa-sliders"></i> scrubbable review — leg segments, close reasons, delegation/board/artifact markers</span>
+        </div>
+
+      </div>
+    </div>
+
+    <p class="muted" style="font-size:12.5px; max-width:980px; margin:16px auto 0; text-align:center">
+      <b style="color:var(--mj-text-secondary)">Stage</b> inverts the hierarchy: the whiteboard is the room and the call is furniture in it.
+      Conversation lives in a collapsible glass dock (try the <i class="fa-solid fa-compress" style="font-size:11px"></i> button — it
+      melts into captions over the stage), delegation work rides the right stage edge, and controls float bottom-center like a meeting app.
+      Review swaps the call bar for a scrubbable transport with leg segments + event markers. Toggle <b style="color:var(--mj-text-secondary)">Live / Review</b> above.
+    </p>
+  </div>
+</div>
+
+<script>
+function setMode(m){
+  document.documentElement.dataset.mode = m;
+  document.getElementById('mLive').classList.toggle('on', m === 'live');
+  document.getElementById('mReview').classList.toggle('on', m === 'review');
+}
+function setDock(d){ document.documentElement.dataset.dock = d; }
+function toggleDock(){ setDock(document.documentElement.dataset.dock === 'open' ? 'captions' : 'open'); }
+document.querySelectorAll('.g-tab[data-tab]').forEach(function(t){
+  t.addEventListener('click', function(){
+    document.querySelectorAll('.g-tab[data-tab]').forEach(function(x){ x.classList.remove('active'); });
+    document.querySelectorAll('.s-pane').forEach(function(p){ p.classList.remove('active'); });
+    t.classList.add('active');
+    document.querySelector('.s-pane[data-pane="' + t.dataset.tab + '"]').classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

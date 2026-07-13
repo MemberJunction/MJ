@@ -5,6 +5,33 @@
  */
 export { ConversionPipeline } from './ConversionPipeline.js';
 export { SQLFileSplitter } from './SQLFileSplitter.js';
+export { splitMigration, extractAffectedEntities } from './MigrationSplitter.js';
+export type {
+  MigrationSplitResult,
+  MigrationRegionKind,
+  RegionFinding,
+  BoundaryMethod,
+  FileRouting,
+} from './MigrationSplitter.js';
+export { convertMigration, extractKeptTSQL } from './MigrationConverter.js';
+export { IncrementalBaker, stripVolatileHeaders } from './IncrementalBaker.js';
+export type {
+  BakerWorkingDB,
+  CapturedEntitySQL,
+  IncrementalBakerOptions,
+  BakedMigrationResult,
+} from './IncrementalBaker.js';
+export type {
+  MigrationConversionResult,
+  ConversionStatus,
+  ConvertMigrationOptions,
+  KeptTSQL,
+  MJTranspileResult,
+  TSQLToPGTranspiler,
+  UnhandledStatement,
+} from './MigrationConverter.js';
+export { splitByStatement, summarizeStatements } from './MigrationStatementSplitter.js';
+export type { StatementBatch, StatementKind } from './MigrationStatementSplitter.js';
 export { DatabaseAuditRunner } from './DatabaseAuditor.js';
 export { NoOpLLMFallback } from './LLMFallback.js';
 export type {

@@ -228,6 +228,20 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
         return true;
     }
 
+    /** In-process provider — it reads vectors from `MJ: Entity Record Documents.VectorJSON`
+     *  and never calls an external service, so it needs no API key / credential. Lets the
+     *  Entity Vector Sync pipeline and dupe detector skip the "No API Key found" guard. */
+    public override get RequiresAPIKey(): boolean {
+        return false;
+    }
+
+    /** SVS keys its vector pool by EntityDocumentID — it reads `MJ: Entity Record Documents`
+     *  rows `WHERE EntityDocumentID = <id>`. So callers must pass the EntityDocumentID (a GUID)
+     *  as `QueryIndex` `params.id`, NOT a logical index name. */
+    public override get QueryKeyIsEntityDocumentID(): boolean {
+        return true;
+    }
+
     /**
      * Drop a cached index. The BaseEntity event subscription handles this
      * automatically for `Save()` / `Delete()` paths; call this manually only

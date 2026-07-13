@@ -344,5 +344,61 @@
       "lastModified": "2026-05-08T00:53:49.018Z",
       "checksum": "41df91fd00c1ad43f8e226361ea0273229325341e37edc1d9a9e134fb4838576"
     }
+  },
+  {
+    "fields": {
+      "Name": "AssemblyAI",
+      "Description": "AI Vendor",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "255D7FB9-26CE-41AE-BCE0-59B53D68AD09"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:09.210Z",
+      "checksum": "7dd5843f33dd6940ac44193c3a96531983b41ad6b1bfd168b96a799fb6627470"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inworld",
+      "Description": "Inworld AI is a real-time voice AI platform whose Realtime API is a single-WebSocket, full-duplex speech-to-speech stack. It brokers many underlying LLMs (selected per session via modelId, e.g. anthropic/claude-sonnet-4-6), runs server-side speech-to-text with voice profiling on input, and synthesizes output with its Realtime TTS-2 engine (supporting inline steering tags like [laugh]). Turn-taking uses semantic VAD with adjustable eagerness, handling true barge-in. Session components (model, instructions, audio, STT/TTS, tools, turn detection) are swappable mid-session without reconnect via session.update.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "9C93ADFB-7EA3-4D3C-A591-D0F06112B689"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:09.223Z",
+      "checksum": "f778175ea41a178814c7e66627508b37ba065f47c0b258b76e1978732fd43cf4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "NVIDIA",
+      "Description": "NVIDIA is the developer of the Nemotron family of open-weights large language models (Nano / Super / Ultra). Nemotron models are distributed under the NVIDIA Open Model License (commercial use permitted) and are packaged as NIM microservices, also available across third-party inference providers including OpenRouter, Together AI, and Anaconda.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "49341BC0-7016-41BA-BADD-E4FDE2B148B4"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T23:25:34.147Z",
+      "checksum": "1a75c1e5e91dc9179c6d788e63766d874c48728d939f305fda1f9e10cd9515d1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hugging Face",
+      "Description": "Hugging Face's open-source speech-to-speech stack (github.com/huggingface/speech-to-speech) \u2014 a self-hosted, cascaded VAD -> STT -> LLM -> TTS realtime voice pipeline (Silero VAD, Parakeet/Whisper ASR, any OpenAI-compatible or local LLM, Qwen3-TTS/Kokoro/ChatTTS). Runs on-prem or on any server the deployment owns; can expose an OpenAI-Realtime-compatible /v1/realtime websocket. Private-by-design and cost-free (no per-minute cloud billing); component models are swappable. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass HuggingFaceRealtime), reaching the browser through MJAPI's realtime proxy so the internal endpoint is never exposed.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "2DD6C8D4-69A7-4FA8-9C6C-15072B96C607"
+    },
+    "sync": {
+      "lastModified": "2026-07-13T14:51:56.711Z",
+      "checksum": "e7bf0c3675e8726bbbf78a0eccad0cd7cb823b75692cee1ffc6581b0450730f8"
+    }
   }
 ]

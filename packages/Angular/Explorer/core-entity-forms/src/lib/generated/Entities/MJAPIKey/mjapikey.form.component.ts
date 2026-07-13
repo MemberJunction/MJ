@@ -19,6 +19,7 @@ export class MJAPIKeyFormComponent extends BaseFormComponent {
             { sectionKey: 'keyInformation', sectionName: 'Key Information', isExpanded: true },
             { sectionKey: 'ownership', sectionName: 'Ownership', isExpanded: true },
             { sectionKey: 'statusUsage', sectionName: 'Status & Usage', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAPIKeyApplications', sectionName: 'API Key Applications', isExpanded: false },
             { sectionKey: 'mJAPIKeyScopes', sectionName: 'API Key Scopes', isExpanded: false },

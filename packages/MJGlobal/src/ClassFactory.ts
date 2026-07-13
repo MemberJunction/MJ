@@ -47,6 +47,17 @@ export class ClassFactory {
     private _registrations: ClassRegistration[] = [];
 
     /**
+     * Memoized results of {@link GetRegistration}, keyed by `baseClassName|normalizedKey`.
+     * GetRegistration is on extremely hot paths (every `CreateInstance`, including one call
+     * per entity field during hydration) and otherwise re-`filter()`s the entire global
+     * registration list on every call. The map is fully cleared whenever a new registration
+     * is added (see {@link Register}) so it can never serve a stale result — registrations are
+     * almost always all added at startup, so in practice the cache is built once and reused.
+     * A `null` value is a cached "no registration found" (still a valid, useful memo).
+     */
+    private _registrationCache: Map<string, ClassRegistration | null> = new Map();
+
+    /**
      * Registered lazy loader callbacks. When `GetRegistrationAsync` or `CreateInstanceAsync`
      * cannot find a registration synchronously, these loaders are called in order until one
      * succeeds (returns `true`). This allows multiple consumers/layers to register their own
@@ -194,6 +205,9 @@ export class ClassFactory {
             if (metadata !== undefined) reg.Metadata = metadata;
 
             this._registrations.push(reg);
+            // Invalidate the GetRegistration memo — a new registration may change the
+            // highest-priority winner for any (baseClass, key) bucket.
+            this._registrationCache.clear();
         }
     }
 
@@ -303,6 +317,24 @@ export class ClassFactory {
      * Returns the registration with the highest priority for a given base class and key. If key is not provided, will return the registration with the highest priority for the base class.
      */
     public GetRegistration(baseClass: unknown, key?: string | null): ClassRegistration | null {
+        if (!baseClass) return null;
+
+        // Memoized fast path — avoids re-filtering the entire registration list on every call.
+        const cacheKey = `${(baseClass as { name: string }).name}|${key == null ? '' : key.trim().toLowerCase()}`;
+        const cached = this._registrationCache.get(cacheKey);
+        if (cached !== undefined) return cached; // includes cached `null` (no-registration) results
+
+        const resolved = this.resolveRegistration(baseClass, key);
+        this._registrationCache.set(cacheKey, resolved);
+        return resolved;
+    }
+
+    /**
+     * Uncached core of {@link GetRegistration}: filters all matching registrations and returns
+     * the highest-priority (last-registered on ties). Kept private so the public accessor can
+     * memoize without the cache logic obscuring the resolution rule.
+     */
+    private resolveRegistration(baseClass: unknown, key?: string | null): ClassRegistration | null {
         let matches = this.GetAllRegistrations(baseClass, key)
         if (matches && matches.length > 0) {
             // figure out the highest priority for all the matching registrations

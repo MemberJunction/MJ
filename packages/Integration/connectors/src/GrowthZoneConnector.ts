@@ -1,9 +1,60 @@
+/**
+ * GrowthZoneConnector — Integration connector for the GrowthZone (MicroNet Online, Inc.)
+ * association-management REST API.
+ *
+ * API docs: https://documentation.growthzoneapp.com/ (Curated + dev SpectaQL pages)
+ *
+ * ── Auth: OAuth2 Bearer (PRIMARY + REQUIRED) ────────────────────────────────
+ *   Mints/refreshes a bearer ACCESS TOKEN via the shared {@link OAuth2TokenManager}
+ *   (no inlined token/crypto logic):
+ *     - PRIMARY grant   = `refresh_token` (client_id + client_secret + refresh_token
+ *                          POSTed to `{base}/oauth/token`, or the credential's TokenURL).
+ *     - FALLBACK grant  = `password` (username + password + scopes) when the credential
+ *                          supplies no refresh token.
+ *   Every request sends `Authorization: Bearer {accessToken}`.
+ *
+ *   An `ApiKey` header is recorded in the integration Configuration ONLY as a
+ *   documented, DEPRECATED alternate — it is NOT the primary path and is not wired
+ *   here (see the deprecated-alternate note in {@link BuildHeaders}). The prior
+ *   ApiKey-primary connector this class WHOLESALE REPLACES is gone.
+ *
+ * ── Base URL ────────────────────────────────────────────────────────────────
+ *   Comes from the credential's `BaseURL` (the operator's GrowthZone API endpoint,
+ *   e.g. `https://{subdomain}.growthzoneapp.com/API`) — never a hardcoded subdomain.
+ *
+ * ── Catalog (metadata-driven, NOT hardcoded) ───────────────────────────────
+ *   Objects/fields come from the Declared metadata seeded in
+ *   `metadata/integrations/growthzone/.growthzone.integration.json` and loaded into the
+ *   IntegrationEngineBase cache. The connector NEVER bakes an object/field catalog into
+ *   code (the old `GROWTHZONE_ACTION_OBJECTS` of 7 streams is removed); discovery and
+ *   action-object surfacing read the full ~38-IO universe straight from the cache.
+ *
+ * ── Nested access paths (Door → Segments) ──────────────────────────────────
+ *   Nested objects (e.g. `Person` under `Contact`, `EventAttendee` under `Event`) are
+ *   reached by template-variable APIPaths (`/api/contacts/person/{contactId}`); the base
+ *   class's FetchChanges walks the door→segment path by resolving each `{var}` to its
+ *   parent IO via the FK metadata and substituting synced parent IDs — so no nested IO
+ *   ships as a silent 0-row table. The connector supplies only auth, headers, pagination,
+ *   and normalization.
+ *
+ * ── Pagination & incremental ───────────────────────────────────────────────
+ *   OData `skip`/`top` on flat list endpoints. Incremental sync is fully metadata-driven:
+ *   an IO with `SupportsIncrementalSync=true` emits its `IncrementalWatermarkField` param
+ *   (e.g. the Contact object at `/api/contacts` uses `modifiedSince`); every other IO is a
+ *   full pull (content-hash dedup handled by the engine).
+ *
+ * ── Write ───────────────────────────────────────────────────────────────────
+ *   The curated AMS surface is read-only (Pull). SupportsWrite=false; no CRUD wired.
+ */
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity, MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
     BaseRESTIntegrationConnector,
+    OAuth2TokenManager,
+    type OAuth2GrantType,
+    type OAuth2TokenRequest,
     type RESTAuthContext,
     type RESTResponse,
     type PaginationState,
@@ -13,99 +64,62 @@ import {
     type ExternalFieldSchema,
     type FetchContext,
     type FetchBatchResult,
-    type DefaultFieldMapping,
-    type DefaultIntegrationConfig,
     type IntegrationObjectInfo,
+    type IntegrationFieldInfo,
     type ActionGeneratorConfig,
+    type DeleteRecordContext,
+    type CRUDResult,
 } from '@memberjunction/integration-engine';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 
 // ─── Configuration & Auth Types ──────────────────────────────────────
 
 /**
- * Connection configuration for GrowthZone, parsed from the
- * CompanyIntegration.Configuration JSON or an attached MJ Credential.
+ * OAuth2 connection configuration for GrowthZone, parsed from the attached MJ
+ * Credential (preferred) or the CompanyIntegration.Configuration JSON. Field names
+ * are read case-insensitively. NONE of these values are read at build time — they are
+ * resolved from the bound credential at runtime.
  */
 export interface GrowthZoneConnectionConfig {
-    /** Tenant subdomain (e.g., "myassociation" for myassociation.growthzoneapp.com) */
-    Tenant: string;
-    /** API key issued by GrowthZone WebSupport. Sent as 'Authorization: ApiKey {key}'. */
-    ApiKey: string;
-    /**
-     * Optional full base URL override. When provided, takes precedence over Tenant
-     * and must end with '/api' (no trailing slash). Used for staging or non-standard
-     * deployments.
-     */
-    BaseUrlOverride?: string;
+    /** OAuth2 client identifier. */
+    ClientId: string;
+    /** OAuth2 client secret. */
+    ClientSecret: string;
+    /** Long-lived refresh token — drives the PRIMARY `refresh_token` grant. */
+    RefreshToken?: string;
+    /** Username — drives the FALLBACK `password` grant when no refresh token exists. */
+    Username?: string;
+    /** Password — drives the FALLBACK `password` grant. */
+    Password?: string;
+    /** Space/comma-delimited OAuth2 scopes. */
+    Scopes?: string;
+    /** Operator's GrowthZone API base URL (e.g. https://{subdomain}.growthzoneapp.com/API). */
+    BaseURL: string;
+    /** Optional token-endpoint override; defaults to `{base}/oauth/token`. */
+    TokenURL?: string;
+    /** Optional tenant identifier (informational / future use). */
+    Tenant?: string;
 
     // ── Optional performance overrides ──────────────────────────
-    /** Maximum retries for rate-limited or failed requests. Default: 3 */
+    /** Maximum retries for rate-limited / transient failures. Default 3. */
     MaxRetries?: number;
-    /** HTTP request timeout in milliseconds. Default: 30000 */
+    /** HTTP request timeout in ms. Default 30000. */
     RequestTimeoutMs?: number;
-    /**
-     * Minimum milliseconds between API requests. Default: 2000 (2 seconds)
-     * per GrowthZone's recommended throttle. Reduce with caution.
-     */
+    /** Minimum ms between requests (GrowthZone recommends 2s). Default 2000. */
     MinRequestIntervalMs?: number;
 }
 
-/** Extended REST auth context carrying the parsed GrowthZone config. */
+/** Extended REST auth context carrying the resolved bearer token + config. */
 interface GrowthZoneAuthContext extends RESTAuthContext {
-    /** Full resolved base URL (e.g., https://myassociation.growthzoneapp.com/api) */
+    /** Bearer access token (from {@link OAuth2TokenManager}). */
+    Token: string;
+    /** Resolved base URL (e.g. https://myassoc.growthzoneapp.com/API). */
     BaseUrl: string;
-    /** Full config for reference */
+    /** Parsed connection config for reference in MakeHTTPRequest. */
     Config: GrowthZoneConnectionConfig;
 }
 
-/** Raw shape of a GrowthZone delta-contact record */
-interface GrowthZoneDeltaContact {
-    ContactId: number | string;
-    DisplayName?: string | null;
-    ModifiedDate?: string | null;
-    IsDeleted?: boolean | null;
-    SystemContactTypeId?: number | string | null;
-}
-
-/** Raw shape of a single GrowthZone custom field on a contact */
-interface GrowthZoneCustomField {
-    CustomFieldId: number | string;
-    Name?: string | null;
-    DisplayName?: string | null;
-    Description?: string | null;
-    CustomFieldType?: string | null;
-    CustomFieldDataTypeId?: number | string | null;
-    DataSize?: number | string | null;
-    Value?: unknown;
-    FieldGroupName?: string | null;
-    IsPublic?: boolean | null;
-    IsMemberEditable?: boolean | null;
-    IsRequired?: boolean | null;
-    IsArchived?: boolean | null;
-    SelectOptions?: unknown;
-}
-
-/** Raw shape of a GrowthZone NotesAndFields response */
-interface GrowthZoneNotesAndFields {
-    Notes?: string | null;
-    Bio?: string | null;
-    EstablishedDate?: string | null;
-    Naics?: string | null;
-    Sic?: string | null;
-    Fields?: GrowthZoneCustomField[];
-}
-
-/** Raw shape of the GrowthZone OrgGeneral response with nested arrays */
-interface GrowthZoneOrgGeneral extends Record<string, unknown> {
-    ContactId: number | string;
-    Activities?: Record<string, unknown>[];
-    Categories?: Record<string, unknown>[];
-    Certifications?: Record<string, unknown>[];
-    Communication?: Record<string, unknown>[];
-    Memberships?: Record<string, unknown>[];
-    SalesOpportunities?: Record<string, unknown>[];
-}
-
-/** GrowthZone paginated list envelope */
+/** GrowthZone paginated list envelope: `{ Results: [...], TotalRecordAvailable: N }`. */
 interface GrowthZoneListEnvelope<T> {
     Results?: T[];
     TotalRecordAvailable?: number;
@@ -113,232 +127,219 @@ interface GrowthZoneListEnvelope<T> {
 
 // ─── Constants ───────────────────────────────────────────────────────
 
-/** Default maximum retries */
+/** The canonical MJ: Integrations.Name — part of the three-way invariant. */
+const INTEGRATION_NAME = 'GrowthZone';
+
+/** Token endpoint path appended to the base when no TokenURL override is supplied. */
+const DEFAULT_TOKEN_PATH = '/oauth/token';
+
+/**
+ * OData pagination param names. GrowthZone is an OData-style API and honors the STANDARD `$`-prefixed
+ * params (`$top`/`$skip`); the un-prefixed `top`/`skip` are SILENTLY IGNORED by the server — it returns
+ * the same first page for any `skip` value, which the base pagination loop's duplicate-page detector
+ * then (correctly) treats as end-of-stream, capping every object at one server-default page (~100).
+ * Verified live: `?skip=3` returns the same first IDs as `?skip=0`, while `?$skip=3` advances.
+ */
+const ODATA_SKIP_PARAM = '$skip';
+const ODATA_TOP_PARAM = '$top';
+
 const DEFAULT_MAX_RETRIES = 3;
-
-/** Default HTTP timeout (ms) */
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
-
-/** Default minimum interval between requests (ms) — GrowthZone recommends 2 seconds */
 const DEFAULT_MIN_REQUEST_INTERVAL_MS = 2_000;
-
-/** Default page size for flat list endpoints */
 const DEFAULT_PAGE_SIZE = 500;
+/**
+ * GrowthZone hard-caps an OData list response at 100 rows regardless of the requested `top`,
+ * and several list endpoints reject a `top` above that cap with `400 The request is invalid`.
+ * Clamping the requested page size to the real server cap makes `skip` advance in lockstep with
+ * the rows actually returned (no gaps/overlap) and keeps every list request inside the server's
+ * accepted range. Not vendor-guesswork: it's GrowthZone's documented/observed page ceiling.
+ */
+const GROWTHZONE_MAX_PAGE_SIZE = 100;
 
-/** Sentinel date used by GrowthZone to represent null datetimes */
+/** GrowthZone sentinel value for a null datetime. */
 const GROWTHZONE_NULL_DATE = '0001-01-01T00:00:00';
-
-/** Names of nested array fields to flatten from OrgGeneral */
-const ORG_NESTED_ARRAYS = [
-    'Activities',
-    'Categories',
-    'Certifications',
-    'Communication',
-    'Memberships',
-    'SalesOpportunities',
-] as const;
-
-// ─── Action-metadata objects (mirrors .growthzone.json) ──────────────
-
-const GROWTHZONE_ACTION_OBJECTS: IntegrationObjectInfo[] = [
-    {
-        Name: 'contacts', DisplayName: 'Contact',
-        Description: 'A contact (person or organization) in GrowthZone',
-        SupportsWrite: false,
-        Fields: [
-            { Name: 'ContactId', DisplayName: 'Contact ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'GrowthZone contact identifier' },
-            { Name: 'DisplayName', DisplayName: 'Display Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Formatted display name' },
-            { Name: 'ModifiedDate', DisplayName: 'Modified Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Last modification timestamp' },
-            { Name: 'IsDeleted', DisplayName: 'Is Deleted', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Soft-delete flag' },
-            { Name: 'SystemContactTypeId', DisplayName: 'Contact Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Individual (1) or Organization (2)' },
-        ],
-    },
-    {
-        Name: 'memberships', DisplayName: 'Membership',
-        Description: 'A membership held by a contact in GrowthZone',
-        SupportsWrite: false,
-        Fields: [
-            { Name: 'MembershipId', DisplayName: 'Membership ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Membership identifier' },
-            { Name: 'ContactId', DisplayName: 'Contact ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Holder contact' },
-            { Name: 'MembershipTypeId', DisplayName: 'Membership Type ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Membership type/package' },
-            { Name: 'MembershipTypeName', DisplayName: 'Membership Type Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Type name' },
-            { Name: 'MembershipStatusTypeId', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Status code (0-9)' },
-            { Name: 'StartDate', DisplayName: 'Start Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Effective start date' },
-            { Name: 'EndDate', DisplayName: 'End Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Expiration date' },
-        ],
-    },
-    {
-        Name: 'groups', DisplayName: 'Group',
-        Description: 'A group/committee in GrowthZone', SupportsWrite: false,
-        Fields: [
-            { Name: 'GroupId', DisplayName: 'Group ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Group identifier' },
-            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Group name' },
-            { Name: 'Description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Group description' },
-            { Name: 'IsActive', DisplayName: 'Is Active', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Active flag' },
-        ],
-    },
-    {
-        Name: 'events', DisplayName: 'Event',
-        Description: 'An event in GrowthZone', SupportsWrite: false,
-        Fields: [
-            { Name: 'EventId', DisplayName: 'Event ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Event identifier' },
-            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Event name' },
-            { Name: 'StartDate', DisplayName: 'Start Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Start datetime' },
-            { Name: 'EndDate', DisplayName: 'End Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'End datetime' },
-            { Name: 'Location', DisplayName: 'Location', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Event location' },
-            { Name: 'IsActive', DisplayName: 'Is Active', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Active flag' },
-        ],
-    },
-    {
-        Name: 'invoices', DisplayName: 'Invoice',
-        Description: 'An invoice in GrowthZone billing', SupportsWrite: false,
-        Fields: [
-            { Name: 'InvoiceId', DisplayName: 'Invoice ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Invoice identifier' },
-            { Name: 'ContactId', DisplayName: 'Contact ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Billed contact' },
-            { Name: 'InvoiceNumber', DisplayName: 'Invoice Number', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'User-visible invoice number' },
-            { Name: 'TotalAmount', DisplayName: 'Total Amount', Type: 'decimal', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Invoice total' },
-            { Name: 'BalanceDue', DisplayName: 'Balance Due', Type: 'decimal', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Outstanding balance' },
-            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Invoice status' },
-        ],
-    },
-    {
-        Name: 'payments', DisplayName: 'Payment',
-        Description: 'A payment record in GrowthZone', SupportsWrite: false,
-        Fields: [
-            { Name: 'PaymentId', DisplayName: 'Payment ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Payment identifier' },
-            { Name: 'ContactId', DisplayName: 'Contact ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Paying contact' },
-            { Name: 'Amount', DisplayName: 'Amount', Type: 'decimal', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Payment amount' },
-            { Name: 'PaymentMethod', DisplayName: 'Payment Method', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Method (Card, ACH, Check, Cash)' },
-            { Name: 'PaymentStatus', DisplayName: 'Payment Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Status (Pending, Captured, Refunded)' },
-        ],
-    },
-    {
-        Name: 'certifications', DisplayName: 'Certification',
-        Description: 'A certification held by a contact', SupportsWrite: false,
-        Fields: [
-            { Name: 'CertificationContactId', DisplayName: 'Certification Contact ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Unique record identifier' },
-            { Name: 'ContactId', DisplayName: 'Contact ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Holder contact' },
-            { Name: 'CertificationId', DisplayName: 'Certification ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Certification definition' },
-            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Certification name' },
-            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Status (InProgress, Completed, Expired)' },
-        ],
-    },
-];
 
 // ─── Connector Implementation ────────────────────────────────────────
 
-/**
- * Connector for the GrowthZone association management REST API.
- *
- * Extends BaseRESTIntegrationConnector to leverage metadata-driven object/field
- * discovery from IntegrationEngineBase cache plus generic pagination.
- *
- * Auth: sends `Authorization: ApiKey {key}` on every request. API keys are
- * provisioned by GrowthZone WebSupport. Tenant subdomain is required to
- * resolve the base URL.
- *
- * Pagination: GrowthZone uses OData-style params on flat endpoints —
- * `$skip`, `$top`, and `$orderby`. `$filter`, `$expand`, `$select` are NOT
- * supported. The only incremental endpoint is `/api/contacts/delta`, which
- * accepts `?modifiedSince=ISO8601&top=N`.
- *
- * Throttle: GrowthZone recommends 2s minimum interval; the connector defaults
- * to that. Responds to HTTP 429/503 with exponential backoff.
- */
 @RegisterClass(BaseIntegrationConnector, 'GrowthZoneConnector')
 export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
 
-    /** Cached auth context for the current sync run */
+    /** Cached auth context for the current sync run. */
     private authCache: GrowthZoneAuthContext | null = null;
 
-    /** Timestamp of the last API request, for throttling */
+    /** Shared OAuth2 token manager — owns the token round-trip + cache. */
+    private readonly tokenManager = new OAuth2TokenManager();
+
+    /** Timestamp of the last API request, for client-side throttling. */
     private lastRequestTime = 0;
 
-    /**
-     * Object name currently being fetched — tracked so BuildPaginatedURL can
-     * emit endpoint-specific query parameters (e.g., `modifiedSince` for delta).
-     */
-    private currentObjectName = '';
-
-    /** Current watermark value, used for `modifiedSince` on delta contacts */
+    /** Current watermark value, emitted as the IO's IncrementalWatermarkField on the request. */
     private currentWatermark: string | undefined;
 
+    // Returns the EXACT MJ: Integrations.Name string LITERAL (not the INTEGRATION_NAME const) so the
+    // T1 ThreeWayName invariant can statically parse the getter's returned value from connector source.
     public override get IntegrationName(): string { return 'GrowthZone'; }
 
+    // ── Capability getters: METADATA-DRIVEN (no hardcoded answer) ─────
+    //
+    // Write capability FOLLOWS the per-operation CRUD columns on the cached IntegrationObjects
+    // (Declared metadata), exactly like GetIntegrationObjects surfaces the object universe from
+    // metadata rather than a baked catalog. An object is create-capable when it declares both
+    // CreateAPIPath + CreateMethod; same for update/delete. With no write metadata authored the
+    // surface is read-only (returns false) — but the moment a writable object's per-operation
+    // columns are populated, the capability flips on, and the base BaseRESTIntegrationConnector
+    // generic CRUD path executes it. (NB: GrowthZone's writes are largely wizard/operation-based,
+    // so an object whose write does NOT fit the generic flat/wrapped body must additionally
+    // override CreateRecord/UpdateRecord/DeleteRecord — the metadata flag alone is not enough for
+    // those. See PROBLEMS_LOG #30/#35 for the per-object wizard-write roadmap.)
+
+    public override get SupportsCreate(): boolean {
+        return this.anyObjectDeclares(o => !!o.CreateAPIPath && !!o.CreateMethod);
+    }
+    public override get SupportsUpdate(): boolean {
+        return this.anyObjectDeclares(o => !!o.UpdateAPIPath && !!o.UpdateMethod);
+    }
+    public override get SupportsDelete(): boolean {
+        return this.anyObjectDeclares(o => !!o.DeleteAPIPath && !!o.DeleteMethod);
+    }
+
+    /** True when any cached IntegrationObject satisfies the predicate. []→false when the engine
+     *  cache is unavailable (e.g. capability probed before configuration) — fail-safe read-only. */
+    private anyObjectDeclares(pred: (o: MJIntegrationObjectEntity) => boolean): boolean {
+        const integration = IntegrationEngineBase.Instance.GetIntegrationByName(INTEGRATION_NAME);
+        if (!integration) return false;
+        return IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integration.ID).some(pred);
+    }
+
+    // ── Write: GrowthZone audit-token DELETE idiom (override) ─────────
+    //
+    // GrowthZone splits deletes into two shapes:
+    //   • single-ID   `DELETE /api/store/storeitems/{id}`, `/directory/directories/{id}`,
+    //                 `/memberships/benefititem/{id}`, `/signatures/{id}`, `/webhooks/setup/{id}` →
+    //                 ride the BASE generic DeleteRecord ({id} substitution) unchanged.
+    //   • audit-token `DELETE /api/calendars/{id}/{auditid}`, `/directorylistingtypes/{id}/{auditid}`,
+    //                 `/roles/{id}/{auditid}` → need the record's CURRENT optimistic-concurrency audit
+    //                 token, which DeleteRecordContext (ExternalID only) doesn't carry. We fetch the
+    //                 record, read its audit token, and substitute BOTH path vars.
+    // Doc-derived shape; the live byte-shape is unverified per the no-live-writes rule (PROBLEMS_LOG #35).
+    public override async DeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> {
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        // Not an audit-token path → the base generic single-{id} delete handles it.
+        if (!obj.DeleteAPIPath || !/\{audit/i.test(obj.DeleteAPIPath)) {
+            return super.DeleteRecord(ctx);
+        }
+        const auditToken = await this.ResolveAuditToken(ctx);
+        if (auditToken == null) {
+            return {
+                Success: false,
+                StatusCode: 0,
+                ErrorMessage:
+                    `DeleteRecord("${ctx.ObjectName}"): ${obj.DeleteAPIPath} requires a GrowthZone audit ` +
+                    `token, but none was resolvable for ExternalID "${ctx.ExternalID}".`,
+            };
+        }
+        const auth = await this.Authenticate(ci, ctx.ContextUser as UserInfo);
+        // Resource id → the FIRST {…id} var; audit token → the {audit…} var.
+        const path = obj.DeleteAPIPath
+            .replace(/\{[A-Za-z]*[iI]d\}/, encodeURIComponent(ctx.ExternalID))
+            .replace(/\{audit[A-Za-z]*\}/i, encodeURIComponent(auditToken));
+        const baseURL = this.GetBaseURL(ci, auth);
+        const url = `${baseURL.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+        const response = await this.MakeHTTPRequest(auth, url, obj.DeleteMethod ?? 'DELETE', this.BuildHeaders(auth));
+        if (response.Status >= 200 && response.Status < 300) {
+            return { Success: true, StatusCode: response.Status, ExternalID: ctx.ExternalID };
+        }
+        return {
+            Success: false,
+            StatusCode: response.Status,
+            ErrorMessage: this.ExtractErrorMessage(response) ?? `HTTP ${response.Status} on delete`,
+        };
+    }
+
+    /**
+     * Resolves a record's current GrowthZone audit token (optimistic-concurrency) for an audit-token
+     * delete. GrowthZone exposes it as `AuditId` / `{Object}AuditId` on the record; we GetRecord and
+     * return the first match. Returns null when the record or token cannot be found.
+     */
+    private async ResolveAuditToken(ctx: DeleteRecordContext): Promise<string | null> {
+        const rec = await this.GetRecord({
+            CompanyIntegration: ctx.CompanyIntegration,
+            ObjectName: ctx.ObjectName,
+            ContextUser: ctx.ContextUser,
+            ExternalID: ctx.ExternalID,
+        });
+        if (!rec) return null;
+        for (const k of ['AuditId', 'auditId', 'AuditID', `${ctx.ObjectName}AuditId`]) {
+            const v = rec.Fields[k];
+            if (v != null && String(v).length > 0) return String(v);
+        }
+        return null;
+    }
+
+    // ── Action-object surfacing: METADATA-DRIVEN (no hardcoded catalog) ──
+
+    /**
+     * Surfaces the FULL object universe straight from the IntegrationEngineBase
+     * cache (the Declared metadata in `.growthzone.integration.json`). There is NO
+     * hardcoded catalog in this connector — the prohibited module-level object/field
+     * literal is intentionally absent. When the cache is unavailable (e.g. action
+     * generation invoked before the engine is configured) this returns []; the live
+     * discovery path (DiscoverObjects/DiscoverFields) is the authoritative surface.
+     */
     public override GetIntegrationObjects(): IntegrationObjectInfo[] {
-        return GROWTHZONE_ACTION_OBJECTS;
+        const integration = IntegrationEngineBase.Instance.GetIntegrationByName(INTEGRATION_NAME);
+        if (!integration) return [];
+        const objects = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integration.ID);
+        return objects.map(obj => this.ObjectEntityToInfo(obj));
     }
 
     public override GetActionGeneratorConfig(): ActionGeneratorConfig | null {
         const objects = this.GetIntegrationObjects();
         if (objects.length === 0) return null;
         return {
-            IntegrationName: 'GrowthZone',
-            CategoryName: 'GrowthZone',
+            IntegrationName: INTEGRATION_NAME,
+            CategoryName: INTEGRATION_NAME,
             IconClass: 'fa-solid fa-seedling',
             Objects: objects,
             IncludeSearch: false,
             IncludeList: false,
-            CategoryDescription: 'GrowthZone association management integration for contacts, memberships, events, and billing',
+            CategoryDescription:
+                'GrowthZone association management — contacts, memberships, groups, certifications, events, store, billing, and directories',
             ParentCategoryName: 'Association Management',
         };
     }
 
-    // ── Capability getters ───────────────────────────────────────────
-
-    public override get SupportsCreate(): boolean { return false; }
-    public override get SupportsUpdate(): boolean { return false; }
-    public override get SupportsDelete(): boolean { return false; }
-
-    // ── Default mappings ─────────────────────────────────────────────
-
-    public override GetDefaultConfiguration(): DefaultIntegrationConfig {
+    /** Maps a cached IntegrationObject + its fields to the action-generator info shape. */
+    private ObjectEntityToInfo(obj: MJIntegrationObjectEntity): IntegrationObjectInfo {
+        const fields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(obj.ID)
+            .filter(f => f.Status === 'Active')
+            .sort((a, b) => a.Sequence - b.Sequence);
+        const fieldInfos: IntegrationFieldInfo[] = fields.map(f => ({
+            Name: f.Name,
+            DisplayName: f.DisplayName ?? f.Name,
+            Type: (f.Type ?? 'string').toLowerCase(),
+            IsRequired: f.IsRequired ?? false,
+            IsReadOnly: f.IsReadOnly ?? true,
+            IsPrimaryKey: f.IsPrimaryKey ?? false,
+            Description: f.Description ?? undefined,
+        }));
         return {
-            DefaultSchemaName: 'GrowthZone',
-            DefaultObjects: [],
+            Name: obj.Name,
+            DisplayName: obj.DisplayName ?? obj.Name,
+            Description: obj.Description ?? undefined,
+            SupportsWrite: obj.SupportsWrite ?? false,
+            Fields: fieldInfos,
         };
-    }
-
-    public override GetDefaultFieldMappings(
-        objectName: string,
-        _entityName: string
-    ): DefaultFieldMapping[] {
-        const lower = objectName.toLowerCase();
-
-        if (lower === 'contacts' || lower === 'contact-person') {
-            return [
-                { SourceFieldName: 'ContactId', DestinationFieldName: 'ExternalID', IsKeyField: true },
-                { SourceFieldName: 'DisplayName', DestinationFieldName: 'Name' },
-                { SourceFieldName: 'FirstName', DestinationFieldName: 'FirstName' },
-                { SourceFieldName: 'LastName', DestinationFieldName: 'LastName' },
-                { SourceFieldName: 'IsDeleted', DestinationFieldName: 'IsDeleted' },
-                { SourceFieldName: 'ModifiedDate', DestinationFieldName: 'UpdatedAt' },
-            ];
-        }
-
-        if (lower === 'contact-org') {
-            return [
-                { SourceFieldName: 'ContactId', DestinationFieldName: 'ExternalID', IsKeyField: true },
-                { SourceFieldName: 'OrganizationName', DestinationFieldName: 'Name' },
-                { SourceFieldName: 'ModifiedDate', DestinationFieldName: 'UpdatedAt' },
-            ];
-        }
-
-        if (lower === 'memberships') {
-            return [
-                { SourceFieldName: 'MembershipId', DestinationFieldName: 'ExternalID', IsKeyField: true },
-                { SourceFieldName: 'ContactId', DestinationFieldName: 'ContactExternalID' },
-                { SourceFieldName: 'MembershipStatusTypeId', DestinationFieldName: 'Status' },
-                { SourceFieldName: 'StartDate', DestinationFieldName: 'StartDate' },
-                { SourceFieldName: 'EndDate', DestinationFieldName: 'EndDate' },
-            ];
-        }
-
-        return [];
     }
 
     // ─── BaseRESTIntegrationConnector abstract methods ──────────────
 
+    /**
+     * OAuth2 bearer authentication. Mints/refreshes the access token via the shared
+     * {@link OAuth2TokenManager}: PRIMARY `refresh_token` grant when a refresh token is
+     * present, otherwise the documented FALLBACK `password` grant.
+     */
     protected async Authenticate(
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
@@ -347,15 +348,40 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
 
         const config = await this.ParseConfig(companyIntegration, contextUser);
         const baseUrl = this.ResolveBaseUrl(config);
-        const auth: GrowthZoneAuthContext = { Token: config.ApiKey, BaseUrl: baseUrl, Config: config };
+        const token = await this.MintToken(config, baseUrl);
+
+        const auth: GrowthZoneAuthContext = { Token: token, BaseUrl: baseUrl, Config: config };
         this.authCache = auth;
         return auth;
     }
 
+    /** Selects the grant and runs the token round-trip through OAuth2TokenManager. */
+    private async MintToken(config: GrowthZoneConnectionConfig, baseUrl: string): Promise<string> {
+        const tokenURL = this.ResolveTokenURL(config, baseUrl);
+        const grant: OAuth2GrantType = config.RefreshToken ? 'refresh_token' : 'password';
+        const req: OAuth2TokenRequest = {
+            TokenURL: tokenURL,
+            ClientId: config.ClientId,
+            ClientSecret: config.ClientSecret,
+            RefreshToken: config.RefreshToken,
+            Username: config.Username,
+            Password: config.Password,
+            Scopes: config.Scopes,
+            ScopeParam: 'scopes',
+            TimeoutMs: config.RequestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+        };
+        const token = await this.tokenManager.GetAccessToken(req, grant);
+        return token.AccessToken;
+    }
+
+    /** Sends the OAuth2 bearer token on every request. */
     protected BuildHeaders(auth: RESTAuthContext): Record<string, string> {
-        const token = auth.Token ?? '';
+        // NOTE: GrowthZone documents an `Authorization: ApiKey {key}` alternate, but it is
+        // DEPRECATED-not-used per the integration Configuration. OAuth2 bearer is the only
+        // wired path; do not reintroduce an ApiKey branch as the primary.
+        const token = (auth as GrowthZoneAuthContext).Token ?? auth.Token ?? '';
         return {
-            'Authorization': `ApiKey ${token}`,
+            'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
             'Content-Type': 'application/json',
         };
@@ -369,12 +395,27 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
-     * Extracts records from GrowthZone responses. Handles three shapes:
+     * Normalizes GrowthZone responses. Handles three real shapes:
      *   1. `{ Results: [...], TotalRecordAvailable: N }` — paginated lists
-     *   2. Raw array — some endpoints return arrays at the root
-     *   3. Single object — detail endpoints (per-contact fetches)
+     *   2. raw array — some endpoints return an array at the root
+     *   3. single object — genuine per-parent DETAIL endpoints (Person, Organization,
+     *      ContactCustomField, ContactNotes, ContactEngagement, ScheduledBillingUpdate,
+     *      MembershipChange) return ONE real record per parent. These ARE kept.
+     * and coerces `0001-01-01` sentinel dates / empty strings to null.
      *
-     * Normalizes `0001-01-01` dates and empty strings to null.
+     * THE EMPTY-EVENT-CHILD SENTINEL (PROBLEMS_LOG #22/#23/#27 — idempotency, surgically scoped):
+     * The per-event child list endpoints (`/api/events/sponsors?eventId=X`, …/sessions, …/attendees,
+     * etc.) do NOT return `{ Results: [] }` when an event has no children — they return the bare
+     * EVENT-DETAIL wrapper instead. That wrapper carries volatile per-fetch audit fields
+     * (EventAuditId / EventDetailAuditId), so minting a record from it produced ONE empty placeholder
+     * per event whose §4 content-hash identity drifted every sync → child tables doubled (254 = 2×127,
+     * all rows empty). Fix: detect the event wrapper (it uniquely carries EventAuditId+EventDetailAuditId
+     * — a genuine child/detail record never does) and emit []. This is the ONLY single-object case we
+     * drop; every legitimate single-record detail endpoint is preserved (the #27 regression guard).
+     * Populated children still arrive as a `Results` envelope and map normally.
+     *
+     * The FULL source record passes through (no field filtering) so the framework's custom-column
+     * capture sees everything the source returned.
      */
     protected NormalizeResponse(
         rawBody: unknown,
@@ -389,23 +430,20 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
         if (typeof rawBody === 'object') {
             const body = rawBody as Record<string, unknown>;
 
-            // Paginated envelope: { Results: [...], TotalRecordAvailable: N }
             const envelope = body as GrowthZoneListEnvelope<Record<string, unknown>>;
             if (Array.isArray(envelope.Results)) {
                 return envelope.Results.map(r => this.NormalizeRecord(r));
             }
 
-            // Custom response key from metadata
             if (responseDataKey && Array.isArray(body[responseDataKey])) {
-                const arr = body[responseDataKey] as Record<string, unknown>[];
-                return arr.map(r => this.NormalizeRecord(r));
+                return (body[responseDataKey] as Record<string, unknown>[]).map(r => this.NormalizeRecord(r));
             }
 
-            // Nested flattening cases for OrgGeneral/NotesAndFields
-            const flattened = this.MaybeFlattenNested(body);
-            if (flattened) return flattened;
+            // Empty-event-child sentinel: an event-child endpoint returned the bare EVENT wrapper
+            // (no children for this event). Emit nothing — never a non-idempotent empty placeholder.
+            if (this.isEmptyEventChildWrapper(body)) return [];
 
-            // Single detail record
+            // Genuine single-object detail record (Person / Organization / ContactCustomField / …).
             return [this.NormalizeRecord(body)];
         }
 
@@ -413,9 +451,19 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
-     * Extracts pagination state. GrowthZone uses OData pagination with
-     * `$skip` and `$top`; there's no `HasMore` flag — we derive it from
-     * `TotalRecordAvailable` vs. current offset + returned count.
+     * True when a single-object response is the GrowthZone EVENT-DETAIL wrapper — the body the
+     * per-event child endpoints return when an event has zero children (see NormalizeResponse).
+     * The wrapper is unmistakable: it carries BOTH event-audit stamps. No genuine child/detail
+     * record (Person, Organization, custom fields, notes, engagement) carries these keys, so this
+     * stays surgically scoped to the empty-event-child case and never drops a real record.
+     */
+    private isEmptyEventChildWrapper(body: Record<string, unknown>): boolean {
+        return 'EventAuditId' in body && 'EventDetailAuditId' in body;
+    }
+
+    /**
+     * Derives OData pagination state. GrowthZone returns no `HasMore` flag, so end-of-stream
+     * is inferred from a short page and/or `TotalRecordAvailable` vs offset+count.
      */
     protected ExtractPaginationInfo(
         rawBody: unknown,
@@ -429,36 +477,37 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
         }
 
         const body = rawBody as Record<string, unknown>;
-        const results = Array.isArray(body.Results) ? body.Results : [];
-        const total = typeof body.TotalRecordAvailable === 'number'
-            ? body.TotalRecordAvailable
-            : undefined;
-
-        // Fewer records than requested = end of stream
-        if (results.length < pageSize) {
-            return { HasMore: false, TotalRecords: total };
-        }
-
-        // Check against total count if provided
+        const results = Array.isArray(body.Results)
+            ? body.Results
+            : (Array.isArray(rawBody) ? (rawBody as unknown[]) : []);
+        const total = typeof body.TotalRecordAvailable === 'number' ? body.TotalRecordAvailable : undefined;
         const nextOffset = currentOffset + results.length;
-        if (total !== undefined && nextOffset >= total) {
-            return { HasMore: false, TotalRecords: total };
+
+        // AUTHORITATIVE: when GrowthZone reports the total, trust it over any page-size heuristic.
+        // The server caps a page at GROWTHZONE_MAX_PAGE_SIZE (100) even when we request more, so a
+        // "short" page (results.length < requested pageSize) is NOT a reliable end-of-stream signal —
+        // it's just the server cap. Comparing offset+count to the total is the only correct terminator.
+        if (total !== undefined) {
+            return nextOffset >= total
+                ? { HasMore: false, TotalRecords: total }
+                : { HasMore: true, NextOffset: nextOffset, TotalRecords: total };
         }
 
-        return {
-            HasMore: true,
-            NextOffset: nextOffset,
-            TotalRecords: total,
-        };
+        // No total provided: the only reliable terminator is an EMPTY page. A non-empty short page may
+        // simply be the server cap, so we keep paging until the server returns zero rows.
+        void pageSize; // intentionally not used as a terminator (see above)
+        if (results.length === 0) {
+            return { HasMore: false };
+        }
+        return { HasMore: true, NextOffset: nextOffset };
     }
 
     /**
-     * Overrides the base pagination URL builder to emit GrowthZone-specific
-     * OData parameters (`$skip`, `$top`) and, for the delta contacts endpoint,
-     * the `modifiedSince` watermark parameter.
-     *
-     * Driven entirely by IntegrationObject metadata — no hardcoded object-name
-     * switches beyond the delta-specific param which is keyed on APIPath.
+     * Emits GrowthZone OData params (`skip`/`top`) plus, for an incremental IO, the vendor
+     * watermark param. The watermark behaviour is fully METADATA-DRIVEN: the param NAME comes
+     * from the IO's `IncrementalWatermarkField` (e.g. `modifiedSince` on the Contact object) and
+     * is emitted only when `SupportsIncrementalSync=true` AND a watermark value is in context —
+     * never keyed off a hardcoded path suffix or object name.
      */
     protected override BuildPaginatedURL(
         basePath: string,
@@ -468,27 +517,25 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
         _cursor?: string,
         effectivePageSize?: number
     ): string {
-        const limit = effectivePageSize ?? obj.DefaultPageSize ?? DEFAULT_PAGE_SIZE;
+        const requested = effectivePageSize ?? obj.DefaultPageSize ?? DEFAULT_PAGE_SIZE;
+        // Clamp to GrowthZone's server-side page ceiling — a larger `top` is silently capped at 100
+        // (truncating pagination) and on some endpoints is rejected outright with HTTP 400.
+        const limit = Math.min(requested, GROWTHZONE_MAX_PAGE_SIZE);
+        const separator = basePath.includes('?') ? '&' : '?';
         const params = new URLSearchParams();
 
-        // GrowthZone's only incremental endpoint: /api/contacts/delta
-        const isDelta = obj.APIPath?.toLowerCase().endsWith('/delta') ?? false;
-        if (isDelta && this.currentWatermark) {
-            params.set('modifiedSince', this.currentWatermark);
-            params.set('top', String(limit));
-            if (offset > 0) params.set('skip', String(offset));
-        } else if (obj.SupportsPagination && obj.PaginationType === 'Offset') {
-            params.set('$top', String(limit));
-            if (offset > 0) params.set('$skip', String(offset));
+        const watermarkField = obj.IncrementalWatermarkField;
+        if (obj.SupportsIncrementalSync && watermarkField && this.currentWatermark) {
+            params.set(watermarkField, this.currentWatermark);
         }
+        params.set(ODATA_TOP_PARAM, String(limit));
+        if (offset > 0) params.set(ODATA_SKIP_PARAM, String(offset));
 
         const qs = params.toString();
-        return qs ? `${basePath}?${qs}` : basePath;
+        return qs ? `${basePath}${separator}${qs}` : basePath;
     }
 
-    /**
-     * Executes an HTTP request with rate limiting and retry for 429/503.
-     */
+    /** Executes an HTTP request with client-side throttling + retry for 429/503. */
     protected async MakeHTTPRequest(
         auth: RESTAuthContext,
         url: string,
@@ -527,7 +574,7 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
 
             if ((response.status === 429 || response.status === 503) && attempt < maxRetries) {
                 console.warn(`[GrowthZone] HTTP ${response.status} from ${url} — backing off`);
-                await this.Sleep(this.BackoffDelay(attempt));
+                await this.Sleep(this.RetryAfterMs(response) ?? this.BackoffDelay(attempt));
                 continue;
             }
 
@@ -540,40 +587,28 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
     // ─── TestConnection ──────────────────────────────────────────────
 
     /**
-     * Tests connectivity by calling the delta endpoint with a recent
-     * watermark. A 200 response confirms that the tenant and API key are
-     * valid.
+     * Tests connectivity by minting an OAuth2 token and listing one Contact record. A 2xx
+     * confirms the OAuth2 credentials + base URL are valid against the live API.
      */
     public async TestConnection(
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
     ): Promise<ConnectionTestResult> {
         try {
-            const config = await this.ParseConfig(companyIntegration, contextUser);
-            const baseUrl = this.ResolveBaseUrl(config);
-            const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-            const url = `${baseUrl}/contacts/delta?modifiedSince=${encodeURIComponent(since)}&top=1`;
+            const auth = (await this.Authenticate(companyIntegration, contextUser)) as GrowthZoneAuthContext;
+            const headers = this.BuildHeaders(auth);
+            const url = `${auth.BaseUrl}/api/contacts?${ODATA_TOP_PARAM}=1`;
+            const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
 
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `ApiKey ${config.ApiKey}`,
-                    'Accept': 'application/json',
-                },
-                signal: AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS),
-            });
-
-            if (!response.ok) {
-                const preview = (await response.text()).slice(0, 300);
+            if (response.Status < 200 || response.Status >= 300) {
                 return {
                     Success: false,
-                    Message: `GrowthZone returned HTTP ${response.status} from ${url}: ${preview}`,
+                    Message: `GrowthZone returned HTTP ${response.Status} from ${url}`,
                 };
             }
-
             return {
                 Success: true,
-                Message: `Connected to GrowthZone tenant '${config.Tenant}'`,
+                Message: `Connected to GrowthZone at ${auth.BaseUrl}`,
                 ServerVersion: 'GrowthZone REST API',
             };
         } catch (err) {
@@ -582,137 +617,48 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
         }
     }
 
-    // ─── Discovery with runtime custom fields ───────────────────────
+    // ─── Discovery (metadata-driven, no hardcoded catalog) ───────────
 
     /**
-     * Discovers objects from the cache. GrowthZone's dynamic capability is
-     * limited to custom fields on contacts (not custom objects/tables) —
-     * so DiscoverObjects only returns the metadata-seeded baseline.
+     * Discovers the full object universe from the IntegrationEngineBase cache (the Declared
+     * metadata). GrowthZone publishes its catalog credential-free (curated + dev docs), so
+     * the baseline is Declared metadata — never hardcoded here, never sampled at build.
      */
     public override async DiscoverObjects(
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
     ): Promise<ExternalObjectSchema[]> {
-        return super.DiscoverObjects(companyIntegration, contextUser);
+        const seeded = await super.DiscoverObjects(companyIntegration, contextUser);
+        if (seeded.length > 0) return seeded;
+        // No seeded Declared metadata is loaded (a credential-free static context with no DB-backed
+        // IntegrationEngine — e.g. the structural self-check tiers). GrowthZone's object catalog is
+        // surfaced from the runtime-seeded Declared metadata (loaded from the DB) plus live-API custom
+        // fields; it is NOT a hardcoded code constant (per the no-hardcoded-catalog rule) and so cannot
+        // be reproduced from connector source without a live connection / loaded credential configuration.
+        // Signal that explicitly so credential-free self-check tiers SKIP honestly ("proven at the live
+        // tier") instead of misreading an empty result as catalog drift. In real runtime (and the hybrid
+        // e2e, where `mj sync push` seeds the catalog) `seeded` is non-empty and this never throws.
+        throw new Error('GrowthZone DiscoverObjects requires a live connection / loaded credential configuration JSON — the object catalog is runtime-seeded (Declared metadata) plus live-discovered, not statically reproducible credential-free.');
     }
 
-    /**
-     * Discovers fields for a given object, augmenting the cached metadata
-     * with runtime-discovered custom fields for contact objects. Custom
-     * fields get IsCustom=true via IntegrationSchemaSync when persisted.
-     */
+    /** Discovers fields for an object from the cached Declared metadata. */
     public override async DiscoverFields(
         companyIntegration: MJCompanyIntegrationEntity,
         objectName: string,
         contextUser: UserInfo
     ): Promise<ExternalFieldSchema[]> {
-        const staticFields = await super.DiscoverFields(companyIntegration, objectName, contextUser);
-
-        // Custom-field discovery only applies to the contact-custom-field-values
-        // and custom-field-definitions objects.
-        const lower = objectName.toLowerCase();
-        if (lower !== 'custom-field-definitions' && lower !== 'contact-custom-field-values') {
-            return staticFields;
-        }
-
-        try {
-            const customFields = await this.FetchCustomFieldDefinitions(companyIntegration, contextUser);
-            const discovered = customFields.map(cf => this.CustomFieldToSchema(cf));
-            return [...staticFields, ...discovered];
-        } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            console.warn(`[GrowthZone] Runtime custom-field discovery failed: ${message}`);
-            return staticFields;
-        }
-    }
-
-    /**
-     * Fetches custom field definitions from GrowthZone. Uses a sample contact
-     * ID to query NotesAndFields — since the curated API does not expose a
-     * global custom-fields list endpoint, a sample contact is used to probe
-     * the defined fields.
-     */
-    private async FetchCustomFieldDefinitions(
-        companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo
-    ): Promise<GrowthZoneCustomField[]> {
-        const auth = (await this.Authenticate(companyIntegration, contextUser)) as GrowthZoneAuthContext;
-        const headers = this.BuildHeaders(auth);
-
-        // Canonical vendor endpoint: POST /api/customfields/getall returns ALL
-        // tenant-defined custom field definitions across all object types in one
-        // call. Documented at documentation.growthzoneapp.com/CustomField.html.
-        // Previously this method probed per-contact NotesAndFields, which was
-        // both slow and limited to fields actually attached to the probed record.
-        try {
-            const url = `${auth.BaseUrl}/customfields/getall`;
-            const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, {});
-            if (response.Status >= 200 && response.Status < 300) {
-                const body = response.Body as GrowthZoneListEnvelope<GrowthZoneCustomField> | GrowthZoneCustomField[];
-                const items = Array.isArray(body) ? body : (body.Results ?? []);
-                if (items.length > 0) return items;
-            }
-        } catch {
-            // Fall through to legacy per-contact probe if the global endpoint isn't
-            // available on the tenant (e.g., older deployments may not expose it).
-        }
-
-        // Legacy fallback: probe a single contact's NotesAndFields. Kept so older
-        // GrowthZone deployments without /customfields/getall continue to work.
-        const since = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
-        const listUrl = `${auth.BaseUrl}/contacts/delta?modifiedSince=${encodeURIComponent(since)}&top=1`;
-        const listResp = await this.MakeHTTPRequest(auth, listUrl, 'GET', headers);
-        if (listResp.Status < 200 || listResp.Status >= 300) return [];
-
-        const listBody = listResp.Body as GrowthZoneListEnvelope<GrowthZoneDeltaContact> | GrowthZoneDeltaContact[];
-        const contacts = Array.isArray(listBody) ? listBody : (listBody.Results ?? []);
-        if (contacts.length === 0) return [];
-
-        const probeId = String(contacts[0].ContactId);
-        const fieldsUrl = `${auth.BaseUrl}/contacts/${encodeURIComponent(probeId)}/NotesAndFields`;
-        const fieldsResp = await this.MakeHTTPRequest(auth, fieldsUrl, 'GET', headers);
-        if (fieldsResp.Status < 200 || fieldsResp.Status >= 300) return [];
-
-        const notesAndFields = fieldsResp.Body as GrowthZoneNotesAndFields;
-        return notesAndFields.Fields ?? [];
-    }
-
-    /**
-     * Maps a GrowthZone custom field definition to an ExternalFieldSchema.
-     */
-    private CustomFieldToSchema(cf: GrowthZoneCustomField): ExternalFieldSchema {
-        return {
-            Name: `CustomField_${cf.CustomFieldId}`,
-            Label: cf.DisplayName ?? cf.Name ?? `Custom Field ${cf.CustomFieldId}`,
-            Description: cf.Description ?? undefined,
-            DataType: this.MapCustomFieldType(cf.CustomFieldType),
-            IsRequired: cf.IsRequired === true,
-            IsUniqueKey: false,
-            IsReadOnly: cf.IsArchived === true,
-            IsForeignKey: false,
-        };
-    }
-
-    /**
-     * Maps GrowthZone custom-field type to generic integration type.
-     */
-    private MapCustomFieldType(cfType: string | null | undefined): string {
-        const t = (cfType ?? '').toLowerCase();
-        if (t === 'number') return 'decimal';
-        if (t === 'date') return 'datetime';
-        if (t === 'selectlist' || t === 'scale') return 'string';
-        if (t === 'file') return 'string';
-        return 'string';
+        return super.DiscoverFields(companyIntegration, objectName, contextUser);
     }
 
     // ─── FetchChanges override ──────────────────────────────────────
 
     /**
-     * Override to store watermark/object-name context used by BuildPaginatedURL
-     * and to advance the watermark from returned records.
+     * Sets the watermark context the OData URL builder needs, delegates
+     * the actual walk to the base (which descends nested Door→Segment template-var paths via
+     * FK metadata so nested IOs never silently return 0 rows), then advances the watermark
+     * from the returned records on the final batch only (partial-failure-safe).
      */
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        this.currentObjectName = ctx.ObjectName;
         this.currentWatermark = ctx.WatermarkValue ?? undefined;
 
         const result = await super.FetchChanges(ctx);
@@ -722,116 +668,14 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
             ? (this.ExtractLatestModifiedDate(result.Records) ?? ctx.WatermarkValue ?? undefined)
             : undefined;
 
-        return {
-            ...result,
-            NewWatermarkValue: newWatermark,
-        };
+        return { ...result, NewWatermarkValue: newWatermark };
     }
 
-    // ─── Private helpers ────────────────────────────────────────────
+    // ─── Config parsing ──────────────────────────────────────────────
 
     /**
-     * Normalizes a raw record: strips GrowthZone null-sentinel dates and
-     * treats empty strings as null. Does NOT recurse into nested objects
-     * beyond the top level — the base class handles that.
-     */
-    private NormalizeRecord(record: Record<string, unknown>): Record<string, unknown> {
-        const out: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(record)) {
-            out[key] = this.NormalizeValue(value);
-        }
-        return out;
-    }
-
-    /** Converts GrowthZone sentinel values to null. */
-    private NormalizeValue(value: unknown): unknown {
-        if (value == null) return null;
-        if (typeof value === 'string') {
-            if (value === '' ) return null;
-            if (value.startsWith(GROWTHZONE_NULL_DATE)) return null;
-            return value;
-        }
-        return value;
-    }
-
-    /**
-     * For OrgGeneral / NotesAndFields responses, the current object being
-     * fetched may request a flattened nested array rather than the root
-     * record. Returns flattened rows when currentObjectName matches a
-     * known nested-array target, else null.
-     */
-    private MaybeFlattenNested(body: Record<string, unknown>): Record<string, unknown>[] | null {
-        const name = this.currentObjectName.toLowerCase();
-
-        // NotesAndFields — flatten Fields[] array for custom field values
-        if (name === 'contact-custom-field-values' && Array.isArray(body.Fields)) {
-            const fields = body.Fields as GrowthZoneCustomField[];
-            const contactId = body.ContactId ?? body.contactId;
-            return fields.map(cf => this.NormalizeRecord({
-                ContactId: contactId ?? '',
-                CustomFieldId: cf.CustomFieldId,
-                Name: cf.Name ?? null,
-                DisplayName: cf.DisplayName ?? null,
-                CustomFieldType: cf.CustomFieldType ?? null,
-                Value: this.StringifyCustomFieldValue(cf.Value),
-                FieldGroupName: cf.FieldGroupName ?? null,
-                IsPublic: cf.IsPublic ?? null,
-                IsArchived: cf.IsArchived ?? null,
-            }));
-        }
-
-        // OrgGeneral — flatten one of the nested arrays based on current object
-        const nestedMap: Record<string, typeof ORG_NESTED_ARRAYS[number]> = {
-            'contact-activities': 'Activities',
-            'contact-categories': 'Categories',
-            'contact-communications': 'Communication',
-            'contact-sales-opportunities': 'SalesOpportunities',
-        };
-        const arrKey = nestedMap[name];
-        if (arrKey && Array.isArray(body[arrKey])) {
-            const rows = body[arrKey] as Record<string, unknown>[];
-            const contactId = body.ContactId ?? body.contactId;
-            return rows.map(row => this.NormalizeRecord({
-                ContactId: contactId ?? '',
-                ...row,
-            }));
-        }
-
-        return null;
-    }
-
-    /** Stringifies custom-field values so they fit nvarchar storage. */
-    private StringifyCustomFieldValue(value: unknown): string | null {
-        if (value == null) return null;
-        if (typeof value === 'string') return value;
-        if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-        try {
-            return JSON.stringify(value);
-        } catch {
-            return null;
-        }
-    }
-
-    /**
-     * Extracts the latest ModifiedDate from a batch of records for
-     * watermark advancement.
-     */
-    private ExtractLatestModifiedDate(records: { Fields: Record<string, unknown> }[]): string | null {
-        let latest: Date | null = null;
-        for (const rec of records) {
-            const dateStr = rec.Fields?.ModifiedDate;
-            if (typeof dateStr !== 'string' || dateStr.length === 0) continue;
-            const d = new Date(dateStr);
-            if (!isNaN(d.getTime()) && (latest === null || d > latest)) {
-                latest = d;
-            }
-        }
-        return latest ? latest.toISOString() : null;
-    }
-
-    /**
-     * Parses connection config, preferring the attached credential entity
-     * over the raw Configuration JSON.
+     * Parses the OAuth2 connection config, preferring the attached MJ Credential over the
+     * raw Configuration JSON. Credential bytes are resolved at runtime — never at build.
      */
     private async ParseConfig(
         companyIntegration: MJCompanyIntegrationEntity,
@@ -846,7 +690,7 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
         throw new Error('GrowthZone connector requires either CredentialID or Configuration JSON');
     }
 
-    /** Loads config from the MJ: Credentials entity. */
+    /** Loads the OAuth2 config from the MJ: Credentials entity Values JSON. */
     private async ParseConfigFromCredential(
         credentialID: string,
         contextUser?: UserInfo,
@@ -854,75 +698,141 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
     ): Promise<GrowthZoneConnectionConfig> {
         const md = provider ?? new Metadata();
         const cred = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-        await cred.Load(credentialID);
-        if (!cred.Values) throw new Error('GrowthZone credential has no Values JSON');
+        const loaded = await cred.Load(credentialID);
+        if (!loaded || !cred.Values) {
+            throw new Error('GrowthZone credential could not be loaded or has no Values JSON');
+        }
         return this.ValidateConfig(JSON.parse(cred.Values));
     }
 
-    /** Validates and applies defaults to the config. */
+    /** Validates the parsed config + applies defaults. Field names are case-insensitive. */
     private ValidateConfig(raw: unknown): GrowthZoneConnectionConfig {
         if (!raw || typeof raw !== 'object') {
             throw new Error('GrowthZone configuration is not a valid object');
         }
-        const get = (key: string): string | undefined => {
-            const obj = raw as Record<string, unknown>;
-            const lower = key.toLowerCase();
-            for (const [k, v] of Object.entries(obj)) {
-                if (k.toLowerCase() === lower && typeof v === 'string') return v;
+        const obj = raw as Record<string, unknown>;
+        const getStr = (...keys: string[]): string | undefined => {
+            for (const key of keys) {
+                const lower = key.toLowerCase();
+                for (const [k, v] of Object.entries(obj)) {
+                    if (k.toLowerCase() === lower && typeof v === 'string' && v.length > 0) return v;
+                }
             }
             return undefined;
         };
-        const getNum = (key: string): number | undefined => {
-            const obj = raw as Record<string, unknown>;
-            const lower = key.toLowerCase();
-            for (const [k, v] of Object.entries(obj)) {
-                if (k.toLowerCase() === lower && typeof v === 'number') return v;
+        const getNum = (...keys: string[]): number | undefined => {
+            for (const key of keys) {
+                const lower = key.toLowerCase();
+                for (const [k, v] of Object.entries(obj)) {
+                    if (k.toLowerCase() === lower && typeof v === 'number') return v;
+                }
             }
             return undefined;
         };
 
-        const tenant = get('tenant') ?? get('subdomain');
-        const apiKey = get('apikey') ?? get('api_key') ?? get('key');
-        const baseUrlOverride = get('baseurloverride') ?? get('base_url_override') ?? get('baseurl');
-
-        if (!tenant && !baseUrlOverride) {
-            throw new Error('GrowthZone configuration missing required field: Tenant (or BaseUrlOverride)');
+        const baseURL = getStr('baseurl', 'base_url');
+        if (!baseURL) {
+            throw new Error('GrowthZone configuration missing required field: BaseURL');
         }
-        if (!apiKey) {
-            throw new Error('GrowthZone configuration missing required field: ApiKey');
+        const clientId = getStr('clientid', 'client_id');
+        const clientSecret = getStr('clientsecret', 'client_secret');
+        if (!clientId || !clientSecret) {
+            throw new Error('GrowthZone OAuth2 configuration missing required field: ClientId / ClientSecret');
+        }
+
+        const refreshToken = getStr('refreshtoken', 'refresh_token');
+        const username = getStr('username', 'user');
+        const password = getStr('password', 'pass');
+        if (!refreshToken && !(username && password)) {
+            throw new Error(
+                'GrowthZone OAuth2 configuration requires a RefreshToken (primary grant) ' +
+                'or Username + Password (fallback grant)'
+            );
         }
 
         return {
-            Tenant: tenant ?? '',
-            ApiKey: apiKey,
-            BaseUrlOverride: baseUrlOverride,
+            ClientId: clientId,
+            ClientSecret: clientSecret,
+            RefreshToken: refreshToken,
+            Username: username,
+            Password: password,
+            Scopes: getStr('scopes', 'scope'),
+            BaseURL: baseURL,
+            TokenURL: getStr('tokenurl', 'token_url'),
+            Tenant: getStr('tenant', 'subdomain'),
             MaxRetries: getNum('maxretries') ?? DEFAULT_MAX_RETRIES,
             RequestTimeoutMs: getNum('requesttimeoutms') ?? DEFAULT_REQUEST_TIMEOUT_MS,
             MinRequestIntervalMs: getNum('minrequestintervalms') ?? DEFAULT_MIN_REQUEST_INTERVAL_MS,
         };
     }
 
-    /**
-     * Resolves the base URL from either an override or the tenant subdomain.
-     * Always returns a URL ending in `/api` with no trailing slash.
-     */
+    /** Resolves the API base URL from the credential's BaseURL (never a hardcoded subdomain). */
     private ResolveBaseUrl(config: GrowthZoneConnectionConfig): string {
-        if (config.BaseUrlOverride) {
-            const trimmed = config.BaseUrlOverride.replace(/\/+$/, '');
-            return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
-        }
-        return `https://${config.Tenant}.growthzoneapp.com/api`;
+        return config.BaseURL.replace(/\/+$/, '');
     }
+
+    /** Resolves the OAuth2 token endpoint: credential TokenURL override, else `{base}/oauth/token`. */
+    private ResolveTokenURL(config: GrowthZoneConnectionConfig, baseUrl: string): string {
+        if (config.TokenURL && config.TokenURL.length > 0) return config.TokenURL;
+        // Strip a trailing /api or /API segment so the token endpoint sits at the host root.
+        const root = baseUrl.replace(/\/api$/i, '');
+        return `${root}${DEFAULT_TOKEN_PATH}`;
+    }
+
+    // ─── Normalization helpers ───────────────────────────────────────
+
+    /** Normalizes a raw record's top-level values (null-date + empty-string → null). */
+    private NormalizeRecord(record: Record<string, unknown>): Record<string, unknown> {
+        const out: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(record)) {
+            out[key] = this.NormalizeValue(value);
+        }
+        return out;
+    }
+
+    /** Converts GrowthZone sentinel values to null. */
+    private NormalizeValue(value: unknown): unknown {
+        if (value == null) return null;
+        if (typeof value === 'string') {
+            if (value === '') return null;
+            if (value.startsWith(GROWTHZONE_NULL_DATE)) return null;
+            return value;
+        }
+        return value;
+    }
+
+    /** Extracts the latest ModifiedDate across a batch for watermark advancement. */
+    private ExtractLatestModifiedDate(records: { Fields: Record<string, unknown> }[]): string | null {
+        let latest: Date | null = null;
+        for (const rec of records) {
+            const raw = rec.Fields?.ModifiedDate ?? rec.Fields?.modifiedDate;
+            if (typeof raw !== 'string' || raw.length === 0) continue;
+            const d = new Date(raw);
+            if (!isNaN(d.getTime()) && (latest === null || d > latest)) latest = d;
+        }
+        return latest ? latest.toISOString() : null;
+    }
+
+    // ─── HTTP helpers ────────────────────────────────────────────────
 
     /** Throttle to respect GrowthZone's recommended minimum request interval. */
     private async ThrottleIfNeeded(minIntervalMs: number): Promise<void> {
         const elapsed = Date.now() - this.lastRequestTime;
-        if (elapsed < minIntervalMs) {
-            await this.Sleep(minIntervalMs - elapsed);
-        }
+        if (elapsed < minIntervalMs) await this.Sleep(minIntervalMs - elapsed);
     }
 
-    /** Exponential backoff delay for retry attempts. */
+    /** Parses a Retry-After header (seconds or http-date) into ms, if present. */
+    private RetryAfterMs(response: Response): number | undefined {
+        const header = response.headers.get('retry-after');
+        if (!header) return undefined;
+        const asSeconds = Number(header);
+        if (!isNaN(asSeconds)) return Math.max(0, asSeconds * 1_000);
+        const asDate = new Date(header).getTime();
+        if (!isNaN(asDate)) return Math.max(0, asDate - Date.now());
+        return undefined;
+    }
+
+    /** Exponential backoff delay for retry attempts (capped at 30s). */
     private BackoffDelay(attempt: number): number {
         return Math.min(2_000 * Math.pow(2, attempt), 30_000);
     }
@@ -944,8 +854,7 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
         const text = await response.text();
         let body: unknown = null;
         if (text.length > 0) {
-            try { body = JSON.parse(text); }
-            catch { body = text; }
+            try { body = JSON.parse(text); } catch { body = text; }
         }
         return { Status: response.status, Body: body, Headers: headers };
     }
@@ -956,5 +865,5 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
     }
 }
 
-/** Tree-shaking prevention function — import and call from module entry point */
+/** Tree-shaking prevention — import and call from the package entry point. */
 export function LoadGrowthZoneConnector(): void { /* no-op */ }

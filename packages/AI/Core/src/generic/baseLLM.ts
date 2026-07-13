@@ -136,11 +136,7 @@ export abstract class BaseLLM extends BaseModel {
                 const errorResult = new ChatResult(false, startTime, endTime);
                 errorResult.data = {
                     choices: [],
-                    usage: {
-                        promptTokens: 0,
-                        completionTokens: 0,
-                        totalTokens: 0
-                    }
+                    usage: new ModelUsage(0, 0)
                 };
                 errorResult.statusText = 'error';
                 errorResult.errorMessage = result.reason?.message || 'Unknown error';
@@ -297,11 +293,7 @@ export abstract class BaseLLM extends BaseModel {
                     const errorResult = new ChatResult(false, startTime, endTime);
                     errorResult.data = {
                         choices: [],
-                        usage: {
-                            promptTokens: 0,
-                            completionTokens: 0,
-                            totalTokens: 0
-                        }
+                        usage: new ModelUsage(0, 0)
                     };
                     errorResult.statusText = 'error';
                     errorResult.errorMessage = error?.message || 'Unknown error';
@@ -579,8 +571,13 @@ export function ResolveFileInputStrategy(
     const lower = mimeType.toLowerCase();
     const matches = capabilities.SupportedMimeTypes.some((pattern) => {
         const p = pattern.toLowerCase();
+        // Wildcard on EITHER side matches (a requested 'image/*' modality probe must
+        // match a driver declaring any concrete 'image/<x>' type, and vice-versa).
         if (p.endsWith('/*')) {
             return lower.startsWith(p.slice(0, -1));
+        }
+        if (lower.endsWith('/*')) {
+            return p.startsWith(lower.slice(0, -1));
         }
         return lower === p;
     });

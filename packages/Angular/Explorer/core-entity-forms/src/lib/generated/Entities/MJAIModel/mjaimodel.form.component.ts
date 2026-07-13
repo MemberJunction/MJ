@@ -39,12 +39,13 @@ export class MJAIModelFormComponent extends BaseFormComponent {
             { sectionKey: 'mJGeneratedCodes', sectionName: 'Generated Codes', isExpanded: false },
             { sectionKey: 'mJAIPromptModels', sectionName: 'AI Prompt Models', isExpanded: false },
             { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false },
-            { sectionKey: 'mJAIPromptRunsOriginalModelID', sectionName: 'AI Prompt Runs (Original Model)', isExpanded: false },
+            { sectionKey: 'mJAIPromptRunsOriginalModelID', sectionName: 'AI Prompt Runs (Original Model ID)', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJAIPromptRunsModelID', sectionName: 'AI Prompt Runs (Model)', isExpanded: false },
             { sectionKey: 'mJQueries', sectionName: 'Queries', isExpanded: false },
             { sectionKey: 'mJTags', sectionName: 'Tags', isExpanded: false },
-            { sectionKey: 'mJAIModels', sectionName: 'AI Models', isExpanded: false }
+            { sectionKey: 'mJAIModels', sectionName: 'AI Models', isExpanded: false },
+            { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false }
         ]);
     }
 }

@@ -11,6 +11,22 @@ import { GeoCodeSyncService, ExistingGeoCodeInfo } from '@memberjunction/geo-cor
 import { GetDialect, SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
+ * Console progress context threaded into {@link ScheduledGeocodingAction.geocodeBatch}
+ * so that per-batch log lines read as one continuous, cumulative stream across
+ * every page of a group (entity) rather than resetting to `1/N` each page.
+ */
+type BatchProgress = {
+    /** Display label for the group, e.g. the entity name. */
+    Label: string;
+    /** Denominator: total records in scope for this group (0 = unknown → rendered as `?`). */
+    Total: number;
+    /** Records already processed for this group before the current call — anchors the cumulative range. */
+    Offset: number;
+    /** 1-based page number, shown in parens. Omitted for single-page groups. */
+    Page?: number;
+};
+
+/**
  * Scheduled geocoding maintenance action that handles three tasks:
  *
  * 1. **Missing records** — Finds records in geo-enabled entities that have
@@ -55,6 +71,8 @@ export class ScheduledGeocodingAction extends BaseAction {
     private static readonly DEFAULT_MAX_TOTAL = 50_000;
     /** Page size for RunView pagination — controls how many BaseEntity objects exist simultaneously. */
     private static readonly PAGE_SIZE = 500;
+    /** Indentation prefix for child log lines nested under a group/entity header. */
+    private static readonly INDENT = '   ';
 
     /**
      * Geocoding provider name in effect for the current run. Set at the top of
@@ -80,7 +98,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         const geocodingProvider = this.getStringParam(params, 'GeocodingProvider');
         this.currentGeocodingProvider = geocodingProvider ?? null;
 
-        LogStatus(`ScheduledGeocodingAction: Starting maintenance run (BatchSize=${batchSize}, MaxTotal=${maxTotal}, GeocodingProvider=${geocodingProvider ?? 'config-default'})`);
+        LogStatus(`🌍 Scheduled Geocoding — starting (batch ${batchSize} · max ${this.fmt(maxTotal)} · provider ${geocodingProvider ?? 'config-default'})`);
 
         const stats = { MissingProcessed: 0, MissingSuccess: 0, RetriesProcessed: 0, RetriesSuccess: 0, OrphansRemoved: 0 };
 
@@ -100,10 +118,10 @@ export class ScheduledGeocodingAction extends BaseAction {
 
         const totalRecordsProcessed = stats.MissingProcessed + stats.RetriesProcessed;
         if (totalRecordsProcessed >= maxTotal) {
-            LogStatus(`ScheduledGeocodingAction: WARNING — MaxTotal limit (${maxTotal}) reached. There may be remaining records for the next run.`);
+            LogStatus(`⚠️  MaxTotal limit (${this.fmt(maxTotal)}) reached — remaining records will be picked up on the next run.`);
         }
 
-        LogStatus(`ScheduledGeocodingAction: Complete — Missing: ${stats.MissingProcessed} processed (${stats.MissingSuccess} success), Retries: ${stats.RetriesProcessed} (${stats.RetriesSuccess} success), Orphans: ${stats.OrphansRemoved} removed`);
+        LogStatus(`🏁 Scheduled Geocoding — complete · missing ${this.fmt(stats.MissingProcessed)} (${this.fmt(stats.MissingSuccess)} ✓) · retries ${this.fmt(stats.RetriesProcessed)} (${this.fmt(stats.RetriesSuccess)} ✓) · orphans ${this.fmt(stats.OrphansRemoved)} removed`);
 
         return {
             Success: true,
@@ -142,7 +160,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         }
 
         if (totalProcessed > 0) {
-            LogStatus(`ScheduledGeocodingAction: Processed ${totalProcessed} missing records (${totalSuccess} geocoded successfully)`);
+            LogStatus(`✅ Missing-record geocoding complete — ${this.fmt(totalProcessed)} processed, ${this.fmt(totalSuccess)} geocoded`);
         }
 
         return { Processed: totalProcessed, Success: totalSuccess };
@@ -186,18 +204,26 @@ export class ScheduledGeocodingAction extends BaseAction {
             let totalSuccess = 0;
             let pageOffset = 0;             // OFFSET-mode (composite-PK fallback)
             let lastSeenKey: CompositeKey | undefined; // keyset mode
+            let pageNumber = 0;             // 1-based, shown in batch lines
+            let candidateTotal = 0;         // denominator: records with address data (from page-1 TotalRowCount)
+            let headerLogged = false;       // emit the entity header lazily, only when there's work to do
 
             // Paginate through entity records to avoid loading all into memory at once.
             // Keyset pagination keeps each page O(log N) regardless of depth — a critical
             // win when the entity has millions of rows. See guides/KEYSET_PAGINATION_GUIDE.md.
             while (totalProcessed < maxRows) {
+                pageNumber++;
                 const pageResult = canUseKeyset
                     ? await this.loadEntityPageKeyset(entityInfo.Name, pkField.Name, nonNullConditions, lastSeenKey, contextUser)
                     : await this.loadEntityPageOffset(entityInfo.Name, nonNullConditions, pageOffset, contextUser);
 
                 if (!pageResult.Success || pageResult.Results.length === 0) break;
 
-                const pageEntities = pageResult.Results as unknown as BaseEntity[];
+                // TotalRowCount reports the full count matching the filter regardless of the
+                // keyset seek predicate / page offset, so the first page gives us a stable denominator.
+                if (candidateTotal === 0) candidateTotal = pageResult.TotalRowCount;
+
+                const pageEntities = pageResult.Results;
 
                 // Filter to records missing geocodes (not in existingMap for any LocationType)
                 const missingRecords = pageEntities.filter(entity => {
@@ -209,9 +235,18 @@ export class ScheduledGeocodingAction extends BaseAction {
                 });
 
                 if (missingRecords.length > 0) {
+                    if (!headerLogged) {
+                        this.logEntityHeader(entityInfo, candidateTotal);
+                        headerLogged = true;
+                    }
                     const budget = maxRows - totalProcessed;
                     const toProcess = missingRecords.slice(0, budget);
-                    const stats = await this.geocodeBatch(toProcess, entityInfo, contextUser, batchSize, existingMap);
+                    const stats = await this.geocodeBatch(toProcess, entityInfo, contextUser, batchSize, existingMap, {
+                        Label: entityInfo.Name,
+                        Total: candidateTotal,
+                        Offset: totalProcessed,
+                        Page: pageNumber
+                    });
                     totalProcessed += stats.Processed;
                     totalSuccess += stats.Success;
                 }
@@ -228,6 +263,10 @@ export class ScheduledGeocodingAction extends BaseAction {
                 } else {
                     pageOffset += ScheduledGeocodingAction.PAGE_SIZE;
                 }
+            }
+
+            if (headerLogged) {
+                this.logEntityComplete(entityInfo, totalProcessed, totalSuccess, candidateTotal);
             }
 
             return { Processed: totalProcessed, Success: totalSuccess };
@@ -254,7 +293,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         nonNullFilter: string,
         lastSeenKey: CompositeKey | undefined,
         contextUser: UserInfo
-    ): Promise<{ Success: boolean; Results: BaseEntity[] }> {
+    ): Promise<{ Success: boolean; Results: BaseEntity[]; TotalRowCount: number }> {
         const rv = new RunView();
         const result = await rv.RunView({
             EntityName: entityName,
@@ -268,7 +307,8 @@ export class ScheduledGeocodingAction extends BaseAction {
 
         return {
             Success: result.Success,
-            Results: result.Success ? (result.Results as unknown as BaseEntity[]) : []
+            Results: result.Success ? (result.Results as unknown as BaseEntity[]) : [],
+            TotalRowCount: result.Success ? result.TotalRowCount : 0
         };
     }
 
@@ -281,7 +321,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         nonNullFilter: string,
         offset: number,
         contextUser: UserInfo
-    ): Promise<{ Success: boolean; Results: BaseEntity[] }> {
+    ): Promise<{ Success: boolean; Results: BaseEntity[]; TotalRowCount: number }> {
         const rv = new RunView();
         const result = await rv.RunView({
             EntityName: entityName,
@@ -295,7 +335,8 @@ export class ScheduledGeocodingAction extends BaseAction {
 
         return {
             Success: result.Success,
-            Results: result.Success ? (result.Results as unknown as BaseEntity[]) : []
+            Results: result.Success ? (result.Results as unknown as BaseEntity[]) : [],
+            TotalRowCount: result.Success ? result.TotalRowCount : 0
         };
     }
 
@@ -322,6 +363,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         let totalProcessed = 0;
         let totalSuccess = 0;
         let pageOffset = 0;
+        let retryTotal = 0;   // denominator: total failed-and-retriable rows (from page-1 TotalRowCount)
 
         while (totalProcessed < maxTotal) {
             const pageResult = await rv.RunView<MJRecordGeoCodeEntity>({
@@ -340,7 +382,8 @@ export class ScheduledGeocodingAction extends BaseAction {
             const records = pageResult.Results.slice(0, budget);
 
             if (totalProcessed === 0) {
-                LogStatus(`ScheduledGeocodingAction: Processing failed records for retry`);
+                retryTotal = Math.min(pageResult.TotalRowCount, maxTotal);
+                LogStatus(`🔁 Retrying failed geocodes — ${this.fmt(retryTotal)} pending`);
             }
 
             // Group by entity for efficient processing
@@ -362,7 +405,11 @@ export class ScheduledGeocodingAction extends BaseAction {
                 const entities = await this.loadSourceEntities(geoRecords, entityInfo, contextUser, provider);
                 if (entities.length === 0) continue;
 
-                const stats = await this.geocodeBatch(entities, entityInfo, contextUser, batchSize);
+                const stats = await this.geocodeBatch(entities, entityInfo, contextUser, batchSize, undefined, {
+                    Label: entityInfo.Name,
+                    Total: retryTotal,
+                    Offset: totalProcessed
+                });
                 totalProcessed += stats.Processed;
                 totalSuccess += stats.Success;
             }
@@ -507,7 +554,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         }
 
         if (entityRemoved > 0) {
-            LogStatus(`ScheduledGeocodingAction: Removed ${entityRemoved} orphaned geo records for ${entityInfo.Name}`);
+            LogStatus(`🧹 ${entityInfo.Name} — removed ${this.fmt(entityRemoved)} orphaned geo records`);
         }
         return entityRemoved;
     }
@@ -531,13 +578,17 @@ export class ScheduledGeocodingAction extends BaseAction {
      * @param contextUser - User context
      * @param batchSize - Number of concurrent geocoding operations per batch
      * @param existingGeoCodesMap - Optional pre-loaded map passed to GeoCodeSyncService
+     * @param progress - Optional console progress context. When supplied, each batch logs a
+     *   cumulative `records X–Y of Total` line (anchored to `progress.Offset`) instead of a
+     *   per-call `batch N/M` line that resets every page.
      */
     private async geocodeBatch(
         entities: BaseEntity[],
         entityInfo: EntityInfo,
         contextUser: UserInfo,
         batchSize: number,
-        existingGeoCodesMap?: Map<string, ExistingGeoCodeInfo>
+        existingGeoCodesMap?: Map<string, ExistingGeoCodeInfo>,
+        progress?: BatchProgress
     ): Promise<{ Processed: number; Success: number }> {
         let totalSuccess = 0;
 
@@ -551,8 +602,8 @@ export class ScheduledGeocodingAction extends BaseAction {
             const batchSuccess = results.filter(r => r.status === 'fulfilled' && r.value).length;
             totalSuccess += batchSuccess;
 
-            if (entities.length > batchSize) {
-                LogStatus(`ScheduledGeocodingAction: ${entityInfo.Name} batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(entities.length / batchSize)} — ${batchSuccess}/${batch.length} success`);
+            if (progress) {
+                this.logBatchProgress(progress, i, batch.length, batchSuccess);
             }
         }
 
@@ -625,6 +676,59 @@ export class ScheduledGeocodingAction extends BaseAction {
             eventCode: BaseEntity.BaseEventCode,
             args: event
         });
+    }
+
+    // ================================================================
+    // Console UX helpers
+    // ================================================================
+
+    /**
+     * Format an integer with locale thousands separators for console output
+     * (e.g. `2000` → `2,000`). Pinned to `en-US` for deterministic logs.
+     */
+    private fmt(n: number): string {
+        return n.toLocaleString('en-US');
+    }
+
+    /**
+     * Emit the group header that precedes a single entity's batch lines, e.g.
+     * `📍 Members — 2,000 records with address data`.
+     */
+    private logEntityHeader(entityInfo: EntityInfo, candidateTotal: number): void {
+        const scope = candidateTotal > 0
+            ? `${this.fmt(candidateTotal)} records with address data`
+            : 'records with address data';
+        LogStatus(`📍 ${entityInfo.Name} — ${scope}`);
+    }
+
+    /**
+     * Emit one indented, cumulative batch line beneath the entity header, e.g.
+     * `   ✓ records 1,991–2,000 of 2,000 · 10/10  (page 4)`. The range is anchored
+     * to `progress.Offset` so the numbers run continuously across every page.
+     */
+    private logBatchProgress(progress: BatchProgress, localIndex: number, batchCount: number, batchSuccess: number): void {
+        const start = progress.Offset + localIndex + 1;
+        const end = progress.Offset + localIndex + batchCount;
+        const total = progress.Total > 0 ? this.fmt(progress.Total) : '?';
+        const allOk = batchSuccess === batchCount;
+        const icon = allOk ? '✓' : '⚠';
+        const failNote = allOk ? '' : ` · ${this.fmt(batchCount - batchSuccess)} failed`;
+        const pageNote = progress.Page != null ? `  (page ${progress.Page})` : '';
+        LogStatus(`${ScheduledGeocodingAction.INDENT}${icon} records ${this.fmt(start)}–${this.fmt(end)} of ${total} · ${batchSuccess}/${batchCount}${failNote}${pageNote}`);
+    }
+
+    /**
+     * Emit the indented per-entity completion line, reconciling geocoded vs.
+     * failed vs. already-current against the candidate total, e.g.
+     * `   ✅ Members — 1,974 geocoded, 26 already current`.
+     */
+    private logEntityComplete(entityInfo: EntityInfo, processed: number, success: number, candidateTotal: number): void {
+        const failed = processed - success;
+        const alreadyCurrent = candidateTotal > 0 ? Math.max(0, candidateTotal - processed) : 0;
+        const parts = [`${this.fmt(success)} geocoded`];
+        if (failed > 0) parts.push(`${this.fmt(failed)} failed`);
+        if (alreadyCurrent > 0) parts.push(`${this.fmt(alreadyCurrent)} already current`);
+        LogStatus(`${ScheduledGeocodingAction.INDENT}✅ ${entityInfo.Name} — ${parts.join(', ')}`);
     }
 
     // ================================================================

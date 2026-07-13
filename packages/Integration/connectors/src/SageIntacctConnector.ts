@@ -1474,7 +1474,7 @@ export class SageIntacctConnector extends BaseIntegrationConnector {
         try {
             const response = await this.SendXMLRequest(session, xml);
             const recordKey = this.ExtractRecordKey(response, ctx.ObjectName);
-            return { Success: true, ExternalID: recordKey, StatusCode: 200 };
+            return this.BuildCreatedResult(recordKey, 200, ctx.ObjectName);
         } catch (err: unknown) {
             return this.BuildCRUDError(err, 'CreateRecord', ctx.ObjectName);
         }

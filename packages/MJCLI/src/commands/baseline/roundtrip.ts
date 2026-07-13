@@ -124,18 +124,27 @@ export default class BaselineRoundtrip extends Command {
     fs.writeFileSync(baselinePath, sql, 'utf8');
     succeed(`Baseline emitted: ${baselinePath}`);
 
-    // 3. (PG only) convert via /pg-migrate toolchain — currently delegated to a
-    //    stub `mj migrate convert` invocation; user must run /pg-migrate manually
-    //    to refine. We try the CLI command first.
+    // 3. (PG only) convert the just-emitted baseline to PostgreSQL through the
+    //    SAME rule-based BatchConverter every migration uses. `mj migrate convert`
+    //    discovers by --source-dir/--file and writes `<baseline>.pg.sql` into
+    //    --output-dir, so we point all three at the baseline we emitted in step 2.
+    //    (Earlier this called nonexistent `--input/--output` flags, which always
+    //    failed — hence the old "stub, run /pg-migrate manually" note.)
     let applyPath = baselinePath;
     if (dialect === 'postgres') {
       phase('Converting baseline to Postgres via mj migrate convert');
       const pgPath = baselinePath.replace(/\.sql$/, '.pg.sql');
-      const result = spawnSync('mj', ['migrate', 'convert', '--input', baselinePath, '--output', pgPath], {
-        stdio: 'inherit',
-      });
+      const outDir = path.dirname(baselinePath);
+      // Remove any stale output so migrate convert (which skips files that already
+      // have a .pg.sql) always re-converts the freshly emitted baseline.
+      fs.rmSync(pgPath, { force: true });
+      const result = spawnSync(
+        'mj',
+        ['migrate', 'convert', '--source-dir', outDir, '--output-dir', outDir, '--file', filename],
+        { stdio: 'inherit' },
+      );
       if (result.status !== 0) {
-        fail('PG conversion failed — run /pg-migrate manually for richer conversion.');
+        fail('PG conversion failed — fix the converter rule and re-run, or run /pg-migrate for the full pipeline.');
         throw new Error('PG conversion failed');
       }
       succeed(`PG baseline written: ${pgPath}`);

@@ -1,5 +1,49 @@
 import { describe, it, expect } from 'vitest';
+import type { CreateRecordContext, RESTAuthContext, RESTResponse } from '@memberjunction/integration-engine';
 import { BlackbaudConnector } from '../BlackbaudConnector.js';
+
+/**
+ * Test connector that stubs the auth + HTTP transport boundaries so CreateRecord
+ * runs for real down to the BuildCreatedResult decision — no credentials or live API.
+ */
+class TestBlackbaudConnector extends BlackbaudConnector {
+    public NextResponse: RESTResponse = { Status: 200, Body: {}, Headers: {} };
+
+    protected override async Authenticate(): Promise<RESTAuthContext> {
+        return { Token: 'test-token', TokenType: 'Bearer', SubscriptionKey: 'test-key' } as RESTAuthContext;
+    }
+
+    protected override async MakeHTTPRequest(): Promise<RESTResponse> {
+        return this.NextResponse;
+    }
+}
+
+function createCtx(objectName: string, attributes: Record<string, unknown>): CreateRecordContext {
+    return { CompanyIntegration: {}, ContextUser: {}, ObjectName: objectName, Attributes: attributes } as unknown as CreateRecordContext;
+}
+
+describe('BlackbaudConnector CreateRecord (missing-ID guard)', () => {
+    it('returns Success=false when a 2xx create response contains no record ID', async () => {
+        const connector = new TestBlackbaudConnector();
+        // Blackbaud returns the new record id in body.id; a 2xx with no id is the silent-loss case.
+        connector.NextResponse = { Status: 200, Body: { someOtherField: 'value' }, Headers: {} };
+
+        const result = await connector.CreateRecord(createCtx('constituents', { last: 'Lovelace' }));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('no record ID');
+    });
+
+    it('returns Success=true with the ExternalID when the create response carries an id', async () => {
+        const connector = new TestBlackbaudConnector();
+        connector.NextResponse = { Status: 200, Body: { id: '1234567' }, Headers: {} };
+
+        const result = await connector.CreateRecord(createCtx('constituents', { last: 'Lovelace' }));
+
+        expect(result.Success).toBe(true);
+        expect(result.ExternalID).toBe('1234567');
+    });
+});
 
 // Smoke tests — verifies the connector's basic identity + capability surface.
 // These pass without HTTP mocks or credentials. Failures here indicate a

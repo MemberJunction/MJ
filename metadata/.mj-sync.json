@@ -23,8 +23,12 @@
     "content-source-types",
     "integration-source-types",
     "integrations",
+    "ai-model-types",
     "ai-vendors",
     "ai-models",
+    "ml-algorithms",
+    "ml-algorithm-use-cases",
+    "ml-algorithm-use-case-rankings",
     "ai-configurations",
     "artifact-types",
     "authorizations",
@@ -38,9 +42,11 @@
     "notifications",
     "agent-categories",
     "agent-request-types",
+    "ai-agent-channels",
     "agent-types",
     "client-tool-definitions",
     "agents",
+    "ai-skills",
     "vector-databases",
     "vector-indexes",
     "entity-document-types",
@@ -63,12 +69,18 @@
     "datasets",
     "archiving",
     "entity-form-overrides",
-    "entity-settings"
+    "entity-settings",
+    "roles",
+    "entity-permissions",
+    "widget-instances"
   ],
   "sqlLogging": {
     "enabled": true,
     "outputDirectory": "./sql_logging",
-    "filterPatterns": ["*spCreateAIPromptRun*", "*spUpdateAIPromptRun*"],
+    "filterPatterns": [
+      "*spCreateAIPromptRun*",
+      "*spUpdateAIPromptRun*"
+    ],
     "filterType": "exclude",
     "formatAsMigration": true,
     "variableBatchThreshold": 200

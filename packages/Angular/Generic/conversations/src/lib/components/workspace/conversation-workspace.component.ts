@@ -30,12 +30,14 @@ import {
   ChangeDetectorRef,
   HostListener
 } from '@angular/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJConversationEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
+import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
@@ -46,7 +48,6 @@ import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
-import { PendingAttachment } from '../mention/mention-editor.component';
 
 /**
  * Top-level workspace component for conversations
@@ -70,6 +71,13 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   @Input() currentUser!: UserInfo;
   @Input() activeContext?: 'library' | 'task';
   @Input() contextItemId?: string;
+  /**
+   * Show the Routines section at the very bottom of the left sidebar. Default true;
+   * hosts that don't want routines (or embed a reduced chat surface) set false.
+   * The section additionally hides itself when the current user lacks Read
+   * permission on 'MJ: User Routines'.
+   */
+  @Input() ShowRoutines: boolean = true;
 
   // Navigation properties for external control (deep linking from URL)
   @Input() set activeTabInput(value: 'conversations' | 'collections' | 'tasks' | undefined) {
@@ -173,6 +181,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private previousIsNewConversation: boolean = false; // Track new conversation state changes
   private destroy$ = new Subject<void>();
 
+  // Stored bound references so addEventListener and removeEventListener get the same function object.
+  private readonly boundOnResizeMove = this.onResizeMove.bind(this);
+  private readonly boundOnResizeEnd = this.onResizeEnd.bind(this);
+  private readonly boundOnResizeTouchMove = this.onResizeTouchMove.bind(this);
+  private readonly boundOnResizeTouchEnd = this.onResizeTouchEnd.bind(this);
+
   // User Settings key for server-side persistence
   private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -189,16 +203,22 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public isNewUnsavedConversation: boolean = false;
   public pendingMessageToSend: string | null = null;
   public pendingAttachmentsToSend: PendingAttachment[] | null = null;
+  /** The conversation pendingMessageToSend is destined for — bound to the chat-area so the
+   *  auto-send reaches only that conversation's input, even if the user swaps conversations
+   *  during the async send window (prevents the message bleeding into the swapped-to conversation). */
+  public pendingMessageConversationId: string | null = null;
   public pendingArtifactId: string | null = null;
+  public pendingArtifactConversationId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;
 
   private engine = ConversationEngine.Instance;
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocompleteService = MentionAutocompleteService.Instance;
 
   constructor(
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
-    private mentionAutocompleteService: MentionAutocompleteService,
     private notificationService: MJNotificationService,
     private streamingService: ConversationStreamingService,
     private uiCommandHandler: UICommandHandlerService,
@@ -237,6 +257,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.isNewUnsavedConversation = true;
     this.pendingMessageToSend = null;
     this.pendingAttachmentsToSend = null;
+    this.pendingMessageConversationId = null;
 
     // Auto-collapse if mobile OR if sidebar is not pinned
     if (this.isMobileView || !this.isSidebarPinned) {
@@ -283,6 +304,31 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    * Handler for new conversation creation from chat area
    * Now includes pending message and attachments to ensure atomic state update
    */
+  /**
+   * A realtime session created (and just finished with) a brand-new conversation. The
+   * row was created SERVER-side, so it isn't in the engine cache yet — reload the list
+   * to fold it in, then select it ONLY when the conversation list is visible (owner
+   * spec: the user may have the sidebar hidden; don't yank their context if so —
+   * the refreshed cache makes it appear whenever the list is reopened).
+   */
+  async onRealtimeConversationReady(event: { conversationId: string; select: boolean }): Promise<void> {
+    try {
+      await ConversationEngine.Instance.LoadConversations(this.environmentId, this.currentUser, true);
+      if (event.select && this.isSidebarVisible) {
+        const conversation = ConversationEngine.Instance.Conversations.find(
+          c => UUIDsEqual(c.ID, event.conversationId)
+        );
+        if (conversation) {
+          this.selectedConversationId = conversation.ID;
+          this.selectedConversation = conversation;
+          this.isNewUnsavedConversation = false;
+        }
+      }
+    } catch (error) {
+      console.error('onRealtimeConversationReady ERROR:', error);
+    }
+  }
+
   onConversationCreated(event: {
     conversation: MJConversationEntity;
     pendingMessage?: string;
@@ -293,6 +339,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       // This ensures the new message-input component receives the pending data
       this.pendingMessageToSend = event.pendingMessage || null;
       this.pendingAttachmentsToSend = event.pendingAttachments || null;
+      // Pin the pending message to THIS conversation so a fast conversation-swap can't
+      // redirect its auto-send into a different conversation.
+      this.pendingMessageConversationId = event.conversation.ID;
       this.selectedConversationId = event.conversation.ID;
       this.selectedConversation = event.conversation;
       this.isNewUnsavedConversation = false;
@@ -309,6 +358,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   onPendingMessageRequested(event: {text: string; attachments: PendingAttachment[]}): void {
     this.pendingMessageToSend = event.text;
     this.pendingAttachmentsToSend = event.attachments;
+    this.pendingMessageConversationId = this.selectedConversationId;
   }
 
   /**
@@ -341,8 +391,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // These will be bubbled up to the host application
     this.uiCommandHandler.actionableCommandRequested
       .pipe(takeUntil(this.destroy$))
-      .subscribe(command => {
-        this.onActionableCommand(command);
+      .subscribe(request => {
+        this.onActionableCommand(request.command);
       });
 
     this.uiCommandHandler.automaticCommandRequested
@@ -374,12 +424,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
 
     // Setup resize listeners
-    window.addEventListener('mousemove', this.onResizeMove.bind(this));
-    window.addEventListener('mouseup', this.onResizeEnd.bind(this));
+    window.addEventListener('mousemove', this.boundOnResizeMove);
+    window.addEventListener('mouseup', this.boundOnResizeEnd);
 
     // Setup touch listeners for mobile
-    window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
-    window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
+    window.addEventListener('touchmove', this.boundOnResizeTouchMove);
+    window.addEventListener('touchend', this.boundOnResizeTouchEnd);
 
     // CRITICAL: Initialize engines FIRST before rendering any UI
     // The isWorkspaceReady flag blocks all child components from rendering
@@ -545,10 +595,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
 
     // Remove resize listeners
-    window.removeEventListener('mousemove', this.onResizeMove.bind(this));
-    window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
-    window.removeEventListener('touchmove', this.onResizeTouchMove.bind(this));
-    window.removeEventListener('touchend', this.onResizeTouchEnd.bind(this));
+    window.removeEventListener('mousemove', this.boundOnResizeMove);
+    window.removeEventListener('mouseup', this.boundOnResizeEnd);
+    window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
+    window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
   }
 
   @HostListener('window:resize')
@@ -1119,6 +1169,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       // Store pending artifact info so chat area can show it and scroll to message
       if (event.artifactId) {
         this.pendingArtifactId = event.artifactId;
+        this.pendingArtifactConversationId = event.id;
         this.pendingArtifactVersionNumber = event.versionNumber || null;
         console.log('📦 Pending artifact set:', event.artifactId, 'v' + event.versionNumber);
       }

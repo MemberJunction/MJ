@@ -1,7 +1,7 @@
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError } from "@memberjunction/core";
+import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError, EntityInfo } from "@memberjunction/core";
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentItemTagEntity,
     MJEntityDocumentEntity, MJEntityRecordDocumentEntity,
@@ -231,12 +231,20 @@ export class AutotagEntity extends AutotagBase {
             ? 'hybrid'
             : mode;
 
-        // If parent tag is suggested by LLM, resolve it through the mutex too
-        // to prevent duplicate parent tags from concurrent batch processing.
-        // ResolveTag handles find-or-create atomically.
+        // If the LLM suggested a parent tag, resolve it first (through the mutex,
+        // find-or-create atomically) and CAPTURE its ID so the child can be nested
+        // under it. Without this the child was created flat (or only under the
+        // source's TagRootID), which is why entity-source taxonomies came out as a
+        // flat list of near-duplicates with no parent/child nesting.
+        let parentTagID: string | null = null;
         if (parentTagName && effectiveMode !== 'constrained') {
-            await TagEngine.Instance.ResolveTag(
-                parentTagName, 0, effectiveMode, rootID, threshold, contextUser, {
+            // Parent tags are broad CATEGORIES — consolidate near-duplicates more
+            // aggressively (e.g. "Research Analysis" → "Research and Analysis") with
+            // a lower match threshold than child tags, which we keep distinct. This
+            // curbs top-level category proliferation without over-merging leaves.
+            const categoryThreshold = Math.min(threshold, 0.82);
+            const parentTag = await TagEngine.Instance.ResolveTag(
+                parentTagName, 0, effectiveMode, rootID, categoryThreshold, contextUser, {
                     scopeContext,
                     suggestThreshold,
                     sourceContentItemID: contentItemTag.ItemID,
@@ -244,9 +252,13 @@ export class AutotagEntity extends AutotagBase {
                     onTagCreated: () => budget?.recordTagCreated(),
                 }
             );
+            parentTagID = parentTag?.ID ?? null;
         }
 
-        // Resolve the tag to a formal Tag record
+        // Resolve the tag to a formal Tag record. parentIDForNew nests a NEWLY
+        // created tag under the LLM-suggested parent and is governance-checked via
+        // ValidateAutoGrow (MaxChildren / depth / AllowAutoGrow). When no parent was
+        // suggested it falls back to the source's TagRootID (legacy behavior).
         const formalTag = await TagEngine.Instance.ResolveTag(
             contentItemTag.Tag,
             contentItemTag.Weight,
@@ -261,6 +273,7 @@ export class AutotagEntity extends AutotagBase {
                 sourceContentSourceID: sourceID,
                 sourceText: contentItemTag.Tag,
                 onTagCreated: () => budget?.recordTagCreated(),
+                parentIDForNew: parentTagID ?? undefined,
             }
         );
 
@@ -423,8 +436,9 @@ export class AutotagEntity extends AutotagBase {
         for (const record of modifiedRecords) {
             const recordID = String(record[pkFieldName] ?? '');
             try {
+                const recordName = this.buildContentItemName(entityInfo, record);
                 const contentItem = await this.ProcessSingleRecord(
-                    record, recordID, contentSource, entityDocument,
+                    record, recordID, recordName, contentSource, entityDocument,
                     templateText, parser, existingERDs, existingContentItems
                 );
                 if (contentItem) {
@@ -437,6 +451,35 @@ export class AutotagEntity extends AutotagBase {
         }
 
         return contentItems;
+    }
+
+    /**
+     * Build the Content Item name for an entity record from the entity's name
+     * field(s). Uses every `IsNameField` in Sequence order (e.g. FirstName +
+     * LastName → "Sarah Chen"), falling back to the single `NameField`, then a
+     * literal `Name` column, then empty. Prevents Content Items from inheriting a
+     * generic/LLM-derived title when the source entity has a real name field.
+     */
+    private buildContentItemName(entityInfo: EntityInfo, record: Record<string, unknown>): string {
+        const val = (fieldName: string | undefined): string => {
+            if (!fieldName) return '';
+            const v = record[fieldName];
+            return v == null ? '' : String(v).trim();
+        };
+
+        // Combine all IsNameField fields in Sequence order.
+        const nameFields = entityInfo.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+        if (nameFields.length > 0) {
+            const parts = nameFields.map(f => val(f.Name)).filter(p => p.length > 0);
+            if (parts.length > 0) return parts.join(' ');
+        }
+
+        // Single NameField fallback, then a literal Name column.
+        const single = val(entityInfo.NameField?.Name);
+        if (single) return single;
+        return val('Name');
     }
 
     /**
@@ -548,6 +591,7 @@ export class AutotagEntity extends AutotagBase {
     private async ProcessSingleRecord(
         record: Record<string, unknown>,
         recordID: string,
+        recordName: string,
         contentSource: MJContentSourceEntity,
         entityDocument: MJEntityDocumentEntity,
         templateText: string,
@@ -575,7 +619,7 @@ export class AutotagEntity extends AutotagBase {
 
         // 4. Create or update ContentItem linked to ERD
         const contentItem = await this.UpsertContentItem(
-            contentSource, erd, renderedText, checksum, record, existingContentItems
+            contentSource, erd, renderedText, checksum, record, recordName, existingContentItems
         );
 
         return contentItem;
@@ -631,6 +675,7 @@ export class AutotagEntity extends AutotagBase {
         text: string,
         checksum: string,
         record: Record<string, unknown>,
+        recordName: string,
         existingContentItems: Map<string, MJContentItemEntity>
     ): Promise<MJContentItemEntity | null> {
         const md = this.ProviderToUse;
@@ -666,8 +711,11 @@ export class AutotagEntity extends AutotagBase {
             contentItem.URL = contentSourceParams.URL;
         }
 
-        // Set/update fields
-        contentItem.Name = (record['Name'] as string) ?? contentSourceParams.name;
+        // Set/update fields. Prefer the entity's name-field value(s) (computed by
+        // buildContentItemName); fall back to the content source name only when the
+        // record has no usable name. This keeps Content Item names like "GPT-4"
+        // instead of inheriting a generic/LLM-derived title.
+        contentItem.Name = recordName && recordName.length > 0 ? recordName : contentSourceParams.name;
         contentItem.Description = this.engine.GetContentItemDescription(contentSourceParams);
         contentItem.Text = text;
         contentItem.Checksum = checksum;

@@ -52,6 +52,12 @@ import { CommonModule } from '@angular/common';
     :host {
       flex: 1;
       min-width: 0;
+      /* min-height: 0 is essential when the parent <mj-page-body> reflows from
+         row → column on mobile: without it this pane can't shrink below its
+         content height, so the inner scroller (mj-page-body-interior) never
+         gets a bounded height and the page can't scroll. Harmless in the row
+         (desktop) case. */
+      min-height: 0;
       display: flex;
       flex-direction: column;
       background: var(--mj-bg-page);

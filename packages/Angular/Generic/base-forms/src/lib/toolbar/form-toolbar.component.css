@@ -261,15 +261,15 @@
 }
 
 .mj-entity-badge--parent {
-  background: color-mix(in srgb, var(--mj-color-indigo-500) 10%, var(--mj-bg-surface));
-  color: var(--mj-color-indigo-500);
-  border-color: color-mix(in srgb, var(--mj-color-indigo-500) 25%, transparent);
+  background: color-mix(in srgb, var(--mj-brand-accent) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-accent);
+  border-color: color-mix(in srgb, var(--mj-brand-accent) 25%, transparent);
 }
 
 .mj-entity-badge--parent:hover {
-  background: color-mix(in srgb, var(--mj-color-indigo-500) 18%, var(--mj-bg-surface));
-  border-color: var(--mj-color-indigo-500);
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--mj-color-indigo-500) 15%, transparent);
+  background: color-mix(in srgb, var(--mj-brand-accent) 18%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-accent);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--mj-brand-accent) 15%, transparent);
 }
 
 .mj-entity-badge--current {

@@ -33,7 +33,7 @@ function makeQueryInfo(dep: CompositionDependency, platform: string): MJQueryEnt
         Reusable: true,
         Status: 'Approved',
         UsesTemplate: dep.sql.includes('{{') || dep.sql.includes('{%'),
-        UserCanRun: vi.fn().mockReturnValue(true),
+        UserCanRun: vi.fn().mockReturnValue({ canRun: true, deniedEntities: [] }),
         GetPlatformSQL: vi.fn().mockReturnValue(dep.sql),
     };
 

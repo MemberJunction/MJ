@@ -32,6 +32,7 @@ export * from './lib/single-list-detail/single-list-detail.component'
 export * from './lib/user-profile/user-profile.component'
 export * from './lib/user-notifications/user-notifications.component';
 export * from './lib/guards/auth-guard.service';
+export * from './lib/guards/app-lock-guard.service';
 export * from './lib/guards/entities.guard';
 
 export * from './lib/single-query/single-query.component'

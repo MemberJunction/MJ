@@ -33,7 +33,7 @@ import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { ConversationBridgeService, ConversationSwitchEvent } from '../../services/conversation-bridge.service';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
-import { PendingAttachment } from '../mention/mention-editor.component';
+import { PendingAttachment } from '@memberjunction/ng-composer';
 
 /** Visual state of the overlay panel */
 export type ChatOverlayState = 'collapsed' | 'expanded' | 'maximized';
@@ -193,6 +193,9 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
 
     /** Pending message to send after conversation creation */
     public PendingMessage: string | null = null;
+    /** The conversation {@link PendingMessage} is destined for — pins the auto-send to that
+     *  conversation's input so a fast conversation-swap can't redirect it elsewhere. */
+    public PendingMessageConversationId: string | null = null;
 
     /** Pending attachments to send after conversation creation */
     public PendingAttachments: PendingAttachment[] | null = null;
@@ -293,6 +296,7 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         // Set ALL state atomically before Angular change detection runs
         this.PendingMessage = event.pendingMessage || null;
         this.PendingAttachments = event.pendingAttachments || null;
+        this.PendingMessageConversationId = event.conversation.ID;
         const prevId = this._conversationId;
         this._conversationId = event.conversation.ID;
         this.Conversation = event.conversation;
@@ -305,6 +309,7 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     public OnPendingMessageConsumed(): void {
         this.PendingMessage = null;
         this.PendingAttachments = null;
+        this.PendingMessageConversationId = null;
     }
 
     /** Handle conversation rename from chat area */

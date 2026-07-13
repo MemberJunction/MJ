@@ -362,12 +362,22 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         }
 
         // Browser config
-        if (config.viewportWidth || config.viewportHeight || config.browserArgs) {
+        if (
+            config.viewportWidth ||
+            config.viewportHeight ||
+            config.browserArgs ||
+            config.connect
+        ) {
             const browserConfig = new BrowserConfig();
             browserConfig.ViewportWidth = config.viewportWidth ?? 1280;
             browserConfig.ViewportHeight = config.viewportHeight ?? 720;
             if (config.browserArgs) {
                 browserConfig.Args = config.browserArgs;
+            }
+            if (config.connect) {
+                browserConfig.Connect = config.connect;
+                browserConfig.ConnectType = config.connectType;
+                browserConfig.ReuseExistingContext = config.reuseExistingContext;
             }
             params.BrowserConfig = browserConfig;
         }
@@ -580,6 +590,17 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
         const { HeadlessBrowserEngine, BrowserConfig: BConfig } = await import('@memberjunction/computer-use');
         const browserEngine = HeadlessBrowserEngine.Instance;
+
+        // If the test config requests attach mode, initialize the engine in
+        // connect mode BEFORE the implicit Initialize(true) triggered by
+        // GetIsolated/GetRecycled. Initialize is idempotent — first worker wins.
+        if (config.connect) {
+            await browserEngine.Initialize(
+                config.headless ?? true,
+                config.connect,
+                config.connectType
+            );
+        }
 
         // Build a BrowserConfig from test config
         const browserConfig = new BConfig();

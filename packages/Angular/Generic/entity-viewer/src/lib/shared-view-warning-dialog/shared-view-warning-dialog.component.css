@@ -106,22 +106,9 @@
   color: var(--mj-text-primary);
 }
 
-/* Warning Box */
-.warning-box {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  background: var(--mj-status-warning-bg);
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 13px;
-  color: var(--mj-status-warning);
-}
-
-.warning-box i {
-  margin-top: 2px;
-  flex-shrink: 0;
-}
+/* Positioning-only helper for the migrated <mj-alert> (box chrome owned by
+   the component; the bespoke warning box carried no margins). */
+.shared-view-alert-pos { margin: 0; }
 
 /* Dialog Footer */
 .dialog-footer {

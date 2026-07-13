@@ -152,4 +152,58 @@ describe('baseline/emitter', () => {
     expect(sql).toContain("CREATE SCHEMA [__mj]");
     expect(sql).not.toContain("CREATE SCHEMA [dbo]");
   });
+
+  /**
+   * Azure SQL parses + binds every batch at submission time and rejects
+   * cross-database references on sight, even if guarded by an unreachable
+   * runtime IF. The v5.0 baseline historically worked on Azure because it
+   * hid every `master.dbo.syslogins` lookup INSIDE an `sp_executesql N'...'`
+   * string literal — the SQL inside the literal is opaque to the parser and
+   * only re-parsed at runtime, when the EngineEdition check has already
+   * short-circuited the call. This test locks that property in.
+   *
+   * Strategy: strip every (escaped-aware) `N'...'` / `'...'` string literal
+   * from the emitted SQL, then assert no `master.*` reference survives.
+   */
+  it('keeps cross-DB references inside string literals (Azure-safe)', () => {
+    const snapshot = snapshotFixture();
+    snapshot.principals = [
+      { name: 'MJ_Connect', kind: 'sql_user', defaultSchema: 'dbo' },
+      { name: 'MJ_CodeGen', kind: 'sql_user', defaultSchema: 'dbo' },
+      { name: 'cdp_UI', kind: 'database_role', owner: 'db_securityadmin' },
+    ];
+    const sql = emitBaselineTsql({
+      snapshot,
+      dataDumps: [],
+      options: { ...baseOpts, includeData: false },
+    });
+
+    // Positive: the cross-DB query IS present, but only inside an
+    // sp_executesql string literal.
+    expect(sql).toMatch(/EXEC sp_executesql N'[^']*master\.dbo\.syslogins/);
+    expect(sql).toContain('CREATE USER [MJ_Connect] FOR LOGIN [MJ_Connect]');
+    expect(sql).toContain('CREATE USER [MJ_Connect] WITHOUT LOGIN');
+
+    // Negative: strip every quoted string literal (handling `''` escapes)
+    // and verify NO `master.*` reference remains in plain SQL — that's
+    // exactly what Azure's parser would see.
+    const noStrings = sql.replace(/N?'(?:''|[^'])*'/g, '<STRING>');
+    expect(noStrings).not.toContain('master.dbo');
+    expect(noStrings).not.toContain('master.sys');
+    expect(noStrings).not.toContain('master.');
+  });
+
+  it('emits a CREATE ROLE block (AUTHORIZATION preserved when owner is set)', () => {
+    const snapshot = snapshotFixture();
+    snapshot.principals = [
+      { name: 'cdp_UI', kind: 'database_role', owner: 'db_securityadmin' },
+    ];
+    const sql = emitBaselineTsql({
+      snapshot,
+      dataDumps: [],
+      options: { ...baseOpts, includeData: false },
+    });
+    expect(sql).toMatch(/CREATE ROLE \[cdp_UI\] AUTHORIZATION \[db_securityadmin\]/);
+    expect(sql).toMatch(/IF DATABASE_PRINCIPAL_ID\(N'cdp_UI'\) IS NULL/);
+  });
 });

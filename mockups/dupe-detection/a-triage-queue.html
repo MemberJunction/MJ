@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dupe Detection · A — Triage Queue</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+    .layout { display:grid; grid-template-columns: 360px 1fr; height: calc(100vh - 53px); }
+
+    /* ----- run context strip ----- */
+    .runbar {
+        grid-column: 1 / -1;
+        display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+        padding:12px 20px; background:var(--mj-bg-surface); border-bottom:1px solid var(--mj-border-default);
+    }
+    .runbar h1 { font-size:16px; margin:0; display:flex; align-items:center; gap:10px; }
+    .runbar .meta { display:flex; gap:18px; flex-wrap:wrap; color:var(--mj-text-muted); font-size:12.5px; }
+    .runbar .meta b { color:var(--mj-text-secondary); }
+    .runbar .spacer { flex:1; }
+    .progress-wrap { display:flex; align-items:center; gap:10px; min-width:240px; }
+    .progress-wrap .bar { flex:1; height:7px; }
+
+    /* ----- queue list ----- */
+    .queue { border-right:1px solid var(--mj-border-default); background:var(--mj-bg-surface); overflow-y:auto; }
+    .queue-head { position:sticky; top:0; background:var(--mj-bg-surface); padding:12px 14px; border-bottom:1px solid var(--mj-border-default); z-index:2; }
+    .queue-head .filters { display:flex; gap:6px; margin-top:9px; flex-wrap:wrap; }
+    .qpill { font-size:11.5px; font-weight:600; padding:4px 10px; border-radius:999px; cursor:pointer;
+             border:1px solid var(--mj-border-default); color:var(--mj-text-secondary); background:var(--mj-bg-surface-card); }
+    .qpill.active { background:var(--mj-brand-soft); color:var(--mj-text-link); border-color:var(--mj-status-info-border); }
+
+    .qitem { display:block; padding:11px 14px; border-bottom:1px solid var(--mj-border-subtle); cursor:pointer; }
+    .qitem:hover { background:var(--mj-bg-surface-hover); }
+    .qitem.active { background:var(--mj-brand-soft); box-shadow: inset 3px 0 0 var(--mj-brand-primary); }
+    html.dark .qitem.active { background:var(--mj-bg-surface-active); }
+    .qitem .row1 { display:flex; align-items:center; gap:8px; }
+    .qitem .name { font-weight:700; font-size:13.5px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .qitem .row2 { display:flex; align-items:center; gap:8px; margin-top:6px; }
+    .qitem .conf { font-size:11px; font-weight:700; }
+    .scorepair { display:flex; align-items:center; gap:5px; font-size:11px; }
+    .scorepair .v { color:var(--vector-accent); font-weight:700; }
+    .scorepair .l { color:var(--mj-brand-primary); font-weight:700; }
+    .scorepair .arrow { color:var(--mj-text-disabled); }
+
+    /* ----- focus panel ----- */
+    .focus { overflow-y:auto; padding:22px 26px 120px; }
+    .reco-banner {
+        display:flex; align-items:center; gap:18px; padding:18px 20px; border-radius:var(--mj-radius);
+        border:1px solid var(--rec-merge); background:color-mix(in srgb, var(--rec-merge) 9%, var(--mj-bg-surface));
+        margin-bottom:18px;
+    }
+    .reco-banner.disagree { border-color:var(--rec-uncertain); background:color-mix(in srgb, var(--rec-uncertain) 10%, var(--mj-bg-surface)); }
+    .reco-banner .verdict { font-size:22px; font-weight:800; letter-spacing:-.3px; }
+    .reco-banner .verdict.merge { color:var(--rec-merge); }
+    .reco-banner .sub { color:var(--mj-text-secondary); font-size:13px; margin-top:2px; }
+    .reco-banner .gauge { margin-left:auto; text-align:right; min-width:230px; }
+    .gauge .line { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:11.5px; }
+    .gauge .line .lbl { width:54px; text-align:right; color:var(--mj-text-muted); font-weight:600; }
+    .gauge .line .bar { flex:1; }
+    .gauge .line .pct { width:38px; font-weight:700; }
+
+    .section-h { font-size:11px; text-transform:uppercase; letter-spacing:.7px; color:var(--mj-text-muted); font-weight:700; margin:20px 0 10px; }
+
+    .reasoning { padding:15px 17px; border-radius:var(--mj-radius); background:var(--mj-bg-surface-card); border:1px solid var(--mj-border-default); }
+    .reasoning p { margin:0 0 9px; color:var(--mj-text-secondary); }
+    .reasoning .memory-note { display:flex; gap:9px; align-items:flex-start; margin-top:11px; padding-top:11px; border-top:1px dashed var(--mj-border-default); font-size:12.5px; color:var(--mj-text-muted); }
+    .reasoning .memory-note .tag { color:var(--vector-accent); font-weight:700; }
+
+    /* survivor + delta table */
+    .delta { width:100%; border-collapse:collapse; font-size:13px; }
+    .delta th, .delta td { padding:9px 12px; text-align:left; border-bottom:1px solid var(--mj-border-subtle); vertical-align:top; }
+    .delta thead th { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--mj-text-muted); border-bottom:1px solid var(--mj-border-default); }
+    .delta .fname { color:var(--mj-text-muted); font-weight:600; width:150px; }
+    .delta td.val { cursor:pointer; border-radius:6px; }
+    .delta td.kept { background:color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface)); box-shadow: inset 0 0 0 1.5px var(--rec-merge); border-radius:6px; font-weight:600; }
+    .delta td.val:hover { background:var(--mj-bg-surface-hover); }
+    .delta .col-surv { background:color-mix(in srgb, var(--mj-brand-primary) 5%, transparent); }
+    .delta .diffdot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--rec-uncertain); margin-right:6px; vertical-align:middle; }
+    .recordhead { display:flex; flex-direction:column; gap:5px; }
+    .recordhead .rname { font-weight:700; }
+    .recordhead .rmeta { display:flex; gap:6px; align-items:center; }
+    .survivor-flag { font-size:10px; font-weight:800; color:var(--mj-brand-primary); letter-spacing:.5px; }
+
+    /* sticky action bar */
+    .actionbar {
+        position:fixed; bottom:0; left:360px; right:0; z-index:40;
+        display:flex; align-items:center; gap:12px; padding:14px 26px;
+        background:var(--mj-bg-surface); border-top:1px solid var(--mj-border-default); box-shadow:0 -6px 20px rgba(15,23,42,.07);
+    }
+    .actionbar .grow { flex:1; }
+    .bulk-hint { font-size:12px; color:var(--mj-text-muted); }
+    .bulk-hint b { color:var(--mj-text-secondary); }
+</style>
+</head>
+<body>
+
+<div class="mock-nav">
+    <div class="brand"><span class="dot"></span> Duplicate Detection <small>· mockups</small></div>
+    <div class="links">
+        <a href="index.html">Overview</a>
+        <a href="a-triage-queue.html" class="active">A · Triage Queue</a>
+        <a href="b-diff-reasoning.html">B · Diff + Reasoning</a>
+        <a href="c-confidence-map.html">C · Confidence Map</a>
+    </div>
+    <div class="spacer"></div>
+    <span class="pattern-tag">Pattern A — throughput / keyboard-driven human-in-the-loop</span>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓 <span id="tlabel">Dark</span></button>
+</div>
+
+<div class="runbar">
+    <h1>🗂️ Accounts <span class="chip ghost mono" style="font-weight:600">Run #1842</span></h1>
+    <div class="meta">
+        <span><b>2,317</b> records scanned</span>
+        <span><b>184</b> match-sets above reasoning threshold</span>
+        <span>Reasoning: <b>Solo Prompt</b> · gemini-3-flash</span>
+        <span>Automation: <b>LLM-Gated</b></span>
+    </div>
+    <div class="spacer"></div>
+    <div class="progress-wrap">
+        <span class="tiny muted">Reviewed</span>
+        <div class="bar llm"><span style="width:26%"></span></div>
+        <span class="tiny" style="font-weight:700">47 / 184</span>
+    </div>
+</div>
+
+<div class="layout">
+    <!-- ============ QUEUE ============ -->
+    <div class="queue">
+        <div class="queue-head">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <strong style="font-size:13px;">Review queue</strong>
+                <span class="chip brand tiny">137 remaining</span>
+            </div>
+            <div class="filters">
+                <span class="qpill active">All 137</span>
+                <span class="qpill">⚠️ Disagreements 12</span>
+                <span class="qpill">Merge 98</span>
+                <span class="qpill">Uncertain 27</span>
+            </div>
+        </div>
+
+        <!-- active item -->
+        <a class="qitem active">
+            <div class="row1">
+                <span class="name">Acme Corporation</span>
+                <span class="chip merge tiny">Merge</span>
+            </div>
+            <div class="row2">
+                <span class="muted tiny">3 matches</span>
+                <span class="spacer" style="flex:1"></span>
+                <span class="scorepair"><span class="v">0.96</span><span class="arrow">→</span><span class="l">0.98</span></span>
+            </div>
+        </a>
+
+        <a class="qitem">
+            <div class="row1">
+                <span class="name">Northwind Traders</span>
+                <span class="chip disagree tiny">⚠ Flip</span>
+            </div>
+            <div class="row2">
+                <span class="muted tiny">2 matches</span><span class="spacer" style="flex:1"></span>
+                <span class="scorepair"><span class="v">0.97</span><span class="arrow">→</span><span class="l">0.19</span></span>
+            </div>
+        </a>
+
+        <a class="qitem">
+            <div class="row1"><span class="name">Globex Inc.</span><span class="chip merge tiny">Merge</span></div>
+            <div class="row2"><span class="muted tiny">4 matches</span><span class="spacer" style="flex:1"></span>
+                <span class="scorepair"><span class="v">0.93</span><span class="arrow">→</span><span class="l">0.95</span></span></div>
+        </a>
+
+        <a class="qitem">
+            <div class="row1"><span class="name">Initech LLC</span><span class="chip uncertain tiny">Uncertain</span></div>
+            <div class="row2"><span class="muted tiny">2 matches</span><span class="spacer" style="flex:1"></span>
+                <span class="scorepair"><span class="v">0.91</span><span class="arrow">→</span><span class="l">0.58</span></span></div>
+        </a>
+
+        <a class="qitem">
+            <div class="row1"><span class="name">Stark Industries</span><span class="chip merge tiny">Merge</span></div>
+            <div class="row2"><span class="muted tiny">3 matches</span><span class="spacer" style="flex:1"></span>
+                <span class="scorepair"><span class="v">0.99</span><span class="arrow">→</span><span class="l">0.99</span></span></div>
+        </a>
+
+        <a class="qitem">
+            <div class="row1"><span class="name">Wayne Enterprises</span><span class="chip merge tiny">Merge</span></div>
+            <div class="row2"><span class="muted tiny">2 matches</span><span class="spacer" style="flex:1"></span>
+                <span class="scorepair"><span class="v">0.94</span><span class="arrow">→</span><span class="l">0.96</span></span></div>
+        </a>
+        <a class="qitem">
+            <div class="row1"><span class="name">Umbrella Corp</span><span class="chip uncertain tiny">Uncertain</span></div>
+            <div class="row2"><span class="muted tiny">5 matches</span><span class="spacer" style="flex:1"></span>
+                <span class="scorepair"><span class="v">0.90</span><span class="arrow">→</span><span class="l">0.61</span></span></div>
+        </a>
+        <a class="qitem">
+            <div class="row1"><span class="name">Soylent Corp</span><span class="chip notdupe tiny">Not dup</span></div>
+            <div class="row2"><span class="muted tiny">1 match</span><span class="spacer" style="flex:1"></span>
+                <span class="scorepair"><span class="v">0.92</span><span class="arrow">→</span><span class="l">0.08</span></span></div>
+        </a>
+    </div>
+
+    <!-- ============ FOCUS ============ -->
+    <div class="focus">
+        <div class="reco-banner">
+            <div>
+                <div class="verdict merge">Merge — high confidence</div>
+                <div class="sub">3 candidate records collapse into <b>Acme Corporation</b>. Reasoning <b>strengthened</b> the vector score (+0.02) and resolved field-level survivors.</div>
+            </div>
+            <div class="gauge">
+                <div class="line"><span class="lbl">Vector</span><div class="bar vector"><span style="width:96%"></span></div><span class="pct" style="color:var(--vector-accent)">0.96</span></div>
+                <div class="line"><span class="lbl">LLM</span><div class="bar llm"><span style="width:98%"></span></div><span class="pct" style="color:var(--mj-brand-primary)">0.98</span></div>
+                <div class="tiny muted" style="text-align:right">solo-prompt · 1,204 tok · 380ms</div>
+            </div>
+        </div>
+
+        <div class="section-h">Reasoning</div>
+        <div class="reasoning">
+            <p>All three records share the canonical domain <span class="mono">acme.com</span> and the same primary address (123 Main St, San Francisco). “Acme Corp” and “Acme Corporation LLC” are formatting/legal-suffix variants of the survivor. Phone numbers differ only in formatting, not digits.</p>
+            <p>Recommend keeping <b>Acme Corporation</b> (most dependent records, 47) as survivor, but adopting the <b>newer billing address</b> and the <b>verified phone</b> from the Salesforce-sourced record — those fields are more current there.</p>
+            <div class="memory-note">
+                <span class="tag">⟲ memory</span>
+                <span>Applied entity-scoped note: <i>“For Accounts, prefer the most-recently-verified phone/address over the record with the most dependencies.”</i> (learned from 9 prior reviews)</span>
+            </div>
+        </div>
+
+        <div class="section-h">Field deltas &amp; survivor selection <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">— click any cell to override the kept value</span></div>
+        <div class="card" style="overflow:hidden;">
+        <table class="delta">
+            <thead>
+                <tr>
+                    <th>Field</th>
+                    <th class="col-surv">
+                        <div class="recordhead"><span class="rname">Acme Corporation <span class="survivor-flag">★ SURVIVOR</span></span>
+                        <span class="rmeta"><span class="prov local"><span class="swatch"></span>Local</span><span class="tiny muted">47 deps</span></span></div>
+                    </th>
+                    <th><div class="recordhead"><span class="rname">Acme Corp</span>
+                        <span class="rmeta"><span class="prov sf"><span class="swatch"></span>Salesforce</span><span class="tiny muted">12 deps</span></span></div></th>
+                    <th><div class="recordhead"><span class="rname">Acme Corporation LLC</span>
+                        <span class="rmeta"><span class="prov hubspot"><span class="swatch"></span>HubSpot</span><span class="tiny muted">5 deps</span></span></div></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td class="fname">Account Name</td><td class="val col-surv kept">Acme Corporation</td><td class="val">Acme Corp</td><td class="val">Acme Corporation LLC</td></tr>
+                <tr><td class="fname">Domain</td><td class="val col-surv kept">acme.com</td><td class="val">acme.com</td><td class="val">acme.com</td></tr>
+                <tr><td class="fname"><span class="diffdot"></span>Phone</td><td class="val col-surv">555-0100</td><td class="val kept">+1 (555) 010-0100</td><td class="val">555.0100</td></tr>
+                <tr><td class="fname"><span class="diffdot"></span>Billing Address</td><td class="val col-surv">123 Main St</td><td class="val kept">123 Main Street, Suite 400</td><td class="val">123 Main St</td></tr>
+                <tr><td class="fname">City</td><td class="val col-surv kept">San Francisco</td><td class="val">San Francisco</td><td class="val">SF</td></tr>
+                <tr><td class="fname"><span class="diffdot"></span>Annual Revenue</td><td class="val col-surv kept">$12.4M</td><td class="val">—</td><td class="val">$11.9M</td></tr>
+                <tr><td class="fname">Owner</td><td class="val col-surv kept">Jane Smith</td><td class="val">Jane Smith</td><td class="val">J. Smith</td></tr>
+            </tbody>
+        </table>
+        </div>
+        <p class="tiny muted" style="margin-top:10px;">2 fields overridden from LLM defaults · final <span class="mono">FieldMap</span> resolves to literal values applied to the survivor before merge · 17 dependent records will be re-pointed.</p>
+    </div>
+</div>
+
+<!-- sticky action bar -->
+<div class="actionbar">
+    <button class="btn success">✓ Approve merge <span class="kbd">A</span></button>
+    <button class="btn">✎ Override survivor <span class="kbd">O</span></button>
+    <button class="btn danger-ghost">Not a duplicate <span class="kbd">N</span></button>
+    <button class="btn">Skip <span class="kbd">S</span></button>
+    <div class="grow"></div>
+    <span class="bulk-hint">Bulk: <b>23</b> sets agree &amp; ≥ 0.95</span>
+    <button class="btn primary">⚡ Approve all 23 <span class="kbd">⇧A</span></button>
+</div>
+
+<script>
+function toggleTheme(){ const d=document.documentElement.classList.toggle('dark'); document.getElementById('tlabel').textContent=d?'Light':'Dark'; }
+if (matchMedia('(prefers-color-scheme: dark)').matches){ toggleTheme(); }
+</script>
+</body>
+</html>

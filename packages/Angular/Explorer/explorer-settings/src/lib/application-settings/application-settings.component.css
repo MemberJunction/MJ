@@ -21,25 +21,6 @@
   padding: 3rem;
 }
 
-.message {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  margin-bottom: 1rem;
-}
-
-.message.error {
-  background-color: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
-  color: var(--mj-status-error);
-}
-
-.message.success {
-  background-color: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
-  color: var(--mj-status-success);
-}
 
 .app-config-layout {
   display: grid;
@@ -97,22 +78,6 @@
   padding: 0.5rem;
   max-height: 400px;
   overflow-y: auto;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  color: var(--mj-text-secondary);
-  text-align: center;
-}
-
-.empty-state i {
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
-  opacity: 0.5;
 }
 
 .app-item {

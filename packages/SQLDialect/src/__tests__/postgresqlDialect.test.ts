@@ -289,6 +289,31 @@ describe('PostgreSQLDialect', () => {
         });
     });
 
+    describe('AlterColumnDDL', () => {
+        // PG refuses an automatic cast for incompatible type changes (e.g. text →
+        // boolean) unless an explicit USING expression is supplied. Without it the
+        // migration fails: "column ... cannot be cast automatically to type boolean".
+        it('emits a USING <col>::<newtype> cast for the type change', () => {
+            const ddl = dialect.AlterColumnDDL('hubspot."Contacts"', {
+                columnName: 'IsActive',
+                newType: 'boolean',
+                newNullable: true,
+            });
+            expect(ddl).toContain('ALTER COLUMN "IsActive" TYPE boolean USING "IsActive"::boolean');
+            expect(ddl).toContain('ALTER COLUMN "IsActive" DROP NOT NULL');
+        });
+
+        it('sets NOT NULL when newNullable is false', () => {
+            const ddl = dialect.AlterColumnDDL('hubspot."Contacts"', {
+                columnName: 'Score',
+                newType: 'integer',
+                newNullable: false,
+            });
+            expect(ddl).toContain('TYPE integer USING "Score"::integer');
+            expect(ddl).toContain('ALTER COLUMN "Score" SET NOT NULL');
+        });
+    });
+
     describe('IndexDDL', () => {
         it('should generate basic index with double-quote identifiers', () => {
             const ddl = dialect.IndexDDL({

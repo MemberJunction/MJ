@@ -8,6 +8,11 @@ on:
 
 jobs:
   generate-release-notes:
+    # Only run for manual dispatch or genuine release PRs (next -> main). Any other
+    # PR opened to main would otherwise spin up the agent AND destructively overwrite
+    # the PR title/description with a version number. github.head_ref is empty on
+    # workflow_dispatch, so the first clause keeps manual runs working.
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'next'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,12 +29,28 @@ jobs:
       - name: Fetch all tags
         run: git fetch --tags
 
+      # Cheap pre-flight: if there is nothing to release (no pending changesets),
+      # skip the paid agent step entirely instead of letting it discover that
+      # after loading full context. find (not `ls | grep`) is pipefail-safe.
+      - name: Check for pending changesets
+        id: cs
+        run: |
+          COUNT=$(find .changeset -maxdepth 1 -name '*.md' ! -iname 'readme.md' | wc -l | tr -d ' ')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      # The changeset gate applies only to the automated PR path. A manual
+      # workflow_dispatch is an explicit human ask — honor it even at 0 pending
+      # changesets (e.g. right after a release, when `changeset version` has
+      # consumed the .md files). Note the dispatch path has a pre-existing
+      # caveat regardless of this gate: the prompt calls get_pull_request with
+      # no PR context, so dispatch runs are only useful alongside an open PR.
       - name: Generate Release Notes with Claude
         id: claude-release-notes
+        if: github.event_name == 'workflow_dispatch' || steps.cs.outputs.count != '0'
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          model: claude-sonnet-4-0
+          model: claude-sonnet-4-6
 
           direct_prompt: |
             You are a technical analyst working as a release coordinator for MemberJunction. Your task is to create release notes in markdown and update the PR description.

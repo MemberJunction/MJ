@@ -257,6 +257,32 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('p_name');
             expect(sql).toContain('p_email');
         });
+
+        it('does NOT list composite-PK columns twice in the INSERT (regression: column "x" specified more than once)', () => {
+            // A composite-PK junction (e.g. hubspot.assoc_contacts_companies) whose PK columns are
+            // caller-supplied data. buildCreateInsertStrategy prepends the PK columns explicitly; the
+            // field list must therefore EXCLUDE them, or PostgreSQL rejects the INSERT with
+            // `column "company_id" specified more than once`.
+            const entity = createMockEntity(
+                { BaseTable: 'assoc_contacts_companies', BaseTableCodeName: 'AssocContactsCompanies', SchemaName: 'hubspot', BaseView: 'vwAssoc_contacts_companies' },
+                [
+                    { ID: 'pk1', Name: 'company_id', CodeName: 'company_id', Type: 'text', Length: 0, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'pk2', Name: 'contact_id', CodeName: 'contact_id', Type: 'text', Length: 0, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'd1', Name: 'association_type', CodeName: 'association_type', Type: 'text', Length: 0, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ]
+            );
+            const sql = provider.generateCRUDCreate(entity);
+            const m = sql.match(/INSERT INTO[\s\S]*?\(([\s\S]*?)\)\s*VALUES/i);
+            expect(m).toBeTruthy();
+            const colList = m![1];
+            const count = (name: string) => (colList.match(new RegExp(`"${name}"`, 'g')) || []).length;
+            // each PK column appears EXACTLY once (the bug emitted them twice)
+            expect(count('company_id')).toBe(1);
+            expect(count('contact_id')).toBe(1);
+            // and they are still present (not stripped out entirely)
+            expect(colList).toContain('"company_id"');
+            expect(colList).toContain('"contact_id"');
+        });
     });
 
     describe('generateCRUDUpdate', () => {
@@ -826,6 +852,42 @@ describe('PostgreSQLCodeGenProvider', () => {
             });
 
             expect(sql).toContain('WARNING');
+        });
+    });
+
+    // Regression: a multi-word (camelCase) PRIMARY KEY must yield a FLAT param name
+    // (`p_recordkey`) consistently across create/update/delete — never the snake form
+    // (`p_record_key`). Before the ParameterRef unification the CRUD *declaration* used
+    // the flat builder while several body references hand-built the name with toSnakeCase,
+    // so a save/delete against a connector table keyed on a soft-PK like `recordKey`
+    // failed on PostgreSQL with `column "p_record_key" does not exist`. ID-keyed entities
+    // were immune because toLowerCase('id') === toSnakeCase('ID'), which is why the bug
+    // stayed hidden until a connector minted its own multi-word PK.
+    describe('multi-word primary key — flat param-name consistency (regression: p_record_key)', () => {
+        const recordKeyEntity = () => createMockEntity(
+            { BaseTable: 'Customer', BaseTableCodeName: 'Customer', SchemaName: 'mj_connector_acgi', BaseView: 'vwCustomers' },
+            [
+                { ID: 'pk-rk', Name: 'recordKey', CodeName: 'recordKey', Type: 'nvarchar', Length: 400, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                { ID: 'f-cust', Name: 'custId', CodeName: 'custId', Type: 'nvarchar', Length: 100, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+            ]
+        );
+
+        it('create references the PK param flat (p_recordkey), never snake (p_record_key)', () => {
+            const sql = provider.generateCRUDCreate(recordKeyEntity());
+            expect(sql).toContain('p_recordkey');
+            expect(sql).not.toContain('p_record_key');
+        });
+
+        it('update references the PK param flat, never snake', () => {
+            const sql = provider.generateCRUDUpdate(recordKeyEntity());
+            expect(sql).toContain('p_recordkey');
+            expect(sql).not.toContain('p_record_key');
+        });
+
+        it('delete declares AND references the PK param flat, never snake', () => {
+            const sql = provider.generateCRUDDelete(recordKeyEntity(), '');
+            expect(sql).toContain('p_recordkey');
+            expect(sql).not.toContain('p_record_key');
         });
     });
 });

@@ -70,6 +70,9 @@ export default class Install extends Command {
     monorepo: Flags.boolean({
       description: 'Install the full MemberJunction source repository instead of the lightweight distribution. Use this for MJ framework development.',
     }),
+    'no-claude-pack': Flags.boolean({
+      description: 'Exclude the Claude Code pack (CLAUDE.md + .claude/ tree) from the scaffold. By default the pack ships with the install so opening Claude Code in your new MJ project gives you the curated MJ-aware experience immediately.',
+    }),
   };
 
   async run(): Promise<void> {
@@ -100,6 +103,7 @@ export default class Install extends Command {
     fast?: boolean;
     'overwrite-config'?: boolean;
     monorepo?: boolean;
+    'no-claude-pack'?: boolean;
   }): Promise<void> {
     const engine = new InstallerEngine();
     const fast = flags.fast ?? false;
@@ -112,6 +116,7 @@ export default class Install extends Command {
       SkipDB: flags['skip-db'],
       SkipStart: flags['skip-start'],
       Fast: fast,
+      NoClaudePack: flags['no-claude-pack'],
     });
 
     if (flags['dry-run']) {

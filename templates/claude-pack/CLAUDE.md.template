@@ -1,0 +1,27 @@
+# Project Instructions for Claude Code
+
+<!-- MJ-MANAGED:CLAUDE-PACK START version={{PACK_VERSION}} mj-major={{MJ_MAJOR}} -->
+<!--
+  This block is managed by MemberJunction.
+
+  - Pack version: {{PACK_VERSION}} (MJ major v{{MJ_MAJOR}})
+  - Pack source:  {{REMOTE_URL_PREFIX}}
+  - Refresh with: mj update:claude
+  - Do not hand-edit between the START and END markers — your edits will be
+    overwritten on the next `mj update:claude` run. Add your own instructions
+    below the END marker; that area is yours.
+-->
+
+@.claude/mj/core.md
+@.claude/mj/v{{MJ_MAJOR}}.md
+
+<!-- MJ-MANAGED:CLAUDE-PACK END -->
+
+## Project notes
+
+<!--
+  Anything below this line is yours. The MemberJunction pack will never touch
+  it. Use this section for project-specific conventions, team practices, links
+  to internal docs, or any guidance you want Claude to pick up for *your* app
+  on top of the standard MJ guidance imported above.
+-->

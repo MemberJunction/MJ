@@ -1,6 +1,6 @@
 # @memberjunction/codegen-lib
 
-The code generation engine for the MemberJunction platform. This library transforms database schema metadata into a complete, type-safe, full-stack application: TypeScript entity classes with Zod validation, Angular form components, SQL stored procedures and views, GraphQL resolvers, and Action subclasses -- all from a single `mj codegen` invocation.
+The code generation engine for the MemberJunction platform. This library transforms database schema metadata into a complete, type-safe, full-stack application: TypeScript entity classes with Zod validation, Angular form components, SQL stored procedures and views, GraphQL resolvers, Action subclasses, and **Remote Operation typed bases** (`RemoteOperationGeneratorBase` → `remote_operations.ts`, one `BaseRemotableOperation` subclass per `MJ: Remote Operations` row — Manual shells or complete AI/Default classes; see the [Remote Operations Guide](../../guides/REMOTE_OPERATIONS_GUIDE.md)) -- all from a single `mj codegen` invocation.
 
 ## Installation
 
@@ -543,6 +543,18 @@ flowchart TD
 | `TransitiveJoinIntelligence` | Detects junction tables and many-to-many relationships | Entity/relationship creation |
 | `EntityNames` | Converts technical table names to user-friendly entity names | Entity creation only |
 | `VirtualEntityFieldDecoration` | Analyzes SQL view definitions to identify PKs, FKs, descriptions, and extended types for virtual entities | Virtual entity creation (idempotent unless `forceRegenerate` option is set) |
+
+### Name Field Rules (Single Winner)
+
+`SmartFieldIdentification` may propose several ranked name-field candidates (e.g. `FirstName`, `LastName`), but MemberJunction metadata supports exactly **one** `IsNameField` per entity — `EntityInfo.NameField`, the base-view FK-name virtual columns, and `RelatedEntityNameFieldMap` resolution all assume a single winner. CodeGen enforces this:
+
+- **Eligibility** — a name field must be bounded text on the base table. Primary keys, uniqueidentifiers, non-text types, `MAX` text, and virtual (view-only) fields are rejected.
+- **Stability** — an entity that already has exactly one valid `IsNameField` keeps it; AI proposals never move an established winner.
+- **Repair** — when multiple fields are flagged (historical accumulation), the field literally named `Name` wins, else the first eligible flagged field in sequence order. All other auto-updatable flags are cleared.
+- **Fresh pick** — when nothing valid is flagged, the first *eligible* AI candidate wins.
+- **Pinning** — fields with `AutoUpdateIsNameField = 0` are never set or cleared by CodeGen; `EntityInfo.NameField`'s literal-`Name` preference arbitrates at runtime if a pinned conflict exists.
+
+Why this matters: with multiple flags, the FK-name pick silently drifted between CodeGen runs as flags accumulated (observed: a related entity's name column flipping from one field to another, reshaping every view that joins to it).
 
 ### Form Layout Stability Guarantees
 

@@ -111,6 +111,8 @@ export interface ClusterConfigPanelEntityDocOption {
     ID: string;
     /** Display name of the entity document */
     Name: string;
+    /** Name of the entity this document belongs to (used for multi-entity selection grouping/labels). */
+    EntityName?: string;
 }
 
 // ================================================================
@@ -145,10 +147,12 @@ export interface ClusterInputVector {
  * dimensionality reduction (UMAP or PCA).
  */
 export interface ClusterPoint {
-    /** X coordinate in 2D projected space. */
+    /** X coordinate in projected space. */
     X: number;
-    /** Y coordinate in 2D projected space. */
+    /** Y coordinate in projected space. */
     Y: number;
+    /** Z coordinate in projected space (only present for 3D projections). */
+    Z?: number;
     /** Cluster assignment ID (`-1` for outliers / noise). */
     ClusterId: number;
     /** Display label for this point (typically the entity record identifier). */
@@ -193,6 +197,17 @@ export interface ClusterConfig {
     EntityName: string;
     /** Specific Entity Document ID to use. When blank, the first active doc for the entity is used. */
     EntityDocumentID: string;
+    /**
+     * Multi-entity clustering: one or more Entity Document IDs whose vectors are
+     * merged into a single analysis. When two or more are selected this takes
+     * precedence over {@link EntityDocumentID}/{@link EntityName}. All selected
+     * documents must use the same embedding model — the server hard-blocks mismatches.
+     */
+    EntityDocumentIDs?: string[];
+    /** Legend mode: color points by their assigned cluster (default) or by source entity. */
+    ColorBy?: 'cluster' | 'entity';
+    /** Projected layout dimensionality: 2 (default, SVG) or 3 (rotatable projection). */
+    Dimensions?: 2 | 3;
     /** Clustering algorithm to use. */
     Algorithm: ClusterAlgorithm;
     /** Number of clusters for K-Means (ignored for DBSCAN). */
@@ -328,6 +343,9 @@ export function DefaultClusterConfig(): ClusterConfig {
     return {
         EntityName: '',
         EntityDocumentID: '',
+        EntityDocumentIDs: [],
+        ColorBy: 'cluster',
+        Dimensions: 2,
         Algorithm: 'kmeans',
         K: 4,
         Epsilon: 0.3,

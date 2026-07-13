@@ -40,9 +40,16 @@ vi.mock('@angular/core', () => ({
 
 const mockDialog = {
     Open: () => ({
+        // The real MJDialogRef.Result emits the clicked MJDialogAction object
+        // ({ text, primary }) — the service detects intent via `action.primary`.
+        // Map the test's 'apply'/'cancel' intent onto that shape.
         Result: {
-            subscribe: (cb: (r: { result: string }) => void) => {
-                cb({ result: hoisted.dialogResult });
+            subscribe: (cb: (r: { text: string; primary?: boolean }) => void) => {
+                cb(
+                    hoisted.dialogResult === 'apply'
+                        ? { text: 'Apply', primary: true }
+                        : { text: 'Cancel' },
+                );
             },
         },
     }),

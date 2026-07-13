@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-mode="live">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redesign A · Console — Realtime Co-Agent UI</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+/* ====================================================================
+   REDESIGN A — "CONSOLE"
+   A disciplined evolution of the shipped two-column overlay.
+   One unified app-bar header owns identity + state + ALL session
+   actions (incl. Close). The thread is de-noised (merged fragments,
+   collapsed silent turns). Composer + soft controls fuse into a single
+   bottom dock. Review mode reuses the exact same chrome — the header
+   swaps its right cluster, a resume strip docks at the bottom, and a
+   summary card terminates short threads so there is no dead space.
+   ==================================================================== */
+
+.frame { position: relative; max-width: 1640px; margin: 0 auto; padding: 16px 20px 48px; }
+.ov {
+  position: relative; height: 846px; display: flex; flex-direction: column;
+  border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-xl);
+  overflow: hidden; background: var(--mj-bg-page); box-shadow: var(--mj-shadow-2xl);
+}
+
+/* ---------- mode switch (topbar) ---------- */
+.mode-switch { display: inline-flex; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-full); background: var(--mj-bg-surface); padding: 3px; gap: 3px; }
+.mode-switch button {
+  border: 0; background: transparent; color: var(--mj-text-muted); font-family: inherit; font-size: 12.5px;
+  font-weight: 700; padding: 5px 14px; border-radius: var(--mj-radius-full); cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+}
+.mode-switch button.on { background: var(--mj-brand-primary); color: #fff; box-shadow: var(--mj-shadow-brand); }
+html[data-mode="review"] .live-only { display: none !important; }
+html[data-mode="live"] .review-only { display: none !important; }
+
+/* ---------- design-note tags ---------- */
+.dn {
+  position: absolute; z-index: 45; display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.03em; line-height: 1.4;
+  padding: 3px 9px; border-radius: var(--mj-radius-full); pointer-events: none; white-space: nowrap;
+  background: color-mix(in srgb, var(--mj-color-tertiary-500) 16%, var(--mj-bg-surface-sunken));
+  border: 1px dashed var(--mj-color-tertiary-400); color: var(--mj-color-tertiary-300);
+  box-shadow: var(--mj-shadow-md);
+}
+.dn i { font-size: 9px; }
+
+/* ---------- THE UNIFIED APP-BAR HEADER ---------- */
+.bar {
+  position: relative; display: flex; align-items: center; gap: 14px; flex-shrink: 0;
+  height: 62px; padding: 0 16px 0 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mj-brand-primary) 9%, var(--mj-bg-surface)), var(--mj-bg-surface));
+  border-bottom: 1px solid var(--mj-border-default);
+}
+.bar .agent-orb { --orb-size: 36px; }
+.bar .agent-orb::after { inset: -4px; }
+.orb-review {
+  --orb-size: 36px; width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; position: relative;
+  background: radial-gradient(circle at 35% 30%, var(--mj-color-neutral-500), var(--mj-color-neutral-700) 65%);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-color-neutral-500) 18%, transparent);
+}
+.bar-id { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.bar-name { font-weight: 700; font-size: 14.5px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+.bar-sub { font-size: 11.5px; color: var(--mj-text-muted); display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.bar-sub b { color: var(--mj-text-secondary); font-weight: 600; }
+.bar-sub .sep { color: var(--mj-text-disabled); }
+
+/* single live state chip — waveform + label, replaces the loose banner state */
+.state-chip {
+  display: inline-flex; align-items: center; gap: 9px; padding: 6px 14px; margin-left: 6px;
+  border-radius: var(--mj-radius-full); border: 1px solid var(--mj-color-success-600);
+  background: var(--mj-status-success-bg); color: var(--mj-status-success-text);
+  font-size: 12px; font-weight: 700;
+}
+.state-chip .waveform { height: 14px; } .state-chip .waveform span { width: 2px; background: var(--mj-status-success); }
+
+/* review: ONE compact summary segment replaces five redundant chips */
+.review-seg {
+  display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px; margin-left: 6px;
+  border-radius: var(--mj-radius-full); border: 1px solid var(--mj-border-strong);
+  background: var(--mj-bg-surface-card); font-size: 12px; font-weight: 600; color: var(--mj-text-secondary);
+  white-space: nowrap;
+}
+.review-seg i { color: var(--mj-text-muted); font-size: 11px; }
+.review-seg b { color: var(--mj-text-primary); font-weight: 700; }
+.review-seg .legs { font-size: 10.5px; font-weight: 800; padding: 1px 8px; border-radius: var(--mj-radius-full); background: rgba(38,153,204,0.16); color: var(--mj-brand-accent); border: 1px solid var(--mj-brand-primary); }
+
+.bar-spacer { flex: 1; }
+.bar-right { display: flex; align-items: center; gap: 8px; }
+.bar-sep { width: 1px; height: 26px; background: var(--mj-border-default); margin: 0 4px; }
+
+/* small square icon actions (captions / dev / minimize / collapse) */
+.iconb {
+  width: 34px; height: 34px; border-radius: var(--mj-radius-md); display: grid; place-items: center;
+  border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary); cursor: pointer; font-size: 13px; transition: all 140ms ease;
+}
+.iconb:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+.iconb.on { background: rgba(38,153,204,0.16); border-color: var(--mj-brand-primary); color: var(--mj-brand-accent); }
+.devlink {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-full); cursor: pointer;
+  background: transparent; color: var(--mj-text-muted); font-family: inherit;
+}
+.devlink:hover { color: var(--mj-text-secondary); border-color: var(--mj-border-strong); }
+.devlink i { font-size: 10px; }
+
+/* End call — labeled pill in the bar (no more floating circle) */
+.end-pill {
+  display: inline-flex; align-items: center; gap: 9px; padding: 8px 18px; font-size: 13px; font-weight: 700;
+  border-radius: var(--mj-radius-full); border: 1px solid var(--mj-status-error); cursor: pointer; font-family: inherit;
+  background: var(--mj-status-error); color: #fff; box-shadow: 0 4px 16px rgba(239,68,68,0.35);
+}
+.end-pill:hover { background: #dc2626; }
+.start-pill {
+  display: inline-flex; align-items: center; gap: 9px; padding: 8px 18px; font-size: 13px; font-weight: 700;
+  border-radius: var(--mj-radius-full); border: 1px solid var(--mj-brand-primary); cursor: pointer; font-family: inherit;
+  background: var(--mj-brand-primary); color: #fff; box-shadow: var(--mj-shadow-brand);
+}
+.start-pill:hover { background: var(--mj-brand-primary-hover); }
+/* the Close affordance the owner asked for — always up in the bar */
+.close-x {
+  width: 34px; height: 34px; border-radius: var(--mj-radius-md); display: grid; place-items: center;
+  border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary); cursor: pointer; font-size: 14px;
+}
+.close-x:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); background: var(--mj-bg-surface-hover); }
+
+/* ---------- BODY: two columns + resizer ---------- */
+.ov-body { flex: 1; min-height: 0; display: flex; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: color-mix(in srgb, var(--mj-bg-page) 70%, var(--mj-bg-surface-sunken)); }
+.rsz { width: 5px; cursor: col-resize; flex-shrink: 0; background: transparent; border-left: 1px solid var(--mj-border-default); transition: background 140ms ease; }
+.rsz:hover { background: color-mix(in srgb, var(--mj-brand-primary) 35%, transparent); }
+.panel { width: 620px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--mj-bg-surface); }
+
+/* ---------- THREAD ---------- */
+.thread-scroll { position: relative; flex: 1; min-height: 0; overflow-y: auto; padding: 22px 26px 16px; scrollbar-width: thin; scrollbar-color: var(--mj-border-strong) transparent; }
+.thread-scroll .thread { max-width: 760px; margin: 0 auto; }
+.thread-scroll .bubble { max-width: 560px; }
+.bubble p { margin: 0; } .bubble p + p { margin-top: 7px; }
+
+/* merged-fragment bubble: one turn, soft paragraph breaks, no "…" orphans */
+.noise-chip {
+  align-self: center; display: inline-flex; align-items: center; gap: 8px; margin: -2px auto 0;
+  font-size: 11px; font-weight: 600; color: var(--mj-text-muted); cursor: pointer; font-family: inherit;
+  border: 1px dashed var(--mj-border-strong); background: var(--mj-bg-surface); border-radius: var(--mj-radius-full); padding: 4px 12px;
+}
+.noise-chip:hover { color: var(--mj-text-secondary); border-color: var(--mj-border-strong); }
+.noise-detail { align-self: center; max-width: 540px; display: none; flex-direction: column; gap: 6px; margin-top: -4px; }
+.noise-detail.open { display: flex; }
+.noise-item { font-size: 12px; color: var(--mj-text-disabled); font-style: italic; border-left: 2px solid var(--mj-border-default); padding: 2px 10px; }
+.noise-item b { color: var(--mj-text-muted); font-style: normal; font-weight: 600; }
+
+/* delegation block + ephemeral narration (anchored, italic, ghost) */
+.delegation-block { display: flex; flex-direction: column; gap: 8px; margin-left: 42px; }
+.live-note {
+  display: flex; align-items: flex-start; gap: 9px; max-width: 600px; padding: 7px 12px;
+  font-size: 12.5px; font-style: italic; color: var(--mj-text-secondary); line-height: 1.5;
+  border-left: 2px solid var(--sage-border); background: color-mix(in srgb, var(--sage) 5%, transparent); border-radius: 0 var(--mj-radius-md) var(--mj-radius-md) 0;
+}
+.live-note i { color: var(--mj-color-violet-300); font-size: 11px; margin-top: 3px; }
+.work-card .pill--running { background: var(--sage-bg); color: var(--mj-color-violet-300); border-color: var(--sage-border); margin-left: auto; }
+.work-card .pill--running i { animation: spin 1.1s linear infinite; }
+.work-progress { height: 4px; border-radius: var(--mj-radius-full); margin-top: 12px; background: color-mix(in srgb, var(--sage) 18%, transparent); overflow: hidden; }
+.work-progress__fill { height: 100%; width: 64%; border-radius: inherit; background: linear-gradient(90deg, var(--mj-color-violet-500), var(--mj-color-violet-300)); }
+
+/* done chip (collapsed delegation result) */
+.done-chip {
+  display: inline-flex; align-items: center; gap: 9px; max-width: 640px; padding: 8px 14px; cursor: pointer; font-family: inherit; text-align: left;
+  border: 1px solid var(--sage-border); background: var(--sage-bg); border-radius: var(--mj-radius-full); font-size: 12.5px; color: var(--mj-text-primary);
+}
+.done-chip .mark { width: 17px; height: 17px; border-radius: 50%; background: var(--mj-status-success); color: #fff; display: grid; place-items: center; font-size: 9px; flex-shrink: 0; }
+.done-chip b { font-weight: 700; }
+.done-chip .prev { color: var(--mj-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.done-chip .via { font-size: 10px; font-weight: 800; color: var(--mj-color-violet-300); text-transform: uppercase; letter-spacing: 0.05em; display: inline-flex; gap: 5px; align-items: center; flex-shrink: 0; }
+.alink {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit;
+  border: 1px solid var(--mj-brand-primary); border-radius: var(--mj-radius-full); background: rgba(38,153,204,0.14); color: var(--mj-brand-accent);
+}
+.alink i { font-size: 10px; }
+.done-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* leg dividers (review) — close-reason lives HERE, not in the header */
+.leg-divider { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
+.leg-divider .ln { flex: 1; height: 1px; background: var(--mj-border-default); }
+.leg-divider .lbl { display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 700; color: var(--mj-text-muted); white-space: nowrap; }
+.leg-divider .lbl i { font-size: 10px; }
+.leg-divider .reason { font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: var(--mj-radius-full); background: rgba(100,116,139,0.18); border: 1px solid var(--mj-border-strong); color: var(--mj-text-secondary); }
+.leg-divider--resume .lbl { color: var(--mj-brand-accent); }
+.leg-divider--resume .ln { background: color-mix(in srgb, var(--mj-brand-primary) 45%, transparent); }
+.leg-divider--resume .carry { font-size: 10.5px; font-weight: 600; color: var(--mj-text-muted); }
+.leg-divider--resume .carry b { color: var(--mj-brand-accent); }
+
+/* session summary card — terminates short review threads, kills dead space */
+.sum-card {
+  margin: 10px auto 0; max-width: 640px; width: 100%; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg);
+  background: var(--mj-bg-surface-card); overflow: hidden; box-shadow: var(--mj-shadow-md);
+}
+.sum-card__head { display: flex; align-items: center; gap: 9px; padding: 11px 16px; font-size: 12.5px; font-weight: 700; border-bottom: 1px solid var(--mj-border-subtle); color: var(--mj-text-secondary); }
+.sum-card__head i { color: var(--mj-brand-accent); }
+.sum-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+.sum-cell { padding: 12px 16px; border-right: 1px solid var(--mj-border-subtle); }
+.sum-cell:last-child { border-right: 0; }
+.sum-cell .k { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-text-muted); }
+.sum-cell .v { font-size: 17px; font-weight: 700; margin-top: 2px; letter-spacing: -0.01em; }
+.sum-cell .v small { font-size: 11px; color: var(--mj-text-muted); font-weight: 500; }
+
+/* ---------- BOTTOM DOCK: soft controls + composer fused into one bar ---------- */
+.dock {
+  position: relative; flex-shrink: 0; display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px; border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface);
+}
+.dock .minis { display: flex; gap: 7px; }
+.mini {
+  width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; font-size: 13.5px;
+  border: 1px solid var(--mj-border-strong); background: var(--mj-bg-surface-card); color: var(--mj-text-primary); transition: all 140ms ease;
+}
+.mini:hover { background: var(--mj-bg-surface-hover); }
+.mini.on { background: rgba(38,153,204,0.16); border-color: var(--mj-brand-primary); color: var(--mj-brand-accent); }
+.dock-compose {
+  flex: 1; display: flex; align-items: center; gap: 9px; padding: 5px 6px 5px 14px;
+  border: 1px solid var(--mj-border-strong); border-radius: var(--mj-radius-full); background: var(--mj-bg-surface-card);
+}
+.dock-compose:focus-within { border-color: var(--mj-brand-primary); box-shadow: 0 0 0 3px rgba(38,153,204,0.12); }
+.dock-compose input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--mj-text-primary); font-family: inherit; font-size: 13.5px; }
+.dock-compose input::placeholder { color: var(--mj-text-muted); }
+.dock-compose .hint { font-size: 10.5px; color: var(--mj-text-disabled); font-weight: 600; white-space: nowrap; }
+.dock-send { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--mj-brand-primary); color: #fff; display: grid; place-items: center; cursor: pointer; font-size: 12px; }
+
+/* review resume strip — replaces the floating Start-live / Close circles */
+.resume-strip {
+  position: relative; flex-shrink: 0; display: flex; align-items: center; gap: 14px;
+  padding: 12px 18px; border-top: 1px solid var(--mj-border-default);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)), var(--mj-bg-surface) 60%);
+}
+.resume-strip .ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: rgba(38,153,204,0.18); color: var(--mj-brand-accent); font-size: 15px; flex-shrink: 0; }
+.resume-strip .tx { flex: 1; min-width: 0; }
+.resume-strip .t1 { font-size: 13px; font-weight: 700; }
+.resume-strip .t2 { font-size: 11.5px; color: var(--mj-text-muted); margin-top: 1px; }
+.resume-strip .t2 b { color: var(--mj-text-secondary); }
+
+/* ---------- SURFACE PANEL ---------- */
+.s-tabs { display: flex; align-items: stretch; flex-shrink: 0; background: var(--mj-bg-surface-sunken); border-bottom: 1px solid var(--mj-border-default); }
+.s-tab {
+  padding: 11px 16px; border: 0; background: transparent; cursor: pointer; font-family: inherit;
+  font-size: 12.5px; font-weight: 600; color: var(--mj-text-muted); display: inline-flex; align-items: center; gap: 8px;
+  border-bottom: 3px solid transparent; transition: all 150ms ease; white-space: nowrap;
+}
+.s-tab:hover { color: var(--mj-text-secondary); }
+.s-tab.active { color: var(--mj-brand-accent); border-bottom-color: var(--mj-brand-primary); background: var(--mj-bg-surface); }
+.s-tab .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mj-status-success); box-shadow: 0 0 0 0 rgba(34,197,94,0.5); animation: pulse-ring 1.6s infinite; }
+.s-tab .ro { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; padding: 1px 6px; border-radius: 4px; background: var(--mj-bg-surface-elevated); color: var(--mj-text-muted); }
+.s-tabs .tabs-end { margin-left: auto; display: flex; align-items: center; padding: 0 8px; gap: 6px; }
+.s-pane { display: none; flex: 1; min-height: 0; flex-direction: column; position: relative; }
+.s-pane.active { display: flex; }
+
+/* activity pane: cards + a stats footer so a single card never floats in a void */
+.act-list { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.act-card { border: 1px solid var(--sage-border); background: var(--sage-bg); border-radius: var(--mj-radius-lg); padding: 12px 14px; }
+.act-card--done { border-color: var(--mj-border-default); background: var(--mj-bg-surface-card); }
+.act-top { display: flex; align-items: center; gap: 9px; }
+.act-name { font-weight: 700; font-size: 13px; }
+.act-status { margin-left: auto; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+.act-status--running { color: var(--mj-color-violet-300); } .act-status--running i { animation: spin 1.1s linear infinite; }
+.act-status--done { color: var(--mj-status-success); }
+.act-step { font-size: 12px; color: var(--mj-text-secondary); margin-top: 6px; }
+.act-meta { font-size: 11px; color: var(--mj-text-muted); margin-top: 7px; display: flex; gap: 12px; }
+.act-stats {
+  flex-shrink: 0; display: flex; gap: 18px; padding: 12px 16px; border-top: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-sunken); font-size: 11px; color: var(--mj-text-muted); font-weight: 600;
+}
+.act-stats b { color: var(--mj-text-secondary); font-weight: 700; }
+.act-empty { flex: 1; display: grid; place-items: center; }
+.act-empty-inner { text-align: center; color: var(--mj-text-muted); max-width: 260px; }
+.act-empty-inner i { font-size: 26px; color: var(--mj-text-disabled); margin-bottom: 10px; }
+.act-empty-inner .t { font-size: 13px; font-weight: 600; color: var(--mj-text-secondary); }
+.act-empty-inner .s { font-size: 11.5px; margin-top: 4px; line-height: 1.5; }
+
+/* artifact pane (carryover doc) */
+.art-doc { flex: 1; overflow-y: auto; padding: 18px 20px; }
+.art-doc h3 { margin: 0 0 4px; font-size: 16px; letter-spacing: -0.01em; }
+.art-doc .cap { font-size: 11.5px; color: var(--mj-text-muted); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.art-sec { border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md); background: var(--mj-bg-surface-card); padding: 12px 14px; margin-bottom: 10px; }
+.art-sec .h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-text-muted); margin-bottom: 8px; }
+.art-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+.art-row b { font-weight: 700; } .art-row .up { color: var(--mj-status-success); font-weight: 700; font-size: 12px; } .art-row .dn2 { color: var(--mj-status-error); font-weight: 700; font-size: 12px; }
+.art-row .muted2 { color: var(--mj-text-muted); font-size: 12px; }
+
+/* ---------- WHITEBOARD pane ---------- */
+.board-head2 { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); flex-shrink: 0; }
+.board-head2 .bt { font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.board-head2 .bt i { color: var(--mj-brand-accent); }
+.board-save { font-size: 10.5px; color: var(--mj-text-muted); display: inline-flex; align-items: center; gap: 5px; }
+.board-save i { color: var(--mj-status-success); font-size: 9px; }
+.bleg { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; font-size: 10.5px; color: var(--mj-text-muted); }
+.bleg .sw { width: 9px; height: 9px; border-radius: 3px; display: inline-block; margin-right: 4px; vertical-align: -1px; }
+.bleg .sw--you { background: var(--mj-bg-surface-elevated); border: 1px solid var(--mj-border-strong); }
+.bleg .sw--sage { background: var(--sage-bg); border: 1px solid var(--sage); }
+.board-canvas2 {
+  position: relative; flex: 1; min-height: 0; overflow: hidden;
+  background-color: var(--mj-bg-surface-sunken);
+  background-image: radial-gradient(rgba(148,163,184,0.14) 1px, transparent 1px); background-size: 22px 22px;
+}
+.bi { position: absolute; box-shadow: var(--mj-shadow-lg); border-radius: 10px; }
+.author-chip { position: absolute; top: -9px; left: 8px; z-index: 3; display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border-radius: var(--mj-radius-full); white-space: nowrap; }
+.author-chip--you { background: var(--mj-color-neutral-700); border: 1px solid var(--mj-border-strong); color: var(--mj-color-neutral-300); }
+.author-chip--sage { background: #2a2150; border: 1px solid var(--sage); color: var(--mj-color-violet-300); }
+.sticky-amber { width: 158px; padding: 13px 12px 11px; border-radius: 4px 4px 14px 4px; font-size: 12px; line-height: 1.45; font-weight: 600; background: linear-gradient(180deg, #fcd34d, #f5b831); color: #3f2d04; transform: rotate(-1.2deg); }
+.scard { width: 192px; background: linear-gradient(180deg, #322a5e, #272050); border: 1px solid var(--sage); color: var(--mj-text-primary); box-shadow: 0 0 0 3px rgba(167,139,250,0.18), var(--mj-shadow-lg); padding: 10px 12px 9px; }
+.scard .h { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-color-violet-300); margin-bottom: 7px; display: flex; align-items: center; gap: 6px; }
+.scard .r { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; padding: 2.5px 0; }
+.scard .r b { font-weight: 700; } .scard .r .v { font-family: var(--mj-font-mono); font-size: 11.5px; }
+.scard .up { color: var(--mj-color-success-400); font-weight: 700; font-size: 10.5px; }
+.scard .dn2 { color: var(--mj-color-error-400); font-weight: 700; font-size: 10.5px; }
+.scard .wrow { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 0; }
+.scard .wrow i { width: 16px; text-align: center; color: var(--mj-color-warning-400); }
+.scard .wrow .t { margin-left: auto; font-family: var(--mj-font-mono); font-size: 11.5px; }
+.scard .hl { font-size: 11px; line-height: 1.4; padding: 4px 0; border-bottom: 1px dashed color-mix(in srgb, var(--sage) 30%, transparent); color: var(--mj-text-secondary); }
+.scard .hl:last-child { border-bottom: 0; }
+.scard .hl b { color: var(--mj-text-primary); font-weight: 600; display: block; }
+.conn { position: absolute; pointer-events: none; overflow: visible; }
+.conn path { stroke: var(--sage); stroke-width: 2; fill: none; filter: drop-shadow(0 0 4px rgba(167,139,250,0.3)); }
+.board-toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: var(--mj-radius-full); background: var(--sage-bg); border: 1px solid var(--sage-border); color: var(--mj-color-violet-300); font-size: 11.5px; font-weight: 600; box-shadow: var(--mj-shadow-lg); white-space: nowrap; }
+.ro-wash { position: absolute; inset: 0; pointer-events: none; }
+.ro-tag { position: absolute; top: 10px; left: 12px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; padding: 3px 10px; border-radius: var(--mj-radius-full); background: rgba(2,6,23,0.6); border: 1px solid var(--mj-border-strong); color: var(--mj-text-secondary); }
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Redesign A · <b style="color:var(--mj-text-secondary)">Console</b> — unified app-bar, de-noised thread, fused dock</span></div>
+    <div class="topbar-spacer"></div>
+    <div class="mode-switch" role="tablist" aria-label="Mockup state">
+      <button type="button" id="mLive" class="on" onclick="setMode('live')"><span class="dot dot--live"></span> Live</button>
+      <button type="button" id="mReview" onclick="setMode('review')"><i class="fa-solid fa-clock-rotate-left"></i> Review</button>
+    </div>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="frame">
+    <div class="ov">
+
+      <!-- ============ UNIFIED APP-BAR HEADER ============ -->
+      <div class="bar">
+        <span class="dn" style="top:-11px; left:240px"><i class="fa-solid fa-lightbulb"></i> one bar: identity · state · every session action — Close included</span>
+
+        <!-- LIVE identity -->
+        <div class="agent-orb live-only" data-state="speaking" aria-hidden="true"></div>
+        <div class="bar-id live-only">
+          <span class="bar-name">Voice for Sage
+            <span class="pill pill--sage"><i class="fa-solid fa-feather"></i> Co-Agent</span>
+          </span>
+          <span class="bar-sub">speaking as <b>Sage</b> <span class="sep">·</span> gpt-realtime <span class="sep">·</span> alloy voice</span>
+        </div>
+        <span class="state-chip live-only">
+          <span class="waveform"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>
+          Speaking
+        </span>
+
+        <!-- REVIEW identity: orb goes quiet, ONE summary segment replaces the chip pile -->
+        <div class="orb-review review-only" aria-hidden="true"></div>
+        <div class="bar-id review-only">
+          <span class="bar-name">Voice for Sage
+            <span class="pill pill--closed"><i class="fa-solid fa-clock-rotate-left"></i> Session review</span>
+          </span>
+          <span class="bar-sub">read-only <span class="sep">·</span> close reasons shown at each leg boundary below</span>
+        </div>
+        <span class="review-seg review-only">
+          <i class="fa-regular fa-calendar"></i> Jun 11 <b>2:58 → 3:19 PM</b>
+          <span class="legs">2 legs</span>
+          <span style="color:var(--mj-text-muted)">21 min · 14 turns</span>
+        </span>
+
+        <div class="bar-spacer"></div>
+
+        <div class="bar-right">
+          <button type="button" class="devlink" title="Open the agent session record"><i class="fa-solid fa-arrow-up-right-from-square"></i> Session</button>
+          <button type="button" class="iconb on live-only" title="Captions on"><i class="fa-solid fa-closed-captioning"></i></button>
+          <button type="button" class="iconb live-only" title="Developer links"><i class="fa-solid fa-gear"></i></button>
+          <button type="button" class="iconb" title="Minimize to floating pill"><i class="fa-solid fa-down-left-and-up-right-to-center"></i></button>
+          <span class="bar-sep"></span>
+          <button type="button" class="end-pill live-only"><i class="fa-solid fa-phone-slash"></i> End call</button>
+          <button type="button" class="start-pill review-only"><i class="fa-solid fa-phone"></i> Start live session</button>
+          <button type="button" class="close-x" title="Close" aria-label="Close session view"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <span class="dn" style="bottom:-11px; right:14px"><i class="fa-solid fa-arrow-up"></i> Close lives in the header — owner request, both modes</span>
+      </div>
+
+      <!-- ============ BODY ============ -->
+      <div class="ov-body">
+        <div class="main">
+
+          <!-- ===== LIVE THREAD ===== -->
+          <div class="thread-scroll live-only">
+            <div class="thread" style="gap:18px">
+              <span class="dn" style="top:148px; right:6px"><i class="fa-solid fa-broom"></i> fragments merged into one turn — no "Hello…" orphans</span>
+
+              <div class="turn turn--user">
+                <div class="turn-avatar">A</div>
+                <div><div class="turn-meta"><span class="typed-tag">spoken</span> You</div>
+                <div class="bubble"><p>Morning, Sage — give me my market and weather briefing.</p>
+                <p>Pull current prices for Apple, Microsoft and Nvidia, today's weather for Boston and Chicago, and search for this morning's top AI headlines. Pin everything to the whiteboard.</p></div></div>
+              </div>
+
+              <!-- silent / unclear utterances collapse to one disclosure chip -->
+              <button type="button" class="noise-chip" onclick="document.getElementById('noiseA').classList.toggle('open')">
+                <i class="fa-solid fa-ear-deaf"></i> 2 quiet moments hidden <i class="fa-solid fa-chevron-down" style="font-size:8px"></i>
+              </button>
+              <div class="noise-detail" id="noiseA">
+                <div class="noise-item"><b>You · 9:31:42</b> — (no speech detected)</div>
+                <div class="noise-item"><b>Sage · 9:31:44</b> — "I didn't quite catch that — say it again?"</div>
+              </div>
+
+              <div class="turn turn--agent">
+                <div class="turn-avatar">S</div>
+                <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+                <div class="bubble">On it. I'll have Sage gather the quotes, both forecasts and the headlines, and I'll lay everything out on the board as it lands.</div></div>
+              </div>
+
+              <!-- DELEGATION IN FLIGHT + anchored ephemeral narration -->
+              <div class="delegation-block">
+                <div class="work-card" role="status">
+                  <div class="work-card__head">
+                    <div class="avatar avatar--sage">S</div>
+                    <div class="work-card__title">Sage is working…</div>
+                    <span class="pill pill--running"><i class="fa-solid fa-spinner"></i> Running</span>
+                  </div>
+                  <div class="work-steps">
+                    <div class="work-step work-step--done"><span class="si"><i class="fa-solid fa-check"></i></span> Get stock quotes — AAPL, MSFT, NVDA</div>
+                    <div class="work-step work-step--done"><span class="si"><i class="fa-solid fa-check"></i></span> Get weather — Boston &amp; Chicago</div>
+                    <div class="work-step work-step--active"><span class="si"><i class="fa-solid fa-rotate"></i></span> Web search — this morning's AI headlines</div>
+                    <div class="work-step work-step--pending"><span class="si"></span> Pin results to the whiteboard</div>
+                  </div>
+                  <div class="work-progress"><div class="work-progress__fill"></div></div>
+                </div>
+                <div class="live-note" role="status">
+                  <i class="fa-solid fa-comment-dots"></i>
+                  Quotes and both forecasts are in — pinning them to the board while the news search finishes…
+                </div>
+                <span class="dn" style="margin-top:-2px; position:static; align-self:flex-start"><i class="fa-solid fa-ghost"></i> narration: italic ghost anchored to its card, fades on completion</span>
+              </div>
+
+              <!-- DELEGATION DONE — collapsed provenance chip -->
+              <div class="delegation-block">
+                <div class="done-row">
+                  <button type="button" class="done-chip" title="Expand result">
+                    <span class="mark"><i class="fa-solid fa-check"></i></span>
+                    <b>Sage</b><span class="prev">3 quotes, 2 forecasts &amp; 4 headlines pinned to the board</span>
+                    <span class="via"><i class="fa-solid fa-shield-halved"></i> via Sage</span>
+                    <i class="fa-solid fa-chevron-down" style="font-size:9px; color:var(--mj-text-muted)"></i>
+                  </button>
+                  <button type="button" class="alink"><i class="fa-solid fa-file-lines"></i> Market briefing</button>
+                </div>
+              </div>
+
+              <div class="turn turn--agent">
+                <div class="turn-avatar">S</div>
+                <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+                <div class="bubble">Done — quotes, weather and the morning's AI headlines are up on the board. Nvidia is leading at plus two point one percent, and Chicago turns rainy after 2 PM. Want me to dig into any of the headlines?<span class="caption-cursor"></span></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== REVIEW THREAD (multi-leg) ===== -->
+          <div class="thread-scroll review-only">
+            <div class="thread" style="gap:18px">
+              <div class="leg-divider">
+                <span class="ln"></span>
+                <span class="lbl"><i class="fa-solid fa-play"></i> Leg 1 · started Jun 11, 2:58 PM</span>
+                <span class="ln"></span>
+              </div>
+
+              <div class="turn turn--user">
+                <div class="turn-avatar">A</div>
+                <div><div class="turn-meta"><span class="typed-tag">spoken</span> You</div>
+                <div class="bubble">Morning, Sage — market and weather briefing. Quotes for Apple, Microsoft, Nvidia; weather for Boston and Chicago; and the top AI headlines. Pin it all to the whiteboard.</div></div>
+              </div>
+              <div class="turn turn--agent">
+                <div class="turn-avatar">S</div>
+                <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+                <div class="bubble">On it — I'll have Sage gather everything and lay it out on the board as it lands.</div></div>
+              </div>
+
+              <div class="leg-divider">
+                <span class="ln"></span>
+                <span class="lbl"><i class="fa-solid fa-flag-checkered"></i> Leg 1 ended · 3:00 PM</span>
+                <span class="reason">Ended by user</span>
+                <span class="ln"></span>
+              </div>
+              <span class="dn" style="position:static; align-self:center"><i class="fa-solid fa-arrow-up"></i> close reason rides its leg boundary — header stays clean</span>
+              <div class="leg-divider leg-divider--resume">
+                <span class="ln"></span>
+                <span class="lbl"><i class="fa-solid fa-rotate-right"></i> Resumed live · 3:12 PM</span>
+                <span class="carry">carried over: <b>Whiteboard</b> + <b>Market briefing</b> + model memory</span>
+                <span class="ln"></span>
+              </div>
+
+              <div class="turn turn--user">
+                <div class="turn-avatar">A</div>
+                <div><div class="turn-meta"><span class="typed-tag">spoken</span> You</div>
+                <div class="bubble">Back — where did we leave off?</div></div>
+              </div>
+              <div class="turn turn--agent">
+                <div class="turn-avatar">S</div>
+                <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+                <div class="bubble">Your briefing board is still up: quotes, both forecasts and four AI headlines. While you were away I refreshed the quotes — Nvidia extended its gain to two point four percent.</div></div>
+              </div>
+
+              <div class="delegation-block">
+                <div class="done-row">
+                  <button type="button" class="done-chip" title="Expand result">
+                    <span class="mark"><i class="fa-solid fa-check"></i></span>
+                    <b>Sage</b><span class="prev">Refreshed quotes &amp; updated the board</span>
+                    <span class="via"><i class="fa-solid fa-shield-halved"></i> via Sage</span>
+                    <i class="fa-solid fa-chevron-down" style="font-size:9px; color:var(--mj-text-muted)"></i>
+                  </button>
+                  <button type="button" class="alink"><i class="fa-solid fa-file-lines"></i> Market briefing · v2</button>
+                </div>
+              </div>
+
+              <div class="leg-divider">
+                <span class="ln"></span>
+                <span class="lbl"><i class="fa-solid fa-flag-checkered"></i> Leg 2 ended · 3:19 PM</span>
+                <span class="reason">Idle timeout · janitor</span>
+                <span class="ln"></span>
+              </div>
+
+              <!-- summary card soaks up the dead space below short threads -->
+              <div class="sum-card">
+                <div class="sum-card__head"><i class="fa-solid fa-chart-simple"></i> Session at a glance</div>
+                <div class="sum-grid">
+                  <div class="sum-cell"><div class="k">Talk time</div><div class="v">9<small>m</small> 12<small>s</small></div></div>
+                  <div class="sum-cell"><div class="k">Turns</div><div class="v">14</div></div>
+                  <div class="sum-cell"><div class="k">Delegations</div><div class="v">2 <small>via Sage</small></div></div>
+                  <div class="sum-cell"><div class="k">Surfaces</div><div class="v">1 <small>board</small> · 1 <small>artifact</small></div></div>
+                </div>
+              </div>
+              <span class="dn" style="position:static; align-self:center"><i class="fa-solid fa-arrow-up"></i> summary card terminates the thread — no more empty void</span>
+            </div>
+          </div>
+
+          <!-- ===== LIVE BOTTOM DOCK: controls + composer, one bar ===== -->
+          <div class="dock live-only">
+            <span class="dn" style="top:-12px; left:18px"><i class="fa-solid fa-layer-group"></i> mute · captions · dev fold into the composer dock — End moved up to the bar</span>
+            <div class="minis">
+              <button type="button" class="mini" title="Mute microphone"><i class="fa-solid fa-microphone"></i></button>
+              <button type="button" class="mini on" title="Captions on"><i class="fa-solid fa-closed-captioning"></i></button>
+              <button type="button" class="mini" title="Developer links"><i class="fa-solid fa-gear"></i></button>
+            </div>
+            <div class="dock-compose">
+              <input type="text" placeholder="Type into the live session — joins this same voice call…">
+              <span class="hint">↵ send</span>
+              <button type="button" class="dock-send" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+          </div>
+
+          <!-- ===== REVIEW RESUME STRIP (replaces floating circles) ===== -->
+          <div class="resume-strip review-only">
+            <div class="ic"><i class="fa-solid fa-tower-broadcast"></i></div>
+            <div class="tx">
+              <div class="t1">This session is closed</div>
+              <div class="t2">Start a live session to continue — <b>the board, the briefing artifact and model memory carry over</b> into the new leg.</div>
+            </div>
+            <button type="button" class="start-pill"><i class="fa-solid fa-phone"></i> Start live session</button>
+            <span class="dn" style="top:-12px; right:18px"><i class="fa-solid fa-anchor"></i> resume action docks full-width — nothing floats in dead space</span>
+          </div>
+        </div>
+
+        <div class="rsz" title="Drag to resize · double-click to reset" role="separator" aria-orientation="vertical"></div>
+
+        <!-- ===== SURFACE PANEL ===== -->
+        <div class="panel">
+          <div class="s-tabs" role="tablist">
+            <button type="button" class="s-tab" data-tab="act" role="tab"><i class="fa-solid fa-list-check"></i> Activity</button>
+            <button type="button" class="s-tab" data-tab="art" role="tab"><i class="fa-solid fa-file-lines"></i> Market briefing</button>
+            <button type="button" class="s-tab active" data-tab="board" role="tab">
+              <i class="fa-solid fa-chalkboard"></i> Whiteboard
+              <span class="live-dot live-only"></span>
+              <span class="ro review-only">read-only</span>
+            </button>
+            <div class="tabs-end">
+              <button type="button" class="iconb" title="Hide session panel"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+          </div>
+
+          <!-- Activity pane -->
+          <div class="s-pane" data-pane="act">
+            <div class="act-list">
+              <div class="act-card live-only">
+                <div class="act-top"><span class="act-name">Sage</span>
+                  <span class="act-status act-status--running"><i class="fa-solid fa-spinner"></i> Running</span></div>
+                <div class="act-step">Web search — this morning's AI headlines</div>
+              </div>
+              <div class="act-card act-card--done">
+                <div class="act-top"><span class="act-name">Sage</span>
+                  <span class="act-status act-status--done"><i class="fa-solid fa-check"></i> Done</span></div>
+                <div class="act-step">3 quotes, 2 forecasts &amp; 4 headlines pinned to the board</div>
+                <div class="act-meta"><span><i class="fa-regular fa-clock"></i> 41s</span><span><i class="fa-solid fa-file-lines"></i> Market briefing</span></div>
+              </div>
+            </div>
+            <div class="act-stats">
+              <span><b>2</b> delegated runs</span><span><b>1</b> artifact</span><span><b>1</b> board</span><span style="margin-left:auto"><b>$0.04</b> est. cost</span>
+            </div>
+          </div>
+
+          <!-- Artifact pane -->
+          <div class="s-pane" data-pane="art">
+            <div class="art-doc">
+              <h3>Market briefing</h3>
+              <div class="cap"><i class="fa-solid fa-shield-halved" style="color:var(--mj-color-violet-300)"></i> produced via Sage · <span class="review-only">v2 · carried into leg 2</span><span class="live-only">v1 · just now</span></div>
+              <div class="art-sec">
+                <div class="h">Quotes · 9:32 AM ET</div>
+                <div class="art-row"><b>AAPL</b><span class="muted2">Apple</span><span>$228.14 <span class="up">+1.2%</span></span></div>
+                <div class="art-row"><b>MSFT</b><span class="muted2">Microsoft</span><span>$474.96 <span class="up">+0.6%</span></span></div>
+                <div class="art-row"><b>NVDA</b><span class="muted2">Nvidia</span><span>$186.50 <span class="up">+2.1%</span></span></div>
+              </div>
+              <div class="art-sec">
+                <div class="h">Weather</div>
+                <div class="art-row"><b>Boston</b><span class="muted2">Sunny</span><span>72°F</span></div>
+                <div class="art-row"><b>Chicago</b><span class="muted2">Rain after 2 PM</span><span>64°F</span></div>
+              </div>
+              <div class="art-sec">
+                <div class="h">Top AI headlines</div>
+                <div class="art-row" style="display:block"><b>Frontier labs agree on eval-sharing pact</b><span class="muted2" style="display:block">Reuters · 7:40 AM</span></div>
+                <div class="art-row" style="display:block"><b>Open-weights model tops coding benchmark</b><span class="muted2" style="display:block">The Verge · 6:55 AM</span></div>
+                <div class="art-row" style="display:block"><b>EU publishes realtime-agent guidance</b><span class="muted2" style="display:block">FT · 6:10 AM</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Whiteboard pane -->
+          <div class="s-pane active" data-pane="board">
+            <div class="board-head2">
+              <span class="bt"><i class="fa-solid fa-chalkboard"></i> Whiteboard</span>
+              <span class="board-save"><i class="fa-solid fa-circle-check"></i> saved · just now</span>
+              <span class="bleg"><span><span class="sw sw--you"></span>You</span><span><span class="sw sw--sage"></span>Sage</span></span>
+              <button type="button" class="iconb live-only" title="Focus the board (hide the call column)"><i class="fa-solid fa-expand"></i></button>
+            </div>
+            <div class="board-canvas2">
+              <div class="ro-wash review-only"><span class="ro-tag"><i class="fa-solid fa-lock" style="font-size:9px"></i> read-only · pan &amp; zoom</span></div>
+
+              <div class="bi sticky-amber" style="left:26px; top:36px">
+                <span class="author-chip author-chip--you"><i class="fa-solid fa-user" style="font-size:7px"></i> You</span>
+                Wed AM briefing<br><span style="font-weight:500">watch: AAPL · MSFT · NVDA</span>
+              </div>
+
+              <div class="bi scard" style="left:248px; top:28px">
+                <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:7px"></i> Sage</span>
+                <div class="h"><i class="fa-solid fa-arrow-trend-up"></i> Quotes · 9:32 AM</div>
+                <div class="r"><b>AAPL</b><span class="v">$228.14</span><span class="up">+1.2%</span></div>
+                <div class="r"><b>MSFT</b><span class="v">$474.96</span><span class="up">+0.6%</span></div>
+                <div class="r"><b>NVDA</b><span class="v">$186.50</span><span class="up">+2.1%</span></div>
+              </div>
+
+              <div class="bi scard" style="left:248px; top:208px; width:192px">
+                <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:7px"></i> Sage</span>
+                <div class="h"><i class="fa-solid fa-cloud-sun"></i> Weather · today</div>
+                <div class="wrow"><i class="fa-solid fa-sun"></i> Boston <span class="t">72°F</span></div>
+                <div class="wrow"><i class="fa-solid fa-cloud-rain"></i> Chicago <span class="t">64°F</span></div>
+              </div>
+
+              <div class="bi scard" style="left:26px; top:248px; width:188px">
+                <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:7px"></i> Sage</span>
+                <div class="h"><i class="fa-solid fa-magnifying-glass"></i> AI headlines</div>
+                <div class="hl"><b>Frontier labs agree on eval-sharing pact</b>Reuters · 7:40a</div>
+                <div class="hl"><b>Open-weights model tops coding bench</b>Verge · 6:55a</div>
+                <div class="hl"><b>EU realtime-agent guidance lands</b>FT · 6:10a</div>
+              </div>
+
+              <svg class="conn" style="left:184px; top:62px; width:70px; height:30px"><path d="M0,10 C30,10 40,18 64,18"></path></svg>
+              <svg class="conn" style="left:184px; top:90px; width:70px; height:150px"><path d="M0,0 C36,30 40,110 60,138"></path></svg>
+
+              <div class="board-toast live-only"><i class="fa-solid fa-feather"></i> Sage pinned 3 cards · just now</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="muted" style="font-size:12.5px; max-width:980px; margin:16px auto 0; text-align:center">
+      <b style="color:var(--mj-text-secondary)">Console</b> keeps the shipped two-column muscle memory but consolidates: the header is a true app bar
+      (identity + state + every session action including <b style="color:var(--mj-text-secondary)">Close</b>), the thread merges caption fragments and folds
+      silent turns behind a disclosure chip, the composer and soft controls fuse into one dock, and review replaces floating buttons with a docked resume strip
+      + at-a-glance summary card. Toggle <b style="color:var(--mj-text-secondary)">Live / Review</b> above; the surface tabs are clickable.
+    </p>
+  </div>
+</div>
+
+<script>
+function setMode(m){
+  document.documentElement.dataset.mode = m;
+  document.getElementById('mLive').classList.toggle('on', m === 'live');
+  document.getElementById('mReview').classList.toggle('on', m === 'review');
+}
+document.querySelectorAll('.s-tab[data-tab]').forEach(function(t){
+  t.addEventListener('click', function(){
+    document.querySelectorAll('.s-tab[data-tab]').forEach(function(x){ x.classList.remove('active'); });
+    document.querySelectorAll('.s-pane').forEach(function(p){ p.classList.remove('active'); });
+    t.classList.add('active');
+    document.querySelector('.s-pane[data-pane="' + t.dataset.tab + '"]').classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

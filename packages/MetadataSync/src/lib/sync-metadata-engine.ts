@@ -7,9 +7,9 @@
  *
  *   1. **Preload** — `Config()` scans every JSON file under each entity
  *      directory once, collects the set of entity names touched (including
- *      nested `relatedEntities`), and asks `BaseEngine.Load` to issue one
- *      unfiltered `RunView` per entity. We load *all* rows of each touched
- *      entity, not just the PKs mentioned in files — for two reasons:
+ *      nested `relatedEntities`), and populates one in-memory slot per
+ *      entity. We want *all* rows of each touched entity, not just the PKs
+ *      mentioned in files — for two reasons:
  *
  *        (a) `mj sync` is for METADATA. The entities involved (Actions,
  *            Prompts, Agents, Templates, etc.) are inherently bounded —
@@ -20,9 +20,35 @@
  *            the local files (e.g. a category referenced by name). A
  *            full preload means those lookups hit the cache too.
  *
- *      The loaded `BaseEntity` instances live on dynamic properties named
- *      via {@link getPropertyNameForEntity}; lookups during the sync phase
- *      consult those arrays instead of round-tripping the DB.
+ *      Each slot is filled one of two ways:
+ *
+ *        - **Delegation (preferred)** — the CLI bootstrap runs
+ *          `StartupManager.Startup()`, which Config()s every
+ *          `@RegisterForStartup` engine (AIEngineBase, QueryEngine,
+ *          IntegrationEngineBase, …) seconds before the push begins. Those
+ *          engines already hold full, unfiltered `entity_object` caches of
+ *          many of the entities we touch. Rather than re-querying the same
+ *          rows, {@link delegateEntityIfCached} asks
+ *          `BaseEngineRegistry.FindCachedEntity` for a loaded engine with an
+ *          unfiltered, unordered, BaseEntity-typed cache and proxies our
+ *          slot to that engine's **live array** (resolved per-access via
+ *          engine + property name, so donor-side array reassignment can't
+ *          strand us). Live references are safe because every accepted
+ *          donor config passes `canUseImmediateMutation` — the donor's own
+ *          event subscription maintains the array in place on save/delete,
+ *          and our explicit {@link addEntityToCache} writes are
+ *          PK-deduped on both sides.
+ *
+ *        - **Self-load (fallback)** — entities no loaded engine caches
+ *          (Templates, Actions, Entity Fields, …) are loaded by
+ *          `BaseEngine.Load` issuing one unfiltered `RunView` per entity,
+ *          exactly as before.
+ *
+ *      Either way, the `BaseEntity` instances are reachable through
+ *      {@link getCachedEntities} / {@link findCachedByPrimaryKey}; lookups
+ *      during the sync phase consult those arrays instead of round-tripping
+ *      the DB. Self-loaded slots live on dynamic properties named via
+ *      {@link getPropertyNameForEntity}.
  *
  *   2. **Event-driven mutation** — `BaseEngine` already wires up the global
  *      `BaseEntity` event bus. Because our configs carry no Filter/OrderBy,
@@ -38,6 +64,7 @@
  */
 import {
   BaseEngine,
+  BaseEngineRegistry,
   BaseEnginePropertyConfig,
   BaseEntity,
   EntityInfo,
@@ -76,6 +103,28 @@ export interface CachedFile {
 }
 
 /**
+ * A slot whose data is served from another loaded engine's cache instead of
+ * a self-issued `RunView`. We keep the donor engine + property name (not a
+ * captured array reference) so every access resolves the donor's **current**
+ * array — a donor-side full refresh that reassigns the property can't leave
+ * us pointing at an orphaned snapshot.
+ */
+interface DelegatedSlot {
+  /** The donor engine instance (a loaded BaseEngine singleton). */
+  engine: Record<string, unknown>;
+  /** The donor's property holding the cached `BaseEntity[]` for this entity. */
+  propertyName: string;
+  /** Donor class name — surfaced in {@link SyncMetadataEngine.getDelegationSummary}. */
+  engineClassName: string;
+}
+
+/** One delegated entity → donor engine pairing, for logging/diagnostics. */
+export interface DelegationSummaryEntry {
+  entityName: string;
+  engineClassName: string;
+}
+
+/**
  * Coordinates upfront batch-preloading of `BaseEntity` instances and in-memory
  * caches for `mj sync push`. See module docstring for the full picture.
  */
@@ -85,6 +134,13 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   private preloadedEntityNames: Set<string> = new Set();
   private lookupCache: Map<string, string> = new Map();
   private fileDataCache: Map<string, CachedFile> = new Map();
+
+  /**
+   * Entities whose slot proxies a donor engine's live cache instead of a
+   * self-loaded array. Populated by {@link delegateEntityIfCached} during
+   * `Config()`; consulted first by {@link resolveSlot}.
+   */
+  private delegatedSlots: Map<string, DelegatedSlot> = new Map();
 
   /** Reverse index used to scope lookup invalidation on delete: entity name → set of lookup keys touching that entity. */
   private lookupKeysByEntity: Map<string, Set<string>> = new Map();
@@ -135,39 +191,51 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   }
 
   /**
-   * Build the dynamic configuration list and trigger `BaseEngine.Load` —
-   * which fans the per-entity unfiltered views out over a single `RunViews`
-   * batch under the hood. Then check each loaded slot for size and emit
-   * warnings if anything came back larger than the metadata-scale threshold.
+   * Scan the metadata tree for touched entities, then fill one slot per
+   * entity: delegate to an already-loaded engine's cache when
+   * {@link delegateEntityIfCached} finds a suitable donor, otherwise
+   * self-load via `BaseEngine.Load` (which fans the per-entity unfiltered
+   * views out over a single `RunViews` batch under the hood). Finally,
+   * build the PK indexes and emit size warnings over BOTH kinds of slot.
+   *
+   * Note: `forceRefresh` only governs the self-loaded entities. Delegated
+   * data was loaded by `StartupManager` during this same process bootstrap,
+   * which satisfies preload's "current as of process start" freshness
+   * requirement without a second round of identical queries.
    */
   public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<unknown> {
-    const configs = await this.buildDynamicConfigs();
+    const entityNames = await this.collectTouchedEntities();
+    const configs = this.partitionEntities(entityNames);
     const providerToUse = provider || this.ProviderToUse;
 
     if (configs.length > 0) {
       await this.Load(configs, providerToUse, forceRefresh, contextUser);
-      this.buildPKIndexes(configs);
-      this.warnOnOversizedSlots(configs);
+    }
+    if (this.preloadedEntityNames.size > 0) {
+      this.buildPKIndexes(this.preloadedEntityNames);
+      this.warnOnOversizedSlots(this.preloadedEntityNames);
     }
     return true;
   }
 
   /**
-   * Build the per-entity PK → entity Map from each populated slot.
-   * Runs once after `BaseEngine.Load` completes. The cost (one walk
-   * over the loaded arrays, building Map entries) is trivial compared
-   * to the per-record-lookup savings it enables downstream.
+   * Build the per-entity PK → entity Map from each populated slot
+   * (self-loaded and delegated alike). Runs once after `Config()` fills
+   * the slots. The cost (one walk over the arrays, building Map entries)
+   * is trivial compared to the per-record-lookup savings it enables
+   * downstream. Delegated arrays mutate out-of-band (the donor's event
+   * subscription replaces saved instances with clones) — that drift is
+   * absorbed by {@link findCachedByPrimaryKey}'s scan-and-repair fallback.
    */
-  private buildPKIndexes(configs: Partial<BaseEnginePropertyConfig>[]): void {
-    for (const config of configs) {
-      if (!config.PropertyName || !config.EntityName) continue;
-      const entityInfo = this.syncEngine.getEntityInfo(config.EntityName);
+  private buildPKIndexes(entityNames: Iterable<string>): void {
+    for (const entityName of entityNames) {
+      const entityInfo = this.syncEngine.getEntityInfo(entityName);
       if (!entityInfo) continue;
-      const list = (this as unknown as Record<string, unknown>)[config.PropertyName];
-      if (!Array.isArray(list)) continue;
+      const list = this.resolveSlot(entityName);
+      if (!list) continue;
 
       const index = new Map<string, BaseEntity>();
-      for (const entity of list as BaseEntity[]) {
+      for (const entity of list) {
         try {
           const pkStr = this.serializePrimaryKey(entityInfo, entity.GetAll());
           index.set(pkStr, entity);
@@ -177,7 +245,7 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
           // will still find it if needed.
         }
       }
-      this.pkIndexes.set(config.EntityName, index);
+      this.pkIndexes.set(entityName, index);
     }
   }
 
@@ -225,10 +293,69 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     return this.preloadedEntityNames.has(entityName);
   }
 
-  public getCachedEntities(entityName: string): BaseEntity[] {
+  /**
+   * Try to serve an entity's slot from another loaded engine's cache instead
+   * of re-querying the DB. Accepts the first `BaseEngineRegistry` match that
+   * holds the **complete** entity set in a live-mutation-safe shape:
+   *
+   * - `unfilteredOnly` — a `Filter` means a subset, useless as a full cache.
+   * - no `OrderBy` — ordered configs fail `canUseImmediateMutation`, so the
+   *   donor responds to entity events with a full refresh that *reassigns*
+   *   the array property mid-push instead of mutating it in place.
+   * - not `ResultType: 'simple'` and rows are `BaseEntity` instances — the
+   *   sync phase calls `.Get()` / `.PrimaryKey` on cached rows.
+   * - not ourselves — a prior run's own slot must not masquerade as a donor.
+   *
+   * Returns true when a donor was registered; the caller then skips the
+   * self-load config for this entity.
+   */
+  public delegateEntityIfCached(entityName: string): boolean {
+    const matches = BaseEngineRegistry.Instance.FindCachedEntity(entityName, { unfilteredOnly: true });
+    for (const match of matches) {
+      if (match.engine === this) continue;
+      if (!match.config.PropertyName) continue;
+      if (match.config.OrderBy) continue;
+      if (match.config.ResultType === 'simple') continue;
+      if (match.records.length > 0 && !(match.records[0] instanceof BaseEntity)) continue;
+
+      this.delegatedSlots.set(entityName, {
+        engine: match.engine as Record<string, unknown>,
+        propertyName: match.config.PropertyName,
+        engineClassName: match.engineClassName
+      });
+      return true;
+    }
+    return false;
+  }
+
+  /** Delegated entity → donor engine pairings from the last `Config()` run, for logging. */
+  public getDelegationSummary(): DelegationSummaryEntry[] {
+    return Array.from(this.delegatedSlots.entries()).map(([entityName, slot]) => ({
+      entityName,
+      engineClassName: slot.engineClassName
+    }));
+  }
+
+  /**
+   * The single resolution point for an entity's backing array: the donor
+   * engine's live array when delegated (re-read per access — see
+   * {@link DelegatedSlot}), our own `cached_*` slot otherwise. Returns
+   * `undefined` when no slot exists yet.
+   */
+  private resolveSlot(entityName: string): BaseEntity[] | undefined {
+    const delegated = this.delegatedSlots.get(entityName);
+    if (delegated) {
+      const live = delegated.engine[delegated.propertyName];
+      if (Array.isArray(live)) return live as BaseEntity[];
+      // Defensive: donor slot vanished — fall through to our own slot.
+    }
     const propName = this.getPropertyNameForEntity(entityName);
     const list = (this as unknown as Record<string, unknown>)[propName];
-    return Array.isArray(list) ? (list as BaseEntity[]) : [];
+    return Array.isArray(list) ? (list as BaseEntity[]) : undefined;
+  }
+
+  public getCachedEntities(entityName: string): BaseEntity[] {
+    return this.resolveSlot(entityName) ?? [];
   }
 
   public getCachedFile(filePath: string): CachedFile | undefined {
@@ -249,12 +376,17 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   }
 
   public addEntityToCache(entityName: string, entity: BaseEntity): void {
-    const propName = this.getPropertyNameForEntity(entityName);
-    const slot = (this as unknown as Record<string, unknown>);
-    if (!Array.isArray(slot[propName])) {
+    // Delegated entities write into the donor's live array: PK-dedup below
+    // prevents a duplicate against rows the donor already holds, and the
+    // donor's own save-event handler sees our instance by reference and
+    // no-ops rather than double-inserting.
+    let list = this.resolveSlot(entityName);
+    if (!list) {
+      const propName = this.getPropertyNameForEntity(entityName);
+      const slot = (this as unknown as Record<string, unknown>);
       slot[propName] = [];
+      list = slot[propName] as BaseEntity[];
     }
-    const list = slot[propName] as BaseEntity[];
     // `PrimaryKey.Equals` requires the entity to have a populated composite
     // key; if either side is missing one we fall back to reference equality
     // only (the entity might not be saved yet, in which case no dedup is
@@ -289,8 +421,9 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   }
 
   public removeEntityFromCache(entityName: string, primaryKey: Record<string, unknown>): void {
-    const propName = this.getPropertyNameForEntity(entityName);
-    const list = (this as unknown as Record<string, unknown>)[propName] as BaseEntity[] | undefined;
+    // For delegated entities this splices the donor's live array; the donor's
+    // delete-event handler tolerates the row already being gone.
+    const list = this.resolveSlot(entityName);
     const entityInfo = this.syncEngine.getEntityInfo(entityName);
     let pkStr: string | null = null;
     if (entityInfo) {
@@ -371,12 +504,10 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
 
   /**
    * Walk every entity referenced by metadata files (including nested
-   * `relatedEntities`) and build one unfiltered `BaseEngine` config per
-   * entity. Each config triggers a single `SELECT * FROM vw<Entity>`
-   * (capped by `IgnoreMaxRows: true` in BaseEngine), pre-populating the
-   * per-entity slot the sync path will read from.
+   * `relatedEntities`) and return the set of entity names touched by this
+   * run. Also primes the file cache as a side effect of the scan.
    */
-  private async buildDynamicConfigs(): Promise<Partial<BaseEnginePropertyConfig>[]> {
+  private async collectTouchedEntities(): Promise<Set<string>> {
     const entitiesFound: Set<string> = new Set();
 
     for (const entityDir of this.entityDirs) {
@@ -395,12 +526,28 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       await this.processFilesInParallel(files, entityConfig.entity, entitiesFound);
     }
 
+    return entitiesFound;
+  }
+
+  /**
+   * Decide, per touched entity, whether the slot delegates to an
+   * already-loaded engine's cache or self-loads. Returns the `BaseEngine`
+   * configs for the self-load remainder; each one triggers a single
+   * `SELECT * FROM vw<Entity>` (capped by `IgnoreMaxRows: true` in
+   * BaseEngine), pre-populating the per-entity slot the sync path reads.
+   */
+  private partitionEntities(entityNames: Set<string>): Partial<BaseEnginePropertyConfig>[] {
+    this.delegatedSlots.clear();
+
     const configs: Partial<BaseEnginePropertyConfig>[] = [];
-    for (const entityName of entitiesFound) {
+    for (const entityName of entityNames) {
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
       if (!entityInfo) continue;
 
       this.markEntityAsPreloaded(entityName);
+      if (this.delegateEntityIfCached(entityName)) {
+        continue;
+      }
       configs.push({
         PropertyName: this.getPropertyNameForEntity(entityName),
         EntityName: entityName,
@@ -418,19 +565,18 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   }
 
   /**
-   * After `BaseEngine.Load` finishes, walk the configs and check whether any
-   * single preloaded entity exceeded the metadata-scale threshold. Emit a
-   * warning so the operator knows their sync is loading something it
+   * After the slots are filled, check whether any single preloaded entity
+   * (self-loaded or delegated) exceeds the metadata-scale threshold. Emit a
+   * warning so the operator knows their sync is using something it
    * probably shouldn't be.
    */
-  private warnOnOversizedSlots(configs: Partial<BaseEnginePropertyConfig>[]): void {
-    for (const config of configs) {
-      if (!config.PropertyName || !config.EntityName) continue;
-      const list = (this as unknown as Record<string, unknown>)[config.PropertyName];
-      if (!Array.isArray(list)) continue;
+  private warnOnOversizedSlots(entityNames: Iterable<string>): void {
+    for (const entityName of entityNames) {
+      const list = this.resolveSlot(entityName);
+      if (!list) continue;
       if (list.length > LARGE_ENTITY_WARN_THRESHOLD) {
         this.warnings.push(
-          `Preloaded ${list.length.toLocaleString()} rows of '${config.EntityName}'. mj sync is intended for metadata-scale entities (hundreds to low tens of thousands); this is large enough that you may want to confirm this entity belongs in a sync workflow.`
+          `Preloaded ${list.length.toLocaleString()} rows of '${entityName}'. mj sync is intended for metadata-scale entities (hundreds to low tens of thousands); this is large enough that you may want to confirm this entity belongs in a sync workflow.`
         );
       }
     }

@@ -8,14 +8,16 @@
 
   <!-- Empty state when no list is selected -->
   @if (!isLoading && !listLoaded && !listId && !listEntity) {
-    <div class="empty-state">
-      <span class="fa-solid fa-rectangle-list empty-icon"></span>
-      <p>Select a list to view its records</p>
-    </div>
+    <mj-empty-state
+      class="list-detail-grid-empty"
+      Icon="fa-solid fa-rectangle-list"
+      Title="Select a list to view its records" />
   }
 
   <!-- Grid display when list is loaded -->
   @if (listLoaded && gridParams) {
+    <!-- List detail grid is not a saved User View, so there's no canonical GridState to manage —
+         suppress the "Manage Columns" chooser (AllowColumnToggle=false). -->
     <mj-entity-data-grid
       #entityDataGrid
       [Params]="gridParams"
@@ -23,6 +25,7 @@
       [ShowToolbar]="showToolbar"
       [ToolbarConfig]="effectiveToolbarConfig"
       [SelectionMode]="selectionMode"
+      [AllowColumnToggle]="false"
       (AfterRowClick)="onRowClick($event)"
       (AfterRowDoubleClick)="onRowDoubleClick($event)"
       (AfterDataLoad)="onDataLoaded($event)"

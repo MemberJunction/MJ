@@ -117,17 +117,28 @@ The Knowledge Hub application provides a suite of dashboards for managing vector
 - **Config panel**: Positioned at top-left with algorithm, metric, and entity selection controls
 - **FetchEntityVectors**: Uses the `FetchEntityVectors` GraphQL query to retrieve vectors from Pinecone with entity metadata filtering
 
-#### Content Autotagging Dashboard
-Five-tab left navigation layout:
-- **Pipeline**: Real-time pipeline monitor showing stage counts (Sources, Items, Tags, Attributes), KPI cards, and run controls with progress reporting
-- **Sources**: Full CRUD management of content sources with source type parameter configuration
-- **Content Types**: Manage content type definitions with default embedding model and vector index selection (tree-dropdown for AI model picker)
-- **Tag Library**: Browse and manage the tag taxonomy with tag weight visualization (0.0--1.0 relevance scores)
-- **Run History**: Historical process run logs with timing, item counts, and error details
+#### Content Autotagging / "Classify" Dashboard
+The Classify sub-app (driver class `AutotaggingPipelineResource`) is a thin host shell that delegates each tab to a self-contained sub-page component. See **[the Classify architecture README](src/AI/components/autotagging/README.md)** for the full component map, data layer, and feature details.
+
+Left-navigation tabs:
+- **Pipeline**: Real-time pipeline monitor — stage counts, KPI cards, live feed, and run controls with GraphQL progress subscription
+- **Sources**: CRUD for content sources, source-detail panel, schedule dialog, full classifier config (taxonomy mode, thresholds, budgets) inline, and a dry-run disposition preview
+- **Content Types**: Content type definitions with default embedding model / vector index
+- **Tag Library**: Browse the tag taxonomy with weight visualization and word cloud
+- **Taxonomy**: Tag governance — tree, duplicates, orphans, treemap, audit, plus per-tag **Governance / Synonyms / Scope** editors
+- **Suggestions Inbox**: Human-in-the-loop review queue for ambiguous classifications (approve / merge / reject)
+- **Tag Health**: Automated taxonomy-quality signals (merge candidates, low-usage, wide-node) with triage actions
+- **Run History**: Historical process-run logs with per-source detail
+
+Architecture: the former 5,147-line monolith was decomposed into 6 tab components (`tabs/`) + 4 dialog components (`dialogs/`) + a shared pure layer (`shared/`: types, formatters, dry-run disposition logic). Cacheable metadata is read from existing engines (`KnowledgeHubMetadataEngine`, `TagEngineBase`, `AIEngineBase`); high-volume rows use `RunView` (never cached).
 
 #### Knowledge Config Dashboard
 - **Central configuration**: Manage entity documents, vector indexes, vector databases, and content infrastructure
 - **Uses KnowledgeHubMetadataEngine**: Singleton cache for all Knowledge Hub metadata with auto-refresh
+
+### Predictive Studio
+
+The Predictive Studio app (`src/PredictiveStudio/`) is a multi-section, lazy-loaded surface for training, comparing, deploying, and monitoring ML models (see the [Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)). Its sections include Home, Algorithm Catalog, Pipeline Builder, Experiments, Model Registry, Compare Runs, and **Models in Production** (`PSProductionResourceComponent` — deployed models, what each writes, schedule, last run, and a generic prediction-distribution mini-viz, all driven by `MJ: ML Model Scoring Bindings` + `MJ: Process Runs`). The panels read live engine data via `PredictiveStudioEngine`; Promote/Validate/Archive and experiment Pause/Resume/Cancel are wired to Remote Operations behind a confirm modal, and Home's "Ask the agent" CTA opens a docked, seeded Model-Dev-Agent chat. See [`src/PredictiveStudio/`](src/PredictiveStudio/) and the guide's [Business-User Experience](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md#16-the-business-user-experience) section.
 
 ### Additional Dashboards
 - **API Keys**: API key management with scopes, applications, and usage tracking

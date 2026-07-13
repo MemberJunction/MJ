@@ -1,5 +1,117 @@
 # @memberjunction/ai-openrouter
 
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.47.0
+- @memberjunction/ai-openai@5.47.0
+- @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.46.0
+- @memberjunction/ai-openai@5.46.0
+- @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.45.1
+- @memberjunction/ai-openai@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/ai-openai@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/ai-openai@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [9f6aa87]
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/ai-openai@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ai@5.42.0
+  - @memberjunction/ai-openai@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [15b743b]
+- Updated dependencies [1568bae]
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/ai-openai@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.2
+- @memberjunction/ai-openai@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.1
+- @memberjunction/ai-openai@5.40.1
+- @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.0
+- @memberjunction/ai-openai@5.40.0
+- @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Minor Changes
+
+- 34fe6d1: Capture and surface AI prompt-cache cost across providers — OpenRouter provider-reported cost passthrough; per-model cache read/write pricing on AI Model Costs with cache-aware cost calculation; cache-token rollups on AI Prompt Runs and Agent Runs; and cache hit-rate + dollar-savings analytics across the AI dashboards (Cost & Budget, Model Performance, Prompt Runs, Usage Patterns, Executive Summary) and the prompt-run / agent-run detail views. Includes a migration adding cache columns — run CodeGen after applying.
+
+### Patch Changes
+
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [34fe6d1]
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/ai-openai@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

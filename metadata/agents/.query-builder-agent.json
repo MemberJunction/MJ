@@ -6,6 +6,8 @@
       "Description": "Business-friendly orchestrator agent that helps users explore their data and build saved queries. Delegates technical SQL work to the Query Strategist sub-agent. Presents results visually with diagrams and formatted tables, hiding SQL complexity unless the user asks for it.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "AcceptsSkills": "All",
+      "SkillActivationMode": "Auto",
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Data",
       "ArtifactCreationMode": "Always",
       "ExecutionOrder": 0,
@@ -225,6 +227,7 @@
             "ExposeAsAction": false,
             "InvocationMode": "Sub-Agent",
             "IconClass": "fa-solid fa-database",
+            "MaxIterationsPerRun": 50,
             "PayloadDownstreamPaths": [
               "*"
             ],
@@ -387,8 +390,8 @@
             "ID": "17E1C958-909C-41B2-8B52-138AED224108"
           },
           "sync": {
-            "lastModified": "2026-04-22T21:09:33.220Z",
-            "checksum": "ac2603026183ecc0409e58efb68b7cc6f7924a9888726681ce9e7ef654474612"
+            "lastModified": "2026-06-16T01:17:22.155Z",
+            "checksum": "52f1b3b936097da7463a314d31b5d523d478023a6a87ceb3c68ac8bca2356d27"
           }
         }
       ]
@@ -397,8 +400,8 @@
       "ID": "204FF1D6-A807-4278-B71A-9D692F19E808"
     },
     "sync": {
-      "lastModified": "2026-04-22T21:09:33.046Z",
-      "checksum": "8a5219da2993e29644c9ad828a85240391edb13bf313a7305adac477195df8b6"
+      "lastModified": "2026-07-07T15:18:38.916Z",
+      "checksum": "de676ff11e23289e825d252c14341f7edbaa1f16c0d050dcf15ba0db2aee450f"
     }
   }
 ]

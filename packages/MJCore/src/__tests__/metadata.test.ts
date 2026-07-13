@@ -34,6 +34,10 @@ describe('Metadata', () => {
 
     beforeEach(() => {
         globalStore = {};
+        // Clear call history on the module-level mockProvider fns — restoreAllMocks()
+        // only restores spies, so calls from prior tests would otherwise leak into
+        // toHaveBeenCalledTimes assertions. clearAllMocks preserves implementations.
+        vi.clearAllMocks();
         vi.spyOn(MJGlobal.Instance, 'GetGlobalObjectStore').mockReturnValue(globalStore);
     });
 

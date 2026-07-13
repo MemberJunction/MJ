@@ -21,8 +21,12 @@
 import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// The variables echo is gated behind BOTH logVariables=true AND telemetry.level='debug'
+// (the single server log-level knob). Set both so the redaction logic under test actually
+// emits its console.dir line.
 vi.mock('../config', () => ({
   configInfo: {
+    telemetry: { level: 'debug' },
     loggingSettings: {
       graphql: {
         logVariables: true,
@@ -32,6 +36,7 @@ vi.mock('../config', () => ({
 }));
 vi.mock('../config.js', () => ({
   configInfo: {
+    telemetry: { level: 'debug' },
     loggingSettings: {
       graphql: {
         logVariables: true,

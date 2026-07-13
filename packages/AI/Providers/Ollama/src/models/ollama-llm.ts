@@ -1,5 +1,5 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ChatMessageContentBlock, parseBase64DataUrl } from '@memberjunction/ai';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Ollama, ChatRequest, ChatResponse, GenerateRequest, GenerateResponse, Message } from 'ollama';
 
 /**
@@ -272,7 +272,8 @@ export class OllamaLLM extends BaseLLM {
                 total_duration: response.total_duration,
                 load_duration: response.load_duration,
                 prompt_eval_duration: response.prompt_eval_duration,
-                eval_duration: response.eval_duration
+                eval_duration: response.eval_duration,
+                raw: ToJSONSafe(response)
             };
             
             return result;

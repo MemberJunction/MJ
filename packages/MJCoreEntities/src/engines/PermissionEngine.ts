@@ -3,7 +3,7 @@ import {
     BaseEnginePropertyConfig,
     IMetadataProvider,
     LogError,
-    LogStatus,
+    LogStatusEx,
     NormalizedPermission,
     PermissionAction,
     PermissionAuditEntry,
@@ -32,6 +32,7 @@ const DOMAIN_TO_AUDIT_ENTITIES: Record<string, string[]> = {
     'Artifact Permissions': ['MJ: Artifact Permissions'],
     'Collection Permissions': ['MJ: Collection Permissions'],
     'AI Agent Permissions': ['MJ: AI Agent Permissions'],
+    'AI Skill Permissions': ['MJ: AI Skill Permissions'],
     'Query Permissions': ['MJ: Query Permissions'],
     'Access Control Rules': ['MJ: Access Control Rules'],
 };
@@ -51,6 +52,7 @@ export const PERMISSION_DOMAIN_ICONS: Record<string, string> = {
     'Artifact Permissions': 'fa-solid fa-file-lines',
     'Collection Permissions': 'fa-solid fa-folder-open',
     'AI Agent Permissions': 'fa-solid fa-robot',
+    'AI Skill Permissions': 'fa-solid fa-wand-magic-sparkles',
     'Query Permissions': 'fa-solid fa-magnifying-glass',
     'Access Control Rules': 'fa-solid fa-lock',
 };
@@ -132,10 +134,12 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
                 LogError(`PermissionEngine: failed to instantiate provider '${domain.ProviderClassName}': ${err}`);
             }
         }
-        LogStatus(
-            `PermissionEngine configured with ${this._providers.size} provider(s) ` +
-                `out of ${activeDomains.length} active domain(s).`
-        );
+        LogStatusEx({
+            message:
+                `PermissionEngine configured with ${this._providers.size} provider(s) ` +
+                `out of ${activeDomains.length} active domain(s).`,
+            verboseOnly: true,
+        });
     }
 
     /**
@@ -247,7 +251,7 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
 
     /** All active, loaded domain catalog records. */
     public get Domains(): MJPermissionDomainEntity[] {
-        return this._domains.filter((d) => d.IsActive);
+        return this.GetConfigData<MJPermissionDomainEntity>('_domains').filter((d) => d.IsActive);
     }
 
     /** Look up the provider for a specific domain by name; returns undefined when not loaded. */

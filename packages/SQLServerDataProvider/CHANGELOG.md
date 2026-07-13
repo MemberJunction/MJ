@@ -1,5 +1,335 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.47.0
+
+### Patch Changes
+
+- 936a286: Scope the view-column-order cache per connection pool instead of per provider instance (#3102). `loadViewColumnOrderCache()` ran a full `sys.columns` scan inside every `Config()`, and MJServer configures a fresh provider (or two — read-write + read-only) per GraphQL request, so the whole-database scan executed once or twice on every request (production Query Store showed ~9,664 executions/24h, the #2 query by execution count). The scan result is now held in a process-static `WeakMap<ConnectionPool, Promise<Map<viewKey, string[]>>>` shared across provider instances, keyed by the pool object so read-write/read-only or multi-database providers (where the same `schema.view` can have different physical column orders) never cross-contaminate — preventing the positional `@ResultTable` mis-routing the cache exists to guard against. Concurrent per-request `Config()` calls de-duplicate onto a single in-flight scan; a failed scan drops its entry so the next call retries (best-effort fallback to metadata-derived column order is unchanged). `Refresh()` — the hook CodeGen/migrations already drive after altering views — invalidates the pool's entry so schema changes are picked up without a restart, and a public static `InvalidateViewColumnOrderCache(pool)` covers explicit out-of-band DDL. Net effect: ~1 scan per pool per process instead of ~1–2 per request.
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/ai-vectordb@5.47.0
+  - @memberjunction/ai-vector-dupe@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/encryption@5.47.0
+  - @memberjunction/generic-database-provider@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/queue@5.47.0
+  - @memberjunction/query-processor@5.47.0
+  - @memberjunction/ai-provider-bundle@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-vectordb@5.46.0
+  - @memberjunction/ai-vector-dupe@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/actions@5.46.0
+  - @memberjunction/encryption@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/queue@5.46.0
+  - @memberjunction/query-processor@5.46.0
+  - @memberjunction/ai-provider-bundle@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/aiengine@5.45.1
+- @memberjunction/ai-vector-dupe@5.45.1
+- @memberjunction/generic-database-provider@5.45.1
+- @memberjunction/queue@5.45.1
+- @memberjunction/ai-provider-bundle@5.45.1
+- @memberjunction/ai@5.45.1
+- @memberjunction/ai-vectordb@5.45.1
+- @memberjunction/actions-base@5.45.1
+- @memberjunction/actions@5.45.1
+- @memberjunction/encryption@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/query-processor@5.45.1
+- @memberjunction/sql-dialect@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-vectordb@5.45.0
+  - @memberjunction/ai-vector-dupe@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/actions@5.45.0
+  - @memberjunction/encryption@5.45.0
+  - @memberjunction/queue@5.45.0
+  - @memberjunction/query-processor@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/ai-provider-bundle@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/ai-vectordb@5.44.0
+  - @memberjunction/ai-vector-dupe@5.44.0
+  - @memberjunction/generic-database-provider@5.44.0
+  - @memberjunction/queue@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/actions@5.44.0
+  - @memberjunction/encryption@5.44.0
+  - @memberjunction/query-processor@5.44.0
+  - @memberjunction/ai-provider-bundle@5.44.0
+  - @memberjunction/sql-dialect@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- 4e05350: Save-capture `@ResultTable` now matches the base view's **actual** column order (read from `sys.columns` at `Config`, cached per entity) instead of inferring it from `EntityField` metadata.
+
+  The save wrapper captures the row via a **positional** `INSERT INTO @ResultTable EXEC <sp>` where the sp returns `SELECT * FROM <BaseView>`; SQL Server maps that result set by ordinal, so `@ResultTable` must be declared in the view's physical column order. The prior heuristics (≤5.40.1 `EntityField.Sequence` order; 5.42 non-virtual-then-virtual partition) only matched canonical CodeGen views. For a manually-maintained view that places a base column **after** the virtual/join columns, the declared order diverged from the view and values mis-routed into wrong-typed slots — a `nvarchar→bit`/`nvarchar→uniqueidentifier` type-conversion error that failed the save and rolled back the transaction.
+
+  Reading the view directly makes the column order authoritative by construction — correct for canonical, computed-column, and hand-maintained views alike. Output is byte-identical to the 5.42 partition for canonical views (a no-op for the overwhelming majority); falls back to the partition when a view is uncached or has a column with no matching field.
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/actions@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/ai-vectordb@5.43.0
+  - @memberjunction/ai-vector-dupe@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/encryption@5.43.0
+  - @memberjunction/generic-database-provider@5.43.0
+  - @memberjunction/queue@5.43.0
+  - @memberjunction/query-processor@5.43.0
+  - @memberjunction/ai-provider-bundle@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- 5ada858: Fix value mis-routing in the save / record-change capture table (`@ResultTable`). The capture column list was built in EntityField **Sequence** order, but the positional `INSERT INTO @ResultTable EXEC` copies the base view's `SELECT [base].*, <joins>` output (base columns first, virtual/related fields last). For entities where CodeGen sequenced a base column **after** a virtual field (newly-added columns get a `maxSequence + 100000` offset), the two orders diverged and values landed in the wrong column — producing truncation or string→bit type-conversion errors on save. The capture list is now emitted base-columns-first then virtual fields, matching the view. This is a stable partition: byte-for-byte identical output for every entity whose virtual fields already sort last (the overwhelming majority), and a correction only for the affected entities.
+- Updated dependencies [9b9b484]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/generic-database-provider@5.42.0
+  - @memberjunction/actions@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/ai-vectordb@5.42.0
+  - @memberjunction/ai-vector-dupe@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/encryption@5.42.0
+  - @memberjunction/queue@5.42.0
+  - @memberjunction/query-processor@5.42.0
+  - @memberjunction/ai@5.42.0
+  - @memberjunction/ai-provider-bundle@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [d38ecbb]
+- Updated dependencies [1e81848]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/ai-vector-dupe@5.41.0
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/aiengine@5.41.0
+  - @memberjunction/generic-database-provider@5.41.0
+  - @memberjunction/ai-provider-bundle@5.41.0
+  - @memberjunction/ai-vectordb@5.41.0
+  - @memberjunction/actions-base@5.41.0
+  - @memberjunction/actions@5.41.0
+  - @memberjunction/encryption@5.41.0
+  - @memberjunction/queue@5.41.0
+  - @memberjunction/query-processor@5.41.0
+  - @memberjunction/global@5.41.0
+  - @memberjunction/sql-dialect@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [da2ee38]
+  - @memberjunction/ai-vector-dupe@5.40.2
+  - @memberjunction/ai@5.40.2
+  - @memberjunction/aiengine@5.40.2
+  - @memberjunction/ai-provider-bundle@5.40.2
+  - @memberjunction/ai-vectordb@5.40.2
+  - @memberjunction/actions-base@5.40.2
+  - @memberjunction/actions@5.40.2
+  - @memberjunction/encryption@5.40.2
+  - @memberjunction/generic-database-provider@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/queue@5.40.2
+  - @memberjunction/query-processor@5.40.2
+  - @memberjunction/sql-dialect@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/aiengine@5.40.1
+  - @memberjunction/ai-vectordb@5.40.1
+  - @memberjunction/ai-vector-dupe@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/actions@5.40.1
+  - @memberjunction/encryption@5.40.1
+  - @memberjunction/generic-database-provider@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/queue@5.40.1
+  - @memberjunction/query-processor@5.40.1
+  - @memberjunction/ai-provider-bundle@5.40.1
+  - @memberjunction/ai@5.40.1
+  - @memberjunction/global@5.40.1
+  - @memberjunction/sql-dialect@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- 804f9f6: Security audit fixes: parameterize SQL queries in GraphQL resolvers to prevent injection, validate entity read permissions on query execution, centralize permission logic in UserCanRun with recursive dependency checks, and fix UUID/multi-provider compliance violations.
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/generic-database-provider@5.40.0
+  - @memberjunction/aiengine@5.40.0
+  - @memberjunction/ai-vectordb@5.40.0
+  - @memberjunction/ai-vector-dupe@5.40.0
+  - @memberjunction/actions-base@5.40.0
+  - @memberjunction/actions@5.40.0
+  - @memberjunction/encryption@5.40.0
+  - @memberjunction/queue@5.40.0
+  - @memberjunction/query-processor@5.40.0
+  - @memberjunction/ai-provider-bundle@5.40.0
+  - @memberjunction/ai@5.40.0
+  - @memberjunction/global@5.40.0
+  - @memberjunction/sql-dialect@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- 7dfacc7: Add support for storing and querying embeddings inside the application's own database instead of a separate vector service. `VectorDBBase` gains an `IColocatedVectorHost` adapter (implemented by the PostgreSQL and SQL Server data providers) and a `ColocatedQuery` API; the new `PgVectorColocated` provider does vector + keyword (RRF) search in one statement, and the new `@memberjunction/ai-vectors-sqlserver` package adds a SQL Server 2025 native `VECTOR` provider with sibling-table and entity-column storage modes. `VectorSearchProvider` and `EntityVectorSyncer` route these indexes through the borrowed connection.
+- eaee99f: fix: re-throw connection errors from RunView/RunQuery instead of swallowing into Success=false
+
+  Preserve mssql ConnectionError type through executeSQLCore so GenericDatabaseProvider can structurally detect infrastructure failures (DB unreachable, pool closed) and re-throw them from InternalRunView and InternalRunQuery. Previously these were silently converted to { Success: false }, making it impossible for callers to distinguish "database is down" from "query returned no results."
+
+- Updated dependencies [26761b8]
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [eaee99f]
+- Updated dependencies [2d1b4e1]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [a2aecc7]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/actions@5.39.0
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-vectordb@5.39.0
+  - @memberjunction/generic-database-provider@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/aiengine@5.39.0
+  - @memberjunction/ai-vector-dupe@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/encryption@5.39.0
+  - @memberjunction/queue@5.39.0
+  - @memberjunction/query-processor@5.39.0
+  - @memberjunction/ai-provider-bundle@5.39.0
+  - @memberjunction/sql-dialect@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

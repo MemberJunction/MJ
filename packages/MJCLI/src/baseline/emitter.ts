@@ -504,31 +504,39 @@ function emitPrincipals(principals: readonly DatabasePrincipalDef[]): string {
       lines.push('GO');
       continue;
     }
-    // SQL users: mirror v5.0's conditional FOR LOGIN / WITHOUT LOGIN pattern.
-    // Wrapped in `IF DATABASE_PRINCIPAL_ID(...) IS NULL` so the whole block
-    // is idempotent when the baseline is re-applied (e.g. for diagnostics).
-    lines.push(`IF DATABASE_PRINCIPAL_ID(${quoteString(u.name)}) IS NULL`);
-    lines.push('BEGIN');
-    lines.push(`    DECLARE @login_exists_${safeSuffix(u.name)} BIT = 0;`);
+    // SQL users: mirror v5.0's pattern EXACTLY so the cross-database
+    // `master.dbo.syslogins` lookup lives INSIDE an `sp_executesql N'...'`
+    // string literal. Azure SQL parses + binds every batch at submission
+    // time and rejects cross-DB references on sight — runtime IF guards
+    // come too late. Wrapping the query in dynamic SQL makes it opaque
+    // to the parser, and the EngineEdition check ensures it never
+    // executes on Azure anyway (so the FOR-LOGIN-or-WITHOUT-LOGIN path
+    // is decided purely from `@associate` set to 1 by SERVERPROPERTY).
+    //
+    // Each block ends with a `GO` so the @associate / @user_exists
+    // variables get a fresh scope per user — no name-mangling needed.
+    const nameForString = u.name.replace(/'/g, "''");
+    lines.push('DECLARE @associate bit');
+    lines.push(`SELECT @associate = CASE SERVERPROPERTY('EngineEdition') WHEN 5 THEN 1 ELSE 0 END`);
+    lines.push('DECLARE @user_exists bit');
     lines.push(
-      `    IF SERVERPROPERTY('EngineEdition') = 5 SET @login_exists_${safeSuffix(u.name)} = 1; ` +
-      `ELSE IF EXISTS (SELECT 1 FROM master.sys.server_principals WHERE name = ${quoteString(u.name)}) ` +
-      `SET @login_exists_${safeSuffix(u.name)} = 1;`,
+      `EXEC sp_executesql N'SELECT @count = COUNT(*) FROM sys.database_principals WHERE [name] = N''${nameForString}''', N'@count bit OUT', @user_exists OUT`,
     );
-    lines.push(`    IF @login_exists_${safeSuffix(u.name)} = 1`);
-    lines.push(`        EXEC('CREATE USER ${quoteIdent(u.name)} FOR LOGIN ${quoteIdent(u.name)}');`);
-    lines.push('    ELSE');
-    lines.push(`        EXEC('CREATE USER ${quoteIdent(u.name)} WITHOUT LOGIN');`);
+    lines.push(
+      `IF @associate = 0 EXEC sp_executesql N'SELECT @count = COUNT(*) FROM master.dbo.syslogins WHERE loginname = N''${nameForString}''', N'@count bit OUT', @associate OUT`,
+    );
+    lines.push('IF @associate = 1 AND @user_exists = 0');
+    lines.push('BEGIN');
+    lines.push(`    CREATE USER ${quoteIdent(u.name)} FOR LOGIN ${quoteIdent(u.name)}`);
+    lines.push('END');
+    lines.push('ELSE IF @user_exists = 0');
+    lines.push('BEGIN');
+    lines.push(`    CREATE USER ${quoteIdent(u.name)} WITHOUT LOGIN`);
     lines.push('END');
     lines.push('GO');
   }
 
   return lines.join(NL);
-}
-
-/** Safe identifier suffix for variable names embedded inside an IF block. */
-function safeSuffix(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_]/g, '_');
 }
 
 /**

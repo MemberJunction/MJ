@@ -211,6 +211,11 @@
   --mj-highlight-subtle: var(--mj-brand-accent-subtle);
   --mj-on-highlight: var(--mj-brand-on-accent);
 
+  /* Search-match highlight — the <mark> wrapping typed-query matches in lists,
+     field labels, FK dropdowns, etc. Muted amber (not the garish browser default). */
+  --mj-search-highlight-bg: color-mix(in srgb, var(--mj-status-warning) 24%, transparent);
+  --mj-search-highlight-text: var(--mj-text-primary);
+
   /* Login Banner Gradient & Waves */
   --mj-login-grad-start: var(--mj-color-brand-900);
   --mj-login-grad-mid:   var(--mj-color-brand-700);
@@ -412,6 +417,10 @@
   --mj-status-warning-bg: rgba(245, 158, 11, 0.15);
   --mj-status-warning-text: var(--mj-color-warning-100);
   --mj-status-warning-border: var(--mj-color-warning-600);
+
+  /* Slightly stronger search highlight on dark surfaces so it stays visible. */
+  --mj-search-highlight-bg: color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
+  --mj-search-highlight-text: var(--mj-text-primary);
 
   --mj-status-error-bg: rgba(239, 68, 68, 0.15);
   --mj-status-error-text: var(--mj-color-error-100);

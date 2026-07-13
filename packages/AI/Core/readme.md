@@ -18,14 +18,17 @@ Every AI capability is represented by an abstract base class. Provider packages 
 
 | Class | Purpose | Key Methods |
 |-------|---------|-------------|
-| `BaseLLM` | Chat completions (text generation) | `ChatCompletion()`, `ChatCompletions()` (parallel batch) |
-| `BaseEmbeddings` | Text-to-vector embeddings | `EmbedText()`, `EmbedTexts()` |
+| `BaseLLM` | Chat completions (text generation) | `ChatCompletion()`, `ChatCompletions()` (parallel batch), `GetFileCapabilities()` |
+| `BaseEmbeddings` | Text & multimodal embeddings | `EmbedText()`, `EmbedTexts()`, `EmbedContent()`, `GetFileCapabilities()` |
 | `BaseImageGenerator` | Image generation, editing, variations | `GenerateImage()`, `EditImage()`, `CreateVariation()` |
 | `BaseAudio` | Text-to-speech and speech-to-text | `TextToSpeech()`, `SpeechToText()` |
 | `BaseVideo` | Video generation from text/images | `GenerateVideo()` |
 | `BaseReranker` | Document reranking for retrieval | `Rerank()` |
+| `BaseRealtimeModel` | Live, full-duplex, tool-calling realtime sessions (voice) | `StartSession()`, `CreateClientSession()` |
 
 All inherit from `BaseModel`, which manages API key storage and provides the `@RegisterClass` integration point.
+
+One additional realtime primitive lives here that is *not* a `BaseModel` capability: `BaseRealtimeChannelServer` — the server half of the realtime **interactive-channel** plugin contract (`MJ: AI Agent Channels.ServerPluginClass`), mirroring the client half (`BaseRealtimeChannelClient` in the Angular conversations package). Concrete plugins register via `@RegisterClass(BaseRealtimeChannelServer, '<key>')` and are resolved per session by `RealtimeChannelServerHost` in `@memberjunction/ai-agents`. See [guides/REALTIME_CO_AGENTS_GUIDE.md](../../../guides/REALTIME_CO_AGENTS_GUIDE.md) §5.
 
 ## Type Definitions
 
@@ -47,6 +50,7 @@ All inherit from `BaseModel`, which manages API key storage and provides the `@R
 |------|-------------|
 | `EmbedTextParams` / `EmbedTextResult` | Single text embedding request and response |
 | `EmbedTextsParams` / `EmbedTextsResult` | Batch text embedding request and response |
+| `EmbedContentParams` / `EmbedContentResult` | Multimodal embedding request (text and/or interleaved media blocks fused into one vector) and response. `EmbedContent()` is non-abstract — it defaults to `EmbedText` for text-only content; multimodal providers override it. Supported media is declared per provider via `GetFileCapabilities()` |
 
 ### Other Types
 
@@ -58,6 +62,7 @@ All inherit from `BaseModel`, which manages API key storage and provides the `@R
 | `RerankParams` / `RerankResult` | Document reranking |
 | `ModelUsage` | Token counts and cost tracking (prompt tokens, completion tokens, total cost, currency) |
 | `BaseResult` | Common result base with success flag, timing, and error info |
+| `FileCapabilities` | Declares which non-text inputs a provider accepts: `SupportedMimeTypes` (e.g. `image/png`, `audio/mp3`, supports `image/*` wildcards), `MaxFileSize`, `MaxFilesPerRequest`, `HasFileAPI`. Returned by `GetFileCapabilities()` on `BaseLLM` (file inputs to chat) and `BaseEmbeddings` (media inputs to `EmbedContent`); `null` means text-only |
 
 ## Utilities
 

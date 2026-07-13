@@ -36,8 +36,14 @@ export class DDLGenerator {
 
   /**
    * Generate a full CREATE TABLE statement.
+   *
+   * @param options.IfNotExists - When true, emit an idempotent, single-statement CREATE
+   *   (and re-run-safe descriptions) so applying the migration twice — or against a table
+   *   that physically exists but has no MJ entity yet — does not collide. Off by default to
+   *   preserve the exact output for callers (e.g. the AI schema designer) that expect a bare
+   *   CREATE TABLE. The integration Create-Tables path opts in.
    */
-  GenerateCreateTable(def: TableDefinition, platform: DatabasePlatform): string {
+  GenerateCreateTable(def: TableDefinition, platform: DatabasePlatform, options?: { IfNotExists?: boolean }): string {
     ValidateIdentifier(def.SchemaName, 'schema');
     ValidateIdentifier(def.TableName, 'table');
 
@@ -66,13 +72,28 @@ export class DDLGenerator {
       lines.push(`    CONSTRAINT ${q(pkName)} PRIMARY KEY (${pkColNames})`);
     }
 
+    // All integration PKs/FKs are SOFT — declared in metadata so CodeGen can key its sprocs, but NOT
+    // enforced by a hard DB constraint. The PK is an inferred/statistical key; a UNIQUE constraint
+    // would reject genuine rows the inference missed and turn a guess into a write-blocking failure.
+    // We emit a NON-UNIQUE index instead, so per-record match/load lookups stay fast without
+    // enforcing a uniqueness we only inferred. (Soft FKs are already excluded in the FK loop below.)
+    const softPkIndex: string[] = [];
     if (def.SoftPrimaryKeys && def.SoftPrimaryKeys.length > 0) {
-      const pkColNames = def.SoftPrimaryKeys.map((f) => {
-        ValidateIdentifier(f, 'soft-pk column');
-        return q(f);
-      }).join(', ');
-      const uqName = `UQ_${def.SchemaName}_${def.TableName}_PK`;
-      lines.push(`    CONSTRAINT ${q(uqName)} UNIQUE (${pkColNames})`);
+      def.SoftPrimaryKeys.forEach((f) => ValidateIdentifier(f, 'soft-pk column'));
+      const ixName = `IX_${def.SchemaName}_${def.TableName}_PK`;
+      const idx = d.IndexDDL({
+        schema: def.SchemaName,
+        tableName: def.TableName,
+        indexName: ixName,
+        columns: def.SoftPrimaryKeys,
+        unique: false,
+      });
+      // Idempotent on re-codegen: PG IndexDDL already emits IF NOT EXISTS; guard SQL Server explicitly.
+      softPkIndex.push(
+        platform === 'postgresql'
+          ? idx + ';'
+          : `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'${ixName}' AND object_id = OBJECT_ID(N'${fullTable}'))\n${idx};`,
+      );
     }
 
     for (const fk of def.ForeignKeys?.filter((f) => !f.IsSoft) ?? []) {
@@ -85,11 +106,13 @@ export class DDLGenerator {
     }
 
     const body = lines.join(',\n');
-    const createTable = `CREATE TABLE ${fullTable} (\n${body}\n);`;
+    const createTable = options?.IfNotExists
+      ? d.CreateTableIfAbsent(fullTable, body)
+      : `CREATE TABLE ${fullTable} (\n${body}\n);`;
 
-    const descStatements = this.GenerateDescriptions(def, d);
-    if (descStatements.length > 0) {
-      return createTable + '\n\n' + descStatements.join('\n\n');
+    const trailing = [...softPkIndex, ...this.GenerateDescriptions(def, d, options?.IfNotExists)];
+    if (trailing.length > 0) {
+      return createTable + '\n\n' + trailing.join('\n\n');
     }
 
     return createTable;
@@ -97,18 +120,24 @@ export class DDLGenerator {
 
   /**
    * Generate description metadata for table + columns.
+   * @param idempotent - When true, emit re-run-safe variants (guarded so re-adding an
+   *   existing description does not error). Default false preserves the original output.
    */
-  GenerateDescriptions(def: TableDefinition, dialect: SQLDialect): string[] {
+  GenerateDescriptions(def: TableDefinition, dialect: SQLDialect, idempotent = false): string[] {
     const statements: string[] = [];
     const allColumns = [...def.Columns, ...(def.AdditionalColumns ?? [])];
 
     if (def.Description) {
-      statements.push(dialect.CommentOnObject('TABLE', def.SchemaName, def.TableName, def.Description) + ';');
+      statements.push(idempotent
+        ? dialect.CommentOnObjectIfAbsent('TABLE', def.SchemaName, def.TableName, def.Description)
+        : dialect.CommentOnObject('TABLE', def.SchemaName, def.TableName, def.Description) + ';');
     }
 
     for (const col of allColumns) {
       if (col.Description) {
-        statements.push(dialect.CommentOnColumn(def.SchemaName, def.TableName, col.Name, col.Description));
+        statements.push(idempotent
+          ? dialect.CommentOnColumnIfAbsent(def.SchemaName, def.TableName, col.Name, col.Description)
+          : dialect.CommentOnColumn(def.SchemaName, def.TableName, col.Name, col.Description));
       }
     }
 

@@ -56,6 +56,15 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
 
   public activeTab: InvitationStatus = 'Pending';
   public invitations: InvitationRow[] = [];
+
+  /**
+   * Precomputed list of invitations matching the active tab, recomputed only when
+   * the source data ({@link invitations}) or {@link activeTab} changes (see
+   * {@link recomputeVisibleInvitations}) — NOT on every change-detection cycle.
+   * Bound directly as the @for source in the template, so a getter here would
+   * allocate a fresh array (map + filter) every CD tick.
+   */
+  public visibleInvitations: InvitationRow[] = [];
   public loading = false;
   public errorMessage: string | null = null;
   public submitting = false;
@@ -74,20 +83,27 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
 
   public setTab(tab: InvitationStatus): void {
     this.activeTab = tab;
+    this.recomputeVisibleInvitations();
     this.cdr.markForCheck();
   }
 
-  public get visibleInvitations(): InvitationRow[] {
-    // We hydrate Status="Pending" rows whose ExpiresAt is in the past as
-    // Expired on the client so users see them without waiting for a
-    // server-side flip. The server's Accept path also lazily marks them.
+  /**
+   * Recompute the precomputed {@link visibleInvitations} array. Called only when
+   * the source data or the active tab changes — keeping the per-row hydration
+   * (map) + filter out of the per-CD-cycle hot path.
+   *
+   * We hydrate Status="Pending" rows whose ExpiresAt is in the past as Expired
+   * on the client so users see them without waiting for a server-side flip. The
+   * server's Accept path also lazily marks them.
+   */
+  private recomputeVisibleInvitations(): void {
     const now = Date.now();
     const hydrated = this.invitations.map<InvitationRow>((inv) =>
       inv.Status === 'Pending' && inv.ExpiresAt.getTime() < now
         ? { ...inv, Status: 'Expired' }
         : inv,
     );
-    return hydrated.filter((i) => i.Status === this.activeTab);
+    this.visibleInvitations = hydrated.filter((i) => i.Status === this.activeTab);
   }
 
   public countFor(status: InvitationStatus): number {
@@ -191,6 +207,7 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
       if (!result.Success) {
         this.errorMessage = result.ErrorMessage ?? 'Failed to load invitations';
         this.invitations = [];
+        this.recomputeVisibleInvitations();
         return;
       }
       this.invitations = (result.Results ?? []).map((r) => ({
@@ -202,9 +219,11 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
         CreatedAt: new Date(r.__mj_CreatedAt as unknown as string),
         Token: String(r.Token),
       }));
+      this.recomputeVisibleInvitations();
     } catch (e) {
       this.errorMessage = e instanceof Error ? e.message : String(e);
       this.invitations = [];
+      this.recomputeVisibleInvitations();
     } finally {
       this.loading = false;
       this.cdr.markForCheck();

@@ -60,6 +60,15 @@ import { Component, HostBinding, Input } from '@angular/core';
     :host(.mj-page-body--flex.mj-page-body--row) {
       flex-direction: row;
     }
+    /* On mobile a left-rail + content row can't coexist horizontally — the rail
+       (mj-left-nav) collapses to a full-width drawer trigger at ≤700px, so the
+       row must stack: the trigger bar on top, the content pane filling the rest.
+       Pairs with mj-left-nav-content's min-height:0 so the content still scrolls. */
+    @media (max-width: 700px) {
+      :host(.mj-page-body--flex.mj-page-body--row) {
+        flex-direction: column;
+      }
+    }
   `]
 })
 export class MJPageBodyComponent {

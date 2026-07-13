@@ -1,6 +1,6 @@
 # Docker Environments
 
-MemberJunction ships three Docker configurations for different use cases.
+MemberJunction ships four Docker configurations for different use cases.
 
 ```mermaid
 graph LR
@@ -26,6 +26,7 @@ graph LR
 | Run the full MJ stack (API + Explorer) inside Docker | [workbench/](workbench/) |
 | Do headless browser automation with Playwright CLI | [workbench/](workbench/) |
 | Test Auth0 login flows end-to-end | [workbench/](workbench/) |
+| Run a local LiveKit server for the **Meet** app (live A/V rooms) | [livekit/](livekit/) |
 
 ---
 

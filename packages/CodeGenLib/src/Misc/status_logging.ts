@@ -5,6 +5,19 @@ import path from 'path';
 import ora from 'ora-classic';
 
 /**
+ * Output stream the CodeGen spinner writes to. Defaults to stdout for normal
+ * human runs. The pluggable CLI (`mj codegen --format=json`) redirects this to
+ * stderr via {@link setCodeGenSpinnerStream} so stdout carries only the
+ * machine-readable result.
+ */
+let _spinnerStream: NodeJS.WriteStream = process.stdout;
+
+/** Redirect the CodeGen spinner to {@link stream} (e.g. stderr in JSON mode). */
+export function setCodeGenSpinnerStream(stream: NodeJS.WriteStream): void {
+   _spinnerStream = stream;
+}
+
+/**
  * Base class for logging, you can sub-class this class to create your own logger and override the logError and logStatus methods if desired.
  * The default behavior in the base class is to use the LogError/LogStatus functions from the @memberjunction/core package to log to the console and to a log file if configured in the config.json file.
  * 
@@ -14,6 +27,12 @@ import ora from 'ora-classic';
  */
 export class LoggerBase {
    private _spinner: any = null;
+   /** The message for the currently-spinning step, without the live elapsed suffix. */
+   private _spinnerBaseMessage: string = '';
+   /** Wall-clock start (ms) of the current step, used for the live elapsed timer. */
+   private _spinnerStart: number = 0;
+   /** Interval handle that re-renders the live elapsed timer onto the spinner. */
+   private _tickHandle: NodeJS.Timeout | null = null;
 
    private get isVerbose(): boolean {
       // Lazy check - configInfo might not be available during module initialization
@@ -22,7 +41,40 @@ export class LoggerBase {
 
    private ensureSpinner(): void {
       if (!this.isVerbose && !this._spinner) {
-         this._spinner = ora();
+         this._spinner = ora({ stream: _spinnerStream });
+      }
+   }
+
+   /** Format an elapsed duration in ms as a compact seconds string, e.g. "3.2s". */
+   private formatElapsed(ms: number): string {
+      return `${(ms / 1000).toFixed(1)}s`;
+   }
+
+   /**
+    * Begin (or restart) the live elapsed timer for the current step. Each call
+    * resets the clock so the timer reflects how long the CURRENT message/sub-step
+    * has been running, not the whole spinner's lifetime. The interval is unref'd
+    * so it never keeps the process alive on its own.
+    */
+   private startTick(): void {
+      this.stopTick();
+      this._spinnerStart = Date.now();
+      if (this._spinner) {
+         this._tickHandle = setInterval(() => {
+            if (this._spinner) {
+               const elapsed = this.formatElapsed(Date.now() - this._spinnerStart);
+               this._spinner.text = `${this._spinnerBaseMessage} (${elapsed})`;
+            }
+         }, 100);
+         this._tickHandle.unref?.();
+      }
+   }
+
+   /** Stop the live elapsed timer if one is running. */
+   private stopTick(): void {
+      if (this._tickHandle) {
+         clearInterval(this._tickHandle);
+         this._tickHandle = null;
       }
    }
 
@@ -33,7 +85,9 @@ export class LoggerBase {
       if (!this.isVerbose) {
          this.ensureSpinner();
          if (this._spinner) {
+            this._spinnerBaseMessage = message;
             this._spinner.start(message);
+            this.startTick();
          } else {
             // Fallback if spinner creation failed
             console.log(`🔄 ${message}`);
@@ -44,13 +98,16 @@ export class LoggerBase {
    }
 
    /**
-    * Update spinner text (non-verbose mode only)
+    * Update spinner text (non-verbose mode only). Resets the live elapsed timer so
+    * the displayed duration tracks the new sub-step rather than the prior one.
     */
    public updateSpinner(message: string): void {
       if (!this.isVerbose) {
          this.ensureSpinner();
          if (this._spinner) {
+            this._spinnerBaseMessage = message;
             this._spinner.text = message;
+            this.startTick();
          } else {
             // Fallback if spinner creation failed
             console.log(`🔄 ${message}`);
@@ -64,6 +121,7 @@ export class LoggerBase {
     * Stop spinner with success message
     */
    public succeedSpinner(message?: string): void {
+      this.stopTick();
       if (!this.isVerbose) {
          this.ensureSpinner();
          if (this._spinner) {
@@ -81,6 +139,7 @@ export class LoggerBase {
     * Stop spinner with failure message
     */
    public failSpinner(message?: string): void {
+      this.stopTick();
       if (!this.isVerbose) {
          this.ensureSpinner();
          if (this._spinner) {
@@ -98,6 +157,7 @@ export class LoggerBase {
     * Stop spinner with warning message
     */
    public warnSpinner(message?: string): void {
+      this.stopTick();
       if (!this.isVerbose) {
          this.ensureSpinner();
          if (this._spinner) {
@@ -115,6 +175,7 @@ export class LoggerBase {
     * Stop spinner without status
     */
    public stopSpinner(): void {
+      this.stopTick();
       if (!this.isVerbose) {
          this.ensureSpinner();
          if (this._spinner) {

@@ -1,0 +1,12 @@
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+    <mj-record-process-editor [Record]="record" [ShowToolbar]="false" [Provider]="ProviderToUse"></mj-record-process-editor>
+
+</mj-record-form-container>
+}

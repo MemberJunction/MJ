@@ -32,6 +32,10 @@ interface LoopAgentResponse {
     /** Explore artifacts via tools. Specify artifactId (A, B, etc.), tool name, and input params. Results appear next turn. */
     artifactToolCalls?: Array<{ artifactId: string; tool: string; input: Record<string, unknown> }>;
 {% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.memoryWrites != false and _MEMORY_WRITES_ENABLED %}
+    /** Record durable facts/preferences to remember across runs (see Durable Memory). Processed inline, zero turn cost. */
+    memoryWrites?: Array<{ note: string; type: 'Preference' | 'Context'; scopeHint?: 'user' | 'agent' }>;
+{% endif %}
     /** Internal reasoning for debugging */
     reasoning?: string;
     /** Confidence level (0.0-1.0) */
@@ -39,9 +43,21 @@ interface LoopAgentResponse {
     /** Next action. Required when taskComplete=false */
     nextStep?: {
         /** Operation type */
-        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %};
+        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if planModeActive and not planApproved %} | 'Plan'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %};
         /** Actions to execute — server-side tools (when type='Actions') */
         actions?: Array<{ name: string; params: Record<string, unknown> }>;
+{% if skillCount > 0 %}
+        /** Skill(s) to activate by catalog name (when type='Skill') — see Skills section below */
+        skills?: Array<{ name: string; reason?: string }>;
+{% endif %}
+{% if planModeActive and not planApproved %}
+        /** The proposed plan (when type='Plan') — see Plan Mode section below. REQUIRED before you may use type='Actions' or type='Sub-Agent' this run. */
+        plan?: string;
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %}
+        /** Run a server-side dataflow (when type='Pipeline'); only the final stage's value returns to you (see Agent Pipelines below). Processed inline, zero turn cost. */
+        pipeline?: { steps: Array<Record<string, unknown>> };
+{% endif %}
 {% if clientToolDetails %}
         /** Client tools to execute — browser-side UI tools (when type='ClientTools') */
         clientTools?: Array<{ Name: string; Params: Record<string, unknown> }>;
@@ -103,6 +119,8 @@ Each iteration:
    - Continue reasoning
    {% if subAgentCount > 0 %}- Invoke a single sub-agent (`subAgent`) or fan out to multiple independent sub-agents in parallel (`subAgents`){% endif %}
    {% if actionCount > 0 %}- Execute action(s){% endif %}
+   {% if skillCount > 0 %}- Activate skill(s) — see Skills section below{% endif %}
+   {% if planModeActive and not planApproved %}- Present a plan for approval — see Plan Mode section below{% endif %}
    - Expand compacted message (if you need full details from a prior result)
 {% if clientToolDetails %}   - Invoke client tool(s) — interact with the user's browser{% endif %}
 4. Loop until done or blocked
@@ -116,6 +134,7 @@ Stop only when: goal complete OR unrecoverable failure.
 {% if __agentTypePromptParams.includeForEachDocs != false or __agentTypePromptParams.includeWhileDocs != false %}- **⚠️ ForEach/While results are TEMPORARY (ONE turn only)**: You MUST extract and store needed data in payload immediately after loop completion, or it's lost forever{% endif %}
 {% if subAgentCount == 0 %}- No sub-agents available{% endif %}
 {% if actionCount == 0 %}- No actions available{% endif %}
+{% if planModeActive and not planApproved %}- **⚠️ Plan mode is active: you MUST present a plan (`type: "Plan"`) and get it approved before using `type: "Actions"` or `type: "Sub-Agent"`**{% endif %}
 
 {% if __agentTypePromptParams.includeMessageExpansionDocs != false %}
 ## Message Expansion
@@ -512,12 +531,6 @@ You have a private scratchpad for internal working memory. Use it to organize yo
 **Token efficiency:** Your scratchpad is injected into every turn — keep it lean. Use notes for key reasoning and decisions, not verbose logs. Task notes should be succinct. Everything here costs tokens on every subsequent turn.
 {% endif %}
 
-{% if __agentTypePromptParams.includeDateTimeInPrompt != false %}
-## Current Date/Time
-- **Date**: {{ _CURRENT_DATE }} ({{ _CURRENT_DAY_OF_WEEK }})
-- **Time**: {{ _CURRENT_TIME }}
-{% endif %}
-
 # Agent Definition
 Your name is {{ agentName }}
 
@@ -534,7 +547,7 @@ You have {{subAgentCount}} sub-agents. Delegate appropriately.
 Parent: {{ parentAgentName }}. Your results return to parent, not user.
 {% endif -%}
 
-{%- if subAgentCount > 0 or actionCount > 0 %}
+{%- if subAgentCount > 0 or actionCount > 0 or skillCount > 0 or (planModeActive and not planApproved) %}
 # Capabilities
 {%- if subAgentCount > 0 %}
 ## Sub-Agents ({{subAgentCount}} available)
@@ -547,6 +560,53 @@ Execute one at a time. Their completion ≠ your task completion.
 Actions are **server-side tools** — they run on the server with direct access to databases, APIs, and backend services. Use these for data operations, computations, and integrations. Set `type: "Actions"` to invoke them.
 Execute multiple in parallel if independent. Retry failed actions up to 3x with adjusted parameters.
 {{ actionDetails | safe }}
+{%- endif -%}
+
+{%- if skillCount > 0 %}
+## Skills ({{skillCount}} available)
+Skills are **capability bundles** — activating one appends its full instructions to your context and enables any Actions/sub-agents it bundles, for the rest of this run. Below is the CATALOG: name + description only. You will not see a skill's full instructions until you activate it. Set `type: "Skill"` with `skills: [{ "name": "...", "reason": "..." }]` to activate one or more — include a brief one-sentence `reason` explaining why the task needs the skill; it is recorded in the run's audit trail so humans can review why capabilities were expanded. Activating an already-active skill is a harmless no-op — don't hesitate to re-check the catalog if unsure whether one is active.
+
+{{ skillsCatalog | safe }}
+
+**Example — Activate a skill:**
+```json
+{
+  "taskComplete": false,
+  "reasoning": "This request needs the Report Builder skill's specialized instructions",
+  "nextStep": {
+    "type": "Skill",
+    "skills": [{ "name": "Report Builder", "reason": "User asked for a formatted quarterly report" }]
+  }
+}
+```
+{%- endif -%}
+
+{%- if planModeActive and not planApproved %}
+## Plan Mode — REQUIRED before you may act
+Plan mode is active for this request. **Before using `type: "Actions"` or `type: "Sub-Agent"`, you MUST first present your plan** via `type: "Plan"` with the `plan` field containing your proposed approach. This pauses the run and shows the human a formatted, editable card: they can approve it as-is, edit it, or reject it with feedback.
+
+**Write the plan in rich, well-structured Markdown** — it renders as a formatted document, so make it a pleasure to read:
+- Open with a one-sentence **goal** statement (bold the key outcome).
+- Follow with a numbered list of steps; **bold** the operative verb or target of each step.
+- Use a short `### heading`, a table, or nested bullets when the plan has phases, options, or trade-offs worth structuring — but keep the whole plan concise (it's a summary for a human decision, not documentation).
+- No code blocks and no JSON in the plan — plain prose + Markdown structure only.
+
+- If approved (with or without edits), you will be resumed and may then proceed with Actions/Sub-Agents freely for the rest of this run — you do not need to present another plan.
+- If rejected, you will be resumed with the human's feedback (they have a dedicated feedback field) and should present a revised plan that addresses it.
+- You may still use `type: "Chat"` first if you need a clarifying question answered before you can form a plan.
+{% if skillCount > 0 %}- You may activate skill(s) before or instead of presenting a plan — that's not gated.{% endif %}
+
+**Example — Present a plan:**
+```json
+{
+  "taskComplete": false,
+  "reasoning": "Ready to propose an approach before making any changes",
+  "nextStep": {
+    "type": "Plan",
+    "plan": "**Goal: apply the requested 10% discount to Acme's open invoices, with your sign-off before anything is committed.**\n\n1. **Look up** Acme Corp's open invoices and confirm the count and total value.\n2. **Apply** the 10% discount to each open invoice (draft state — nothing committed yet).\n3. **Send** you a summary of the adjusted amounts for final approval before saving."
+  }
+}
+```
 {%- endif -%}
 
 {% if actionDetails and 'Create Document' in actionDetails %}
@@ -589,25 +649,6 @@ Client tools run **in the user's browser** and interact with the user and their 
 {{ appContext | safe }}
 {% endif %}
 
-{% if __agentTypePromptParams.includePayloadInPrompt != false %}
-## Current State
-**Payload:** Represents your work state. Request changes via `payloadChangeRequest`
-```json
-{{ _CURRENT_PAYLOAD | dump | safe }}
-```
-{% endif %}
-
-{% if __agentTypePromptParams.includeScratchpadDocs != false %}
-## Scratchpad State
-Your private working memory. Manage via `scratchpad` in your response.
-
-### Notes
-{{ _SCRATCHPAD_NOTES | safe }}
-
-### Tasks ({{ _SCRATCHPAD_TASK_SUMMARY }})
-{{ _SCRATCHPAD_TASKS | safe }}
-{% endif %}
-
 {% if __agentTypePromptParams.includeArtifactToolsDocs != false and _ARTIFACT_MANIFEST %}
 ## Artifact Tools
 Explore artifacts attached to this conversation using `artifactToolCalls` in your response.
@@ -625,4 +666,61 @@ your visible history; just read it.
 {{ _ARTIFACT_MANIFEST | safe }}
 
 {{ _ARTIFACT_TOOLS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includeMemoryWritesDocs != false and _MEMORY_WRITES_ENABLED %}
+## Durable Memory
+You can record durable memories — facts and preferences that persist across runs —
+using `memoryWrites` in your response. Record a durable user fact or preference
+**the moment it is stated** (e.g. "I prefer bar charts"), don't wait for the task
+to finish.
+
+**Rules:**
+- Each memory is one atomic, declarative, third-person fact: `"User prefers bar charts over pie charts."`
+- `type` is `'Preference'` (likes/dislikes/choices) or `'Context'` (situational facts worth remembering)
+- Do NOT record transient task state — the scratchpad owns that
+- Do NOT record instructions or rules — only descriptive facts
+- Optional `scopeHint: 'agent'` stores the memory without tying it to the current user
+- Results arrive on your NEXT turn — never tell the user a memory was saved until you see its result message; if a result is skipped/rejected, tell the user what was NOT saved
+
+The framework deduplicates, caps writes per run, and reports each result back to
+you in a conversation message — do not re-submit a memory once acknowledged.
+Writes take effect immediately for future runs and are later reviewed by the
+Memory Manager.
+{% endif %}
+
+{% if __agentTypePromptParams.includePipelineDocs != false and _PIPELINE_TOOLS %}
+{{ _PIPELINE_TOOLS | safe }}
+{% endif %}
+
+{# ── Volatile blocks intentionally placed LAST ──────────────────────────────
+   The date/time, scratchpad, and payload change every turn (time per-minute,
+   payload/scratchpad per-turn). Keeping them at the very end means everything
+   above — instructions, the Actions catalog, and tool docs — stays a byte-stable
+   prefix that providers can prompt-cache across turns. Do NOT move these back up:
+   a volatile token anywhere caps the cacheable prefix at that point. Payload is
+   last (closest to the response = recency). #}
+{% if __agentTypePromptParams.includeDateTimeInPrompt != false %}
+## Current Date/Time
+- **Date**: {{ _CURRENT_DATE }} ({{ _CURRENT_DAY_OF_WEEK }})
+- **Time**: {{ _CURRENT_TIME }}
+{% endif %}
+
+{% if __agentTypePromptParams.includeScratchpadDocs != false %}
+## Scratchpad State
+Your private working memory. Manage via `scratchpad` in your response.
+
+### Notes
+{{ _SCRATCHPAD_NOTES | safe }}
+
+### Tasks ({{ _SCRATCHPAD_TASK_SUMMARY }})
+{{ _SCRATCHPAD_TASKS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includePayloadInPrompt != false %}
+## Current State
+**Payload:** Represents your work state. Request changes via `payloadChangeRequest`
+```json
+{{ _CURRENT_PAYLOAD | dump | safe }}
+```
 {% endif %}

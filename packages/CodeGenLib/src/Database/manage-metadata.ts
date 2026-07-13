@@ -6,12 +6,13 @@ import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatab
 // and the SS code path silently fails.
 import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, dbPlatform, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExternalDataSourceReadRouter, ExternalSchemaObject, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
+import { mapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
 import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
@@ -505,8 +506,25 @@ export class ManageMetadataBase {
    private static _softPKFKConfigCache: any = null;
    private static _softPKFKConfigPath: string = '';
    /**
+    * Drops the cached soft PK/FK config so the next {@link getSoftPKFKConfig} call re-reads the
+    * additionalSchemaInfo file from disk. REQUIRED for the long-lived in-process (RSU) CodeGen path:
+    * the cache is process-static (load-once), which is correct for a one-shot `mj codegen` CLI run but
+    * STALE in a long-running MJAPI where RSU rewrites additionalSchemaInfo on every ApplyAll. Without
+    * invalidation, a connector's FIRST ApplyAll writes its soft PKs to the file but CodeGen returns the
+    * pre-write cached config → "No primary key found" → the entity is never created → no entity map →
+    * 0 rows sync until an MJAPI restart. RunInProcess calls this at the start of every run (which always
+    * follows RSU's WriteAdditionalSchemaInfo step), so each in-process run sees the freshly-written file.
+    * Deterministic + event-driven (no mtime/TOCTOU race). The CLI `Run()` path does not call this, so its
+    * load-once-per-process behavior is unchanged.
+    */
+   public static invalidateSoftPKFKConfigCache(): void {
+      ManageMetadataBase._softPKFKConfigCache = null;
+      ManageMetadataBase._softPKFKConfigPath = '';
+   }
+   /**
     * Loads and caches the soft PK/FK configuration from the additionalSchemaInfo file.
-    * The file is only loaded once per session to avoid repeated I/O.
+    * Cached per process to avoid repeated I/O within a CodeGen run; the in-process (RSU) path calls
+    * {@link invalidateSoftPKFKConfigCache} at the start of each run so a rewritten file is picked up.
     */
    private static getSoftPKFKConfig(): any {
       // Return cached config if path hasn't changed
@@ -973,10 +991,18 @@ export class ManageMetadataBase {
             if (UUIDsEqual(existingParentId, parentId)) {
                logStatus(`    > IS-A: "${childName}" already has ParentID set to "${parentName}", skipping`);
             } else {
-               // Set ParentID on the child entity
-               await this.runQueryWithParams(pool, `UPDATE ${this.qs(schema, 'Entity')} SET ParentID = @ParentID WHERE ID = @ChildID`,
-               { 'ParentID': parentId, 'ChildID': childId }
-               );
+               // Set ParentID on the child entity. Build an inlined (non-parameterized) UPDATE and
+               // run it via LogSQLAndExecute so the assignment is BOTH executed live AND serialized
+               // into the CodeGen_Run migration — mirroring applySoftPKFKConfig(). A parameterized
+               // runQueryWithParams() executes live but is never written to the migration file, so on
+               // any migration-only/clean deploy Entity.ParentID stays NULL, IsChildType is false, and
+               // creating a child record fails on the child→parent FK (the IS-A base view + mirrored
+               // virtual fields are already serialized, but this one flag was not).
+               const updateSQL = `UPDATE ${this.qs(schema, 'Entity')}
+                                  SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
+                                      ${this.qi('ParentID')} = '${parentId}'
+                                  WHERE ${this.qi('ID')} = '${childId}'`;
+               await this.LogSQLAndExecute(pool, updateSQL, `Set IS-A ParentID for "${childName}" → "${parentName}"`);
 
                if (existingParentId) {
                   logStatus(`    > IS-A: Updated "${childName}" ParentID from previous value to "${parentName}"`);
@@ -1171,6 +1197,23 @@ export class ManageMetadataBase {
       }
       const excludeSchemas = configInfo.excludeSchemas ? [...configInfo.excludeSchemas] : [];
 
+      // Ensure the platform's metadata-management support objects exist and
+      // match this CodeGenLib version. These routines/views are CodeGen's own
+      // machinery — when the provider supplies DDL (PostgreSQL), we install it
+      // idempotently here rather than depending on migrations to have shipped
+      // it. Nothing below can work without them, so a failure here is fatal.
+      const supportObjectsSQL = this.dbProvider.getMetadataSupportObjectsSQL(mj_core_schema());
+      if (supportObjectsSQL) {
+         try {
+            await pool.query(supportObjectsSQL);
+            logStatus('   Ensured metadata-management support objects (views/routines) are current');
+         }
+         catch (e) {
+            logError(`   Error ensuring metadata-management support objects: ${e instanceof Error ? e.message : e}`);
+            return false;
+         }
+      }
+
       let bSuccess = true;
       let start = new Date();
       
@@ -1268,6 +1311,24 @@ export class ManageMetadataBase {
          bSuccess = false;
       }
 
+      // External-data-source entities: introspect the REMOTE schema and sync their EntityField rows
+      // (the remote analogue of reading the local view's columns for a virtual entity).
+      const eeResult = await this.manageExternalEntities(pool, currentUser)
+      if (! eeResult.success) {
+         logError('   Error managing external data source entities');
+         bSuccess = false;
+      }
+      // External entities are processed AFTER the main manageEntityRelationships pass above, so any
+      // foreign keys they introspected (now set as soft FKs) need a second relationship pass to be
+      // materialized into EntityRelationship records in this same run.
+      if (eeResult.relationshipsUpdated) {
+         logStatus('   Managing external-entity relationships...');
+         if (! await this.manageEntityRelationships(pool, excludeSchemas, md)) {
+            logError('   Error managing external entity relationships');
+            bSuccess = false;
+         }
+      }
+
       // LLM-assisted virtual entity field decoration — identify PKs, FKs, and descriptions
       await this.decorateVirtualEntitiesWithLLM(pool, currentUser);
 
@@ -1300,7 +1361,71 @@ export class ManageMetadataBase {
       }
       logStatus(`    > Synced schema info in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
 
+      // INTEGRITY CHECK: flag any entity whose base columns are sequenced AFTER its virtual fields
+      // (a metadata inconsistency that forces the data-provider save-capture to re-order defensively).
+      await this.checkEntityFieldSequenceIntegrity(pool, excludeSchemas);
+
       return bSuccess;
+   }
+
+   /**
+    * INTEGRITY CHECK — in a well-formed entity every base (non-virtual) field sequences BEFORE the
+    * virtual/related fields, so the EntityField order matches the base view's `SELECT [base].*, <joins>`
+    * column output. The positional save-capture in the data providers (e.g. SQLServerDataProvider's
+    * @ResultTable) relies on that alignment. CodeGen assigns newly-discovered columns a temporary
+    * `maxSequence + 100000` offset that updateExistingEntityFieldsFromSchema is supposed to renumber; if
+    * a base column is left sequenced AFTER a virtual field, the save-capture would mis-route values by
+    * position. The providers now compensate (saves stay correct), but the metadata is still wrong — so we
+    * scan for it after every metadata pass and log a prominent warning to drive the root cause out over time.
+    */
+   protected async checkEntityFieldSequenceIntegrity(pool: CodeGenConnection, excludeSchemas: string[]): Promise<void> {
+      try {
+         const excl = excludeSchemas.length > 0
+            ? `WHERE ${this.qi('EntityID')} NOT IN (SELECT ${this.qi('ID')} FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE ${this.qi('SchemaName')} IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))`
+            : '';
+         const sSQL = `SELECT ${this.qi('EntityID')}, ${this.qi('Entity')}, ${this.qi('Name')}, ${this.qi('Sequence')}, ${this.qi('IsVirtual')}
+                       FROM ${this.qs(mj_core_schema(), 'vwEntityFields')}
+                       ${excl}
+                       ORDER BY ${this.qi('EntityID')}, ${this.qi('Sequence')}`;
+         const result = await this.runQuery(pool, sSQL);
+         const rows: Array<{ EntityID: string; Entity: string; Name: string; Sequence: number; IsVirtual: unknown }> = result.recordset;
+         const isV = (v: unknown): boolean => v === true || v === 1 || v === '1';
+
+         const grouped = new Map<string, Array<{ Entity: string; Name: string; Sequence: number; IsVirtual: unknown }>>();
+         for (const r of rows) {
+            const k = String(r.EntityID);
+            let arr = grouped.get(k);
+            if (!arr) { arr = []; grouped.set(k, arr); }
+            arr.push(r);
+         }
+
+         const offenders: Array<{ entity: string; fields: string[] }> = [];
+         for (const fields of grouped.values()) {
+            const virtualSeqs = fields.filter(f => isV(f.IsVirtual)).map(f => f.Sequence);
+            if (virtualSeqs.length === 0) continue; // no virtual fields → cannot be out of order
+            const minVirtualSeq = Math.min(...virtualSeqs);
+            const mis = fields.filter(f => !isV(f.IsVirtual) && f.Sequence > minVirtualSeq).map(f => f.Name);
+            if (mis.length > 0) offenders.push({ entity: fields[0].Entity, fields: mis });
+         }
+
+         if (offenders.length === 0) return; // healthy
+
+         const bar = '='.repeat(110);
+         let msg = `\n${bar}\n` +
+                   `⚠️  CODEGEN INTEGRITY WARNING — ${offenders.length} entit${offenders.length === 1 ? 'y has' : 'ies have'} base column(s) sequenced AFTER virtual fields\n` +
+                   `${bar}\n` +
+                   `   Healthy entities sequence ALL base (non-virtual) fields before virtual/related fields, so EntityField\n` +
+                   `   order matches the base view ([base].* then joins) that the data-provider save-capture relies on. When a\n` +
+                   `   base column sequences after a virtual field, the capture re-orders defensively (saves stay correct), but\n` +
+                   `   the metadata is wrong. Usual cause: a newly-added column's temporary maxSequence+100000 offset was not\n` +
+                   `   renumbered. Fix the field's Sequence at the source so it sorts with the base columns.\n` +
+                   `   Affected (entity: base fields out of order):\n`;
+         for (const o of offenders) msg += `      • ${o.entity}: ${o.fields.join(', ')}\n`;
+         msg += bar;
+         logError(msg);
+      } catch (e) {
+         logError(`   checkEntityFieldSequenceIntegrity failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
    }
 
    protected async manageVirtualEntities(pool: CodeGenConnection): Promise<{success: boolean, anyUpdates: boolean}> {
@@ -1324,6 +1449,292 @@ export class ManageMetadataBase {
          }
       }
       return {success: bSuccess, anyUpdates: anyUpdates};
+   }
+
+   /**
+    * External-data-source analogue of {@link manageVirtualEntities}. For each entity backed by an
+    * external data source, introspect the REMOTE schema (via the EDS router resolved through the
+    * ClassFactory) and sync its `EntityField` rows to match — the remote equivalent of reading the
+    * local INFORMATION_SCHEMA for a virtual/view entity. No-op when there are no external entities.
+    */
+   /**
+    * Whether the current database's `Entity` table has the `ExternalDataSourceID` column. External
+    * Data Sources ship as a SQL Server migration only, so on any database/schema that predates it
+    * (PostgreSQL today) the column is absent — and ANY raw SQL referencing it throws
+    * "column does not exist" and aborts the entire CodeGen run, even for a pure MJ-DB schema with no
+    * external entities. Callers gate EDS-specific queries on this so CodeGen stays green everywhere
+    * and auto-activates once the column lands on other platforms (mirrors the PG stored-proc guard in
+    * metadataSupportObjects.ts). Cross-platform via INFORMATION_SCHEMA; cached for the run (the schema
+    * cannot change mid-run).
+    */
+   private _entityHasExternalDataSourceColumn: boolean | null = null;
+   protected async entityHasExternalDataSourceColumn(pool: CodeGenConnection): Promise<boolean> {
+      if (this._entityHasExternalDataSourceColumn === null) {
+         // Check the VIEW the gated queries actually read (vwEntities), not the base Entity table — a
+         // schema where the table has the column but the view wasn't refreshed to expose it would still
+         // throw. (Matches the PG guard in metadataSupportObjects.ts, which also checks the view.)
+         const sql = `SELECT COUNT(*) AS ColExists FROM INFORMATION_SCHEMA.COLUMNS ` +
+                     `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = 'vwEntities' AND COLUMN_NAME = 'ExternalDataSourceID'`;
+         const result = await this.runQuery(pool, sql);
+         const row = (result.recordset?.[0] ?? {}) as Record<string, unknown>;
+         const cnt = row.ColExists ?? row.colexists ?? 0;
+         this._entityHasExternalDataSourceColumn = Number(cnt) > 0;
+      }
+      return this._entityHasExternalDataSourceColumn;
+   }
+
+   protected async manageExternalEntities(pool: CodeGenConnection, currentUser: UserInfo): Promise<{success: boolean, anyUpdates: boolean, relationshipsUpdated: boolean}> {
+      let bSuccess = true;
+      let anyUpdates = false;
+      let relationshipsUpdated = false;
+      // EDS is provisioned only where its (SQL Server) migration ran. On a database whose Entity table
+      // lacks ExternalDataSourceID (e.g. PostgreSQL), there can be no external entities — and the query
+      // below would throw and abort the whole CodeGen run — so skip cleanly.
+      if (!(await this.entityHasExternalDataSourceColumn(pool))) {
+         return {success: true, anyUpdates: false, relationshipsUpdated: false};
+      }
+      const sql = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE ExternalDataSourceID IS NOT NULL`;
+      const result = await this.runQuery(pool, sql);
+      const externalEntities = result.recordset;
+      if (!externalEntities || externalEntities.length === 0) {
+         return {success: true, anyUpdates: false, relationshipsUpdated: false};
+      }
+      // Lazily load the External Data Sources engine + drivers — ONLY now that we know external
+      // entities exist. The dynamic import is deliberate (CLAUDE.md rule #8, category 3: build-tool
+      // startup deferral): the common codegen run has no external entities and must not pay the cost
+      // of loading pg/mongodb/the engine. The packages are declared deps; importing each triggers its
+      // @RegisterClass side effects so the ClassFactory can resolve the router + drivers below.
+      // snowflake-sdk is an optional peer the Snowflake driver loads only on connect.
+      await import('@memberjunction/external-data-sources');
+      await import('@memberjunction/external-data-source-postgres');
+      await import('@memberjunction/external-data-source-snowflake');
+      await import('@memberjunction/external-data-source-mongodb');
+      await import('@memberjunction/external-data-source-sqlserver');
+      await import('@memberjunction/external-data-source-mysql');
+      await import('@memberjunction/external-data-source-oracle');
+      const router = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
+      if (!router) {
+         logError('   Cannot sync external entity fields: no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources (and the relevant driver) are loaded in the CodeGen process.');
+         return {success: false, anyUpdates: false, relationshipsUpdated: false};
+      }
+      // Refresh the in-memory metadata cache so the external entities are present for EntityByName()
+      // inside manageSingleExternalEntity / manageSingleVirtualEntityField. External entities are
+      // often created/seeded after the CodeGen process loaded metadata at startup; without this
+      // refresh, EntityByName() returns null and field sync is SILENTLY skipped — the same gotcha
+      // already handled for config-created virtual entities above.
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+      await md.Refresh();
+      for (const ee of externalEntities) {
+         const {success, updatedEntity, relationshipsUpdated: relUpdated} = await this.manageSingleExternalEntity(pool, ee, router, currentUser);
+         anyUpdates = anyUpdates || updatedEntity;
+         relationshipsUpdated = relationshipsUpdated || relUpdated;
+         if (!success) {
+            logError(`   Error managing external entity ${ee.Name}`);
+            bSuccess = false;
+         }
+      }
+      return {success: bSuccess, anyUpdates, relationshipsUpdated};
+   }
+
+   /**
+    * Whether an introspected remote object has columns we can safely sync. When false (object
+    * missing or zero columns), {@link manageSingleExternalEntity} skips the field sync rather than
+    * treating it as "the entity now has no fields" (which would DELETE every EntityField). Pure/testable.
+    */
+   protected externalObjectIsSyncable(obj: { Columns?: unknown[] } | null | undefined): boolean {
+      return !!(obj && Array.isArray(obj.Columns) && obj.Columns.length > 0);
+   }
+
+   /**
+    * Builds the DELETE for EntityFields no longer present in the freshly-introspected remote object,
+    * or '' when nothing should be removed. Field-name matching is case-insensitive. Pure/testable
+    * (no DB access) — the data-loss-sensitive computation guarded by {@link externalObjectIsSyncable}.
+    */
+   protected buildExternalFieldRemoveSQL(schema: string, existingFields: Array<{ ID: string; Name: string }>, introspectedFieldNames: string[]): string {
+      const present = new Set(introspectedFieldNames.map(n => n.trim().toLowerCase()));
+      const removeIds = existingFields.filter(f => !present.has(f.Name.trim().toLowerCase())).map(f => f.ID);
+      if (removeIds.length === 0) {
+         return '';
+      }
+      const idList = removeIds.map(id => `'${id}'`).join(',');
+      // Clear FK dependents (value-list entries) before the EntityField delete to avoid an FK violation,
+      // mirroring spDeleteUnneededEntityFields. Emitted as two statements separated by the platform terminator.
+      return `DELETE FROM ${this.qs(schema, 'EntityFieldValue')} WHERE EntityFieldID IN (${idList});\n` +
+             `DELETE FROM ${this.qs(schema, 'EntityField')} WHERE ID IN (${idList})`;
+   }
+
+   /**
+    * Introspects the remote schema for a single external entity and syncs its `EntityField` rows.
+    * Mirrors {@link manageSingleVirtualEntity} but sources the field list from the driver's
+    * `IntrospectSchema` (mapped to MJ types via {@link mapExternalNativeTypeToMJ}) instead of the
+    * local view's columns, and reuses {@link manageSingleVirtualEntityField} for create/update.
+    */
+   protected async manageSingleExternalEntity(pool: CodeGenConnection, externalEntity: EntityInfo, router: ExternalDataSourceReadRouter, currentUser: UserInfo): Promise<{success: boolean, updatedEntity: boolean, relationshipsUpdated: boolean}> {
+      let bSuccess = true;
+      let bUpdated = false;
+      let bRelationshipsUpdated = false;
+      // Introspection reaches a live remote system. A connection/auth/network failure there must NOT
+      // fail the whole CodeGen run (which also regenerates every MJ-DB entity) — treat it as a
+      // recoverable warning-skip, leaving this entity's existing fields untouched. Genuine errors in
+      // the field-sync logic below still fail (caught by the outer try/catch as success:false).
+      let descriptor: Awaited<ReturnType<typeof router.IntrospectExternalSchema>>;
+      try {
+         descriptor = await router.IntrospectExternalSchema(externalEntity.ExternalDataSourceID, externalEntity.SchemaName || undefined, currentUser);
+      } catch (e: unknown) {
+         // Surface via logError (not logStatus) so a genuine driver bug isn't invisible in a green run —
+         // but still recover (success:true) so one unreachable remote source can't fail the whole run.
+         logError(`   ⚠️  External entity ${externalEntity.Name}: remote schema introspection failed (${e instanceof Error ? e.message : String(e)}) — skipping this entity (left untouched); CodeGen run continues.`);
+         return {success: true, updatedEntity: false, relationshipsUpdated: false};
+      }
+      try {
+         // Find the remote object backing this entity (prefer ExternalObjectName; fall back to
+         // BaseTable/Name). Match on bare or schema-qualified name, case-insensitively.
+         const target = (externalEntity.ExternalObjectName || externalEntity.BaseTable || externalEntity.Name || '').trim().toLowerCase();
+         const obj = descriptor.Objects.find(o =>
+            o.Name.trim().toLowerCase() === target ||
+            `${o.Schema ?? ''}.${o.Name}`.trim().toLowerCase() === target);
+         if (!obj) {
+            logStatus(`   ⚠️  External entity ${externalEntity.Name}: remote object '${externalEntity.ExternalObjectName ?? externalEntity.Name}' not found in introspected schema — skipping this entity (left untouched); CodeGen run continues.`);
+            // Recoverable skip (misconfigured/unreachable object): leave the entity untouched and
+            // continue the run rather than failing the whole metadata pass for one external entity.
+            return {success: true, updatedEntity: false, relationshipsUpdated: false};
+         }
+         // Guard the degenerate "found but zero columns" case the same way as "not found": a
+         // permission-limited / transient / partial introspection that returns an object shell with
+         // no columns must NOT be treated as "the entity now has no fields" — that would make the
+         // remove-list below every existing EntityField and DELETE them all (silent metadata loss).
+         // Bail with a warning instead and leave the existing fields untouched.
+         if (!this.externalObjectIsSyncable(obj)) {
+            logStatus(`   ⚠️  External entity ${externalEntity.Name}: remote object '${obj.Name}' introspected with zero columns — skipping field sync to avoid destroying existing field metadata; CodeGen run continues.`);
+            // Recoverable skip (permission-limited / transient / partial introspection): leave the
+            // existing fields untouched and continue, rather than failing the whole metadata pass.
+            return {success: true, updatedEntity: false, relationshipsUpdated: false};
+         }
+
+         // Map each introspected column into the veField shape that manageSingleVirtualEntityField consumes.
+         const eeFields = obj.Columns.map(c => {
+            const t = mapExternalNativeTypeToMJ(c.NativeType);
+            return { FieldName: c.Name, Type: t.Type, Length: t.Length, Precision: t.Precision, Scale: t.Scale, AllowsNull: c.Nullable, IsPrimaryKey: c.IsPrimaryKey };
+         });
+
+         const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+         const entity = md.EntityByName(externalEntity.Name);
+         if (entity) {
+            // remove EntityFields no longer present in the remote object
+            const sqlRemove = this.buildExternalFieldRemoveSQL(mj_core_schema(), entity.Fields, eeFields.map(ef => ef.FieldName));
+            if (sqlRemove) {
+               await this.LogSQLAndExecute(pool, sqlRemove, `SQL text to remove fields from external entity ${externalEntity.Name}`);
+               bUpdated = true;
+            }
+
+            // create/update each remote column. Use the real PK info from introspection; fall back
+            // to "first column is the PK" when the remote reported none (e.g. a view).
+            const anyPk = eeFields.some(f => f.IsPrimaryKey);
+            // How many columns make up the PK? Introspected PK count when present, else 1 (first-column
+            // fallback). A composite PK (>1) means no single column is unique on its own (M4).
+            const primaryKeyColumnCount = anyPk ? eeFields.filter(f => f.IsPrimaryKey).length : 1;
+            const singleColumnPrimaryKey = primaryKeyColumnCount === 1;
+            for (let i = 0; i < eeFields.length; i++) {
+               const ef = eeFields[i];
+               const makePrimaryKey = ef.IsPrimaryKey || (!anyPk && i === 0);
+               // reconcilePrimaryKey=true: introspection is authoritative, so sync PK/Unique flags in BOTH
+               // directions (set AND clear) — this clears a stale PK column when the remote PK moves (H5).
+               const {success, updatedField} = await this.manageSingleVirtualEntityField(pool, externalEntity, ef, i + 1, makePrimaryKey, singleColumnPrimaryKey, true);
+               bUpdated = bUpdated || updatedField;
+               if (!success) {
+                  logError(`Error managing external entity field ${ef.FieldName} for external entity ${externalEntity.Name}`);
+                  bSuccess = false;
+               }
+            }
+
+            // Baseline FK consumption: turn introspected single-column foreign keys into soft FKs
+            // (RelatedEntityID + IsSoftForeignKey) so the standard manageEntityRelationships pass
+            // materializes them into EntityRelationship records.
+            if (await this.manageExternalEntityRelationships(pool, externalEntity, obj, md)) {
+               bUpdated = true;
+               bRelationshipsUpdated = true;
+            }
+         }
+
+         if (bUpdated) {
+            const sqlUpdate = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${externalEntity.ID}'`;
+            await this.LogSQLAndExecute(pool, sqlUpdate, `SQL text to update external entity updated date for ${externalEntity.Name}`);
+         }
+         return {success: bSuccess, updatedEntity: bUpdated, relationshipsUpdated: bRelationshipsUpdated};
+      }
+      catch (e: unknown) {
+         logError(e instanceof Error ? e.message : String(e));
+         return {success: false, updatedEntity: bUpdated, relationshipsUpdated: bRelationshipsUpdated};
+      }
+   }
+
+   /**
+    * Baseline foreign-key consumption for an external entity: for each introspected single-column
+    * relationship whose referenced remote object is ALSO an imported external entity in the same
+    * data source, set the FK field's RelatedEntityID + RelatedEntityFieldName + IsSoftForeignKey=1.
+    * The standard `manageEntityRelationships` pass then materializes these into EntityRelationship
+    * records. Composite FKs and references to objects that aren't imported are skipped (logged) —
+    * those are the follow-up hardening. Returns true if any FK field was updated.
+    */
+   protected async manageExternalEntityRelationships(
+      pool: CodeGenConnection,
+      externalEntity: EntityInfo,
+      obj: ExternalSchemaObject,
+      md: Metadata,
+   ): Promise<boolean> {
+      const relationships = obj.Relationships ?? [];
+      // No introspected relationships → nothing to set. We deliberately do NOT try to "clear dropped FKs"
+      // here: introspection returning zero relationships is AMBIGUOUS — it happens for drivers that don't
+      // report FK metadata at all (MongoDB), and for low-privilege logins where the catalog FK views are
+      // permission-filtered to zero rows (SQL Server sys.foreign_keys). Clearing on that signal would wipe
+      // user-authored soft-FKs (which are indistinguishable from CodeGen-set ones — there is no marker),
+      // so we leave existing FK metadata untouched. (See the change-detection below for the no-churn set path.)
+      if (relationships.length === 0) {
+         return false;
+      }
+      const dsID = externalEntity.ExternalDataSourceID;
+      const entity = md.EntityByName(externalEntity.Name); // read current field FK metadata (prior-run state)
+      const sqlStatements: string[] = [];
+      for (const rel of relationships) {
+         if (rel.Columns.length !== 1) {
+            logStatus(`      ⚠ external FK ${externalEntity.Name}.${rel.Name ?? '(unnamed)'}: composite key (${rel.Columns.length} columns) — skipped (baseline supports single-column FKs)`);
+            continue;
+         }
+         const { Column: fkColumn, ReferencedColumn: refColumn } = rel.Columns[0];
+         // Resolve the referenced object to an imported external entity in the SAME data source
+         // (match ExternalObjectName, falling back to BaseTable/Name — mirrors how this entity's
+         // own object is resolved above).
+         const target = rel.ReferencedObject.trim().toLowerCase();
+         const relatedEntity = md.Entities.find(e =>
+            e.ExternalDataSourceID && dsID && UUIDsEqual(e.ExternalDataSourceID, dsID) &&
+            ((e.ExternalObjectName || e.BaseTable || e.Name) || '').trim().toLowerCase() === target);
+         if (!relatedEntity) {
+            logStatus(`      ⚠ external FK ${externalEntity.Name}.${fkColumn} → '${rel.ReferencedObject}': referenced entity not imported — skipped`);
+            continue;
+         }
+         // Change detection (M5): skip the UPDATE when the field already carries the exact desired FK
+         // metadata — otherwise every CodeGen run re-UPDATEs the row, bumping __mj_UpdatedAt and logging
+         // a spurious change even though nothing changed.
+         const field = entity?.Fields.find(f => f.Name.trim().toLowerCase() === fkColumn.trim().toLowerCase());
+         const alreadySet = !!field && field.IsSoftForeignKey === true &&
+            !!field.RelatedEntityID && UUIDsEqual(field.RelatedEntityID, relatedEntity.ID) &&
+            (field.RelatedEntityFieldName ?? '').trim() === refColumn.trim();
+         if (alreadySet) {
+            continue;
+         }
+         sqlStatements.push(`UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+                         SET RelatedEntityID='${relatedEntity.ID}',
+                             RelatedEntityFieldName='${refColumn.replace(/'/g, "''")}',
+                             IsSoftForeignKey=1
+                         WHERE EntityID='${externalEntity.ID}' AND Name='${fkColumn.replace(/'/g, "''")}'`);
+         logStatus(`      ✓ external FK ${externalEntity.Name}.${fkColumn} → ${relatedEntity.Name}.${refColumn}`);
+      }
+
+      if (sqlStatements.length === 0) {
+         return false;
+      }
+      await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set external foreign keys for ${externalEntity.Name}`);
+      return true;
    }
 
    protected async manageSingleVirtualEntity(pool: CodeGenConnection, virtualEntity: EntityInfo): Promise<{success: boolean, updatedEntity: boolean}> {
@@ -1385,9 +1796,48 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async manageSingleVirtualEntityField(pool: CodeGenConnection, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean): Promise<{success: boolean, updatedField: boolean, newFieldID: string | null}> {
+   /**
+    * Desired PK/Unique flags for a virtual/external entity field. IsPrimaryKey mirrors makePrimaryKey;
+    * IsUnique is true ONLY for a SINGLE-column PK — a column of a COMPOSITE key is not unique on its own,
+    * so composite-key columns get IsUnique=false (M4). Pure function so the rule is unit-tested.
+    */
+   protected resolvePrimaryKeyFlags(makePrimaryKey: boolean, singleColumnPrimaryKey: boolean): { wantPrimaryKey: boolean; wantUnique: boolean } {
+      return { wantPrimaryKey: makePrimaryKey, wantUnique: makePrimaryKey && singleColumnPrimaryKey };
+   }
+
+   /**
+    * Whether a field's PK/Unique flags need to change. In RECONCILE mode (external entities, whose
+    * introspected PK set is authoritative across ALL fields) we sync in BOTH directions — setting the
+    * flags when a column becomes a PK AND clearing them when it stops being one (H5: otherwise a stale PK
+    * column keeps IsPrimaryKey=1 when the remote PK moves, yielding duplicate PKs). In NON-reconcile mode
+    * (virtual entities, where makePrimaryKey is a one-time first-column bootstrap, not authoritative) we
+    * only SET on acquisition and never clear — avoiding wiping a legitimately-configured PK, and avoiding
+    * a spurious UPDATE (+ __mj_UpdatedAt bump) every run when nothing changed. Pure function; unit-tested.
+    */
+   protected primaryKeyFlagsChanged(
+      current: { isPrimaryKey: boolean; isUnique: boolean },
+      want: { wantPrimaryKey: boolean; wantUnique: boolean },
+      makePrimaryKey: boolean,
+      reconcile: boolean,
+   ): boolean {
+      if (!reconcile) {
+         return makePrimaryKey && !current.isPrimaryKey;
+      }
+      // Reconcile mode: sync PK status in both directions. IsUnique is managed ONLY in tandem with the
+      // primary key (when the field is, or is becoming, a PK) — we must NOT force IsUnique=0 on an
+      // ordinary non-PK column, which would silently wipe a legitimately-unique field (e.g. a user- or
+      // introspection-marked unique `email`) that has nothing to do with the primary key.
+      const pkStatusChanged = current.isPrimaryKey !== want.wantPrimaryKey;
+      const uniqueIsPkRelated = want.wantPrimaryKey || current.isPrimaryKey;
+      const uniqueChanged = uniqueIsPkRelated && current.isUnique !== want.wantUnique;
+      return pkStatusChanged || uniqueChanged;
+   }
+
+   protected async manageSingleVirtualEntityField(pool: CodeGenConnection, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean, singleColumnPrimaryKey: boolean = true, reconcilePrimaryKey: boolean = false): Promise<{success: boolean, updatedField: boolean, newFieldID: string | null}> {
       // this protected checks to see if the field exists in the entity definition, and if not, adds it
       // if it exist it updates the entity field to match the view's data type and nullability attributes
+
+      const { wantPrimaryKey, wantUnique } = this.resolvePrimaryKeyFlags(makePrimaryKey, singleColumnPrimaryKey);
 
       // first, get the entity definition
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
@@ -1397,8 +1847,17 @@ export class ManageMetadataBase {
       if (entity) {
          const field = entity.Fields.find(f => f.Name.trim().toLowerCase() === veField.FieldName.trim().toLowerCase());
          if (field) {
-            // have a match, so the field exists in the entity definition, now check to see if it needs to be updated
-            if (makePrimaryKey ||
+            // Decide whether the PK/Unique flags need to change. In RECONCILE mode (external entities,
+            // whose introspected PK set is authoritative across ALL fields) we sync in BOTH directions —
+            // setting the flags when a column becomes a PK AND clearing them when it stops being one (H5:
+            // otherwise a stale PK column keeps IsPrimaryKey=1 when the remote PK moves, yielding duplicate
+            // PKs). In NON-reconcile mode (virtual entities, where makePrimaryKey is a one-time first-column
+            // bootstrap, not authoritative) we only SET on acquisition and never clear, to avoid wiping a
+            // legitimately-configured PK — and we avoid re-UPDATING an unchanged row every run.
+            const pkFlagsChanged = this.primaryKeyFlagsChanged(
+               { isPrimaryKey: field.IsPrimaryKey, isUnique: field.IsUnique },
+               { wantPrimaryKey, wantUnique }, makePrimaryKey, reconcilePrimaryKey);
+            if (pkFlagsChanged ||
                 field.Type.trim().toLowerCase() !== veField.Type.trim().toLowerCase() ||
                 field.Length !== veField.Length ||
                 field.AllowsNull !== veField.AllowsNull ||
@@ -1412,7 +1871,7 @@ export class ManageMetadataBase {
                                     Sequence=${fieldSequence},
                                     Type='${veField.Type}',
                                     AllowsNull=${this.boolLit(veField.AllowsNull)},
-                                    ${makePrimaryKey ? `IsPrimaryKey=${this.boolLit(true)},IsUnique=${this.boolLit(true)},` : ''}
+                                    ${pkFlagsChanged ? `IsPrimaryKey=${this.boolLit(wantPrimaryKey)},IsUnique=${this.boolLit(wantUnique)},` : ''}
                                     Length=${veField.Length},
                                     Precision=${veField.Precision},
                                     Scale=${veField.Scale}
@@ -1437,9 +1896,9 @@ export class ManageMetadataBase {
                                       ${q('Length')}, ${q('Precision')}, ${q('Scale')},
                                       ${q('Sequence')}, ${q('IsPrimaryKey')}, ${q('IsUnique')},
                                       ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')} )
-                            VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${veField.FieldName}', '${veField.Type}', ${this.boolLit(veField.AllowsNull)},
+                            VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${String(veField.FieldName).replace(/'/g, "''")}', '${veField.Type}', ${this.boolLit(veField.AllowsNull)},
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
-                                       ${safeSequence}, ${this.boolLit(makePrimaryKey)}, ${this.boolLit(makePrimaryKey)},
+                                       ${safeSequence}, ${this.boolLit(wantPrimaryKey)}, ${this.boolLit(wantUnique)},
                                        ${this.utcNow()}, ${this.utcNow()}
                                     )`;
             await this.LogSQLAndExecute(pool, sqlAdd, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
@@ -2406,6 +2865,17 @@ export class ManageMetadataBase {
          const entities = <EntityInfo[]>entitiesResult.recordset;
          if (entities && entities.length > 0) {
             for (const e of entities) {
+               // External-data-source entities have no physical MJ table by design, so they always
+               // surface in vwEntitiesWithMissingBaseTables — but they must NOT be pruned (their data
+               // lives on a remote system). Skip them here. This is the analogue of the VirtualEntity
+               // exclusion, but kept as a single dialect-agnostic code guard rather than baked into the
+               // per-dialect filter (getEntitiesWithMissingBaseTablesFilter) or the view, so it applies
+               // uniformly across SQL Server and PostgreSQL. (The External Data Sources migration only
+               // recreates the view to re-expose the ExternalDataSourceID column to this guard; it does
+               // not exclude external entities at the SQL level.)
+               if (e.ExternalDataSourceID) {
+                  continue;
+               }
                // for the given entity, wipe out the entity metadata and its core deps.
                // the below could fail if there are non-core dependencies on the entity, but that's ok, we will flag that in the console
                // for the admin to handle manually
@@ -2782,9 +3252,9 @@ export class ManageMetadataBase {
             if (primaryKeys.length > 0) {
                for (const pk of primaryKeys) {
                   const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
-                                SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()},
-                                    ${this.qi('IsPrimaryKey')} = 1,
-                                    ${this.qi('IsSoftPrimaryKey')} = 1
+                                SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
+                                    ${this.qi('IsPrimaryKey')} = ${this.boolLit(true)},
+                                    ${this.qi('IsSoftPrimaryKey')} = ${this.boolLit(true)}
                                 WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${pk.FieldName}'`;
                   const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft PK for ${tableSchema}.${tableName}.${pk.FieldName}`);
 
@@ -2812,10 +3282,10 @@ export class ManageMetadataBase {
                   const relatedEntityId = relatedEntityResult.recordset[0].ID;
 
                   const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
-                                SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()},
+                                SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
                                     ${this.qi('RelatedEntityID')} = '${relatedEntityId}',
                                     ${this.qi('RelatedEntityFieldName')} = '${fk.RelatedField}',
-                                    ${this.qi('IsSoftForeignKey')} = 1
+                                    ${this.qi('IsSoftForeignKey')} = ${this.boolLit(true)}
                                 WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fk.FieldName}'`;
                   const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft FK for ${tableSchema}.${tableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
 
@@ -2966,12 +3436,19 @@ export class ManageMetadataBase {
     */
    protected async ensureCreatedAtUpdatedAtFieldsExist(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
+         // Only exclude external entities where the ExternalDataSourceID column exists (SQL Server today).
+         // On PostgreSQL the column is absent, so referencing it here would throw and fail CodeGen; external
+         // entities cannot exist there anyway, so the predicate is simply omitted.
+         const externalEntityClause = (await this.entityHasExternalDataSourceColumn(pool))
+            ? 'ExternalDataSourceID IS NULL AND -- external entities have no physical base table to add __mj_ system columns to (data is remote)'
+            : '';
          const sqlEntities = `SELECT
                                  *
                               FROM
                                  ${this.qs(mj_core_schema(), 'vwEntities')}
                               WHERE
                                  VirtualEntity = ${this.boolLit(false)} AND
+                                 ${externalEntityClause}
                                  TrackRecordChanges = ${this.boolLit(true)} AND
                                  SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
          const entitiesResult = await this.runQuery(pool, sqlEntities);
@@ -3184,7 +3661,7 @@ export class ManageMetadataBase {
                const namingOptions = configInfo.entityNaming?.normalizeFieldNames !== false ? this.getEntityNamingOptions() : undefined;
                const sDisplayName = stripTrailingChars(createDisplayName(field.Name, namingOptions), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
-                  const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()}, DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
+                  const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()}, DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
                   await this.LogSQLAndExecute(pool, sSQL, `SQL text to update display name for field ${field.Name}`);
                }
             }
@@ -4016,7 +4493,7 @@ export class ManageMetadataBase {
 
             if (ManageMetadataBase.newEntityList.length > 0) {
                // only do this if we actually created new entities
-               LogStatus(`   Done creating entities, refreshing metadata to reflect new entities...`)
+               logStatus(`   Done creating entities, refreshing metadata to reflect new entities...`)
                await md.Refresh();// refresh now since we've added some new entities
             }
          }
@@ -4349,10 +4826,10 @@ export class ManageMetadataBase {
                }
             }
 
-            LogStatus(`   Created new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`)
+            logStatus(`   Created new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`)
          }
          else {
-            LogStatus(`   Skipping new entity ${newEntity.TableName} because it doesn't qualify to be created. Reason: ${validationMessage}`)
+            logStatus(`   Skipping new entity ${newEntity.TableName} because it doesn't qualify to be created. Reason: ${validationMessage}`)
             return;
          }
       }
@@ -4401,7 +4878,7 @@ export class ManageMetadataBase {
             .replace(/^-|-$/g, '');         // trim hyphens from start/end
 
          const sSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath)
-                       VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', 1)`;
+                       VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)})`;
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
          LogStatus(`Created new application ${appName} with Path: ${path}`);
 
@@ -5008,7 +5485,33 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Generate SQL UPDATEs for IsNameField on the identified name fields
+    * Generate SQL UPDATEs for IsNameField — SINGLE-WINNER semantics.
+    *
+    * The LLM's `result.nameFields` is a RANKED candidate list (it may propose several
+    * fields that "together" name the record, e.g. FirstName + LastName), but every
+    * downstream consumer — `EntityInfo.NameField`, the base-view generator's FK-name
+    * virtual columns, `RelatedEntityNameFieldMap` resolution — assumes exactly ONE name
+    * field per entity. Historically this method flagged EVERY candidate and never
+    * cleared anything, so flags accumulated across runs (57 core entities ended up with
+    * 2–4 `IsNameField=1` rows) and the FK-name pick silently DRIFTED between CodeGen
+    * runs as the first-by-sequence winner changed (observed: Conversation Details
+    * flipping `Message` → `Role`, reshaping every view that joins to it).
+    *
+    * Winner selection (deterministic, mirrors `EntityInfo.NameField`'s runtime
+    * preference and the v5.41 metadata backfill):
+    *  1. **Stability** — if exactly one currently-flagged field is still eligible, it
+    *     stays the winner regardless of what the LLM proposes. An already-valid single
+    *     name field never drifts.
+    *  2. **Repair** — if several flagged fields are eligible, prefer the one literally
+    *     named `Name`, else the first in field order (fields arrive ordered by
+    *     `Sequence` from the metadata query).
+    *  3. **Fresh pick** — if no flagged field is eligible, take the first eligible LLM
+    *     candidate in ranked order.
+    *
+    * Every NON-winner with `IsNameField=1` and `AutoUpdateIsNameField=1` is CLEARED, so
+    * historical accumulation self-heals on the next analysis pass. Fields pinned with
+    * `AutoUpdateIsNameField=0` are never touched in either direction — the user owns
+    * them, and `EntityInfo.NameField`'s literal-`Name` preference arbitrates at runtime.
     */
    protected applyNameFieldUpdates(
       sqlStatements: string[],
@@ -5017,19 +5520,95 @@ export class ManageMetadataBase {
    ): void {
       const nameFieldNames: string[] = result.nameFields ?? [];
 
+      // Surface LLM candidates that don't exist on the entity (same diagnostics as before).
       for (const nfName of nameFieldNames) {
-         const nameField = fields.find(f => f.Name === nfName);
-         if (nameField && nameField.AutoUpdateIsNameField && nameField.ID && !nameField.IsNameField) {
-            sqlStatements.push(`
-               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-               SET IsNameField = ${this.boolLit(true)}
-               WHERE ID = '${nameField.ID}'
-               AND AutoUpdateIsNameField = ${this.boolLit(true)}
-            `);
-         } else if (!nameField) {
+         if (!fields.some(f => f.Name === nfName)) {
             logError(`Smart field identification returned invalid nameField: '${nfName}' not found in entity fields`);
          }
       }
+
+      const winner = this.selectNameFieldWinner(fields, nameFieldNames);
+
+      // Set the winner when it isn't flagged yet (and auto-update is allowed).
+      if (winner && winner.AutoUpdateIsNameField && winner.ID && !winner.IsNameField) {
+         sqlStatements.push(`
+               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               SET IsNameField = ${this.boolLit(true)}
+               WHERE ID = '${winner.ID}'
+               AND AutoUpdateIsNameField = ${this.boolLit(true)}
+            `);
+      }
+
+      // Clear every other flagged field that allows auto-update — single winner, always.
+      for (const f of fields) {
+         if (f === winner || !f.IsNameField || !f.AutoUpdateIsNameField || !f.ID) {
+            continue;
+         }
+         sqlStatements.push(`
+               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               SET IsNameField = ${this.boolLit(false)}
+               WHERE ID = '${f.ID}'
+               AND AutoUpdateIsNameField = ${this.boolLit(true)}
+            `);
+      }
+   }
+
+   /**
+    * Picks the single IsNameField winner for an entity per the rules documented on
+    * {@link applyNameFieldUpdates}: stable current winner → deterministic repair
+    * (literal `Name`, then field order) → first eligible LLM candidate. Returns null
+    * when nothing eligible exists (the entity simply has no name field — FK-name
+    * virtual columns are skipped for it, which beats pointing them at a PK or blob).
+    */
+   protected selectNameFieldWinner(
+      fields: Array<Record<string, unknown>>,
+      rankedCandidates: string[]
+   ): Record<string, unknown> | null {
+      const eligibleFlagged = fields.filter(f => f.IsNameField && this.isFieldEligibleForNameField(f));
+      if (eligibleFlagged.length === 1) {
+         return eligibleFlagged[0];
+      }
+      if (eligibleFlagged.length > 1) {
+         const literalName = eligibleFlagged.find(f => (f.Name as string | undefined)?.trim().toLowerCase() === 'name');
+         return literalName ?? eligibleFlagged[0];
+      }
+      for (const candidateName of rankedCandidates) {
+         const candidate = fields.find(f => f.Name === candidateName);
+         if (candidate && this.isFieldEligibleForNameField(candidate)) {
+            return candidate;
+         }
+      }
+      return null;
+   }
+
+   /**
+    * Returns true if the field is a sensible target for IsNameField (i.e. could
+    * serve as the entity's human-readable display name). A name field must be
+    * BOUNDED TEXT ON THE BASE TABLE — so we reject primary keys, uniqueidentifiers,
+    * all non-text types, unbounded (MAX) text, and VIRTUAL fields. This stops Smart
+    * Field Identification from flagging a PK/uniqueidentifier as a name field, which
+    * would corrupt every related-entity name virtual field that joins to this entity
+    * (those resolve their SQL type from the related entity's NameField). Virtual
+    * fields are rejected because a view-only name column forces the FK-name join to
+    * target the VIEW instead of the base table — the self-referencing case is
+    * unbuildable on PostgreSQL and SQL Server (see the self-FK skip in the view
+    * generator), and a name that is itself a borrowed FK-name resolves circularly.
+    */
+   protected isFieldEligibleForNameField(field: Record<string, unknown>): boolean {
+      if (field.IsPrimaryKey === true) return false;
+      if (field.IsVirtual === true) return false;
+      const type = (field.Type as string | undefined ?? '').toLowerCase();
+      const textTypes = new Set(['nvarchar', 'varchar', 'char', 'nchar']);
+      if (!textTypes.has(type)) return false;
+      // Unbounded text (NVARCHAR(MAX) → length -1) is never a good name field.
+      // NOTE: the advanced-generation metadata query aliases `ef.Length AS MaxLength`
+      // (`Length` is a reserved-ish word it quotes), so runtime records carry
+      // `MaxLength` — checking only `Length` made this rejection a silent no-op and
+      // let nvarchar(MAX) columns (e.g. Conversation Details.Message) through.
+      // Accept either key so the guardrail works for both runtime rows and tests.
+      const length = (field.Length ?? field.MaxLength) as number | undefined;
+      if (length === -1) return false;
+      return true;
    }
 
    /**
@@ -5040,11 +5619,15 @@ export class ManageMetadataBase {
       fields: Array<Record<string, unknown>>,
       result: SmartFieldIdentificationResult
    ): void {
+      // Guard against a malformed LLM result that omits the array entirely.
+      // Mirrors the defensive handling in the sibling apply* methods.
+      const defaultInView: string[] = result.defaultInView ?? [];
+
       const defaultInViewFields = fields.filter(f =>
-         result.defaultInView.includes(f.Name as string) && f.AutoUpdateDefaultInView && f.ID
+         defaultInView.includes(f.Name as string) && f.AutoUpdateDefaultInView && f.ID
       );
 
-      const missingFields = result.defaultInView.filter(name =>
+      const missingFields = defaultInView.filter(name =>
          !fields.some(f => f.Name === name)
       );
       if (missingFields.length > 0) {
@@ -5286,10 +5869,14 @@ export class ManageMetadataBase {
    ): Promise<void> {
       const existingCategories = this.buildExistingCategorySet(fields);
 
-      await this.applyFieldCategories(pool, entity, fields, result.fieldCategories, existingCategories);
+      // Defensive: a malformed LLM result can leave fieldCategories undefined or
+      // non-array; both consumers below iterate it, so coerce to a safe array.
+      const fieldCategories = Array.isArray(result.fieldCategories) ? result.fieldCategories : [];
+
+      await this.applyFieldCategories(pool, entity, fields, fieldCategories, existingCategories);
 
       // Auto-detect geo-capable entities and set SupportsGeoCoding
-      await this.detectAndSetGeoCodingSupport(pool, entity, result.fieldCategories);
+      await this.detectAndSetGeoCodingSupport(pool, entity, fieldCategories);
 
       if (result.entityIcon) {
          await this.applyEntityIcon(pool, entity.ID, result.entityIcon);

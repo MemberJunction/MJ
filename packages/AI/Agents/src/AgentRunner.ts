@@ -407,6 +407,12 @@ export class AgentRunner {
                 onProgress: wrappedOnProgress
             };
 
+            // Returning-visitor memory (RV3): for a public web-widget guest with remembering on, derive the
+            // memory scope from THIS conversation's resolved identity / prior-conversation chain so the
+            // existing note injection surfaces the recap a prior session left. Returns immediately (no DB
+            // read) for every ordinary agent run — see the ReturningVisitorContext hot-path guard in the method.
+            await this.applyReturningVisitorMemoryScope(modifiedParams, conversationId, contextUser, md);
+
             const agentResult = await this.RunAgent<C, R>(modifiedParams);
 
             // Mark execution as completed to stop progress saves
@@ -426,13 +432,13 @@ export class AgentRunner {
             // - Step 7 (media) creates new AIAgentRunMedia and ConversationDetailAttachment records —
             //   entirely separate from steps 5 and 6
             //
-            // IMPORTANT: All three MUST complete before the resolver publishes the 'complete' event,
-            // because the client reloads all conversation data from the DB when it receives that event.
-            // If any write hasn't flushed yet, the client would see stale data. Promise.all guarantees
-            // all three finish before we return.
+            // IMPORTANT: All of these MUST complete before the resolver publishes the 'complete'
+            // event, because the client reloads all conversation data from the DB when it receives
+            // that event. If any write hasn't flushed yet, the client would see stale data. They run
+            // SEQUENTIALLY (not in parallel) — see the dispatch note below the definitions.
 
-            // Step 5: Update agent response detail with final result (async)
-            const updateDetailPromise = (async () => {
+            // Step 5: Update agent response detail with final result.
+            const updateDetail = async () => {
                 if (agentResponseDetail && agentResponseDetailId) {
                     // Wait for any in-flight progress save to complete
                     // EnsureSaveComplete() resolves immediately if no save in progress
@@ -469,10 +475,10 @@ export class AgentRunner {
                     }
                     LogStatus(`Updated agent response detail ${agentResponseDetailId} with final status: ${agentResponseDetail.Status}`);
                 }
-            })();
+            };
 
-            // Step 6: Process artifacts if requested and agent succeeded (async)
-            const processArtifactsPromise = (async () => {
+            // Step 6: Process artifacts if requested and agent succeeded.
+            const processArtifacts = async () => {
                 const shouldCreateArtifacts = options.createArtifacts !== false; // Default true
                 if (shouldCreateArtifacts && agentResult.success && agentResult.payload) {
                     return this.ProcessAgentArtifacts(
@@ -484,10 +490,10 @@ export class AgentRunner {
                     );
                 }
                 return undefined;
-            })();
+            };
 
-            // Step 6b: Process file artifacts produced by file-generation actions (async)
-            const processFileArtifactsPromise = (async () => {
+            // Step 6b: Process file artifacts produced by file-generation actions.
+            const processFileArtifacts = async () => {
                 if (agentResult.success && agentResponseDetailId && agentResult.fileOutputs?.length) {
                     await this.ProcessFileArtifacts(
                         agentResult.fileOutputs,
@@ -498,10 +504,10 @@ export class AgentRunner {
                         params.agent.AcceptUnregisteredFiles
                     );
                 }
-            })();
+            };
 
             // Step 7: Save media outputs to AIAgentRunMedia (audit) and create artifacts (display)
-            const saveMediaPromise = (async () => {
+            const saveMedia = async () => {
                 if (agentResult.mediaOutputs && agentResult.mediaOutputs.length > 0) {
                     const mediaToSave = agentResult.mediaOutputs;
                     LogStatus(`Processing ${mediaToSave.length} media output(s)`);
@@ -521,10 +527,23 @@ export class AgentRunner {
                     // artifact). Writing artifacts directly removes the deprecated-entity dependency
                     // and the redundant dual-write. Uses the same createArtifactWithVersion helper
                     // that ProcessFileArtifacts uses, keeping artifact creation logic in one place.
-                    if (agentResponseDetailId) {
+                    //
+                    // Suppress standalone artifacts for media already embedded in the report
+                    // payload (e.g. the research agent inlines its infographic as a base64 <img>
+                    // in report.html). Without this, the same image surfaces twice — once inside
+                    // the report and once as its own artifact card. Media NOT found in the payload
+                    // (e.g. Sage → Generate Image, where the image IS the deliverable) still gets a
+                    // standalone artifact. Note: SaveAgentRunMedia above is intentionally run over
+                    // the FULL list — the bytes are always retained for audit/lineage regardless.
+                    const payloadStr = agentResult.payload ? JSON.stringify(agentResult.payload) : '';
+                    const mediaForArtifacts = payloadStr
+                        ? mediaToSave.filter(m => !this.isMediaEmbeddedInPayload(m, payloadStr))
+                        : mediaToSave;
+
+                    if (agentResponseDetailId && mediaForArtifacts.length > 0) {
                         await this.CreateMediaArtifacts(
                             agentResponseDetailId,
-                            mediaToSave,
+                            mediaForArtifacts,
                             contextUser,
                             md
                         );
@@ -532,17 +551,22 @@ export class AgentRunner {
                     return ids;
                 }
                 return [];
-            })();
+            };
 
-            // Wait for all three post-execution operations to complete before returning.
-            // The resolver publishes the 'complete' event after this returns, so the client
-            // is guaranteed to see all DB writes when it reloads.
-            const [, artifactInfo] = await Promise.all([
-                updateDetailPromise,
-                processArtifactsPromise,
-                processFileArtifactsPromise,
-                saveMediaPromise
-            ]);
+            // Run these post-execution DB writes SEQUENTIALLY, not concurrently. They all mutate
+            // entities through the same request-scoped provider/connection, and the file/media path
+            // (createArtifactWithVersion) wraps its writes in an explicit BeginTransaction/Commit on
+            // that shared connection. Running them in parallel let the media transaction interleave
+            // with the report path's artifact + ConversationDetailArtifact saves, so the report's
+            // junction Save intermittently failed — the throw was swallowed and the report artifact
+            // was left orphaned (no conversation-detail link), surfacing in chat as "only the image,
+            // no report." Sequential execution removes the interleave; all writes still complete
+            // before we return, so the resolver's 'complete' event still guarantees the client sees
+            // every write.
+            await updateDetail();
+            const artifactInfo = await processArtifacts();
+            await processFileArtifacts();
+            await saveMedia();
 
             return {
                 agentResult,
@@ -749,7 +773,10 @@ export class AgentRunner {
      * - Other modes: Creates artifact with Visibility='Always'
      *
      * @param agentResult - The result from agent execution containing the payload
-     * @param conversationDetailId - The conversation detail to link the artifact to
+     * @param conversationDetailId - The conversation detail to link the artifact to. May be
+     *   `undefined` for runs executed OUTSIDE a conversation context (e.g. realtime voice
+     *   delegations): the artifact + version are still created, but the previous-artifact lookup
+     *   and the `ConversationDetailArtifact` junction link are skipped.
      * @param sourceArtifactId - Optional explicit artifact to version from (agent continuity)
      * @param contextUser - The user context for the operation
      * @returns Artifact metadata if created, undefined if skipped or failed
@@ -770,7 +797,7 @@ export class AgentRunner {
      */
     public async ProcessAgentArtifacts<R>(
         agentResult: ExecuteAgentResult<R>,
-        conversationDetailId: string,
+        conversationDetailId: string | undefined,
         sourceArtifactId: string | undefined,
         contextUser: UserInfo,
         provider?: IMetadataProvider
@@ -809,13 +836,16 @@ export class AgentRunner {
                 newVersionNumber = maxVersion + 1;
                 LogStatus(`Creating version ${newVersionNumber} of source artifact ${artifactId}`);
             }
-            // Priority 2: Try to find previous artifact for this message
+            // Priority 2: Try to find previous artifact for this message (only when running in
+            // a conversation context — outside one there is no message to look behind)
             else {
-                const previousArtifact = await this.FindPreviousArtifactForMessage(
-                    conversationDetailId,
-                    contextUser,
-                    md
-                );
+                const previousArtifact = conversationDetailId
+                    ? await this.FindPreviousArtifactForMessage(
+                        conversationDetailId,
+                        contextUser,
+                        md
+                    )
+                    : null;
 
                 if (previousArtifact) {
                     artifactId = previousArtifact.artifactId;
@@ -913,7 +943,11 @@ export class AgentRunner {
                 }
             }
 
-            // Link the new version to this conversation detail and return
+            // Link the new version to this conversation detail and return. Outside a
+            // conversation context (no detail id) there is nothing to link — return directly.
+            if (!conversationDetailId) {
+                return { artifactId, versionId: version.ID, versionNumber: newVersionNumber };
+            }
             return this.LinkArtifactToConversationDetail(
                 version.ID, conversationDetailId, artifactId, newVersionNumber, contextUser, md
             );
@@ -1108,6 +1142,48 @@ export class AgentRunner {
     }
 
     // ── Media artifact creation ─────────────────────────────────────────────────
+
+    /**
+     * Determines whether a media output's bytes are already embedded inside the agent's
+     * output payload (which is serialized into the report artifact by
+     * {@link ProcessAgentArtifacts}).
+     *
+     * WHY: agents like the research agent write a report (e.g. `report.html`) that inlines
+     * a generated image as a base64 data URL (`<img src="data:image/png;base64,…">`). That
+     * same image ALSO arrives on `agentResult.mediaOutputs`, so creating a standalone media
+     * artifact for it would duplicate the image — once inside the report, once as its own
+     * card. When the media is provably embedded in the payload we skip the standalone
+     * artifact. Media that is NOT in the payload (e.g. Sage → Generate Image, where the
+     * image is the deliverable) is left alone and still persists as its own artifact.
+     *
+     * The check is purely in-memory (no DB query): we look for a representative chunk of the
+     * media's base64 bytes inside the already-serialized payload string. base64 blobs are
+     * large, so matching a fixed-length prefix is both cheap and robust against the payload
+     * wrapping the data in a `data:<mime>;base64,` prefix.
+     *
+     * @param media - The media output under consideration
+     * @param payloadStr - The agent payload pre-serialized via JSON.stringify (caller-cached)
+     * @returns true if the media bytes appear in the payload, false otherwise
+     */
+    private isMediaEmbeddedInPayload(media: MediaOutput, payloadStr: string): boolean {
+        if (!payloadStr || !media.data) {
+            return false;
+        }
+
+        // Strip any data-URL prefix so the needle is raw base64 — the payload may store the
+        // image either as a bare base64 string or wrapped in a data URL; the base64 body is
+        // common to both forms.
+        const rawBase64 = media.data.replace(/^data:[^;]+;base64,/, '');
+
+        // A fixed-length prefix is plenty to identify a specific base64 blob without scanning
+        // the entire (potentially multi-MB) string for an exact full-length match.
+        const needle = rawBase64.slice(0, 256);
+        if (needle.length === 0) {
+            return false;
+        }
+
+        return payloadStr.includes(needle);
+    }
 
     /**
      * Creates `MJ: Artifact` + `MJ: Artifact Version` + `MJ: Conversation Detail Artifact`
@@ -1476,6 +1552,67 @@ export class AgentRunner {
             'video/ogg': 'ogv'
         };
         return mimeToExt[mimeType.toLowerCase()] || 'bin';
+    }
+
+    /**
+     * Returning-visitor memory scope (RV3, text/conversation path). Derives the agent's primary memory
+     * scope from a conversation's returning-visitor fields when the caller supplied none:
+     *
+     *   - linked visitor    → `(LinkedEntityID's entity name, LinkedRecordID)`
+     *   - linked anonymous  → `("MJ: Conversations", LastConversationID)`
+     *   - ordinary chat     → leaves scope unset (no behavior change)
+     *
+     * Mutates `params.PrimaryScopeEntityName` / `params.PrimaryScopeRecordID`, which `BaseAgent` already
+     * threads into note injection. An explicit caller-supplied scope always wins. Best-effort — a failure
+     * here never blocks the agent run (the visitor just gets no prior context this turn).
+     *
+     * HOT-PATH GUARD: this only ever applies to a public web-widget GUEST session that has
+     * returning-visitor remembering turned on — those (and only those) carry a `ReturningVisitorContext`
+     * lifted from the verified session token. Every ordinary agent run has no such context, so we bail
+     * BEFORE touching the database and add zero latency to the common path (no conversation Load on the
+     * hot path). Only the widget-guest case pays the one extra read, which is correct since the
+     * conversation is the source of truth for an identity that may have been resolved mid-session.
+     */
+    private async applyReturningVisitorMemoryScope<C>(
+        params: ExecuteAgentParams<C>,
+        conversationId: string,
+        contextUser: UserInfo,
+        md: IMetadataProvider
+    ): Promise<void> {
+        try {
+            // Gate 1 (cheap, in-memory): not a returning-visitor widget guest → nothing to do, no DB read.
+            if (!contextUser?.ReturningVisitorContext) {
+                return;
+            }
+            // Gate 2: need a conversation to read from, and an explicit caller scope always wins.
+            if (!conversationId || params.PrimaryScopeRecordID || (params.data?.PrimaryScopeRecordID as string | undefined)) {
+                return;
+            }
+            const convo = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+            if (!(await convo.Load(conversationId))) {
+                return;
+            }
+            let entityName: string | undefined;
+            let recordId: string | undefined;
+            if (convo.LinkedEntityID && convo.LinkedRecordID) {
+                entityName = md.Entities.find((e) => UUIDsEqual(e.ID, convo.LinkedEntityID!))?.Name;
+                recordId = convo.LinkedRecordID;
+            } else if (convo.LastConversationID) {
+                entityName = 'MJ: Conversations';
+                recordId = convo.LastConversationID;
+            }
+            if (entityName && recordId) {
+                params.PrimaryScopeEntityName = entityName;
+                params.PrimaryScopeRecordID = recordId;
+                LogStatusEx({
+                    message: `derived memory scope ${entityName}/${recordId} for conversation ${conversationId}`,
+                    category: 'ReturningVisitor',
+                    verboseOnly: true
+                });
+            }
+        } catch (e) {
+            LogError(`[ReturningVisitor] failed to derive memory scope for conversation ${conversationId}: ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 
     /**

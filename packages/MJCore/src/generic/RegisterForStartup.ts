@@ -3,6 +3,7 @@ import { UserInfo } from "./securityInfo";
 import { IMetadataProvider } from "./interfaces";
 import { Metadata } from "./metadata";
 import { LocalCacheManager } from "./localCacheManager";
+import { LogStatusEx } from "./logging";
 
 /**
  * Options for the @RegisterForStartup decorator
@@ -366,7 +367,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         const cacheStart = Date.now();
         const storageProvider = (provider ?? Metadata.Provider).LocalStorageProvider;
         await LocalCacheManager.Instance.Initialize(storageProvider);
-        console.debug(`LocalCacheManager initialized in ${Date.now() - cacheStart}ms`);
+        LogStatusEx({ message: `LocalCacheManager initialized in ${Date.now() - cacheStart}ms`, verboseOnly: true });
 
 
 
@@ -447,7 +448,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         const lines = sorted.map(r =>
             `  ${r.success ? '✅' : '❌'} ${r.className}: ${r.durationMs}ms`
         );
-        console.log(`[StartupManager] All engines loaded in ${totalMs}ms:\n${lines.join('\n')}`);
+        LogStatusEx({ message: `[StartupManager] All engines loaded in ${totalMs}ms:\n${lines.join('\n')}`, verboseOnly: true });
 
         // Fire deferred engines AFTER sync completes — fire-and-forget, no await.
         // The Promise here is never awaited; consumers reach a deferred engine via
@@ -477,7 +478,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         provider?: IMetadataProvider
     ): void {
         const names = registrations.map(r => r.constructor.name).join(', ');
-        console.log(`[StartupManager] Kicking off ${registrations.length} deferred engine(s) in background: [${names}]`);
+        LogStatusEx({ message: `[StartupManager] Kicking off ${registrations.length} deferred engine(s) in background: [${names}]`, verboseOnly: true });
 
         for (const reg of registrations) {
             const delay = reg.options.deferredDelay || 0;
@@ -486,7 +487,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
                 reg.getInstance().HandleStartup(contextUser, provider).then(() => {
                     reg.loadedAt = new Date();
                     reg.loadDurationMs = Date.now() - loadStart;
-                    console.log(`[StartupManager] ⏱️  Deferred engine loaded: ${reg.constructor.name} (${reg.loadDurationMs}ms)`);
+                    LogStatusEx({ message: `[StartupManager] ⏱️  Deferred engine loaded: ${reg.constructor.name} (${reg.loadDurationMs}ms)`, verboseOnly: true });
                 }).catch((error: unknown) => {
                     const durationMs = Date.now() - loadStart;
                     const severity = reg.options.severity || 'error';
@@ -500,7 +501,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
             };
 
             if (delay > 0) {
-                console.log(`[StartupManager] Delaying startup of deferred engine ${reg.constructor.name} by ${delay}ms`);
+                LogStatusEx({ message: `[StartupManager] Delaying startup of deferred engine ${reg.constructor.name} by ${delay}ms`, verboseOnly: true });
                 setTimeout(run, delay);
             } else {
                 run();

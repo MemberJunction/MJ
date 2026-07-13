@@ -703,6 +703,49 @@ describe('ValidationService - Field Value List Validation (comma-delimited multi
   });
 });
 
+describe('ValidationService - Required-field warning is NEW-record-only', () => {
+  // A NOT-NULL field with no default — e.g. BaseView on MJ: Entities. Existing
+  // records already hold its value in the DB, so a metadata file that omits it
+  // (because it only updates some other field) must NOT be warned about.
+  function makeEntityInfoWithRequiredField(): any {
+    return {
+      Name: 'MJ: Entities',
+      Fields: [
+        { Name: 'Name', AllowsNull: true, DefaultValue: null, RelatedEntity: null, AutoIncrement: false, ReadOnly: false, IsForeignKey: false },
+        { Name: 'BaseView', AllowsNull: false, DefaultValue: null, RelatedEntity: null, AutoIncrement: false, ReadOnly: false, IsForeignKey: false },
+      ],
+    };
+  }
+
+  async function callValidateFields(
+    fields: Record<string, any>,
+    isExistingRecord: boolean,
+  ): Promise<{ errors: any[]; warnings: any[] }> {
+    const svc = new ValidationService({ checkBestPractices: true } as any);
+    (svc as any).errors = [];
+    (svc as any).warnings = [];
+    await (svc as any).validateFields(fields, makeEntityInfoWithRequiredField(), '/test/entities.json', undefined, isExistingRecord);
+    return { errors: (svc as any).errors, warnings: (svc as any).warnings };
+  }
+
+  it('warns about a missing required field for a NEW record (no primaryKey)', async () => {
+    const { warnings } = await callValidateFields({}, false);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].field).toBe('BaseView');
+    expect(warnings[0].message).toContain('BaseView');
+  });
+
+  it('does NOT warn about a missing required field for an EXISTING record (has primaryKey)', async () => {
+    const { warnings } = await callValidateFields({}, true);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('does not warn for a NEW record when the required field IS provided', async () => {
+    const { warnings } = await callValidateFields({ BaseView: 'vwTest' }, false);
+    expect(warnings).toHaveLength(0);
+  });
+});
+
 describe('ValidationService - Dependency Order Checking Logic', () => {
   it('should detect order violations', () => {
     const directoryOrder = ['B', 'A']; // B comes first but depends on A

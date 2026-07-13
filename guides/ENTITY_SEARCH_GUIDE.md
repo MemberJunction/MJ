@@ -127,7 +127,17 @@ Result: same one-line API call on the client and the server; the right work happ
 
 ## Configuration
 
-Semantic and hybrid modes require an Active `EntityDocument` of type `Search` registered for the target entity. The MJ install seeds one for `MJ: Entities` (see `/metadata/entity-documents/`), so the entity catalog is searchable out of the box.
+Semantic and hybrid modes require an Active `EntityDocument` of type `Search` registered for the target entity. The MJ install seeds a **standard set** of Search EntityDocuments (see `/metadata/entity-documents/`), so several core catalogs are searchable out of the box, all on the in-process `Simple Vector Service Provider` + `gte-small (Local)` embedding stack (no API key, no cost):
+
+| Seeded Search EntityDocument | Target entity |
+|---|---|
+| `MJ Entities Search` | `MJ: Entities` |
+| `AI Agents Search` | `MJ: AI Agents` |
+| `Actions Search` | `MJ: Actions` |
+| `AI Prompts Search` | `MJ: AI Prompts` |
+| `AI Models Search` | `MJ: AI Models` |
+
+Opting another entity in is purely additive metadata — no code.
 
 ### Enabling on your own entity (3 steps)
 
@@ -137,17 +147,22 @@ Semantic and hybrid modes require an Active `EntityDocument` of type `Search` re
    {
      "fields": {
        "Name": "Accounts Search",
-       "EntityID": "@lookup:Entities.Name=Accounts",
+       "EntityID": "@lookup:MJ: Entities.Name=Accounts",
        "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
        "Status": "Active",
        "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+       "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
        "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
-       "Template": "@file:templates/accounts-search.njk",
+       "TemplateText": "@file:templates/accounts-search.njk",
        "PotentialMatchThreshold": 0.7,
        "AbsoluteMatchThreshold": 0.95
      }
    }
    ```
+
+   > **`VectorIndexID` is required.** `VectorizeEntity` throws a configuration error if the EntityDocument has no Vector Index. Use the seeded `Default - SVS + gte-small (Local)` index unless you've created your own.
+   >
+   > **`TemplateText` (not `TemplateID`)** is the convenient path: on `mj sync push`, the `MJ: Entity Documents` server entity auto-creates the backing `Template` + `Template Content` records from the `@file:` content and stamps `TemplateID` for you. Omit `primaryKey`/`sync` for new records — mj-sync stamps them on first push.
 
 2. **Write the template** at `templates/accounts-search.njk`. A reasonable default:
 
@@ -157,9 +172,9 @@ Semantic and hybrid modes require an Active `EntityDocument` of type `Search` re
    {{ Industry }} - {{ Region }}
    ```
 
-   Templates can reference any field on the record. Keep them focused on the text a user would actually phrase — descriptive fields, business-language tags, not internal IDs.
+   Templates can reference any field on the record — including denormalized view fields (e.g. `{{ Vendor }}`, `{{ Category }}`). Keep them focused on the text a user would actually phrase — descriptive fields, business-language tags, not internal IDs.
 
-3. **Run the vector sync**. The seeded `Sync Entity Vectors` scheduled job (cron `0 0 4 * * *` daily, `RunImmediatelyIfNeverRun: true`) will pick up the new EntityDocument on its next poll, generate embeddings for every record, and write them to `EntityRecordDocument.VectorJSON`. No manual step required — though you can force a run from the Scheduling dashboard.
+3. **Run the vector sync**. The seeded `Entity Vector Sync - Daily` scheduled job (cron `0 0 4 * * *`, `RunImmediatelyIfNeverRun: true`) drives the `Vectorize Entity` action over every Active `Search` EntityDocument, generates embeddings for each record, and writes them to `EntityRecordDocument.VectorJSON`. No manual step required — though you can force a run from the Scheduling dashboard. If **no** Active `Search` EntityDocuments exist, the job is a clean no-op (`ResultCode: NO_DOCUMENTS`), not a failure.
 
 That's it. `Provider.SearchEntity({ entityName: 'Accounts', searchText: query })` now returns semantic results.
 

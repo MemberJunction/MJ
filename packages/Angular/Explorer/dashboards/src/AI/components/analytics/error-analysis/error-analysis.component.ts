@@ -102,24 +102,17 @@ const FIELDS = [
 
             <!-- Error Groups -->
             @if (ErrorGroups.length === 0) {
-                <div class="empty-state">
-                    <i class="fa-solid fa-check-circle empty-state__icon"></i>
-                    <div class="empty-state__title">No Errors Found</div>
-                    <div class="empty-state__subtitle">No errors detected in the selected time range.</div>
-                </div>
+                <mj-empty-state Variant="success"
+                    Title="No Errors Found"
+                    Message="No errors detected in the selected time range." />
             }
 
             @for (group of ErrorGroups; track group.Source) {
-                <div class="error-group" [class.error-group--expanded]="group.IsExpanded">
-                    <div
-                        class="error-group__header"
-                        (click)="ToggleGroup(group)"
-                        role="button"
-                        tabindex="0"
-                        (keydown.enter)="ToggleGroup(group)">
-                        <div class="error-group__left">
-                            <i [class]="group.IsExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"
-                               class="expand-icon"></i>
+                <mj-accordion-panel Size="sm" [FlushBody]="true"
+                    [Expanded]="group.IsExpanded"
+                    (ExpandedChange)="onGroupExpandedChange(group, $event)">
+                    <ng-template mjAccordionTitle>
+                        <div class="error-group__title-row">
                             <div class="error-group__source">
                                 <div class="source-name">{{ group.Source }}</div>
                                 <div class="source-details">
@@ -128,21 +121,22 @@ const FIELDS = [
                                     <span class="source-model">{{ group.ModelName }}</span>
                                 </div>
                             </div>
+                            <div class="error-group__right">
+                                <span class="mj-accordion-badge mj-accordion-badge--error">{{ group.Count }}</span>
+                                <div class="last-error-time">{{ group.LastErrorTime }}</div>
+                            </div>
                         </div>
-                        <div class="error-group__right">
-                            <span class="error-count-badge">{{ group.Count }}</span>
-                            <div class="last-error-time">{{ group.LastErrorTime }}</div>
-                        </div>
-                    </div>
-
-                    @if (!group.IsExpanded) {
-                        <div class="error-group__preview">
-                            <span class="preview-label">Last error:</span>
-                            {{ group.LastErrorMessage }}
-                        </div>
-                    }
-
-                    @if (group.IsExpanded) {
+                        <!-- Collapsed-preview wrinkle: the "last error" preview lives in the
+                             title slot (gated on !IsExpanded) so it shows while collapsed,
+                             and the full error list lives in the body. -->
+                        @if (!group.IsExpanded) {
+                            <div class="error-group__preview">
+                                <span class="preview-label">Last error:</span>
+                                {{ group.LastErrorMessage }}
+                            </div>
+                        }
+                    </ng-template>
+                    <ng-template mjAccordionBody>
                         <div class="error-group__body">
                             @for (err of group.Errors; track err.ID) {
                                 <div class="error-detail">
@@ -156,8 +150,8 @@ const FIELDS = [
                                 </div>
                             }
                         </div>
-                    }
-                </div>
+                    </ng-template>
+                </mj-accordion-panel>
             }
         }
     `,
@@ -240,74 +234,29 @@ const FIELDS = [
             max-width: 220px;
         }
 
-        /* ── Empty State ── */
-        .empty-state {
-            text-align: center;
-            padding: 48px 24px;
-            color: var(--mj-text-muted);
-        }
-
-        .empty-state__icon {
-            font-size: 40px;
-            color: var(--mj-status-success);
-            margin-bottom: 12px;
-        }
-
-        .empty-state__title {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--mj-text-primary);
-            margin-bottom: 4px;
-        }
-
-        .empty-state__subtitle {
-            font-size: 13px;
-            color: var(--mj-text-muted);
-        }
-
         /* ── Error Groups ── */
-        .error-group {
-            background: var(--mj-bg-surface);
-            border: 1px solid var(--mj-border-default);
-            border-radius: 10px;
+        /* Each group is now an <mj-accordion-panel>; it owns the card chrome,
+           header row, hover, chevron, and expanded state. We only space the
+           panels apart here. The removed bespoke blocks (.error-group wrapper
+           chrome, .error-group--expanded border, .error-group__header + :hover,
+           .error-group__left, .expand-icon chevron) are gone — the accordion
+           provides all of that. */
+        mj-accordion-panel {
+            display: block;
             margin-bottom: 8px;
-            overflow: hidden;
-            transition: border-color 0.2s;
         }
 
-        .error-group--expanded {
-            border-color: var(--mj-status-error);
-        }
-
-        .error-group__header {
+        /* Title-slot layout: source info on the left, badge + time on the right. */
+        .error-group__title-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 14px 16px;
-            cursor: pointer;
-            transition: background 0.15s;
-        }
-
-        .error-group__header:hover {
-            background: var(--mj-bg-surface-hover);
-        }
-
-        .error-group__left {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            min-width: 0;
-        }
-
-        .expand-icon {
-            font-size: 11px;
-            color: var(--mj-text-muted);
-            width: 16px;
-            flex-shrink: 0;
-            transition: transform 0.2s;
+            gap: 12px;
+            width: 100%;
         }
 
         .error-group__source {
+            flex: 1;
             min-width: 0;
         }
 
@@ -340,19 +289,8 @@ const FIELDS = [
             flex-shrink: 0;
         }
 
-        .error-count-badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 28px;
-            height: 24px;
-            padding: 0 8px;
-            border-radius: 12px;
-            background: color-mix(in srgb, var(--mj-status-error) 12%, var(--mj-bg-surface));
-            color: var(--mj-status-error);
-            font-size: 12px;
-            font-weight: 700;
-        }
+        /* Count pill now uses the canonical .mj-accordion-badge--error (token-driven,
+           dark-mode-safe) — the bespoke .error-count-badge rule was deleted. */
 
         .last-error-time {
             font-size: 12px;
@@ -360,8 +298,10 @@ const FIELDS = [
             white-space: nowrap;
         }
 
+        /* Preview now renders inside the accordion title slot (already indented),
+           so it only needs a little top separation from the title row. */
         .error-group__preview {
-            padding: 0 16px 12px 42px;
+            margin-top: 6px;
             font-size: 12px;
             color: var(--mj-text-muted);
             white-space: nowrap;
@@ -374,14 +314,15 @@ const FIELDS = [
             margin-right: 4px;
         }
 
+        /* Body is rendered flush ([FlushBody]); it manages its own scroll/padding.
+           No body-hiding/collapse rule needed — the accordion owns expand/collapse. */
         .error-group__body {
-            border-top: 1px solid var(--mj-border-subtle);
             max-height: 400px;
             overflow-y: auto;
         }
 
         .error-detail {
-            padding: 12px 16px 12px 42px;
+            padding: 12px 16px;
             border-bottom: 1px solid var(--mj-border-subtle);
         }
 
@@ -496,8 +437,11 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
         this.LoadData();
     }
 
-    public ToggleGroup(group: ErrorGroup): void {
-        group.IsExpanded = !group.IsExpanded;
+    /** Accordion-driven handler — SETS the emitted expanded value (vs. a flip),
+     *  preserving the detectChanges() side-effect and keeping IsExpanded in sync
+     *  so the collapsed-only "last error" preview shows/hides correctly. */
+    public onGroupExpandedChange(group: ErrorGroup, expanded: boolean): void {
+        group.IsExpanded = expanded;
         this.cdr.detectChanges();
     }
 

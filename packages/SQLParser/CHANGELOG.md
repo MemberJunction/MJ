@@ -1,5 +1,80 @@
 # @memberjunction/sql-parser
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+  - @memberjunction/sql-dialect@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [b98366b]
+  - @memberjunction/sql-dialect@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

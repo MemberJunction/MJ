@@ -4,6 +4,7 @@
  * These types are used throughout the engine for tracking app state,
  * installation actions, error phases, and progress reporting.
  */
+import type { MJOpenAppEntity } from '@memberjunction/core-entities';
 
 /**
  * Possible statuses for an installed Open App.
@@ -30,6 +31,80 @@ export type ErrorPhase = 'Schema' | 'Migration' | 'Packages' | 'Config' | 'Hooks
 export type DependencyStatus = 'Satisfied' | 'Missing' | 'Incompatible';
 
 /**
+ * Checkpoint values written to OpenApp.LastCompletedStep during `InstallApp`.
+ * Read back on re-entry (Status still 'Installing') to resume from the right
+ * point instead of restarting the whole install.
+ *
+ * There is no checkpoint value for schema creation / migrations: those steps run
+ * BEFORE the OpenApp row exists (nothing to attach a checkpoint to yet), and both
+ * are already safely re-runnable on their own — schema creation reuses an existing
+ * schema instead of erroring, and Skyway's own per-schema migration-history table
+ * only applies migrations it hasn't already applied. So the earliest checkpoint is
+ * 'RecordCreated'; a crash before that point just restarts from the top, which is
+ * cheap and correct.
+ */
+export type InstallStep =
+    | 'RecordCreated'
+    | 'PackagesInstalled'
+    | 'ConfigUpdated'
+    | 'AngularExcludesUpdated'
+    | 'Finalized'
+    | 'HooksRun';
+
+/**
+ * Checkpoint values written to OpenApp.LastCompletedStep during `UpgradeApp`.
+ * Read back on re-entry (Status 'Upgrading' or a caught-failure 'Error') to resume from the
+ * right point instead of restarting the whole upgrade.
+ *
+ * Always paired with `OpenApp.LastCompletedStepTargetVersion`. `Version` on the row stays at
+ * the PRE-upgrade value until this attempt's `RecordUpdated` step, so the checkpoint alone can't
+ * tell "resume THIS upgrade" apart from "a fresh upgrade request to a DIFFERENT target arrived
+ * while one was mid-flight." A checkpoint is only trusted when the target-version column matches
+ * the version currently being requested — a mismatch means a full (safe) restart instead.
+ *
+ * `HooksRun` is checkpointed for audit/observability, but is NOT reliably resumable: both Install
+ * and Upgrade flip Status to a settled value (Active/Disabled) BEFORE running hooks, so a hard
+ * process kill during hook execution (not a caught JS exception — that DOES flip to 'Error' and
+ * IS retried) leaves the row settled with a stale 'Finalized'/'RecordUpdated' checkpoint that
+ * nothing ever revisits. Known limitation; fixing it means either moving the terminal status
+ * write after hooks or building real hook-level resumability — deferred as a follow-up.
+ */
+export type UpgradeStep =
+    | 'MigrationsApplied'
+    | 'PackagesInstalled'
+    | 'ConfigUpdated'
+    | 'AngularExcludesUpdated'
+    | 'RecordUpdated'
+    | 'HooksRun'
+    | 'DependenciesReplaced';
+
+/**
+ * Checkpoint values written to OpenApp.LastCompletedStep during `RemoveApp`.
+ * Read back on re-entry (Status still 'Removing') to resume from the right
+ * point instead of restarting the whole removal.
+ *
+ * Mirrors the two phases `RemoveApp` already enforces strictly in order (DB cleanup —
+ * metadata + teardown + schema drop — must fully succeed before any filesystem mutation
+ * begins, so a DB failure never leaves a half-removed app with files stripped but schema
+ * intact). 'DbCleanupDone' means metadata/teardown/schema-drop all completed; 'FilesRemoved'
+ * means config/bootstrap/package files were removed too — only the final status write and
+ * audit history entry remain.
+ */
+export type RemoveStep = 'DbCleanupDone' | 'FilesRemoved';
+
+/**
+ * Compile-time guard: the three checkpoint step unions above, combined, must exactly match the
+ * CHECK-constraint-derived union CodeGen generates for `MJOpenAppEntity.LastCompletedStep`. If a
+ * future migration adds/removes a CHECK value without updating `InstallStep`/`UpgradeStep`/
+ * `RemoveStep` (or vice versa), this fails to compile instead of silently falling through
+ * `IsStepDone`'s "unrecognized checkpoint → not done" fail-safe, which would just make the new
+ * value's step get redone forever rather than flagging the drift.
+ */
+type AssertExactUnion<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _StepUnionMatchesEntityCheckConstraint = AssertExactUnion<InstallStep | UpgradeStep | RemoveStep, NonNullable<MJOpenAppEntity['LastCompletedStep']>>;
+
+/**
  * Progress callbacks for installation operations.
  * Follows the same callback pattern as mj-sync's PushCallbacks.
  */
@@ -46,6 +121,45 @@ export interface AppInstallCallbacks {
     OnLog?: (message: string) => void;
     /** Called when the engine needs user confirmation (e.g. destructive actions) */
     OnConfirm?: (message: string) => Promise<boolean>;
+
+    // ── Interactive prompt callbacks ──────────────────────────────────────────
+    // Wired by the CLI to @inquirer/prompts; absent for headless/non-interactive
+    // callers (in which case in-process hook modules should fall back to defaults).
+    /** Prompt for free-text input. */
+    OnPromptInput?: (message: string, opts?: { default?: string }) => Promise<string>;
+    /** Prompt for a yes/no confirmation with an optional default. */
+    OnPromptConfirm?: (message: string, opts?: { default?: boolean }) => Promise<boolean>;
+    /** Prompt to choose one option from a list. */
+    OnPromptSelect?: (message: string, choices: Array<{ name: string; value: string }>) => Promise<string>;
+    /** Prompt for a masked secret (e.g. an API key). */
+    OnPromptPassword?: (message: string) => Promise<string>;
+}
+
+/**
+ * Payload passed to an in-process lifecycle hook module's default export
+ * (referenced by manifest `hooks.postInstallModule` / `preRemoveModule` /
+ * `postUpgradeModule`). The engine resolves the module from the consumer's
+ * node_modules, imports it, and awaits `default(payload)`.
+ *
+ * Hook authors (e.g. the Skip Client app) import this type from
+ * `@memberjunction/open-app-engine` and type their default export against it.
+ * `Provider`/`ContextUser` are intentionally loosely typed here to avoid a hard
+ * dependency on `@memberjunction/core` from this types module; cast them to
+ * `IMetadataProvider` / `UserInfo` in the hook.
+ */
+export interface AppHookPayload {
+    /** The installed/affected app record. */
+    App: InstalledAppInfo;
+    /** Consumer monorepo root (process.cwd() at install time). */
+    RepoRoot: string;
+    /** Live MJ metadata/data provider (cast to IMetadataProvider). */
+    Provider: unknown;
+    /** Context user the engine runs entity operations as (cast to UserInfo). */
+    ContextUser: unknown;
+    /** Interactive + progress callbacks (prompt callbacks present only in interactive installs). */
+    Callbacks?: AppInstallCallbacks;
+    /** The validated manifest as a plain object (typed as MJAppManifest by consumers). */
+    Manifest: unknown;
 }
 
 /**
@@ -56,6 +170,13 @@ export interface InstallOptions {
     Source: string;
     /** Specific version to install (default: latest) */
     Version?: string;
+    /**
+     * Path within the repository to the app's `mj-app.json` (and its `migrations`/`metadata`
+     * directories). Defaults to the repo root. Enables multiple apps per repository
+     * (e.g. `CRM/HubSpot`). When omitted, falls back to any subpath embedded in `Source`.
+     * Per-app identity (like `Source`/`Version`) — NOT a passthrough option.
+     */
+    Subpath?: string;
     /** Enable verbose output */
     Verbose?: boolean;
     /** Allow schema names starting with '__'. Dangerous; MJ-internal apps only. */
@@ -166,6 +287,8 @@ export interface InstalledAppInfo {
     PublisherURL: string | null;
     /** GitHub repository URL */
     RepositoryURL: string;
+    /** In-repo subpath to the app (for multi-app repos); null/undefined = repo root */
+    Subpath?: string | null;
     /** Database schema name (if the app uses one) */
     SchemaName: string | null;
     /** Semver range of compatible MJ versions */
@@ -184,6 +307,10 @@ export interface InstalledAppInfo {
     InstalledByUserID: string;
     /** Current app status */
     Status: AppStatus;
+    /** Last install/upgrade/remove step that completed successfully, for resuming a retry */
+    LastCompletedStep?: InstallStep | UpgradeStep | RemoveStep | null;
+    /** For Upgrade only: the version LastCompletedStep was recorded against — see UpgradeStep doc. */
+    LastCompletedStepTargetVersion?: string | null;
 }
 
 /**
@@ -196,6 +323,8 @@ export interface ResolvedDependency {
     VersionRange: string;
     /** GitHub repository URL */
     Repository: string;
+    /** In-repo subpath to the dependency app (for multi-app repos); undefined = repo root */
+    Subpath?: string;
     /** Whether this dependency is already installed */
     AlreadyInstalled: boolean;
     /** Currently installed version (if installed) */

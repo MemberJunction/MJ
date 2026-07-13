@@ -1,5 +1,279 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/ai-vectors@5.47.0
+  - @memberjunction/ai-vectordb@5.47.0
+  - @memberjunction/ai-vector-sync@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/record-comparison@5.47.0
+  - @memberjunction/templates@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/ai-vectors@5.46.0
+  - @memberjunction/ai-vectordb@5.46.0
+  - @memberjunction/ai-vector-sync@5.46.0
+  - @memberjunction/record-comparison@5.46.0
+  - @memberjunction/templates@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/ai-vectors@5.45.1
+  - @memberjunction/ai-vector-sync@5.45.1
+  - @memberjunction/templates@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/ai-vectordb@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/record-comparison@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/ai-vectors@5.45.0
+  - @memberjunction/ai-vectordb@5.45.0
+  - @memberjunction/ai-vector-sync@5.45.0
+  - @memberjunction/record-comparison@5.45.0
+  - @memberjunction/templates@5.45.0
+  - @memberjunction/ai@5.45.0
+
+## 5.44.0
+
+### Minor Changes
+
+- 6f74b17: Add an LLM/agentic reasoning pass on top of the embedding/vector duplicate-detection pipeline — "vectors filter, reasoning validates". A small/fast LLM judges high-probability vector candidates (Merge / NotDuplicate / Uncertain) to shrink the human-review set, strengthening or weakening the vector score rather than replacing it. Adds a dual-provider reasoning seam (Prompt/Agent), per-entity gating (EnableLLMReasoning, ReasoningThreshold, AutomationLevel), per-candidate verdict/audit columns, the new @memberjunction/record-comparison engine + resolver/client, and an in-place reasoning UI in the duplicates dashboard. Fully back-compat: EnableLLMReasoning defaults to 0, leaving the vector-only path byte-for-byte unchanged.
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/ai-vectordb@5.44.0
+  - @memberjunction/record-comparison@5.44.0
+  - @memberjunction/ai-prompts@5.44.0
+  - @memberjunction/ai-vectors@5.44.0
+  - @memberjunction/ai-vector-sync@5.44.0
+  - @memberjunction/templates@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/ai-vectors@5.43.0
+  - @memberjunction/ai-vectordb@5.43.0
+  - @memberjunction/ai-vector-sync@5.43.0
+  - @memberjunction/templates@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- 0c6bf61: Entity Vector Sync: ship standard Search Entity Documents, no-op cleanly when none are configured, and remove a duplicate metadata load at startup.
+
+  **`@memberjunction/ai-vector-sync` (minor — ships new seed metadata; downstream installs must run `mj sync push` / a metadata migration to pick up the standard Search Entity Documents):**
+  - Adds a standard set of Active `Search`-type Entity Documents — `MJ: Entities`, `MJ: AI Agents`, `MJ: Actions`, `MJ: AI Prompts`, `MJ: AI Models` — under `/metadata/entity-documents/` (+ Nunjucks templates and a folder README), all on the in-process `Simple Vector Service Provider` + `gte-small (Local)` stack (no API key, no per-token cost). Semantic / hybrid `Provider.SearchEntity` now works out of the box for these core catalogs.
+  - `EntityVectorSyncer.GetActiveEntityDocuments` returns `[]` (logging a warning for an unknown/misspelled type name) instead of throwing when no Active documents of the requested type exist, so unattended callers don't hard-fail on an empty/fresh DB.
+
+  **`@memberjunction/core-actions` (patch):** `VectorizeEntityAction` returns `Success`/`ResultCode: "NO_DOCUMENTS"` (a benign no-op) when there are no Active Entity Documents of the requested type — so the daily `Entity Vector Sync` scheduled job no longer reports a _failed_ run on a fresh DB — and captures `Config()`/lookup errors as a legible `FAILED` result instead of an uncaught throw. Also fixes a latent `error as any`.
+
+  **`@memberjunction/aiengine` + `@memberjunction/ai-agents` (patch — startup perf / telemetry):** `AIEngine.RefreshActions` now reuses already-cached `MJ: Actions` metadata via `BaseEngineRegistry.TryGetCachedRecords` instead of loading a second copy into `ActionEngineBase` (a separate singleton from the server-side `ActionEngineServer`); `BaseAgent.initializeEngines` loads `ActionEngineServer` before `AIEngine` so the registry hit lands. Together these eliminate the duplicate 6-entity `RunViews` batch (and its "Duplicate RunView Detected" telemetry warning) at agent/scheduled-job startup.
+
+  **Keyless local vector providers (`@memberjunction/ai-vectordb`, `@memberjunction/ai-vectors-memory`, `@memberjunction/ai-vector-dupe` — patch):** `VectorDBBase` gains a `RequiresAPIKey` capability (default `true`); `SimpleVectorServiceProvider` overrides it to `false` since it's in-process (reads vectors from `MJ: Entity Record Documents.VectorJSON`, no external service). Both the Entity Vector Sync pipeline and the duplicate-record detector now consult `RequiresAPIKey` (in addition to the existing colocated-query exemption) before rejecting a provider for a missing key — fixing a spurious `No API Key found for Vector Database SimpleVectorServiceProvider` that blocked the standard Search docs above from vectorizing. The dupe detector also no longer pre-throws on a missing embedding key, so local embedding models (e.g. `gte-small (Local)`) work there too, matching the sync pipeline.
+
+  Adds 14 unit tests (9 covering the VectorizeEntityAction no-op / failure-aggregation / error-capture / param-shaping paths; 3 covering `RefreshActions` registry-reuse vs. base-engine fallback; 2 covering the `RequiresAPIKey` default + `SimpleVectorServiceProvider` override). No code migrations; the only downstream action is the metadata sync noted above. Docs updated: `ENTITY_SEARCH_GUIDE.md`, `@memberjunction/ai-vector-sync` README, `metadata/entity-documents/README.md`, `CACHING_AND_PUBSUB_GUIDE.md`, and JSDoc.
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/templates@5.42.0
+  - @memberjunction/ai-vector-sync@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/ai-vectordb@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ai-vectors@5.42.0
+  - @memberjunction/ai@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- d38ecbb: Remove committed merge-conflict markers from scripts/run-dupe-detection.ts, keeping the provider-parameter variants of createAndTriggerRun and pollUntilDone
+- 1e81848: Thread the request-scoped IMetadataProvider through the duplicate-detection stack instead of falling back to the process-global provider. VectorBase now accepts a provider in its constructor and its Provider setter rebinds the internal RunView; the Metadata getter returns the provider-aware IMetadataProvider. EntityVectorSyncer forwards the provider through its constructor, DuplicateRecordDetector passes its provider to the syncer it spawns, and MJDuplicateRunEntityServer passes this.ProviderToUse into the detector and its RunView. The run-dupe-detection CLI harness uses the provider returned by setupSQLServerClient directly. Note: VectorBase.Metadata's declared type changed from the concrete Metadata wrapper to IMetadataProvider.
+- Updated dependencies [8fd6f59]
+- Updated dependencies [1e81848]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/ai-vectors@5.41.0
+  - @memberjunction/ai-vector-sync@5.41.0
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/aiengine@5.41.0
+  - @memberjunction/ai-vectordb@5.41.0
+  - @memberjunction/templates@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- da2ee38: Fix duplicate detection defects: drop stale "ghost" vector matches to deleted/re-seeded records (the apparent record-matching-itself), guard against recursive re-triggering that exploded detail rows, skip auto-merge for merge-disallowed entities instead of failing the run, and sort the Record Duplicates UI groups and per-card matches by match probability descending.
+  - @memberjunction/ai@5.40.2
+  - @memberjunction/aiengine@5.40.2
+  - @memberjunction/ai-vectors@5.40.2
+  - @memberjunction/ai-vectordb@5.40.2
+  - @memberjunction/ai-vector-sync@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/templates@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/aiengine@5.40.1
+  - @memberjunction/ai-vectors@5.40.1
+  - @memberjunction/ai-vectordb@5.40.1
+  - @memberjunction/ai-vector-sync@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/templates@5.40.1
+  - @memberjunction/ai@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/aiengine@5.40.0
+  - @memberjunction/ai-vectors@5.40.0
+  - @memberjunction/ai-vectordb@5.40.0
+  - @memberjunction/ai-vector-sync@5.40.0
+  - @memberjunction/templates@5.40.0
+  - @memberjunction/ai@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-vectordb@5.39.0
+  - @memberjunction/ai-vector-sync@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/aiengine@5.39.0
+  - @memberjunction/ai-vectors@5.39.0
+  - @memberjunction/templates@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

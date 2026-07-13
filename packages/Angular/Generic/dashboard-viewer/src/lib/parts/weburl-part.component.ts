@@ -24,25 +24,30 @@ import { PanelConfig } from '../models/dashboard-types';
         
           <!-- Error state -->
           @if (ErrorMessage) {
-            <div class="error-state">
-              <i class="fa-solid fa-exclamation-triangle"></i>
-              <span>{{ ErrorMessage }}</span>
+            <mj-empty-state
+              class="part-placeholder"
+              Variant="error"
+              Icon="fa-solid fa-triangle-exclamation"
+              Title="Couldn't load content"
+              [Message]="ErrorMessage"
+              Size="compact">
               @if (rawUrl) {
-                <a [href]="rawUrl" target="_blank" class="open-link">
-                  <i class="fa-solid fa-external-link-alt"></i>
+                <a actions [href]="rawUrl" target="_blank" class="open-link">
+                  <i class="fa-solid fa-up-right-from-square"></i>
                   Open in new window
                 </a>
               }
-            </div>
+            </mj-empty-state>
           }
-        
+
           <!-- No URL configured -->
           @if (!IsLoading && !ErrorMessage && !SafeUrl) {
-            <div class="empty-state">
-              <i class="fa-solid fa-globe"></i>
-              <h4>No URL Configured</h4>
-              <p>Click the configure button to set a URL for this part.</p>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Icon="fa-solid fa-globe"
+              Title="No URL Configured"
+              Message="Click the configure button to set a URL for this part."
+              Size="compact" />
           }
         
           <!-- Iframe container - sandbox and allowfullscreen must be static, so we use ng-container to switch -->
@@ -152,9 +157,7 @@ import { PanelConfig } from '../models/dashboard-types';
             position: relative; /* Required for overlay positioning */
         }
 
-        .loading-state,
-        .error-state,
-        .empty-state {
+        .loading-state {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -165,20 +168,18 @@ import { PanelConfig } from '../models/dashboard-types';
             padding: 24px;
         }
 
-        .loading-state i,
-        .error-state i,
-        .empty-state i {
+        .loading-state i {
             font-size: 48px;
             color: var(--mj-text-muted);
             margin-bottom: 16px;
         }
 
-        .error-state i {
-            color: var(--mj-status-error);
+        .part-placeholder {
+            height: 100%;
         }
 
-        .error-state .open-link {
-            margin-top: 16px;
+        /* Projected "open in new window" link inside the error empty-state */
+        .open-link {
             padding: 8px 16px;
             background: var(--mj-brand-primary);
             color: var(--mj-text-inverse);
@@ -190,18 +191,8 @@ import { PanelConfig } from '../models/dashboard-types';
             font-size: 14px;
         }
 
-        .error-state .open-link:hover {
+        .open-link:hover {
             background: var(--mj-brand-primary-hover);
-        }
-
-        .empty-state h4 {
-            margin: 0 0 8px 0;
-            color: var(--mj-text-primary);
-        }
-
-        .empty-state p {
-            margin: 0;
-            font-size: 13px;
         }
 
         .content-iframe {

@@ -268,12 +268,11 @@ export class MCPLogDetailPanelComponent implements OnInit, OnDestroy {
         }
     }
 
-    getStatusClass(status: string): string {
+    getStatusVariant(status: string): 'info' | 'success' | 'warning' | 'error' {
         switch (status) {
-            case 'Success': return 'status-success';
-            case 'Error': return 'status-error';
-            case 'Running': return 'status-running';
-            default: return 'status-unknown';
+            case 'Success': return 'success';
+            case 'Error': return 'error';
+            default: return 'info';
         }
     }
 }

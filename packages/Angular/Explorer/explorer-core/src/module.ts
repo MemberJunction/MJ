@@ -12,7 +12,7 @@ import { MJProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
 // MJ
-import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
@@ -34,6 +34,7 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
 import { DashboardPreferencesDialogComponent } from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
@@ -65,6 +66,8 @@ import { SearchModule } from '@memberjunction/ng-search';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { ConversationFeedbackResource } from './lib/conversation-feedback';
+import { LiveKitRoomResource } from './lib/resource-wrappers/livekit-room-resource.component';
+import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
 
 @NgModule({
   declarations: [
@@ -93,8 +96,10 @@ import { ConversationFeedbackResource } from './lib/conversation-feedback';
     NotificationsResource,
     DashboardPreferencesDialogComponent,
     ConversationFeedbackResource,
+    LiveKitRoomResource,
   ],
   imports: [
+    MarkdownModule,
     AppRoutingModule,
     CommonModule,
     FormsModule,
@@ -132,7 +137,10 @@ import { ConversationFeedbackResource } from './lib/conversation-feedback';
     MJDropdownComponent,
     MJWindowComponent,
     MJWindowTitlebarComponent,
-    PaginationComponent
+    PaginationComponent,
+    MJLiveKitRoomComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent
   ],
   exports: [
     ResourceContainerComponent,

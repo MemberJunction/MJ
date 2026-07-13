@@ -160,15 +160,11 @@
             
             <!-- Empty state for hierarchy -->
             @if (!hierarchyData || (!hasChildren() && !hasParent())) {
-              <div class="empty-hierarchy">
-                <i class="fa-solid fa-sitemap"></i>
-                <h4>No Agent Hierarchy</h4>
-                <p>This agent doesn't have any parent or child agents yet.</p>
-                <button class="create-subagent-btn" (click)="openCreateSubAgent()">
-                  <i class="fa-solid fa-plus"></i>
-                  Create Sub-Agent
-                </button>
-              </div>
+              <mj-empty-state class="empty-hierarchy" Variant="empty" Icon="fa-solid fa-sitemap"
+                Title="No Agent Hierarchy"
+                Message="This agent doesn't have any parent or child agents yet."
+                ActionText="Create Sub-Agent" ActionIcon="fa-solid fa-plus"
+                (Action)="openCreateSubAgent()" />
             }
           </div>
         </div>
@@ -190,14 +186,9 @@
           
           <div class="prompts-list">
             @if (agentPrompts.length === 0) {
-              <div class="empty-prompts">
-                <i class="fa-solid fa-comment-dots"></i>
-                <p>No prompts configured for this agent</p>
-                <button class="add-first-prompt-btn">
-                  <i class="fa-solid fa-plus"></i>
-                  Add First Prompt
-                </button>
-              </div>
+              <mj-empty-state Variant="empty" Icon="fa-solid fa-comment-dots"
+                Title="No prompts configured for this agent"
+                ActionText="Add First Prompt" ActionIcon="fa-solid fa-plus" />
             } @else {
               @for (prompt of agentPrompts; track prompt.id) {
                 <div class="prompt-card">

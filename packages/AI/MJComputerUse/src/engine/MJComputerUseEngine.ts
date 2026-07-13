@@ -17,7 +17,7 @@
 import { LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, MJAIPromptEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { ChatMessageRole, createBase64DataUrl } from '@memberjunction/ai';
 import type { ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -49,6 +49,46 @@ import {
 import type { JsonSchemaType, AuthMethod } from '@memberjunction/computer-use';
 
 import { MJRunComputerUseParams, MJDomainAuthBinding, ActionRef, PromptEntityRef } from '../types/mj-params.js';
+import { AgentRunStepTracker } from './agent-run-step-tracker.js';
+
+/**
+ * Default stored-prompt name the goal loop's controller uses when the caller pins neither a prompt nor a
+ * model — the golden-source "Computer Use - Controller" metadata prompt (template + model selection). See
+ * the FLIP in {@link MJComputerUseEngine.Run}.
+ */
+export const DEFAULT_CONTROLLER_PROMPT_NAME = 'Computer Use - Controller';
+
+/**
+ * Default stored-prompt name the judge uses when the caller pins neither a judge prompt nor a judge model —
+ * the "Computer Use - Judge" metadata prompt. See the FLIP in {@link MJComputerUseEngine.Run}.
+ */
+export const DEFAULT_JUDGE_PROMPT_NAME = 'Computer Use - Judge';
+
+/**
+ * Picks the highest-power LLM that supports Image **input** (a vision-capable controller), or `undefined`
+ * when none qualify. Filters the candidate models to the `LLM` type, narrows to those for which
+ * `supportsImageInput` is true, then returns the one with the highest `PowerRank` (descending).
+ *
+ * Pure (no engine/singleton state) so it is unit-testable in isolation; {@link MJComputerUseEngine}'s
+ * `selectHighestPowerVisionLLM` supplies `AIEngine.Instance.Models` + an `AIEngine.ModelSupportsModality`
+ * predicate. The original input array is not mutated.
+ *
+ * @param models The candidate models (typically `AIEngine.Instance.Models`).
+ * @param supportsImageInput Predicate: does the model id accept Image input modality?
+ * @returns The best vision-capable LLM, or `undefined` when none qualify.
+ */
+export function pickHighestPowerVisionLLM(
+    models: MJAIModelEntityExtended[],
+    supportsImageInput: (modelId: string) => boolean,
+): MJAIModelEntityExtended | undefined {
+    const visionLLMs = models
+        .filter((m) => typeof m.AIModelType === 'string' && m.AIModelType.trim().toLowerCase() === 'llm')
+        .filter((m) => supportsImageInput(m.ID));
+    if (visionLLMs.length === 0) {
+        return undefined;
+    }
+    return [...visionLLMs].sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0))[0];
+}
 
 export class MJComputerUseEngine extends ComputerUseEngine {
     private promptRunner: AIPromptRunner;
@@ -56,6 +96,12 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     private agentRunId: string | undefined;
     private lastPromptRunId: string | undefined;
     private _provider: IMetadataProvider | null = null;
+
+    /**
+     * When the run is linked to a parent agent-run step (AgentRunId + AgentRunStepID), this tracker nests a
+     * child `Prompt` step per controller/judge prompt under it. Undefined when no step linkage was supplied.
+     */
+    private stepTracker: AgentRunStepTracker | undefined;
 
     /**
      * Optional metadata provider override. Callers should set
@@ -97,13 +143,35 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         this.agentRunId = params.AgentRunId;
         this.lastPromptRunId = undefined;
 
-        // Resolve prompt entity refs → full MJAIPromptEntityExtended
+        // When linked to a parent agent-run step, nest a child Prompt step per prompt under it.
+        this.stepTracker = undefined;
+        if (params.AgentRunId && params.AgentRunStepID) {
+            const tracker = new AgentRunStepTracker(this.Provider, this.contextUser, params.AgentRunId, params.AgentRunStepID);
+            await tracker.Init();
+            this.stepTracker = tracker;
+        }
+
+        // Resolve prompt entity refs → full MJAIPromptEntityExtended (explicit caller override first).
         this.controllerPromptEntity = await this.resolvePromptRef(params.ControllerPromptRef);
         this.judgePromptEntity = await this.resolvePromptRef(params.JudgePromptRef);
 
-        // If no explicit controller prompt or model, auto-select the best
-        // vision-capable LLM from MJ metadata. The base engine already has a
-        // DEFAULT_CONTROLLER_PROMPT, so all we need is a model to send it to.
+        // FLIP THE DEFAULT: when the caller pinned neither a prompt nor a model, default the controller +
+        // judge to the stored "Computer Use - Controller"/"- Judge" metadata prompts — the golden source of
+        // BOTH the prompt text AND model selection (Gemini 3.1 Flash-Lite → Haiku 4.5 → GPT 5.5 by priority).
+        // This routes the goal loop through AIPromptRunner with the prompt's configured models + prompt-run
+        // logging, instead of the legacy "auto-select a vision model + built-in code prompt" path. Resolution
+        // is non-throwing — if the stored prompt is absent from metadata we fall through to that legacy path,
+        // so the engine never hard-fails (and standalone/no-metadata callers are unaffected).
+        if (!this.controllerPromptEntity && !params.ControllerModel) {
+            this.controllerPromptEntity = await this.resolveDefaultPromptByName(DEFAULT_CONTROLLER_PROMPT_NAME);
+        }
+        if (!this.judgePromptEntity && !params.JudgeModel) {
+            this.judgePromptEntity = await this.resolveDefaultPromptByName(DEFAULT_JUDGE_PROMPT_NAME);
+        }
+
+        // If STILL no controller prompt or model (the stored default is missing too), auto-select the best
+        // vision-capable LLM from MJ metadata. The base engine already has a DEFAULT_CONTROLLER_PROMPT, so
+        // all we need is a model to send it to.
         if (!this.controllerPromptEntity && !params.ControllerModel) {
             const autoModel = await this.autoSelectControllerModel();
             if (!autoModel) {
@@ -133,7 +201,12 @@ export class MJComputerUseEngine extends ComputerUseEngine {
             params.Tools = [...(params.Tools ?? []), ...actionTools];
         }
 
-        return super.Run(params);
+        try {
+            return await super.Run(params);
+        } finally {
+            // Flush the fire-and-forget child step saves now that the goal is done (no-op when untracked).
+            await this.stepTracker?.Flush();
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -308,6 +381,24 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     }
 
     /**
+     * Resolves a DEFAULT prompt by name from the AIEngine cache — the goal-loop FLIP's golden-source lookup.
+     * Unlike {@link resolvePromptRef}, this is **non-throwing**: a missing default (e.g. the metadata isn't
+     * seeded, or a standalone caller) returns `undefined` and the engine falls through to its legacy
+     * auto-select path, so the default-to-stored-prompt behavior degrades gracefully and never hard-fails.
+     *
+     * @param name The stored prompt name (e.g. {@link DEFAULT_CONTROLLER_PROMPT_NAME}).
+     * @returns The prompt entity, or `undefined` when not present in metadata.
+     */
+    private async resolveDefaultPromptByName(name: string): Promise<MJAIPromptEntityExtended | undefined> {
+        await AIEngine.Instance.Config(false, this.contextUser);
+        const prompt = AIEngine.Instance.Prompts.find(p => p.Name === name && p.Status === 'Active');
+        if (!prompt) {
+            this.log(`Default stored prompt "${name}" not found/active in metadata — falling back to auto-selection.`);
+        }
+        return prompt;
+    }
+
+    /**
      * Auto-select the best controller model from MJ metadata.
      *
      * Uses the canonical MJ pattern: AIEngine.GetHighestPowerLLM()
@@ -316,16 +407,43 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      * Returns undefined if no active LLM exists at all.
      */
     private async autoSelectControllerModel(): Promise<ModelConfig | undefined> {
-        const selected = await AIEngine.Instance.GetHighestPowerLLM(undefined, this.contextUser);
+        // Make sure model metadata is warm (cheap no-op when already loaded).
+        await AIEngine.Instance.Config(false, this.contextUser);
+
+        // The controller drives the browser from SCREENSHOTS, so it MUST accept image input. Prefer the
+        // highest-power LLM that explicitly advertises Image *input* modality; fall back to the plain
+        // highest-power LLM only when none do (e.g. a deployment relying on AIModelType-inherited
+        // modalities that aren't captured as explicit AIModelModality rows) so selection never hard-fails.
+        const vision = this.selectHighestPowerVisionLLM();
+        const selected = vision ?? (await AIEngine.Instance.GetHighestPowerLLM(undefined, this.contextUser));
         if (!selected) return undefined;
 
         const vendor = selected.Vendor ?? 'unknown';
         const model = selected.APIName ?? selected.Name;
         const driverClass = selected.DriverClass ?? undefined;
 
-        LogStatus(`Auto-selected controller model: ${vendor}:${model} (PowerRank=${selected.PowerRank ?? 0}, driver=${driverClass ?? 'auto'})`);
+        LogStatus(
+            `Auto-selected controller model: ${vendor}:${model} ` +
+            `(PowerRank=${selected.PowerRank ?? 0}, driver=${driverClass ?? 'auto'}, vision=${vision ? 'yes' : 'fallback'})`,
+        );
 
         return new ModelConfig(vendor, model, driverClass);
+    }
+
+    /**
+     * Returns the highest-power LLM that explicitly supports Image **input** (vision), or `undefined`
+     * when none do. Mirrors `GetHighestPowerModel`'s LLM-type filter, then narrows to vision-capable
+     * models via `AIEngine.ModelSupportsModality` before ranking by `PowerRank` (descending).
+     *
+     * Note: `ModelSupportsModality` reads explicit `AIModelModality` rows; a model that inherits Image
+     * input from its `AIModelType` without an explicit row won't match here — that's the documented
+     * fall-back case in {@link autoSelectControllerModel}.
+     */
+    private selectHighestPowerVisionLLM(): MJAIModelEntityExtended | undefined {
+        return pickHighestPowerVisionLLM(
+            AIEngine.Instance.Models,
+            (modelId) => AIEngine.Instance.ModelSupportsModality(modelId, 'Image', 'Input'),
+        );
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -368,7 +486,17 @@ export class MJComputerUseEngine extends ComputerUseEngine {
             params.conversationMessages = conversationMessages;
         }
 
-        return this.promptRunner.ExecutePrompt(params);
+        // Nest a child `Prompt` step under the goal's parent step (no-op when step-tracking is inactive),
+        // finalizing it with the produced prompt-run id whether the prompt succeeds, fails, or throws.
+        const step = this.stepTracker ? await this.stepTracker.BeginPromptStep(promptEntity) : null;
+        try {
+            const result = await this.promptRunner.ExecutePrompt(params);
+            this.stepTracker?.EndPromptStep(step, result.promptRun?.ID, result.success, result.errorMessage); // fire-and-forget
+            return result;
+        } catch (err) {
+            this.stepTracker?.EndPromptStep(step, undefined, false, err instanceof Error ? err.message : String(err));
+            throw err;
+        }
     }
 
     /**

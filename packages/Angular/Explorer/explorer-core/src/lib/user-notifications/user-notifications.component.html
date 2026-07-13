@@ -6,7 +6,14 @@
         <div class="title-icon">
           <i class="fa-solid fa-bell"></i>
         </div>
-        <h1>Notifications</h1>
+        <div class="title-text">
+          <h1>Notifications</h1>
+          @if (UnreadNotifications.length > 0) {
+            <span class="title-subtitle">{{UnreadNotifications.length}} unread</span>
+          } @else if (AllNotifications.length > 0) {
+            <span class="title-subtitle">All caught up</span>
+          }
+        </div>
       </div>
 
       @if (AllNotifications.length > 0) {
@@ -36,14 +43,10 @@
     <!-- Filters Section -->
     @if (AllNotifications.length > 0) {
       <div class="filters-section">
-        <!-- Horizontal Slider for Filters (Mobile) -->
         <div class="filters-slider">
           <div class="slider-content">
-            <!-- Stats Pills (Filter Tabs) -->
+            <!-- Read-status pills -->
             <div class="header-stats" role="group" aria-label="Filter notifications by read status">
-              <input #allRadio type="radio" name="UnreadStatus" value="All"
-                     (change)="onReadRadioChanged($event)" checked class="hidden-radio"
-                     id="filter-all" />
               <button class="stat-pill"
                       type="button"
                       [class.active]="radioSelected === 'All'"
@@ -54,9 +57,6 @@
                 <span class="stat-count">{{AllNotifications.length}}</span>
               </button>
 
-              <input #unreadRadio type="radio" name="UnreadStatus" value="Unread"
-                     (change)="onReadRadioChanged($event)" class="hidden-radio"
-                     id="filter-unread" />
               @if (UnreadNotifications.length > 0 || ReadNotifications.length === 0) {
                 <button class="stat-pill"
                         type="button"
@@ -72,9 +72,6 @@
                 </button>
               }
 
-              <input #readRadio type="radio" name="UnreadStatus" value="Read"
-                     (change)="onReadRadioChanged($event)" class="hidden-radio"
-                     id="filter-read" />
               @if (ReadNotifications.length > 0 || UnreadNotifications.length === 0) {
                 <button class="stat-pill"
                         type="button"
@@ -88,7 +85,7 @@
               }
             </div>
 
-            <!-- Native Type Filter Dropdown (in slider on mobile) -->
+            <!-- Type filter -->
             @if (notificationTypes.length > 0) {
               <div class="filter-item type-filter-slider">
                 <select class="type-select"
@@ -105,7 +102,7 @@
           </div>
         </div>
 
-        <!-- Search Filter (separate, full-width on mobile) -->
+        <!-- Search -->
         <div class="search-section">
           <div class="search-container">
             <i class="fa-solid fa-magnifying-glass search-icon" aria-hidden="true"></i>
@@ -118,7 +115,6 @@
           </div>
         </div>
 
-        <!-- Filter Info Badge -->
         @if (NotificationsToShow.length !== AllNotifications.length) {
           <div class="filter-info">
             <span class="filter-badge">
@@ -134,90 +130,117 @@
   <!-- Notifications Content -->
   <div class="notifications-content">
     @if (NotificationsToShow.length === 0 && AllNotifications.length === 0) {
-      <div class="empty-state">
-        <div class="empty-icon">
-          <i class="fa-solid fa-bell-slash"></i>
-        </div>
-        <h3>No Notifications</h3>
-        <p>You're all caught up! New notifications will appear here.</p>
-      </div>
+      <mj-empty-state
+        Variant="success"
+        Icon="fa-solid fa-bell-slash"
+        Title="No Notifications"
+        Message="You're all caught up! New notifications will appear here." />
     } @else if (NotificationsToShow.length === 0) {
-      <div class="empty-state">
-        <div class="empty-icon">
-          <i class="fa-solid fa-filter-circle-xmark"></i>
-        </div>
-        <h3>No Matching Notifications</h3>
-        <p>Try adjusting your filters to see more notifications.</p>
-      </div>
+      <mj-empty-state
+        Variant="no-results"
+        Icon="fa-solid fa-filter-circle-xmark"
+        Title="No Matching Notifications"
+        Message="Try adjusting your filters to see more notifications." />
     } @else {
-      <!-- Notifications List -->
+      <!-- Day-grouped notification list -->
       <div class="notifications-list">
-        @for (notification of NotificationsToShow; track notification.ID) {
-          <article class="notification-card"
-                   [class.unread]="notification.Unread"
-                   [class.clickable]="isNotificationClickable(notification)"
-                   role="article"
-                   [attr.aria-label]="notification.Title">
+        @for (group of Groups; track group.Key) {
+          <div class="group-label">{{group.Label}}</div>
 
-            <!-- Unread Indicator Bar -->
-            <div class="card-indicator" aria-hidden="true"></div>
+          @for (vm of group.Items; track vm.N.ID) {
+            <article class="notification-card"
+                     [class.unread]="vm.N.Unread"
+                     [class.expanded]="IsExpanded(vm)"
+                     [class.clickable]="vm.Clickable"
+                     role="article"
+                     [attr.aria-label]="vm.N.Title">
 
-            <!-- Type Icon -->
-            <div class="card-icon"
-                 [style.background-color]="getTypeColor(notification) + '15'"
-                 aria-hidden="true">
-              <i [class]="'fa-solid ' + getTypeIcon(notification)"
-                 [style.color]="getTypeColor(notification)"></i>
-            </div>
+              <!-- Unread Indicator Bar -->
+              <div class="card-indicator" aria-hidden="true"></div>
 
-            <!-- Content -->
-            <div class="card-content" (click)="notificationClicked(notification)">
-              <div class="card-header">
-                <h3 class="card-title" [class.card-title-unread]="notification.Unread">
-                  {{notification.Title}}
-                </h3>
-                <span class="card-time">
-                  <i class="fa-regular fa-clock" aria-hidden="true"></i>
-                  <time [attr.datetime]="notification.__mj_CreatedAt">
-                    {{notification.__mj_CreatedAt | date:'MMM d, h:mm a'}}
-                  </time>
-                </span>
+              <!-- Type Icon -->
+              <div class="card-icon" aria-hidden="true">
+                <i [class]="'fa-solid ' + getTypeIcon(vm.N)"
+                   [style.color]="getTypeColor(vm.N)"></i>
               </div>
 
-              <div class="card-meta">
-                <span class="card-type"
-                      [style.background-color]="getTypeColor(notification) + '15'"
-                      [style.color]="getTypeColor(notification)">
-                  {{getTypeName(notification)}}
-                </span>
+              <!-- Content -->
+              <div class="card-content" (click)="notificationClicked(vm.N)">
+                <div class="card-header">
+                  <h3 class="card-title" [class.card-title-unread]="vm.N.Unread">
+                    {{vm.N.Title}}
+                  </h3>
+                  <span class="card-time" [title]="(vm.N.__mj_CreatedAt | date:'medium') ?? ''">
+                    @if (vm.Relative) {
+                      {{vm.Relative}}
+                    } @else {
+                      <time [attr.datetime]="vm.N.__mj_CreatedAt">{{vm.N.__mj_CreatedAt | date:'MMM d, h:mm a'}}</time>
+                    }
+                  </span>
+                </div>
+
+                <div class="card-meta">
+                  <span class="card-type">{{getTypeName(vm.N)}}</span>
+                  @if (vm.Clickable) {
+                    <span class="card-open-hint">
+                      <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> Open
+                    </span>
+                  }
+                </div>
+
+                @if (!IsExpanded(vm)) {
+                  <p class="card-message">{{vm.Preview}}</p>
+                } @else {
+                  <div class="card-rich" (click)="$event.stopPropagation()">
+                    @switch (vm.Kind) {
+                      @case ('html') {
+                        <!-- Angular sanitizes on [innerHTML] bind; chrome tags were stripped at classification -->
+                        <div class="card-rich-html" [innerHTML]="vm.Body"></div>
+                      }
+                      @case ('markdown') {
+                        <mj-markdown class="card-rich-md" [data]="vm.Body" [enableMermaid]="false"></mj-markdown>
+                      }
+                      @default {
+                        <p class="card-message card-message-full">{{vm.N.Message}}</p>
+                      }
+                    }
+                  </div>
+                }
+
+                @if (vm.Expandable) {
+                  <button class="card-expand-btn" type="button"
+                          (click)="ToggleExpanded(vm, $event)"
+                          [attr.aria-expanded]="IsExpanded(vm)">
+                    <i class="fa-solid" [class.fa-chevron-down]="!IsExpanded(vm)" [class.fa-chevron-up]="IsExpanded(vm)" aria-hidden="true"></i>
+                    {{ IsExpanded(vm) ? 'Show less' : 'Show more' }}
+                  </button>
+                }
               </div>
 
-              <p class="card-message">{{notification.Message}}</p>
-            </div>
-
-            <!-- Actions -->
-            <div class="card-actions">
-              @if (notification.Unread) {
-                <button class="card-action-btn"
-                        type="button"
-                        (click)="markAsRead(notification, true, null)"
-                        [attr.aria-label]="'Mark ' + notification.Title + ' as read'"
-                        title="Mark as Read">
-                  <i class="fa-solid fa-check" aria-hidden="true"></i>
-                  <span class="action-text">Read</span>
-                </button>
-              } @else {
-                <button class="card-action-btn"
-                        type="button"
-                        (click)="markAsRead(notification, false, null)"
-                        [attr.aria-label]="'Mark ' + notification.Title + ' as unread'"
-                        title="Mark as Unread">
-                  <i class="fa-solid fa-envelope" aria-hidden="true"></i>
-                  <span class="action-text">Unread</span>
-                </button>
-              }
-            </div>
-          </article>
+              <!-- Actions -->
+              <div class="card-actions">
+                @if (vm.N.Unread) {
+                  <button class="card-action-btn"
+                          type="button"
+                          (click)="markAsRead(vm.N, true, null)"
+                          [attr.aria-label]="'Mark ' + vm.N.Title + ' as read'"
+                          title="Mark as Read">
+                    <i class="fa-solid fa-check" aria-hidden="true"></i>
+                    <span class="action-text">Read</span>
+                  </button>
+                } @else {
+                  <button class="card-action-btn"
+                          type="button"
+                          (click)="markAsRead(vm.N, false, null)"
+                          [attr.aria-label]="'Mark ' + vm.N.Title + ' as unread'"
+                          title="Mark as Unread">
+                    <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+                    <span class="action-text">Unread</span>
+                  </button>
+                }
+              </div>
+            </article>
+          }
         }
       </div>
     }

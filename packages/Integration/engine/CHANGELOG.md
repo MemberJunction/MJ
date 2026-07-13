@@ -1,5 +1,333 @@
 # @memberjunction/integration-engine
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/integration-engine-base@5.47.0
+  - @memberjunction/integration-pk-classifier@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/integration-progress-artifacts@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/integration-engine-base@5.46.0
+  - @memberjunction/integration-pk-classifier@5.46.0
+  - @memberjunction/integration-progress-artifacts@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/integration-engine-base@5.45.1
+- @memberjunction/integration-pk-classifier@5.45.1
+- @memberjunction/integration-progress-artifacts@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- 81a8aa2: Custom-column promotion gate (U3) + opt-in reclaim planner (U7) — two pure decision functions in `CustomColumnPromotion.ts`; the engine PLANS, the consumer executes.
+
+  **U3 — hold promotion until a full sync (`planPromotions` + `PromotionPlanOptions.LockUntilFullSync`).** After a rediscovery, an _incremental_ sync only re-syncs changed rows, so unchanged rows still carry now-vanished keys in their overflow JSON — a coverage scan over that stale mix could **phantom-promote** a column the source already dropped. A full sync evicts every stale key per-row (`reconcileOverflowValue`, shipped in the schema-fidelity change), making the scan trustworthy. When `LockUntilFullSync` is set, `planPromotions` plans **nothing** — the engine's half of "lock column-application until the sync after a schema change." The engine supplies the lever; the consumer owns the state (it knows when a full sync completed) and pulls it. Default (undefined/false) = unlocked, so existing callers are unchanged.
+
+  **U7 — opt-in reclaim of vanished promoted columns (`planColumnReclamations`).** A promoted column the source stops sending currently lingers all-NULL (non-destructive by design). This adds a **pure, triple-gated, default-OFF** planner: it returns candidates only when the deployment opts in (`ReclaimVanishedColumns`) AND a full sync was observed (`FullSyncCompleted`), and even then only for a column that is BOTH all-NULL across that full sync AND absent from the source. Nothing is dropped by default, and a column holding data is never a candidate. Symmetric to `planPromotions`: the engine only PLANS the drop; the consumer/RSU performs the destructive DDL.
+
+  Both are pure and deterministic (sorted output), matching the existing `decideLengthOverlay` / `reconcileOverflowValue` pattern. Unit-tested (2 lock cases + 4 reclaim cases). No migration; no behavior change unless a caller passes the new options.
+
+### Patch Changes
+
+- f99cbc1: Fix: template-var **child** objects now receive sampled field metadata at discovery, and the parent's addressing key is **resolved from the fetched rows** rather than presupposed.
+
+  A second-layer object whose API path nests under a parent (`/orgs/{OrgId}/events`) resolves its parent IDs through `LoadParentIDs`, which reads the **synced** DB. At discovery nothing is synced yet, so the child yields zero records → it is sampled with no fields (no widths, no PK, no custom-column capture), silently falling back to declared-only metadata. Discovery instead **walks the same DAG sync walks** — parents before children, a child reading its parents — but adapted with a rough per-table record limit (~`maxRecords`) and reading parents from a **live sample** instead of the DB. This is a single recursive routine (`StreamRecordsForDiscovery`), **uniform to all depths**: a template-var child streams its parent by calling the _same routine_ one level up, so a grandparent is sampled identically. Because each level pulls its parent lazily and there is **no per-level cap**, the child's fill-to-N demand propagates up the _entire_ dependency chain to the parentless top — the "fill to N" completion happens at the top of the chain, not locally. A million-row ancestor is streamed and cut off early (record-constrained, unlike sync which walks every row).
+
+  Crucially, the parent's addressing-key **field name is not presupposed**. After fetching the parent it is resolved, in order: (1) a **declared PK** in metadata; else (2) the engine's **value-statistic PK classifier run over the rows fetch just returned** (`pickKeyFromStats` / soft-fallback — discovery-via-fetch, the same determination used everywhere). If neither resolves, the parent is genuinely keyless and its child **adjourns** (caught on the first real sync). No conventional identity name is ever guessed — a field name is never assumed for a field the data doesn't prove is the key.
+
+  Discovery-only and additive: it runs through a dedicated path (the REST `DiscoverySampleRecordStream` override → `StreamRecordsForDiscovery`), so the **sync path** (`FetchWithTemplateVars` → `LoadParentIDs`) is untouched — `ZERO_PARENTS` and the "sync the parent first" DAG contract are unchanged; non-template-var objects are untouched. Multi-var (composition) children are **deferred**: the sampler adjourns them (declared-only until first sync) rather than fire malformed URLs at the vendor. The parent live-sample is an HTTP fetch with no SQL, so it is dialect-agnostic — identical on SQL Server and PostgreSQL. Covered by unit tests: the pre-fix zero-record gap, a declared-PK parent, a **keyless parent whose key is resolved from the fetched rows**, the record bound, and the sync path staying unchanged.
+
+- 11d5b4e: Fix (MJ#3047): quote the primary-key identifier in the content-hash prefetch filter so an integration object whose PK column name is a SQL reserved word (e.g. Zendesk `custom_objects.key`) no longer silently loses idempotency.
+
+  `IntegrationEngine.PrefetchContentHashes` built its bulk stored-hash lookup as `WHERE key IN (…)` with the PK identifier unquoted. For a reserved-word PK the database rejects the query; because the prefetch is best-effort it swallows the error and returns nothing, so the content-hash idempotent-skip fast path can never engage — every unchanged record is re-written on each sync (inflated `RecordsUpdated`, redundant writes). The filter now quotes the PK identifier(s) **and** value literals through the provider's dialect (`DatabaseProviderBase.Dialect` → `[key]` on SQL Server, `"key"` on PostgreSQL), so it is valid on both targets without reintroducing the SS-brackets-break-Postgres problem the previous unquoted form was guarding against. Filter construction is extracted to a pure `buildContentHashPrefetchFilter` helper with unit tests covering reserved-word single + composite PKs on both dialects.
+
+- 82ca89b: Two catalog-fidelity fixes for the connector discovery/sync pipeline:
+  - **Width never shrinks on rediscovery (U2).** `IntegrationSchemaSync`'s per-field overlay assigned the rediscovered `MaxLength` directly, so a rediscovery whose sample happened to be narrower than a prior run shrank the persisted `IOF.Length`. RSU only ever widens the physical column (never shrinks it), so the catalog drifted below the column (catalog `nvarchar(128)` vs column `nvarchar(512)`) and a later apply keyed off the catalog could truncate a value the wider column still holds. The overlay is now a pure `decideLengthOverlay` that grows the persisted width but never shrinks it (a null/undefined source width is "no opinion" — the persisted value sticks).
+  - **Stale overflow keys are evicted on re-sync (U4), which also stops phantom promotion (U3).** The custom-overflow write only fired when a record had unmapped fields, so when a source column vanished the record's unmapped set emptied, the write was skipped, and the prior overflow JSON (with the now-gone key) stuck around forever — where a coverage scan could still promote it to a real column. The write now reconciles to the record's CURRENT unmapped keys on every sync (`reconcileOverflowValue`), clearing the column to null when there are none, so a vanished key is evicted the next time its row is synced. Byte-identical for customs-free rows (writing null to an already-null column is a no-op under dirty tracking).
+
+  Both are extracted as pure, unit-tested decision functions (`decideLengthOverlay`, `reconcileOverflowValue`) matching the existing `decideBooleanOverlay` pattern. Code-only, no migration.
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/integration-engine-base@5.45.0
+  - @memberjunction/integration-pk-classifier@5.45.0
+  - @memberjunction/integration-progress-artifacts@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/integration-engine-base@5.44.0
+  - @memberjunction/integration-pk-classifier@5.44.0
+  - @memberjunction/integration-progress-artifacts@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- b98366b: Integration framework hardening for wide-catalog and multi-level connectors (extracted from the 20-connector close-out; no connector-specific code).
+  - **Wide-table safety (dialect-driven in-row size + column-count limits).** The row-size knowledge now lives in the dialect abstraction, not in platform string-branching: `SQLDialect` gains `MaxInRowSizeBytes` (SQL Server `8060`, PostgreSQL `null`), `MaxColumnCount` (SQL Server `1024`, PostgreSQL `1600`), and `EstimateInRowBytes(rawSqlType)` (SQL Server's per-type in-row footprint; base default a conservative off-row pointer). `SchemaBuilder` consumes these via `GetDialect()` — for a dialect with a hard in-row limit it keeps all primary-key columns + a declared-priority core subset within budget, defers the rest (they still sync and land in `__mj_integration_CustomOverflow`), and emits a structured warning instead of shipping a table that fails every `INSERT` with `Cannot create a row of size … greater than 8060`; a dialect with no in-row limit (PostgreSQL/TOAST) only gets a soft advisory near its column-count cap. `IntegrationEngine` adds an env-clamped per-table column ceiling (`MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE`, max 1000 = SQL Server's 1024 minus framework column headroom) so column-count-driven failures degrade to a reversible auto-disable at apply time. Proven on netFORUM (wide objects 8/17 → 15/17, zero 8060 INSERT failures); 17 row-size unit tests.
+  - **Multi-level template-var traversal.** `BaseRESTIntegrationConnector.ResolveParentForVar` adds a per-variable parent map (`Configuration.parentObjectNames` `{ "<var>": "<SiblingObject>" }`, with optional `parentObjectIDFieldNames`), checked before the existing single-valued `parentObjectName`. This lets a path with more than one template variable (e.g. `/events/{eventCode}/sessions/{sessionCode}/…`) resolve each variable to its own parent object instead of collapsing both to one parent and tripping the `PARENT_CYCLE` guard (→ 0 rows). Backward-compatible: connectors that declare no `parentObjectNames` are unaffected.
+  - **Large-catalog ApplyAll performance.** `IntegrationDiscoveryResolver.createEntityAndFieldMaps` reuses the already-in-memory persisted field schema (built in Phase 1) instead of issuing a live per-object `DiscoverFields` describe in a sequential loop, and resolves the target entity via an `O(1)` `schema.table → EntityInfo` map instead of an `O(N²)` scan. This removes the per-object round-trips and ~millions of comparisons that pushed very large catalogs (e.g. Salesforce's ~1,695 objects) past the client timeout with zero maps created.
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/integration-engine-base@5.43.0
+  - @memberjunction/integration-pk-classifier@5.43.0
+  - @memberjunction/integration-progress-artifacts@5.43.0
+
+## 5.42.0
+
+### Minor Changes
+
+- 6ac8ca4: feat(integration): v2 integration framework + unified connector set (GrowthZone, OpenWater, ORCID, PropFuel, Path LMS)
+
+  Consolidated integration-v2 work — framework hardening + five connectors — proven end-to-end via the
+  GraphQL stand-up path (clean DB, CreateConnection → ApplyAll → StartSync) on SQL Server.
+
+  **Integration core (`integration-engine`, `integration-engine-base`, `integration-schema-builder`):**
+  - Deterministic §4 content-hash identity stamp for keyless rows (stable storage key + idempotent re-sync).
+  - Door-before-child dependency ordering derived from soft-FK `parentObjectName`/`ReferencedType` — children
+    land in one pass (no ZERO_PARENTS, no second-sync self-heal).
+  - Adaptive rate-limit hooks (`RateLimitAcquire`/`Report`/`MaxConcurrency`) on `FetchContext`.
+  - Shared `auth-helpers` (`OAuth2TokenManager`); `KeySerialization`/`RecordFlatten` committed (were
+    imported-but-untracked — fresh clones could not build); `IntegrationEngineBase.SeedForTesting` for
+    offline replay harnesses.
+
+  **Schema correctness + sizing (`integration-engine`, `integration-schema-builder`):**
+  - `json`/`text`/`array`/`object` and unsized strings map to `NVARCHAR(MAX)`/unbounded text instead of
+    being collapsed to `nvarchar(255)` — a nested-array JSON or long field routinely exceeds 255 and was
+    dropped at sync time (OpenWater `Program.rounds` went from **0** rows to all of them). Bounded scalar
+    strings keep a small, space-efficient size (255 floor; declared length + headroom when the source
+    reports one; PK strings capped at the dialect index-key limit). Soft-PK columns are emitted nullable.
+  - String-overflow is **skip-and-surface** (`STRING_OVERFLOW_SKIPPED` SyncWarning via the new
+    `StringOverflowError`), not truncate or fail-the-batch.
+  - **Active-only materialization (phantom-skip):** `buildSourceSchemaFromPersistedRows` materializes only
+    `Status='Active'` objects/fields — no empty phantom tables, no wasted per-entity CodeGen/advancedGen cost.
+
+  **StartSync honesty (`server`):**
+  - `IntegrationStartSync` no longer returns optimistic `{Success:true, RunID:null}` for fast/no-op syncs;
+    it resolves the run by recency over a bounded poll (real `RunID`), and returns `Success:false` with a
+    message when no run record appears.
+
+  **Soft-PK config cache (`codegen-lib`):**
+  - `RunInProcess` invalidates `ManageMetadataBase`'s soft-PK/FK config cache per in-process run — the
+    path-keyed cache went stale in the long-lived MJAPI RSU CodeGen path ("No primary key found" → entity
+    never created → 0 rows synced until restart). Deterministic; the CLI `Run()` path is unchanged.
+
+  **Unified connector set (`integration-connectors`):**
+  - **GrowthZone** — OAuth2, 38 objects, idempotency + probe-amended pagination metadata.
+  - **OpenWater** — 25 objects, OpenAPI-complete.
+  - **ORCID** — 12 per-record objects, public-API live-verified.
+  - **PropFuel** — file-feed slice (rich REST API documented out-of-scope).
+  - **Path LMS (Blue Sky eLearn)** — GraphQL Reporting API, pull-only; GraphQL over `/graphql`, two-step
+    app-credential → bearer auth; credential-free discovery from the public SpectaQL schema (84 record
+    types / 1175 fields); per-object `AccessPath` walks the 16 GraphQL query doors to leaf records;
+    content-hash idempotency.
+  - All five validated under the v2 architecture (RealityProbe / completeness-diff / T12 idempotency).
+
+  **Migration + metadata (additive schema → minor):** ships forward migration(s) + integration metadata
+  seeds; additive only — no column drops, narrowing, renames, or new required params — backward-compatible
+  **minor** per the publish-then-no-breaking-changes policy.
+
+### Patch Changes
+
+- 6520bea: Add MemberSuite (AMS) integration connector — REST API v2, 196 objects / ~6,000 fields extracted credential-free from MemberSuite's public module swaggers (CRM/membership/events/fundraising/financial). Signed-request auth via auth-helpers, narrow Activity/Certification write surface, runtime custom-field/saved-search discovery, full-record pass-through. Adds the `MemberSuite API` credential type. Also adds the additive `OAuth2TokenRequest.ExtraParams` field required by the existing RhythmConnector (engine patch).
+- 5ebf0e9: Add the netFORUM Enterprise (Community Brands AMS) connector — xWeb SOAP/XML route.
+  - **`NetForumConnector`** (`@memberjunction/integration-connectors`): integrates netFORUM Enterprise via the xWeb SOAP/XML web service (`netForumXML.asmx`), implemented as SOAP-over-HTTP on `BaseRESTIntegrationConnector`. Two-step `Authenticate` token auth; `GetQuery`/`GetQueryDefinition`/`ExecuteMethod` reads; per-facade `*_last_updated_dt` incremental watermarks; facade CRUD where the xWeb docs establish it. The standard Enterprise object model (34 Integration Objects) is Declared from the public xWeb WSDL; customer-specific queries/views/custom columns are runtime-discovered via `GetQueryDefinition` (`DiscoveryIsAuthoritative=false`), never baked into the connector.
+  - **`@memberjunction/integration-engine`**: adds the optional `OAuth2TokenRequest.ExtraParams` field (extra `application/x-www-form-urlencoded` grant-body params, e.g. Auth0 `audience`), forwarded by `OAuth2TokenManager` with standard params taking precedence. This is the engine half of the OAuth2 change `RhythmConnector` already depends on.
+
+  > **Note:** netFORUM's denormalized facades (e.g. `Individual`, `FundraisingGift`) can exceed SQL Server's hard 1024-column-per-table limit when fully flattened; those objects need column-overflow handling at the framework level before they can materialize as single tables.
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [6ac8ca4]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/integration-engine-base@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/integration-pk-classifier@5.42.0
+  - @memberjunction/integration-progress-artifacts@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/integration-engine-base@5.41.0
+  - @memberjunction/integration-pk-classifier@5.41.0
+  - @memberjunction/integration-progress-artifacts@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/integration-engine-base@5.40.2
+- @memberjunction/integration-pk-classifier@5.40.2
+- @memberjunction/integration-progress-artifacts@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/integration-engine-base@5.40.1
+  - @memberjunction/integration-pk-classifier@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/integration-progress-artifacts@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/integration-engine-base@5.40.0
+  - @memberjunction/integration-pk-classifier@5.40.0
+  - @memberjunction/integration-progress-artifacts@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Minor Changes
+
+- db4addf: feat(integration): Integration Framework Expansion — schema + metadata-driven CRUD base class, generated layer, cross-dialect hardening, and field-mapping cache
+
+  End-to-end increment expanding the integration framework: new per-operation write metadata on the schema, a generic metadata-driven CRUD base class, the regenerated entity/GraphQL/form layers that expose it, plus the cross-dialect (PostgreSQL + SQL Server) bug fixes and a field-mapping performance cache found while proving it live.
+
+  **Schema (v5.39.x migration)**
+  - `IntegrationObject`: explicit per-operation write columns — `CreateAPIPath`/`Method`/`BodyShape`/`BodyKey`/`IDLocation`, `UpdateAPIPath`/`Method`/`BodyShape`/`BodyKey`/`IDLocation`, `DeleteAPIPath`/`DeleteIDLocation`. The legacy `WriteAPIPath`/`WriteMethod` are kept one release as deprecated aliases.
+  - `IntegrationObject`: `IncrementalWatermarkField` — vendor cursor/timestamp field name driving the incremental sync filter.
+  - `IntegrationObject` + `IntegrationObjectField`: `MetadataSource` enum `{Declared, Discovered, Custom}` — provenance for merge precedence in `IntegrationSchemaSync`.
+
+  All schema changes are additive (new nullable fields + a new enum field) — no existing field is removed, renamed, or narrowed — so the bumps are **minor**.
+
+  **Engine / base class (`@memberjunction/integration-engine`)**
+  - `ExternalFieldSchema`: add `IsPrimaryKey` (distinct from `IsUniqueKey`). Fixes an `IntrospectSchema` bug where `IsPrimaryKey` was incorrectly mapped from `IsUniqueKey` — an object can have multiple unique fields but only one primary key.
+  - `BaseRESTIntegrationConnector`: new `TransformRecord` hook — optional per-record customization seam between `NormalizeResponse` and `ToExternalRecord` (default identity); override for vendor-specific record-level shape changes.
+  - `BaseRESTIntegrationConnector`: generic metadata-driven CRUD — `CreateRecord`/`UpdateRecord`/`DeleteRecord`/`GetRecord` read the per-operation columns and execute generically. Concrete connectors override only when an API is genuinely idiosyncratic. Replaces the hand-rolled write logic previously duplicated across every concrete connector.
+  - `FieldMappingEngine`: cache compiled `custom`-transform expressions instead of recompiling `new Function` once per field per record. A batch of N records sharing an expression compiles it once and executes the cached function N times, dropping per-record cost from `O(compile + execute)` to `O(execute)`. The cache stores a typed `CompiledExpression = (value, fields) => unknown` (no weak typing), caches compile failures too (a malformed expression is compiled once and the resulting `Error` re-thrown from cache per record, leaving `OnError` `Fail`/`Null`/`Skip` semantics unchanged), and is bounded by `MJLruCache` (1000-entry default) since the owning `IntegrationEngine` is a process-lifetime singleton.
+
+  **Generated layer (CodeGen for the v5.39.x migration)**
+  - `@memberjunction/core-entities` — `IntegrationObjectEntity` / `IntegrationObjectFieldEntity` gain strongly-typed accessors for the per-operation write columns, `IncrementalWatermarkField`, and the `MetadataSource` enum (`'Declared' | 'Discovered' | 'Custom'`).
+  - `@memberjunction/server` — regenerated resolvers / GraphQL types expose the new fields.
+  - `@memberjunction/ng-core-entity-forms` — regenerated `MJ: Integration Objects` / `MJ: Integration Object Fields` forms render the new fields.
+
+  **Cross-dialect hardening (PostgreSQL + SQL Server)**
+
+  Bugs found and fixed while proving the framework end-to-end on both dialects with live generated actions:
+  - `@memberjunction/codegen-lib` — PostgreSQL CRUD generation emitted the primary-key column twice for composite-PK entities, so association/junction tables never synced on PG; `PostgreSQLCodeGenProvider` now treats a multi-column PK as strategy-handled. Soft-PK/FK application uses dialect-aware identifier quoting and boolean literals (`this.dialect.QuoteIdentifier` / `BooleanLiteral`) so the pass runs correctly on PostgreSQL.
+  - `@memberjunction/server` — wired the PostgreSQL branch of the in-process CodeGen runner (`RuntimeSchemaManager.SetCodeGenRunner`) that previously existed only for SQL Server, so runtime schema sync no longer falls back to a hang-prone child process on PG. `IntegrationDiscoveryResolver` entity/field-map creation is now create-or-reuse (idempotent on re-apply), and its idempotency + operational list reads use `BypassCache` so create-vs-update decisions read committed state.
+  - `@memberjunction/integration-engine` — `MatchEngine.FindRecordMapEntry` and the bulk record-map load now read committed state (`BypassCache`), fixing duplicate-create after a direct-DB change; watermark save/load is idempotent to avoid a transaction-abort on retry. `LoadRunConfiguration` and every remaining operational decision-read — the upsert-by-identity record-map lookup, field-maps, the full-vs-incremental gate, write-back external-id lookup, orphan-sweep, and orphaned-run resume — now also `BypassCache`. This closes a Postgres-only gap where a freshly-toggled entity-map `Configuration` (e.g. enabling partition/Merkle reconcile) was read stale → the ChangeToken rollup was silently never written on PG, and removes the broader read-stale-then-decide bug class so the read-your-own-writes pipeline always decides from committed state on both dialects.
+  - `@memberjunction/core-actions` — the generated integration-action executor used stale entity names (`'Integrations'`, `'Company Integrations'`); corrected to `'MJ: Integrations'` / `'MJ: Company Integrations'` so `List`/`Get` invoke successfully.
+  - `@memberjunction/core-entities-server` — declares its previously-undeclared `@memberjunction/integration-pk-classifier` dependency (used by the server-side LLM PK-detection callback), fixing the missing-dependency check; covers the integration server-entity behavior (`MJCompanyIntegrationEntityServer`, `IntegrationLLMPKCallback`).
+  - Multi-provider safety — the post-pipeline metadata `Refresh()` calls in `IntegrationDiscoveryResolver` and `MJCompanyIntegrationEntityServer` now refresh the request's own provider (`provider ?? new Metadata()`) instead of the global default, satisfying the `MultiProviderCompliance` gate and refreshing the correct cache under a non-default provider.
+  - Dialect layer (`@memberjunction/sql-dialect`) — statement splitting for runtime schema migrations is now a dialect concern: `SplitStatements` (naive `;`-split on the base, dollar-quote-aware override on PostgreSQL so `DO $$…$$` blocks stay intact) instead of living in the schema-engine runtime.
+
+### Patch Changes
+
+- a1e2776: Add an idempotent `Upsert` verb to integration connectors, implemented for HubSpot contacts.
+
+  **Engine** (`integration-engine`): a new CRUD verb alongside Create/Update/Delete — a `SupportsUpsert` capability getter and a default-throwing `Upsert(ctx)` on `BaseIntegrationConnector`, a new `UpsertRecordContext` type (carries `Attributes` plus an optional `IDProperty` override of the upsert key), and an optional `UpsertKey` field on `IntegrationObjectInfo` so objects can declare their natural unique business key. Purely additive: existing connectors inherit the throwing default, `UpsertKey` is optional, and the action-generator verb set is unchanged (no auto-generated Upsert action).
+
+  **HubSpot** (`integration-connectors`): `HubSpotConnector` overrides `Upsert` for contacts. This defines an error out of existence — a search-then-create sequence has a window in which a concurrent writer can create the same email-keyed contact, yielding `409 Contact already exists`; rather than catch and special-case that 409, `Upsert` issues a single idempotent call to `POST /crm/v3/objects/<object>/batch/upsert` with a batch of one (`idProperty`/`id` per input, `id` = the upsert-key value), which creates-on-missing and updates-on-existing without a 409, removing the race window entirely. The `idProperty` defaults from the object's `UpsertKey` metadata (`email` for contacts) and is overridable per call. It uses the write-verb error pattern: it never trusts a bare 2xx (a batch envelope reporting `numErrors`, a non-`COMPLETE` status, empty `results`, or a result with no object id all surface as `Success:false`), and a missing key/value fails with a 400 before any API call.
+
+  Note: the single-record `PATCH /crm/v3/objects/contacts/{email}?idProperty=email` was verified live to NOT create-on-missing (404), so the batch/upsert-of-one is the correct single-call idempotent path; the documented multi-input batch caveats (whole-batch 409, no partial upserts) do not apply at size one.
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/integration-engine-base@5.39.0
+  - @memberjunction/integration-pk-classifier@5.39.0
+  - @memberjunction/integration-progress-artifacts@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

@@ -1,13 +1,14 @@
 import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, AfterViewInit, inject } from '@angular/core';
 import { MJQueryEntityExtended, MJQueryParameterEntity, MJQueryCategoryEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQueryPermissionEntity, MJQueryDependencyEntity, QueryEngine } from '@memberjunction/core-entities';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
-import { BaseFormComponent, FormToolbarConfig, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, FormToolbarConfig, CUSTOM_LAYOUT_TOOLBAR_CONFIG, MJFormPresenterService } from '@memberjunction/ng-base-forms';
 import { MJQueryFormComponent } from '../../generated/Entities/MJQuery/mjquery.form.component';
-import { RUN_QUERY_SQL_FILTERS, CompositeKey } from '@memberjunction/core';
+import { RUN_QUERY_SQL_FILTERS, CompositeKey, BaseEntity } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CodeEditorComponent, CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { NavigationService } from '@memberjunction/ng-shared';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { Subject } from 'rxjs';
 
 interface CategoryTreeNode {
@@ -36,7 +37,6 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public hasUnsavedChanges = false;
     public showFiltersHelp = false;
     public showRunDialog = false;
-    public showCategoryDialog = false;
     public categoryPathDisplay = '';
     public IsSaving = false;
 
@@ -106,6 +106,8 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public sqlFilters = RUN_QUERY_SQL_FILTERS;
     
     private navigationService = inject(NavigationService);
+    private formPresenter = inject(MJFormPresenterService);
+    private confirmService = inject(MJConfirmService);
     private destroy$ = new Subject<void>();
 
     /**
@@ -476,7 +478,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * Delete a parameter
      */
     async deleteParameter(param: MJQueryParameterEntity) {
-        if (!confirm(`Are you sure you want to delete parameter "${param.Name}"?`)) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Parameter', message: `Delete parameter "${param.Name}"?` }))) {
             return;
         }
 
@@ -533,14 +535,54 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
     
     /**
-     * Handle category creation from dialog
+     * Create a new Query Category in a slide-in via the generic
+     * MJFormPresenterService. A new record opens in edit mode automatically.
+     * On save, refresh the category tree and select the new category.
      */
-    onCategoryCreated(newCategory: MJQueryCategoryEntity) {
+    async createCategory(): Promise<void> {
+        const ref = this.formPresenter.Open({
+            EntityName: 'MJ: Query Categories',
+            Presentation: 'slide-in',
+            // Quick-create: drop the system-metadata (timestamps) section — empty
+            // for a new record. Merges over the slide-in preset (toolbar still off).
+            Config: { HiddenSectionKeys: ['systemMetadata'] },
+            Provider: this.ProviderToUse,
+        });
+        const saved = await ref.AfterSaved();
+        if (saved) {
+            this.onCategoryCreated(saved);
+        }
+    }
+
+    /**
+     * Edit the currently-selected category in a slide-in via the generic
+     * MJFormPresenterService. `StartInEditMode` opens the existing record
+     * editable. On save, refresh the category tree.
+     */
+    async editSelectedCategory(): Promise<void> {
+        if (!this.record.CategoryID) return;
+        const ref = this.formPresenter.Open({
+            EntityName: 'MJ: Query Categories',
+            RecordId: this.record.CategoryID,
+            Presentation: 'slide-in',
+            // Open editable + drop the system-metadata section. Partial config
+            // merges over the slide-in preset, so the toolbar stays suppressed.
+            Config: { StartInEditMode: true, HiddenSectionKeys: ['systemMetadata'] },
+            Provider: this.ProviderToUse,
+        });
+        const saved = await ref.AfterSaved();
+        if (saved) {
+            this.loadCategories();
+            this.cdr.detectChanges();
+        }
+    }
+
+    onCategoryCreated(newCategory: BaseEntity) {
         // Reload categories to include the new one
         this.loadCategories();
 
         // Set the new category as selected
-        this.record.CategoryID = newCategory.ID;
+        this.record.CategoryID = (newCategory as MJQueryCategoryEntity).ID;
 
         // Trigger change detection
         this.cdr.detectChanges();
@@ -770,7 +812,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * Delete a field
      */
     async deleteField(field: MJQueryFieldEntity) {
-        if (!confirm(`Are you sure you want to delete field "${field.Name}"?`)) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Field', message: `Delete field "${field.Name}"?` }))) {
             return;
         }
 
@@ -838,7 +880,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * Delete an entity
      */
     async deleteEntity(entity: MJQueryEntityEntity) {
-        if (!confirm(`Are you sure you want to delete entity "${entity.Entity}"?`)) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Entity', message: `Delete entity "${entity.Entity}"?` }))) {
             return;
         }
 

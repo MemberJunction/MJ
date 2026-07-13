@@ -4,16 +4,17 @@
  * Fetches the *minimal* slice of migration files needed to bring a database to a
  * target version, instead of cloning the entire `migrations/` history.
  *
- * Skyway's resolver already auto-selects the highest baseline and subsumes every
- * migration at or below it. This module mirrors that selection on the FETCH side
- * so we only download what Skyway will actually run:
+ * The selection depends on whether the target database is fresh or existing, because
+ * Skyway only ever applies baselines to a fresh (no-history) database:
  *
- *   run set = [ highest `B` baseline ] + [ every `V` after that baseline ] + [ all `R` repeatables ]
+ *   fresh install   →  [ highest `B` baseline ] + [ every `V` after it ] + [ all `R` repeatables ]
+ *   existing upgrade →  [ every `V` after the DB's current version ]      + [ all `R` repeatables ]   (no baseline)
  *
- * The git ref bounds the top of the range (only migrations that exist at/below the
- * target are present in the tree); the latest baseline bounds the bottom. Selection
- * uses the numeric `<timestamp>` filename token — Skyway's version key — via the
- * shared {@link parseMigrationFilename}.
+ * The existing-upgrade path is what makes incremental upgrades correct: a baseline floor
+ * would skip the intermediate versioned migrations a behind-the-baseline DB still needs.
+ * The git ref bounds the top of the range (only migrations at/below the target are in the
+ * tree). Selection uses the numeric `<timestamp>` filename token — Skyway's version key —
+ * via the shared {@link parseMigrationFilename}.
  */
 import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
@@ -51,15 +52,42 @@ export function resolveGitRef(tagOrBranch: string): string {
 
 /**
  * Pure selector: given the repo-relative migration paths present at a ref, return
- * the minimal slice Skyway needs. With no baseline present (e.g. legacy v2), returns
- * the full versioned history. Repeatable migrations are always included.
+ * the minimal slice Skyway needs. Repeatable migrations are always included.
+ *
+ * Two modes, keyed on `currentVersion` (the highest migration already applied to the
+ * target database, or `null` for a fresh one):
+ *
+ * - **Fresh install** (`currentVersion == null`): `baseline + tail` — the highest `B`
+ *   baseline plus every `V` after it. Skyway applies the baseline (consolidated schema)
+ *   then the tail. This is the bandwidth-optimal path for a brand-new database.
+ * - **Existing-DB upgrade** (`currentVersion` set): every `V` strictly after the current
+ *   version, with **no baseline**. Skyway never applies a `B` file to a database that
+ *   already has history, and the baseline floor would wrongly skip the intermediate
+ *   versioned migrations the DB still needs (e.g. a v5.36 file below a v5.37 baseline
+ *   when upgrading a v5.35 database).
+ *
+ * With no baseline present (e.g. legacy v2) the fresh path returns the full versioned history.
  */
-export function selectMigrationSlice(paths: readonly string[]): string[] {
+export function selectMigrationSlice(paths: readonly string[], currentVersion?: string | null): string[] {
   const sqlPaths = paths.filter((p) => p.toLowerCase().endsWith('.sql'));
   const repeatables = sqlPaths.filter((p) => REPEATABLE_PATTERN.test(path.basename(p)));
+
+  if (currentVersion != null) {
+    // Existing DB: upgrade with versioned migrations after the current version only.
+    const versioned = sqlPaths.filter((p) => isVersionedAfter(p, currentVersion));
+    return Array.from(new Set([...versioned, ...repeatables]));
+  }
+
+  // Fresh DB: baseline + everything after it.
   const floorTimestamp = highestBaselineTimestamp(sqlPaths);
   const versioned = sqlPaths.filter((p) => isInVersionedSlice(p, floorTimestamp));
   return Array.from(new Set([...versioned, ...repeatables]));
+}
+
+/** True if `filePath` is a versioned (`V`) migration whose timestamp is strictly after `currentVersion`. */
+function isVersionedAfter(filePath: string, currentVersion: string): boolean {
+  const parsed = parseMigrationFilename(path.basename(filePath));
+  return parsed?.kind === 'V' && parsed.timestamp > currentVersion;
 }
 
 /** Returns the timestamp of the latest `B` baseline among the paths, or null if none. */
@@ -87,7 +115,13 @@ function isInVersionedSlice(filePath: string, floorTimestamp: string | null): bo
  * only the selected migration slice. Returns the temp dir plus a `cleanup` the caller
  * MUST run in a finally. On any internal failure the temp dir is removed before throwing.
  */
-export async function fetchMigrationSlice(opts: { repoUrl: string; ref: string; dialect: MigrationDialect }): Promise<MigrationFetchResult> {
+export async function fetchMigrationSlice(opts: {
+  repoUrl: string;
+  ref: string;
+  dialect: MigrationDialect;
+  /** Highest version already applied to the target DB; `null`/omitted = fresh install (baseline + tail). */
+  currentVersion?: string | null;
+}): Promise<MigrationFetchResult> {
   const migrationsRoot = opts.dialect === 'postgresql' ? 'migrations-pg' : 'migrations';
   const dir = mkdtempSync(path.join(tmpdir(), 'mj-migrations-'));
   const cleanup = async (): Promise<void> => {
@@ -105,7 +139,7 @@ export async function fetchMigrationSlice(opts: { repoUrl: string; ref: string; 
       return { dir, selected: [], usedFallback: true, cleanup };
     }
     const allPaths = await listTreePaths(git, migrationsRoot);
-    const selected = selectMigrationSlice(allPaths);
+    const selected = selectMigrationSlice(allPaths, opts.currentVersion);
     const checkoutTargets = selected.length > 0 ? selected : [migrationsRoot];
     await git.raw(['sparse-checkout', 'set', '--no-cone', ...checkoutTargets]);
     await git.raw(['checkout']);

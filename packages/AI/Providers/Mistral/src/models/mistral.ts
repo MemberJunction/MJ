@@ -1,5 +1,5 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ErrorAnalyzer } from '@memberjunction/ai';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Mistral } from "@mistralai/mistralai";
 import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice, ChatCompletionStreamRequest } from '@mistralai/mistralai/models/components';
 
@@ -50,10 +50,15 @@ export class MistralLLM extends BaseLLM {
         const startTime = new Date();
 
         let responseFormat: ResponseFormat | undefined = undefined;
-        if (params.responseFormat) {
-            if(params.responseFormat === 'JSON') {
+        switch (params.responseFormat) {
+            case 'JSON':
                 responseFormat = { type: "json_object" };
-            }
+                break;
+            case 'ModelSpecific':
+                if (params.modelSpecificResponseFormat) {
+                    responseFormat = params.modelSpecificResponseFormat as ResponseFormat;
+                }
+                break;
         }
 
         // Convert messages to format expected by Mistral, with optional prefill
@@ -160,7 +165,8 @@ export class MistralLLM extends BaseLLM {
             model: chatResponse.model,
             id: chatResponse.id,
             object: chatResponse.object,
-            created: chatResponse.created
+            created: chatResponse.created,
+            raw: ToJSONSafe(chatResponse)
         };
         
         return chatResult;
@@ -185,10 +191,17 @@ export class MistralLLM extends BaseLLM {
         // Reset streaming state for new request
         this.resetStreamingState();
         let responseFormat: ResponseFormat | undefined = undefined;
-        if (params.responseFormat === 'JSON') {
-            responseFormat = { type: "json_object" };
+        switch (params.responseFormat) {
+            case 'JSON':
+                responseFormat = { type: "json_object" };
+                break;
+            case 'ModelSpecific':
+                if (params.modelSpecificResponseFormat) {
+                    responseFormat = params.modelSpecificResponseFormat as ResponseFormat;
+                }
+                break;
         }
-        
+
         // Convert messages to format expected by Mistral, with optional prefill
         const messages = this.MapMJMessagesToMistral(params.messages, params.assistantPrefill);
 

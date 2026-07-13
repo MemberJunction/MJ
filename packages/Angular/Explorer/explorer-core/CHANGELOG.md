@@ -1,5 +1,885 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [46a06ac]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ng-dashboards@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/ng-auth-services@5.47.0
+  - @memberjunction/ng-base-application@5.47.0
+  - @memberjunction/ng-entity-form-dialog@5.47.0
+  - @memberjunction/ng-entity-permissions@5.47.0
+  - @memberjunction/ng-explorer-settings@5.47.0
+  - @memberjunction/ng-list-detail-grid@5.47.0
+  - @memberjunction/ng-shared@5.47.0
+  - @memberjunction/ng-ai-test-harness@5.47.0
+  - @memberjunction/ng-artifacts@5.47.0
+  - @memberjunction/ng-base-forms@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-composer@5.47.0
+  - @memberjunction/ng-container-directives@5.47.0
+  - @memberjunction/ng-conversations@5.47.0
+  - @memberjunction/ng-dashboard-viewer@5.47.0
+  - @memberjunction/ng-entity-viewer@5.47.0
+  - @memberjunction/ng-feedback@5.47.0
+  - @memberjunction/ng-file-storage@5.47.0
+  - @memberjunction/ng-list-management@5.47.0
+  - @memberjunction/ng-mj-livekit-room@5.47.0
+  - @memberjunction/ng-notifications@5.47.0
+  - @memberjunction/ng-query-viewer@5.47.0
+  - @memberjunction/ng-record-changes@5.47.0
+  - @memberjunction/ng-record-selector@5.47.0
+  - @memberjunction/ng-record-tags@5.47.0
+  - @memberjunction/ng-resource-permissions@5.47.0
+  - @memberjunction/ng-search@5.47.0
+  - @memberjunction/ng-shared-generic@5.47.0
+  - @memberjunction/ng-user-avatar@5.47.0
+  - @memberjunction/communication-types@5.47.0
+  - @memberjunction/entity-communications-client@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/interactive-component-types@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/templates-base-types@5.47.0
+  - @memberjunction/ng-export-service@5.47.0
+  - @memberjunction/ng-generic-dialog@5.47.0
+  - @memberjunction/ng-markdown@5.47.0
+  - @memberjunction/ng-pagination@5.47.0
+  - @memberjunction/ng-ui-components@5.47.0
+  - @memberjunction/ng-word-cloud@5.47.0
+  - @memberjunction/lists-base@5.47.0
+  - @memberjunction/export-engine@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/ng-entity-permissions@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/ng-auth-services@5.46.0
+  - @memberjunction/ng-base-application@5.46.0
+  - @memberjunction/ng-dashboards@5.46.0
+  - @memberjunction/ng-entity-form-dialog@5.46.0
+  - @memberjunction/ng-explorer-settings@5.46.0
+  - @memberjunction/ng-list-detail-grid@5.46.0
+  - @memberjunction/ng-shared@5.46.0
+  - @memberjunction/ng-ai-test-harness@5.46.0
+  - @memberjunction/ng-artifacts@5.46.0
+  - @memberjunction/ng-base-forms@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-composer@5.46.0
+  - @memberjunction/ng-container-directives@5.46.0
+  - @memberjunction/ng-conversations@5.46.0
+  - @memberjunction/ng-dashboard-viewer@5.46.0
+  - @memberjunction/ng-entity-viewer@5.46.0
+  - @memberjunction/ng-feedback@5.46.0
+  - @memberjunction/ng-file-storage@5.46.0
+  - @memberjunction/ng-list-management@5.46.0
+  - @memberjunction/ng-mj-livekit-room@5.46.0
+  - @memberjunction/ng-notifications@5.46.0
+  - @memberjunction/ng-query-viewer@5.46.0
+  - @memberjunction/ng-record-changes@5.46.0
+  - @memberjunction/ng-record-selector@5.46.0
+  - @memberjunction/ng-record-tags@5.46.0
+  - @memberjunction/ng-resource-permissions@5.46.0
+  - @memberjunction/ng-search@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/ng-user-avatar@5.46.0
+  - @memberjunction/communication-types@5.46.0
+  - @memberjunction/entity-communications-client@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/interactive-component-types@5.46.0
+  - @memberjunction/templates-base-types@5.46.0
+  - @memberjunction/ng-export-service@5.46.0
+  - @memberjunction/ng-generic-dialog@5.46.0
+  - @memberjunction/ng-markdown@5.46.0
+  - @memberjunction/ng-pagination@5.46.0
+  - @memberjunction/ng-ui-components@5.46.0
+  - @memberjunction/ng-word-cloud@5.46.0
+  - @memberjunction/lists-base@5.46.0
+  - @memberjunction/export-engine@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ng-conversations@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/ng-dashboards@5.45.1
+  - @memberjunction/ng-shared@5.45.1
+  - @memberjunction/ng-ai-test-harness@5.45.1
+  - @memberjunction/graphql-dataprovider@5.45.1
+  - @memberjunction/ng-entity-form-dialog@5.45.1
+  - @memberjunction/ng-entity-permissions@5.45.1
+  - @memberjunction/ng-explorer-settings@5.45.1
+  - @memberjunction/ng-list-detail-grid@5.45.1
+  - @memberjunction/ng-file-storage@5.45.1
+  - @memberjunction/ng-list-management@5.45.1
+  - @memberjunction/ng-record-selector@5.45.1
+  - @memberjunction/ng-artifacts@5.45.1
+  - @memberjunction/ng-feedback@5.45.1
+  - @memberjunction/ng-mj-livekit-room@5.45.1
+  - @memberjunction/ng-notifications@5.45.1
+  - @memberjunction/ng-record-tags@5.45.1
+  - @memberjunction/ng-search@5.45.1
+  - @memberjunction/entity-communications-client@5.45.1
+  - @memberjunction/ng-base-forms@5.45.1
+  - @memberjunction/ng-entity-viewer@5.45.1
+  - @memberjunction/ng-dashboard-viewer@5.45.1
+  - @memberjunction/ng-query-viewer@5.45.1
+  - @memberjunction/ng-record-changes@5.45.1
+  - @memberjunction/ng-resource-permissions@5.45.1
+  - @memberjunction/ng-auth-services@5.45.1
+  - @memberjunction/ng-base-application@5.45.1
+  - @memberjunction/ng-base-types@5.45.1
+  - @memberjunction/ng-composer@5.45.1
+  - @memberjunction/ng-container-directives@5.45.1
+  - @memberjunction/ng-export-service@5.45.1
+  - @memberjunction/ng-generic-dialog@5.45.1
+  - @memberjunction/ng-markdown@5.45.1
+  - @memberjunction/ng-pagination@5.45.1
+  - @memberjunction/ng-shared-generic@5.45.1
+  - @memberjunction/ng-ui-components@5.45.1
+  - @memberjunction/ng-user-avatar@5.45.1
+  - @memberjunction/ng-word-cloud@5.45.1
+  - @memberjunction/communication-types@5.45.1
+  - @memberjunction/interactive-component-types@5.45.1
+  - @memberjunction/lists-base@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/export-engine@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/templates-base-types@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- c1f2d3d: User Routines (P1.5): user-owned scheduled/monitoring routines that run an Agent, Action, or Prompt on a cron schedule. New UserRoutine/UserRoutineRecipient/UserRoutineRun schema; UserRoutineDispatcherDriver scheduled-job driver (1-minute sweep, claim-before-run, bounded concurrency, per-routine isolation, runs as the owner, Template-driven notifications with OnChange result-hash detection, RequestedSkillIDs pre-arming for Agent targets); pure UserRoutineProcessor schedule/notify primitives shared with MJUserRoutineEntityServer (NextRunAt on save, cron validation) and MJUserRoutineRecipientEntityServer (User-xor-Email); lazy non-startup UserRoutineEngine; new @memberjunction/ng-user-routines widget set (list/editor/history + command-center composite + slide-in, cancelable Before/After events, Agent-only creation with categorical ng-trees picker); conversations bottom-sidebar Routines section gated by ShowRoutines input AND entity-Read permission (hosted in both the generic workspace sidebar and Explorer's Chat wrapper); Routines Explorer app; pure cron preset/describe helpers now in @memberjunction/global (CronUtils); mj-tree gains a DefaultExpansion input ('first-level' | 'all' | 'none'); BaseScheduledJob gains IsHighFrequencyByDesign so by-design pollers (the routine dispatcher) opt out of the high-frequency cron warning; Agent-target routines run inside a dedicated per-routine Conversation (Application-scoped via the Routines app so it stays out of the default chat list; RunAgentInConversation writes proper user/assistant turns; standalone fallback when the app is absent); UserRoutine.ConversationID schema + open-conversation and open-execution-record event chains through the conversations hosts; server-side cascade delete (recipients + run bookkeeping) so routines that have run delete cleanly; agent picker is a compact mj-tree-dropdown (DefaultExpansion pass-through added); mj-slide-panel settles to transform:none when open so position:fixed descendants (dropdown panels) keep true viewport coordinates; time-relative sidebar/card/history text is snapshot-based (NG0100 fix); 16-test live integration suite + live Playwright E2E; Explorer notifications page rebuilt (day-grouped cards, sanitized HTML + Markdown message rendering with expand/collapse previews, snapshot relative times, removal of a test harness that created junk Conversations on Mark-All-Read) and the seeded routine notification template gains a compact Markdown Text body that the dispatcher now prefers for in-app delivery (the HTML document stays for email); new @memberjunction/ng-composer package extracts the conversations message composer (mention editor + dropdown + message input box) so the routine editor's InitialMessage field uses the mention editor without an ng-conversations dependency cycle — and the composer's mention/command triggers are PLUGGABLE: a generic ComposerTriggerProvider contract (TriggerChar/Key/Priority/GetSuggestions, generic MentionSuggestion with provider-supplied presets) with two supply modes (explicit [TriggerProviders] list, or ClassFactory discovery via @RegisterClass(ComposerTriggerProvider,'<key>') filtered by [ExcludedTriggerKeys]), leaving ng-composer with ZERO AI knowledge; the AI plugins moved to ng-conversations (composer-plugins: 'agent-mentions' '@' agents+users w/ configuration presets, 'record-mentions' '#' entities+queries, 'skill-commands' '/' skills — tree-shake-guarded by LoadComposerPlugins(); MentionAutocompleteService moved back to ng-conversations as a BaseSingleton engine shared by plugins and components) plus a new mj-ai-composer wrapped component that proxies the full mj-message-input-box surface with the AI triggers built in and familiar EnableAgentMentions/EnableEntityMentions/EnableSkillCommands convenience flags (the chat composer now uses it); the routine editor uses discovery mode with agent-mentions excluded.
+
+### Patch Changes
+
+- fbee64c: Fix intermittent stale installed-apps state in the Home dashboard and app switcher. BaseEngine's entity-event skip-guards previously dropped the observer notification along with the redundant refresh whenever an event's changes were already reflected in an engine array (in-place save of a cached instance, manual push after create) — so UserInfoEngine's Install/Enable/Disable/UninstallApplication flows never emitted DataChange$ and ApplicationManager.applications$ went permanently stale. Skip paths now emit through the new notifyAlreadyAppliedMutation. Hardening in the same pass: the debounced pipeline buffers ALL events per window and decides refresh-vs-skip as an OR over the batch (ProcessEntityEvents — a lone in-place save can no longer mask a coalesced fresh-instance save); delete membership checks key off the event payload's pre-delete OldValues snapshot (Delete() re-keys the entity via NewRecord() before the debounced handler runs); deletes of rows absent from an array stay silent to avoid phantom delete events on filtered configs (manual-splice engine code notifies explicitly — UninstallApplication now does); transiently-failed event-triggered refreshes get a bounded, backed-off retry instead of stranding observers until an unrelated event; applyImmediateMutation's already-in-array branches gained the same DataChange$ parity. The 'MJ: User Applications' config now uses a 200ms DebounceTime (vs the 1500ms default) so app-config dialog saves reach the UI near-instantly.
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [13716e4]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [6e10f66]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/ng-dashboards@5.45.0
+  - @memberjunction/graphql-dataprovider@5.45.0
+  - @memberjunction/ng-ui-components@5.45.0
+  - @memberjunction/ng-artifacts@5.45.0
+  - @memberjunction/ng-ai-test-harness@5.45.0
+  - @memberjunction/ng-conversations@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ng-composer@5.45.0
+  - @memberjunction/ng-auth-services@5.45.0
+  - @memberjunction/ng-base-application@5.45.0
+  - @memberjunction/ng-entity-form-dialog@5.45.0
+  - @memberjunction/ng-entity-permissions@5.45.0
+  - @memberjunction/ng-explorer-settings@5.45.0
+  - @memberjunction/ng-list-detail-grid@5.45.0
+  - @memberjunction/ng-shared@5.45.0
+  - @memberjunction/ng-base-forms@5.45.0
+  - @memberjunction/ng-base-types@5.45.0
+  - @memberjunction/ng-container-directives@5.45.0
+  - @memberjunction/ng-dashboard-viewer@5.45.0
+  - @memberjunction/ng-entity-viewer@5.45.0
+  - @memberjunction/ng-feedback@5.45.0
+  - @memberjunction/ng-file-storage@5.45.0
+  - @memberjunction/ng-list-management@5.45.0
+  - @memberjunction/ng-mj-livekit-room@5.45.0
+  - @memberjunction/ng-notifications@5.45.0
+  - @memberjunction/ng-query-viewer@5.45.0
+  - @memberjunction/ng-record-changes@5.45.0
+  - @memberjunction/ng-record-selector@5.45.0
+  - @memberjunction/ng-record-tags@5.45.0
+  - @memberjunction/ng-resource-permissions@5.45.0
+  - @memberjunction/ng-search@5.45.0
+  - @memberjunction/ng-shared-generic@5.45.0
+  - @memberjunction/ng-user-avatar@5.45.0
+  - @memberjunction/communication-types@5.45.0
+  - @memberjunction/entity-communications-client@5.45.0
+  - @memberjunction/interactive-component-types@5.45.0
+  - @memberjunction/templates-base-types@5.45.0
+  - @memberjunction/ng-generic-dialog@5.45.0
+  - @memberjunction/ng-export-service@5.45.0
+  - @memberjunction/ng-markdown@5.45.0
+  - @memberjunction/ng-pagination@5.45.0
+  - @memberjunction/ng-word-cloud@5.45.0
+  - @memberjunction/lists-base@5.45.0
+  - @memberjunction/export-engine@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- f8be8a0: Consolidate collapsible/disclosure UI onto the canonical `<mj-accordion-panel>` across MJ Explorer, and level up the accordion component itself.
+
+  **`@memberjunction/ng-ui-components` (the component):**
+  - New **`MJAccordionModule`** — bundles the panel + all three slot directives (`mjAccordionTitle`, `mjAccordionActions`, `mjAccordionBody`) so consumers import one symbol instead of four (works in both NgModule and standalone `imports`). An NgModule is used because AOT can't expand a value-array across a compiled-package boundary (NG1010) and an `as const` tuple is rejected by the `imports` type (TS2322).
+  - New lazy **`[mjAccordionBody]`** slot — heavy bodies (code editors, grids, charts) instantiate on first expand and stay alive for animated re-toggle, so consumers don't have to reason about content weight or hand-write `@if (expanded)`.
+  - Hardening: `--sm`/`--disabled`/`--muted-icon` modifiers scoped to child combinators (no nested-panel style bleed); `hasBeenExpanded` made non-public per naming conventions; added a DOM test proving the module exposes every declarable.
+
+  **~50 disclosure surfaces migrated** from bespoke `<div (click)>`-header + `@if` markup to `<mj-accordion-panel>` across 20 Angular packages — dashboard-viewer config panels, DevTools Class Registry, Version History diff/snapshot groups, the test-run dialog, Explorer section toggles (about-dialog, sql-logging, SystemDiagnostics, App Roles, Home add-pin, Integration activity, Actions/Permissions/Credentials/Testing/ComponentStudio), and Generic components (agents, clustering, conversations, search, entity-viewer, filter-builder, record-tags, resource-permissions, core-entity-forms). Each replaces a non-focusable `<div (click)>` header with a real `<button [attr.aria-expanded]>` — a genuine accessibility improvement, not cosmetic — and deletes the per-consumer collapse chrome CSS. Card-based collapsibles, trees, and fill-panes are intentionally out of scope (they route to their own primitives).
+
+  No public API changes in the consumer packages (internal refactor). Verified: all affected package test suites pass, CI UI gates green (design tokens + button overrides), and a full audit confirmed side-effects preserved with two visual regressions caught and fixed (SystemDiagnostics severity tint restored with semantic tokens; cluster-scatter members list scroll-confined via `[Fill]`).
+  </content>
+
+- 914acd4: Fix dashboard panels stuck on "Loading…" after navigating Back from a record opened inside a pinned dashboard. The dashboard viewer now defers Golden Layout initialization until its container has a non-zero size and exposes a deterministic `waitForLayoutReady()` signal (replacing a fragile fixed-delay load-complete in the dashboard resource wrapper). The dashboard browser also moves its query-param round-trip onto the framework's `OnQueryParamsChanged` contract so back/forward, deep links, and Home pins reliably restore the open dashboard.
+- 45df197: Fix a single-resource-mode tab reuse leak that allowed stale resource query params to appear on reused tabs. Resource-owned URL state now writes through a tab-scoped, resource-identity-guarded query-param path, so cached components cannot push stale params like `conversationId` or `minRelevance` onto a tab that has since been reused for `/record/...`. This prevents the record URL flash/navigation trap while preserving legitimate query-param state owned by the current resource.
+- 0476455: Migrate inline empty-state placeholders to the canonical `<mj-empty-state>` component across Explorer and Generic Angular packages (UI-consistency objective O4), wiring the component into the packages that needed it (and adding `@memberjunction/ng-ui-components` as a dependency where missing). Also fixes reset-filter CTA correctness in three picker dialogs (sub-agent selector, add-action, action gallery) where the handler cleared only a subset of the active filter dimensions, and refines the UI adoption measurement script with a transparent three-tier empty-state count (raw widened → non-placeholder false-positives → wrappers-around-migrated → genuine).
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [e84c85b]
+- Updated dependencies [f8be8a0]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [1e5e449]
+- Updated dependencies [914acd4]
+- Updated dependencies [18b5bf0]
+- Updated dependencies [04f7863]
+- Updated dependencies [be5ab50]
+- Updated dependencies [45df197]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [0476455]
+- Updated dependencies [9f96357]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-engine-base@5.44.0
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/ng-conversations@5.44.0
+  - @memberjunction/graphql-dataprovider@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ng-entity-viewer@5.44.0
+  - @memberjunction/ng-ui-components@5.44.0
+  - @memberjunction/ng-ai-test-harness@5.44.0
+  - @memberjunction/ng-dashboard-viewer@5.44.0
+  - @memberjunction/ng-dashboards@5.44.0
+  - @memberjunction/ng-explorer-settings@5.44.0
+  - @memberjunction/ng-query-viewer@5.44.0
+  - @memberjunction/ng-record-tags@5.44.0
+  - @memberjunction/ng-resource-permissions@5.44.0
+  - @memberjunction/ng-search@5.44.0
+  - @memberjunction/ng-shared@5.44.0
+  - @memberjunction/ng-artifacts@5.44.0
+  - @memberjunction/ng-mj-livekit-room@5.44.0
+  - @memberjunction/ng-base-forms@5.44.0
+  - @memberjunction/ng-file-storage@5.44.0
+  - @memberjunction/ng-list-detail-grid@5.44.0
+  - @memberjunction/ng-list-management@5.44.0
+  - @memberjunction/ng-record-changes@5.44.0
+  - @memberjunction/ng-auth-services@5.44.0
+  - @memberjunction/ng-feedback@5.44.0
+  - @memberjunction/ng-notifications@5.44.0
+  - @memberjunction/entity-communications-client@5.44.0
+  - @memberjunction/ng-base-application@5.44.0
+  - @memberjunction/ng-entity-form-dialog@5.44.0
+  - @memberjunction/ng-entity-permissions@5.44.0
+  - @memberjunction/ng-base-types@5.44.0
+  - @memberjunction/ng-record-selector@5.44.0
+  - @memberjunction/ng-shared-generic@5.44.0
+  - @memberjunction/ng-user-avatar@5.44.0
+  - @memberjunction/communication-types@5.44.0
+  - @memberjunction/templates-base-types@5.44.0
+  - @memberjunction/ng-export-service@5.44.0
+  - @memberjunction/ng-generic-dialog@5.44.0
+  - @memberjunction/ng-word-cloud@5.44.0
+  - @memberjunction/ng-container-directives@5.44.0
+  - @memberjunction/interactive-component-types@5.44.0
+  - @memberjunction/ng-pagination@5.44.0
+  - @memberjunction/lists-base@5.44.0
+  - @memberjunction/export-engine@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [a975e3d]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [54183aa]
+- Updated dependencies [3eaa05a]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/ng-base-forms@5.43.0
+  - @memberjunction/ng-ui-components@5.43.0
+  - @memberjunction/ng-pagination@5.43.0
+  - @memberjunction/ng-conversations@5.43.0
+  - @memberjunction/ai-engine-base@5.43.0
+  - @memberjunction/ng-auth-services@5.43.0
+  - @memberjunction/ng-base-application@5.43.0
+  - @memberjunction/ng-dashboards@5.43.0
+  - @memberjunction/ng-entity-form-dialog@5.43.0
+  - @memberjunction/ng-entity-permissions@5.43.0
+  - @memberjunction/ng-explorer-settings@5.43.0
+  - @memberjunction/ng-list-detail-grid@5.43.0
+  - @memberjunction/ng-shared@5.43.0
+  - @memberjunction/ng-ai-test-harness@5.43.0
+  - @memberjunction/ng-artifacts@5.43.0
+  - @memberjunction/ng-base-types@5.43.0
+  - @memberjunction/ng-container-directives@5.43.0
+  - @memberjunction/ng-dashboard-viewer@5.43.0
+  - @memberjunction/ng-entity-viewer@5.43.0
+  - @memberjunction/ng-feedback@5.43.0
+  - @memberjunction/ng-file-storage@5.43.0
+  - @memberjunction/ng-list-management@5.43.0
+  - @memberjunction/ng-mj-livekit-room@5.43.0
+  - @memberjunction/ng-notifications@5.43.0
+  - @memberjunction/ng-query-viewer@5.43.0
+  - @memberjunction/ng-record-changes@5.43.0
+  - @memberjunction/ng-record-selector@5.43.0
+  - @memberjunction/ng-record-tags@5.43.0
+  - @memberjunction/ng-resource-permissions@5.43.0
+  - @memberjunction/ng-search@5.43.0
+  - @memberjunction/ng-shared-generic@5.43.0
+  - @memberjunction/ng-user-avatar@5.43.0
+  - @memberjunction/communication-types@5.43.0
+  - @memberjunction/entity-communications-client@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+  - @memberjunction/interactive-component-types@5.43.0
+  - @memberjunction/templates-base-types@5.43.0
+  - @memberjunction/ng-generic-dialog@5.43.0
+  - @memberjunction/ng-export-service@5.43.0
+  - @memberjunction/ng-word-cloud@5.43.0
+  - @memberjunction/lists-base@5.43.0
+  - @memberjunction/export-engine@5.43.0
+
+## 5.42.0
+
+### Minor Changes
+
+- 9b9b484: Field active-status enforcement relocation, plus the "Meet" app rename, quieter operational logging, and a telemetry suppression refinement.
+
+  **Field active-status enforcement (`@memberjunction/core`, `@memberjunction/generic-database-provider`)**
+  - Deprecated-field warnings and disabled-field exceptions are now enforced at the field-access boundary genuine code flows through — `BaseEntity.Get()`, `Set()`, and `SetMany()` (what the generated strongly-typed accessors call) — instead of on the low-level `EntityField.Value` accessor. This flips a leaky blocklist (assert on every `.Value` touch, then suppress at each internal call site) into a precise allowlist, and fixes false deprecation warnings emitted on every load/save of a record that merely _contains_ a deprecated column (e.g. `"MJ: AI Agent Runs".AgentState`) even when no code uses it.
+  - New memoized `EntityInfo.HasInactiveFields` fast-path gate: entities whose fields are all `Active` (the vast majority) pay only a single cached boolean check in the hot read/write paths.
+  - `EntityField.ActiveStatusAssertions` is retained as a `@deprecated` no-op for backward compatibility; the six now-redundant internal suppression toggles were removed. Warning caller strings are now accurate (`BaseEntity.Get`/`Set`) instead of the misleading `"EntityField.Value setter"`.
+
+  **Telemetry (`@memberjunction/core`)**
+  - Suppress "load this into a dedicated engine cache" telemetry suggestions for entities that have explicitly opted out of caching (`EntityInfo.AllowCaching = false`), reusing the existing flag as the single source of truth.
+
+  **Quieter operational logging (`@memberjunction/scheduling-engine`, `@memberjunction/ai-agents`, `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`)**
+  - Scheduled-job no-op runs (e.g. the Agent Memory Manager finding no new activity) now collapse to the engine's `Starting`/`Completed` heartbeat; the per-agent and memory-manager internal traces are verbose-only.
+  - Cleaner server startup logging: transient boot spinner, true total timing, less redundant output, and the `CustomColumnPromoter` registration log demoted to verbose-only.
+
+  **"Meet" app + local LiveKit dev (`@memberjunction/ng-explorer-core`, `@memberjunction/livekit-room-server`, `@memberjunction/auth-providers`, `@memberjunction/server`)**
+  - Renamed the Realtime app to "Meet", with the Live Room now defaulting to the Realtime co-agent instead of starting with no agent, plus a local LiveKit dev server and supporting docs.
+
+- 5fde509: Add the LiveKit room UX stack — a full-featured, framework-portable LiveKit client plus the MJ realtime-bridge binding, server token/egress support, and an Explorer surface.
+  - **`@memberjunction/livekit-room-core`** (new): framework-agnostic pure-TS room controller over `livekit-client` — observable room state, participants, active speakers, audio meters, device control, data-channel messages, audio-autoplay unblock, Krisp noise filter, background blur/virtual background, E2EE, room-free media preview, and a deep **cancelable event architecture** (`event.Cancel = true`).
+  - **`@memberjunction/ng-livekit-room`** (new): super-featured portable Angular UI (`mj-livekit-room`) — gallery / active-speaker / **split-view (draggable splitter)** / audio-only layouts with a live switcher, A/V/screen controls, data-channel chat, device + settings menu (noise filter / background blur), **PreJoin lobby**, **StartAudio** unblock, click-to-pin, **agent-state visualizer**, **collaborative whiteboard** (reuses `@memberjunction/ng-whiteboard`, synced over the data channel — agent co-authoring supported), recording control, and E2EE. Every feature gated by a PascalCase `@Input`; core events re-surfaced as `@Output`s. MJ design tokens with fallbacks.
+  - **`@memberjunction/livekit-room-server`** (new): scoped client/bot token minting (`livekit-server-sdk`), `LiveKitAgentRoomCoordinator` session-start harness (opens a realtime session → `AIBridgeEngine.StartBridgeSession`), and `LiveKitEgressService` recording.
+  - **`@memberjunction/ng-mj-livekit-room`** (new): MJ binding (`mj-livekit-agent-room`) resolving tokens / starting agent sessions / recording via the RealtimeBridge GraphQL surface.
+  - **`@memberjunction/graphql-dataprovider`**: adds `GraphQLLiveKitClient` (mint token, start agent room session, start/stop recording).
+  - **`@memberjunction/server`**: adds `RealtimeBridgeResolver` (`MintLiveKitClientToken`, `StartLiveKitAgentRoomSession`, `StartLiveKitRecording`, `StopLiveKitRecording`).
+  - **`@memberjunction/ng-explorer-core`**: registers a `LiveKitRoomResource` so the room can be opened as an Explorer tab.
+
+  Tests: 74 unit tests across the stack (core 22, server 15, ng-livekit-room 26, GraphQL client 6, resolver 5). No migrations. The agent-talking path additionally requires the deployment to bind a realtime-session factory on `LiveKitAgentRoomCoordinator.Instance` and the LiveKit native room client (`@livekit/rtc-node`) — the documented deployment seams.
+
+- 4ec1732: Make the Meet app's LiveKit Live Room work end-to-end (default agent resolution, realtime model fallback, real backing session row, bridge-driver registration, connect timeout, and active device selection), then build it into a multi-party experience: a pre-join agent picker, threading a target agent so the co-agent actually responds, in-room add/remove of agents, and shareable human invite links. Also improves Entity Vector Sync with a concise per-document summary, verbose-gated pipeline logging, and a batched Entity Record Document existence read that replaces an N+1 query storm.
+
+### Patch Changes
+
+- 313c1c5: Make Explorer's primary navigation perceivable to assistive tech and DOM/accessibility-tree agents (computer-use) — a dual accessibility + agent-usability win.
+  - **New `mjClickable` directive** (`@memberjunction/ng-ui-components`): retrofits an existing clickable `<div>`/`<span>` into an accessible, keyboard-operable control without changing its tag or styling — adds `role` (button/link), `tabindex`, an `aria-label` accessible name, Enter/Space activation (dispatches a native click, so existing `(click)` handlers run for both mouse and keyboard), and an optional `data-testid` hook. Prefer a real `<button mjButton>`/`<a>` for new markup; use `mjClickable` to fix existing widgets cheaply.
+  - **`mjButton` gains `[ariaLabel]`** (applied without clobbering a directly-authored `aria-label`) and a dev-mode warning when an icon-only button ends up with no accessible name.
+  - **Adopted on the nav surfaces that were invisible to a DOM agent**: the Home dashboard app tiles (the reported "agent can't find the app to click" case), sidebar items (notifications/favorites/recents), and the header `app-nav` items + `app-switcher` (trigger gets `aria-expanded`/`aria-haspopup`, items/active get `aria-current`). Icon-only buttons on the Home dashboard get accessible names. Seeds a `data-testid` convention on these surfaces.
+
+  Tests added for both directives (host bindings, keyboard activation, label clobber-safety, dev warnings).
+
+- da5a3dd: Group conversations into collapsible, nestable folders (backed by MJ: Projects) and make the Collections view's artifact organization fluid — drag-and-drop, frictionless multi-select, bulk move, a staging shelf, a navigator pane, and a right-click "Open source conversation". Also fixes stale-cache reads after moves/deletes (BypassCache), conversation-folder delete not refreshing, and cached-tab navigation that opened the Conversations app without selecting the conversation.
+- Updated dependencies [313c1c5]
+- Updated dependencies [256ab06]
+- Updated dependencies [9b9b484]
+- Updated dependencies [e7c2437]
+- Updated dependencies [37c73f6]
+- Updated dependencies [5fde509]
+- Updated dependencies [a07fde1]
+- Updated dependencies [a81d82f]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [ccaf49b]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [e4235fd]
+- Updated dependencies [3ee0f22]
+- Updated dependencies [a5d4a15]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ng-ui-components@5.42.0
+  - @memberjunction/ng-dashboards@5.42.0
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/ng-conversations@5.42.0
+  - @memberjunction/communication-types@5.42.0
+  - @memberjunction/ng-mj-livekit-room@5.42.0
+  - @memberjunction/graphql-dataprovider@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/ng-entity-viewer@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ng-entity-form-dialog@5.42.0
+  - @memberjunction/ng-entity-permissions@5.42.0
+  - @memberjunction/ng-explorer-settings@5.42.0
+  - @memberjunction/ng-ai-test-harness@5.42.0
+  - @memberjunction/ng-artifacts@5.42.0
+  - @memberjunction/ng-base-forms@5.42.0
+  - @memberjunction/ng-feedback@5.42.0
+  - @memberjunction/ng-file-storage@5.42.0
+  - @memberjunction/ng-generic-dialog@5.42.0
+  - @memberjunction/ng-list-management@5.42.0
+  - @memberjunction/ng-record-changes@5.42.0
+  - @memberjunction/ng-record-selector@5.42.0
+  - @memberjunction/ng-record-tags@5.42.0
+  - @memberjunction/ng-resource-permissions@5.42.0
+  - @memberjunction/ai-engine-base@5.42.0
+  - @memberjunction/ng-shared@5.42.0
+  - @memberjunction/ng-auth-services@5.42.0
+  - @memberjunction/ng-base-application@5.42.0
+  - @memberjunction/ng-list-detail-grid@5.42.0
+  - @memberjunction/ng-base-types@5.42.0
+  - @memberjunction/ng-container-directives@5.42.0
+  - @memberjunction/ng-dashboard-viewer@5.42.0
+  - @memberjunction/ng-notifications@5.42.0
+  - @memberjunction/ng-query-viewer@5.42.0
+  - @memberjunction/ng-search@5.42.0
+  - @memberjunction/ng-shared-generic@5.42.0
+  - @memberjunction/ng-user-avatar@5.42.0
+  - @memberjunction/entity-communications-client@5.42.0
+  - @memberjunction/interactive-component-types@5.42.0
+  - @memberjunction/templates-base-types@5.42.0
+  - @memberjunction/ng-export-service@5.42.0
+  - @memberjunction/ng-pagination@5.42.0
+  - @memberjunction/ng-word-cloud@5.42.0
+  - @memberjunction/lists-base@5.42.0
+  - @memberjunction/export-engine@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [6f227ab]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [34d17e2]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [4b30726]
+- Updated dependencies [ef5a5d7]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+- Updated dependencies [4b3fb9d]
+- Updated dependencies [fb2a22f]
+- Updated dependencies [c5d93a0]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/ng-conversations@5.41.0
+  - @memberjunction/graphql-dataprovider@5.41.0
+  - @memberjunction/ai-engine-base@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ng-dashboards@5.41.0
+  - @memberjunction/ng-notifications@5.41.0
+  - @memberjunction/ng-artifacts@5.41.0
+  - @memberjunction/ng-base-forms@5.41.0
+  - @memberjunction/ng-auth-services@5.41.0
+  - @memberjunction/ng-base-application@5.41.0
+  - @memberjunction/ng-entity-form-dialog@5.41.0
+  - @memberjunction/ng-entity-permissions@5.41.0
+  - @memberjunction/ng-explorer-settings@5.41.0
+  - @memberjunction/ng-list-detail-grid@5.41.0
+  - @memberjunction/ng-shared@5.41.0
+  - @memberjunction/ng-ai-test-harness@5.41.0
+  - @memberjunction/ng-base-types@5.41.0
+  - @memberjunction/ng-container-directives@5.41.0
+  - @memberjunction/ng-dashboard-viewer@5.41.0
+  - @memberjunction/ng-entity-viewer@5.41.0
+  - @memberjunction/ng-feedback@5.41.0
+  - @memberjunction/ng-file-storage@5.41.0
+  - @memberjunction/ng-list-management@5.41.0
+  - @memberjunction/ng-query-viewer@5.41.0
+  - @memberjunction/ng-record-changes@5.41.0
+  - @memberjunction/ng-record-selector@5.41.0
+  - @memberjunction/ng-record-tags@5.41.0
+  - @memberjunction/ng-resource-permissions@5.41.0
+  - @memberjunction/ng-search@5.41.0
+  - @memberjunction/ng-shared-generic@5.41.0
+  - @memberjunction/ng-user-avatar@5.41.0
+  - @memberjunction/communication-types@5.41.0
+  - @memberjunction/entity-communications-client@5.41.0
+  - @memberjunction/interactive-component-types@5.41.0
+  - @memberjunction/templates-base-types@5.41.0
+  - @memberjunction/ng-export-service@5.41.0
+  - @memberjunction/ng-generic-dialog@5.41.0
+  - @memberjunction/ng-pagination@5.41.0
+  - @memberjunction/ng-ui-components@5.41.0
+  - @memberjunction/ng-word-cloud@5.41.0
+  - @memberjunction/lists-base@5.41.0
+  - @memberjunction/export-engine@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [3da89ef]
+- Updated dependencies [da2ee38]
+  - @memberjunction/ng-artifacts@5.40.2
+  - @memberjunction/ng-dashboards@5.40.2
+  - @memberjunction/ng-conversations@5.40.2
+  - @memberjunction/ng-dashboard-viewer@5.40.2
+  - @memberjunction/ai-engine-base@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/ng-auth-services@5.40.2
+  - @memberjunction/ng-base-application@5.40.2
+  - @memberjunction/ng-entity-form-dialog@5.40.2
+  - @memberjunction/ng-entity-permissions@5.40.2
+  - @memberjunction/ng-explorer-settings@5.40.2
+  - @memberjunction/ng-list-detail-grid@5.40.2
+  - @memberjunction/ng-shared@5.40.2
+  - @memberjunction/ng-ai-test-harness@5.40.2
+  - @memberjunction/ng-base-forms@5.40.2
+  - @memberjunction/ng-base-types@5.40.2
+  - @memberjunction/ng-container-directives@5.40.2
+  - @memberjunction/ng-entity-viewer@5.40.2
+  - @memberjunction/ng-export-service@5.40.2
+  - @memberjunction/ng-feedback@5.40.2
+  - @memberjunction/ng-file-storage@5.40.2
+  - @memberjunction/ng-generic-dialog@5.40.2
+  - @memberjunction/ng-list-management@5.40.2
+  - @memberjunction/ng-notifications@5.40.2
+  - @memberjunction/ng-pagination@5.40.2
+  - @memberjunction/ng-query-viewer@5.40.2
+  - @memberjunction/ng-record-changes@5.40.2
+  - @memberjunction/ng-record-selector@5.40.2
+  - @memberjunction/ng-record-tags@5.40.2
+  - @memberjunction/ng-resource-permissions@5.40.2
+  - @memberjunction/ng-search@5.40.2
+  - @memberjunction/ng-shared-generic@5.40.2
+  - @memberjunction/ng-ui-components@5.40.2
+  - @memberjunction/ng-user-avatar@5.40.2
+  - @memberjunction/ng-word-cloud@5.40.2
+  - @memberjunction/communication-types@5.40.2
+  - @memberjunction/entity-communications-client@5.40.2
+  - @memberjunction/graphql-dataprovider@5.40.2
+  - @memberjunction/interactive-component-types@5.40.2
+  - @memberjunction/lists-base@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/export-engine@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/templates-base-types@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-engine-base@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/ng-auth-services@5.40.1
+  - @memberjunction/ng-base-application@5.40.1
+  - @memberjunction/ng-dashboards@5.40.1
+  - @memberjunction/ng-entity-form-dialog@5.40.1
+  - @memberjunction/ng-entity-permissions@5.40.1
+  - @memberjunction/ng-explorer-settings@5.40.1
+  - @memberjunction/ng-list-detail-grid@5.40.1
+  - @memberjunction/ng-shared@5.40.1
+  - @memberjunction/ng-ai-test-harness@5.40.1
+  - @memberjunction/ng-artifacts@5.40.1
+  - @memberjunction/ng-base-forms@5.40.1
+  - @memberjunction/ng-base-types@5.40.1
+  - @memberjunction/ng-container-directives@5.40.1
+  - @memberjunction/ng-conversations@5.40.1
+  - @memberjunction/ng-dashboard-viewer@5.40.1
+  - @memberjunction/ng-entity-viewer@5.40.1
+  - @memberjunction/ng-feedback@5.40.1
+  - @memberjunction/ng-file-storage@5.40.1
+  - @memberjunction/ng-list-management@5.40.1
+  - @memberjunction/ng-notifications@5.40.1
+  - @memberjunction/ng-query-viewer@5.40.1
+  - @memberjunction/ng-record-changes@5.40.1
+  - @memberjunction/ng-record-selector@5.40.1
+  - @memberjunction/ng-record-tags@5.40.1
+  - @memberjunction/ng-resource-permissions@5.40.1
+  - @memberjunction/ng-search@5.40.1
+  - @memberjunction/ng-shared-generic@5.40.1
+  - @memberjunction/ng-user-avatar@5.40.1
+  - @memberjunction/communication-types@5.40.1
+  - @memberjunction/entity-communications-client@5.40.1
+  - @memberjunction/graphql-dataprovider@5.40.1
+  - @memberjunction/interactive-component-types@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/templates-base-types@5.40.1
+  - @memberjunction/ng-export-service@5.40.1
+  - @memberjunction/ng-generic-dialog@5.40.1
+  - @memberjunction/ng-pagination@5.40.1
+  - @memberjunction/ng-ui-components@5.40.1
+  - @memberjunction/ng-word-cloud@5.40.1
+  - @memberjunction/lists-base@5.40.1
+  - @memberjunction/export-engine@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Minor Changes
+
+- 43e6c0f: MJ-issued magic-link sessions for external, app-scoped users: passwordless, single-use (or multi-use) invite links that sign external users into MJExplorer confined to one application and a per-link role. MJ issues and validates its own RS256 session tokens (published via JWKS, accepted by the standard auth-provider path), so there's no external IdP dependency or per-user IdP cost. Invite scope (app, role, expiry, max uses) is configured per link, with support for per-invite app/role, resource-scoped RLS sharing, and anonymous sessions — a shared Anonymous principal whose scope rides per-session JWT claims rather than DB roles, so concurrent anonymous visitors can't accrete privileges.
+
+  Also includes two framework changes made along the way:
+  - **RunView server-cache RLS fix:** the cache fingerprint now incorporates the per-user Row-Level-Security where-clause, so an RLS-scoped read can no longer be served an unscoped cached result. No-op for users without an RLS filter (byte-identical fingerprint), so normal caching is untouched.
+  - **BaseEngine degrades gracefully under restricted roles:** a config load that fails because the current user lacks Read permission is now treated as a permanent condition — the property loads empty and the engine is marked loaded — instead of looping on "not marking as loaded", which previously hung the MJExplorer shell for least-privilege users (e.g. magic-link guests). Only genuinely transient failures (network, server restart) keep retrying.
+
+- 253a188: Knowledge Hub Classify redesign
+  - **Clustering**: new `@memberjunction/clustering-engine` (framework-agnostic fetch → cluster → reduce → LLM-name pipeline), a "Run Cluster Analysis" action, a `RunClusterAnalysis` GraphQL resolver, a `GraphQLClusterClient` transport, and the Angular `ClusteringService` thinned to delegate to the server.
+  - **View-type plug-in architecture (entity viewer)**: `ViewType` registry + `ViewTypeEngine` + `IViewTypeDescriptor`/`IViewRenderer`/`IViewPropSheet` contracts in `ng-entity-viewer`, with Grid/Cards/Timeline/Map descriptors. The host now **dynamic-mounts** any registered plug-in view type (via `ViewContainerRef`) with zero host changes, and the switcher shows the active type's icon + label, collapsing from an icon strip to a dropdown as the list grows. **Cluster view type** added in `@memberjunction/ng-clustering` (descriptor + `IViewRenderer` wrapper over the scatter + `IViewPropSheet` + an Entity-Document availability engine) — available on any entity with vectors, reusing the same `ClusteringService`. The active view type persists to `UserView.ViewTypeID` (new source of truth; backfilled from the legacy `DisplayState.defaultMode`) and per-view-type config to `UserView.DisplayState.viewTypeConfigs` (new typed `IViewTypeConfigEntry`). `ViewType.Icon` is now `ExtendedType='Icon'` for the admin icon picker. See `packages/Angular/Generic/entity-viewer/VIEW_TYPE_PLUGINS.md`.
+  - **Classify UX**: per-tab scroll fix, Refresh buttons, meaningful content-item display names, loading states, `BaseEntityEvent` reactivity, and load-more pagination.
+  - **Audit & analytics**: direct tag→prompt-run lineage (`AIPromptRunID` + `Reasoning` on Content Item Tags), `ClassifyAnalyticsEngine`, reusable item grid + drilldown, and an Overview analytics section.
+  - **Setup & onboarding**: contextual prompt injection (org/content-type/source aggregation), `generateSeedTaxonomy` (clustering-backed) + resolver, source-form domain-context UI, org-context editor, inline Entity Document creation, seed-taxonomy review, and a guided setup wizard.
+  - **Visualize surface**: Knowledge Hub "Clusters" tab generalized to a "Visualize" host with Clusters / Tag Cloud modes, a `TagCloudEngine`, and a shared record drilldown.
+  - **Foundations**: `ApplicationSettingEngine` (global + app-scoped settings), and the `tag-engine` → `tag-engine-base` split so browser code no longer pulls server-only AI dependencies.
+  - **Fix**: stop server-only packages (`templates` → `aiengine`/`ai-provider-bundle`, storage, vector-DB and LLM provider SDKs) from leaking into the browser class-registration manifest, which previously broke the MJExplorer cold build. Added CLAUDE.md guardrails to the Bootstrap and BootstrapLite packages.
+
+### Patch Changes
+
+- 6957711: Clean up the conversation empty-state welcome screen (remove duplicate sidebar toggle, fix non-rendering suggested-prompt icons, keep it scroll-free at 1080p) and fix the chat resource on mobile so the conversation sidebar slides over the chat with a tap-to-close backdrop instead of squishing it. Also center the chat header actions vertically.
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [7bbfd62]
+- Updated dependencies [f2cca15]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+- Updated dependencies [40e90fa]
+- Updated dependencies [6957711]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/ng-dashboards@5.40.0
+  - @memberjunction/ng-entity-viewer@5.40.0
+  - @memberjunction/graphql-dataprovider@5.40.0
+  - @memberjunction/ng-artifacts@5.40.0
+  - @memberjunction/ng-auth-services@5.40.0
+  - @memberjunction/ng-shared@5.40.0
+  - @memberjunction/ng-conversations@5.40.0
+  - @memberjunction/ai-engine-base@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/ng-base-application@5.40.0
+  - @memberjunction/ng-entity-form-dialog@5.40.0
+  - @memberjunction/ng-entity-permissions@5.40.0
+  - @memberjunction/ng-explorer-settings@5.40.0
+  - @memberjunction/ng-list-detail-grid@5.40.0
+  - @memberjunction/ng-ai-test-harness@5.40.0
+  - @memberjunction/ng-base-forms@5.40.0
+  - @memberjunction/ng-base-types@5.40.0
+  - @memberjunction/ng-container-directives@5.40.0
+  - @memberjunction/ng-dashboard-viewer@5.40.0
+  - @memberjunction/ng-feedback@5.40.0
+  - @memberjunction/ng-file-storage@5.40.0
+  - @memberjunction/ng-list-management@5.40.0
+  - @memberjunction/ng-notifications@5.40.0
+  - @memberjunction/ng-query-viewer@5.40.0
+  - @memberjunction/ng-record-changes@5.40.0
+  - @memberjunction/ng-record-selector@5.40.0
+  - @memberjunction/ng-record-tags@5.40.0
+  - @memberjunction/ng-resource-permissions@5.40.0
+  - @memberjunction/ng-search@5.40.0
+  - @memberjunction/ng-shared-generic@5.40.0
+  - @memberjunction/ng-user-avatar@5.40.0
+  - @memberjunction/communication-types@5.40.0
+  - @memberjunction/entity-communications-client@5.40.0
+  - @memberjunction/interactive-component-types@5.40.0
+  - @memberjunction/templates-base-types@5.40.0
+  - @memberjunction/ng-export-service@5.40.0
+  - @memberjunction/ng-generic-dialog@5.40.0
+  - @memberjunction/ng-pagination@5.40.0
+  - @memberjunction/ng-ui-components@5.40.0
+  - @memberjunction/ng-word-cloud@5.40.0
+  - @memberjunction/lists-base@5.40.0
+  - @memberjunction/export-engine@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Minor Changes
+
+- bd95e83: feat(explorer): concise-chrome filter model + mobile chrome overhaul
+
+  Reworked MJ Explorer's shared page chrome for mobile and rolled out the
+  "concise filter model" across every filter-bearing dashboard.
+
+  **Concise filter model** — one Filter button holds all filters (popover on
+  desktop, bottom sheet on mobile); search is persistent. Inline quick-filter
+  chips and the applied-filter chip row are gone. The control bar reads
+  `search · Filter · view` and lives in the header `[toolbar]` slot, right-aligned
+  on desktop and left-aligned on mobile (where search grows to fill). Sections
+  converted: Identity & Access, Lists, Testing, AI, Actions (Action Explorer
+  folds Sort into the popover), Scheduling, Integration, Credentials, Version
+  History, MCP, and Communication — with categorical/time-range chips folded
+  into the single Filter popover.
+
+  **Mobile chrome** — shared primitives now carry the mobile behaviors so pages
+  get them for free: `mj-left-nav` off-canvas drawer, `mj-filter-popover` bottom
+  sheet, icon-only action buttons and refresh, `mj-page-body` row→column reflow,
+  and `mj-page-header`/`-interior` compaction. `mj-filter-panel` gains
+  multi-select fields.
+
+  **Shell fixes** — keep the header right-edge cluster (chat/nav-bar app icons +
+  avatar) on one row at mobile widths instead of stacking, and anchor the mobile
+  nav drawer's notification badge to the Notifications button instead of the
+  drawer corner.
+
+### Patch Changes
+
+- 3c53858: feat(forms): inline "create new" from FK fields (event-based) + fold Allow\*API into entity permissions
+
+  When the related record you need isn't in a foreign-key dropdown, you can now create it
+  inline. A sticky "➕ Create …" footer (always visible at the bottom of the dropdown,
+  prefilled with whatever you typed) requests creation; the new record is auto-selected into
+  the field once saved. Gated on create permission + a new `@Input() AllowFKCreate` (default
+  true); surface configurable via `@Input() FKCreatePresentation: 'dialog' | 'slide-in'`.
+
+  **`@memberjunction/ng-base-forms`** — the Generic FK field stays generic: it only _emits_ a
+  new `create-related` `FormNavigationEvent` (carrying the entity, prefill `NewRecordValues`,
+  preferred presentation, provider, and a `Complete(record)` callback). It does **not** open
+  the form itself — that would couple a generic component to the app-level form presenter.
+
+  **`@memberjunction/ng-explorer-core`** — `SingleRecordComponent` handles the new
+  `create-related` event: opens the related entity's form via `MJFormPresenterService`
+  (dialog/slide-in, prefilled), then calls `event.Complete(savedRecord)` so the field selects it.
+
+  **`@memberjunction/core`** — `EntityInfo.GetUserPermisions()` now folds the entity's
+  `Allow{Create,Update,Delete}API` flags into the corresponding `Can*` results. An API-driven
+  action requires both a role grant **and** the entity allowing that action at all, so a user
+  can no longer be reported as able to create/update/delete records of an entity whose API for
+  that action is disabled. (Read is unchanged — it has no `Allow*API` flag.)
+
+- 3b29882: feat: render any entity form as a tab, dialog, or slide-in (Generic, no regeneration)
+
+  Adds a presentation-agnostic form stack to `@memberjunction/ng-base-forms`:
+  - **`MjEntityFormHostComponent`** — headless host that resolves the form
+    (generated / custom / interactive override + variants), loads the record,
+    dynamically creates + binds the form, re-emits its events, and tears down.
+    Extracted from Explorer's `SingleRecordComponent`, which is now a thin wrapper.
+  - **`MjFormDialogComponent` / `MjFormSlideInComponent`** + **`MJFormPresenterService`**
+    — declarative and imperative ways to open any entity form as a modal dialog or
+    slide-in panel.
+  - **`EntityFormConfig`** + presets — per-instance control over toolbar visibility,
+    related-entity sections, section collapsibility, width, and in-form navigation.
+    Applied via the form reference so existing generated forms honor it **without
+    regeneration**.
+  - **`FormResolverService`** moved from `ng-explorer-core` into `ng-base-forms`
+    (it had no Explorer/Router coupling), making the interactive-form + variant
+    pathway first-class on every surface.
+  - **`MjSlidePanelComponent`** relocated from `ng-versions` into `ng-ui-components`
+    as a first-class shared primitive; `ng-versions` and the other consumers
+    (record-changes, record-tags, entity-viewer, dashboards, core-entity-forms) now
+    import it from there.
+
+  Phase-1 consumer migrations: the Query Categories create flow now uses
+  `<mj-form-dialog>`, and editing the selected category uses `MJFormPresenterService`
+  slide-in — replacing the bespoke `query-category-dialog`.
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [f60e340]
+- Updated dependencies [bd95e83]
+- Updated dependencies [1b69c68]
+- Updated dependencies [3c53858]
+- Updated dependencies [4bc6fb4]
+- Updated dependencies [3b29882]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/graphql-dataprovider@5.39.0
+  - @memberjunction/ng-ui-components@5.39.0
+  - @memberjunction/ng-dashboards@5.39.0
+  - @memberjunction/ng-explorer-settings@5.39.0
+  - @memberjunction/ng-base-forms@5.39.0
+  - @memberjunction/ng-shared-generic@5.39.0
+  - @memberjunction/ng-record-changes@5.39.0
+  - @memberjunction/ng-record-tags@5.39.0
+  - @memberjunction/ng-entity-viewer@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai-engine-base@5.39.0
+  - @memberjunction/ng-auth-services@5.39.0
+  - @memberjunction/ng-base-application@5.39.0
+  - @memberjunction/ng-entity-form-dialog@5.39.0
+  - @memberjunction/ng-entity-permissions@5.39.0
+  - @memberjunction/ng-list-detail-grid@5.39.0
+  - @memberjunction/ng-shared@5.39.0
+  - @memberjunction/ng-ai-test-harness@5.39.0
+  - @memberjunction/ng-artifacts@5.39.0
+  - @memberjunction/ng-base-types@5.39.0
+  - @memberjunction/ng-container-directives@5.39.0
+  - @memberjunction/ng-conversations@5.39.0
+  - @memberjunction/ng-dashboard-viewer@5.39.0
+  - @memberjunction/ng-feedback@5.39.0
+  - @memberjunction/ng-file-storage@5.39.0
+  - @memberjunction/ng-list-management@5.39.0
+  - @memberjunction/ng-notifications@5.39.0
+  - @memberjunction/ng-query-viewer@5.39.0
+  - @memberjunction/ng-record-selector@5.39.0
+  - @memberjunction/ng-resource-permissions@5.39.0
+  - @memberjunction/ng-search@5.39.0
+  - @memberjunction/ng-user-avatar@5.39.0
+  - @memberjunction/communication-types@5.39.0
+  - @memberjunction/entity-communications-client@5.39.0
+  - @memberjunction/interactive-component-types@5.39.0
+  - @memberjunction/templates-base-types@5.39.0
+  - @memberjunction/ng-generic-dialog@5.39.0
+  - @memberjunction/ng-export-service@5.39.0
+  - @memberjunction/ng-pagination@5.39.0
+  - @memberjunction/ng-word-cloud@5.39.0
+  - @memberjunction/lists-base@5.39.0
+  - @memberjunction/export-engine@5.39.0
+
 ## 5.38.0
 
 ### Minor Changes

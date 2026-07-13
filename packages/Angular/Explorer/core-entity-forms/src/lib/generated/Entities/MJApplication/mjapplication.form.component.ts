@@ -19,6 +19,7 @@ export class MJApplicationFormComponent extends BaseFormComponent {
             { sectionKey: 'applicationConfiguration', sectionName: 'Application Configuration', isExpanded: true },
             { sectionKey: 'generalInformation', sectionName: 'General Information', isExpanded: true },
             { sectionKey: 'navigationSettings', sectionName: 'Navigation Settings', isExpanded: true },
+            { sectionKey: 'agentConfiguration', sectionName: 'Agent Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJApplicationEntities', sectionName: 'Entities', isExpanded: false },
             { sectionKey: 'mJApplicationSettings', sectionName: 'Application Settings', isExpanded: false },
@@ -26,7 +27,10 @@ export class MJApplicationFormComponent extends BaseFormComponent {
             { sectionKey: 'mJDashboards', sectionName: 'Dashboards', isExpanded: false },
             { sectionKey: 'mJApplicationRoles', sectionName: 'Application Roles', isExpanded: false },
             { sectionKey: 'mJDashboardUserPreferences', sectionName: 'Dashboard User Preferences', isExpanded: false },
-            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false }
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'mJMagicLinkInviteApplications', sectionName: 'Magic Link Invite Applications', isExpanded: false },
+            { sectionKey: 'mJMagicLinkInvites', sectionName: 'Magic Link Invites', isExpanded: false },
+            { sectionKey: 'mJConversationWidgetInstances', sectionName: 'Conversation Widget Instances', isExpanded: false }
         ]);
     }
 }

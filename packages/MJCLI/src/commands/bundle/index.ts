@@ -33,6 +33,9 @@ export default class Bundle extends Command {
       options: ['sqlserver', 'postgresql'],
       dependsOn: ['with-migrations'],
     }),
+    'no-claude-pack': Flags.boolean({
+      description: 'Exclude the Claude Code pack (CLAUDE.md + .claude/) from the bundle. By default the pack is included so air-gapped installs get the same out-of-the-box Claude experience as online installs.',
+    }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
   };
 
@@ -52,6 +55,8 @@ export default class Bundle extends Command {
     // map it to the literal union without an assertion.
     const dbPlatform = flags['db-platform'] === 'postgresql' ? 'postgresql' : flags['db-platform'] === 'sqlserver' ? 'sqlserver' : undefined;
 
+    const includeClaudePack = !flags['no-claude-pack'];
+
     const result = await createDistributionBundle({
       Out: out,
       Ref: ref,
@@ -59,6 +64,7 @@ export default class Bundle extends Command {
       SourceDir: source,
       IncludeMigrations: flags['with-migrations'],
       MigrationPlatform: dbPlatform,
+      IncludeClaudePack: includeClaudePack,
     });
 
     if (flags.verbose && result.UsedFallback) {
@@ -66,6 +72,7 @@ export default class Bundle extends Command {
     }
 
     const migrationsNote = flags['with-migrations'] ? `, including migrations${dbPlatform ? ` (${dbPlatform})` : ''}` : '';
-    this.log(`Created ${result.Out} (${result.EntryCount} entries${migrationsNote}).`);
+    const packNote = includeClaudePack ? '' : ' (Claude pack excluded)';
+    this.log(`Created ${result.Out} (${result.EntryCount} entries${migrationsNote}${packNote}).`);
   }
 }

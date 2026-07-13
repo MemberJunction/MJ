@@ -299,6 +299,29 @@ console.log(field.IsPrimaryKey); // Primary key?
 console.log(field.ReadOnly);     // Read-only field?
 ```
 
+#### Deprecated and Disabled Fields (Active-Status Enforcement)
+
+Every entity field has a `Status` of `Active` (the default), `Deprecated`, or `Disabled`. The column stays physically present in the table and the `EntityField` instance is always created — status only governs whether *code* is allowed to use the field:
+
+- **`Deprecated`** — still functional, but emits a batched console **warning** when accessed, nudging callers off it before removal.
+- **`Disabled`** — **throws** on access; the field is off-limits even though the metadata and physical column remain.
+
+**Where enforcement happens (and where it deliberately does not).** The status check lives at the field-access boundary that real code flows through — `BaseEntity.Get()`, `BaseEntity.Set()`, and `BaseEntity.SetMany()` — which is exactly what the generated strongly-typed accessors call:
+
+```typescript
+// Generated accessor → BaseEntity.Get/Set → status enforced here
+const s = agentRun.AgentState;      // Deprecated → warns; Disabled → throws
+agentRun.Set('AgentState', value);  // same enforcement via the dynamic API
+```
+
+It is **not** enforced on the low-level `EntityField.Value` accessor. Framework-internal machinery — dirty checking, validation, serialization (`GetAll`), record-change capture, and load-time hydration — reads `EntityField.Value` directly and is therefore exempt by construction. This is what keeps merely **loading or saving** a record that *contains* a deprecated column from false-warning on every operation: only genuine, code-initiated field access counts as "use."
+
+`SetMany()` distinguishes the two via its `ignoreActiveStatusAssertions` parameter — the load/hydration paths pass `true` (populating from the database is not user use), while ordinary user-initiated `SetMany()` calls enforce status.
+
+**Fast path.** Enforcement is gated on `EntityInfo.HasInactiveFields`, a value memoized once per entity definition. Entities whose fields are all `Active` (the overwhelming majority) pay only a single cached boolean check in `Get`/`Set`/`SetMany` — no per-field work and zero overhead in hot read/write loops.
+
+> Note: `EntityField.ActiveStatusAssertions` is retained as a **deprecated no-op** for backward compatibility. There is nothing to toggle at the field level anymore, since `EntityField.Value` no longer asserts.
+
 #### Save and Delete
 
 ```typescript
@@ -829,18 +852,23 @@ export class MyEngine extends BaseEngine<MyEngine> {
         return super.getInstance<MyEngine>();
     }
 
-    public MyData: SomeEntity[] = [];
+    private _myData: SomeEntity[] = [];
 
-    protected get Config(): BaseEnginePropertyConfig[] {
-        return [
+    public get MyData(): SomeEntity[] {
+        return this.GetConfigData<SomeEntity>('_myData');
+    }
+
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo): Promise<void> {
+        const params: Partial<BaseEnginePropertyConfig>[] = [
             {
-                PropertyName: 'MyData',
+                PropertyName: '_myData',
                 EntityName: 'Some Entity',
                 Filter: 'IsActive = 1',
                 OrderBy: 'Name ASC',
                 AutoRefresh: true      // Auto-refresh on entity save/delete events
             }
         ];
+        return await this.Load(params, undefined, forceRefresh, contextUser);
     }
 }
 
@@ -855,6 +883,81 @@ Key features:
 - Automatic refresh when entities are saved or deleted (debounced)
 - Local caching support via `CacheLocal` and `CacheLocalTTL` options
 - Supports both entity and dataset loading
+
+#### Permission-Constrained Loading
+
+When a user lacks read permissions on entities an engine loads, the engine enters a **permission-constrained** state instead of failing with errors or retrying endlessly. This is an all-or-nothing check — if any entity config is denied, all configs for that engine are skipped.
+
+The `GetConfigData<E>(propertyName)` method is the canonical way for engine getters to expose loaded data. It checks the data map for permission denial and throws a `PermissionConstrainedError` if the config was skipped, preventing consumers from silently operating on empty arrays.
+
+```typescript
+// Consumer that wants graceful degradation (optional feature)
+if (!AIEngineBase.Instance.IsPermissionConstrained) {
+    const models = AIEngineBase.Instance.Models;
+    // ... render AI features
+} else {
+    // ... hide AI features, show notice
+}
+
+// Consumer that requires the data (hard error if missing)
+const queries = QueryEngine.Instance.Queries; // throws PermissionConstrainedError if denied
+```
+
+| State | `Loaded` | `IsPermissionConstrained` | Behavior |
+|---|---|---|---|
+| Not loaded | `false` | `false` | `EnsureLoaded()` retries normally |
+| Loaded normally | `true` | `false` | Normal operation |
+| Permission-constrained | `true` | `true` | `GetConfigData()` throws `PermissionConstrainedError`, no retry, no entity event handling |
+
+---
+
+### BaseEngineRegistry — cross-engine cache reverse lookup
+
+Every `BaseEngine` registers itself with the process-wide `BaseEngineRegistry` on
+load, so the registry always knows **which loaded engines cache which entities**.
+You can use that to ask, from anywhere, *"is this entity already fully in memory?
+if so, hand me the array — and don't go to the database."*
+
+This is the introspection behind the Admin → System Diagnostics "loaded engines"
+view, plus two reverse-lookup helpers:
+
+```typescript
+import { BaseEngineRegistry, UserInfo } from '@memberjunction/core';
+
+// All loaded engines that cache 'Users', unfiltered (full-set) caches first.
+// Each match carries the engine, its config, and a LIVE pointer to the array.
+const matches = BaseEngineRegistry.Instance.FindCachedEntity<UserInfo>('Users');
+// matches[0] => { engineClassName, engine, config, records: UserInfo[], unfiltered }
+
+// Or the one-liner: the best (unfiltered-preferred) cached array, or null.
+const users = BaseEngineRegistry.Instance.TryGetCachedRecords<UserInfo>('Users', { unfilteredOnly: true });
+if (users) {
+    // Small/static entity already in memory — filter/sort locally, zero DB calls.
+    const hits = users.filter(u => u.Name.toLowerCase().includes(q));
+} else {
+    // Not cached as a full set → fall back to a normal RunView against the DB.
+}
+```
+
+`FindCachedEntity(entityName, { unfilteredOnly? })`:
+- Considers **only loaded** engines (a registered-but-unloaded engine has no data).
+- Matches an engine config when `Type === 'entity'` and `EntityName` matches (case-insensitive, trimmed).
+- Orders **unfiltered caches first** — a config with no `Filter` holds the *complete*
+  entity set and is authoritative (safe for "show all" / in-memory search); filtered
+  caches (a subset) come after. `unfilteredOnly: true` omits the filtered ones.
+- Returns the engine's **live array** (not a copy) — read it, don't mutate it. When the
+  config's `ResultType` is `'simple'`, rows are plain objects, not `BaseEntity` instances.
+- Returns **all** matches when several engines cache the same entity, so the caller can
+  pick (by `engineClassName`, by inspecting `config`, etc.).
+
+`TryGetCachedRecords(entityName, { unfilteredOnly? })` is the convenience wrapper —
+the best match's array, or `null`.
+
+**Why it's useful:** UI and service code that needs to look up records for a
+small/static entity (FK pickers, dropdowns, validation) can serve the lookup from
+an already-loaded engine cache in a single line — no extra DB round-trip, no
+per-keystroke query — and transparently fall back to `RunView` when the entity
+isn't cached as a full set.
 
 ---
 
@@ -1310,6 +1413,39 @@ CodeNameFromString('First Name');          // 'FirstName'
 
 ---
 
+## Fire-and-Forget Entity Saves (`BaseEntitySaveQueue`)
+
+`BaseEntitySaveQueue` is the entity-aware façade over `@memberjunction/global`'s `KeyedSerialTaskQueue` for **non-blocking persistence** — writing observability/log rows (agent-run steps, action-execution logs, AI prompt runs, record-process details) without blocking the work that produced them on a DB round-trip.
+
+```typescript
+import { BaseEntitySaveQueue } from '@memberjunction/core';
+
+const queue = new BaseEntitySaveQueue();
+
+// Fire-and-forget INSERT of a freshly NewRecord()'d entity.
+queue.Insert(logEntity);
+
+// Fire-and-forget UPDATE chained after that entity's INSERT. The mutation runs INSIDE the
+// post-INSERT task, so the INSERT's finalizeSave reload can never revert it.
+queue.Update(logEntity, (e) => { e.Set('EndedAt', new Date()); e.Set('Status', 'Completed'); });
+
+// At a run/goal boundary, flush to await all pending saves + surface failure counts.
+const { failures } = await queue.Flush();
+```
+
+**Why the `Update(applyMutation)` shape matters.** A fire-and-forget INSERT serializes the entity's current fields and, on completion, `BaseEntity.finalizeSave` reloads the inserted row (`init()` + `SetMany`). Any field mutated on that same instance *while the INSERT is in flight* is reverted, and a force-persisted UPDATE then writes the stale values — the classic "stuck at Running" bug. Because the queue runs `applyMutation` **inside** the post-INSERT task, the mutation always lands after the reload, making that race **impossible by construction**.
+
+| Method | Purpose |
+|---|---|
+| `Insert(entity)` | Fire-and-forget create. The entity instance is the serialization key, so a later `Update` of the same instance waits for it. |
+| `Update(entity, applyMutation?)` | Fire-and-forget, force-persisted (`IgnoreDirtyState`) update chained after the INSERT; `applyMutation` runs post-INSERT (race-safe). |
+| `Flush()` | Await all pending saves; returns `{ failures, rejections }`. Call at a run/goal boundary. |
+| `new BaseEntitySaveQueue({ onError })` | Route failure messages to a structured logger (e.g. a category/metadata logger) instead of the default `LogError`. |
+
+Single-primary-key entities only; the queue logs (never throws) on a failed save, since these rows are observability and must not break the work that produced them.
+
+---
+
 ## Error Handling
 
 RunView and RunQuery do NOT throw exceptions on failure. Always check `Success`:
@@ -1440,6 +1576,37 @@ This library is written in TypeScript and provides full type definitions. All ge
 ## License
 
 ISC License - see LICENSE file for details.
+
+## Remote Operations (the 4th Data Primitive)
+
+`BaseRemotableOperation<TInput, TOutput>` (defined in this package) is a typed, provider-routed server capability invoked from **one call site** on both the client (marshalled over GraphQL) and the server (in-process) — the missing peer of the three primitives MJCore already gives you:
+
+```mermaid
+graph LR
+    subgraph "MJ data primitives — one call site, provider-routed"
+        A["BaseEntity<br/><i>record CRUD</i>"]
+        B["RunView<br/><i>dynamic set reads</i>"]
+        C["RunQuery<br/><i>stored queries</i>"]
+        D["BaseRemotableOperation<br/><b>typed RPC</b>"]
+    end
+    style D fill:#8b5cf6,color:#fff,stroke:#6d28d9
+```
+
+`entity.Save()` · `rv.RunView()` · `rq.RunQuery()` · **`op.Execute()`** — same shape, same tier-agnostic DX.
+
+Before this primitive, exposing one non-CRUD capability ("render a template", "run a process") to the browser meant hand-writing a stack — a TypeGraphQL resolver, a typed GraphQL client (or an inline `gql` string + a provider cast), an Angular wrapper, **and** the input/output types twice (client + server), kept in sync by hand. A Remote Operation replaces all of it with one typed object:
+
+```typescript
+// typed in, typed out — identical on client and server; a wrong field is a compile error
+const result = await new TemplateRunOperation().Execute({ templateID, data });
+result.Output?.output;
+```
+
+New operations are declared as `MJ: Remote Operations` metadata rows; CodeGen emits the typed base, and the body is written by hand (**Manual**), authored by an LLM from the row's `Description` and approved (**AI**), or left as emitted boilerplate (**Default**). Transport, auth, the long-running progress channel, and approval gating are written **once** in the framework and shared by every operation.
+
+> **Visual before/after**: See the [**Remote Operations Showcase**](./docs/REMOTE_OPERATIONS_SHOWCASE.md) — a diagram-driven tour of the layers this removes, built from two real migrations. *(Best starting point for sharing with the team.)*
+>
+> **Full Guide**: See the [**Remote Operations Guide**](../../guides/REMOTE_OPERATIONS_GUIDE.md) for when to use it (vs. an Action or a bespoke resolver), the three authoring modes, calling conventions, the auth chain, and long-running progress.
 
 ## Virtual Entities
 
@@ -1644,6 +1811,56 @@ const params = EntityInfo.BuildOrganicKeyViewParams(record, relatedEntity, organ
 ```
 
 > **Full Guide**: See [Organic Keys Guide](./docs/organic-keys.md) for the complete schema, all 4 query patterns, normalization strategies, CodeGen configuration, Angular UI integration, and an end-to-end setup walkthrough.
+
+## Entity Field Rules
+
+`EntityFieldRules` is the **metadata-aware** layer on top of the pure field-rules engine in
+[`@memberjunction/global`](../MJGlobal/README.md#field-rules-engine). The pure engine is deliberately
+metadata-blind — it computes a per-field diff from a plain `Record<string, unknown>` and an injected
+lookup resolver, so it runs anywhere. `EntityFieldRules` adds the things that only make sense when the
+**target is a real MJ entity** and that need this package's metadata layer:
+
+| Adds | Why it needs core |
+|---|---|
+| **`Validate(entityName, ruleSet)`** — target field exists? writable (not PK/read-only/virtual)? source `field` refs valid? | `EntityInfo` / `EntityFieldInfo` |
+| **Type coercion** — a formula yielding `"42"` becomes numeric `42` for a numeric column | `EntityFieldInfo.TSType` |
+| **Built-in lookup resolver** for `lookup` rule sources | `RunView` |
+| **`ApplyToEntity(entity, ruleSet, { DryRun })`** — write the computed values + `Save()` (Record Changes captures before/after) | `BaseEntity` |
+
+**Scope:** the *target is always an MJ entity*; the *source* may be the entity's own fields plus an
+optional injected `Context` (a data context, a query result, an agent's output, related-entity lookups)
+— all data you already hold. When the *other side* is a **live external system**, that is the domain of
+[`@memberjunction/integration`](../Integration/engine/README.md#field-mapping--the-shared-transform-engine),
+which uses the same pure transform engine. `EntityFieldRules` is a writer *to* entities, not a
+bidirectional mapper.
+
+```ts
+import { EntityFieldRules } from '@memberjunction/core';
+import type { FieldRuleSet } from '@memberjunction/global';
+
+const ruleSet: FieldRuleSet = {
+    Rules: [
+        { TargetField: 'Description', Source: { Kind: 'formula', Expression: "fields.Name + ' (normalized)'" } },
+        { TargetField: 'Status', Source: { Kind: 'static', Value: 'Inactive' }, Condition: 'DaysSinceActivity > 365' },
+    ],
+};
+
+// 1) Pre-flight (synchronous, safe to run in a UX on every edit)
+const check = EntityFieldRules.Validate('Accounts', ruleSet);
+if (!check.Valid) console.warn(check.Errors);
+
+// 2) Dry-run preview (computes the diff, writes nothing)
+const rules = new EntityFieldRules(contextUser);
+const preview = await rules.ApplyToEntity(account, ruleSet, { DryRun: true });
+// preview.Changes → per-field old → new; preview.Saved === false
+
+// 3) Apply for real (writes + Save → Record Changes versioning)
+const result = await rules.ApplyToEntity(account, ruleSet);
+```
+
+> For **bulk** updates across a view / list / filtered set, the `FieldRulesProcessor` in
+> `@memberjunction/record-set-processor` runs `EntityFieldRules` per record with batching, concurrency,
+> and dry-run — that's the rules-based bulk-update tool.
 
 ## Documentation
 

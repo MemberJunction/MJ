@@ -1,0 +1,40 @@
+<mj-slide-panel
+  Mode="slide"
+  [Visible]="Visible"
+  [Title]="effectiveTitle"
+  [Resizable]="Resizable"
+  [WidthPx]="WidthPx"
+  (WidthChanged)="onWidthChanged($event)"
+  (Closed)="onCancel()">
+
+  <div class="mj-form-slide-in-layout">
+    <div class="mj-form-slide-in-body">
+      <mj-entity-form-host #host
+        [EntityName]="EntityName"
+        [PrimaryKey]="effectivePrimaryKey!"
+        [Record]="Record"
+        [NewRecordValues]="NewRecordValues"
+        [SectionName]="SectionName"
+        [EditMode]="EditMode"
+        [Config]="EffectiveConfig"
+        [Provider]="Provider"
+        (Saved)="onHostSaved($event)"
+        (Dismissed)="onHostDismissed()"
+        (FormCreated)="onFormCreated($event)"
+        (Navigate)="Navigate.emit($event)"
+        (Notification)="Notification.emit($event)"
+        (RecordDeleted)="RecordDeleted.emit($event)"
+        (RecordSaveFailed)="RecordSaveFailed.emit($event)"
+        (ValidationFailed)="ValidationFailed.emit($event)"
+        (LoadError)="LoadError.emit($event)">
+      </mj-entity-form-host>
+    </div>
+
+    @if (ShowFooter) {
+      <div class="mj-form-slide-in-footer">
+        <button mjButton variant="primary" [disabled]="saving" (click)="onSaveClick()">{{ SaveButtonText }}</button>
+        <button mjButton [disabled]="saving" (click)="onCancel()">{{ CancelButtonText }}</button>
+      </div>
+    }
+  </div>
+</mj-slide-panel>

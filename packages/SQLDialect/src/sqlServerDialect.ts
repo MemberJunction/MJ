@@ -150,6 +150,11 @@ export class SQLServerDialect extends SQLDialect {
         return aliasName;
     }
 
+    /** SQL Server is case-insensitive for identifiers; the schema name is stored as-given. */
+    CanonicalSchemaName(name: string): string {
+        return name;
+    }
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     LimitClause(limit: number, offset?: number): LimitClauseResult {
@@ -223,6 +228,44 @@ export class SQLServerDialect extends SQLDialect {
     get BooleanTypeNames(): readonly string[]  { return SQLServerDialect._BooleanTypeNames; }
     get StringTypeNames(): readonly string[]   { return SQLServerDialect._StringTypeNames; }
     get FixedWidthStringTypeNames(): readonly string[] { return SQLServerDialect._FixedWidthStringTypeNames; }
+    /** SQL Server index keys are limited to 900 bytes → 450 NVARCHAR (2-byte) chars. */
+    override get MaxKeyStringLength(): number { return 450; }
+
+    /** SQL Server enforces a hard ~8060-byte in-row row size; only variable-length values go off-row. */
+    override get MaxInRowSizeBytes(): number { return 8060; }
+
+    /** SQL Server's hard per-table column cap. */
+    override get MaxColumnCount(): number { return 1024; }
+
+    /**
+     * Minimum in-row byte footprint of a column. Off-row-capable variable-length / LOB types
+     * (incl. `(N)VARCHAR(MAX)`) contribute only a 24-byte in-row pointer; fixed-length types
+     * contribute their full size. Unknown types are treated as off-row pointers (conservative).
+     */
+    override EstimateInRowBytes(rawSqlType: string): number {
+        const t = (rawSqlType ?? '').toUpperCase().trim();
+        // Off-row-capable variable-length + LOB types → 24-byte in-row pointer floor.
+        if (/^(N?VARCHAR|VARBINARY)\s*\(/.test(t)) return 24; // covers (N)VARCHAR(MAX) too
+        if (/^(TEXT|NTEXT|IMAGE|XML|SQL_VARIANT)\b/.test(t)) return 24;
+        // Fixed-length character/binary types stay fully in-row.
+        const nchar = t.match(/^NCHAR\s*\(\s*(\d+)\s*\)/);
+        if (nchar) return parseInt(nchar[1], 10) * 2;
+        const chr = t.match(/^(?:CHAR|BINARY)\s*\(\s*(\d+)\s*\)/);
+        if (chr) return parseInt(chr[1], 10);
+        if (/^UNIQUEIDENTIFIER\b/.test(t)) return 16;
+        if (/^BIGINT\b/.test(t)) return 8;
+        if (/^SMALLINT\b/.test(t)) return 2;
+        if (/^TINYINT\b/.test(t)) return 1;
+        if (/^INT\b/.test(t)) return 4;
+        if (/^BIT\b/.test(t)) return 1;
+        if (/^(DECIMAL|NUMERIC|MONEY|SMALLMONEY)\b/.test(t)) return 17;
+        if (/^(FLOAT|REAL)\b/.test(t)) return 8;
+        if (/^DATETIMEOFFSET\b/.test(t)) return 10;
+        if (/^(DATETIME2|DATETIME|SMALLDATETIME)\b/.test(t)) return 8;
+        if (/^DATE\b/.test(t)) return 3;
+        if (/^TIME\b/.test(t)) return 5;
+        return 24; // unknown → treat as off-row variable-length pointer (conservative)
+    }
     get DateTypeNames(): readonly string[]     { return SQLServerDialect._DateTypeNames; }
     get IntegerTypeNames(): readonly string[]  { return SQLServerDialect._IntegerTypeNames; }
     get FloatTypeNames(): readonly string[]    { return SQLServerDialect._FloatTypeNames; }
@@ -498,6 +541,30 @@ export class SQLServerDialect extends SQLDialect {
         ].join('\n');
     }
 
+    // ─── Idempotent (single-statement) DDL — see SQLDialect base ─────
+
+    override CreateTableIfAbsent(fullTable: string, columnsBody: string): string {
+        // Single-statement IF guard (no BEGIN/END) so migration chunkers that split on ';\n'
+        // boundaries cannot separate the guard from the CREATE. The only ';' is the terminating ');'.
+        return `IF OBJECT_ID(N'${fullTable}', N'U') IS NULL\nCREATE TABLE ${fullTable} (\n${columnsBody}\n);`;
+    }
+
+    override CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string {
+        const level1Type = this.objectTypeToLevel1Type(objectType);
+        // IF NOT EXISTS governs the single EXEC that follows (sp_addextendedproperty has no internal ';').
+        return [
+            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${schema}', N'${level1Type}', N'${name}', NULL, NULL))`,
+            `${this.CommentOnObject(objectType, schema, name, comment)};`,
+        ].join('\n');
+    }
+
+    override CommentOnColumnIfAbsent(schema: string, table: string, column: string, comment: string): string {
+        return [
+            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${schema}', N'TABLE', N'${table}', N'COLUMN', N'${column}'))`,
+            this.CommentOnColumn(schema, table, column, comment),
+        ].join('\n');
+    }
+
     // ─── Schema Introspection ────────────────────────────────────────
 
     SchemaIntrospectionQueries(): SchemaIntrospectionSQL {
@@ -548,6 +615,41 @@ export class SQLServerDialect extends SQLDialect {
         };
     }
 
+    /**
+     * SQL Server FK-graph query for cascade planning — reads the `sys.foreign_keys` catalog.
+     * Returns one row per FK column with `childNullable` (from `sys.columns.is_nullable`) and
+     * `colCount` (columns in the constraint, for composite exclusion). Both parent + child are
+     * filtered to `schema`. Schema is embedded as a literal (no bind params) so it runs via
+     * `ExecuteSQL(sql)`.
+     */
+    ForeignKeyGraphSQL(schema: string): string {
+        const s = this.QuoteStringLiteral(schema);
+        // Disabled FKs (fk.is_disabled = 1) are intentionally NOT filtered: a disabled FK can't block
+        // the Entity delete, so including it only yields an extra, conservative-safe child clear.
+        // ORDER BY fk.name makes edge order — and therefore statement + dry-run order — deterministic.
+        return (
+            'SELECT rt.name AS parentTable, rc.name AS parentRefCol, pt.name AS childTable, ' +
+            'pc.name AS childCol, pc.is_nullable AS childNullable, fk.name AS fkName, ' +
+            '(SELECT COUNT(*) FROM sys.foreign_key_columns x WHERE x.constraint_object_id = fk.object_id) AS colCount ' +
+            'FROM sys.foreign_keys fk ' +
+            'JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id ' +
+            'JOIN sys.objects rt ON rt.object_id = fk.referenced_object_id ' +
+            'JOIN sys.schemas rs ON rs.schema_id = rt.schema_id ' +
+            'JOIN sys.columns rc ON rc.object_id = fk.referenced_object_id AND rc.column_id = fkc.referenced_column_id ' +
+            'JOIN sys.objects pt ON pt.object_id = fk.parent_object_id ' +
+            'JOIN sys.schemas ps ON ps.schema_id = pt.schema_id ' +
+            'JOIN sys.columns pc ON pc.object_id = fk.parent_object_id AND pc.column_id = fkc.parent_column_id ' +
+            `WHERE rs.name = ${s} AND ps.name = ${s} ` +
+            'ORDER BY fk.name'
+        );
+    }
+
+    AtomicBatchScript(statements: string[]): string {
+        if (!statements || !statements.length) return '';
+        const body = statements.join(';\n');
+        return `SET QUOTED_IDENTIFIER ON;\nSET ANSI_NULLS ON;\nSET XACT_ABORT ON;\nBEGIN TRANSACTION;\n${body};\nCOMMIT TRANSACTION;`;
+    }
+
     // ─── IIF ─────────────────────────────────────────────────────────
 
     IIF(condition: string, trueVal: string, falseVal: string): string {
@@ -586,6 +688,18 @@ export class SQLServerDialect extends SQLDialect {
                 return this.FallbackType();
         }
     }
+
+    // ─── Error Classification ────────────────────────────────────────
+
+    IsConnectionError(e: unknown): boolean {
+        if (!(e instanceof Error)) return false;
+
+        // mssql driver sets error.name to 'ConnectionError' for all connectivity
+        // failures (timeout, refused, reset, TLS handshake, etc.)
+        return e.name === 'ConnectionError';
+    }
+
+    // ─── Private Helpers ────────────────────────────────────────────
 
     private resolveStringType(maxLength?: number): string {
         if (maxLength != null && maxLength > 0) {

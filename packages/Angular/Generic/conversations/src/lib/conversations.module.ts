@@ -2,9 +2,10 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
+import { OverlayModule } from '@angular/cdk/overlay';
 
 // MJ UI Components
-import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
 
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -12,6 +13,7 @@ import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { TestingModule } from '@memberjunction/ng-testing';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { UserRoutinesModule } from '@memberjunction/ng-user-routines';
 
 // Markdown module
 import { MarkdownModule } from '@memberjunction/ng-markdown';
@@ -19,19 +21,24 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 // Resource permissions (generic share dialog)
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 
+// Composer (mention editor + dropdown + message input box) — extracted to @memberjunction/ng-composer
+import { ComposerModule } from '@memberjunction/ng-composer';
+
+// AI-aware composer wrapper (agent/record/skill trigger plugins built in)
+import { AiComposerComponent } from './components/composer/ai-composer.component';
+import { LoadComposerPlugins } from './composer-plugins/load-composer-plugins';
+
 // Components
 import { MessageItemComponent } from './components/message/message-item.component';
 import { MessageListComponent } from './components/message/message-list.component';
 import { MessageInputComponent } from './components/message/message-input.component';
-import { MessageInputBoxComponent } from './components/message/message-input-box.component';
 import { DynamicFormsModule } from '@memberjunction/ng-forms';
 import { ActionableCommandsComponent } from './components/message/actionable-commands.component';
-import { MentionDropdownComponent } from './components/mention/mention-dropdown.component';
-import { MentionEditorComponent } from './components/mention/mention-editor.component';
 import { ConversationMessageRatingComponent } from './components/message/conversation-message-rating.component';
 import { ConversationWorkspaceComponent } from './components/workspace/conversation-workspace.component';
 import { ConversationNavigationComponent } from './components/navigation/conversation-navigation.component';
 import { ConversationSidebarComponent } from './components/sidebar/conversation-sidebar.component';
+import { RoutinesSectionComponent } from './components/sidebar/routines-section.component';
 import { ConversationListComponent } from './components/conversation/conversation-list.component';
 import { ConversationChatAreaComponent } from './components/conversation/conversation-chat-area.component';
 import { ConversationEmptyStateComponent } from './components/conversation/conversation-empty-state.component';
@@ -70,23 +77,63 @@ import { GlobalTasksPanelComponent } from './components/global-tasks/global-task
 import { ImageViewerComponent } from './components/attachment/image-viewer.component';
 import { PinnedMessagesPanelComponent } from './components/conversation/pinned-messages-panel.component';
 import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.component';
+import { RealtimeAgentPickerComponent } from './components/realtime/realtime-agent-picker.component';
+import { RealtimeSessionOverlayComponent } from './components/realtime/realtime-session-overlay.component';
+import { RealtimeWhiteboardHostComponent } from '@memberjunction/ng-whiteboard';
+import { LoadRealtimeWhiteboardChannel } from './components/realtime/whiteboard/whiteboard-channel';
+import { LoadWhiteboardArtifactViewer } from './components/realtime/whiteboard/whiteboard-artifact-viewer.component';
+import { LoadRealtimeRemoteBrowserChannel } from './components/realtime/remote-browser/remote-browser-channel';
+import { RemoteBrowserSurfaceComponent } from './components/realtime/remote-browser/remote-browser-surface.component';
+import { LoadRealtimeMediaChannel } from './components/realtime/media/media-channel';
+import { LoadClientContextChannel } from './components/realtime/channels/client-context-channel';
+import { RealtimeMediaSurfaceComponent } from './components/realtime/media/realtime-media-surface.component';
+import { RealtimeEvidencePlaybackComponent } from './components/realtime/evidence-playback/realtime-evidence-playback.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
+
+// PR 2c — Widget extension surface (standalone)
+import { ChatSlotDirective } from './directives/chat-slot.directive';
+import { MJChatEmptyStateDefaultComponent } from './components/slots/mj-chat-empty-state-default.component';
+import { MJChatAgentPresenceDefaultComponent } from './components/slots/mj-chat-agent-presence-default.component';
+import { MJChatHeaderDefaultComponent } from './components/slots/mj-chat-header-default.component';
+import { MJChatMessageExtraDefaultComponent } from './components/slots/mj-chat-message-extra-default.component';
+import { MJChatDemonstrationSurfaceDefaultComponent } from './components/slots/mj-chat-demonstration-surface-default.component';
+import { MJChatMessageBubbleDefaultComponent } from './components/slots/mj-chat-message-bubble-default.component';
+
+// Tree-shaking prevention for interactive-channel CLIENT PLUGINS: they are resolved
+// dynamically through the MJ ClassFactory (keyed by the `MJ: AI Agent Channels` registry's
+// ClientPluginClass), so these static calls are what keep their @RegisterClass side effects
+// from being eliminated by the bundler. They live here (not in RealtimeSessionService) because
+// channel plugins carry Angular surface components — the service stays component-free.
+LoadRealtimeWhiteboardChannel();
+// Remote Browser channel plugin — same registry-driven resolution (ClientPluginClass
+// 'RealtimeRemoteBrowserChannel'); the static call defeats tree-shaking of its @RegisterClass.
+LoadRealtimeRemoteBrowserChannel();
+// Media channel plugin — same registry-driven resolution (ClientPluginClass
+// 'RealtimeMediaChannel'); the static call defeats tree-shaking of its @RegisterClass.
+LoadRealtimeMediaChannel();
+LoadClientContextChannel();
+// Whiteboard ARTIFACT VIEWER plugin — resolved by the artifact plugin host via the
+// ClassFactory (keyed by the artifact type's DriverClass), same tree-shaking concern.
+LoadWhiteboardArtifactViewer();
+// Composer trigger-provider PLUGINS ('@' agent mentions, '#' record mentions, '/' skill
+// commands) — resolved via ClassFactory discovery by any mj-mention-editor without an
+// explicit provider list; the static call defeats tree-shaking of their @RegisterClass.
+LoadComposerPlugins();
 
 // Export all components (excluding standalone components)
 const COMPONENTS = [
   MessageItemComponent,
   MessageListComponent,
   MessageInputComponent,
-  MessageInputBoxComponent,
+  AiComposerComponent,
   ActionableCommandsComponent,
-  MentionDropdownComponent,
-  MentionEditorComponent,
   ConversationMessageRatingComponent,
   ConversationWorkspaceComponent,
   ConversationNavigationComponent,
   ConversationSidebarComponent,
+  RoutinesSectionComponent,
   ConversationListComponent,
   ConversationChatAreaComponent,
   ConversationEmptyStateComponent,
@@ -133,15 +180,21 @@ const COMPONENTS = [
     FormsModule,
     ReactiveFormsModule,
     RouterModule,
+    OverlayModule,
     MJButtonDirective,
     MJDatepickerComponent,
     MJDialogComponent,
     MJDialogActionsComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent,
+    MJAccordionModule,
     ContainerDirectivesModule,
     CodeEditorModule,
     ArtifactsModule,
     TestingModule,
     SharedGenericModule,
+    UserRoutinesModule,
+    ComposerModule,
     MarkdownModule,
     DynamicFormsModule,
     ResourcePermissionsModule,
@@ -150,13 +203,46 @@ const COMPONENTS = [
     CollectionShareModalComponent,
     UserPickerComponent,
     ArtifactCollectionPickerModalComponent,
-    ArtifactShareModalComponent
+    ArtifactShareModalComponent,
+    // PR 2c — Widget extension surface (standalone)
+    ChatSlotDirective,
+    MJChatEmptyStateDefaultComponent,
+    MJChatAgentPresenceDefaultComponent,
+    MJChatHeaderDefaultComponent,
+    MJChatMessageExtraDefaultComponent,
+    MJChatDemonstrationSurfaceDefaultComponent,
+    MJChatMessageBubbleDefaultComponent,
+    // Realtime / voice (PR #2787)
+    RealtimeAgentPickerComponent,
+    RealtimeSessionOverlayComponent,
+    RealtimeWhiteboardHostComponent,
+    RemoteBrowserSurfaceComponent,
+    RealtimeMediaSurfaceComponent,
+    RealtimeEvidencePlaybackComponent
   ],
   exports: [
     ...COMPONENTS,
     SearchShortcutDirective,
+    // Composer components (mj-mention-editor / mj-mention-dropdown / mj-message-input-box)
+    // remain available to consumers of this module's template surface
+    ComposerModule,
     // Standalone components
-    TasksFullViewComponent
+    TasksFullViewComponent,
+    // PR 2c — Widget extension surface
+    ChatSlotDirective,
+    MJChatEmptyStateDefaultComponent,
+    MJChatAgentPresenceDefaultComponent,
+    MJChatHeaderDefaultComponent,
+    MJChatMessageExtraDefaultComponent,
+    MJChatDemonstrationSurfaceDefaultComponent,
+    MJChatMessageBubbleDefaultComponent,
+    // Realtime / voice (PR #2787)
+    RealtimeAgentPickerComponent,
+    RealtimeSessionOverlayComponent,
+    RealtimeWhiteboardHostComponent,
+    RemoteBrowserSurfaceComponent,
+    RealtimeMediaSurfaceComponent,
+    RealtimeEvidencePlaybackComponent
   ]
 })
 export class ConversationsModule { }

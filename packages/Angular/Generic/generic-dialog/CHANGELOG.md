@@ -1,5 +1,86 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [13716e4]
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/ng-ui-components@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [f8be8a0]
+- Updated dependencies [1e5e449]
+- Updated dependencies [0476455]
+  - @memberjunction/ng-ui-components@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [54183aa]
+  - @memberjunction/ng-ui-components@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [313c1c5]
+  - @memberjunction/ng-ui-components@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [bd95e83]
+- Updated dependencies [3b29882]
+  - @memberjunction/ng-ui-components@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

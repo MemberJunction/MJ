@@ -348,32 +348,6 @@
 
 /* Legacy .details-actions removed - buttons now in header */
 
-/* Empty State */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 48px;
-    color: var(--mj-text-secondary);
-    text-align: center;
-}
-
-.empty-state i {
-    font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.5;
-}
-
-.empty-state span {
-    font-size: 16px;
-    font-weight: 500;
-}
-
-.empty-state p {
-    font-size: 14px;
-    margin-top: 8px;
-}
 
 /* ========================================
    Slide-out Panel Styles
@@ -632,15 +606,6 @@
     min-height: 80px;
 }
 
-:host ::ng-deep .form-input .k-input,
-:host ::ng-deep .form-textarea .k-input-inner {
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 14px;
-    border-color: var(--mj-border-default);
-    transition: all 0.2s ease;
-}
-
 :host ::ng-deep .form-input:focus-within,
 :host ::ng-deep .form-textarea:focus-within {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
@@ -654,25 +619,6 @@
     background: var(--mj-bg-page);
     border-top: 1px solid var(--mj-border-default);  /* category/slideout separator */
     flex-shrink: 0;
-}
-
-:host ::ng-deep .slideout-footer .k-button {
-    min-width: 100px;
-    padding: 10px 20px;
-    font-weight: 600;
-    border-radius: 8px;
-    transition: all 0.2s ease;
-}
-
-:host ::ng-deep .slideout-footer .k-button-solid-primary {
-    background: var(--mj-brand-primary);
-    border: none;
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-}
-
-:host ::ng-deep .slideout-footer .k-button-solid-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
 }
 
 .checkbox-label {
@@ -936,25 +882,8 @@
     width: 60px;
 }
 
-:host ::ng-deep .pattern-field .k-input {
-    padding: 3px 6px;
-    font-size: 11px;
-    border-radius: 4px;
-    height: 26px;
-}
-
 .type-field {
     width: 75px;
-}
-
-:host ::ng-deep .type-field .k-dropdownlist {
-    font-size: 11px;
-    height: 26px;
-}
-
-:host ::ng-deep .type-field .k-input-inner {
-    padding: 2px 6px;
-    font-size: 11px;
 }
 
 .empty-scopes-message {

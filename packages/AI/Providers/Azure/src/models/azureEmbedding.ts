@@ -21,6 +21,11 @@ export class AzureEmbedding extends BaseEmbeddings {
         super(apiKey);
         // Client initialization is deferred until SetAdditionalSettings is called
     }
+
+    /** Native batch endpoint: Azure AI Inference embeds an array of inputs in one request. */
+    public override get SupportsBatchEmbeddings(): boolean {
+        return true;
+    }
     
     /**
      * Set additional provider-specific settings
@@ -123,6 +128,7 @@ export class AzureEmbedding extends BaseEmbeddings {
                 ModelUsage: {
                     promptTokens: responseBody.usage?.prompt_tokens || 0,
                     completionTokens: 0,
+                    get totalInputTokens() { return this.promptTokens; },
                     get totalTokens() { return this.promptTokens + this.completionTokens; }
                 }
             };
@@ -143,6 +149,7 @@ export class AzureEmbedding extends BaseEmbeddings {
                 ModelUsage: {
                     promptTokens: 0,
                     completionTokens: 0,
+                    get totalInputTokens() { return this.promptTokens; },
                     get totalTokens() { return this.promptTokens + this.completionTokens; }
                 }
             };
@@ -156,7 +163,7 @@ export class AzureEmbedding extends BaseEmbeddings {
      * @param params Embedding parameters
      * @returns Embedding result
      */
-    public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+    protected override async embedBatch(params: EmbedTextsParams): Promise<EmbedTextsResult> {
         // Ensure client is initialized
         if (!this._client) {
             throw new Error('Azure client not initialized. Call SetAdditionalSettings with an endpoint first.');
@@ -202,6 +209,7 @@ export class AzureEmbedding extends BaseEmbeddings {
                 ModelUsage: {
                     promptTokens: responseBody.usage?.prompt_tokens || 0,
                     completionTokens: 0,
+                    get totalInputTokens() { return this.promptTokens; },
                     get totalTokens() { return this.promptTokens + this.completionTokens; }
                 }
             };
@@ -222,6 +230,7 @@ export class AzureEmbedding extends BaseEmbeddings {
                 ModelUsage: {
                     promptTokens: 0,
                     completionTokens: 0,
+                    get totalInputTokens() { return this.promptTokens; },
                     get totalTokens() { return this.promptTokens + this.completionTokens; }
                 }
             };

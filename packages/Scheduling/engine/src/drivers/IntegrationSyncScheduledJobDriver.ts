@@ -60,7 +60,10 @@ export class IntegrationSyncScheduledJobDriver extends BaseScheduledJob {
             config.CompanyIntegrationID,
             context.ContextUser,
             'Scheduled',
-            undefined, // onProgress
+            // Heartbeat the lease per sync batch so a healthy long-running sync
+            // keeps its concurrency slot (GH #2749). Fire-and-forget is safe —
+            // context.heartbeat never throws and self-throttles (~5 min).
+            () => { void context.heartbeat?.(); },
             undefined, // onNotification
             options
         );

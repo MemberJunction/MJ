@@ -1,4 +1,4 @@
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseEntity, RunView, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
 import { MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from './BaseAIEngine';
@@ -90,14 +90,14 @@ export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEn
         switch (this.BindingType) {
             case 'Vendor': {
                 // Direct vendor binding - get type from the vendor
-                const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, this.AIVendorID));
+                const vendor = engine.VendorsByID.get(NormalizeUUID(this.AIVendorID));
                 return vendor?.CredentialTypeID ?? null;
             }
             case 'ModelVendor': {
                 // ModelVendor binding - get vendor from ModelVendor, then get type
                 const modelVendor = engine.ModelVendors.find(mv => UUIDsEqual(mv.ID, this.AIModelVendorID));
                 if (modelVendor) {
-                    const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, modelVendor.VendorID));
+                    const vendor = engine.VendorsByID.get(NormalizeUUID(modelVendor.VendorID));
                     return vendor?.CredentialTypeID ?? null;
                 }
                 return null;
@@ -106,7 +106,7 @@ export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEn
                 // PromptModel binding - get vendor from PromptModel's VendorID
                 const promptModel = engine.PromptModels.find(pm => UUIDsEqual(pm.ID, this.AIPromptModelID));
                 if (promptModel && promptModel.VendorID) {
-                    const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, promptModel.VendorID));
+                    const vendor = engine.VendorsByID.get(NormalizeUUID(promptModel.VendorID));
                     return vendor?.CredentialTypeID ?? null;
                 }
                 return null;
@@ -124,13 +124,13 @@ export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEn
 
         switch (this.BindingType) {
             case 'Vendor': {
-                const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, this.AIVendorID));
+                const vendor = engine.VendorsByID.get(NormalizeUUID(this.AIVendorID));
                 return vendor?.CredentialType ?? null;
             }
             case 'ModelVendor': {
                 const modelVendor = engine.ModelVendors.find(mv => UUIDsEqual(mv.ID, this.AIModelVendorID));
                 if (modelVendor) {
-                    const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, modelVendor.VendorID));
+                    const vendor = engine.VendorsByID.get(NormalizeUUID(modelVendor.VendorID));
                     return vendor?.CredentialType ?? null;
                 }
                 return null;
@@ -138,7 +138,7 @@ export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEn
             case 'PromptModel': {
                 const promptModel = engine.PromptModels.find(pm => UUIDsEqual(pm.ID, this.AIPromptModelID));
                 if (promptModel && promptModel.VendorID) {
-                    const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, promptModel.VendorID));
+                    const vendor = engine.VendorsByID.get(NormalizeUUID(promptModel.VendorID));
                     return vendor?.CredentialType ?? null;
                 }
                 return null;
@@ -156,13 +156,13 @@ export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEn
 
         switch (this.BindingType) {
             case 'Vendor': {
-                const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, this.AIVendorID));
+                const vendor = engine.VendorsByID.get(NormalizeUUID(this.AIVendorID));
                 return vendor?.Name ?? this.AIVendorID ?? 'Unknown';
             }
             case 'ModelVendor': {
                 const modelVendor = engine.ModelVendors.find(mv => UUIDsEqual(mv.ID, this.AIModelVendorID));
                 if (modelVendor) {
-                    const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, modelVendor.VendorID));
+                    const vendor = engine.VendorsByID.get(NormalizeUUID(modelVendor.VendorID));
                     return vendor?.Name ?? modelVendor.Vendor ?? 'Unknown';
                 }
                 return this.AIModelVendorID ?? 'Unknown';
@@ -170,7 +170,7 @@ export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEn
             case 'PromptModel': {
                 const promptModel = engine.PromptModels.find(pm => UUIDsEqual(pm.ID, this.AIPromptModelID));
                 if (promptModel && promptModel.VendorID) {
-                    const vendor = engine.Vendors.find(v => UUIDsEqual(v.ID, promptModel.VendorID));
+                    const vendor = engine.VendorsByID.get(NormalizeUUID(promptModel.VendorID));
                     return vendor?.Name ?? promptModel.Vendor ?? 'Unknown';
                 }
                 return this.AIPromptModelID ?? 'Unknown';

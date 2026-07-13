@@ -165,8 +165,11 @@ export class PineconeDatabase extends VectorDBBase {
             return this.wrapSuccessResponse(result);
         }
         catch(ex){
-            console.log(ex);
-            return this.wrapSuccessResponse(null);
+            // Return a FAILURE response — never a success with null data. Reporting success here
+            // silently swallows real upsert errors (e.g. "Vector dimension 1536 does not match the
+            // dimension of the index 512"), making the whole vectorization pipeline claim it worked.
+            LogError("Error creating records", undefined, ex);
+            return this.wrapFailureResponse(ex instanceof Error ? ex.message : String(ex));
         }
     }
 
@@ -188,8 +191,10 @@ export class PineconeDatabase extends VectorDBBase {
             return this.wrapSuccessResponse(fetchResult);
         }
         catch(ex){
+            // Failure must report failure — returning a success response with null data swallows
+            // the fetch error and makes callers believe the records were retrieved.
             LogError("Error getting records", undefined, ex);
-            return this.wrapSuccessResponse(null);
+            return this.wrapFailureResponse(ex instanceof Error ? ex.message : String(ex));
         }
     }
 
@@ -277,19 +282,4 @@ export class PineconeDatabase extends VectorDBBase {
         }
     }
 
-    private wrapSuccessResponse(data: any): BaseResponse {
-        return {
-            success: true,
-            message: null,
-            data: data
-        }
-    };
-
-    private wrapFailureResponse(message?: string): BaseResponse {
-        return {
-            success: false,
-            message: message || "An error occurred",
-            data: null
-        }
-    }
 }

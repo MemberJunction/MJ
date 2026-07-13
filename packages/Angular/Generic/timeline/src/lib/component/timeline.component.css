@@ -131,27 +131,6 @@ mj-timeline {
   to { transform: rotate(360deg); }
 }
 
-.mj-timeline__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 64px 24px;
-  gap: 8px;
-  text-align: center;
-}
-
-.mj-timeline__empty-icon {
-  font-size: 32px;
-  color: var(--mj-timeline-text-muted);
-  opacity: 0.4;
-}
-
-.mj-timeline__empty-text {
-  color: var(--mj-timeline-text-secondary);
-  font-size: var(--mj-text-sm);
-}
-
 /* ============================================================================
    TIME SEGMENTS - Year/Month badges on the axis
    ============================================================================ */

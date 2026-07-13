@@ -1,0 +1,176 @@
+<mj-dialog [Visible]="Visible" Title="Add Source (Guided)" [Width]="660" (Close)="Close()">
+    <div class="wiz">
+        <!-- Step progress -->
+        <div class="wiz-progress">
+            @for (s of ActiveSteps; track s; let i = $index) {
+                <div class="wiz-step-dot"
+                     [class.active]="i === StepIndex"
+                     [class.done]="i < StepIndex">
+                    <span class="wiz-step-num">{{ i + 1 }}</span>
+                </div>
+            }
+        </div>
+        <div class="wiz-step-title">
+            <span class="wiz-step-counter">Step {{ StepIndex + 1 }} of {{ TotalSteps }}</span>{{ StepLabel }}
+        </div>
+
+        <div class="wiz-body">
+            <!-- Source Type -->
+            @if (CurrentStep === 'source-type') {
+                <div class="at-form-group">
+                    <label class="at-form-label">Source name</label>
+                    <input type="text" class="mj-input" [(ngModel)]="SourceName" placeholder="Source name">
+                </div>
+                <div class="at-form-group">
+                    <label class="at-form-label">Source type</label>
+                    <select class="mj-input" [(ngModel)]="SourceTypeID">
+                        <option value="">Select source type…</option>
+                        @for (opt of SourceTypeOptions; track opt.ID) {
+                            <option [value]="opt.ID">{{ opt.Name }}</option>
+                        }
+                    </select>
+                </div>
+                @if (!IsEntitySource && SourceTypeID) {
+                    <div class="at-form-group">
+                        <label class="at-form-label">URL (if applicable)</label>
+                        <input type="url" class="mj-input" [(ngModel)]="SourceURL" placeholder="https://…">
+                    </div>
+                }
+            }
+
+            <!-- Entity -->
+            @if (CurrentStep === 'entity') {
+                <div class="at-form-group">
+                    <label class="at-form-label">Entity</label>
+                    <select class="mj-input" [(ngModel)]="EntityID">
+                        <option value="">Select entity…</option>
+                        @for (opt of EntityOptions; track opt.ID) {
+                            <option [value]="opt.ID">{{ opt.Name }}</option>
+                        }
+                    </select>
+                </div>
+                @if (EntityID && !SelectedEntityHasNoDocument) {
+                    <div class="wiz-callout ok">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <strong>{{ SelectedEntityName }}</strong> already has an Entity Document — the next step is skipped.
+                    </div>
+                }
+            }
+
+            <!-- Entity Document (inline create) -->
+            @if (CurrentStep === 'entity-doc') {
+                <div class="wiz-callout">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <strong>{{ SelectedEntityName }}</strong> has no Entity Document. Create one to continue.
+                </div>
+                <div class="at-form-group">
+                    <label class="at-form-label">Document name</label>
+                    <input type="text" class="mj-input" [(ngModel)]="NewEntityDocName" placeholder="Document name">
+                </div>
+                <div class="at-form-group">
+                    <label class="at-form-label">Fields to include ({{ SelectedEntityDocFieldCount }} selected)</label>
+                    <div class="wiz-field-list">
+                        @for (f of SelectedEntityFields; track f.Name) {
+                            <label class="wiz-field-row">
+                                <input type="checkbox" [(ngModel)]="NewEntityDocSelectedFields[f.Name]">
+                                <span>{{ f.DisplayName }}</span>
+                            </label>
+                        }
+                    </div>
+                </div>
+                <button mjButton variant="primary" size="sm" (click)="CreateEntityDocument()" [disabled]="EntityDocSaving">
+                    @if (EntityDocSaving) { <i class="fa-solid fa-spinner fa-spin"></i> Creating… }
+                    @else { <i class="fa-solid fa-check"></i> Create Entity Document }
+                </button>
+            }
+
+            <!-- Content Type -->
+            @if (CurrentStep === 'content-type') {
+                @if (HasAnyContentType) {
+                    <div class="at-form-group">
+                        <label class="at-form-label">Content type</label>
+                        <select class="mj-input" [(ngModel)]="ContentTypeID">
+                            <option value="">Select content type…</option>
+                            @for (opt of ContentTypeOptions; track opt.ID) {
+                                <option [value]="opt.ID">{{ opt.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                } @else {
+                    <div class="wiz-callout">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        No content types exist yet. Create one from the Content Types tab, then return to this wizard.
+                    </div>
+                }
+            }
+
+            <!-- Taxonomy Strategy -->
+            @if (CurrentStep === 'taxonomy') {
+                <p class="wiz-help">
+                    Optionally generate a starter tag taxonomy by sampling this source's content.
+                    You can skip this and refine the taxonomy later.
+                </p>
+                <classify-seed-taxonomy
+                    [SourceID]="PendingSourceID"
+                    [Provider]="Provider"
+                    (Accepted)="OnTaxonomyAccepted($event)">
+                </classify-seed-taxonomy>
+            }
+
+            <!-- Domain Context -->
+            @if (CurrentStep === 'domain-context') {
+                <div class="at-form-group">
+                    <label class="at-form-label">Source guidance</label>
+                    <textarea class="mj-textarea" rows="4" [(ngModel)]="ClassificationContext"
+                              placeholder="Free-text guidance for the classifier about this source's domain…"></textarea>
+                </div>
+                <div class="wiz-toggle-row">
+                    <div>
+                        <div class="wiz-toggle-t">Substitutive mode</div>
+                        <div class="wiz-toggle-d">When on, this source's guidance replaces org/content-type context; off = added.</div>
+                    </div>
+                    <mj-switch [(ngModel)]="IsSubstitutiveMode"></mj-switch>
+                </div>
+            }
+
+            <!-- Review -->
+            @if (CurrentStep === 'review') {
+                <div class="wiz-review">
+                    <div class="wiz-review-row"><span>Name</span><strong>{{ SourceName || '—' }}</strong></div>
+                    <div class="wiz-review-row"><span>Source type</span><strong>{{ SourceTypeName }}</strong></div>
+                    @if (IsEntitySource) {
+                        <div class="wiz-review-row"><span>Entity</span><strong>{{ SelectedEntityName || '—' }}</strong></div>
+                        <div class="wiz-review-row"><span>Entity document</span><strong>{{ EntityDocName }}</strong></div>
+                    } @else {
+                        <div class="wiz-review-row"><span>Content type</span><strong>{{ ContentTypeName }}</strong></div>
+                        @if (SourceURL) {
+                            <div class="wiz-review-row"><span>URL</span><strong>{{ SourceURL }}</strong></div>
+                        }
+                    }
+                    <div class="wiz-review-row"><span>Domain context</span><strong>{{ ClassificationContext.trim() ? (ClassificationContextMode + ' · set') : 'none' }}</strong></div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <mj-dialog-actions>
+        <div class="wiz-actions">
+            @if (IsLastStep) {
+                <button mjButton variant="primary" size="sm" (click)="Finish()" [disabled]="Saving">
+                    @if (Saving) { <i class="fa-solid fa-spinner fa-spin"></i> Creating… }
+                    @else { <i class="fa-solid fa-check"></i> Create source }
+                </button>
+            } @else {
+                <button mjButton variant="primary" size="sm" (click)="Next()" [disabled]="!CanGoNext || Saving">
+                    @if (Saving) { <i class="fa-solid fa-spinner fa-spin"></i> Working… }
+                    @else { Next <i class="fa-solid fa-arrow-right"></i> }
+                </button>
+            }
+            @if (StepIndex > 0) {
+                <button mjButton variant="secondary" size="sm" (click)="Back()" [disabled]="Saving">Back</button>
+            }
+            <span class="wiz-actions-spacer"></span>
+            <button mjButton variant="flat" size="sm" (click)="Close()">Cancel</button>
+        </div>
+    </mj-dialog-actions>
+</mj-dialog>

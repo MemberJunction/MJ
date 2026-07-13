@@ -494,17 +494,23 @@ flowchart TD
     C -->|No| Z[Ignore]
     C -->|Yes| D{Can use immediate mutation?}
     D -->|"Yes: No Filter, No OrderBy,<br/>No AdditionalLoading override"| E[Synchronous array mutation]
-    D -->|No| F[Debounced full refresh]
+    D -->|No| F[Buffer ALL events<br/>in the debounce window]
 
     E --> G[Update in-memory array<br/>push/splice/replace]
-    G --> H[NotifyDataChange via DataChange$]
+    G --> H[NotifyDataChange via DataChange$<br/>+ emitPropertyChange]
     G --> I{CacheLocal enabled?}
     I -->|Yes| J[syncLocalCacheForConfig]
     J --> K[UpsertSingleEntity or RemoveSingleEntity<br/>using CompositeKey]
 
-    F -->|1.5s debounce| L[LoadSingleConfig from server]
+    F -->|"debounce elapses<br/>(default 1.5s, per-config DebounceTime)"| N{Any event in the batch NOT yet<br/>reflected in the array?}
+    N -->|Yes| L[LoadSingleConfig from server<br/>one refresh covers the whole batch]
     L --> M[RunView → updates cache naturally]
     L --> H
+    L -.->|transient failure| R[scheduleEventRefreshRetry<br/>bounded backoff 2s/4s]
+    R -.-> L
+    N -->|"No — every change already applied<br/>(in-place save / manual push)"| S[notifyAlreadyAppliedMutation]
+    S --> H
+    N -->|"Only deletes of rows<br/>absent from the array"| T[Silent — manual-splice engine code<br/>owns the notification]
 ```
 
 **Note**: LocalCacheManager also independently subscribes to MJGlobal events (including `remote-invalidate`) and updates its own caches. The `syncLocalCacheForConfig` path is only for local save/delete events where BaseEngine handles the immediate mutation — remote events are handled by LocalCacheManager's own `HandleRemoteInvalidateEvent`.
@@ -546,6 +552,22 @@ protected async syncLocalCacheForConfig(
 ## Eviction Policies
 
 When the cache exceeds `maxSizeBytes` or `maxEntries`, entries are evicted to make room.
+
+### Size Estimation (sampled, not exact)
+
+Entry `sizeBytes` is an **approximate** figure used only for eviction accounting — it is never
+exact and never affects correctness. Rather than `JSON.stringify` the entire result array on every
+cache write (which previously ran an O(rows × fields) serialization on the per-save/delete hot
+path), `estimateResultsSize()` samples a few random rows and scales:
+
+- sample count = `clamp(ceil(rowCount × 0.10), 3, 10)` distinct **random** row indexes
+- average `JSON.stringify(row).length` across the sample, multiply by `rowCount`, ×2 for UTF-16
+- `rowCount === 0` → 0; `rowCount ≤ 3` → measure every row (no sampling)
+
+Random (not first-N) sampling avoids systematic skew when rows are heterogeneous (e.g. a nullable
+large JSON/text column whose head rows happen to be null or oversized). Single-row cache mutations
+(`UpsertSingleEntity`/`RemoveSingleEntity`) likewise avoid per-row `CompositeKey` allocation by
+keying their internal dedup Map with a cheap delimiter-joined PK string.
 
 ### Eviction Trigger
 
@@ -814,7 +836,7 @@ Behind the scenes:
 
 - `ObserveProperty(propertyName)` is **lazy-created on first call** — engines whose properties are never observed pay zero runtime cost for the observable.
 - `BehaviorSubject` semantics: subscribers receive the current array immediately on subscribe, then re-receive the same array reference on every mutation.
-- The mutation triggers come from BaseEngine's built-in BaseEntity event handler — `DebounceIndividualBaseEntityEvent` → `ProcessEntityEvent` → either an in-place array mutation (when no `Filter`/`OrderBy`/`AdditionalLoading` are set, so MJ can safely splice) or a full refresh (when a filter is set so MJ can't determine whether the saved row still belongs). Either way, `emitPropertyChange(propertyName)` fires and the observable re-emits.
+- The mutation triggers come from BaseEngine's built-in BaseEntity event handler — `DebounceIndividualBaseEntityEvent` buffers **all** events in the debounce window and delivers the batch to `ProcessEntityEvents` (`ProcessEntityEvent` is a back-compat single-event wrapper), which per config either applies in-place array mutations (when no `Filter`/`OrderBy`/`AdditionalLoading` are set, so MJ can safely splice), runs one full refresh covering the batch (when a filter is set so MJ can't determine whether the saved row still belongs), or — when every event's changes are **already reflected** in the array (an in-place save of the array's own cached instance, a manually-pushed create) — skips the redundant refresh but still notifies via `notifyAlreadyAppliedMutation`. In all three cases `emitPropertyChange(propertyName)` fires and the observable re-emits. The only silent case is a delete of a row absent from the config's array (indistinguishable from "never matched the Filter") — engine code that manually splices must call `notifyAlreadyAppliedMutation(config, 'delete', entity)` itself (see `UserInfoEngine.UninstallApplication` for the reference pattern).
 - `DataChange$: Observable<EngineDataChangeEvent>` is the engine-wide complement — emits one event per refresh with the config + new data.
 
 **When to build a new engine vs. reuse an existing service**:
@@ -986,14 +1008,19 @@ this._eventListener.subscribe(async (event) => {
 
 **`skipAdditionalLoadingCheck` parameter**: Callers that invoke `AdditionalLoading()` themselves after applying mutations can pass `canUseImmediateMutation(config, true)` to skip the override check. This is used by `applyRemoteRecordData` which applies all config mutations first, then calls `AdditionalLoading()` once at the end.
 
-**Debounced refresh** (server round-trip, 1.5s debounce):
+**Debounced batch refresh** (server round-trip; default 1.5s debounce, per-config `DebounceTime` override):
 - Used when immediate mutation isn't safe (filtered/sorted data, post-processing)
-- Uses RxJS `Subject` per entity name with `debounceTime` operator
-- Re-fetches from server via `LoadSingleConfig`
+- An RxJS `Subject` per entity name **buffers every event raised during the window** and delivers the batch to `ProcessEntityEvents` (the override seam; `ProcessEntityEvent` is a back-compat single-event wrapper)
+- Per config, the decision is an **OR over the whole batch** — judging only the last event would let an already-applied write mask a coalesced fresh-instance save:
+  - ANY event not yet reflected in the array → one `LoadSingleConfig` refresh covers the batch
+  - else, any event already applied (in-place save of the array's own cached instance, manual push after create) → `notifyAlreadyAppliedMutation` emits `DataChange$` + `ObserveProperty` without a refresh — the refresh is redundant but the notification is not
+  - deletes of rows absent from the array stay **silent** ("already spliced by engine code" is indistinguishable from "never matched the Filter", and notifying would assert phantom deletes to filtered configs' observers) — **engine code that manually splices must call `notifyAlreadyAppliedMutation(config, 'delete', entity)` itself**; `UserInfoEngine.UninstallApplication` is the reference pattern
+- Delete membership checks key off the event payload's pre-delete `OldValues` snapshot — `BaseEntity.Delete()` calls `NewRecord()` (regenerating the PK) before the debounced handler runs, so matching by the live entity's key can never identify the deleted row
+- A transiently-failed refresh schedules a bounded, backed-off retry (`scheduleEventRefreshRetry`: 2s/4s, max `MaxEventRefreshRetries` = 2 overridable, one pending per property). Permission denials are recorded as loaded-empty and never retried
 
 ### DataChange$ Observable
 
-After any array mutation (immediate or debounced), BaseEngine emits through `DataChange$`:
+After any array change (immediate mutation, debounced refresh, or a skipped refresh whose changes were already applied), BaseEngine emits through `DataChange$`:
 
 ```typescript
 // Components can subscribe for reactive updates
@@ -1102,6 +1129,40 @@ When to use this pattern instead of startup loading:
 When startup loading is still right:
 - Dataset is small and lookups happen everywhere (e.g. `AIEngineBase`, `UserInfoEngine`)
 - The first lookup happens in a hot path that can't easily await an async load (e.g. a synchronous render loop with no setup hook)
+
+### Check the Registry Before You Query (MJ Convention)
+
+The flip side of engines caching eagerly: **other code should reuse those caches instead of re-querying.** In any process that bootstraps via `StartupManager` (MJAPI, MJCLI commands, mj-sync), every `@RegisterForStartup` engine has already loaded its entities into memory before your code runs. A consumer that issues its own unfiltered `RunView` for one of those entities doubles the DB round trips and the RAM, and trips the `REDUNDANT DATA LOADING` warning from `BaseEngineRegistry`'s load tracking.
+
+`BaseEngineRegistry` (in `@memberjunction/core`) provides the reverse lookup:
+
+```typescript
+import { BaseEngineRegistry } from '@memberjunction/core';
+
+// "Best cache or null" — the common one-liner
+const rows = BaseEngineRegistry.Instance.TryGetCachedRecords<UserInfo>('Users', { unfilteredOnly: true });
+if (rows) { /* serve from memory */ } else { /* RunView fallback */ }
+
+// Full matches — when you need to vet the donor's config before trusting it
+const matches = BaseEngineRegistry.Instance.FindCachedEntity('MJ: AI Prompts', { unfilteredOnly: true });
+```
+
+`FindCachedEntity` returns, per loaded engine that caches the entity: the engine instance, the full `BaseEnginePropertyConfig` that produced the cache, and a **live reference** to the cached array (unfiltered full-set caches sort first).
+
+**Vetting a donor.** Treat a match as the authoritative full set only when all of these hold:
+
+1. **`unfilteredOnly: true`** — a `Filter` means a subset, useless as a full cache.
+2. **No `OrderBy`** on the config — ordered configs fail `canUseImmediateMutation` (see [Immediate Mutation vs Debounced Refresh](#immediate-mutation-vs-debounced-refresh)), so the donor responds to entity events with a full refresh that **reassigns** the array property. If your usage outlives a single tick, resolve the array per-access via donor engine + `config.PropertyName` rather than capturing the reference.
+3. **`ResultType` is not `'simple'`** (and `records[0] instanceof BaseEntity` when rows exist) — required if you'll call `.Get()` / `.PrimaryKey` / `.Save()` on the rows.
+4. **Not yourself** — guard `match.engine === this` so an engine's own slot from a prior run can't masquerade as a donor.
+
+**The returned array is the donor's live array — read it, don't mutate it.** For unfiltered/unordered/`entity_object` configs the donor's BaseEntity event subscription keeps the array current on save/delete automatically (see [Real-Time Array Updates](#real-time-array-updates-event-handling)), so a live reference stays fresh for free. Writing into a donor's array requires understanding both sides' dedup semantics — `SyncMetadataEngine` in `@memberjunction/metadata-sync` is the correctly-engineered exception and the reference implementation: its `delegateEntityIfCached()` partitions a dynamic entity set into "delegate to a donor" vs. "self-load", resolves donor arrays per-access, and PK-dedups its writes against the donor's event handler.
+
+A simpler read-only example is `AIEngine.RefreshActions()` in `@memberjunction/aiengine`: `ActionEngineBase` and `ActionEngineServer` are separate singletons that each cache the same unfiltered `'MJ: Actions'` set, so on the server one of them is usually already loaded. `RefreshActions` does `BaseEngineRegistry.Instance.TryGetCachedRecords<MJActionEntity>('MJ: Actions', { unfilteredOnly: true })` and reuses whichever sibling already holds the set, falling back to loading `ActionEngineBase` only on a miss — eliminating a redundant 6-entity load (and the duplicate-RunView telemetry warning) at agent/job startup.
+
+**Why this is a convention, not a one-off optimization**: donors are discovered dynamically at runtime. Consumers get faster automatically as new engines ship — no version coupling, no hardcoded donor lists. When no engine caches the entity, the lookup returns empty and the consumer falls back to its own `RunView`/`Load`, so adoption is always graceful.
+
+The same convention is summarized in the repo root [CLAUDE.md](../CLAUDE.md) under "Check the Registry Before You Query".
 
 ### LocalCacheManager Independent Event Handling
 
@@ -1845,7 +1906,7 @@ const status = LocalCacheManager.Instance.GetRunViewCacheStatus(fingerprint);
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `ServerAutoCacheMaxRows` | 250 | Max row count for auto-caching unfiltered RunView results (0 = disabled) |
-| `DedupLingerMs` | 5,000 ms | How long resolved RunViews results stay available for instant replay |
+| `DedupLingerMs` | 5,000 ms | How long resolved RunViews results stay available for instant replay. Entries are **write-invalidated**: a BaseEntity save/delete/remote-invalidate for any entity a batch's params touch drops its lingered AND in-flight entries, so an identical call after a write always re-executes instead of replaying pre-write rows. Params addressed only by ViewID/ViewName (no EntityName) are not tracked. |
 
 ### ProviderBase Client-Side Fast-Start
 

@@ -1369,6 +1369,110 @@ export function EscapeHTML(text: string): string {
 }
 
 /**
+ * The format a piece of text appears to be authored in, as classified by
+ * {@link detectRichTextFormat}.
+ */
+export type RichTextFormat = 'markdown' | 'html' | 'plain';
+
+/** Default number of leading characters {@link detectRichTextFormat} inspects. */
+export const DEFAULT_RICH_TEXT_SCAN_LENGTH = 500;
+
+/**
+ * Structural / inline HTML tags that, when present in sufficient number, indicate real HTML
+ * markup rather than an incidental angle bracket.
+ */
+const RICH_TEXT_HTML_TAG_REGEX =
+    /<\/?(?:p|div|span|br|hr|h[1-6]|ul|ol|li|table|thead|tbody|tr|td|th|a|img|strong|em|b|i|u|blockquote|pre|code|section|article|header|footer|nav|figure|figcaption|small|sub|sup|mark|dl|dt|dd)\b[^>]*>/gi;
+
+/** Markdown signals that are strong on their own (a single match is enough to classify). */
+const STRONG_MARKDOWN_PATTERNS: readonly RegExp[] = [
+    /^#{1,6}\s+\S/m,                 // ATX heading:  "# Title"
+    /^```/m,                          // fenced code block
+    /^~~~/m,                          // alternative fenced code block
+    /\[[^\]]+\]\([^)]+\)/,            // link:  [text](url)
+    /!\[[^\]]*\]\([^)]+\)/,           // image: ![alt](url)
+    /^\s*\|.+\|\s*$[\r\n]+^\s*\|?[\s:]*-{2,}/m, // table header + delimiter row
+];
+
+/** Weaker Markdown signals — need at least two distinct ones to classify as Markdown. */
+const WEAK_MARKDOWN_PATTERNS: readonly RegExp[] = [
+    /^\s*[-*+]\s+\S/m,                // unordered list item
+    /^\s*\d+\.\s+\S/m,                // ordered list item
+    /\*\*[^*\s][^*]*\*\*/,            // **bold**
+    /(?:^|\s)__[^_\s][^_]*__(?:\s|$)/,// __bold__
+    /(?:^|\s)`[^`\s][^`]*`/,          // `inline code`
+    /^>\s+\S/m,                       // > blockquote
+    /^\s*([-*_])(?:\s*\1){2,}\s*$/m,  // thematic break: ---, ***, ___
+];
+
+/**
+ * Lightweight, dependency-free detection of the likely format of a string — Markdown, HTML,
+ * or plain text. Useful for deciding how to render free-text content (e.g. a long entity
+ * field) without requiring callers to declare the format up front.
+ *
+ * The detection is intentionally **conservative**: it requires reasonably strong signals
+ * before classifying content as Markdown or HTML, so ordinary prose (which may contain the
+ * odd `<` or `*`) stays `'plain'`. Markdown is treated as the safe **superset** — content
+ * showing Markdown signals is classified `'markdown'` even when it also contains inline HTML,
+ * because Markdown renderers handle embedded HTML.
+ *
+ * Only the leading `maxScanLength` characters are inspected — format signals, when present,
+ * appear early, so a small window keeps the regex work cheap on large values and slower
+ * machines. If nothing matches within that window, the content is assumed `'plain'`.
+ *
+ * NOTE: this classifies; it does NOT sanitize. Anything rendered as HTML must still be passed
+ * through an HTML sanitizer (e.g. Angular's `[innerHTML]` binding, which sanitizes in HTML
+ * context) before being injected into the DOM.
+ *
+ * @param value - The text to classify (null/undefined/blank → `'plain'`).
+ * @param maxScanLength - Leading characters to inspect. Defaults to {@link DEFAULT_RICH_TEXT_SCAN_LENGTH} (500).
+ * @returns `'markdown'`, `'html'`, or `'plain'`.
+ */
+export function detectRichTextFormat(
+    value: string | null | undefined,
+    maxScanLength: number = DEFAULT_RICH_TEXT_SCAN_LENGTH
+): RichTextFormat {
+    if (!value) return 'plain';
+
+    const limit = maxScanLength > 0 ? maxScanLength : DEFAULT_RICH_TEXT_SCAN_LENGTH;
+    const sample = value.length > limit ? value.slice(0, limit) : value;
+    if (sample.trim().length === 0) return 'plain';
+
+    // Markdown wins when present — its renderer also handles embedded HTML.
+    if (hasMarkdownSignals(sample)) return 'markdown';
+
+    // Otherwise, treat as HTML only when there are at least two real tags.
+    if (countHtmlTags(sample) >= 2) return 'html';
+
+    return 'plain';
+}
+
+/** True when the sample shows a strong Markdown signal, or two or more weak signals. */
+function hasMarkdownSignals(sample: string): boolean {
+    if (STRONG_MARKDOWN_PATTERNS.some((re) => re.test(sample))) return true;
+
+    let weak = 0;
+    for (const re of WEAK_MARKDOWN_PATTERNS) {
+        if (re.test(sample)) {
+            weak++;
+            if (weak >= 2) return true;
+        }
+    }
+    return false;
+}
+
+/** Count HTML-like tag matches (capped — we only care whether there are at least two). */
+function countHtmlTags(sample: string): number {
+    RICH_TEXT_HTML_TAG_REGEX.lastIndex = 0;
+    let count = 0;
+    while (RICH_TEXT_HTML_TAG_REGEX.exec(sample) !== null) {
+        count++;
+        if (count >= 2) break;
+    }
+    return count;
+}
+
+/**
  * Build an HTML-safe string with every case-insensitive occurrence of `query` inside
  * `text` wrapped in the supplied `<mark>` tag. Designed for search-result UIs whose
  * output is bound to Angular's `[innerHTML]` (or any equivalent that trusts raw HTML).

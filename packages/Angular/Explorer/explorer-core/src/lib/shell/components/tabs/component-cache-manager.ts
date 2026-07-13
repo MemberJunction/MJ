@@ -1,5 +1,5 @@
 import { ComponentRef, ApplicationRef } from '@angular/core';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 
 /**
@@ -75,7 +75,14 @@ export class ComponentCacheManager {
    */
   public static MaxDetachedComponents: number = 20;
 
-  constructor(private appRef: ApplicationRef) {}
+  /**
+   * @param navigationService Optional — when provided, the cache manager keeps the AI agent's live
+   *   client-tool set in sync with the attached surface: it replays a reattached component's tools
+   *   ({@link NavigationService.NotifyResourceReattached}) and clears them on detach
+   *   ({@link NavigationService.NotifyResourceDetached}), since cached components don't re-run
+   *   `ngAfterViewInit`. Centralizing it here covers BOTH single-resource and Golden Layout paths.
+   */
+  constructor(private appRef: ApplicationRef, private navigationService?: NavigationService) {}
 
   /**
    * Generate a unique cache key from resource identity.
@@ -175,6 +182,9 @@ export class ComponentCacheManager {
       info.isAttached = true;
       info.attachedToTabId = tabId;
       info.lastUsed = new Date();
+      // Replay this surface's agent client tools to the AI agent on reattach (cached components keep
+      // their instance but never re-run ngAfterViewInit, so they don't re-register on their own).
+      this.navigationService?.NotifyResourceReattached(info.componentRef.instance);
     }
   }
 
@@ -192,6 +202,9 @@ export class ComponentCacheManager {
     info.isAttached = false;
     info.attachedToTabId = null;
     info.lastUsed = new Date();
+    // Clear this surface's agent client tools on detach so the previous app's tools aren't offered to
+    // the AI agent on the next surface. NotifyResourceReattached replays them if the user returns.
+    this.navigationService?.NotifyResourceDetached(info.componentRef.instance);
     this.EvictIfNeeded();
     return info;
   }
@@ -269,6 +282,8 @@ export class ComponentCacheManager {
 
     while (detached.length > ComponentCacheManager.MaxDetachedComponents) {
       const [key, info] = detached.shift()!;
+      // Drop the destroyed component's cached agent tools so the registry doesn't retain a dead ref.
+      this.navigationService?.ForgetResource(info.componentRef.instance);
       this.appRef.detachView(info.componentRef.hostView);
       info.componentRef.destroy();
       this.cache.delete(key);
@@ -295,6 +310,7 @@ export class ComponentCacheManager {
 
     if (!info) return;
 
+    this.navigationService?.ForgetResource(info.componentRef.instance);
     this.appRef.detachView(info.componentRef.hostView);
     info.componentRef.destroy();
     this.cache.delete(key);

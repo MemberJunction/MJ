@@ -2,6 +2,9 @@ import { RegisterClass } from "@memberjunction/global";
 import { BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
+// Realtime (Agents Platform) driver — BaseRealtimeModel implementation
+export * from './elevenLabsRealtime';
+
 @RegisterClass(BaseAudioGenerator, "ElevenLabsAudioGenerator")
 export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     private _elevenLabs: ElevenLabsClient;

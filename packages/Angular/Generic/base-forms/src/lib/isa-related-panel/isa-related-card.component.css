@@ -167,7 +167,7 @@
 .mj-isa-card--nested {
   box-shadow: none;
   border: 1px solid var(--mj-border-default);
-  border-left: 2px solid color-mix(in srgb, var(--mj-brand-primary) 60%, var(--mj-color-neutral-400));
+  border-left: 2px solid color-mix(in srgb, var(--mj-brand-primary) 60%, var(--mj-border-strong));
   border-radius: var(--mj-radius-md);
 }
 

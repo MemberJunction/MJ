@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { Metadata, IMetadataProvider } from '@memberjunction/core';
+import { Metadata, IMetadataProvider, LogStatus, PermissionConstrainedError } from '@memberjunction/core';
 import { UserInfoEngine, MJWorkspaceEntity } from '@memberjunction/core-entities';
 import {
   WorkspaceConfiguration,
@@ -155,6 +155,14 @@ export class WorkspaceStateManager {
     }
     // Use UserInfoEngine for centralized, cached workspace loading
     const engine = UserInfoEngine.Instance;
+
+    // Permission-denied ≠ empty — don't auto-create a workspace for denied users.
+    if (engine.IsPermissionConstrained) {
+      LogStatus('[WorkspaceStateManager] UserInfoEngine is permission-constrained, using default workspace configuration');
+      this.configuration$.next(createDefaultWorkspaceConfiguration());
+      return;
+    }
+
     const workspaces = engine.Workspaces;
 
     if (workspaces.length > 0) {
@@ -221,6 +229,16 @@ export class WorkspaceStateManager {
   UpdateConfiguration(config: WorkspaceConfiguration): void {
     this.configuration$.next(config);
     this.requestSave();
+  }
+
+  /**
+   * Reset workspace to a clean default configuration and persist immediately.
+   * Used for recovery when stale or corrupted workspace data prevents startup.
+   */
+  async ResetConfiguration(): Promise<void> {
+    const defaultConfig = createDefaultWorkspaceConfiguration();
+    this.configuration$.next(defaultConfig);
+    await this.persistConfiguration();
   }
 
   /**

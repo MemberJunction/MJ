@@ -143,11 +143,4 @@
     flex-shrink: 0;
 }
 
-.empty-state {
-    padding: 36px 16px;
-    text-align: center;
-    color: var(--mj-text-muted);
-    font-size: 13px;
-}
-.empty-state i { font-size: 18px; margin-bottom: 8px; color: var(--mj-text-disabled); }
 .muted { color: var(--mj-text-muted); font-size: 12px; }

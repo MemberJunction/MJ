@@ -12,7 +12,6 @@ import { ___runObject, handleServerInit } from './util';
 import { MJGlobal } from '@memberjunction/global';
 import { RunCodeGenBase, SQLCodeGenBase } from '@memberjunction/codegen-lib';
 import { Metadata } from '@memberjunction/core';
-import AppDataSource from '@memberjunction/codegen-lib/dist/Config/db-connection';
 
 const app = express();
 

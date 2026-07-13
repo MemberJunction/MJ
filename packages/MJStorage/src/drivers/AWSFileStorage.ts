@@ -12,13 +12,17 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { RegisterClass } from '@memberjunction/global';
 import env from 'env-var';
 import mime from 'mime-types';
+import { Readable } from 'stream';
 import {
+  BuildHttpRangeHeader,
   CreatePreAuthUploadUrlPayload,
   FileSearchOptions,
   FileSearchResultSet,
   FileStorageBase,
   GetObjectParams,
   GetObjectMetadataParams,
+  GetObjectStreamParams,
+  ObjectStreamResult,
   StorageListResult,
   StorageObjectMetadata,
 } from '../generic/FileStorageBase';
@@ -168,7 +172,12 @@ export class AWSFileStorage extends FileStorageBase {
       this._keyPrefix = config.keyPrefix.endsWith('/') ? config.keyPrefix : `${config.keyPrefix}/`;
     }
 
-    // Reinitialize the S3 client with new credentials
+    // Reinitialize the S3 client with new credentials.
+    // Destroy the old client first so its keep-alive sockets and credential-provider
+    // chain (which can hold IMDS polling timers) are released before reassignment.
+    if (this._client) {
+      this._client.destroy();
+    }
     const credentials = {
       accessKeyId: this._accessKeyId,
       secretAccessKey: this._secretAccessKey,
@@ -718,6 +727,90 @@ export class AWSFileStorage extends FileStorageBase {
       console.error(e);
       throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
+  }
+
+  /**
+   * S3 supports ranged streaming via the GetObject API's `Range` parameter.
+   */
+  public override get SupportsStreaming(): boolean {
+    return true;
+  }
+
+  /**
+   * Streams an object's content from S3, optionally honoring a byte range.
+   *
+   * Uses the S3 `GetObjectCommand` with the `Range` parameter so large objects are
+   * served as a Node.js readable stream without buffering in memory. The S3 response
+   * carries `ContentType`, `ContentLength`, and (for ranged reads) `ContentRange`,
+   * which are mapped directly onto the {@link ObjectStreamResult}.
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for S3) plus optional Range.
+   * @returns A Promise resolving to an {@link ObjectStreamResult}.
+   * @throws Error if the object doesn't exist or cannot be streamed.
+   */
+  public override async GetObjectStream(params: GetObjectStreamParams): Promise<ObjectStreamResult> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For S3, objectId and fullPath are the same (both are the key/path)
+    const objectName = params.objectId || params.fullPath!;
+    const key = this._normalizeKey(objectName);
+    const command = new GetObjectCommand({
+      Bucket: this._bucket,
+      Key: key,
+      Range: params.Range ? BuildHttpRangeHeader(params.Range) : undefined,
+    });
+
+    try {
+      const response = await this._client.send(command);
+
+      if (!response.Body) {
+        throw new Error(`Empty response body for object: ${objectName}`);
+      }
+
+      // In Node.js, the S3 Body is a Readable stream (IncomingMessage). Narrow the
+      // typed union without resorting to `any`.
+      if (!(response.Body instanceof Readable)) {
+        throw new Error(`S3 returned a non-Node stream body for object: ${objectName}`);
+      }
+
+      const result: ObjectStreamResult = {
+        Stream: response.Body,
+        ContentType: response.ContentType,
+        ContentLength: response.ContentLength,
+      };
+
+      const contentRange = this._parseS3ContentRange(response.ContentRange);
+      if (contentRange) {
+        result.ContentRange = contentRange;
+      }
+
+      return result;
+    } catch (e) {
+      console.error('Error streaming object from S3 storage', { key, bucket: this._bucket });
+      console.error(e);
+      throw new Error(`Failed to stream object: ${params.objectId || params.fullPath}`);
+    }
+  }
+
+  /**
+   * Parses an S3 `Content-Range` header value (`bytes start-end/total`) into the
+   * structured form used by {@link ObjectStreamResult.ContentRange}.
+   *
+   * @param contentRange - The raw `ContentRange` value from the S3 response, if present.
+   * @returns The parsed range, or undefined when no (valid) range header was returned.
+   */
+  private _parseS3ContentRange(contentRange: string | undefined): { Start: number; End: number; Total: number } | undefined {
+    if (!contentRange) {
+      return undefined;
+    }
+    const match = /bytes\s+(\d+)-(\d+)\/(\d+)/.exec(contentRange);
+    if (!match) {
+      return undefined;
+    }
+    return { Start: Number(match[1]), End: Number(match[2]), Total: Number(match[3]) };
   }
 
   /**

@@ -16,6 +16,17 @@
         </mj-stat-badge>
       </div>
       <div actions>
+        <button mjButton variant="primary" size="sm" (click)="createNewModel()" title="Create New Model">
+          <i class="fa-solid fa-plus"></i>
+          <span class="action-btn-label">New Model</span>
+        </button>
+      </div>
+      <div toolbar>
+        <mj-page-search
+          Placeholder="Search models..."
+          [Value]="searchTerm"
+          (ValueChange)="onSearchChange($event)">
+        </mj-page-search>
         <mj-filter-popover
           [ActiveCount]="ActiveFilterCount"
           [ShowClearAll]="ActiveFilterCount > 0"
@@ -49,40 +60,24 @@
             </mj-filter-field>
           </mj-filter-panel>
         </mj-filter-popover>
-
         <mj-view-toggle
           [Options]="modelViewOptions"
           [ActiveKey]="viewMode"
           (KeyChange)="setViewMode($any($event))">
         </mj-view-toggle>
-
-        <button mjButton variant="primary" size="sm" (click)="createNewModel()" title="Create New Model">
-          <i class="fa-solid fa-plus"></i>
-          New Model
-        </button>
-      </div>
-      <div toolbar>
-        <mj-page-search
-          Placeholder="Search models..."
-          [Value]="searchTerm"
-          (ValueChange)="onSearchChange($event)">
-        </mj-page-search>
       </div>
     </mj-page-header>
 
     <mj-page-body [Flex]="true">
           @if (filteredModels.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-microchip fa-4x"></i>
-              <h3>No models found</h3>
-              <p>{{ hasActiveFilters ? 'Try adjusting your filters' : 'Create your first AI model to get started' }}</p>
-              @if (!hasActiveFilters) {
-                <button class="primary-action" (click)="createNewModel()">
-                  <i class="fa-solid fa-plus"></i>
-                  Create First Model
-                </button>
-              }
-            </div>
+            <mj-empty-state
+              [Variant]="hasActiveFilters ? 'no-results' : 'empty'"
+              Icon="fa-solid fa-microchip"
+              Title="No models found"
+              [Message]="hasActiveFilters ? 'Try adjusting your filters' : 'Create your first AI model to get started'"
+              [ActionText]="hasActiveFilters ? 'Reset filters' : 'Create First Model'"
+              [ActionIcon]="hasActiveFilters ? 'fa-solid fa-rotate-left' : 'fa-solid fa-plus'"
+              (Action)="onEmptyStateAction()" />
           } @else {
             @switch (viewMode) {
               @case ('grid') {

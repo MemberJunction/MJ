@@ -43,6 +43,16 @@ mj-collapsible-panel.mj-drag-over {
   border-bottom-color: var(--mj-brand-primary);
 }
 
+/* Static header — sections locked open (Config.collapsibleSections === false) */
+.mj-forms-panel-header--static {
+  cursor: default;
+}
+
+.mj-forms-panel-header--static:hover {
+  background: var(--mj-bg-surface-elevated);
+  border-bottom-color: var(--mj-border-default);
+}
+
 /* Drag handle */
 .mj-forms-drag-handle {
   display: flex;
@@ -243,10 +253,11 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
    SEARCH HIGHLIGHTING
    ============================================ */
 .mj-forms-panel-title ::ng-deep .mj-forms-search-highlight {
-  background-color: var(--mj-color-warning-200, #fef08a);
-  color: var(--mj-color-warning-800, #854d0e);
-  padding: 0;
+  /* Muted, theme-aware highlight (semantic token) — consistent with the field
+     label + FK dropdown highlights. Replaces the old bright-yellow primitive. */
+  background-color: var(--mj-search-highlight-bg);
+  color: var(--mj-search-highlight-text);
   border-radius: 2px;
-  font-weight: 700;
-  box-shadow: 0 0 0 2px var(--mj-color-warning-200, #fef08a);
+  padding: 0 1px;
+  font-weight: 600;
 }

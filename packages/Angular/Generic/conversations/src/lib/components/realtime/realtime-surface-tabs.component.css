@@ -1,0 +1,265 @@
+:host {
+  display: block;
+  height: 100%;
+  /* activity accent — same violet palette the rail + delegation cards use */
+  --activity-accent: var(--mj-color-violet-400, #a78bfa);
+  --activity-accent-bg: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 12%, transparent);
+  --activity-accent-border: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 38%, transparent);
+  /* per-tab accent, set inline per channel ([style.--tab-accent]); falls back to the brand. */
+  --tab-accent: var(--mj-brand-primary);
+}
+
+/* The surface panel fills the overlay's `.call-panel` flex item — the overlay owns
+   the width (user drag via the resize handle, persisted per-user, default tiers). */
+.surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+}
+/* Board-focus fill: the panel owns the whole overlay (the main call column is hidden). */
+.surface--fill {
+  width: 100%;
+  border-left: none;
+}
+.surface--collapsed {
+  width: 40px;
+  background: var(--mj-bg-surface-card);
+}
+
+/* ---------- collapsed slim strip ---------- */
+.surface__strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.surface__strip-icon {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+
+.surface__toggle {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 10px;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+.surface__toggle:hover {
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-strong);
+}
+
+/* ---------- tab strip: channel cluster (left) | spacer | Activity (right) ---------- */
+.surface-tabs {
+  display: flex;
+  align-items: stretch;
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.surface-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* The flex spacer separates the channel cluster (left) from the Activity tab (right). */
+.tabs-spacer {
+  flex: 1 1 auto;
+  min-width: 12px;
+}
+
+/* Tabs keep their natural width while there's room; when space gets tight they shrink
+   (ellipsizing their titles) down to a readable floor. The ACTIVE tab never shrinks. */
+.s-tab {
+  position: relative;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mj-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-bottom: 3px solid transparent;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: calc(11px + 7px + 8ch + 28px); /* icon + gap + ~8ch + padding */
+}
+.s-tab i {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.s-tab__title {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.s-tab:hover {
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-hover);
+}
+
+/* Per-channel color dot — the distinct accent each channel tab carries. */
+.s-tab__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--tab-accent);
+}
+
+/* Active tab: filled background + a colored underline in the tab's own accent. */
+.s-tab--active {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface);
+  flex-shrink: 0;
+}
+.s-tab--channel.s-tab--active {
+  border-bottom-color: var(--tab-accent);
+}
+.s-tab--channel.s-tab--active .s-tab__dot {
+  box-shadow: 0 0 6px var(--tab-accent);
+}
+.s-tab--channel.s-tab--active i {
+  color: var(--tab-accent);
+}
+
+/* ---------- the Activity tab (right-aligned, distinct accent + pulse icon) ---------- */
+.s-tab--activity {
+  color: var(--mj-text-secondary);
+}
+.s-tab--activity i {
+  color: var(--activity-accent);
+}
+.s-tab--activity.s-tab--active {
+  border-bottom-color: var(--activity-accent);
+  background: var(--activity-accent-bg);
+  color: var(--mj-text-primary);
+}
+.s-tab__badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: var(--activity-accent);
+  color: var(--mj-text-inverse);
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Brief flash for a just-revealed channel tab (the agent first acted on it). */
+.s-tab--flash {
+  animation: tab-flash 1.4s ease;
+}
+@keyframes tab-flash {
+  0% {
+    background: color-mix(in srgb, var(--tab-accent) 30%, transparent);
+    border-bottom-color: var(--tab-accent);
+    color: var(--mj-text-primary);
+  }
+  60% {
+    background: color-mix(in srgb, var(--tab-accent) 16%, transparent);
+    border-bottom-color: var(--tab-accent);
+  }
+  100% {
+    background: var(--mj-bg-surface);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .s-tab--flash {
+    animation: none;
+    background: color-mix(in srgb, var(--tab-accent) 18%, transparent);
+  }
+}
+
+.tabs-end {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+/* ---------- panes: all alive, only the active one displayed ---------- */
+.s-pane {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  /* Positioning context for the first-run channel-onboarding overlay (absolute, inset:0). */
+  position: relative;
+}
+.s-pane--active {
+  display: flex;
+}
+
+/* Empty strip (idle voice-first session): a gentle hint rather than a bare grid. */
+.surface__empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--mj-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 24px;
+  text-align: center;
+}
+.surface__empty i {
+  font-size: 20px;
+  color: var(--activity-accent);
+  opacity: 0.6;
+}
+
+/* Channel slot placeholder ("Whiteboard coming online…") */
+.channel-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--mj-text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 24px;
+  text-align: center;
+}
+.channel-placeholder i {
+  font-size: 22px;
+  color: var(--tab-accent);
+  opacity: 0.7;
+}
+
+/* On narrow widths the panel stacks out of the way (overlay falls back to single column) */
+@media (max-width: 860px) {
+  .surface {
+    display: none;
+  }
+}

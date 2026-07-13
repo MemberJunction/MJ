@@ -788,10 +788,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Prompt Runs (Judge) Section -->
+    <!-- AI Prompt Runs (Judge Prompt) Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRunsJudgeID"
-        SectionName="AI Prompt Runs (Judge)"
+        SectionName="AI Prompt Runs (Judge Prompt)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -857,6 +857,106 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Record Processes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRecordProcesses"
+        SectionName="Record Processes"
+        Icon="fa fa-cogs"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRecordProcesses')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Processes','PromptID')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Processes')"
+                [AllowLoad]="IsSectionExpanded('mJRecordProcesses')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordProcesses', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Entity Documents Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityDocuments"
+        SectionName="Entity Documents"
+        Icon="fa fa-file-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityDocuments')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Documents','ReasoningPromptID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Documents')"
+                [AllowLoad]="IsSectionExpanded('mJEntityDocuments')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityDocuments', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Scoped Prompt Parts Section -->
+    <mj-collapsible-panel
+        SectionKey="mJScopedPromptParts"
+        SectionName="Scoped Prompt Parts"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJScopedPromptParts')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scoped Prompt Parts','PromptID')"
+                [NewRecordValues]="NewRecordValues('MJ: Scoped Prompt Parts')"
+                [AllowLoad]="IsSectionExpanded('mJScopedPromptParts')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJScopedPromptParts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Scoped Prompt Configs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJScopedPromptConfigs"
+        SectionName="Scoped Prompt Configs"
+        Icon="fa fa-sliders-h"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJScopedPromptConfigs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scoped Prompt Configs','PromptID')"
+                [NewRecordValues]="NewRecordValues('MJ: Scoped Prompt Configs')"
+                [AllowLoad]="IsSectionExpanded('mJScopedPromptConfigs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJScopedPromptConfigs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

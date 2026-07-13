@@ -328,6 +328,178 @@ describe('loadConfigFile', () => {
     const config = await loadConfigFile(filePath);
     expect(Object.keys(config)).toHaveLength(0);
   });
+
+  it('should throw when file has keys but none are recognized (catches old template bug)', async () => {
+    const filePath = path.join(tempDir, 'all-unknown.json');
+    await fs.writeFile(filePath, JSON.stringify({
+      FooBar: 'value',
+      AnotherUnknown: 42,
+    }));
+
+    await expect(loadConfigFile(filePath)).rejects.toThrow(/contains 2 key\(s\) but none are recognized/i);
+  });
+
+  it('should NOT throw when at least one known key is recognized among unknowns', async () => {
+    const filePath = path.join(tempDir, 'mixed.json');
+    await fs.writeFile(filePath, JSON.stringify({
+      DatabaseHost: 'host',
+      UnknownField: 'ignored',
+    }));
+
+    const config = await loadConfigFile(filePath);
+    expect(config.DatabaseHost).toBe('host');
+  });
+
+  describe('legacy camelCase key aliases', () => {
+    it('should map dbUrl → DatabaseHost (and the other direct 1:1 aliases)', async () => {
+      const filePath = path.join(tempDir, 'legacy.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        dbUrl: 'legacy-host',
+        dbPort: 1444,
+        dbDatabase: 'LegacyDB',
+        codeGenLogin: 'cg-user',
+        codeGenPwD: 'cg-pass',
+        mjAPILogin: 'api-user',
+        mjAPIPwD: 'api-pass',
+        graphQLPort: 4001,
+        openAIAPIKey: 'oai',
+        anthropicAPIKey: 'ant',
+        mistralAPIKey: 'mis',
+      }));
+
+      const config = await loadConfigFile(filePath);
+      expect(config.DatabaseHost).toBe('legacy-host');
+      expect(config.DatabasePort).toBe(1444);
+      expect(config.DatabaseName).toBe('LegacyDB');
+      expect(config.CodeGenUser).toBe('cg-user');
+      expect(config.CodeGenPassword).toBe('cg-pass');
+      expect(config.APIUser).toBe('api-user');
+      expect(config.APIPassword).toBe('api-pass');
+      expect(config.APIPort).toBe(4001);
+      expect(config.OpenAIKey).toBe('oai');
+      expect(config.AnthropicKey).toBe('ant');
+      expect(config.MistralKey).toBe('mis');
+    });
+
+    it('should coerce dbTrustServerCertificate "Y" → DatabaseTrustCert true', async () => {
+      const filePath = path.join(tempDir, 'trust.json');
+      await fs.writeFile(filePath, JSON.stringify({ dbTrustServerCertificate: 'Y' }));
+
+      const config = await loadConfigFile(filePath);
+      expect(config.DatabaseTrustCert).toBe(true);
+    });
+
+    it('should coerce dbTrustServerCertificate "N" → DatabaseTrustCert false', async () => {
+      const filePath = path.join(tempDir, 'trust-n.json');
+      await fs.writeFile(filePath, JSON.stringify({ dbTrustServerCertificate: 'N' }));
+
+      const config = await loadConfigFile(filePath);
+      expect(config.DatabaseTrustCert).toBe(false);
+    });
+
+    it('should map legacy authType "MSAL" → AuthProvider "entra"', async () => {
+      const filePath = path.join(tempDir, 'msal.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        authType: 'MSAL',
+        msalWebClientId: 'client-id',
+        msalTenantId: 'tenant-id',
+      }));
+
+      const config = await loadConfigFile(filePath);
+      expect(config.AuthProvider).toBe('entra');
+      expect(config.AuthProviderValues).toEqual({ ClientID: 'client-id', TenantID: 'tenant-id' });
+    });
+
+    it('should map legacy authType "Auth0" → AuthProvider "auth0"', async () => {
+      const filePath = path.join(tempDir, 'auth0.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        authType: 'Auth0',
+        auth0ClientId: 'cid',
+        auth0ClientSecret: 'csec',
+        auth0Domain: 'tenant.auth0.com',
+      }));
+
+      const config = await loadConfigFile(filePath);
+      expect(config.AuthProvider).toBe('auth0');
+      expect(config.AuthProviderValues).toEqual({
+        ClientID: 'cid',
+        ClientSecret: 'csec',
+        Domain: 'tenant.auth0.com',
+      });
+    });
+
+    it('should map legacy createNewUser + user* fields into a CreateNewUser object', async () => {
+      const filePath = path.join(tempDir, 'newuser.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        createNewUser: 'Y',
+        userName: 'jdoe',
+        userEmail: 'jdoe@example.com',
+        userFirstName: 'John',
+        userLastName: 'Doe',
+      }));
+
+      const config = await loadConfigFile(filePath);
+      expect(config.CreateNewUser).toEqual({
+        Username: 'jdoe',
+        Email: 'jdoe@example.com',
+        FirstName: 'John',
+        LastName: 'Doe',
+      });
+    });
+
+    it('should NOT create a CreateNewUser when createNewUser is "N"', async () => {
+      const filePath = path.join(tempDir, 'no-newuser.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        createNewUser: 'N',
+        userEmail: 'someone@example.com',
+        // Provide at least one canonical key so the "no recognized" throw doesn't fire on user-keys-only
+        DatabaseHost: 'h',
+      }));
+
+      const config = await loadConfigFile(filePath);
+      expect(config.CreateNewUser).toBeUndefined();
+    });
+
+    it('should accept a fully legacy install.config.json (pre-5.34 format) end-to-end', async () => {
+      const filePath = path.join(tempDir, 'all-legacy.json');
+      await fs.writeFile(filePath, JSON.stringify({
+        dbUrl: 'localhost',
+        dbInstance: '',
+        dbTrustServerCertificate: 'Y',
+        dbDatabase: 'MyMJ',
+        dbPort: 1433,
+        codeGenLogin: 'MJ_CodeGen',
+        codeGenPwD: 'pw1',
+        mjAPILogin: 'MJ_Connect',
+        mjAPIPwD: 'pw2',
+        graphQLPort: 4000,
+        authType: 'MSAL',
+        msalWebClientId: 'cid',
+        msalTenantId: 'tid',
+        createNewUser: 'Y',
+        userEmail: 'me@x.com',
+        userFirstName: 'Me',
+        userLastName: 'You',
+        userName: 'meyou',
+        openAIAPIKey: 'oai',
+        anthropicAPIKey: 'ant',
+        mistralAPIKey: 'mis',
+      }));
+
+      const config = await loadConfigFile(filePath);
+      expect(config.DatabaseHost).toBe('localhost');
+      expect(config.DatabasePort).toBe(1433);
+      expect(config.DatabaseName).toBe('MyMJ');
+      expect(config.DatabaseTrustCert).toBe(true);
+      expect(config.CodeGenUser).toBe('MJ_CodeGen');
+      expect(config.APIUser).toBe('MJ_Connect');
+      expect(config.APIPort).toBe(4000);
+      expect(config.AuthProvider).toBe('entra');
+      expect(config.AuthProviderValues?.ClientID).toBe('cid');
+      expect(config.CreateNewUser?.Email).toBe('me@x.com');
+      expect(config.OpenAIKey).toBe('oai');
+    });
+  });
 });
 
 /* ================================================================== */

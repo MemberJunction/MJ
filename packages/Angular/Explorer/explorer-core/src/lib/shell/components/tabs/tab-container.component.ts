@@ -28,7 +28,7 @@ import {
   LayoutNode
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent, HomeAppPinService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, HomeAppPinService, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseEntity, DatasetResultType, LogError, Metadata } from '@memberjunction/core';
@@ -70,6 +70,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   @Output() layoutInitError = new EventEmitter<void>();
 
   private pinService = inject(HomeAppPinService);
+  private navigationService = inject(NavigationService);
   private subscriptions: Subscription[] = [];
   private layoutInitRetryCount = 0;
   private readonly MAX_LAYOUT_INIT_RETRIES = 5;
@@ -113,7 +114,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   ) {
     super();
     // Initialize component cache manager
-    this.cacheManager = new ComponentCacheManager(this.appRef);
+    this.cacheManager = new ComponentCacheManager(this.appRef, this.navigationService);
   }
 
   ngOnInit(): void {
@@ -502,6 +503,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // Get the active tab (or first tab)
     const activeTab = config.tabs.find(t => t.id === config.activeTabId) || config.tabs[0];
     if (!activeTab) {
+      // Config has tabs but none match activeTabId and the array fallback failed.
+      // This shouldn't happen, but if it does, unblock the loading screen.
+      this.emitFirstLoadCompleteOnce();
       return;
     }
 
@@ -525,6 +529,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const resourceData = await this.getResourceDataFromTab(activeTab);
     if (!resourceData) {
       LogError(`Unable to create ResourceData for tab: ${activeTab.title}`);
+      // Unblock the shell's loading overlay — stale or malformed tab config shouldn't
+      // leave the user stuck on the loading screen forever
+      this.emitFirstLoadCompleteOnce();
       return;
     }
 
@@ -1000,6 +1007,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       const tab = this.workspaceManager.GetTab(tabId);
       if (!tab) {
         LogError(`Tab not found: ${tabId}`);
+        this.emitFirstLoadCompleteOnce();
         return;
       }
 
@@ -1007,6 +1015,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       const glContainer = container as { element: HTMLElement };
       if (!glContainer?.element) {
         LogError('Golden Layout container element not found');
+        this.emitFirstLoadCompleteOnce();
         return;
       }
 
@@ -1014,6 +1023,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       const resourceData = await this.getResourceDataFromTab(tab);
       if (!resourceData) {
         LogError(`Unable to create ResourceData for tab: ${tab.title}`);
+        this.emitFirstLoadCompleteOnce();
         return;
       }
 

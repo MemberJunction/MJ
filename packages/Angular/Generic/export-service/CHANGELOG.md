@@ -1,5 +1,77 @@
 # @memberjunction/ng-export-service
 
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

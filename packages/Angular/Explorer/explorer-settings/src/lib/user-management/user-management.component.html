@@ -20,47 +20,35 @@
     </mj-stat-badge>
   </div>
   <div toolbar>
+    <!-- Concise-chrome control bar: search · Filter. Status + Role live behind
+         the one Filter button; applied filters show as removable chips below
+         the card. On mobile the popover docks as a bottom sheet. -->
     <mj-page-search
       Placeholder="Search users by name or email..."
       [Value]="filters$.value.search"
       (ValueChange)="updateFilter({ search: $event })">
     </mj-page-search>
-    <div class="status-chips" role="group" aria-label="Filter by status">
-      <mj-filter-chip
-        Label="All"
-        [Active]="filters$.value.status === 'all'"
-        (Clicked)="onStatusFilterChange('all')">
-      </mj-filter-chip>
-      <mj-filter-chip
-        Label="Active"
-        [Active]="filters$.value.status === 'active'"
-        (Clicked)="onStatusFilterChange('active')">
-      </mj-filter-chip>
-      <mj-filter-chip
-        Label="Inactive"
-        [Active]="filters$.value.status === 'inactive'"
-        (Clicked)="onStatusFilterChange('inactive')">
-      </mj-filter-chip>
-    </div>
-  </div>
-  <div actions>
     <mj-filter-popover
-      [ActiveCount]="popoverActiveFilterCount"
-      [ShowClearAll]="popoverActiveFilterCount > 0"
-      (ClearAllRequested)="onFilterPanelChange({ role: '' })">
+      Label="Filters"
+      Icon="fa-solid fa-filter"
+      [ActiveCount]="TotalActiveFilterCount"
+      [ShowClearAll]="TotalActiveFilterCount > 0"
+      (ClearAllRequested)="clearAllAppliedFilters()">
       <mj-filter-panel
         [Fields]="filterFields"
         [Values]="filterValues"
         (ValuesChange)="onFilterPanelChange($event)"
-        (Reset)="onFilterPanelChange({ role: '' })">
+        (Reset)="clearAllAppliedFilters()">
       </mj-filter-panel>
     </mj-filter-popover>
+  </div>
+  <div actions>
     <mj-refresh-button [Loading]="isLoading" (Clicked)="refreshData()"></mj-refresh-button>
     <button mjButton variant="secondary" size="sm" (click)="exportUsers()" aria-label="Export users to file">
-      <i class="fa-solid fa-download"></i> Export
+      <i class="fa-solid fa-download"></i> <span class="mj-action-label">Export</span>
     </button>
     <button mjButton variant="primary" size="sm" (click)="createNewUser()" aria-label="Add new user">
-      <i class="fa-solid fa-plus"></i> Add User
+      <i class="fa-solid fa-plus"></i> <span class="mj-action-label">Add User</span>
     </button>
   </div>
 </mj-page-header-interior>
@@ -306,11 +294,14 @@
           }
 
           @if (filteredUsers.length === 0) {
-            <div class="empty-state" role="status">
-              <i class="fa-solid fa-users-slash empty-icon" aria-hidden="true"></i>
-              <p class="empty-text">No users found</p>
-              <p class="empty-subtext">Try adjusting your filters or add a new user</p>
-            </div>
+            <mj-empty-state
+              [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+              Icon="fa-solid fa-users-slash"
+              Title="No users found"
+              Message="Try adjusting your filters or add a new user"
+              [ActionText]="IsListNarrowed ? 'Reset filters' : ''"
+              ActionIcon="fa-solid fa-rotate-left"
+              (Action)="resetAllFiltersAndSearch()" />
           }
         </div>
     }

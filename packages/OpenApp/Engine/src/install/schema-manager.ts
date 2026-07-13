@@ -81,8 +81,11 @@ export async function SchemaExists(
   schemaName: string,
   provider: DatabaseProviderBase
 ): Promise<boolean> {
+  // information_schema.schemata is ANSI-standard and present on both SQL Server
+  // and PostgreSQL, so schema existence needs no dialect branch (sys.schemas is
+  // SQL-Server-only and errors on PG).
   const results = await provider.ExecuteSQL<Record<string, unknown>>(
-    `SELECT 1 AS Exists_ FROM sys.schemas WHERE name = '${EscapeSqlString(schemaName)}'`
+    `SELECT 1 AS Exists_ FROM information_schema.schemata WHERE schema_name = '${EscapeSqlString(schemaName)}'`
   );
   return results.length > 0;
 }
@@ -104,7 +107,12 @@ export async function CreateAppSchema(
     return validation;
   }
 
-  const exists = await SchemaExists(schemaName, provider);
+  // Create the schema under its platform-canonical name (PG folds unquoted DDL to lowercase),
+  // so this is the SAME physical schema the app's (typically unquoted) migration DDL will
+  // target — a mixed-case name can't split into a quoted-mixed + folded-lowercase pair.
+  const canonical = provider.Dialect.CanonicalSchemaName(schemaName);
+
+  const exists = await SchemaExists(canonical, provider);
   if (exists) {
     return {
       Success: false,
@@ -113,7 +121,7 @@ export async function CreateAppSchema(
   }
 
   try {
-    await provider.ExecuteSQL(`CREATE SCHEMA [${EscapeSqlIdentifier(schemaName)}]`);
+    await provider.ExecuteSQL(`CREATE SCHEMA ${provider.Dialect.QuoteIdentifier(canonical)}`);
     return { Success: true };
   }
   catch (error: unknown) {
@@ -142,15 +150,36 @@ export async function DropAppSchema(
     return validation;
   }
 
-  const exists = await SchemaExists(schemaName, provider);
-  if (!exists) {
-    return { Success: true };
-  }
-
   try {
-    // Drop all objects in the schema first (SQL Server doesn't support CASCADE on DROP SCHEMA)
-    await DropAllSchemaObjects(schemaName, provider);
-    await provider.ExecuteSQL(`DROP SCHEMA [${EscapeSqlIdentifier(schemaName)}]`);
+    if (provider.Dialect.PlatformKey === 'postgresql') {
+      // Schema CREATE now canonicalizes the name (see CreateAppSchema), so a fresh install has a
+      // single physical schema. This case-insensitive sweep additionally cleans up any LEGACY
+      // split — a mixed-case schema that fragmented (folded-lowercase tables + quoted-mixed
+      // Skyway history) before canonicalization existed. Every schema whose name matches
+      // case-insensitively is CASCADE-dropped, so teardown is always complete.
+      //
+      // Blast radius (the one irreversible operation in remove): the sweep CASCADE-drops EVERY
+      // schema equal to `schemaName` under `lower()`, not just the exact-case one. That is bounded
+      // on purpose — `schemaName` is the removed app's own (app-controlled) schema, it has already
+      // passed ValidateSchemaName + the caller's reserved-name guard, and the value is escaped
+      // before interpolation. So the only schemas in range are case-variants of the app's own
+      // schema (the legacy-split fragments). It will NOT touch an unrelated app's schema unless two
+      // apps adopted names differing only by case — which canonicalization now prevents at install.
+      const matches = await provider.ExecuteSQL<{ schema_name: string }>(
+        `SELECT schema_name FROM information_schema.schemata WHERE lower(schema_name) = lower('${EscapeSqlString(schemaName)}')`
+      );
+      for (const m of matches) {
+        await provider.ExecuteSQL(`DROP SCHEMA ${provider.Dialect.QuoteIdentifier(m.schema_name)} CASCADE`);
+      }
+    } else {
+      // SQL Server is case-insensitive for identifiers (one schema) and has no CASCADE
+      // on DROP SCHEMA — the schema must be emptied first.
+      if (!(await SchemaExists(schemaName, provider))) {
+        return { Success: true };
+      }
+      await DropAllSchemaObjects(schemaName, provider);
+      await provider.ExecuteSQL(`DROP SCHEMA ${provider.Dialect.QuoteIdentifier(schemaName)}`);
+    }
     return { Success: true };
   }
   catch (error: unknown) {
@@ -164,7 +193,11 @@ export async function DropAppSchema(
 
 /**
  * Drops all objects within a schema before the schema itself can be dropped.
- * SQL Server requires schemas to be empty before they can be dropped.
+ * SQL-Server-only: SQL Server requires schemas to be empty before they can be
+ * dropped (it has no `DROP SCHEMA ... CASCADE`). PostgreSQL uses native CASCADE
+ * in {@link DropAppSchema} and never calls this. The generated T-SQL here
+ * (sys.* catalogs, QUOTENAME, sp_executesql) is therefore intentionally
+ * SQL-Server-specific.
  *
  * Uses QUOTENAME() for all dynamic identifiers in generated SQL to prevent
  * injection via object names. The schema name is passed as a parameterized
@@ -242,11 +275,4 @@ async function DropAllSchemaObjects(
  */
 export function EscapeSqlString(value: string): string {
   return value.replace(/'/g, "''");
-}
-
-/**
- * Escapes a string for use as a SQL identifier (within square brackets).
- */
-function EscapeSqlIdentifier(value: string): string {
-  return value.replace(/\]/g, ']]');
 }

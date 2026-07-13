@@ -163,10 +163,13 @@ export class FunctionRule implements IConversionRule {
       return `${dropBlock}${header}\nAS $$\n${declareBlock}BEGIN\n${body.trim()}\nEND;\n$$ LANGUAGE plpgsql;`;
     }
 
-    // Fallback: basic wrapping
-    sql = sql.replace(/\bAS\s*\n\s*BEGIN\b/i, 'AS $$\nBEGIN');
+    // Fallback: basic wrapping.
+    // NOTE: `$$` in a String.replace() replacement is interpreted as a single
+    // literal `$`, so the dollar-quote delimiters MUST be written `$$$$` here to
+    // emit `$$`. (Earlier `'AS $$\nBEGIN'` silently produced an invalid `AS $`.)
+    sql = sql.replace(/\bAS\s*\n\s*BEGIN\b/i, 'AS $$$$\nBEGIN');
     if (!sql.includes('$$ LANGUAGE')) {
-      sql = sql.replace(/\bEND\s*$/i, 'END\n$$ LANGUAGE plpgsql;');
+      sql = sql.replace(/\bEND\s*$/i, 'END\n$$$$ LANGUAGE plpgsql;');
     }
     if (sql.includes('AS $$') && !sql.includes('$$ LANGUAGE')) {
       sql = sql.trimEnd().replace(/;$/, '') + '\nEND;\n$$ LANGUAGE plpgsql;';
@@ -187,6 +190,99 @@ export class FunctionRule implements IConversionRule {
  *  Matches on the extracted function name (lowercase) to avoid false positives
  *  when one function's body references another hand-written function. */
 function getHandwrittenFunction(funcName: string): string | null {
+  if (funcName === 'fn_mj_geodistance') {
+    // MJ geo infrastructure (new in v5.38). Multi-statement T-SQL scalar with
+    // inline DECLAREs, a THEN-less IF, and ATN2 — none of which the generic
+    // scalar path converts. Hand-written PG (Haversine great-circle distance).
+    return `CREATE OR REPLACE FUNCTION __mj."fn_MJ_GeoDistance"(
+    "p_Lat1" DECIMAL(10,6),
+    "p_Lng1" DECIMAL(10,6),
+    "p_Lat2" DECIMAL(10,6),
+    "p_Lng2" DECIMAL(10,6),
+    "p_Unit" VARCHAR(2)
+)
+RETURNS FLOAT AS $$
+DECLARE
+    p_R FLOAT := CASE WHEN "p_Unit" = 'km' THEN 6371.0 ELSE 3959.0 END;
+    p_Lat1Rad FLOAT;
+    p_Lat2Rad FLOAT;
+    p_DeltaLat FLOAT;
+    p_DeltaLng FLOAT;
+    p_A FLOAT;
+    p_C FLOAT;
+BEGIN
+    IF "p_Lat1" IS NULL OR "p_Lng1" IS NULL OR "p_Lat2" IS NULL OR "p_Lng2" IS NULL THEN
+        RETURN NULL;
+    END IF;
+    p_Lat1Rad := RADIANS(CAST("p_Lat1" AS FLOAT));
+    p_Lat2Rad := RADIANS(CAST("p_Lat2" AS FLOAT));
+    p_DeltaLat := RADIANS(CAST("p_Lat2" - "p_Lat1" AS FLOAT));
+    p_DeltaLng := RADIANS(CAST("p_Lng2" - "p_Lng1" AS FLOAT));
+    p_A := SIN(p_DeltaLat / 2.0) * SIN(p_DeltaLat / 2.0)
+         + COS(p_Lat1Rad) * COS(p_Lat2Rad)
+         * SIN(p_DeltaLng / 2.0) * SIN(p_DeltaLng / 2.0);
+    p_C := 2.0 * ATAN2(SQRT(p_A), SQRT(1.0 - p_A));
+    RETURN p_R * p_C;
+END;
+$$ LANGUAGE plpgsql;`;
+  }
+  if (funcName === 'fn_mj_georecordsnear') {
+    // MJ geo infrastructure (new in v5.38). T-SQL inline TVF
+    // (RETURNS TABLE AS RETURN (...)) returning typed columns — the generic
+    // inline-TVF path emits all columns as TEXT, which mismatches the SELECT.
+    // Hand-written PG (LANGUAGE sql) with the correct RecordGeoCode column types.
+    return `CREATE OR REPLACE FUNCTION __mj."fn_MJ_GeoRecordsNear"(
+    "p_EntityName" VARCHAR(500),
+    "p_CenterLat" DECIMAL(10,6),
+    "p_CenterLng" DECIMAL(10,6),
+    "p_Radius" FLOAT,
+    "p_Unit" VARCHAR(2)
+)
+RETURNS TABLE (
+    "ID" UUID,
+    "EntityID" UUID,
+    "RecordID" VARCHAR(450),
+    "LocationType" VARCHAR(50),
+    "Latitude" DECIMAL(10,6),
+    "Longitude" DECIMAL(10,6),
+    "Precision" VARCHAR(20),
+    "CountryID" UUID,
+    "StateProvinceID" UUID,
+    "Status" VARCHAR(20),
+    "GeocodingSource" VARCHAR(30),
+    "Distance" FLOAT
+) AS $$
+    WITH "BoundingBox" AS (
+        SELECT
+            "p_Radius" / (CASE WHEN "p_Unit" = 'km' THEN 111.0 ELSE 69.0 END) AS "LatDelta",
+            "p_Radius" / (CASE WHEN "p_Unit" = 'km' THEN 111.0 ELSE 69.0 END
+                        * COS(RADIANS(CAST("p_CenterLat" AS FLOAT)))) AS "LngDelta"
+    )
+    SELECT
+        rgc."ID",
+        rgc."EntityID",
+        rgc."RecordID",
+        rgc."LocationType",
+        rgc."Latitude",
+        rgc."Longitude",
+        rgc."Precision",
+        rgc."CountryID",
+        rgc."StateProvinceID",
+        rgc."Status",
+        rgc."GeocodingSource",
+        __mj."fn_MJ_GeoDistance"(rgc."Latitude", rgc."Longitude", "p_CenterLat", "p_CenterLng", "p_Unit") AS "Distance"
+    FROM __mj."RecordGeoCode" rgc
+    INNER JOIN __mj."Entity" e ON e."ID" = rgc."EntityID"
+    CROSS JOIN "BoundingBox" bb
+    WHERE e."Name" = "p_EntityName"
+      AND rgc."Status" = 'success'
+      AND rgc."Latitude" IS NOT NULL
+      AND rgc."Longitude" IS NOT NULL
+      AND rgc."Latitude"  BETWEEN "p_CenterLat" - bb."LatDelta" AND "p_CenterLat" + bb."LatDelta"
+      AND rgc."Longitude" BETWEEN "p_CenterLng" - bb."LngDelta" AND "p_CenterLng" + bb."LngDelta"
+      AND __mj."fn_MJ_GeoDistance"(rgc."Latitude", rgc."Longitude", "p_CenterLat", "p_CenterLng", "p_Unit") <= "p_Radius";
+$$ LANGUAGE sql;`;
+  }
   if (funcName === 'striptoalphanumeric') {
     return `CREATE OR REPLACE FUNCTION __mj."StripToAlphanumeric"(
     IN "p_InputString" TEXT

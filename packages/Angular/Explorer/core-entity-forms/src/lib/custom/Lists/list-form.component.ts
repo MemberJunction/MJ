@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
-import { Subject, debounceTime } from 'rxjs';
+import { Subject, debounceTime, takeUntil } from 'rxjs';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -7,6 +7,7 @@ import { MJListFormComponent } from '../../generated/Entities/MJList/mjlist.form
 import { MJListEntity, MJListDetailEntity, MJListDetailEntityExtended, MJListCategoryEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
 import { ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 
 export type ListSection = 'overview' | 'items' | 'sharing' | 'activity' | 'settings';
 
@@ -54,6 +55,7 @@ export interface AddableRecord {
 })
 export class MJListFormComponentExtended extends MJListFormComponent implements OnInit, OnDestroy {
     private sharedService = inject(SharedService);
+    private confirmService = inject(MJConfirmService);
 
     public override record!: MJListEntity;
 
@@ -110,6 +112,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public showAddFromViewLoader = false;
     public userViews: MJUserViewEntityExtended[] | null = null;
     public userViewsToAdd: MJUserViewEntityExtended[] = [];
+    /**
+     * Normalized-UUID set of the IDs in {@link userViewsToAdd}, kept in sync with that
+     * array. Lets {@link isViewSelected} (bound per-row in the dialog's @for, ~2x/row)
+     * do an O(1) lookup instead of scanning the array with UUIDsEqual on every check.
+     */
+    private userViewsToAddIds: Set<string> = new Set<string>();
     public addFromViewProgress = 0;
     public addFromViewTotal = 0;
     public fetchingRecordsToSave = false;
@@ -129,7 +137,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         // Set up search debounce
         this.searchSubject
-            .pipe(debounceTime(300))
+            .pipe(debounceTime(300), takeUntil(this.destroy$))
             .subscribe((searchText) => this.searchRecords(searchText));
 
         await this.loadExplorerData();
@@ -354,7 +362,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         const count = this.selectedItems.size;
         const confirmMessage = `Remove ${count} item${count > 1 ? 's' : ''} from this list?`;
 
-        if (!confirm(confirmMessage)) return;
+        if (!(await this.confirmService.ConfirmDelete({ message: confirmMessage }))) return;
 
         try {
             for (const id of this.selectedItems) {
@@ -674,6 +682,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public async openAddFromViewDialog(): Promise<void> {
         this.showAddFromViewDialog = true;
         this.userViewsToAdd = [];
+        this.userViewsToAddIds.clear();
         this.cdr.markForCheck();
 
         if (!this.userViews) {
@@ -684,6 +693,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public closeAddFromViewDialog(): void {
         this.showAddFromViewDialog = false;
         this.userViewsToAdd = [];
+        this.userViewsToAddIds.clear();
         this.showAddFromViewLoader = false;
         this.addFromViewProgress = 0;
         this.addFromViewTotal = 0;
@@ -717,14 +727,16 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         const index = this.userViewsToAdd.findIndex(v => UUIDsEqual(v.ID, view.ID));
         if (index >= 0) {
             this.userViewsToAdd.splice(index, 1);
+            this.userViewsToAddIds.delete(NormalizeUUID(view.ID));
         } else {
             this.userViewsToAdd.push(view);
+            this.userViewsToAddIds.add(NormalizeUUID(view.ID));
         }
         this.cdr.markForCheck();
     }
 
     public isViewSelected(view: MJUserViewEntityExtended): boolean {
-        return this.userViewsToAdd.some(v => UUIDsEqual(v.ID, view.ID));
+        return this.userViewsToAddIds.has(NormalizeUUID(view.ID));
     }
 
     public async confirmAddFromView(): Promise<void> {

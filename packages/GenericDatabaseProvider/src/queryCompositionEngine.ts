@@ -18,7 +18,7 @@ export interface IComposableQuery {
     Reusable: boolean | null;
     Status: string | null;
     IsApproved: boolean;
-    UserCanRun(user: UserInfo): boolean;
+    UserCanRun(user: UserInfo, _visited?: Set<string>): { canRun: boolean; deniedEntities: string[] };
     GetPlatformSQL(platform: DatabasePlatform): string;
 }
 
@@ -453,7 +453,7 @@ export class QueryCompositionEngine {
             Reusable: true,
             Status: 'Approved',
             get IsApproved(): boolean { return true; },
-            UserCanRun(): boolean { return true; },
+            UserCanRun(): { canRun: boolean; deniedEntities: string[] } { return { canRun: true, deniedEntities: [] }; },
             GetPlatformSQL(): string { return sql; },
         };
     }
@@ -520,9 +520,13 @@ export class QueryCompositionEngine {
             );
         }
 
-        if (!query.UserCanRun(contextUser)) {
+        const runResult = query.UserCanRun(contextUser);
+        if (!runResult.canRun) {
+            const deniedMsg = runResult.deniedEntities.length > 0
+                ? ` Denied entities: ${runResult.deniedEntities.join(', ')}.`
+                : '';
             throw new Error(
-                `User does not have permission to run referenced query "${token.FullPath}" (${query.Name}).`
+                `User does not have permission to run referenced query "${token.FullPath}" (${query.Name}).${deniedMsg}`
             );
         }
     }

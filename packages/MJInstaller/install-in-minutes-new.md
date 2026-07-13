@@ -120,7 +120,26 @@ Then open your browser to `http://localhost:4201` (or whatever port you configur
 
 > MJExplorer is a useful application to test your installation. Even if you don't plan to use it in production, browsing some of your data through it helps validate that everything is set up correctly.
 
-### 5. What to Do If Something Goes Wrong
+### 5. (Optional) Claude Code Pack
+
+If you use Claude Code (the CLI or VS Code extension), the installer ships a curated MemberJunction context bundle that lands in your project automatically:
+
+- A `CLAUDE.md` at the project root with MJ-specific guidance (entity patterns, RunView idioms, common pitfalls)
+- An `.claude/commands/` folder with slash commands tailored to MJ workflows (e.g. `/new-branch`, `/create-pr`, `/debug-agent-run`, `/refresh-pack`)
+- A `.claude/skills/` folder with reusable skill definitions
+- A `.claude/mj/` managed bundle that the pack updater uses to keep itself current
+
+To refresh the pack to the latest published version at any time:
+
+```
+mj update:claude
+```
+
+To verify the pack is intact, run `mj doctor` — it includes 5 checks for managed-block presence, manifest integrity, and the SessionStart hook.
+
+If you don't use Claude Code, you can leave the files alone or remove them — they're optional. The rest of MemberJunction works fine without the pack.
+
+### 6. What to Do If Something Goes Wrong
 
 #### Resume a Failed Install
 

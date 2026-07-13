@@ -43,9 +43,10 @@ interface SharePermission {
             <h4>People with Access</h4>
             <div class="permission-list">
               @if (permissions.length === 0) {
-                <div class="empty-state">
-                  <p>No one has been given access yet</p>
-                </div>
+                <mj-empty-state
+                  Icon="fa-solid fa-user-group"
+                  Title="No one has been given access yet"
+                  Size="compact" />
               }
               @for (permission of permissions; track permission) {
                 <div class="permission-item">
@@ -128,9 +129,6 @@ interface SharePermission {
     .permission-controls { display: flex; align-items: center; gap: 8px; }
     .btn-remove { padding: 6px 8px; background: transparent; border: none; cursor: pointer; border-radius: 3px; color: #999; }
     .btn-remove:hover { background: #FFEBEE; color: #D32F2F; }
-
-    .empty-state { padding: 24px; text-align: center; color: #999; }
-    .empty-state p { margin: 0; font-size: 13px; }
 
     .link-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
     .link-controls label { font-size: 13px; }

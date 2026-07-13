@@ -63,8 +63,20 @@ export class ReactHooksRulesRule extends BaseLintRule {
 
     traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
+        let hookName: string | null = null;
         if (t.isIdentifier(path.node.callee) && hooks.includes(path.node.callee.name)) {
-          const hookName = path.node.callee.name;
+          hookName = path.node.callee.name;
+        } else if (
+          t.isMemberExpression(path.node.callee) &&
+          !path.node.callee.computed &&
+          t.isIdentifier(path.node.callee.object, { name: 'React' }) &&
+          t.isIdentifier(path.node.callee.property) &&
+          hooks.includes(path.node.callee.property.name)
+        ) {
+          hookName = path.node.callee.property.name;
+        }
+
+        if (hookName !== null) {
 
           // Rule 1: Check if hook is inside the main component function or custom hook
           let funcParent = path.getFunctionParent();

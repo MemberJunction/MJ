@@ -21,7 +21,16 @@ vi.mock('@memberjunction/core', () => ({
     })),
     LogError: vi.fn(),
     LogStatusEx: vi.fn(),
-    IsVerboseLoggingEnabled: vi.fn(() => false)
+    IsVerboseLoggingEnabled: vi.fn(() => false),
+    // Added in v5.39 for decoupling fix — the engine imports these even on
+    // code paths these existing tests don't exercise. Minimal class stubs
+    // so module-load doesn't fail.
+    IMetadataProvider: class {},
+    RunView: class {
+        async RunView(): Promise<{ Success: boolean; Results: unknown[] }> {
+            return { Success: true, Results: [] };
+        }
+    }
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
@@ -102,7 +111,11 @@ vi.mock('@memberjunction/scheduling-base-types', () => ({
     NotificationChannel: {}
 }));
 
-vi.mock('@memberjunction/scheduling-engine-base', () => {
+vi.mock('@memberjunction/scheduling-engine-base', async () => {
+    // Real rxjs Subject so JobsChanged$ is genuinely subscribable and the wake-on-
+    // activation path can be exercised by tests via the __emitJobsChanged() helper.
+    const { Subject } = await import('rxjs');
+    const jobsChanged = new Subject<void>();
     const fakeBase = {
         ScheduledJobs: [] as Array<Record<string, unknown>>,
         ScheduledJobTypes: [] as Array<Record<string, unknown>>,
@@ -113,7 +126,21 @@ vi.mock('@memberjunction/scheduling-engine-base', () => {
         GetJobTypeByName: vi.fn(),
         GetJobTypeByDriverClass: vi.fn(),
         GetJobsByType: vi.fn().mockReturnValue([]),
-        GetRunsForJob: vi.fn().mockReturnValue([])
+        GetRunsForJob: vi.fn().mockReturnValue([]),
+        // Fires when the active scheduled-job set changes; the engine subscribes to
+        // wake a suspended poll timer on activation.
+        JobsChanged$: jobsChanged.asObservable(),
+        __emitJobsChanged: () => jobsChanged.next(),
+        // Added in v5.39 for the decoupling fix. Provider doubles as both an
+        // IMetadataProvider and a DatabaseProviderBase via the engine's cast.
+        // Default ExecuteSQL returns the permission-probe "OK" shape so the
+        // probe call in StartPolling doesn't warn.
+        ContextUser: { ID: 'user-1' },
+        ProviderToUse: {
+            MJCoreSchemaName: '__mj',
+            ExecuteSQL: vi.fn().mockResolvedValue([{ permission_name: 'EXECUTE' }])
+        },
+        RunViewProviderToUse: {}
     };
 
     return {
@@ -184,36 +211,87 @@ describe('SchedulingEngine', () => {
     });
 
     describe('StopPolling', () => {
-        it('should do nothing when not polling', () => {
+        it('should do nothing when not polling', async () => {
             expect(engine.IsPolling).toBe(false);
-            engine.StopPolling();
+            await engine.StopPolling();
             expect(engine.IsPolling).toBe(false);
         });
 
-        it('should set IsPolling to false when called', () => {
-            // Start polling first
+        it('should set IsPolling to false when called', async () => {
+            // Start polling first. v5.39: StartPolling is async, and requires
+            // at least one active job to actually set isPolling=true (otherwise
+            // it short-circuits with "no active jobs, polling not started").
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
-            engine.StartPolling(mockUser);
+            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
+            await engine.StartPolling(mockUser);
             expect(engine.IsPolling).toBe(true);
-            engine.StopPolling();
+            await engine.StopPolling();
             expect(engine.IsPolling).toBe(false);
+            mockBase.ScheduledJobs = [];
         });
     });
 
     describe('StartPolling', () => {
-        it('should set IsPolling to true', () => {
+        it('should set IsPolling to true', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
-            engine.StartPolling(mockUser);
+            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
+            await engine.StartPolling(mockUser);
             expect(engine.IsPolling).toBe(true);
+            await engine.StopPolling();
+            mockBase.ScheduledJobs = [];
         });
 
-        it('should not start double polling if already polling', () => {
+        it('should not start double polling if already polling', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
-            engine.StartPolling(mockUser);
+            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
+            await engine.StartPolling(mockUser);
             const firstPollingState = engine.IsPolling;
             // Calling again should be a no-op
-            engine.StartPolling(mockUser);
+            await engine.StartPolling(mockUser);
             expect(engine.IsPolling).toBe(firstPollingState);
+            await engine.StopPolling();
+            mockBase.ScheduledJobs = [];
+        });
+
+        // Flush the fire-and-forget async restart kicked off by the JobsChanged$
+        // handler. Microtasks only — the 60s poll timer is never advanced under
+        // fake timers, so this can't recurse into a poll tick.
+        const flushMicrotasks = async () => {
+            for (let i = 0; i < 25; i++) {
+                await Promise.resolve();
+            }
+        };
+
+        it('should auto-start polling when a job is activated after a boot-time suspension', async () => {
+            const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
+            // Boot with zero active jobs: polling is suspended, but the engine still
+            // subscribes to JobsChanged$ and retains the context user.
+            mockBase.ScheduledJobs = [];
+            await engine.StartPolling(mockUser);
+            expect(engine.IsPolling).toBe(false);
+
+            // A job is activated → base reconciles its set and fires JobsChanged$.
+            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
+            (mockBase as unknown as { __emitJobsChanged: () => void }).__emitJobsChanged();
+            await flushMicrotasks();
+
+            expect(engine.IsPolling).toBe(true);
+            await engine.StopPolling();
+            mockBase.ScheduledJobs = [];
+        });
+
+        it('should NOT start polling on a JobsChanged notification while no active jobs exist', async () => {
+            const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
+            mockBase.ScheduledJobs = [];
+            await engine.StartPolling(mockUser);
+            expect(engine.IsPolling).toBe(false);
+
+            // e.g. a job was edited but remains inactive → the set is still empty.
+            (mockBase as unknown as { __emitJobsChanged: () => void }).__emitJobsChanged();
+            await flushMicrotasks();
+
+            expect(engine.IsPolling).toBe(false);
+            await engine.StopPolling();
         });
     });
 
