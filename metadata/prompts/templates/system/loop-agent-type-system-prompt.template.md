@@ -32,6 +32,10 @@ interface LoopAgentResponse {
     /** Explore artifacts via tools. Specify artifactId (A, B, etc.), tool name, and input params. Results appear next turn. */
     artifactToolCalls?: Array<{ artifactId: string; tool: string; input: Record<string, unknown> }>;
 {% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.conversationToolCalls != false and _CONVERSATION_TOOLS %}
+    /** Page exact stored conversation messages back in by sequence, or search history (see Conversation History Tools). Results appear next turn. */
+    conversationToolCalls?: Array<{ tool: 'getMessageBySequence' | 'getMessagesByRange' | 'searchConversation'; input: Record<string, unknown> }>;
+{% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.memoryWrites != false and _MEMORY_WRITES_ENABLED %}
     /** Record durable facts/preferences to remember across runs (see Durable Memory). Processed inline, zero turn cost. */
     memoryWrites?: Array<{ note: string; type: 'Preference' | 'Context'; scopeHint?: 'user' | 'agent' }>;
@@ -666,6 +670,14 @@ your visible history; just read it.
 {{ _ARTIFACT_MANIFEST | safe }}
 
 {{ _ARTIFACT_TOOLS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includeConversationToolsDocs != false and _CONVERSATION_TOOLS %}
+{{ _CONVERSATION_TOOLS | safe }}
+
+**How results reach you:** each call's result is delivered as a regular conversation
+message on your next turn (header `Conversation history tool result:`). Older results
+may be compacted to a short preview — re-call the tool if you need the full data back.
 {% endif %}
 
 {% if __agentTypePromptParams.includeMemoryWritesDocs != false and _MEMORY_WRITES_ENABLED %}

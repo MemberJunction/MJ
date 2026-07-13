@@ -279,6 +279,15 @@ export interface LoopAgentTypePromptParams {
     includeArtifactToolsDocs?: boolean;
 
     /**
+     * Include conversation-history retrieval tool documentation in the prompt (the
+     * `_CONVERSATION_TOOLS` block). Only emitted when the run has a conversationId —
+     * these tools page exact pre-summary messages back in by their persisted Sequence
+     * handles. Disable for agents that should never dig into conversation history.
+     * @default true
+     */
+    includeConversationToolsDocs?: boolean;
+
+    /**
      * Include tool-pipeline documentation in the prompt (the `_PIPELINE_TOOLS` block).
      * Only emitted when at least one pipeline source — an Action or artifact tool — is available.
      * Disable for agents that should never compose pipelines.
@@ -326,6 +335,7 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeScratchpadDocs: true,
     scratchpadMaxTasks: 50,
     includeArtifactToolsDocs: true,
+    includeConversationToolsDocs: true,
     includePipelineDocs: true,
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1

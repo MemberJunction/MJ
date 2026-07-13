@@ -49,6 +49,7 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
 import { ConversationCompactionManager, CompactionOutcome, EffectiveContextBudget } from './ConversationCompactionManager';
+import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult } from './ConversationToolManager';
 import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
 import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
@@ -896,6 +897,12 @@ export class BaseAgent {
     private _artifactToolManager: ArtifactToolManager = new ArtifactToolManager();
 
     /**
+     * Manages conversation-history retrieval tools for the current agent run.
+     * Armed only when the run has a conversationId (the cross-turn context gate).
+     */
+    private _conversationToolManager: ConversationToolManager = new ConversationToolManager();
+
+    /**
      * Manages in-flight durable memory writes for the current agent run.
      * Only consulted when the agent has AllowMemoryWrite enabled.
      */
@@ -1413,6 +1420,10 @@ export class BaseAgent {
             this._scratchpadManager.Clear();
             this._artifactToolManager.Clear();
             this._memoryWriteManager.Clear();
+
+            // Arm conversation-history retrieval tools — available only when the run has a
+            // conversation to page against (the same gate as all cross-turn context features).
+            this._conversationToolManager.Initialize(wrappedParams.conversationId || null, params.contextUser);
 
             // Initialize artifact tools with any input artifacts attached to the run.
             // Artifacts arrive as a typed first-class field on ExecuteAgentParams —
@@ -3442,6 +3453,14 @@ export class BaseAgent {
                 this.logStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`, true, params);
             } else if (this._artifactToolManager.HasArtifacts()) {
                 this.logStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`, true, params);
+            }
+
+            // Inject conversation-history retrieval tool docs when the run has a
+            // conversation to page against. Like artifact tools, results are pushed as
+            // one-shot conversation messages, never re-rendered per turn.
+            const conversationToolsEnabled = agentTypePromptParams?.includeConversationToolsDocs !== false;
+            if (conversationToolsEnabled && this._conversationToolManager.IsAvailable) {
+                promptParams.data['_CONVERSATION_TOOLS'] = this._conversationToolManager.GetToolDocumentation();
             }
 
             // Enable the memory-writes response field + docs only for agents that opted in
@@ -5481,6 +5500,93 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Executes conversation-history retrieval tool calls, wrapping each invocation in
+     * its own AIAgentRunStep (StepType='Tool', "Conversation Tool: {tool}") — the same
+     * per-call observability shape as artifact tools. Reads are served from the
+     * ConversationEngine cache; per-call failures are contained in the result.
+     *
+     * @protected
+     */
+    protected async executeConversationToolCallsAsSteps(
+        calls: ConversationToolCall[],
+        params: ExecuteAgentParams,
+    ): Promise<ConversationToolExecutionResult[]> {
+        return Promise.all(
+            calls.map(async (call) => {
+                const toolStep = await this.createStepEntity({
+                    stepType: 'Tool',
+                    stepName: `Conversation Tool: ${call.tool}`,
+                    contextUser: params.contextUser,
+                    inputData: {
+                        tool: call.tool,
+                        input: call.input,
+                        conversationId: params.conversationId,
+                    },
+                });
+
+                const executed = await this._conversationToolManager.ExecuteSingleToolCall(call);
+
+                await this.finalizeStepEntity(
+                    toolStep,
+                    executed.result.success,
+                    executed.result.success ? undefined : executed.result.errorMessage,
+                    {
+                        tool: executed.tool,
+                        input: executed.input,
+                        result: executed.result,
+                        durationMs: executed.durationMs,
+                    },
+                );
+
+                return executed;
+            }),
+        );
+    }
+
+    /**
+     * Pushes a single user-role message containing rendered conversation-tool results
+     * into the conversation — the same inject-once-then-expire lifecycle as artifact
+     * tool results.
+     *
+     * @protected
+     */
+    protected injectConversationToolResultsMessage(
+        params: ExecuteAgentParams,
+        toolResults: ConversationToolExecutionResult[],
+    ): void {
+        if (toolResults.length === 0) return;
+        const header = toolResults.length === 1
+            ? 'Conversation history tool result:'
+            : `Conversation history tool results (${toolResults.length} calls):`;
+        const body = toolResults.map((r, i) => {
+            const heading = `### ${i + 1}. ${r.tool}(${JSON.stringify(r.input)})`;
+            if (r.result.success) {
+                const raw = typeof r.result.data === 'string'
+                    ? r.result.data
+                    : JSON.stringify(r.result.data, null, 2);
+                const data = this.capStandaloneToolResultText(raw);
+                return `${heading}\n\`\`\`json\n${data}\n\`\`\``;
+            }
+            return `${heading}\n**Error:** ${r.result.errorMessage}`;
+        }).join('\n\n');
+
+        const message: AgentChatMessage = {
+            role: 'user',
+            content: `${header}\n${body}`,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'tool-result',
+                expirationTurns: 3,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 500,
+                compactPromptId: '',
+            },
+        };
+        params.conversationMessages.push(message);
+    }
+
+    /**
      * Pushes a single user-role message containing rendered artifact-tool
      * results into the conversation. This mirrors the action-result
      * "inject once, then expire" pattern — the LLM sees the results on its
@@ -6228,6 +6334,7 @@ The context is now within limits. Please retry your request with the recovered c
             { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' },
             { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' },
             { docsFlag: 'includeArtifactToolsDocs', responseTypeKey: 'artifactToolCalls' },
+            { docsFlag: 'includeConversationToolsDocs', responseTypeKey: 'conversationToolCalls' },
             { docsFlag: 'includePipelineDocs', responseTypeKey: 'pipeline' },
             { docsFlag: 'includeMemoryWritesDocs', responseTypeKey: 'memoryWrites' }
         ];
@@ -8418,6 +8525,19 @@ The context is now within limits. Please retry your request with the recovered c
                 this.injectArtifactToolResultsMessage(params, toolResults);
             } else if (this._artifactToolManager.HasArtifacts()) {
                 this.logStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`, true, params);
+            }
+
+            // Execute conversation-history retrieval tool calls if provided (zero turn cost —
+            // processed inline, results delivered as a conversation message next turn)
+            const conversationToolCalls = initialNextStep.conversationToolCalls as ConversationToolCall[] | undefined;
+            if (conversationToolCalls?.length) {
+                if (this._conversationToolManager.IsAvailable) {
+                    this.logStatus(`[ConversationTools] LLM requested ${conversationToolCalls.length} tool call(s): ${conversationToolCalls.map(c => c.tool).join(', ')}`, true, params);
+                    const conversationToolResults = await this.executeConversationToolCallsAsSteps(conversationToolCalls, params);
+                    this.injectConversationToolResultsMessage(params, conversationToolResults);
+                } else {
+                    this.logStatus(`[ConversationTools] LLM requested conversation tools but the run has no conversationId — ignored`, true, params);
+                }
             }
 
             // Execute in-flight memory writes if provided (zero turn cost — processed inline)

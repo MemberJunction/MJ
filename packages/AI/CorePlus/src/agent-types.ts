@@ -593,6 +593,16 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     artifactToolCalls?: { artifactId: string; tool: string; input: Record<string, unknown> }[];
     /**
+     * Conversation-history retrieval tool calls from the agent's response — page exact
+     * stored messages back in by their persisted Sequence handles, or search history.
+     * Processed inline (zero turn cost) alongside artifact tool calls; only honored
+     * when the run has a conversationId.
+     * NOTE: structural duplicate of ConversationToolCall in @memberjunction/ai-agents
+     * (CorePlus sits below Agents and cannot import from it), mirroring how
+     * artifactToolCalls duplicates ArtifactToolCall above.
+     */
+    conversationToolCalls?: { tool: string; input: Record<string, unknown> }[];
+    /**
      * Durable memory writes from the agent's response. Each entry records a
      * fact/preference that persists across runs as a provisional agent note.
      * Processed inline (zero turn cost) alongside artifact tool calls; only

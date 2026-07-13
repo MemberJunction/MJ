@@ -25,6 +25,7 @@
 import { TestRunner, Assert, AssertEqual } from './lib/harness';
 import { bootstrapAI, AICtx } from './lib/ai-bootstrap';
 import { ConversationEngine, MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { ConversationToolManager, ConversationSearchHit, ConversationToolMessage } from '@memberjunction/ai-agents';
 
 const FIXTURE_TAG = '(mj-integration-test — safe to delete)';
 
@@ -145,6 +146,30 @@ async function main(): Promise<void> {
         // summary (set in the earlier test) becomes the boundary again.
         AssertEqual(window[0].metadata?.summaryBoundarySequence, 2, 'boundary recomputed without excluded row');
         Assert(window.every(m => m.metadata?.conversationDetailId !== placeholderId), 'excluded row absent');
+    });
+
+    runner.Test('retrieval tools page and search the full stored history (live cache reads)', async () => {
+        const fixture = fixtures[0];
+        const tools = new ConversationToolManager();
+        tools.Initialize(fixture.conversation.ID, ctx.user);
+
+        // Exact paging by the trigger-assigned sequence handle
+        const bySeq = await tools.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 1 } });
+        Assert(bySeq.result.success, `getMessageBySequence failed: ${bySeq.result.errorMessage}`);
+        AssertEqual((bySeq.result.data as ConversationToolMessage).message, 'm1', 'exact message by sequence');
+
+        // Range paging — includes rows the summary now covers (full history stays addressable)
+        const byRange = await tools.ExecuteSingleToolCall({ tool: 'getMessagesByRange', input: { startSequence: 1, endSequence: 3 } });
+        Assert(byRange.result.success, `getMessagesByRange failed: ${byRange.result.errorMessage}`);
+        const rangeData = byRange.result.data as { messages: ConversationToolMessage[] };
+        AssertEqual(rangeData.messages.map(m => m.message).join(','), 'm1,m2,m3', 'inclusive range in order');
+
+        // Search over pre-summary history
+        const search = await tools.ExecuteSingleToolCall({ tool: 'searchConversation', input: { query: 'm2' } });
+        Assert(search.result.success, `searchConversation failed: ${search.result.errorMessage}`);
+        const hits = (search.result.data as { hits: ConversationSearchHit[] }).hits;
+        AssertEqual(hits.length, 1, 'one search hit');
+        AssertEqual(hits[0].sequence, 2, 'hit points at the right sequence handle');
     });
 
     runner.Test('second conversation is independently sequenced and windowed', async () => {

@@ -1,9 +1,10 @@
 import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest } from "@memberjunction/ai-core-plus";
 import { ArtifactToolCall } from "../ArtifactToolManager";
+import { ConversationToolCall } from "../ConversationToolManager";
 import { MemoryWriteRequest } from "../MemoryWriteManager";
 
 // Re-export universal types for backward compatibility
-export type { ForEachOperation, WhileOperation, ArtifactToolCall, MemoryWriteRequest };
+export type { ForEachOperation, WhileOperation, ArtifactToolCall, ConversationToolCall, MemoryWriteRequest };
 
 /**
  * Response structure for Loop Agent Type
@@ -60,6 +61,15 @@ export interface LoopAgentResponse<P = any> {
      * injected into the next turn's prompt via _ARTIFACT_TOOL_RESULTS.
      */
     artifactToolCalls?: ArtifactToolCall[];
+
+    /**
+     * Conversation-history retrieval tool invocations — page exact pre-summary
+     * messages back into context by their persisted `Sequence` handles, or search
+     * the full stored history. Processed inline on the same turn as other response
+     * fields (zero turn cost); results are injected as a conversation message on
+     * the next turn. Only honored when the run has a conversationId.
+     */
+    conversationToolCalls?: ConversationToolCall[];
 
     /**
      * Durable memory writes — record facts/preferences that persist across
