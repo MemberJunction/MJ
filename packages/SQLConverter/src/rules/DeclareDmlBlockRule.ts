@@ -73,6 +73,10 @@ export class DeclareDmlBlockRule implements IConversionRule {
       "RAISE EXCEPTION '$1';"
     );
 
+    // Convert PRINT → RAISE NOTICE. PL/pgSQL has no PRINT statement; left alone it
+    // would be mangled into a quoted identifier ("PRINT") by the PascalCase pass below.
+    result = this.convertPrint(result);
+
     // Convert EXEC('str' + v_var + 'str') → EXECUTE format('str %I str', v_var).
     // Must run BEFORE quotePascalCaseIdentifiers (so EXEC isn't already quoted to "EXEC").
     result = this.convertDynamicExec(result);
@@ -143,6 +147,25 @@ export class DeclareDmlBlockRule implements IConversionRule {
   }
 
   /**
+   * Convert T-SQL PRINT to PL/pgSQL RAISE NOTICE.
+   *
+   *   PRINT 'msg';                    → RAISE NOTICE '%', 'msg';
+   *   PRINT 'msg: ' + v_var;          → RAISE NOTICE '%', 'msg: ' || v_var;
+   *
+   * The + → || rewrite is segment-aware so a literal `+` inside a quoted string
+   * is left alone. Runs after variable renaming (@x → v_x) and before the
+   * PascalCase-identifier quoting pass (which would otherwise emit "PRINT").
+   */
+  private convertPrint(sql: string): string {
+    return sql.replace(/^(\s*)PRINT\s+([^;]+);/gim, (_match, indent: string, expr: string) => {
+      const concatenated = this.segmentSQL(expr.trim())
+        .map(seg => (seg.type === 'code' ? seg.text.replace(/\+/g, '||') : seg.text))
+        .join('');
+      return `${indent}RAISE NOTICE '%', ${concatenated};`;
+    });
+  }
+
+  /**
    * Convert dynamic T-SQL EXEC('str' + @var + 'str') to PG EXECUTE format('str %I str', v_var).
    *
    * T-SQL uses string concatenation with `+`. PG uses `format()` with `%I` for identifiers
@@ -159,8 +182,16 @@ export class DeclareDmlBlockRule implements IConversionRule {
         const args: string[] = [];
         for (const part of parts) {
           if (/^'.*'$/.test(part)) {
-            // String literal — strip quotes, escape % for format()
-            fmtParts.push(part.slice(1, -1).replace(/%/g, '%%'));
+            // String literal — strip quotes, convert bracketed identifiers, escape %
+            // for format(). Bracket conversion must happen here: string-literal content
+            // is (correctly) opaque to the earlier convertIdentifiers pass, but this
+            // literal is dynamic SQL that PG will EXECUTE, so [s].[T] must become s."T".
+            const inner = part
+              .slice(1, -1)
+              .replace(/\[([^\]]+)\]\.\[([^\]]+)\]/g, '$1."$2"')
+              .replace(/\[([^\]]+)\]/g, '"$1"')
+              .replace(/%/g, '%%');
+            fmtParts.push(inner);
           } else if (/^v_\w+$/.test(part)) {
             // Variable reference — use %I (identifier quoting).
             // %I already wraps the value in double quotes, so the surrounding
@@ -212,8 +243,10 @@ export class DeclareDmlBlockRule implements IConversionRule {
       return `IF ${cond.trim()} THEN`;
     });
     // Convert standalone END (that closes IF) → END IF;
-    // This is tricky — need to be careful not to break nested blocks
-    result = result.replace(/\bEND\b\s*(?=\s*\n\s*(?:--|UPDATE|DELETE|INSERT|$))/gi, 'END IF;');
+    // This is tricky — need to be careful not to break nested blocks. The trailing
+    // `\s*$` alternative catches an END that closes the whole block (no newline after
+    // it) — common when the IF block is the last statement of the batch.
+    result = result.replace(/\bEND\b\s*(?=\s*\n\s*(?:--|UPDATE|DELETE|INSERT|$)|\s*$)/gi, 'END IF;');
     return result;
   }
 

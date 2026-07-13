@@ -213,6 +213,40 @@ WHERE e.ID = '123'`;
       expect(result).toContain('WHERE');
       expect(result).not.toMatch(/\bFROM\b/i);
     });
+
+    it('should keep a CTE join (bare name, no alias) in the rewritten FROM clause', () => {
+      // Mirrors the ConversationDetail.Sequence backfill: UPDATE alias FROM table JOIN cte
+      const sql = `WITH numbered AS (
+    SELECT ID,
+           ROW_NUMBER() OVER (PARTITION BY ConversationID
+                              ORDER BY __mj_CreatedAt ASC, ID ASC) AS rn
+    FROM [__mj].[ConversationDetail]
+)
+UPDATE cd
+    SET cd.Sequence = numbered.rn
+FROM [__mj].[ConversationDetail] cd
+JOIN numbered ON numbered.ID = cd.ID`;
+      const result = convert(sql);
+      expect(result).toContain('UPDATE __mj."ConversationDetail" AS cd');
+      // The CTE must survive as the FROM source — dropping it dangles numbered.rn
+      expect(result).toMatch(/\bFROM\b[\s\S]*\bnumbered\b/);
+      // The join condition must land in WHERE
+      expect(result).toMatch(/\bWHERE\b[\s\S]*numbered\."ID"\s*=\s*cd\."ID"/);
+    });
+
+    it('should leave the statement unchanged when a join fragment cannot be parsed', () => {
+      // A subquery join target is out of scope for the rewrite — corrupting the
+      // statement by dropping the FROM clause would be a silent data bug.
+      const sql = `UPDATE cd
+    SET cd.Sequence = x.rn
+FROM [__mj].[ConversationDetail] cd
+JOIN (SELECT ID, 1 AS rn FROM [__mj].[ConversationDetail]) x ON x.ID = cd.ID`;
+      const result = convert(sql);
+      // The FROM clause (and the join source) must not be silently dropped
+      expect(result).toMatch(/\bFROM\b/i);
+      expect(result).toContain('cd');
+      expect(result).toMatch(/\bJOIN\b/i);
+    });
   });
 
   describe('__mj_ prefixed column quoting', () => {

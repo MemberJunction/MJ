@@ -159,5 +159,32 @@ IF @NoteStatusConstraint IS NOT NULL
       expect(result).not.toMatch(/sys\.columns/i);
       expect(result).not.toMatch(/\bOBJECT_ID\b/i);
     });
+
+    it('full drop-and-log block: PRINT, bracketed dynamic SQL, and trailing END all convert', () => {
+      // Mirrors the v5.48.x Agent_Conversation_Compaction StepType CHECK widening block
+      const sql = `DECLARE @ConstraintName NVARCHAR(200);
+SELECT @ConstraintName = name
+FROM sys.check_constraints
+WHERE parent_object_id = OBJECT_ID('[__mj].[AIAgentRunStep]')
+  AND COL_NAME(parent_object_id, parent_column_id) = 'StepType';
+
+IF @ConstraintName IS NOT NULL
+BEGIN
+    EXEC('ALTER TABLE [__mj].[AIAgentRunStep] DROP CONSTRAINT ' + @ConstraintName);
+    PRINT 'Dropped existing StepType check constraint: ' + @ConstraintName;
+END`;
+      const result = convert(sql);
+      // PRINT converts to RAISE NOTICE with + → || concatenation
+      expect(result).toContain("RAISE NOTICE '%', 'Dropped existing StepType check constraint: ' || v_ConstraintName;");
+      expect(result).not.toMatch(/"?PRINT"?/);
+      // Bracketed identifiers inside the dynamic-SQL string literal are converted
+      expect(result).toContain(`EXECUTE format('ALTER TABLE __mj."AIAgentRunStep" DROP CONSTRAINT %I', v_ConstraintName)`);
+      expect(result).not.toMatch(/\[__mj\]/);
+      // The IF block's closing END becomes END IF even at end-of-batch
+      expect(result).toMatch(/END IF;/);
+      // The whole thing is a valid DO block
+      expect(result).toMatch(/^DO \$mj\$/m);
+      expect(result).toMatch(/END \$mj\$;/);
+    });
   });
 });
