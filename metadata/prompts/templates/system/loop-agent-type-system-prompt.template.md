@@ -33,8 +33,8 @@ interface LoopAgentResponse {
     artifactToolCalls?: Array<{ artifactId: string; tool: string; input: Record<string, unknown> }>;
 {% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.conversationToolCalls != false and _CONVERSATION_TOOLS %}
-    /** Page exact stored conversation messages back in by sequence, or search history (see Conversation History Tools). Results appear next turn. */
-    conversationToolCalls?: Array<{ tool: 'getMessageBySequence' | 'getMessagesByRange' | 'searchConversation'; input: Record<string, unknown> }>;
+    /** Page exact stored conversation messages back in by sequence, search history, or summarize a range through a lens (see Conversation History Tools). Results appear next turn. */
+    conversationToolCalls?: Array<{ tool: 'getMessageBySequence' | 'getMessagesByRange' | 'searchConversation' | 'summarizeRange'; input: Record<string, unknown> }>;
 {% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.memoryWrites != false and _MEMORY_WRITES_ENABLED %}
     /** Record durable facts/preferences to remember across runs (see Durable Memory). Processed inline, zero turn cost. */

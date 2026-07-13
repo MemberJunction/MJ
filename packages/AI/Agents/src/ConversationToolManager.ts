@@ -18,8 +18,23 @@
 import { UserInfo } from '@memberjunction/core';
 import { ConversationEngine, MJConversationDetailEntity } from '@memberjunction/core-entities';
 
-/** Tool names available on `conversationToolCalls`. `summarizeRange` lands with the recursive sub-call phase. */
-export type ConversationToolName = 'getMessageBySequence' | 'getMessagesByRange' | 'searchConversation';
+/** Tool names available on `conversationToolCalls`. */
+export type ConversationToolName = 'getMessageBySequence' | 'getMessagesByRange' | 'searchConversation' | 'summarizeRange';
+
+/**
+ * The seam through which `summarizeRange` runs its recursive LLM sub-call. Implemented by
+ * BaseAgent (which owns prompt execution and run-step observability) so this manager stays
+ * free of prompt-runner dependencies and trivially testable.
+ */
+export interface ConversationToolSummaryHost {
+    /**
+     * Runs the range-summary prompt over the rendered slice.
+     * @param rangeText - The `[seq N] Role: text` rendering of the requested range
+     * @param lens - The task-specific focus the summary must serve
+     * @returns The summary text plus the AIPromptRun ID of the sub-call (for lineage)
+     */
+    RunSummaryPrompt(rangeText: string, lens: string): Promise<{ text: string; promptRunId?: string }>;
+}
 
 /**
  * One conversation-tool invocation from the LLM. A single input shape with per-tool
@@ -42,6 +57,8 @@ export interface ConversationToolCall {
         role?: string;
         /** searchConversation: result cap (default 20, max 50) */
         maxResults?: number;
+        /** summarizeRange: the task-specific focus the summary must serve */
+        lens?: string;
     };
 }
 
@@ -73,10 +90,16 @@ export interface ConversationToolExecutionResult {
         errorMessage?: string;
     };
     durationMs: number;
+    /** summarizeRange only: the AIPromptRun of the recursive sub-call (step TargetLogID lineage) */
+    promptRunId?: string;
 }
 
 /** Hard cap on messages returned by getMessagesByRange. */
 const MAX_RANGE_MESSAGES = 50;
+/** Hard cap on the span a single summarizeRange sub-call may cover. */
+const MAX_SUMMARIZE_RANGE_MESSAGES = 500;
+/** Character budget for the rendered slice fed to the summarizeRange sub-call. */
+const MAX_SUMMARIZE_INPUT_CHARS = 100_000;
 /** Total character budget for a range result — beyond it, messages are dropped with a note. */
 const MAX_RANGE_TOTAL_CHARS = 32_000;
 /** searchConversation result caps. */
@@ -93,6 +116,7 @@ const SNIPPET_CHARS = 300;
 export class ConversationToolManager {
     private conversationId: string | null = null;
     private contextUser: UserInfo | null = null;
+    private summaryHost: ConversationToolSummaryHost | null = null;
 
     /** Arms the manager for a run. Pass null conversationId to disable (programmatic runs). */
     public Initialize(conversationId: string | null, contextUser: UserInfo): void {
@@ -100,10 +124,16 @@ export class ConversationToolManager {
         this.contextUser = contextUser;
     }
 
+    /** Wires the recursive-sub-call seam (BaseAgent owns prompt execution). */
+    public SetSummaryHost(host: ConversationToolSummaryHost | null): void {
+        this.summaryHost = host;
+    }
+
     /** Disarms the manager (per-run reset). */
     public Clear(): void {
         this.conversationId = null;
         this.contextUser = null;
+        this.summaryHost = null;
     }
 
     /** True when the run has a conversation to page against. */
@@ -115,8 +145,8 @@ export class ConversationToolManager {
     public async ExecuteSingleToolCall(call: ConversationToolCall): Promise<ConversationToolExecutionResult> {
         const start = Date.now();
         try {
-            const data = await this.dispatch(call);
-            return { tool: call.tool, input: call.input, result: { success: true, data }, durationMs: Date.now() - start };
+            const { data, promptRunId } = await this.dispatch(call);
+            return { tool: call.tool, input: call.input, result: { success: true, data }, durationMs: Date.now() - start, promptRunId };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             return { tool: call.tool, input: call.input, result: { success: false, errorMessage }, durationMs: Date.now() - start };
@@ -138,24 +168,85 @@ export class ConversationToolManager {
             '| `getMessageBySequence` | `{ "sequence": 42 }` | the exact message at that sequence |',
             `| \`getMessagesByRange\` | \`{ "startSequence": 10, "endSequence": 20 }\` | the messages in the inclusive range (max ${MAX_RANGE_MESSAGES}) |`,
             `| \`searchConversation\` | \`{ "query": "text or regex", "isRegex"?: true, "role"?: "User"\\|"AI", "startSequence"?, "endSequence"?, "maxResults"? }\` | matching hits as \`{sequence, role, agent, snippet}\` (default ${DEFAULT_SEARCH_RESULTS}) — then page the hits you need |`,
+            `| \`summarizeRange\` | \`{ "startSequence": 1, "endSequence": 120, "lens": "what the summary should focus on" }\` | a focused summary of the range through YOUR lens (max ${MAX_SUMMARIZE_RANGE_MESSAGES} messages) — use when a range is too big to page in raw |`,
             '',
             'Example: `"conversationToolCalls": [{ "tool": "searchConversation", "input": { "query": "budget approval" } }]`'
         ].join('\n');
     }
 
     /** Routes a call to its tool implementation. */
-    private async dispatch(call: ConversationToolCall): Promise<unknown> {
+    private async dispatch(call: ConversationToolCall): Promise<{ data: unknown; promptRunId?: string }> {
         const details = await this.loadOrderedDetails();
         switch (call.tool) {
             case 'getMessageBySequence':
-                return this.getMessageBySequence(details, call.input);
+                return { data: this.getMessageBySequence(details, call.input) };
             case 'getMessagesByRange':
-                return this.getMessagesByRange(details, call.input);
+                return { data: this.getMessagesByRange(details, call.input) };
             case 'searchConversation':
-                return this.searchConversation(details, call.input);
+                return { data: this.searchConversation(details, call.input) };
+            case 'summarizeRange':
+                return this.summarizeRange(details, call.input);
             default:
                 throw new Error(`Unknown conversation tool '${call.tool as string}'`);
         }
+    }
+
+    /**
+     * The recursive sub-call (RLM pattern): renders the requested slice and hands it to
+     * the host's summary prompt with the caller's lens. The agent is not limited to the
+     * one baseline summary's framing — any window can be re-summarized however the
+     * current task needs, on a cheap sub-call model.
+     */
+    private async summarizeRange(
+        details: MJConversationDetailEntity[],
+        input: ConversationToolCall['input']
+    ): Promise<{ data: unknown; promptRunId?: string }> {
+        if (!this.summaryHost) {
+            throw new Error('summarizeRange is unavailable: no summary host is wired for this run');
+        }
+        const { startSequence, endSequence } = input;
+        if (typeof startSequence !== 'number' || typeof endSequence !== 'number' || startSequence > endSequence) {
+            throw new Error(`summarizeRange requires numeric 'startSequence' <= 'endSequence'`);
+        }
+        if (!input.lens || input.lens.trim().length === 0) {
+            throw new Error(`summarizeRange requires a 'lens' describing what the summary should focus on`);
+        }
+        if (endSequence - startSequence + 1 > MAX_SUMMARIZE_RANGE_MESSAGES) {
+            throw new Error(`Range spans ${endSequence - startSequence + 1} messages — max ${MAX_SUMMARIZE_RANGE_MESSAGES} per summarizeRange call`);
+        }
+        const inRange = details.filter(d => d.Sequence >= startSequence && d.Sequence <= endSequence);
+        if (inRange.length === 0) {
+            throw new Error(`No messages found in sequence range ${startSequence}..${endSequence}`);
+        }
+
+        const rangeText = this.renderRangeForSummary(inRange);
+        const summary = await this.summaryHost.RunSummaryPrompt(rangeText, input.lens.trim());
+        return {
+            data: {
+                lens: input.lens.trim(),
+                startSequence,
+                endSequence,
+                messageCount: inRange.length,
+                summary: summary.text
+            },
+            promptRunId: summary.promptRunId
+        };
+    }
+
+    /** `[seq N] Role: text` rendering with a total input budget for the sub-call model. */
+    private renderRangeForSummary(details: MJConversationDetailEntity[]): string {
+        const lines: string[] = [];
+        let usedChars = 0;
+        for (const detail of details) {
+            const line = `[seq ${detail.Sequence}] ${detail.Role || 'User'}: ${detail.Message || ''}`;
+            usedChars += line.length;
+            if (usedChars > MAX_SUMMARIZE_INPUT_CHARS && lines.length > 0) {
+                lines.push(`[input capped at ~${MAX_SUMMARIZE_INPUT_CHARS.toLocaleString()} characters — messages from sequence ${detail.Sequence} onward omitted; summarize a narrower range to cover them]`);
+                break;
+            }
+            lines.push(line);
+        }
+        return lines.join('\n');
     }
 
     /** Full conversation history, ordered by Sequence, from the engine cache. */

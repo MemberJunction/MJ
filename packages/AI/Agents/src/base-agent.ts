@@ -1424,6 +1424,7 @@ export class BaseAgent {
             // Arm conversation-history retrieval tools — available only when the run has a
             // conversation to page against (the same gate as all cross-turn context features).
             this._conversationToolManager.Initialize(wrappedParams.conversationId || null, params.contextUser);
+            this._conversationToolManager.SetSummaryHost(this.buildConversationSummaryHost(wrappedParams));
 
             // Initialize artifact tools with any input artifacts attached to the run.
             // Artifacts arrive as a typed first-class field on ExecuteAgentParams —
@@ -5500,6 +5501,36 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Builds the summarizeRange recursive-sub-call host: resolves the seeded
+     * 'Summarize Conversation Range' prompt (priority-ordered cheap models — the RLM
+     * "strong root model, cheap sub-call model" split) and runs it via the standard
+     * prompt runner so the AIPromptRun records itself.
+     * @protected
+     */
+    protected buildConversationSummaryHost(params: ExecuteAgentParams): { RunSummaryPrompt(rangeText: string, lens: string): Promise<{ text: string; promptRunId?: string }> } {
+        return {
+            RunSummaryPrompt: async (rangeText: string, lens: string) => {
+                const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Summarize Conversation Range');
+                if (!prompt) {
+                    throw new Error(`The 'Summarize Conversation Range' system prompt is not present in this environment`);
+                }
+                const promptParams = new AIPromptParams();
+                promptParams.prompt = prompt;
+                promptParams.data = { lens, messages: rangeText };
+                promptParams.contextUser = params.contextUser;
+                const result = await this._promptRunner.ExecutePrompt<string>(promptParams);
+                const text = (typeof result.result === 'string' && result.result.trim().length > 0)
+                    ? result.result.trim()
+                    : (result.rawResult || '').trim();
+                if (!result.success || text.length === 0) {
+                    throw new Error(result.errorMessage || 'summarizeRange sub-call returned no content');
+                }
+                return { text, promptRunId: result.promptRun?.ID };
+            }
+        };
+    }
+
+    /**
      * Executes conversation-history retrieval tool calls, wrapping each invocation in
      * its own AIAgentRunStep (StepType='Tool', "Conversation Tool: {tool}") — the same
      * per-call observability shape as artifact tools. Reads are served from the
@@ -5526,6 +5557,13 @@ The context is now within limits. Please retry your request with the recovered c
 
                 const executed = await this._conversationToolManager.ExecuteSingleToolCall(call);
 
+                // summarizeRange's recursive LLM sub-call records an AIPromptRun — link it
+                // through this Tool step's TargetLogID (one step + one prompt run: full
+                // lineage without a duplicate Prompt step for the same call).
+                if (executed.promptRunId) {
+                    toolStep.TargetLogID = executed.promptRunId;
+                }
+
                 await this.finalizeStepEntity(
                     toolStep,
                     executed.result.success,
@@ -5535,6 +5573,7 @@ The context is now within limits. Please retry your request with the recovered c
                         input: executed.input,
                         result: executed.result,
                         durationMs: executed.durationMs,
+                        ...(executed.promptRunId && { promptRunId: executed.promptRunId }),
                     },
                 );
 

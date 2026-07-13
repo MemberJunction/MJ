@@ -150,6 +150,49 @@ describe('ConversationToolManager', () => {
         });
     });
 
+    describe('summarizeRange (recursive sub-call via host seam)', () => {
+        it('renders the range with sequence handles, threads the lens, and returns the prompt-run lineage', async () => {
+            const host = {
+                RunSummaryPrompt: vi.fn().mockResolvedValue({ text: 'FOCUSED SUMMARY', promptRunId: 'SUB-RUN-1' }),
+            };
+            manager.SetSummaryHost(host);
+            const r = await manager.ExecuteSingleToolCall({
+                tool: 'summarizeRange',
+                input: { startSequence: 1, endSequence: 4, lens: 'budget decisions only' },
+            });
+            expect(r.result.success).toBe(true);
+            expect(r.promptRunId).toBe('SUB-RUN-1');
+            expect(r.result.data).toMatchObject({ lens: 'budget decisions only', startSequence: 1, endSequence: 4, messageCount: 4, summary: 'FOCUSED SUMMARY' });
+            const [rangeText, lens] = host.RunSummaryPrompt.mock.calls[0];
+            expect(lens).toBe('budget decisions only');
+            expect(rangeText).toContain('[seq 1] User:');
+            expect(rangeText).toContain('[seq 4] AI:');
+            expect(rangeText).not.toContain('[seq 5]');
+        });
+
+        it('fails cleanly without a host, a lens, or an in-range span', async () => {
+            const noHost = await manager.ExecuteSingleToolCall({ tool: 'summarizeRange', input: { startSequence: 1, endSequence: 2, lens: 'x' } });
+            expect(noHost.result.success).toBe(false);
+            expect(noHost.result.errorMessage).toContain('no summary host');
+
+            manager.SetSummaryHost({ RunSummaryPrompt: vi.fn() });
+            const noLens = await manager.ExecuteSingleToolCall({ tool: 'summarizeRange', input: { startSequence: 1, endSequence: 2 } });
+            expect(noLens.result.success).toBe(false);
+            expect(noLens.result.errorMessage).toContain('lens');
+
+            const emptyRange = await manager.ExecuteSingleToolCall({ tool: 'summarizeRange', input: { startSequence: 90, endSequence: 95, lens: 'x' } });
+            expect(emptyRange.result.success).toBe(false);
+            expect(emptyRange.result.errorMessage).toContain('No messages found');
+        });
+
+        it('rejects spans over the 500-message cap', async () => {
+            manager.SetSummaryHost({ RunSummaryPrompt: vi.fn() });
+            const r = await manager.ExecuteSingleToolCall({ tool: 'summarizeRange', input: { startSequence: 1, endSequence: 999, lens: 'x' } });
+            expect(r.result.success).toBe(false);
+            expect(r.result.errorMessage).toContain('max 500');
+        });
+    });
+
     it('contains unknown tools as failed results', async () => {
         const r = await manager.ExecuteSingleToolCall({ tool: 'summarizeEverything' as never, input: {} });
         expect(r.result.success).toBe(false);
@@ -158,7 +201,7 @@ describe('ConversationToolManager', () => {
 
     it('documentation lists every tool', () => {
         const docs = manager.GetToolDocumentation();
-        for (const tool of ['getMessageBySequence', 'getMessagesByRange', 'searchConversation']) {
+        for (const tool of ['getMessageBySequence', 'getMessagesByRange', 'searchConversation', 'summarizeRange']) {
             expect(docs).toContain(tool);
         }
     });
