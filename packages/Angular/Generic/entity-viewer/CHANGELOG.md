@@ -1,5 +1,27 @@
 # @memberjunction/ng-entity-viewer
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-entity-action-ux@5.47.0
+  - @memberjunction/ng-filter-builder@5.47.0
+  - @memberjunction/ng-list-management@5.47.0
+  - @memberjunction/ng-map-view@5.47.0
+  - @memberjunction/ng-record-changes@5.47.0
+  - @memberjunction/ng-shared-generic@5.47.0
+  - @memberjunction/ng-timeline@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/ng-export-service@5.47.0
+  - @memberjunction/ng-pagination@5.47.0
+  - @memberjunction/ng-ui-components@5.47.0
+  - @memberjunction/export-engine@5.47.0
+  - @memberjunction/global@5.47.0
+
 ## 5.46.0
 
 ### Patch Changes

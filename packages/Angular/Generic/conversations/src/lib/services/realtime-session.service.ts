@@ -12,6 +12,7 @@ import {
   LoadAssemblyAIRealtimeClient,
   LoadElevenLabsRealtimeClient,
   LoadGeminiRealtimeClient,
+  LoadHuggingFaceRealtimeClient,
   LoadOpenAIRealtimeClient,
   LoadxAIRealtimeClient,
   RealtimeAudioActivity,
@@ -46,6 +47,7 @@ LoadGeminiRealtimeClient();
 LoadElevenLabsRealtimeClient();
 LoadAssemblyAIRealtimeClient();
 LoadxAIRealtimeClient();
+LoadHuggingFaceRealtimeClient();
 
 /**
  * Connection / turn state for a real-time voice session, surfaced to the UI overlay.
