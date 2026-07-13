@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import fs from 'fs'; // mocked below (vi.mock('fs')) — used to capture generated file content
 
 // Mock all external dependencies
 vi.mock('@memberjunction/core', () => {
@@ -267,11 +268,14 @@ describe('EntitySubClassGeneratorBase', () => {
             ...overrides
         });
 
+        // includeFileHeader=true → a complete standalone single-entity file. The base-class import is
+        // emitted inline in this mode (for the multi-entity file path the assembler hoists + dedupes it —
+        // see the "exactly once" regression test below).
         const generate = async (entity: Record<string, unknown>) =>
             generator.generateEntitySubClass(
                 {} as Parameters<typeof generator.generateEntitySubClass>[0],
                 entity as Parameters<typeof generator.generateEntitySubClass>[1],
-                false,
+                true,
                 true
             );
 
@@ -297,6 +301,30 @@ describe('EntitySubClassGeneratorBase', () => {
             expect(result).toContain('extends MyCustomBase');
             expect(result).toContain("import { MyCustomBase } from '@my/pkg';");
             expect(result).not.toContain('ReadOnlyExternalBaseEntity');
+        });
+
+        it('emits the ReadOnlyExternalBaseEntity import exactly once for a file with multiple external entities', async () => {
+            // Regression (fix C): the import was previously emitted inline per external entity, so a file
+            // with 2+ external entities produced duplicate `import { ReadOnlyExternalBaseEntity }` lines
+            // → TS2300 duplicate identifier. The assembler now hoists + de-duplicates subclass imports.
+            // (fs is mocked, so we capture the content passed to writeFileSync rather than a real file.)
+            const writeMock = vi.mocked(fs.writeFileSync);
+            writeMock.mockClear();
+            const bronze = makeEntity({ Name: 'Bronze Sales', ClassName: 'BronzeSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales', BaseView: 'vwBronzeSales' });
+            const silver = makeEntity({ Name: 'Silver Sales', ClassName: 'SilverSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'silver', BaseTable: 'sales', BaseView: 'vwSilverSales' });
+            const ok = await generator.generateAllEntitySubClasses(
+                {} as Parameters<typeof generator.generateAllEntitySubClasses>[0],
+                [bronze, silver] as Parameters<typeof generator.generateAllEntitySubClasses>[1],
+                '/out',
+                true
+            );
+            expect(ok).toBe(true);
+            const call = writeMock.mock.calls.find((c) => String(c[0]).endsWith('entity_subclasses.ts'));
+            expect(call).toBeTruthy();
+            const content = String(call![1]);
+            const importMatches = content.match(/import \{ ReadOnlyExternalBaseEntity \} from '@memberjunction\/core-entities';/g) || [];
+            expect(importMatches.length).toBe(1); // exactly one, not one-per-entity
+            expect((content.match(/extends ReadOnlyExternalBaseEntity/g) || []).length).toBe(2); // both still extend it
         });
     });
 

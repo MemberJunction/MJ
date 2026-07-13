@@ -74,6 +74,32 @@ describe('ExternalDataSourceReadRouterImpl', () => {
       expect(viewParams.objectName).toBe('things_table');
     });
 
+    it('qualifies the object name with SchemaName for a non-default-schema external entity (fix B)', async () => {
+      const driver = makeFakeDriver();
+      (driver.RunView as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, rows: [], executionTimeMs: 1 });
+      mockResolve(driver);
+
+      // A bare object name in a non-default schema: without qualification the SQL driver falls back to
+      // the source's DefaultSchema and would read `dbo.sales` instead of `bronze.sales`.
+      const entity = new EntityInfo({ Name: 'Bronze Sales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales' });
+      await impl.RunViewExternal(entity, { EntityName: 'Bronze Sales' });
+
+      const [, viewParams] = (driver.RunView as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(viewParams.objectName).toBe('bronze.sales');
+    });
+
+    it('leaves an already schema-qualified ExternalObjectName untouched (no double-qualify)', async () => {
+      const driver = makeFakeDriver();
+      (driver.RunView as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, rows: [], executionTimeMs: 1 });
+      mockResolve(driver);
+
+      const entity = new EntityInfo({ Name: 'Gold Metrics', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'gold.daily_metrics', SchemaName: 'gold', BaseTable: 'daily_metrics' });
+      await impl.RunViewExternal(entity, { EntityName: 'Gold Metrics' });
+
+      const [, viewParams] = (driver.RunView as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(viewParams.objectName).toBe('gold.daily_metrics');
+    });
+
     it('fails clearly (no driver call) when offset-paginating a PK-less entity with no OrderBy', async () => {
       const driver = makeFakeDriver();
       mockResolve(driver);

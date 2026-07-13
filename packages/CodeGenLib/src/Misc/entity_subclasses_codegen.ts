@@ -147,7 +147,13 @@ export class EntitySubClassGeneratorBase {
       for (const e of entities) {
         sContent += await this.generateEntitySubClass(pool, e, false, skipDBUpdate);
       }
-      const allContent = `${this.generateEntitySubClassFileHeader()} \n ${zodContent} \n ${sContent}`;
+      // Hoist the base-class imports (e.g. ReadOnlyExternalBaseEntity for external entities, or custom
+      // subclass imports) into the file header, de-duplicated. Emitting each once — instead of once per
+      // entity — prevents a TS2300 duplicate-identifier error in files with 2+ external entities.
+      const subclassImports: string = [...new Set(
+        entities.map((e) => this.resolveEntityBaseClass(e).importStatement).filter((s) => s.length > 0)
+      )].join('');
+      const allContent = `${this.generateEntitySubClassFileHeader()} \n ${subclassImports}${zodContent} \n ${sContent}`;
 
       makeDir(directory);
       fs.writeFileSync(path.join(directory, 'entity_subclasses.ts'), allContent);
@@ -176,6 +182,25 @@ export const loadModule = () => {
    * @param entity
    * @param includeFileHeader
    */
+  /**
+   * Resolves an entity's generated base class and the import statement that class requires.
+   * Pure (no side effects) so BOTH {@link generateEntitySubClass} and the file assembler can call it —
+   * the assembler uses it to hoist and DE-DUPLICATE these imports into the file header. Emitting the
+   * import once per file instead of once per entity avoids a TS2300 duplicate-identifier error when a
+   * file contains 2+ external entities (each previously emitted `import { ReadOnlyExternalBaseEntity }`).
+   * Precedence: explicit custom subclass → ReadOnlyExternalBaseEntity (external entities) → BaseEntity.
+   */
+  protected resolveEntityBaseClass(entity: EntityInfo): { baseClass: string; importStatement: string } {
+    const explicitSubClass: string = entity.EntityObjectSubclassName ? entity.EntityObjectSubclassName : '';
+    const explicitSubClassImport: string = entity.EntityObjectSubclassImport ? entity.EntityObjectSubclassImport : '';
+    if (explicitSubClass.length > 0 && explicitSubClassImport.length > 0) {
+      return { baseClass: explicitSubClass, importStatement: `import { ${explicitSubClass} } from '${explicitSubClassImport}';\n` };
+    } else if (entity.ExternalDataSourceID) {
+      return { baseClass: 'ReadOnlyExternalBaseEntity', importStatement: `import { ReadOnlyExternalBaseEntity } from '@memberjunction/core-entities';\n` };
+    }
+    return { baseClass: 'BaseEntity', importStatement: '' };
+  }
+
   public async generateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
       console.warn(`SKIPPING TYPESCRIPT GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
@@ -305,28 +330,16 @@ export const loadModule = () => {
       //      appear in downstream generated packages, so the @memberjunction/core-entities import
       //      is always a clean cross-package import, never a self-import.)
       //   3. BaseEntity for everything else.
-      const explicitSubClass: string = entity.EntityObjectSubclassName ? entity.EntityObjectSubclassName : '';
-      const explicitSubClassImport: string = entity.EntityObjectSubclassImport ? entity.EntityObjectSubclassImport : '';
-      const hasExplicitSubClass: boolean = explicitSubClass.length > 0 && explicitSubClassImport.length > 0;
-
-      let sBaseClass: string;
-      let subClassImportStatement: string;
-      if (hasExplicitSubClass) {
-        if (entity.ExternalDataSourceID) {
-          // The custom subclass takes precedence over ReadOnlyExternalBaseEntity, so this external
-          // entity's read-only guarantee is preserved ONLY if that subclass itself extends
-          // ReadOnlyExternalBaseEntity. Warn so the author doesn't silently lose Save/Delete rejection
-          // (there's no write sproc, so an attempted mutation would otherwise fail confusingly downstream).
-          logStatus(`   ⚠️  External entity '${entity.Name}' has a custom subclass ('${explicitSubClass}') that overrides ReadOnlyExternalBaseEntity — Save/Delete will be rejected only if '${explicitSubClass}' extends ReadOnlyExternalBaseEntity.`);
-        }
-        sBaseClass = explicitSubClass;
-        subClassImportStatement = `import { ${explicitSubClass} } from '${explicitSubClassImport}';\n`;
-      } else if (entity.ExternalDataSourceID) {
-        sBaseClass = 'ReadOnlyExternalBaseEntity';
-        subClassImportStatement = `import { ReadOnlyExternalBaseEntity } from '@memberjunction/core-entities';\n`;
-      } else {
-        sBaseClass = 'BaseEntity';
-        subClassImportStatement = '';
+      // Base class + its import come from resolveEntityBaseClass (pure) so the file assembler can hoist
+      // and de-duplicate the imports into the header. The per-entity inline import (below) is emitted
+      // ONLY in the standalone includeFileHeader path (single entity → no duplication); in the
+      // multi-entity file path the assembler owns the (deduped) imports.
+      const { baseClass: sBaseClass, importStatement: subClassImportStatement } = this.resolveEntityBaseClass(entity);
+      if (entity.ExternalDataSourceID && entity.EntityObjectSubclassName && entity.EntityObjectSubclassImport) {
+        // Custom subclass takes precedence over ReadOnlyExternalBaseEntity, so this external entity's
+        // read-only guarantee holds ONLY if that subclass itself extends ReadOnlyExternalBaseEntity.
+        // Warn so the author doesn't silently lose Save/Delete rejection.
+        logStatus(`   ⚠️  External entity '${entity.Name}' has a custom subclass ('${entity.EntityObjectSubclassName}') that overrides ReadOnlyExternalBaseEntity — Save/Delete will be rejected only if '${entity.EntityObjectSubclassName}' extends ReadOnlyExternalBaseEntity.`);
       }
       const loadFieldString: string = entity.PrimaryKeys.map((f) => `${f.CodeName}: ${f.TSType}`).join(', ');
       const loadFunction: string = `    /**
@@ -472,7 +485,7 @@ ${jsonTypeBlock}
  * @class${disabledFlag}
  * @public${deprecatedFlag}
  */
-${subClassImportStatement}@RegisterClass(BaseEntity, '${entity.Name}')
+${includeFileHeader ? subClassImportStatement : ''}@RegisterClass(BaseEntity, '${entity.Name}')
 export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
 
 ${fields}

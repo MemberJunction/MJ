@@ -84,7 +84,7 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
         }
       }
       const viewParams: ExternalViewParams = {
-        objectName: entity.ExternalObjectName || entity.BaseTable || entity.Name,
+        objectName: this.resolveExternalObjectName(entity),
         fields: params.Fields && params.Fields.length ? params.Fields : undefined,
         filter: (params.ExtraFilter as string) || undefined,
         orderBy,
@@ -113,6 +113,23 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
     }
   }
 
+  /**
+   * Resolves the schema-qualified remote object name for an external entity. If ExternalObjectName is
+   * already schema-qualified (contains a '.') it's used as-is; otherwise it's qualified with the
+   * entity's SchemaName so objects in a NON-default schema (e.g. medallion bronze/silver/gold, or any
+   * multi-schema source) resolve correctly. Without this the SQL driver falls back to the source's
+   * DefaultSchema for a bare name, so a `bronze.` object would be read as `dbo.` and fail with
+   * "Invalid object name". SchemaName is the same value CodeGen used to introspect the object, so the
+   * read path and introspection stay consistent.
+   */
+  private resolveExternalObjectName(entity: EntityInfo): string {
+    const objectName = entity.ExternalObjectName || entity.BaseTable || entity.Name;
+    if (objectName.includes('.') || !entity.SchemaName) {
+      return objectName;
+    }
+    return `${entity.SchemaName}.${objectName}`;
+  }
+
   public async LoadExternalRecord<T = unknown>(
     entity: EntityInfo,
     compositeKey: CompositeKey,
@@ -136,7 +153,7 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
           Date.now() - start,
         );
       }
-      const objectName = entity.ExternalObjectName || entity.BaseTable || entity.Name;
+      const objectName = this.resolveExternalObjectName(entity);
       const row = await driver.LoadSingle<ExternalRow>(dataSource, objectName, primaryKeys, contextUser);
       return {
         Success: true,
