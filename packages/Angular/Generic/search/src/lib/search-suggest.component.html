@@ -30,6 +30,28 @@
             </div>
         }
 
+        <!-- Recently opened records section (idle state) -->
+        @if (showRecentRecordsSection) {
+            <div class="suggest-section">
+                <div class="suggest-section-header">
+                    <i class="fa-solid fa-clock-rotate-left suggest-section-icon"></i>
+                    <span>Recently Opened</span>
+                </div>
+                @for (record of VisibleRecentRecords; track record.EntityName + record.RecordID; let i = $index) {
+                    <div
+                        class="suggest-item suggest-recent-item"
+                        [class.suggest-item-highlighted]="IsHighlighted((showRecentSection ? VisibleRecentSearches.length : 0) + i)"
+                        (mousedown)="OnRecentRecordClick(record); $event.preventDefault()"
+                        (mouseenter)="HighlightedIndex = (showRecentSection ? VisibleRecentSearches.length : 0) + i"
+                    >
+                        <i class="fa-solid fa-file-lines suggest-item-icon"></i>
+                        <span class="suggest-item-text">{{ record.RecordName }}</span>
+                        <span class="suggest-item-meta">{{ record.EntityName }}</span>
+                    </div>
+                }
+            </div>
+        }
+
         <!-- Preview results section -->
         @if (showPreviewSection && !IsLoading) {
             @if (VisiblePreviewResults.length > 0) {
@@ -107,8 +129,8 @@
             </div>
         }
 
-        <!-- Empty state when no recent and query too short -->
-        @if (!showRecentSection && !showPreviewSection) {
+        <!-- Empty state when no recents of either kind and query too short -->
+        @if (!showRecentSection && !showRecentRecordsSection && !showPreviewSection) {
             <div class="suggest-empty">
                 <span>Type at least {{ MinQueryLength }} characters to search</span>
             </div>

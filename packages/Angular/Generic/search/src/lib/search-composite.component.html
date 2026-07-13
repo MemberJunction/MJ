@@ -31,6 +31,7 @@
         [MinQueryLength]="MinQueryLength"
         [MaxPreviewResults]="MaxPreviewResults"
         [ShowRecent]="EnableRecent"
+        [RecentRecords]="RecentRecords"
         [ShowPromo]="ShowPromo"
         [PromoText]="PromoText"
         [PromoActionLabel]="PromoActionLabel"
@@ -38,7 +39,8 @@
         (RecentSelected)="OnRecentSelected($any($event))"
         (SeeAllRequested)="OnSeeAllRequested($any($event))"
         (ClearRecentRequested)="OnClearRecentRequested()"
-        (PromoAccepted)="PromoAccepted.emit($any($event))"
+        (RecentRecordSelected)="OnRecentRecordSelected($event)"
+        (PromoAccepted)="PromoAccepted.emit($event)"
         (PromoDismissed)="PromoDismissed.emit()"
     ></mj-search-suggest>
 </div>
