@@ -1,5 +1,23 @@
 # @memberjunction/record-set-processor
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-agents@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/record-set-processor-base@5.47.0
+  - @memberjunction/templates@5.47.0
+  - @memberjunction/field-rules-transforms@5.47.0
+  - @memberjunction/global@5.47.0
+
 ## 5.46.0
 
 ### Patch Changes

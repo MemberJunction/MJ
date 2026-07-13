@@ -1,5 +1,13 @@
 # @memberjunction/auth-providers
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/global@5.47.0
+
 ## 5.46.0
 
 ### Patch Changes
