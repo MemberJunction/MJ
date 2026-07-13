@@ -7,27 +7,48 @@ Source: GitHub Issues API for `MemberJunction/MJ`, open issues only, excluding p
 ## Executive Summary
 
 - Open issues reviewed: **104**
-- A. Open but likely solved/superseded and should be closed: **4**
-- B. Irrelevant / no direct MJ build action: **3**
-- C. Should be built: **97**
+- A. Open but solved/superseded — **4, all closed 2026-07-12**
+- B. Irrelevant / no direct MJ build action — **2, both closed 2026-07-12** (a third, #2487, was re-categorized to C on review; see below)
+- C. Should be built: **98**
 
-This replaces the earlier closed-issue interpretation: closed GitHub issues are no longer counted as “solved and should be closed.” Category A now means **currently open** issues that appear solved, superseded, or stale enough to close after maintainer confirmation.
+Categories A and B have been reviewed and resolved, so the remaining inventory below is Category C only — the actionable backlog.
+
+### Category A resolution (closed)
+
+All four were auto-filed `🔴 Unit-test backstop failed on next` bot issues (#3079, #3082, #3088, #3119). Unit tests on `next` have been green continuously since the last failure (de3dec9, 2026-07-10 21:48 UTC): the following push passed, and every run since has passed, including the scheduled full-suite backstops on 07-10, 07-11, and 07-12. No open backstop issue was newer than #3119.
+
+These issues are auto-filed on failure but never auto-closed on recovery, which is why four accumulated. Adding a recovery step to the backstop workflow would prevent the backlog from re-forming.
+
+### Category B resolution (closed)
+
+- **#2451, #2452** — closed as not planned. Both were filed by `app/mj-feedback-bot` while exercising the in-app feedback pipeline ("Feedback Test: Hello Again", "Another Bug Test"); neither is a product defect.
+- **#2487 — re-categorized to C, left open.** The original triage called this "irrelevant / no direct MJ build action." That is wrong. Cross-application migration ordering (MJ + BAC + BCSaaS + SaaS) is an unresolved architecture decision with an active 7-comment thread, competing proposals (holistic ordering vs. dependency pinning), and an implementation-plan PR (#2488) that was **closed without merging**. Nothing was decided and nothing was built; it remains a stated blocker for lifting SaaS products onto BAC. It is scored Critical / High below.
+
+### Category C: work completed in this pass
+
+The three Low-effort items were taken first — the cheapest way to prove the backlog moves. Each was re-verified against the code before any fix was written, on the principle that a triage rationale is a hypothesis, not a finding.
+
+- **#3103 (Critical/Low) — fixed.** Malformed `DenyFields` now rejected at save (`MJMLTrainingPipelineEntityServer.ValidateAsync`), the editor no longer manufactures the bad input, and the dominance threshold is clamped at runtime so already-saved values can't disarm the guard. Found and fixed an adjacent bug: `DEFAULT_DOMINANCE_THRESHOLD` was defined twice with different values (`0.85` vs `0.6`), so agent-authored pipelines were held to a laxer guard than hand-authored ones.
+- **#3105 (High/Low) — fixed.** Confirmed via the compiled `dist`, which shipped raw `&__` to the browser. The trap was in **three** files, not the one reported (two more in `ng-conversations`), plus a `styleUrl` pointing at a nonexistent file. A new CI gate (`check:ui-ngc-scss`) prevents it re-arming; the gate was verified to fail on the original file and pass on the fixed tree.
+- **#3064 (High/Low) — premise corrected; partially fixed.** `AIPrompt.TimeoutMS` **does not exist** (the column belongs to `MJ: Remote Operations`), so the runner was not ignoring a bound — none could be expressed. Shipped a per-request `AIPromptParams.timeoutMS` with a typed retriable error, and wired `ChatParams.cancellationToken` through **all 19 LLM drivers** so a timeout now aborts the socket rather than abandoning the promise. Remaining work split to #3133; the driver-plumbing cleanup to #3132. Issue left open.
+
+**Bug found while fixing the above, affecting every provider:** `BaseLLM.handleStreamingChatCompletion` caught mid-stream errors, logged them, and then finalized the response as a **success** — so a dropped connection or provider fault part-way through a stream silently produced truncated content the caller was told was complete. Now fixed in Core: genuine failures surface as failures.
 
 ## Category C Severity × Effort
 
 | Severity | Low effort | Medium effort | High effort |
 |---|---:|---:|---:|
-| Critical | 1 | 3 | 16 |
+| Critical | 1 | 3 | 17 |
 | High | 2 | 6 | 51 |
 | Medium | 1 | 5 | 5 |
 | Low | 1 | 5 | 1 |
 
 ## Methodology
 
-- Reviewed only issues whose current GitHub state is `open`; pull requests are excluded.
-- Category A is reserved for open issues that look superseded or stale/resolved and therefore should be closed only after maintainer confirmation.
-- Category B is reserved for tests, non-actionable discussions, or items better represented outside the MJ issue tracker.
-- Category C contains actionable work; severity estimates impact, while effort estimates implementation size and coordination complexity.
+- Reviewed only issues whose GitHub state was `open` as of 2026-07-12; pull requests are excluded.
+- Category A was reserved for open issues that looked superseded or stale/resolved. Each was verified against current CI state before closing.
+- Category B was reserved for tests, non-actionable discussions, or items better represented outside the MJ issue tracker. Each was verified against its thread before closing — which is how #2487 was caught and moved to C.
+- Category C contains actionable work; severity estimates impact, while effort estimates implementation size and coordination complexity. Scores are heuristic starting points for prioritization, not final engineering sizing.
 
 ## Complete Open Issue Inventory
 
@@ -79,9 +100,7 @@ This replaces the earlier closed-issue interpretation: closed GitHub issues are 
 | 2396 | C. Should be built | High | High | none | CodeGen: SPs silently fail to create due to sqlcmd -V 17 severity threshold, with no recovery in subsequent runs | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2396 |
 | 2414 | C. Should be built | High | High | bug | [scheduling-actions] ExecuteJobNowAction creates orphan 'Running' ScheduledJobRun without dispatching job | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2414 |
 | 2435 | C. Should be built | High | High | enhancement | Publish MemberJunction as a native Zapier Platform integration (public directory listing) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2435 |
-| 2451 | B. Irrelevant / no direct MJ build action | n/a | n/a | bug, user-submitted, priority: low | Feedback Test: Hello Again | Appears to be a user-submitted feedback test rather than a product defect. | https://github.com/MemberJunction/MJ/issues/2451 |
-| 2452 | B. Irrelevant / no direct MJ build action | n/a | n/a | bug, user-submitted, priority: medium | Another Bug Test | Appears to be a user-submitted feedback test rather than a product defect. | https://github.com/MemberJunction/MJ/issues/2452 |
-| 2487 | B. Irrelevant / no direct MJ build action | n/a | n/a | none | Architecture Discussion: Cross-Application Migration Ordering Across MJ + BAC + BCSaaS + SaaS Products | Cross-application architecture discussion spanning MJ plus other products; convert to design doc/RFC rather than track as an MJ build issue. | https://github.com/MemberJunction/MJ/issues/2487 |
+| 2487 | C. Should be built | Critical | High | none | Architecture Discussion: Cross-Application Migration Ordering Across MJ + BAC + BCSaaS + SaaS Products | Unresolved architecture decision, not a discussion to archive: plan PR #2488 closed unmerged, competing proposals unreconciled, and it is a stated blocker for lifting SaaS products onto BAC. | https://github.com/MemberJunction/MJ/issues/2487 |
 | 2490 | C. Should be built | High | Medium | bug | LearnWorlds: FindUserByEmail unreliable on schools that ignore /v2/users search params | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2490 |
 | 2554 | C. Should be built | High | High | enhancement, important, priority: low | BaseEngine: lazy-load heavy columns with LRU cache to reduce cold-load payload | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2554 |
 | 2555 | C. Should be built | High | High | none | Expose SendGrid tracking, custom args, and event-webhook surface in @memberjunction/communication-sendgrid | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2555 |
@@ -123,10 +142,7 @@ This replaces the earlier closed-issue interpretation: closed GitHub issues are 
 | 3065 | C. Should be built | High | Medium | none | Gemini: valid JSON body followed by stray trailing fragment despite ResponseFormat=JSON — runner should recover strict JSON centrally | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3065 |
 | 3066 | C. Should be built | High | High | none | vwAIModels flattened APIName is a cross-vendor footgun: adding an AIModelVendor row can silently change every consumer's model id | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3066 |
 | 3072 | C. Should be built | Critical | High | none | Task-mode startup: configurable `startup.mode` ('full' / 'task') for fast CLI/script boot | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3072 |
-| 3079 | A. Open but likely solved/superseded; should be closed | n/a | n/a | none | 🔴 Unit-test backstop failed on next (00e573c) | Automated unit-test backstop for an older next commit; superseded by newer backstop issues and should be closed after linking to the latest CI result. | https://github.com/MemberJunction/MJ/issues/3079 |
-| 3082 | A. Open but likely solved/superseded; should be closed | n/a | n/a | none | 🔴 Unit-test backstop failed on next (1e24751) | Automated unit-test backstop for an older next commit; superseded by newer backstop issues and should be closed after linking to the latest CI result. | https://github.com/MemberJunction/MJ/issues/3082 |
 | 3085 | C. Should be built | Critical | High | none | Sync engine: no lookback overlap for MonotonicWatermark connectors (late-committing rows can be permanently missed) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3085 |
-| 3088 | A. Open but likely solved/superseded; should be closed | n/a | n/a | none | 🔴 Unit-test backstop failed on next (3ee17d8) | Automated unit-test backstop for an older next commit; superseded by newer backstop issues and should be closed after linking to the latest CI result. | https://github.com/MemberJunction/MJ/issues/3088 |
 | 3093 | C. Should be built | Critical | High | none | MergeRecords FieldMap cannot express NULL values (Value: String! + client .toString() crash) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3093 |
 | 3095 | C. Should be built | High | High | enhancement | Fail-fast guard for the shared metadata graph: freeze Info objects (at least in dev) after Config | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3095 |
 | 3103 | C. Should be built | Critical | Low | none | Predictive Studio: malformed LeakageGuard DenyFields silently disarms the leakage guard (G4) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3103 |
@@ -135,5 +151,4 @@ This replaces the earlier closed-issue interpretation: closed GitHub issues are 
 | 3106 | C. Should be built | High | High | none | Custom BaseResourceComponent nav items silently hang forever after successful data load (change-detection not re-running) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3106 |
 | 3109 | C. Should be built | High | High | none | [Explorer] Per-application / per-role shell chrome + application-scoped search — wiring the shell to configuration surfaces MJ already has | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3109 |
 | 3113 | C. Should be built | High | High | bug, good first issue | @memberjunction/server ships "types": "./src/index.ts" — consumers type-check MJ sources under their own compiler options | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3113 |
-| 3119 | A. Open but likely solved/superseded; should be closed | n/a | n/a | none | 🔴 Unit-test backstop failed on next (de3dec9) | Automated unit-test backstop for an older next commit; superseded if the branch has moved or CI has recovered; close once current backstop status is green or tracked elsewhere. | https://github.com/MemberJunction/MJ/issues/3119 |
 | 3125 | C. Should be built | High | High | bug | CI: changes.yml "Check migration filenames" rejects all baselines (B-prefixed migrations) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3125 |
