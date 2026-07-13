@@ -19445,5 +19445,49 @@
       "lastModified": "2026-07-10T23:26:27.052Z",
       "checksum": "580740414c9a234fc14641c1abfb079e5576a5c721bbb1434ad50140312ccf16"
     }
+  },
+  {
+    "fields": {
+      "Name": "HuggingFace Speech-to-Speech",
+      "PowerRank": 3,
+      "Description": "Hugging Face's open-source, self-hosted speech-to-speech stack treated as a realtime model: a cascaded VAD -> STT -> LLM -> TTS pipeline (Silero VAD, Parakeet/Whisper ASR, any OpenAI-compatible or local LLM, Qwen3-TTS/Kokoro/ChatTTS) exposing an OpenAI-Realtime-compatible /v1/realtime websocket. Private-by-design (audio never leaves owned infrastructure) and cost-free (no per-minute billing); component models are swappable. Reaches the browser through MJAPI's realtime proxy (client-direct topology) so the internal endpoint is never exposed and MJAPI stays the single ingress. Per-session prompt/tool/voice config is supplied natively via session.update; no server-side agent object and no token-usage events. Endpoint + optional auth are deployment config (HUGGINGFACE_REALTIME_URL / AI_VENDOR_API_KEY__HuggingFaceRealtime); set the key to a sentinel like 'none' for a keyless endpoint. DriverClass HuggingFaceRealtime. Low PowerRank so it is opt-in, not the default realtime provider.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 5,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Hugging Face",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "DriverClass": "HuggingFaceRealtime",
+            "APIName": "speech-to-speech",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true
+          },
+          "primaryKey": {
+            "ID": "05BE3CE6-166F-4789-AC17-8D0857B2CC9D"
+          },
+          "sync": {
+            "lastModified": "2026-07-13T14:52:16.315Z",
+            "checksum": "cb0a34d3cdfff469c213ea9bdaa4022ad7f92ac57f2991232680889cf5fdaf4b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1B8E7F2A-8F9A-408A-803B-50A64EC25E73"
+    },
+    "sync": {
+      "lastModified": "2026-07-13T14:52:16.271Z",
+      "checksum": "fbef46bfa17cf9e87f111f0f3d69d08250772968a1d8614f0fef91d3fe184ee1"
+    }
   }
 ]
