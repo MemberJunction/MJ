@@ -11,15 +11,16 @@
  * Pure + framework-free (no entity/provider deps) → fully unit-testable with zero setup.
  */
 
-import type {
-  ModelingPlanSpec,
-  SourceBinding,
-  FeatureStepGraph,
-  FeatureStep,
-  AsOfStrategy,
-  LeakageGuard,
-  ValidationStrategy,
-  ProblemType,
+import {
+  DOMINANCE_THRESHOLD_DEFAULT,
+  type ModelingPlanSpec,
+  type SourceBinding,
+  type FeatureStepGraph,
+  type FeatureStep,
+  type AsOfStrategy,
+  type LeakageGuard,
+  type ValidationStrategy,
+  type ProblemType,
 } from '@memberjunction/predictive-studio-core';
 
 /** The resolved, ready-to-persist configuration for one `MJ: ML Training Pipelines` row. */
@@ -48,8 +49,6 @@ export interface PipelineConfig {
   validation: ValidationStrategy;
 }
 
-/** Default single-feature-dominance threshold when the plan doesn't override it. */
-const DEFAULT_DOMINANCE_THRESHOLD = 0.85;
 
 /** The chosen experiment = the highest-priority (lowest `Priority` number) proposed experiment. */
 function chooseExperiment(spec: ModelingPlanSpec): ModelingPlanSpec['ProposedExperiments'][number] | null {
@@ -87,7 +86,7 @@ function buildSourceBindings(spec: ModelingPlanSpec): SourceBinding[] {
 /** Leakage guard: deny every field the plan marked `exclude`, plus the dominance threshold. */
 function buildLeakageGuard(spec: ModelingPlanSpec): LeakageGuard {
   const denyFields = (spec.LeakageNotes ?? []).filter((n) => n.Action === 'exclude').map((n) => n.Field);
-  return { DenyFields: denyFields, SingleFeatureDominanceThreshold: DEFAULT_DOMINANCE_THRESHOLD };
+  return { DenyFields: denyFields, SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT };
 }
 
 /** Validation strategy straight from the plan (LockedHoldoutFraction is always carried). */
