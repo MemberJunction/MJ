@@ -100,6 +100,9 @@ describe('HuggingFaceRealtime', () => {
                     Config: { voice: 'nova', inputTranscriptionModel: 'whisper' },
                 })
             );
+            // `type: 'realtime'` is REQUIRED — HF's /v1/realtime validates session.update against the GA
+            // session shape and rejects an object without it (verified live vs speech-to-speech v0.2.10).
+            expect(session['type']).toBe('realtime');
             expect(session['instructions']).toBe('You are a helpful voice agent.');
             expect(Array.isArray(session['tools'])).toBe(true);
             const tools = session['tools'] as JSONObject[];
@@ -167,8 +170,23 @@ describe('HuggingFaceRealtime', () => {
             const session = await startSession(driver, makeParams());
             const frames = driver.Socket.Frames();
             expect(frames[0]).toMatchObject({ type: 'session.update' });
-            expect((frames[0]['session'] as JSONObject)['instructions']).toBe('You are a helpful voice agent.');
+            const applied = frames[0]['session'] as JSONObject;
+            expect(applied['instructions']).toBe('You are a helpful voice agent.');
+            // GA session discriminator the HF endpoint requires (else session.update is rejected).
+            expect(applied['type']).toBe('realtime');
             expect(session).toBeInstanceOf(HuggingFaceRealtimeSession);
+        });
+
+        it('re-registers tools via a session.update carrying the required realtime discriminator', async () => {
+            const driver = new TestHuggingFaceRealtime('');
+            const session = await startSession(driver, makeParams());
+            const before = driver.Socket.Frames().length;
+            await session.RegisterTools([{ Name: 'new_tool', Description: 'A new tool', ParametersSchema: { type: 'object' } }]);
+            const frame = driver.Socket.Frames().slice(before)[0];
+            expect(frame).toMatchObject({ type: 'session.update' });
+            const updated = frame['session'] as JSONObject;
+            expect(updated['type']).toBe('realtime');
+            expect((updated['tools'] as JSONObject[])[0]).toMatchObject({ type: 'function', name: 'new_tool' });
         });
 
         it('resolves upstream URL/auth from env when no Config override is present', async () => {

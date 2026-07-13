@@ -42,6 +42,7 @@ Seeded as the `HuggingFace Speech-to-Speech` model (`MJ: AI Models`, type `Realt
 - **Transcripts**: both roles (the pipeline's STT stage transcribes the user).
 - **`SendContextNote` / `RequestSpokenUpdate`**: native (system-role item / `response.create`).
 - **`OnUsage`**: best-effort — fires only if the compat endpoint reports a `response.done` usage block (self-hosted has no billing meter).
-- **Tools**: native OpenAI function tools, so `invoke-target-agent` delegation works.
+- **Tools**: native OpenAI function tools, so `invoke-target-agent` delegation works — **provided the HF pipeline runs a tool-capable LLM backend.** The in-process `--llm_backend mlx-lm` (and `transformers`) path does **not** emit function calls, so a co-agent on it can voice but never delegate. For delegation, run the pipeline with `--llm_backend chat-completions` (or `responses-api`) pointed at a tool-capable server (vLLM / llama.cpp) or the HF router. MJ's realtime wire is backend-agnostic — the tool call surfaces as `response.function_call_arguments.done` regardless. Validated live end-to-end (voice → tool call → tool result → voiced answer) against speech-to-speech v0.2.10 with a llama.cpp + Qwen2.5 backend.
+- **Session shape**: the endpoint validates `session.update` against the GA OpenAI-Realtime schema, which requires the session object to be discriminated by `type: 'realtime'`. The driver stamps this automatically; without it the endpoint rejects the update and the prompt + tools are silently dropped.
 
 See the [Real-Time Co-Agents Guide](../../../../guides/REALTIME_CO_AGENTS_GUIDE.md) for the full realtime architecture.

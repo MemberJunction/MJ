@@ -188,6 +188,11 @@ export class HuggingFaceRealtime extends BaseRealtimeModel {
      */
     public static BuildSessionObject(params: RealtimeSessionParams): JSONObject {
         const session: JSONObject = {
+            // GA OpenAI-Realtime requires the session object to be discriminated by `type: 'realtime'`;
+            // HuggingFace's `/v1/realtime` validates `session.update` against that GA shape and rejects a
+            // session object without it ("Unknown or invalid event: session.update"), which would silently
+            // drop the prompt AND the tools (breaking tool delegation). Verified against speech-to-speech v0.2.10.
+            type: 'realtime',
             instructions: HuggingFaceRealtime.ComposeSystemPrompt(params.SystemPrompt, params.InitialContext),
         };
         const tools = params.Tools ?? [];
@@ -243,7 +248,7 @@ export class HuggingFaceRealtime extends BaseRealtimeModel {
         );
     }
 
-    /** Resolves the PCM sample rate: `params.Config.sampleRate` override, else the 24 kHz default. */
+    /** Resolves the PCM sample rate: `params.Config.sampleRate` override, else the HF-native 16 kHz default. */
     public static ResolveSampleRate(params: RealtimeSessionParams): number {
         const raw = params.Config?.['sampleRate'];
         return typeof raw === 'number' && raw > 0 ? raw : HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE;
@@ -446,8 +451,9 @@ export class HuggingFaceRealtimeSession implements IRealtimeSession {
         }
         this.currentToolsFingerprint = fingerprint;
         this.sendFrame({
+            // `type: 'realtime'` — the GA session-object discriminator the endpoint requires (see BuildSessionObject).
             type: 'session.update',
-            session: { tools: tools.map((tool) => HuggingFaceRealtime.MapToolToFunction(tool)) },
+            session: { type: 'realtime', tools: tools.map((tool) => HuggingFaceRealtime.MapToolToFunction(tool)) },
         });
     }
 

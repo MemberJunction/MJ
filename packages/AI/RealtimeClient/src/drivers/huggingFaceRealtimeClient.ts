@@ -301,7 +301,7 @@ export class HuggingFaceRealtimeClient extends BaseRealtimeClient {
         return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? (raw as JSONObject) : {};
     }
 
-    /** Extracts the PCM sample rate from the server pact, defaulting to 24 kHz. */
+    /** Extracts the PCM sample rate from the server pact, defaulting to the HF-native 16 kHz. */
     private static parseSampleRate(config: ClientRealtimeSessionConfig): number {
         const raw = config.SessionConfig?.['sampleRate'];
         return typeof raw === 'number' && raw > 0 ? raw : HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE;
