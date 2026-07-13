@@ -8195,16 +8195,23 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Pass cancellation token and streaming callbacks to prompt execution
             promptParams.cancellationToken = params.cancellationToken;
-            // Final-reply extraction: the ROOT agent's type may know how to pull the
-            // user-facing reply text out of its raw prompt stream (e.g. Loop's envelope
-            // carries it in the root-level `message` field). Extracted text is re-emitted
-            // as ADDITIONAL `kind:'final-response'` deltas — the only chunks the
-            // conversation client renders — while raw chunks keep flowing unchanged for
-            // existing consumers. Root-only: a sub-agent's "final" message is a result
-            // for its parent, not the user's reply — and note the hierarchy check is the
-            // effective discriminator (first-level sub-agents also see parentDepth 0).
+            // Final-reply extraction: when the agent OPTS IN via
+            // AIAgent.EnableFinalResponseStreaming (default OFF — a developer must
+            // explicitly enable it per agent, mirroring the AllowMemoryWrite /
+            // SupportsPlanMode capability-gate pattern), the ROOT agent's type may pull
+            // the user-facing reply text out of its raw prompt stream (e.g. Loop's
+            // envelope carries it in the root-level `message` field). Extracted text is
+            // re-emitted as ADDITIONAL `kind:'final-response'` deltas — the only chunks
+            // the conversation client renders — while raw chunks keep flowing unchanged
+            // for existing consumers. Root-only: a sub-agent's "final" message is a
+            // result for its parent, not the user's reply — and note the hierarchy check
+            // is the effective discriminator (first-level sub-agents also see
+            // parentDepth 0).
             const wantFinalResponseExtraction =
-                !!params.onStreaming && (params.parentDepth ?? 0) === 0 && !params.parentAgentHierarchy?.length;
+                !!params.onStreaming
+                && params.agent.EnableFinalResponseStreaming === true
+                && (params.parentDepth ?? 0) === 0
+                && !params.parentAgentHierarchy?.length;
             // One extractor per MODEL ATTEMPT, not per executePrompt call: the prompt
             // runner's validation-retry loop re-runs the model through this same
             // callback, and a truncated attempt would leave a shared parser mid-string —

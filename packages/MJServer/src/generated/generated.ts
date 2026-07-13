@@ -11419,6 +11419,9 @@ if this limit is exceeded.`})
     @Field(() => Boolean, {description: `When 1, every root-level run of this agent executes in plan mode regardless of the per-request planMode flag — the agent must present a plan and receive human approval before any Actions or Sub-Agent steps execute. SupportsPlanMode is irrelevant when this is set. Use for high-consequence agents (e.g. ones with outbound-communication capabilities) where human-in-the-loop review is mandatory.`}) 
     RequirePlanMode: boolean;
         
+    @Field(() => Boolean, {description: `When enabled, the agent framework extracts this agent's user-facing final reply from its raw prompt stream (via the agent type's final-response stream extractor, e.g. the Loop envelope's root-level message on a taskComplete turn) and re-emits it as kind='final-response' deltas so the conversation client renders the reply live as it is generated. Off by default: raw stream chunks still flow for observability, but nothing is rendered into the chat bubble. Applies to root-agent runs only.`}) 
+    EnableFinalResponseStreaming: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -11811,6 +11814,9 @@ export class CreateMJAIAgentInput {
     @Field(() => Boolean, { nullable: true })
     RequirePlanMode?: boolean;
 
+    @Field(() => Boolean, { nullable: true })
+    EnableFinalResponseStreaming?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -12042,6 +12048,9 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => Boolean, { nullable: true })
     RequirePlanMode?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    EnableFinalResponseStreaming?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

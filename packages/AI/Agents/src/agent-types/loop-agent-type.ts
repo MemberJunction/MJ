@@ -62,7 +62,9 @@ export class LoopAgentType extends BaseAgentType {
      * user-facing reply on the final turn. This extractor re-emits just that text as
      * `kind:'final-response'` deltas so the conversation client can render the reply
      * live while the envelope is still being generated. Non-final turns and nested
-     * `message` keys are never emitted; see LoopAgentStreamExtractor.
+     * `message` keys are never emitted; see LoopAgentStreamExtractor. NOTE: BaseAgent
+     * only invokes this when the agent has opted in via
+     * AIAgent.EnableFinalResponseStreaming (default off).
      */
     public override CreateFinalResponseStreamExtractor(): AgentFinalResponseStreamExtractor | null {
         return new LoopAgentStreamExtractor();
