@@ -359,23 +359,50 @@ them.)
 
 ## 9. Phasing
 
-1. **Migration** ✅ *(done — `V202607131200__v5.48.x__Agent_Conversation_Compaction.sql`)* —
-   `Sequence` (+ backfill + trigger), `SummaryPromptRunID`, agent context-control fields on
-   `AIAgentType`/`AIAgent`, `StepType='Compaction'`.
-2. **CodeGen** ⏭️ **NEXT — run locally (see §9.1).** Generates entity classes, views, SPs
-   from the migration. No dependent TypeScript may be written until this is done.
-3. **Assembly layer** — `ConversationEngine.GetAgentContextWindow`; add `conversationId`
-   to `ExecuteAgentParams`; route `RunAIAgentResolver` through it. Behavior-neutral until
-   summaries exist.
-4. **Cross-turn compaction** — summary prompt + post-turn trigger + model validation +
-   `'Compaction'` run step + `SummaryPromptRunID` write.
-5. **Retrieval tools** — `getMessageBySequence` / `getMessagesByRange` /
-   `searchConversation`.
-6. **Recursive tool** — `summarizeRange` (cheap sub-call model, own run step).
-7. **Edit handling** — `OriginalMessageChanged` flagging + Record Changes surfacing.
+> **STATUS: ALL PHASES SHIPPED (2026-07-13).** Implementation notes below record where
+> the build deliberately refined the sketch; the sections above remain the design rationale.
 
-Each phase: build the affected package (`npm run build` in the package dir), run/​update
-that package's Vitest suite, report results.
+1. **Migration** ✅ — `V202607131200__v5.48.x__Agent_Conversation_Compaction.sql`:
+   `Sequence` (+ backfill + trigger), `SummaryPromptRunID`, agent context-control fields on
+   `AIAgentType`/`AIAgent`, `StepType='Compaction'` (CHECK re-added with next's full value
+   set incl. `'Plan'`/`'Skill'`). PostgreSQL variant in `migrations-pg/v5/` (SQLConverter
+   toolchain + hand-authored PL/pgSQL trigger: BEFORE ROW with a per-conversation advisory
+   xact lock as the UPDLOCK/HOLDLOCK analog).
+2. **CodeGen** ✅ — output appended to the migration per the separator convention (single
+   artifact); fresh-DB migrate verified on SQL Server AND PostgreSQL, including batch-insert
+   Sequence assignment through the real `spCreateConversationDetail` SELECT-back.
+3. **Assembly layer** ✅ — `ConversationEngine.GetAgentContextWindow(conversationId, user,
+   { excludeDetailIds?, maxTailMessages? })` (the cap applies ONLY when no boundary exists —
+   legacy last-N parity; cutting a post-boundary tail would create a coverage gap);
+   `ExecuteAgentParams.conversationId`; the resolver's history loader routes through the
+   engine window and keeps only attachment enrichment; the in-flight agent-response
+   placeholder row is excluded from the window.
+4. **Cross-turn compaction** ✅ — `ConversationCompactionManager` (static
+   `ResolveEffectiveBudget` + `CompactIfNeeded`). Post-turn hook is **fire-and-forget after
+   the run row saves** (an awaited pass would delay the caller's completion event); the
+   pre-turn fallback runs synchronously but ONLY under an explicitly configured budget
+   (pre-prompt the model is unknown, and the conservative default would over-trigger on
+   large-context models) and splices the summary into live messages in place, preserving
+   attachment-enriched tails. Quiet no-ops record no step; fired/failed passes record the
+   `'Compaction'` step with `TargetLogID` = the summary `AIPromptRun`.
+5. **Retrieval tools** ✅ — `ConversationToolManager` via the `conversationToolCalls`
+   inline response field (mirrors `artifactToolCalls`: zero turn cost, per-call
+   `StepType='Tool'` steps, one-shot next-turn result messages, `_CONVERSATION_TOOLS`
+   docs block, `includeConversationToolsDocs` prompt param).
+6. **Recursive tool** ✅ — `summarizeRange` through a `ConversationToolSummaryHost` seam
+   (BaseAgent runs the seeded `Summarize Conversation Range` prompt on cheap models). The
+   sub-call's `AIPromptRun` links via the existing Tool step's `TargetLogID` — one step +
+   one prompt run per call rather than a duplicate `'Prompt'` step.
+7. **Edit handling** ✅ — `MJConversationDetailEntityServer.ShouldFlagOriginalMessageChanged`
+   (the pre-existing implementation had an inverted `IsSaved` check and never fired); the
+   predicate exempts the framework's own Message rewrites (In-Progress progress updates,
+   the finalization Status-transition save).
+
+Deterministic coverage lives in
+`packages/MJServer/integration-test-scripts/conversation-compaction-tests.ts` plus vitest
+suites in `@memberjunction/ai-agents`, `@memberjunction/core-entities`, and
+`@memberjunction/core-entities-server`; live end-to-end (real agent + real summary model,
+lineage assertions) was verified against a workbench database during the build.
 
 ### 9.1 Handoff — CodeGen must run locally before any code is written
 
