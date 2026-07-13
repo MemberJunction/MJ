@@ -19,6 +19,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@memberjunction/cli": "5.47.0",
     "dotenv": "17.2.4",
     "nodemon": "^3.1.11",
     "ts-node": "^10.9.2",
