@@ -202,6 +202,13 @@ export class SearchSuggestComponent implements OnInit {
         this.HighlightedIndex = -1;
     }
 
+    /** Number of keyboard-navigable rows currently visible (recents + recently
+        opened + preview results + see-all). Public so the composite's Tab
+        handling knows when the highlight has walked off the end of the list. */
+    public get NavigableItemCount(): number {
+        return this.getNavigableItemCount();
+    }
+
     // --- Template getters ---
 
     /** Whether to show recent searches section */
@@ -276,10 +283,10 @@ export class SearchSuggestComponent implements OnInit {
         this.PromoDismissed.emit();
     }
 
-    /** Handle clicking "Clear" on recent searches */
+    /** "Clear" on recent searches — click-driven so keyboard Enter/Space work;
+        the template's mousedown-preventDefault keeps the input from blurring. */
     public OnClearRecentClick(event: MouseEvent): void {
         event.stopPropagation();
-        event.preventDefault();
         this.ClearRecentRequested.emit();
     }
 

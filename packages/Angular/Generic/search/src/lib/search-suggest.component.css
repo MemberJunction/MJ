@@ -53,8 +53,12 @@
 
 .suggest-clear-link {
     margin-left: auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-family: inherit;
     font-size: 0.68rem;
-    font-weight: 500;
+    font-weight: var(--mj-font-medium);
     color: var(--mj-text-link, var(--mj-brand-primary));
     cursor: pointer;
     text-transform: none;
@@ -63,6 +67,12 @@
 
 .suggest-clear-link:hover {
     text-decoration: underline;
+}
+
+.suggest-clear-link:focus-visible {
+    outline: 2px solid var(--mj-border-focus);
+    outline-offset: 2px;
+    border-radius: var(--mj-radius-sm);
 }
 
 /* Items */

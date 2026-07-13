@@ -13,7 +13,9 @@
                 <div class="suggest-section-header">
                     <i class="fa-solid fa-clock suggest-section-icon"></i>
                     <span>Recent Searches</span>
-                    <span class="suggest-clear-link" (mousedown)="OnClearRecentClick($event)">Clear</span>
+                    <button type="button" class="suggest-clear-link" aria-label="Clear recent searches"
+                        (mousedown)="$event.preventDefault()"
+                        (click)="OnClearRecentClick($event)">Clear</button>
                 </div>
                 @for (recent of VisibleRecentSearches; track recent.Query; let i = $index) {
                     <div

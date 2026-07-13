@@ -583,7 +583,7 @@ export class OmnibarPaletteComponent implements OnDestroy {
     }
 
     private get currentUser(): UserInfo | null {
-        return Metadata.Provider?.CurrentUser ?? null;
+        return Metadata.Provider?.CurrentUser ?? null; // global-provider-ok: Explorer shell palette is app chrome bound to the session's default provider
     }
 }
 

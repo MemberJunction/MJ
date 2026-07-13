@@ -179,6 +179,27 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
                     this.searchSuggestRef.SelectHighlighted();
                 }
                 break;
+            case 'Tab': {
+                // Tab walks the dropdown suggestions (mirrors ArrowDown/Up) before
+                // leaving the widget — same model as the palette and overlay. DOM
+                // focus stays in the input (combobox pattern); only the highlight
+                // moves. Once the highlight walks off either end, Tab proceeds
+                // naturally (forward → the promo row / next control; backward →
+                // out of the bar).
+                const suggest = this.searchSuggestRef;
+                const count = suggest?.NavigableItemCount ?? 0;
+                if (!suggest || count === 0) {
+                    break;
+                }
+                if (!event.shiftKey && suggest.HighlightedIndex < count - 1) {
+                    event.preventDefault();
+                    suggest.NavigateDown();
+                } else if (event.shiftKey && suggest.HighlightedIndex > 0) {
+                    event.preventDefault();
+                    suggest.NavigateUp();
+                }
+                break;
+            }
         }
     }
 
