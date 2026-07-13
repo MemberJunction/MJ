@@ -172,7 +172,7 @@ export class ViewInfo extends BaseInfo {
                             // find the entity field and put it in place inside the View Metadata for easy access
                             if (c) {
                                 // check to make sure the current item is non-null to ensure metadata isn't messed up 
-                                const field = this._EntityInfo.Fields.find(f => f.Name.trim().toLowerCase() == c.Name.trim().toLowerCase())
+                                const field = this._EntityInfo.FieldByName(c.Name)
                                 return new ViewColumnInfo({...c, EntityField: field})
                             }
                             else {

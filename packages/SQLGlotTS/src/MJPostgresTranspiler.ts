@@ -1,10 +1,14 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync, unlinkSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/** Process-unique sequence for temp bit-column registry files (no Date/random needed). */
+let bitColsFileSeq = 0;
 
 /** One statement the MJ dialect refused to emit — a reported conversion gap. */
 export interface MJUnhandledStatement {
@@ -77,12 +81,42 @@ export class MJPostgresTranspiler {
   private readonly dialectPath: string;
   private readonly extraBitColumns: string[];
   private readonly timeoutMs: number;
+  /** Lazily-written temp file holding the bit-col registry JSON. `undefined` = not yet computed, `null` = none. */
+  private bitColsFile: string | null | undefined;
 
   constructor(options?: MJPostgresTranspilerOptions) {
     this.pythonPath = options?.pythonPath ?? process.env.MJ_SQLGLOT_PYTHON ?? 'python3';
     this.dialectPath = resolveDialectPath();
     this.extraBitColumns = options?.extraBitColumns ?? [];
     this.timeoutMs = options?.timeoutMs ?? 120_000;
+  }
+
+  /**
+   * Serialize the cross-file BIT registry to a temp file and hand the dialect its
+   * PATH (via `MJ_EXTRA_BIT_COLS_FILE`), never the JSON itself. The registry grows
+   * with the schema (every baseline's BIT columns); passed inline as the
+   * `MJ_EXTRA_BIT_COLS` env var it exceeds the OS single-arg/env limit (Linux
+   * `MAX_ARG_STRLEN`, 128 KB) once baselines accumulate, and `spawn` fails with
+   * `E2BIG`. A file path is a few bytes, so there is no ceiling. Written once and
+   * reused across calls; removed on process exit.
+   */
+  private getBitColsFile(): string | null {
+    if (this.bitColsFile !== undefined) return this.bitColsFile;
+    if (this.extraBitColumns.length === 0) {
+      this.bitColsFile = null;
+      return null;
+    }
+    const file = path.join(os.tmpdir(), `mj-extra-bitcols-${process.pid}-${bitColsFileSeq++}.json`);
+    writeFileSync(file, JSON.stringify(this.extraBitColumns), 'utf8');
+    process.once('exit', () => {
+      try {
+        unlinkSync(file);
+      } catch {
+        /* best-effort cleanup */
+      }
+    });
+    this.bitColsFile = file;
+    return file;
   }
 
   /** Transpile T-SQL to PostgreSQL. Statements the dialect can't emit land in `unhandled`. */
@@ -116,11 +150,14 @@ export class MJPostgresTranspiler {
 
   private runDialect(args: string[], stdin: string): Promise<string> {
     return new Promise<string>((resolve, reject) => {
+      const bitColsFile = this.getBitColsFile();
       const proc = spawn(this.pythonPath, [this.dialectPath, ...args], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
-          MJ_EXTRA_BIT_COLS: JSON.stringify(this.extraBitColumns),
+          // Pass the registry by file path (see getBitColsFile) — never inline, to
+          // avoid `spawn E2BIG` when the registry outgrows the OS env-size limit.
+          ...(bitColsFile ? { MJ_EXTRA_BIT_COLS_FILE: bitColsFile } : {}),
         },
       });
 

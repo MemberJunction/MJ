@@ -1,5 +1,103 @@
 # Change Log - @memberjunction/server
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+- Updated dependencies [92ecbf8]
+- Updated dependencies [f4dce92]
+- Updated dependencies [936a286]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/codegen-lib@5.47.0
+  - @memberjunction/postgresql-dataprovider@5.47.0
+  - @memberjunction/sqlserver-dataprovider@5.47.0
+  - @memberjunction/ai-agent-manager-actions@5.47.0
+  - @memberjunction/ai-agent-manager@5.47.0
+  - @memberjunction/ai-agents@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/clustering-engine@5.47.0
+  - @memberjunction/computer-use@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/tag-engine@5.47.0
+  - @memberjunction/tag-engine-base@5.47.0
+  - @memberjunction/ai-mcp-client@5.47.0
+  - @memberjunction/computer-use-engine@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/ai-bridge-base@5.47.0
+  - @memberjunction/ai-bridge-ringcentral@5.47.0
+  - @memberjunction/ai-bridge-teams@5.47.0
+  - @memberjunction/ai-bridge-twilio@5.47.0
+  - @memberjunction/ai-bridge-vonage@5.47.0
+  - @memberjunction/ai-bridge-server@5.47.0
+  - @memberjunction/remote-browser-base@5.47.0
+  - @memberjunction/remote-browser-cdp@5.47.0
+  - @memberjunction/remote-browser-selfhost@5.47.0
+  - @memberjunction/remote-browser-server@5.47.0
+  - @memberjunction/ai-vectordb@5.47.0
+  - @memberjunction/ai-vectors-pinecone@5.47.0
+  - @memberjunction/ai-vector-sync@5.47.0
+  - @memberjunction/api-keys@5.47.0
+  - @memberjunction/actions-apollo@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/actions-bizapps-accounting@5.47.0
+  - @memberjunction/actions-bizapps-crm@5.47.0
+  - @memberjunction/actions-bizapps-formbuilders@5.47.0
+  - @memberjunction/actions-bizapps-lms@5.47.0
+  - @memberjunction/actions-bizapps-social@5.47.0
+  - @memberjunction/core-actions@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/auth-providers@5.47.0
+  - @memberjunction/communication-types@5.47.0
+  - @memberjunction/communication-engine@5.47.0
+  - @memberjunction/entity-communications-base@5.47.0
+  - @memberjunction/entity-communications-server@5.47.0
+  - @memberjunction/notifications@5.47.0
+  - @memberjunction/communication-ms-graph@5.47.0
+  - @memberjunction/communication-sendgrid@5.47.0
+  - @memberjunction/component-registry-client-sdk@5.47.0
+  - @memberjunction/credentials@5.47.0
+  - @memberjunction/doc-utils@5.47.0
+  - @memberjunction/encryption@5.47.0
+  - @memberjunction/external-change-detection@5.47.0
+  - @memberjunction/generic-database-provider@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/integration-engine@5.47.0
+  - @memberjunction/integration-schema-builder@5.47.0
+  - @memberjunction/interactive-component-types@5.47.0
+  - @memberjunction/lists@5.47.0
+  - @memberjunction/livekit-room-server@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/core-entities-server@5.47.0
+  - @memberjunction/data-context@5.47.0
+  - @memberjunction/data-context-server@5.47.0
+  - @memberjunction/queue@5.47.0
+  - @memberjunction/storage@5.47.0
+  - @memberjunction/record-comparison@5.47.0
+  - @memberjunction/redis-provider@5.47.0
+  - @memberjunction/scheduling-actions@5.47.0
+  - @memberjunction/scheduling-engine-base@5.47.0
+  - @memberjunction/scheduling-engine@5.47.0
+  - @memberjunction/schema-engine@5.47.0
+  - @memberjunction/search-engine@5.47.0
+  - @memberjunction/server-extensions-core@5.47.0
+  - @memberjunction/templates@5.47.0
+  - @memberjunction/testing-engine@5.47.0
+  - @memberjunction/testing-engine-base@5.47.0
+  - @memberjunction/version-history@5.47.0
+  - @memberjunction/esignature@5.47.0
+  - @memberjunction/ai-provider-bundle@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/config@5.47.0
+  - @memberjunction/integration-progress-artifacts@5.47.0
+  - @memberjunction/lists-base@5.47.0
+  - @memberjunction/global@5.47.0
+  - @memberjunction/scheduling-base-types@5.47.0
+
 ## 5.46.0
 
 ### Minor Changes
