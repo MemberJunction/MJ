@@ -40,6 +40,14 @@ export interface MJConfig {
   dbEncrypt?: string;
   /** SQL Server instance name (for named instances) */
   dbInstanceName?: string;
+  /**
+   * Per-request timeout in milliseconds for the database connection. When set, it is
+   * applied to the mssql pool's `requestTimeout` (SQL Server) or the pg client's
+   * `statement_timeout` (PostgreSQL). When omitted, each driver's own default applies
+   * (mssql: 15000ms). Long-running operations (e.g. `mj app remove` dropping a large
+   * schema) require raising this above the default to avoid a premature request timeout.
+   */
+  dbRequestTimeout?: number;
   /** Schema name for MemberJunction core tables (defaults to __mj) */
   mjCoreSchema?: string;
   /** Allow additional properties for extensibility */

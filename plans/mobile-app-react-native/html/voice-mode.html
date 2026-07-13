@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MJ Mobile · Voice Mode</title>
+<meta name="viewport" content="width=393, initial-scale=1">
+<style>
+  :root {
+    --bg: #0d0d12;
+    --ink: #f6f6f8;
+    --ink-2: #b9b9c4;
+    --ink-3: #6e6e7a;
+    --brand: #6688f0;
+    --skip: #264FAF;
+    --research: #7c5cd6;
+    --shadow-lg: 0 24px 60px rgba(0,0,0,0.5);
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif; background: #e8e6df; color: var(--ink); min-height: 100vh; }
+  .device-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 32px 16px; }
+  .device { width: 393px; height: 852px; background: var(--bg); border-radius: 54px; box-shadow: var(--shadow-lg), 0 0 0 12px #1a1a1f, 0 0 0 13px #2a2a30; position: relative; overflow: hidden; }
+  .gradient-bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 600px 460px at 50% 35%, rgba(102,136,240,0.40) 0%, transparent 65%),
+      radial-gradient(ellipse 460px 280px at 50% 85%, rgba(124,92,214,0.18) 0%, transparent 60%),
+      var(--bg);
+  }
+  .dynamic-island { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 124px; height: 36px; background: #000; border-radius: 20px; z-index: 10; }
+  .home-indicator { position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%); width: 134px; height: 5px; background: #f6f6f8; border-radius: 3px; opacity: 0.4; }
+  .statusbar { position: relative; height: 54px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 28px 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
+
+  .nav-top {
+    position: relative;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px;
+  }
+  .speaker-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px 6px 8px;
+    background: rgba(46,196,163,0.14);
+    border: 1px solid rgba(46,196,163,0.30);
+    border-radius: 999px;
+    font-size: 12.5px; font-weight: 600;
+    color: #6ce0c0;
+    letter-spacing: 0.02em;
+  }
+  .speaker-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #2ec4a3; box-shadow: 0 0 12px #2ec4a3; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .convo-meta { font-size: 12px; color: var(--ink-2); font-weight: 500; }
+  .convo-meta strong { color: var(--ink); font-weight: 600; }
+  .close-btn { width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.08); display: inline-flex; align-items: center; justify-content: center; color: var(--ink); }
+
+  .stage { position: relative; display: flex; flex-direction: column; align-items: center; padding: 50px 32px 0; }
+  .orb {
+    width: 240px; height: 240px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.65), rgba(102,136,240,0.85) 30%, rgba(60,90,200,0.95) 65%, rgba(40,60,160,1) 100%);
+    box-shadow:
+      0 0 120px rgba(102,136,240,0.6),
+      inset 0 0 60px rgba(255,255,255,0.20),
+      inset 0 -20px 40px rgba(0,0,0,0.25);
+    position: relative;
+    animation: breathe 1.6s ease-in-out infinite;
+  }
+  .orb::after {
+    content: '';
+    position: absolute; inset: -12px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.18);
+    animation: ripple 2.2s ease-out infinite;
+  }
+  .orb::before {
+    content: '';
+    position: absolute; inset: -28px;
+    border-radius: 50%;
+    border: 1px solid rgba(102,136,240,0.20);
+    animation: ripple 2.2s ease-out infinite 0.7s;
+  }
+  @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+  @keyframes ripple { 0% { transform: scale(0.95); opacity: 0.7; } 100% { transform: scale(1.32); opacity: 0; } }
+  .waveform { margin-top: 32px; display: flex; align-items: center; gap: 5px; height: 56px; }
+  .bar { width: 4px; border-radius: 2px; background: linear-gradient(180deg, #aabaff, #6688f0); box-shadow: 0 0 6px rgba(102,136,240,0.5); }
+  .bar:nth-child(1) { height: 18px; }
+  .bar:nth-child(2) { height: 32px; }
+  .bar:nth-child(3) { height: 52px; }
+  .bar:nth-child(4) { height: 42px; }
+  .bar:nth-child(5) { height: 28px; }
+  .bar:nth-child(6) { height: 48px; }
+  .bar:nth-child(7) { height: 36px; }
+  .bar:nth-child(8) { height: 22px; }
+  .bar:nth-child(9) { height: 40px; }
+  .bar:nth-child(10) { height: 30px; }
+  .bar:nth-child(11) { height: 50px; }
+  .bar:nth-child(12) { height: 24px; }
+  .bar:nth-child(13) { height: 38px; }
+
+  .transcript-card {
+    position: relative;
+    margin: 44px 24px 0;
+    padding: 22px 22px 20px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 22px;
+    backdrop-filter: blur(20px);
+  }
+  .transcript-label {
+    font-size: 11px; font-weight: 700;
+    color: rgba(170,186,255,0.85);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .transcript { font-size: 19px; line-height: 1.4; color: var(--ink); font-weight: 500; letter-spacing: -0.01em; }
+  .transcript .live { color: var(--ink-2); }
+  .controls { position: absolute; bottom: 50px; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 32px; }
+  .ctrl-btn {
+    width: 64px; height: 64px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.10);
+    color: var(--ink);
+    border: 1px solid rgba(255,255,255,0.10);
+    backdrop-filter: blur(10px);
+  }
+  .ctrl-btn.primary {
+    width: 84px; height: 84px;
+    background: linear-gradient(160deg, #ff5a5f, #d63a3f);
+    box-shadow: 0 12px 30px rgba(255,90,95,0.45);
+    border: none;
+  }
+  .ctrl-label { position: absolute; bottom: 28px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--ink-3); letter-spacing: 0.04em; }
+</style>
+</head>
+<body>
+<div class="device-wrap">
+  <div class="device">
+    <div class="dynamic-island"></div>
+    <div class="gradient-bg"></div>
+
+    <div class="statusbar">
+      <div>9:41</div>
+      <div style="display:inline-flex; gap:6px; align-items:center;">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="6" width="3" height="6" rx="1"/><rect x="5" y="3" width="3" height="9" rx="1"/><rect x="10" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="26" height="12" viewBox="0 0 26 12" fill="currentColor"><rect x="0" y="1" width="22" height="10" rx="2.5" fill="none" stroke="currentColor"/><rect x="2" y="3" width="18" height="6" rx="1"/><rect x="23" y="4" width="2" height="4" rx="0.5"/></svg>
+      </div>
+    </div>
+
+    <div class="nav-top">
+      <div class="speaker-pill"><span class="dot"></span>Listening</div>
+      <div class="convo-meta"><strong>Acme pipeline review</strong></div>
+      <button class="close-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6l-12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="stage">
+      <div class="orb"></div>
+      <div class="waveform">
+        <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        <div class="bar"></div>
+      </div>
+    </div>
+
+    <div class="transcript-card">
+      <div class="transcript-label">You · live</div>
+      <div class="transcript">What's the total pipeline for Acme this quarter <span class="live">and who's the owner on the…</span></div>
+    </div>
+
+    <div class="controls">
+      <button class="ctrl-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </button>
+      <button class="ctrl-btn primary">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
+      <button class="ctrl-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h16"/></svg>
+      </button>
+    </div>
+    <div class="ctrl-label">Tap to stop · swipe right for keyboard</div>
+
+    <div class="home-indicator"></div>
+  </div>
+</div>
+</body>
+</html>

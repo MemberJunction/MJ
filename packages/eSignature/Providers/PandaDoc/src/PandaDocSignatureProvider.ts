@@ -9,8 +9,11 @@ import {
     NormalizedSignatureEvent,
     OperationResult,
     RecipientStatus,
+    SignatureFieldPlacement,
+    SignatureFieldType,
     SignatureOperation,
     SignatureProviderConfig,
+    SignatureRecipientInput,
     SignedDocumentResult,
     WebhookVerificationResult,
 } from '@memberjunction/esignature';
@@ -56,6 +59,11 @@ export function mapPandaDocStatus(status: string): EnvelopeStatus {
             return 'Unknown';
     }
 }
+
+/** US-Letter page in PDF points (72/inch) — used to convert normalized-percent coordinates into the
+ *  point positions PandaDoc's `fields` map expects on a raw-uploaded document. */
+const PANDADOC_LETTER_WIDTH_PT = 612;
+const PANDADOC_LETTER_HEIGHT_PT = 792;
 
 /** PandaDoc sends the body HMAC in this query param (and mirrors it in a header on some setups). */
 const PANDADOC_SIGNATURE_PARAM = 'signature';
@@ -260,6 +268,66 @@ export class PandaDocSignatureProvider extends BaseSignatureProvider {
 
     // ---- PandaDoc request construction -----------------------------------------------------------
 
+    /**
+     * Build PandaDoc's `fields` map from our portable placement. PandaDoc keys fields by a unique
+     * name and binds each to a signer by **role**, positioning with page + x/y (in points) on a
+     * raw-uploaded PDF. Only coordinate-based fields are emitted here: PandaDoc has no free-text
+     * anchor API for raw uploads (its anchor equivalent is in-document `{{field}}` tags handled by
+     * PandaDoc itself), so anchor-only fields are left to PandaDoc's own placement — a documented
+     * limitation; DocuSign is the provider with native free-text anchoring. Returns undefined when
+     * there's nothing to place (so PandaDoc applies its default).
+     */
+    private buildFields(req: CreateEnvelopeRequest): Record<string, unknown> | undefined {
+        const fields: Record<string, unknown> = {};
+        req.recipients.forEach((recipient, signerIndex) => {
+            const role = recipient.role ?? `Signer ${signerIndex + 1}`;
+            (recipient.fields ?? []).forEach((field, fieldIndex) => {
+                const placed = this.pandaDocField(field, role);
+                if (placed) {
+                    fields[`mj_${signerIndex}_${fieldIndex}`] = placed;
+                }
+            });
+        });
+        return Object.keys(fields).length > 0 ? fields : undefined;
+    }
+
+    /** One PandaDoc field descriptor from a placement, or null for anchor-only/unplaced fields. */
+    private pandaDocField(field: SignatureFieldPlacement, role: string): Record<string, unknown> | null {
+        if (field.page == null || field.xPercent == null || field.yPercent == null) {
+            return null;
+        }
+        // PandaDoc positions in points (1/72") from the page top-left. Convert the % against the
+        // field's ACTUAL page size when supplied, else fall back to US-Letter in points.
+        const widthPt = field.pageWidthPt ?? PANDADOC_LETTER_WIDTH_PT;
+        const heightPt = field.pageHeightPt ?? PANDADOC_LETTER_HEIGHT_PT;
+        return {
+            type: this.pandaDocFieldType(field.type ?? 'signature'),
+            role,
+            page: field.page - 1, // PandaDoc pages are 0-based.
+            x: Math.round((field.xPercent / 100) * widthPt),
+            y: Math.round((field.yPercent / 100) * heightPt),
+            required: field.required !== false,
+        };
+    }
+
+    /** Map our portable field type onto PandaDoc's field-type keyword. */
+    private pandaDocFieldType(type: SignatureFieldType): string {
+        switch (type) {
+            case 'signature':
+                return 'signature';
+            case 'initials':
+                return 'initials';
+            case 'dateSigned':
+                return 'date';
+            case 'text':
+                return 'text';
+            case 'checkbox':
+                return 'checkbox';
+            default:
+                return 'signature';
+        }
+    }
+
     private async uploadDocument(
         req: CreateEnvelopeRequest,
         config: PandaDocConfig,
@@ -268,6 +336,12 @@ export class PandaDocSignatureProvider extends BaseSignatureProvider {
         const firstDoc = req.documents[0];
         const blob = new Blob([new Uint8Array(firstDoc.bytes)], { type: firstDoc.contentType || 'application/pdf' });
         form.append('file', blob, firstDoc.filename);
+
+        // A field binds to a recipient by role name in PandaDoc, so ensure any recipient that has
+        // fields has a role to bind them to (synthesize a stable one when the caller didn't set one).
+        const roleFor = (r: SignatureRecipientInput, i: number): string | undefined =>
+            r.role ?? ((r.fields?.length ?? 0) > 0 ? `Signer ${i + 1}` : undefined);
+
         form.append(
             'data',
             JSON.stringify({
@@ -276,9 +350,10 @@ export class PandaDocSignatureProvider extends BaseSignatureProvider {
                     email: r.email,
                     first_name: (r.name || r.email).split(' ')[0],
                     last_name: (r.name || '').split(' ').slice(1).join(' ') || undefined,
-                    role: r.role,
+                    role: roleFor(r, i),
                     signing_order: r.routingOrder ?? i + 1,
                 })),
+                fields: this.buildFields(req),
                 parse_form_fields: false,
                 metadata: req.metadata,
             }),

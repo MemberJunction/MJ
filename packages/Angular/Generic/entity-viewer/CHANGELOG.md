@@ -1,5 +1,155 @@
 # @memberjunction/ng-entity-viewer
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-entity-action-ux@5.47.0
+  - @memberjunction/ng-filter-builder@5.47.0
+  - @memberjunction/ng-list-management@5.47.0
+  - @memberjunction/ng-map-view@5.47.0
+  - @memberjunction/ng-record-changes@5.47.0
+  - @memberjunction/ng-shared-generic@5.47.0
+  - @memberjunction/ng-timeline@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/ng-export-service@5.47.0
+  - @memberjunction/ng-pagination@5.47.0
+  - @memberjunction/ng-ui-components@5.47.0
+  - @memberjunction/export-engine@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-entity-action-ux@5.46.0
+  - @memberjunction/ng-filter-builder@5.46.0
+  - @memberjunction/ng-list-management@5.46.0
+  - @memberjunction/ng-map-view@5.46.0
+  - @memberjunction/ng-record-changes@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/ng-timeline@5.46.0
+  - @memberjunction/ng-export-service@5.46.0
+  - @memberjunction/ng-pagination@5.46.0
+  - @memberjunction/ng-ui-components@5.46.0
+  - @memberjunction/export-engine@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-list-management@5.45.1
+- @memberjunction/ng-entity-action-ux@5.45.1
+- @memberjunction/ng-record-changes@5.45.1
+- @memberjunction/actions-base@5.45.1
+- @memberjunction/ng-base-types@5.45.1
+- @memberjunction/ng-export-service@5.45.1
+- @memberjunction/ng-filter-builder@5.45.1
+- @memberjunction/ng-map-view@5.45.1
+- @memberjunction/ng-pagination@5.45.1
+- @memberjunction/ng-shared-generic@5.45.1
+- @memberjunction/ng-timeline@5.45.1
+- @memberjunction/ng-ui-components@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/export-engine@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [13716e4]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/ng-ui-components@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/ng-base-types@5.45.0
+  - @memberjunction/ng-entity-action-ux@5.45.0
+  - @memberjunction/ng-filter-builder@5.45.0
+  - @memberjunction/ng-list-management@5.45.0
+  - @memberjunction/ng-map-view@5.45.0
+  - @memberjunction/ng-record-changes@5.45.0
+  - @memberjunction/ng-shared-generic@5.45.0
+  - @memberjunction/ng-timeline@5.45.0
+  - @memberjunction/ng-export-service@5.45.0
+  - @memberjunction/ng-pagination@5.45.0
+  - @memberjunction/export-engine@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- e84c85b: Fix saved views not appearing in the view selector until a page reload. The selector now reacts to UserViewEngine cache changes via ObserveProperty, so created/updated/duplicated/deleted views refresh the dropdown immediately, eliminating the stale-cache race after a save.
+- f8be8a0: Consolidate collapsible/disclosure UI onto the canonical `<mj-accordion-panel>` across MJ Explorer, and level up the accordion component itself.
+
+  **`@memberjunction/ng-ui-components` (the component):**
+  - New **`MJAccordionModule`** — bundles the panel + all three slot directives (`mjAccordionTitle`, `mjAccordionActions`, `mjAccordionBody`) so consumers import one symbol instead of four (works in both NgModule and standalone `imports`). An NgModule is used because AOT can't expand a value-array across a compiled-package boundary (NG1010) and an `as const` tuple is rejected by the `imports` type (TS2322).
+  - New lazy **`[mjAccordionBody]`** slot — heavy bodies (code editors, grids, charts) instantiate on first expand and stay alive for animated re-toggle, so consumers don't have to reason about content weight or hand-write `@if (expanded)`.
+  - Hardening: `--sm`/`--disabled`/`--muted-icon` modifiers scoped to child combinators (no nested-panel style bleed); `hasBeenExpanded` made non-public per naming conventions; added a DOM test proving the module exposes every declarable.
+
+  **~50 disclosure surfaces migrated** from bespoke `<div (click)>`-header + `@if` markup to `<mj-accordion-panel>` across 20 Angular packages — dashboard-viewer config panels, DevTools Class Registry, Version History diff/snapshot groups, the test-run dialog, Explorer section toggles (about-dialog, sql-logging, SystemDiagnostics, App Roles, Home add-pin, Integration activity, Actions/Permissions/Credentials/Testing/ComponentStudio), and Generic components (agents, clustering, conversations, search, entity-viewer, filter-builder, record-tags, resource-permissions, core-entity-forms). Each replaces a non-focusable `<div (click)>` header with a real `<button [attr.aria-expanded]>` — a genuine accessibility improvement, not cosmetic — and deletes the per-consumer collapse chrome CSS. Card-based collapsibles, trees, and fill-panes are intentionally out of scope (they route to their own primitives).
+
+  No public API changes in the consumer packages (internal refactor). Verified: all affected package test suites pass, CI UI gates green (design tokens + button overrides), and a full audit confirmed side-effects preserved with two visual regressions caught and fixed (SystemDiagnostics severity tint restored with semantic tokens; cluster-scatter members list scroll-confined via `[Fill]`).
+  </content>
+
+- 0476455: Migrate inline empty-state placeholders to the canonical `<mj-empty-state>` component across Explorer and Generic Angular packages (UI-consistency objective O4), wiring the component into the packages that needed it (and adding `@memberjunction/ng-ui-components` as a dependency where missing). Also fixes reset-filter CTA correctness in three picker dialogs (sub-agent selector, add-action, action gallery) where the handler cleared only a subset of the active filter dimensions, and refines the UI adoption measurement script with a transparent three-tier empty-state count (raw widened → non-placeholder false-positives → wrappers-around-migrated → genuine).
+- 9f96357: Fix MJ Explorer view configuration (#2974): "Visible Columns" edits now reflect in the grid (the grid view type is backed by the canonical UserView.GridState rather than a divergent per-view-type copy), and the "Manage Columns" toolbar item now opens the config panel instead of doing nothing. Embedded/related-entity grids (custom-form and list-detail) suppress the column chooser since they aren't saved User Views.
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [f8be8a0]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [1e5e449]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [0476455]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ng-ui-components@5.44.0
+  - @memberjunction/ng-filter-builder@5.44.0
+  - @memberjunction/ng-entity-action-ux@5.44.0
+  - @memberjunction/ng-list-management@5.44.0
+  - @memberjunction/ng-record-changes@5.44.0
+  - @memberjunction/ng-timeline@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/ng-base-types@5.44.0
+  - @memberjunction/ng-map-view@5.44.0
+  - @memberjunction/ng-shared-generic@5.44.0
+  - @memberjunction/ng-export-service@5.44.0
+  - @memberjunction/ng-pagination@5.44.0
+  - @memberjunction/export-engine@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

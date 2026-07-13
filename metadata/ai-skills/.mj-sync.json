@@ -1,0 +1,37 @@
+{
+  "entity": "MJ: AI Skills",
+  "filePattern": "**/.*.json",
+  "defaults": {
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".ai-skills.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "CreatedByUserID": {
+        "entity": "MJ: Users",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": {
+        "entity": "MJ: AI Skill Actions",
+        "foreignKey": "SkillID"
+      },
+      "MJ: AI Skill Sub Agents": {
+        "entity": "MJ: AI Skill Sub Agents",
+        "foreignKey": "SkillID"
+      }
+    }
+  }
+}

@@ -37,6 +37,14 @@ export interface AgentContextUpdate {
     }>;
 }
 
+export interface TabQueryParamUpdateGuard {
+    resourceType?: string | null;
+    driverClass?: string | null;
+    recordId?: string | null;
+    navItemName?: string | null;
+    entity?: string | null;
+}
+
 /**
  * System application ID for non-app-specific resources (fallback only)
  * Uses double underscore prefix to indicate system-level resource
@@ -924,6 +932,42 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
+   * Update query params for a specific tab, optionally only if the tab still hosts
+   * the expected resource identity. This matters in single-resource mode where a
+   * tab ID can be reused for a different resource while the previous component is
+   * detached but still alive in the cache.
+   */
+  UpdateTabQueryParams(
+    tabId: string,
+    queryParams: Record<string, string | null>,
+    guard?: TabQueryParamUpdateGuard
+  ): boolean {
+    const tab = this.workspaceManager.GetTab(tabId);
+    if (!tab) {
+      console.debug('NavigationService.UpdateTabQueryParams: Tab not found; ignoring stale query-param update:', tabId);
+      return false;
+    }
+
+    if (guard && !this.tabMatchesQueryParamGuard(tab, guard)) {
+      console.debug('NavigationService.UpdateTabQueryParams: Tab identity changed; ignoring stale query-param update:', {
+        tabId,
+        guard,
+        current: {
+          resourceType: tab.configuration?.['resourceType'],
+          driverClass: tab.configuration?.['resourceTypeDriverClass'] || tab.configuration?.['driverClass'],
+          recordId: tab.resourceRecordId || tab.configuration?.['recordId'],
+          navItemName: tab.configuration?.['navItemName'],
+          entity: tab.configuration?.['Entity'] || tab.configuration?.['entity']
+        }
+      });
+      return false;
+    }
+
+    this.applyQueryParamsToTab(tabId, queryParams);
+    return true;
+  }
+
+  /**
    * Notify subscribers that query params changed on a specific tab.
    * Called by the shell when back/forward navigation changes query params on the active tab.
    * The notification includes the tab ID so only the component in that tab reacts.
@@ -963,6 +1007,32 @@ export class NavigationService implements OnDestroy {
       return false;
     }
     return keysA.every(key => a[key] === b[key]);
+  }
+
+  private tabMatchesQueryParamGuard(tab: { resourceRecordId?: string; configuration?: Record<string, unknown> }, guard: TabQueryParamUpdateGuard): boolean {
+    const config = tab.configuration || {};
+    const matches = (expected: string | null | undefined, actual: unknown, normalize = false): boolean => {
+      if (expected === undefined || expected === null) {
+        return true;
+      }
+      const expectedText = String(expected);
+      const actualText = actual == null ? '' : String(actual);
+      return normalize
+        ? expectedText.trim().toLowerCase() === actualText.trim().toLowerCase()
+        : expectedText === actualText;
+    };
+
+    const currentDriverClass = (config['resourceTypeDriverClass'] || config['driverClass']) as string | undefined;
+    const currentRecordId = tab.resourceRecordId || (config['recordId'] as string | undefined) || '';
+    const currentEntity = (config['Entity'] || config['entity']) as string | undefined;
+
+    // Resource type and entity names can vary by casing/metadata spelling; class names,
+    // record IDs, and nav labels are canonical tab identity fields and stay exact-match.
+    return matches(guard.resourceType, config['resourceType'], true) &&
+      matches(guard.driverClass, currentDriverClass) &&
+      matches(guard.recordId, currentRecordId) &&
+      matches(guard.navItemName, config['navItemName']) &&
+      matches(guard.entity, currentEntity, true);
   }
 
   /**

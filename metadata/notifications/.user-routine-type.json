@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "Name": "User Routine",
+    "Description": "Notifications sent when a user routine (MJ: User Routines) run completes and its NotifyCondition is met — delivered to the routine owner and its recipients by the User Routine Dispatcher",
+    "DefaultInApp": true,
+    "DefaultEmail": false,
+    "DefaultSMS": false,
+    "AllowUserPreference": true,
+    "Icon": "fa-clock-rotate-left",
+    "Color": "#2196F3",
+    "AutoExpireDays": 14,
+    "Priority": 20
+  },
+  "primaryKey": {
+    "ID": "6F11D129-03C5-4BAA-A19B-D5D95E4F60BD"
+  },
+  "sync": {
+    "lastModified": "2026-07-07T15:18:38.679Z",
+    "checksum": "b005fdaae85c8244af4801405d5f338a898515c98e50c0e18470bfa9d120cd37"
+  }
+}

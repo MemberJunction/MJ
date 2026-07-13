@@ -15,6 +15,8 @@ const echoTranspiler: TSQLToPGTranspiler = {
 class FakeDB implements BakerWorkingDB {
   calls: string[] = [];
   applied: string[] = [];
+  /** The full entity set returned by listBakeableEntities (baseline bake path). */
+  bakeable: string[] = [];
   constructor(private readonly capture: (name: string) => CapturedEntitySQL) {}
   async apply(sql: string): Promise<void> {
     this.calls.push('apply');
@@ -26,6 +28,10 @@ class FakeDB implements BakerWorkingDB {
   async captureEntity(name: string): Promise<CapturedEntitySQL> {
     this.calls.push(`capture:${name}`);
     return this.capture(name);
+  }
+  async listBakeableEntities(): Promise<string[]> {
+    this.calls.push('listBakeable');
+    return this.bakeable;
   }
 }
 
@@ -157,6 +163,53 @@ describe('IncrementalBaker', () => {
 
     expect(r.status).toBe('needs-hand-authoring');
     expect(r.handProcedural.length).toBeGreaterThan(0);
+  });
+
+  describe('baseline mode (B… snapshot)', () => {
+    /** A minimal bannerless baseline: hand DDL + metadata seed, no CodeGen banners. Its
+     *  affectedEntities is empty, so the baker must bake the FULL listBakeableEntities set. */
+    const baselineSql = [
+      'CREATE TABLE [${flyway:defaultSchema}].[Widget] (ID UNIQUEIDENTIFIER NOT NULL);',
+      'GO',
+      "INSERT INTO [${flyway:defaultSchema}].[Entity] (ID, Name) VALUES ('11111111-1111-1111-1111-111111111111', 'Widgets');",
+    ].join('\n');
+
+    it('bakes the FULL entity set (not the empty banner set) and skips re-applying the hand body', async () => {
+      const db = new FakeDB(capturedFor);
+      db.bakeable = ['MJ: AI Agent Runs', 'MJ: AI Prompts', 'Widgets'];
+      const baker = new IncrementalBaker({ transpiler: echoTranspiler, db });
+
+      const r = await baker.bakeMigration(baselineSql, 'B202607091514__v5.46.x__Baseline.sql');
+
+      expect(r.mode).toBe('baked');
+      // pre-seeded working DB: NEVER re-applies the hand body (its tables already exist)
+      expect(db.calls).not.toContain('apply');
+      expect(db.applied).toHaveLength(0);
+      // full set captured, in listBakeableEntities order, after a metadata refresh
+      expect(db.calls).toEqual([
+        'refresh',
+        'listBakeable',
+        'capture:MJ: AI Agent Runs',
+        'capture:MJ: AI Prompts',
+        'capture:Widgets',
+      ]);
+      expect(r.affectedEntities).toEqual(['MJ: AI Agent Runs', 'MJ: AI Prompts', 'Widgets']);
+    });
+
+    it('still assembles the transpiled hand body + baked CodeGen into a standalone .pg.sql', async () => {
+      const db = new FakeDB(capturedFor);
+      db.bakeable = ['Widgets'];
+      const baker = new IncrementalBaker({ transpiler: echoTranspiler, db });
+
+      const r = await baker.bakeMigration(baselineSql, 'B202607091514__v5.46.x__Baseline.sql');
+
+      expect(r.pgSQL).toContain('INLINE NATIVE CodeGen baking');
+      // hand body (tables/metadata) transpiled in…
+      expect(r.pgSQL).toContain('Widget');
+      // …and the native CodeGen section follows
+      expect(r.pgSQL).toContain('-- ===================== CodeGen (native PG, baked) =====================');
+      expect(r.pgSQL).toContain('CREATE OR REPLACE VIEW __mj."vwWidgetss"');
+    });
   });
 
   describe('re-bake mode (committedPgSql provided)', () => {

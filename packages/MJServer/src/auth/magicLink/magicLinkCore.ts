@@ -106,35 +106,63 @@ export function evaluateInvite(invite: InviteEvaluationInput, nowMs: number): { 
   return { ok: true };
 }
 
+/** SQL dialect for {@link buildConsumeInviteSQL}. */
+export type ConsumeInviteDialect = 'sqlserver' | 'postgresql';
+
+/** SQL Server table identifier — bracket-quoted `[schema].[table]` (word chars only). */
+const QUALIFIED_TABLE_PATTERN = /^\[\w+\]\.\[\w+\]$/;
+/** PostgreSQL table identifier — `schema.table` (word chars only); auto-quoted downstream. */
+const QUALIFIED_TABLE_PATTERN_PG = /^\w+\.\w+$/;
+
 /**
- * Builds the atomic compare-and-swap UPDATE that consumes one use of an invite.
+ * Builds the atomic compare-and-swap UPDATE that consumes one use of an invite,
+ * in the given SQL dialect.
  *
  * The WHERE clause re-checks every eligibility condition at the DB level, so the
  * increment and the guard are a single atomic operation: concurrent redemptions
- * of a single-use link race on the row and exactly one matches (the matched row
- * is returned via OUTPUT). This is what actually enforces single-use — the
- * JS-side `evaluateInvite` is only a friendly pre-check.
+ * of a single-use link race on the row and exactly one matches. This is what
+ * actually enforces single-use — the JS-side `evaluateInvite` is only a friendly
+ * pre-check. The matched row's ID is returned to the caller (via `OUTPUT` on SQL
+ * Server, `RETURNING` on PostgreSQL) so it can detect a win (exactly one row).
  *
- * The invite ID MUST be bound as parameter `@p0` by the caller — it is never
- * interpolated into the string, so this builder is injection-safe regardless of
- * the ID's contents.
+ * The invite ID MUST be bound as a parameter by the caller (`@p0` on SQL Server,
+ * `$1` on PostgreSQL) — it is never interpolated into the string, so this builder
+ * is injection-safe regardless of the ID's contents.
  *
- * OUTPUT goes `INTO` a table variable (not a bare OUTPUT): SQL Server forbids a
- * bare OUTPUT clause on a table that has enabled triggers, and CodeGen adds an
- * `__mj_UpdatedAt` trigger to every MJ table. The trailing SELECT returns exactly
- * the matched row(s) so the caller can detect a win (exactly one row) regardless
- * of trigger behavior.
+ * **SQL Server** — `OUTPUT` goes `INTO` a table variable (not a bare OUTPUT):
+ * SQL Server forbids a bare OUTPUT clause on a table that has enabled triggers,
+ * and CodeGen adds an `__mj_UpdatedAt` trigger to every MJ table. The trailing
+ * SELECT returns the matched row(s) regardless of trigger behavior.
  *
- * `qualifiedTable` is asserted to be a bracket-quoted `[schema].[table]` (word
- * chars only) before interpolation. The caller derives it from `EntityInfo`
- * (never user input), so this is defense-in-depth: even a future careless caller
- * cannot turn this into an injection vector — a non-conforming table throws.
+ * **PostgreSQL** — the `UPDATE … WHERE` guard IS itself the atomic single-use
+ * gate: the row is locked for the UPDATE's duration, so concurrent redemptions
+ * serialize and only the first matching `Status='Active' AND UseCount < MaxUses`
+ * wins; `RETURNING` yields the row iff the guard matched (equivalent to the SS
+ * `OUTPUT`-into-table win-detect). PascalCase identifiers are auto-quoted by
+ * `PostgreSQLDataProvider.ExecuteSQL`, so the table is passed unquoted (`schema.table`).
  *
- * @param qualifiedTable  bracket-quoted `[schema].[table]` for MagicLinkInvite
+ * `qualifiedTable` is asserted to match the dialect's whitelist pattern before
+ * interpolation. The caller derives it from `EntityInfo` (never user input), so
+ * this is defense-in-depth: even a future careless caller cannot turn this into
+ * an injection vector — a non-conforming table throws.
+ *
+ * @param qualifiedTable  `[schema].[table]` (sqlserver) or `schema.table` (postgresql) for MagicLinkInvite
+ * @param dialect         target SQL dialect (defaults to `'sqlserver'`)
  */
-const QUALIFIED_TABLE_PATTERN = /^\[\w+\]\.\[\w+\]$/;
-
-export function buildConsumeInviteSQL(qualifiedTable: string): string {
+export function buildConsumeInviteSQL(qualifiedTable: string, dialect: ConsumeInviteDialect = 'sqlserver'): string {
+  if (dialect === 'postgresql') {
+    if (!QUALIFIED_TABLE_PATTERN_PG.test(qualifiedTable)) {
+      throw new Error(`buildConsumeInviteSQL: refusing to build SQL for non-whitelisted table identifier '${qualifiedTable}'.`);
+    }
+    return (
+      `UPDATE ${qualifiedTable} ` +
+      `SET UseCount = UseCount + 1, ` +
+      `ConsumedAt = COALESCE(ConsumedAt, (now() AT TIME ZONE 'utc')), ` +
+      `Status = CASE WHEN UseCount + 1 >= MaxUses THEN 'Consumed' ELSE Status END ` +
+      `WHERE ID = $1 AND Status = 'Active' AND UseCount < MaxUses AND ExpiresAt > (now() AT TIME ZONE 'utc') ` +
+      `RETURNING ID;`
+    );
+  }
   if (!QUALIFIED_TABLE_PATTERN.test(qualifiedTable)) {
     throw new Error(`buildConsumeInviteSQL: refusing to build SQL for non-whitelisted table identifier '${qualifiedTable}'.`);
   }

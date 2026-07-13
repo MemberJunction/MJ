@@ -793,8 +793,8 @@ ${permissions}
         const paramString = this.generateCRUDParamString(entity.Fields, true);
         const permissions = this.generateCRUDPermissions(entity, fnName, CRUDType.Update);
         const updateFields = this.generateUpdateFieldString(entity.Fields);
-        const whereClause = this.buildPrimaryKeyWhereClause(entity, 'p_');
-        const selectWhereClause = this.buildPrimaryKeyWhereClause(entity, 'p_');
+        const whereClause = this.buildPrimaryKeyWhereClause(entity);
+        const selectWhereClause = this.buildPrimaryKeyWhereClause(entity);
 
         const trigger = this.generateTimestampTrigger(entity);
 
@@ -1424,7 +1424,11 @@ END $$;
             varDecls.push(`${varName} ${sqlType}`);
             selectFlds.push(pgDialect.QuoteIdentifier(pk.Name));
             fetchVars.push(varName);
-            routineParamParts.push(`p_${this.toSnakeCase(pk.CodeName)} := ${varName}`);
+            // Param NAME must use the canonical flat builder (ParameterRef → `p_<lower>`) so it
+            // matches the CRUD routine's declared signature; only the local VARIABLE (v_…) uses
+            // snake_case. Using toSnakeCase here produced `p_record_key` for a multi-word PK while
+            // the routine declared `p_recordkey`, breaking cascade delete/update-to-NULL on PG.
+            routineParamParts.push(`${pgDialect.ParameterRef(pk.CodeName)} := ${varName}`);
         }
 
         return {
@@ -2163,9 +2167,13 @@ WHERE p.prokind IN ('f', 'p')
     }
 
     /** Builds a WHERE clause using primary key fields with a parameter prefix */
-    private buildPrimaryKeyWhereClause(entity: EntityInfo, prefix: string): string {
+    private buildPrimaryKeyWhereClause(entity: EntityInfo): string {
+        // Param name via the canonical flat builder (ParameterRef → `p_<lower>`), NOT toSnakeCase,
+        // so the WHERE matches the CRUD function's declared parameter. A `p_${toSnakeCase}` here
+        // emitted `p_record_key` for a multi-word PK while the signature declared `p_recordkey`,
+        // so every UPDATE failed on PostgreSQL with `column "p_record_key" does not exist`.
         return entity.PrimaryKeys.map((k: EntityFieldInfo) =>
-            `${pgDialect.QuoteIdentifier(k.Name)} = ${prefix}${this.toSnakeCase(k.CodeName)}`
+            `${pgDialect.QuoteIdentifier(k.Name)} = ${pgDialect.ParameterRef(k.CodeName)}`
         ).join(' AND ');
     }
 
@@ -2190,7 +2198,7 @@ WHERE p.prokind IN ('f', 'p')
         }
 
         if ((firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' || firstKey.Type.toLowerCase().trim() === 'uuid') && entity.PrimaryKeys.length === 1) {
-            const paramName = `p_${this.toSnakeCase(firstKey.CodeName)}`;
+            const paramName = pgDialect.ParameterRef(firstKey.CodeName);
             const hasNonPkFields = insertColumns.trim().length > 0;
             return {
                 preInsert: `v_new_id := COALESCE(${paramName}, gen_random_uuid());\n    `,
@@ -2205,7 +2213,7 @@ WHERE p.prokind IN ('f', 'p')
 
         // Composite keys or non-auto, non-UUID PKs
         const selectWhere = entity.PrimaryKeys.map((k: EntityFieldInfo) =>
-            `${pgDialect.QuoteIdentifier(k.Name)} = p_${this.toSnakeCase(k.CodeName)}`
+            `${pgDialect.QuoteIdentifier(k.Name)} = ${pgDialect.ParameterRef(k.CodeName)}`
         ).join(' AND ');
 
         // Composite-PK tables: every PK column has AllowUpdateAPI=0, so generateInsertFieldString
@@ -2220,7 +2228,7 @@ WHERE p.prokind IN ('f', 'p')
                 .map((k: EntityFieldInfo) => pgDialect.QuoteIdentifier(k.Name))
                 .join(',\n            ');
             const pkValues = entity.PrimaryKeys
-                .map((k: EntityFieldInfo) => `p_${this.toSnakeCase(k.CodeName)}`)
+                .map((k: EntityFieldInfo) => pgDialect.ParameterRef(k.CodeName))
                 .join(',\n            ');
             const hasNonPkColumns = insertColumns.trim().length > 0;
             finalColumns = hasNonPkColumns ? `${pkColumns},\n            ${insertColumns}` : pkColumns;
@@ -2248,14 +2256,14 @@ WHERE p.prokind IN ('f', 'p')
         const nullParts: string[] = [];
 
         for (const k of entity.PrimaryKeys) {
-            const paramName = `p_${this.toSnakeCase(k.CodeName)}`;
+            const paramName = pgDialect.ParameterRef(k.CodeName);
             paramParts.push(`${paramName} ${this.mapSQLType(k.SQLFullType)}`);
             selectParts.push(`${paramName} AS ${pgDialect.QuoteIdentifier(k.Name)}`);
             nullParts.push(`NULL::${this.mapSQLType(k.SQLFullType)} AS ${pgDialect.QuoteIdentifier(k.Name)}`);
         }
 
         const whereClause = entity.PrimaryKeys.map((k: EntityFieldInfo) =>
-            `${pgDialect.QuoteIdentifier(k.Name)} = p_${this.toSnakeCase(k.CodeName)}`
+            `${pgDialect.QuoteIdentifier(k.Name)} = ${pgDialect.ParameterRef(k.CodeName)}`
         ).join(' AND ');
 
         let deleteBody: string;
@@ -2294,7 +2302,7 @@ WHERE p.prokind IN ('f', 'p')
         }
 
         const updateFnName = this.getCRUDRoutineName(relatedEntity, CRUDType.Update);
-        const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = p_${this.toSnakeCase(parentEntity.FirstPrimaryKey.CodeName)}`;
+        const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = ${pgDialect.ParameterRef(parentEntity.FirstPrimaryKey.CodeName)}`;
 
         return `    -- Cascade: Set ${relatedEntity.Name}.${fkField.Name} to NULL
     FOR v_rec IN
@@ -2317,7 +2325,7 @@ WHERE p.prokind IN ('f', 'p')
         }
 
         const deleteFnName = this.getCRUDRoutineName(relatedEntity, CRUDType.Delete);
-        const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = p_${this.toSnakeCase(parentEntity.FirstPrimaryKey.CodeName)}`;
+        const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = ${pgDialect.ParameterRef(parentEntity.FirstPrimaryKey.CodeName)}`;
 
         return `    -- Cascade: Delete ${relatedEntity.Name} records via ${fkField.Name}
     FOR v_rec IN
