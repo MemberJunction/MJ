@@ -24,17 +24,52 @@ These issues are auto-filed on failure but never auto-closed on recovery, which 
 - **#2451, #2452** — closed as not planned. Both were filed by `app/mj-feedback-bot` while exercising the in-app feedback pipeline ("Feedback Test: Hello Again", "Another Bug Test"); neither is a product defect.
 - **#2487 — re-categorized to C, left open.** The original triage called this "irrelevant / no direct MJ build action." That is wrong. Cross-application migration ordering (MJ + BAC + BCSaaS + SaaS) is an unresolved architecture decision with an active 7-comment thread, competing proposals (holistic ordering vs. dependency pinning), and an implementation-plan PR (#2488) that was **closed without merging**. Nothing was decided and nothing was built; it remains a stated blocker for lifting SaaS products onto BAC. It is scored Critical / High below.
 
-### Category C: work completed in this pass
+## Category C: status
 
-The three Low-effort items were taken first — the cheapest way to prove the backlog moves. Each was re-verified against the code before any fix was written, on the principle that a triage rationale is a hypothesis, not a finding.
+| | Count |
+|---|---:|
+| Addressed in PR #3129 | **3** (2 fully fixed, 1 partially — see below) |
+| Not yet started | **95** |
+| **Total** | **98** |
 
-- **#3103 (Critical/Low) — fixed.** Malformed `DenyFields` now rejected at save (`MJMLTrainingPipelineEntityServer.ValidateAsync`), the editor no longer manufactures the bad input, and the dominance threshold is clamped at runtime so already-saved values can't disarm the guard. Found and fixed an adjacent bug: `DEFAULT_DOMINANCE_THRESHOLD` was defined twice with different values (`0.85` vs `0.6`), so agent-authored pipelines were held to a laxer guard than hand-authored ones.
-- **#3105 (High/Low) — fixed.** Confirmed via the compiled `dist`, which shipped raw `&__` to the browser. The trap was in **three** files, not the one reported (two more in `ng-conversations`), plus a `styleUrl` pointing at a nonexistent file. A new CI gate (`check:ui-ngc-scss`) prevents it re-arming; the gate was verified to fail on the original file and pass on the fixed tree.
-- **#3064 (High/Low) — premise corrected; partially fixed.** `AIPrompt.TimeoutMS` **does not exist** (the column belongs to `MJ: Remote Operations`), so the runner was not ignoring a bound — none could be expressed. Shipped a per-request `AIPromptParams.timeoutMS` with a typed retriable error, and wired `ChatParams.cancellationToken` through **all 19 LLM drivers** so a timeout now aborts the socket rather than abandoning the promise. Remaining work split to #3133; the driver-plumbing cleanup to #3132. Issue left open.
+### Done in PR #3129
 
-**Bug found while fixing the above, affecting every provider:** `BaseLLM.handleStreamingChatCompletion` caught mid-stream errors, logged them, and then finalized the response as a **success** — so a dropped connection or provider fault part-way through a stream silently produced truncated content the caller was told was complete. Now fixed in Core: genuine failures surface as failures.
+The three Low-effort items were taken first — the cheapest way to prove the backlog moves. Each was re-verified against the code before any fix was written, on the principle that **a triage rationale is a hypothesis, not a finding**. That discipline paid for itself immediately: one of the three had a false premise, and two of the three turned out to be bigger than reported.
+
+- **#3103 (Critical/Low) — FIXED.** Malformed `DenyFields` now rejected at save (`MJMLTrainingPipelineEntityServer.ValidateAsync`), the editor no longer manufactures the bad input, and the dominance threshold is clamped at enforcement time so already-saved values can't disarm the guard. Found and fixed an adjacent bug: `DEFAULT_DOMINANCE_THRESHOLD` was defined twice with different values (`0.85` vs `0.6`), so agent-authored pipelines were held to a materially laxer guard than hand-authored ones. *Closes on merge.*
+- **#3105 (High/Low) — FIXED.** Confirmed via the compiled `dist`, which shipped raw `&__` to the browser. The trap was in **three** files, not the one reported (two more in `ng-conversations`), plus a `styleUrl` pointing at a file that doesn't exist. New CI gate `check:ui-ngc-scss` prevents it re-arming, verified to fail on the original file and pass on the fixed tree. **Resurrects styling that never rendered in production** — needs a visual check before merge. *Closes on merge.*
+- **#3064 (High/Low) — PREMISE CORRECTED; PARTIALLY FIXED. Stays open.** `AIPrompt.TimeoutMS` **does not exist** (the column belongs to `MJ: Remote Operations`), so the runner was not ignoring a bound — none could be expressed at all. Shipped a per-request `AIPromptParams.timeoutMS` with a typed retriable error, and wired `ChatParams.cancellationToken` through **all 19 LLM drivers** so a timeout now tears down the socket instead of abandoning the promise. The prompt-level column is split to **#3133**; the driver-plumbing cleanup to **#3132**.
+
+**A bug none of this was looking for, affecting every provider:** `BaseLLM.handleStreamingChatCompletion` caught mid-stream errors, logged them, and then finalized the response as a **success** — so a dropped connection or provider fault part-way through a stream silently produced truncated content the caller was told was complete. Under all 19 drivers, for every streaming consumer. Now fixed in Core. This was not in the backlog at all; it surfaced only because four independent workstreams tripped over it.
+
+### Recommended next (for whoever picks this up)
+
+The matrix below is dominated by High/High (51) and Critical/High (16), which is not a work queue. A suggested order:
+
+**1. Finish what's half-done.** #3133 (the `AIPrompt.TimeoutMS` column — migration + CodeGen + a one-line change; the seam is already in place) and #3132 (absorb the duplicated per-driver cancellation plumbing into `BaseLLM`, and add a first-class `AIErrorType.Cancelled` — today an abort classifies as *retriable*, so a naive driver would retry a request the user cancelled). Both are small, both close loops this PR deliberately left open rather than half-wire.
+
+**2. Take the remaining Low/Medium-effort items with real severity.** These are the ones where impact and cost are most out of proportion:
+
+| Issue | Sev / Effort | What |
+|---|---|---|
+| #1964 | Critical / Med | Users on shared computers may authenticate as the **wrong user** |
+| #3093 | Critical / Med | `MergeRecords` FieldMap can't express NULL (`Value: String!` + client `.toString()` crash) |
+| #2356 | Critical / Med | `mj-tree-dropdown` search input **permanently freezes the page** |
+| #1939 | Critical / Med | `pdf-parse` crashes on Node 24+ at module init |
+| #503 | Medium / Low | Add a `Dimension` column to the VectorDatabase entity |
+| #125 | Low / Low | Compare/Merge dialog styling |
+
+**3. Re-verify before building — the scores here are not trustworthy on their own.** Of the three issues actually worked, one had a **false premise** (#3064: the field didn't exist), one was **understated by 3×** (#3105: three affected files, not one), and the B-category triage tried to close a **live architecture blocker** (#2487). Treat every row below as a lead to confirm, not a spec to implement. Check the issue against the code first; if the premise is wrong, say so on the issue rather than building to it.
+
+**4. #2487 needs a decision, not an implementation.** Cross-application migration ordering is blocked on a human call between competing proposals, with a plan PR already closed unmerged. It is scored Critical/High but no amount of engineering time moves it until that call is made.
+
+### Two security/correctness items worth pulling forward
+
+Not Low-effort, but they are the highest-consequence things in the list and have been open a while: **#2638** and **#2691** — GraphQL request logging and error responses both echo **plaintext variable values**, so any secret-bearing mutation leaks to stdout / to the client. Both Critical.
 
 ## Category C Severity × Effort
+
+Counts below are the **original triage**, including the 3 issues addressed in this PR (#3103 at Critical/Low; #3064 and #3105 at High/Low). Subtract those to get the untouched backlog.
 
 | Severity | Low effort | Medium effort | High effort |
 |---|---:|---:|---:|
@@ -43,12 +78,31 @@ The three Low-effort items were taken first — the cheapest way to prove the ba
 | Medium | 1 | 5 | 5 |
 | Low | 1 | 5 | 1 |
 
+## Handoff notes for PR #3129
+
+**Verification already done.** Full repo build **298/298** and full test suite **592/592**, both forced uncached (`npx turbo run build --force` / `npx turbo run test --force`). ~50 new cancellation tests across the driver fleet, 36 new leakage-guard tests. A changeset is included (patch, 21 packages).
+
+**No migrations, no CodeGen.** Nothing in this PR touches schema. The one schema change the work implies (`AIPrompt.TimeoutMS`) was deliberately *not* shipped — writing code against a column CodeGen hasn't generated would mean `.Get('TimeoutMS')`, which the project rules forbid, and a dead column would recreate the exact "looks configured, does nothing" bug #3064 reports. It's #3133.
+
+**What still needs a human before merge:**
+
+1. **Visual check on the resurrected styling (#3105).** These rules have *never rendered* in production, so enabling them changes the UI. Specifically: the realtime **media-surface tab bar had no active-tab indicator**, and **evidence playback had no active-turn highlight and no played-progress color** on its waveform. They look intentional (they're functional affordances, not decoration), but nobody has seen them live. Worth 5 minutes in the browser.
+2. **Behavior change on #3103.** Existing pipeline rows with bracket-mangled `DenyFields` will now **fail to save until corrected**. That is the intended outcome — a guard protecting nothing should not be quietly tolerated — but if any live customer DB holds such a row, it surfaces as a validation error on next edit rather than silently continuing to train unprotected. The *runtime clamp* already covers already-saved bad thresholds without requiring a re-save.
+3. **#3064 stays open.** Only half of it shipped. Don't let the PR merge auto-close it.
+
+**Things a reviewer should not be surprised by:**
+
+- The diff is ~+14.5k lines, but ~9.8k of that is the raw `github_open_issues_snapshot.json`. The reviewable code is a small fraction of that number.
+- `changeset status` errors in this repo (it looks for a `main` baseline; this repo uses `next`). Pre-existing, unrelated to this PR.
+- `check:ui:all` reports pre-existing token violations in files this PR never touched. The CI gate only diffs *changed* files, and those are clean.
+
 ## Methodology
 
 - Reviewed only issues whose GitHub state was `open` as of 2026-07-12; pull requests are excluded.
 - Category A was reserved for open issues that looked superseded or stale/resolved. Each was verified against current CI state before closing.
 - Category B was reserved for tests, non-actionable discussions, or items better represented outside the MJ issue tracker. Each was verified against its thread before closing — which is how #2487 was caught and moved to C.
-- Category C contains actionable work; severity estimates impact, while effort estimates implementation size and coordination complexity. Scores are heuristic starting points for prioritization, not final engineering sizing.
+- Category C contains actionable work; severity estimates impact, while effort estimates implementation size and coordination complexity. Scores are heuristic starting points for prioritization, **not** final engineering sizing — and, as the three worked items showed, not reliable statements of the problem either.
+- **This report is a snapshot, not durable state.** It was generated 2026-07-12 and will drift as issues open and close. Re-pull the API snapshot before relying on the inventory.
 
 ## Complete Open Issue Inventory
 
@@ -138,16 +192,16 @@ The three Low-effort items were taken first — the cheapest way to prove the ba
 | 2995 | C. Should be built | High | High | none | PostgreSQL Schema Casing for Entity Class Names | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2995 |
 | 3030 | C. Should be built | High | High | none | PostgreSQL provider returns NUMERIC/BIGINT as strings — cost.toFixed console flood + string-concatenated token sums in Explorer | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3030 |
 | 3059 | C. Should be built | High | High | none | BaseEngine filtered caches can serve stale reads after a write — LocalCacheManager invalidation is unordered vs. the triggering read | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3059 |
-| 3064 | C. Should be built | High | Low | none | AIPromptRunner does not enforce AIPrompt.TimeoutMS on the single-model execution path | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3064 |
+| 3064 | 🟡 PARTIAL in PR #3129 — premise was false; column split to #3133 | High | Low | none | AIPromptRunner does not enforce AIPrompt.TimeoutMS on the single-model execution path | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3064 |
 | 3065 | C. Should be built | High | Medium | none | Gemini: valid JSON body followed by stray trailing fragment despite ResponseFormat=JSON — runner should recover strict JSON centrally | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3065 |
 | 3066 | C. Should be built | High | High | none | vwAIModels flattened APIName is a cross-vendor footgun: adding an AIModelVendor row can silently change every consumer's model id | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3066 |
 | 3072 | C. Should be built | Critical | High | none | Task-mode startup: configurable `startup.mode` ('full' / 'task') for fast CLI/script boot | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3072 |
 | 3085 | C. Should be built | Critical | High | none | Sync engine: no lookback overlap for MonotonicWatermark connectors (late-committing rows can be permanently missed) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3085 |
 | 3093 | C. Should be built | Critical | High | none | MergeRecords FieldMap cannot express NULL values (Value: String! + client .toString() crash) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3093 |
 | 3095 | C. Should be built | High | High | enhancement | Fail-fast guard for the shared metadata graph: freeze Info objects (at least in dev) after Config | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3095 |
-| 3103 | C. Should be built | Critical | Low | none | Predictive Studio: malformed LeakageGuard DenyFields silently disarms the leakage guard (G4) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3103 |
+| 3103 | ✅ FIXED in PR #3129 | Critical | Low | none | Predictive Studio: malformed LeakageGuard DenyFields silently disarms the leakage guard (G4) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3103 |
 | 3104 | C. Should be built | High | High | none | Predictive Studio: non-numeric feature columns silently become dead constant-0 features (G7) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3104 |
-| 3105 | C. Should be built | High | Low | none | ng-dashboards: KnowledgeHub feature-pipelines .scss uses Sass nesting under a no-Sass build — &__/&-- rules are dead in production | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3105 |
+| 3105 | ✅ FIXED in PR #3129 | High | Low | none | ng-dashboards: KnowledgeHub feature-pipelines .scss uses Sass nesting under a no-Sass build — &__/&-- rules are dead in production | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3105 |
 | 3106 | C. Should be built | High | High | none | Custom BaseResourceComponent nav items silently hang forever after successful data load (change-detection not re-running) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3106 |
 | 3109 | C. Should be built | High | High | none | [Explorer] Per-application / per-role shell chrome + application-scoped search — wiring the shell to configuration surfaces MJ already has | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3109 |
 | 3113 | C. Should be built | High | High | bug, good first issue | @memberjunction/server ships "types": "./src/index.ts" — consumers type-check MJ sources under their own compiler options | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3113 |
