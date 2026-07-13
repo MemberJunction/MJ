@@ -162,6 +162,13 @@ with `DefaultDatabase` set to the warehouse name and a credential carrying `tena
 
 > **FK introspection on Fabric.** Fabric Warehouse supports `PRIMARY KEY` / `FOREIGN KEY` constraints only as **`NOT ENFORCED`**, and only when added via `ALTER TABLE` (inline constraints in `CREATE TABLE` error with *"…not supported in this edition"*). When such constraints exist, the driver's `sys.foreign_keys` introspection surfaces them into MJ `Relationships` exactly as for SQL Server — verified by a live integration test that seeds a `NOT ENFORCED` FK and asserts it's introspected. A Fabric source with no declared constraints simply yields empty `Relationships` (the query returns gracefully, it doesn't error).
 
+**Operational caveats.** A few Fabric-specific behaviors worth knowing before you point production entities at a Fabric source:
+
+- **A tenant admin must enable SPN access.** Beyond the workspace grant above, a Fabric **tenant admin** must turn on *"Service principals can use Fabric APIs"* (admin portal → tenant settings). Without it, Entra auth fails outright no matter how the workspace is shared — this is the most common first-connect failure.
+- **Lakehouse table discovery lags.** The Lakehouse SQL analytics endpoint discovers new Delta tables **asynchronously** — a just-written gold table can take seconds-to-minutes to become introspectable/queryable. A non-issue for steady-state gold consumption; occasionally visible right after a pipeline creates a *new* table.
+- **Every query bills capacity units.** Fabric meters each query against your capacity. The external-read row caps (default **1,000** / hard **50,000**) and the TTL cache (default **300s**) are the cost governors — keep them tight, and use a least-privilege, read-only SPN.
+- **Identifiers are case-sensitive.** Fabric endpoints use a binary, case-sensitive collation (`Latin1_General_100_BIN2_UTF8`), so object/column names must match **exactly**. MJ quotes and passes identifiers through as-is, so make sure each entity's `SchemaName` / `ExternalObjectName` and field names match the Fabric casing precisely.
+
 ---
 
 ## Known limitations
