@@ -143,7 +143,7 @@ describe('OmnibarCommandProvider', () => {
         provider.Attach(context);
         const out = await provider.GetSuggestions({ ...REQ, Query: 'sk' });
         expect(out.length).toBeGreaterThan(0);
-        expect(out[0].displayName).toBe('Open Skills Studio');
+        expect(out[0].displayName).toBe('Skills Studio');
         expect(GetOmnibarNavPayload(out[0])).toEqual({ kind: 'app', appId: 'a1', appName: 'Skills Studio' });
     });
 
@@ -151,7 +151,7 @@ describe('OmnibarCommandProvider', () => {
         const provider = new OmnibarCommandProvider();
         provider.Attach(context);
         const out = await provider.EmptyStateSuggestions(REQ);
-        expect(out[0].displayName).toBe('Open Chat');
+        expect(out[0].displayName).toBe('Chat');
     });
 });
 

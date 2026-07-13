@@ -72,8 +72,12 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     /** Placeholder text for the search input */
     @Input() Placeholder = 'Search across all your knowledge...';
 
-    /** Maximum number of results to fetch */
-    @Input() MaxResults = 25;
+    /**
+     * Maximum number of results to fetch and display. Deliberately small — the
+     * overlay is a quick-jump surface; "See all results" hands off to the full
+     * Search Results workspace for anything deeper.
+     */
+    @Input() MaxResults = 10;
 
     /** Whether the overlay is currently visible */
     private _IsOpen = false;
@@ -131,6 +135,13 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     @Output() FilterChanged = new EventEmitter<SearchFilterChangeEvent>();
     @Output() SearchExecuted = new EventEmitter<SearchExecutedEvent>();
     @Output() AgentCtaClicked = new EventEmitter<string>();
+    /**
+     * Emitted when the user clicks "See all results" — carries the current query.
+     * Hosts (e.g. the Explorer shell) open the full Search Results workspace,
+     * which has scopes, relevance controls, and richer result actions than this
+     * capped quick-jump overlay. The overlay closes itself after emitting.
+     */
+    @Output() SeeAllRequested = new EventEmitter<string>();
 
     // --- Component State ---
 
@@ -258,6 +269,15 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     /** Handle clicking the agent CTA */
     public OnAgentCtaClick(): void {
         this.AgentCtaClicked.emit(this.Query);
+        this.Close();
+    }
+
+    /** Handle clicking "See all results" — hand off to the full Search workspace */
+    public OnSeeAllClick(): void {
+        const query = this.Query.trim();
+        if (query.length > 0) {
+            this.SeeAllRequested.emit(query);
+        }
         this.Close();
     }
 

@@ -25,6 +25,9 @@
             <div class="search-shortcut-hint">
                 <kbd>ESC</kbd>
             </div>
+            <button type="button" class="search-close-btn" aria-label="Close" title="Close" (click)="Close()">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
 
         <!-- Results area -->
@@ -169,12 +172,18 @@
                     <span class="search-footer-count">
                         {{ TotalCount }} results in {{ FormatElapsedTime(ElapsedMs) }}
                     </span>
-                    @if (ShowAgentCta) {
-                        <button class="agent-cta-btn agent-cta-btn-small" (click)="OnAgentCtaClick()">
-                            <i class="fa-solid fa-robot"></i>
-                            {{ AgentCtaText }}
+                    <div class="search-footer-actions">
+                        <button type="button" class="see-all-btn" (click)="OnSeeAllClick()">
+                            See all results
+                            <i class="fa-solid fa-arrow-right"></i>
                         </button>
-                    }
+                        @if (ShowAgentCta) {
+                            <button class="agent-cta-btn agent-cta-btn-small" (click)="OnAgentCtaClick()">
+                                <i class="fa-solid fa-robot"></i>
+                                {{ AgentCtaText }}
+                            </button>
+                        }
+                    </div>
                 </div>
             }
         </div>

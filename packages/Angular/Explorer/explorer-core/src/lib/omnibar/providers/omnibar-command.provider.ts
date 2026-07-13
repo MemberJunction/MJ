@@ -74,8 +74,8 @@ export class OmnibarCommandProvider extends OmnibarProvider {
         return {
             type: 'app',
             id: app.ID,
-            name: `Open ${app.Name}`,
-            displayName: `Open ${app.Name}`,
+            name: app.Name,
+            displayName: app.Name,
             description: app.Description || 'Switch app',
             icon: app.Icon || 'fa-solid fa-grid-2',
             color: app.Color || undefined,

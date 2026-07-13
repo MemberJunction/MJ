@@ -325,7 +325,8 @@
   <mj-search-overlay
     [(IsOpen)]="LegacySearchOpen"
     [EnableGlobalShortcut]="false"
-    (ResultSelected)="OnOverlayResultSelected($event)">
+    (ResultSelected)="OnOverlayResultSelected($event)"
+    (SeeAllRequested)="OnOverlaySeeAll($event)">
   </mj-search-overlay>
 }
 

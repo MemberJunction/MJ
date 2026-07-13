@@ -2721,6 +2721,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.OnSearchResultSelected(event.Result);
   }
 
+  /** Legacy search overlay "See all results" → the full Search Results workspace
+      (same destination as the omnibar's see-all row). */
+  OnOverlaySeeAll(query: string): void {
+      this.LegacySearchOpen = false;
+      this.navigationService.OpenSearch(query);
+  }
+
   // ========================================
   // NOTIFICATION FUNCTIONALITY
   // ========================================

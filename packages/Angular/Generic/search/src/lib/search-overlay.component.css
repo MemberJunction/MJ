@@ -89,6 +89,28 @@
     font-family: inherit;
 }
 
+.search-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--mj-text-muted);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.search-close-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
 /* Results Area */
 .search-results-area {
     overflow-y: auto;
@@ -365,6 +387,33 @@
 .search-footer-count {
     color: var(--mj-text-muted);
     font-size: 0.78rem;
+}
+
+.search-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* "See all results" — hand-off to the full Search Results workspace */
+.see-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 8px;
+    border: 1px solid var(--mj-border-default);
+    background: transparent;
+    color: var(--mj-brand-primary);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.see-all-btn:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+    border-color: var(--mj-brand-primary);
 }
 
 /* Agent CTA Button */

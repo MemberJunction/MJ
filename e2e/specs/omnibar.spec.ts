@@ -87,15 +87,15 @@ test.describe.serial('Unified command palette', () => {
     await expect(page.locator('.tab-label, [class*="tab"]', { hasText: 'Users' }).first()).toBeVisible({ timeout: 30_000 });
   });
 
-  test('/ switches to Commands mode and Enter switches app', async ({ page }) => {
+  test('/ switches to Go to App mode and Enter switches app', async ({ page }) => {
     await gotoHome(page);
     await openPalette(page);
     await page.locator('.ob-input').fill('/');
-    await expect(page.locator('.ob-mode-badge')).toHaveText(/command/i, { timeout: 15_000 });
+    await expect(page.locator('.ob-mode-badge')).toHaveText(/go to app/i, { timeout: 15_000 });
     await expect(page.locator('.ob-row').first()).toBeVisible({ timeout: 30_000 });
     // Deterministic target: Chat is present for every test user (visible on Home).
     await page.locator('.ob-input').fill('/chat');
-    const chatRow = page.locator('.ob-row', { hasText: 'Open Chat' }).first();
+    const chatRow = page.locator('.ob-row', { hasText: 'Chat' }).first();
     await expect(chatRow).toBeVisible({ timeout: 30_000 });
     await chatRow.click();
     await expect(page.locator('.omnibar-palette')).toBeHidden();

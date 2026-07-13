@@ -108,10 +108,6 @@ export class OmnibarPaletteComponent implements OnDestroy {
         return this.ActiveTriggerChar === '' && this.EffectiveQuery.trim().length > 0;
     }
 
-    public get ProviderCount(): number {
-        return this.providers.length;
-    }
-
     /** Hint chips for the empty state — one per non-default provider. */
     public get TriggerHints(): Array<{ Char: string; Label: string }> {
         return this.providers

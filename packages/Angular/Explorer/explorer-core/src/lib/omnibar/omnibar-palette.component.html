@@ -19,6 +19,9 @@
         (keydown)="OnInputKeydown($event)" />
       <span class="ob-mode-badge">{{ ActiveModeLabel }}</span>
       <kbd class="ob-kbd">esc</kbd>
+      <button type="button" class="ob-close" aria-label="Close" title="Close" (click)="Close()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
     </div>
 
     @if (ShowScopes && Scopes.length > 0) {
@@ -98,10 +101,6 @@
     <div class="ob-foot">
       <span class="ob-k"><kbd class="ob-kbd">↑</kbd><kbd class="ob-kbd">↓</kbd> navigate</span>
       <span class="ob-k"><kbd class="ob-kbd">↵</kbd> open</span>
-      <span class="ob-reg">
-        <i class="fa-solid fa-plug"></i>
-        {{ ProviderCount }} trigger providers registered — extensible via <code>&#64;RegisterClass(OmnibarProvider)</code>
-      </span>
     </div>
   </div>
 }
