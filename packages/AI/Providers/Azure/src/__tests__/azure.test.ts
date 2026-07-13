@@ -18,9 +18,26 @@ vi.mock('@azure/identity', () => ({
     DefaultAzureCredential: mockDefaultAzureCredential,
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: Function) => target,
-}));
+vi.mock('@memberjunction/global', () => {
+    // This suite imports the REAL @memberjunction/ai, so the mock must cover everything
+    // that package reaches for at module load — not just what azure.ts itself uses.
+    // BaseSingleton is one of those; omitting it fails the whole file at import time.
+    const store = new Map<string, unknown>();
+    class BaseSingleton<T> {
+        public static getInstance<T>(this: new () => T): T {
+            const key = this.name;
+            if (!store.has(key)) {
+                store.set(key, new this());
+            }
+            return store.get(key) as T;
+        }
+    }
+    return {
+        RegisterClass: () => (target: Function) => target,
+        ToJSONSafe: (value: unknown) => value,
+        BaseSingleton,
+    };
+});
 
 import { AzureLLM } from '../models/azure';
 import { ChatMessageRole, ChatParams, ChatResult } from '@memberjunction/ai';
