@@ -1,5 +1,45 @@
 # @memberjunction/integration-connectors
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/external-data-sources@5.47.0
+  - @memberjunction/integration-engine@5.47.0
+  - @memberjunction/integration-engine-base@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/external-data-sources@5.46.0
+  - @memberjunction/integration-engine@5.46.0
+  - @memberjunction/integration-engine-base@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- 1740db3: Add the External-Data-Source-backed ingestion connector abstractions (the "heart"): `BaseExternalDataSourceConnector` (family-neutral — resolves the shared `MJ: External Data Sources` row via the EDS router, `TestConnection`, `IntrospectSchema` mapping `ExternalSchemaDescriptor` → `SourceSchemaInfo`, and generic incremental `FetchChanges` that passes a **structured `incrementalSince` watermark bound + raw ordering columns** to `driver.RunView` — the connector writes NO dialect SQL; the EDS driver renders the predicate, quoting, and literal formatting), plus the `BaseSqlExternalDataSourceConnector` (SQL family — **authoritative** discovery) and `BaseDocumentDataSourceConnector` (document/NoSQL family — **non-authoritative** sampled discovery) families. The connection binds to a shared EDS row via `Configuration.externalDataSourceID`; credentials flow through CredentialEngine. Deprecates the SQL-Server-hardcoded, inline-`mssql` `RelationalDBConnector`. Thin per-engine leaves ship as Open Apps in the MemberJunction/Integrations repo.
+- Updated dependencies [00e573c]
+  - @memberjunction/external-data-sources@5.45.1
+  - @memberjunction/integration-engine@5.45.1
+  - @memberjunction/integration-engine-base@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes

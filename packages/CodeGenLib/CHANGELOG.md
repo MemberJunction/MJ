@@ -1,5 +1,123 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.47.0
+
+### Minor Changes
+
+- 92ecbf8: Fix two PostgreSQL CodeGen bugs that turned every `mj codegen` run into a full ~380-entity regeneration instead of a differential (emitting ~184k lines of byte-identical views/sprocs each run):
+  1. **Base-view false "changed" detection.** `checkBaseViewChangedInDB` compared the generated view text against PostgreSQL's `pg_get_viewdef()`, which re-qualifies columns and normalizes whitespace/casing — so it never byte-matched and reported ~314/380 base views as "changed." On PostgreSQL this now compares the view's exposed **column set** (`information_schema.columns`) against the entity's expected fields instead of text: deterministic, immune to `pg_get_viewdef` reformatting, and it still catches a stale view whose columns drifted from metadata (the v5.46 OpenApp outage — a migration adds a column + metadata but doesn't re-bake the view) plus the missing-view self-heal (empty column set → force-recreate). SQL Server keeps its verbatim-definition text comparison.
+  2. **Sequence-renumber over-regeneration.** `spUpdateExistingEntityFieldsFromSchema` flagged an entity as modified for a pure `Sequence` renumber (a freshly-added field's temp `100037` → `19`), forcing a byte-identical view+sproc regen for dozens of entities. The renumber is still applied, but a Sequence-only change no longer marks the entity for regeneration.
+
+  Net: a fresh-migrated PG database regenerates only genuinely-changed entities, and a stale view (columns not matching metadata) is still healed.
+
+### Patch Changes
+
+- f4dce92: Fix PostgreSQL CRUD save/update/delete/cascade failing on entities whose primary key has a multi-word (camelCase/PascalCase) name.
+
+  The PG CodeGen provider declared CRUD function parameters with the canonical flat builder (`ParameterRef` → `p_<lower>`, e.g. `p_recordkey`) but _referenced_ the primary key in several body clauses via `toSnakeCase` (`p_record_key`). Because `toLowerCase()` and `toSnakeCase()` produce the _same_ string for single-word/`ID` keys, this was invisible on every `ID`-keyed entity — but a table keyed on a multi-word soft-PK (e.g. a connector's `recordKey`) generated a function that declared `p_recordkey` and referenced `p_record_key`, so every save/update/delete failed on PostgreSQL with `column "p_record_key" does not exist`.
+
+  All parameter names now route through the single `ParameterRef` builder in both `PostgreSQLCodeGenProvider` (create/update/delete/cascade bodies) and `PostgreSQLDataProvider` (the save-call binding). This is a no-op for `ID`/single-word keys and fixes multi-word keys. Regenerate CRUD functions (`mj codegen`) after upgrading to apply the fix — no data migration required.
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+- Updated dependencies [f4dce92]
+- Updated dependencies [936a286]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/postgresql-dataprovider@5.47.0
+  - @memberjunction/sqlserver-dataprovider@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/external-data-sources@5.47.0
+  - @memberjunction/external-data-source-mongodb@5.47.0
+  - @memberjunction/external-data-source-mysql@5.47.0
+  - @memberjunction/external-data-source-oracle@5.47.0
+  - @memberjunction/external-data-source-postgres@5.47.0
+  - @memberjunction/external-data-source-sqlserver@5.47.0
+  - @memberjunction/external-data-source-snowflake@5.47.0
+  - @memberjunction/generic-database-provider@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/core-entities-server@5.47.0
+  - @memberjunction/server-bootstrap-lite@5.47.0
+  - @memberjunction/sql-parser@5.47.0
+  - @memberjunction/ai-provider-bundle@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/cli-core@5.47.0
+  - @memberjunction/config@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/actions@5.46.0
+  - @memberjunction/external-data-sources@5.46.0
+  - @memberjunction/external-data-source-mongodb@5.46.0
+  - @memberjunction/external-data-source-mysql@5.46.0
+  - @memberjunction/external-data-source-oracle@5.46.0
+  - @memberjunction/external-data-source-postgres@5.46.0
+  - @memberjunction/external-data-source-sqlserver@5.46.0
+  - @memberjunction/external-data-source-snowflake@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/core-entities-server@5.46.0
+  - @memberjunction/postgresql-dataprovider@5.46.0
+  - @memberjunction/sqlserver-dataprovider@5.46.0
+  - @memberjunction/server-bootstrap-lite@5.46.0
+  - @memberjunction/ai-provider-bundle@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/cli-core@5.46.0
+  - @memberjunction/config@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+  - @memberjunction/sql-parser@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+- Updated dependencies [00e573c]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/external-data-sources@5.45.1
+  - @memberjunction/external-data-source-sqlserver@5.45.1
+  - @memberjunction/external-data-source-mongodb@5.45.1
+  - @memberjunction/external-data-source-oracle@5.45.1
+  - @memberjunction/external-data-source-postgres@5.45.1
+  - @memberjunction/external-data-source-mysql@5.45.1
+  - @memberjunction/external-data-source-snowflake@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/core-entities-server@5.45.1
+  - @memberjunction/server-bootstrap-lite@5.45.1
+  - @memberjunction/generic-database-provider@5.45.1
+  - @memberjunction/sqlserver-dataprovider@5.45.1
+  - @memberjunction/ai-provider-bundle@5.45.1
+  - @memberjunction/postgresql-dataprovider@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/actions@5.45.1
+  - @memberjunction/cli-core@5.45.1
+  - @memberjunction/config@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/sql-dialect@5.45.1
+  - @memberjunction/sql-parser@5.45.1
+
 ## 5.45.0
 
 ### Minor Changes

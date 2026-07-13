@@ -1,5 +1,70 @@
 # @memberjunction/ng-base-forms
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-code-editor@5.47.0
+  - @memberjunction/ng-entity-viewer@5.47.0
+  - @memberjunction/ng-list-management@5.47.0
+  - @memberjunction/ng-notifications@5.47.0
+  - @memberjunction/ng-react@5.47.0
+  - @memberjunction/ng-record-changes@5.47.0
+  - @memberjunction/ng-record-tags@5.47.0
+  - @memberjunction/ng-shared-generic@5.47.0
+  - @memberjunction/interactive-component-types@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/ng-markdown@5.47.0
+  - @memberjunction/ng-ui-components@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-code-editor@5.46.0
+  - @memberjunction/ng-entity-viewer@5.46.0
+  - @memberjunction/ng-list-management@5.46.0
+  - @memberjunction/ng-notifications@5.46.0
+  - @memberjunction/ng-react@5.46.0
+  - @memberjunction/ng-record-changes@5.46.0
+  - @memberjunction/ng-record-tags@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/interactive-component-types@5.46.0
+  - @memberjunction/ng-markdown@5.46.0
+  - @memberjunction/ng-ui-components@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-list-management@5.45.1
+- @memberjunction/ng-notifications@5.45.1
+- @memberjunction/ng-react@5.45.1
+- @memberjunction/ng-record-tags@5.45.1
+- @memberjunction/ng-entity-viewer@5.45.1
+- @memberjunction/ng-record-changes@5.45.1
+- @memberjunction/ng-base-types@5.45.1
+- @memberjunction/ng-code-editor@5.45.1
+- @memberjunction/ng-markdown@5.45.1
+- @memberjunction/ng-shared-generic@5.45.1
+- @memberjunction/ng-ui-components@5.45.1
+- @memberjunction/interactive-component-types@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes

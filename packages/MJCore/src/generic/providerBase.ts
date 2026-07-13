@@ -7,7 +7,7 @@ import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, MJLruCache } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -234,7 +234,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _localMetadata: AllMetadata = new AllMetadata();
     private _entityMapByName = new Map<string, EntityInfo>();
     private _entityMapByID = new Map<string, EntityInfo>();
-    private _entityRecordNameCache = new Map<string, string>();
+    // Bounded LRU (unlike its siblings above, this cache holds one entry per distinct
+    // *record* touched via Load()/Save()/LoadFromData() — not per entity definition — so
+    // it can't be reset on metadata refresh; it needs its own eviction policy.
+    private _entityRecordNameCache = new MJLruCache<string, string>({ maxSize: 10000, ttlMs: 60 * 60 * 1000 });
 
     private _refresh = false;
 
@@ -447,7 +450,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The cached display name, or undefined if not in cache
      */
     public async GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined> {
-        let cachedEntry = this._entityRecordNameCache.get(this.getCacheKey(entityName, compositeKey));
+        let cachedEntry = this._entityRecordNameCache.Get(this.getCacheKey(entityName, compositeKey));
         if (!cachedEntry && loadIfNeeded) {
             cachedEntry = await this.GetEntityRecordName(entityName, compositeKey);
         }
@@ -462,7 +465,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param recordName - The display name to cache
      */
     public SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void {
-        this._entityRecordNameCache.set(this.getCacheKey(entityName, compositeKey), recordName);
+        this._entityRecordNameCache.Set(this.getCacheKey(entityName, compositeKey), recordName);
     }
 
     /**
@@ -479,7 +482,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Check cache unless forceRefresh
         if (!forceRefresh) {
-            const cached = this._entityRecordNameCache.get(cacheKey);
+            const cached = this._entityRecordNameCache.Get(cacheKey);
             if (cached !== undefined) {
                 return cached;
             }
@@ -488,7 +491,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Fetch from database via provider-specific implementation
         const name = await this.InternalGetEntityRecordName(entityName, compositeKey, contextUser);
         if (name) {
-            this._entityRecordNameCache.set(cacheKey, name);
+            this._entityRecordNameCache.Set(cacheKey, name);
         }
         return name;
     }
@@ -511,7 +514,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             for (let i = 0; i < info.length; i++) {
                 const item = info[i];
                 const cacheKey = this.getCacheKey(item.EntityName, item.CompositeKey);
-                const cached = this._entityRecordNameCache.get(cacheKey);
+                const cached = this._entityRecordNameCache.Get(cacheKey);
 
                 if (cached !== undefined) {
                     // Cache hit
@@ -542,7 +545,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // Cache successful results
                     if (result.Success && result.RecordName) {
                         const cacheKey = this.getCacheKey(result.EntityName, result.CompositeKey);
-                        this._entityRecordNameCache.set(cacheKey, result.RecordName);
+                        this._entityRecordNameCache.Set(cacheKey, result.RecordName);
                     }
                 }
             }
@@ -556,7 +559,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             for (const result of results) {
                 if (result.Success && result.RecordName) {
                     const cacheKey = this.getCacheKey(result.EntityName, result.CompositeKey);
-                    this._entityRecordNameCache.set(cacheKey, result.RecordName);
+                    this._entityRecordNameCache.Set(cacheKey, result.RecordName);
                 }
             }
 
@@ -1119,7 +1122,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     private findBestField(entity: EntityInfo, preferredNames: string[]): string {
         for (const name of preferredNames) {
-            const field = entity.Fields.find(f => f.Name === name);
+            const field = entity.FieldByName(name);
             if (field) return field.Name;
         }
         // Fallback to first text field
@@ -3424,6 +3427,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
     }
 
+    /**
+     * @deprecated The reuse-global fast path now builds a shared shell instead — see
+     * {@link CreateSharedMetadataShell}. The metadata graph is immutable after Config,
+     * so re-instantiating every Info object (~1s of synchronous constructor work for a
+     * ~600-entity install) bought no isolation the shell doesn't already provide.
+     * Subclass OVERRIDES of this method are still honored on the fast path (see
+     * {@link CopyMetadataFromGlobalProvider}) for backward compatibility; new
+     * customizations should override {@link CreateSharedMetadataShell} instead.
+     */
     protected CloneAllMetadata(toClone: AllMetadata): AllMetadata {
         // we need to create a copy but can't do it the standard way becuase we need object instances
         // for various things like EntityInfo
@@ -3433,14 +3445,72 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * Copies metadata from the global provider to the local instance.
-     * This is used to ensure that the local instance has the latest metadata
-     * information available without having to reload it from the server.
+     * Builds this instance's AllMetadata as a thin shell over another provider's
+     * already-loaded metadata: every metadata array is a PER-INSTANCE shallow copy
+     * whose elements are the SHARED Info object instances, and CurrentUser remains
+     * this instance's own.
+     *
+     * Why sharing the instances is safe — and why this replaced the former deep
+     * clone (CloneAllMetadata) on the reuse-global fast path: the metadata graph is
+     * immutable after Config. Refreshes swap the WHOLE AllMetadata object
+     * (UpdateLocalMetadata), never mutate the Info objects in place, so the only
+     * per-instance datum inside the graph is CurrentUser — which this shell keeps
+     * independent. The deep clone cost ~1s of event-loop-blocking constructor work
+     * per provider on every server request (MemberJunction/MJ#3083); the shell is
+     * ~20 array-of-pointer copies (microseconds).
+     *
+     * Why the array containers are copied rather than aliased: an in-place
+     * `.sort()`/`.push()`/`.splice()` by request-scoped code then stays local to
+     * that provider — matching the clone era's isolation for the common accidental
+     * mutation class — instead of reordering the global graph for every other
+     * in-flight request. Only the top-level AllMetadata collections get this
+     * per-instance protection: everything below them is shared, including the
+     * nested arrays owned by Info objects (`entity.Fields`,
+     * `entity.RelatedEntities`, `application.ApplicationEntities`, ...) — an
+     * in-place mutation of those is process-wide. Property writes on the shared
+     * Info objects themselves are likewise visible process-wide (as they always
+     * were on the client's global provider): treat Info objects and everything
+     * they own as read-only; copy before sorting.
+     *
+     * Override precedence: if a subclass overrides BOTH this method and the
+     * deprecated {@link CloneAllMetadata}, the CloneAllMetadata override wins on
+     * the fast path (see {@link CopyMetadataFromGlobalProvider}) — the
+     * conservative back-compat choice, since pre-#3083 subclasses could only have
+     * customized adoption through CloneAllMetadata. Remove the CloneAllMetadata
+     * override to activate a CreateSharedMetadataShell override.
+     */
+    protected CreateSharedMetadataShell(shared: AllMetadata): AllMetadata {
+        const shell = new AllMetadata();
+        for (const m of AllMetadataArrays) {
+            shell[m.key] = [...(shared[m.key] ?? [])];
+        }
+        shell.CurrentUser = this.CurrentUser; // same semantics the deep clone had — per-instance, not shared
+        return shell;
+    }
+
+    /**
+     * Adopts the global provider's metadata for this instance without reloading it
+     * from the server: shares the (immutable post-Config) metadata arrays by
+     * reference via {@link CreateSharedMetadataShell} and builds this instance's
+     * entity lookup maps.
      */
     protected CopyMetadataFromGlobalProvider(): boolean {
         try {
-            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { // global-provider-ok: this method literally clones FROM the global provider on bootstrap
-                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata); // global-provider-ok: bootstrap clone path
+            // Require the global provider to actually HAVE metadata (entities loaded) — a
+            // registered-but-not-yet-configured global would otherwise donate an empty graph
+            // and this Config would "succeed" with zero entities. Falling through to the
+            // normal load path is the correct behavior in that case.
+            const globalMetadata = Metadata.Provider !== this ? Metadata.Provider?.AllMetadata : undefined; // global-provider-ok: this method adopts metadata FROM the global provider on bootstrap
+            if ((globalMetadata?.AllEntities?.length ?? 0) > 0) {
+                // Back-compat: before #3083 this path called the overridable CloneAllMetadata,
+                // so external subclasses could customize adoption (e.g. tenant-filtered deep
+                // clones). Honor such overrides; the base behavior is the cheap shared shell.
+                // If a subclass overrides both, the CloneAllMetadata override deliberately wins.
+                const subclassOverridesClone = this.CloneAllMetadata !== ProviderBase.prototype.CloneAllMetadata;
+                const adopted = subclassOverridesClone
+                    ? this.CloneAllMetadata(globalMetadata)
+                    : this.CreateSharedMetadataShell(globalMetadata);
+                this.UpdateLocalMetadata(adopted);
                 return true;
             }
             return false;

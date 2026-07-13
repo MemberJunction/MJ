@@ -1,5 +1,209 @@
 # @memberjunction/ng-dashboards
 
+## 5.47.0
+
+### Minor Changes
+
+- 46a06ac: Predictive Studio phase 2: per-record prediction contributions, as-of scoring fix, Studio UX overhaul.
+  - **Per-record prediction contributions (P1-5)**: sidecar `/predict` returns the signed top feature drivers behind each row's prediction for linear models (`coef_ · transformed value` — exact and cheap; tree/ensemble models return none and callers fall back to global feature importance). Typed end-to-end via the new `PredictionContribution` in the shared sidecar contract.
+  - **Fix — as-of column now covered by the anti-skew hydration guard**: `AsOfStrategy` `column` mode reads its cutoff date off each record, but the required-columns set only tracked feature columns + target, so a scoring scope's narrow projection that dropped the date column failed every record at `resolveAsOfDate` (live repro: 0/6747, circuit breaker). The as-of column is now hydrated and hard-asserted exactly like a feature column; two regression tests added.
+  - **Studio UX**: purged all `//` comments from PS SCSS (this package embeds raw SCSS, so `//` comments reach the browser as invalid CSS and silently eat the next rule — root cause of the pipeline-pill layout breakage); Training Pipelines and Model Registry columns now scroll independently via fill-mode content hosts; Models door gains the missing `[Flex]` page body; hero card flattened to standard surface tokens; Predictions door gains business-predictions/at-risk view-models, agent context, and copilot view-models.
+  - **Docs**: `plans/predictive-studio-guardrails.md` records 8 field-tested guardrail gaps (G1–G8) with proposed fixes; G8 (the as-of hydration gap) ships fixed here.
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [46a06ac]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/predictive-studio-core@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/tag-engine-base@5.47.0
+  - @memberjunction/api-keys-base@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/ng-base-application@5.47.0
+  - @memberjunction/ng-core-entity-forms@5.47.0
+  - @memberjunction/ng-explorer-settings@5.47.0
+  - @memberjunction/ng-shared@5.47.0
+  - @memberjunction/ng-testing@5.47.0
+  - @memberjunction/ng-action-gallery@5.47.0
+  - @memberjunction/ng-actions@5.47.0
+  - @memberjunction/ng-agent-requests@5.47.0
+  - @memberjunction/ng-agents@5.47.0
+  - @memberjunction/ng-ai-test-harness@5.47.0
+  - @memberjunction/ng-archive-manager@5.47.0
+  - @memberjunction/ng-base-forms@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-clustering@5.47.0
+  - @memberjunction/ng-code-editor@5.47.0
+  - @memberjunction/ng-composer@5.47.0
+  - @memberjunction/ng-container-directives@5.47.0
+  - @memberjunction/ng-conversations@5.47.0
+  - @memberjunction/ng-credentials@5.47.0
+  - @memberjunction/ng-dashboard-viewer@5.47.0
+  - @memberjunction/ng-entity-relationship-diagram@5.47.0
+  - @memberjunction/ng-entity-viewer@5.47.0
+  - @memberjunction/ng-filter-builder@5.47.0
+  - @memberjunction/ng-list-management@5.47.0
+  - @memberjunction/ng-media-player@5.47.0
+  - @memberjunction/ng-map-view@5.47.0
+  - @memberjunction/ng-notifications@5.47.0
+  - @memberjunction/ng-query-viewer@5.47.0
+  - @memberjunction/ng-react@5.47.0
+  - @memberjunction/ng-record-process-studio@5.47.0
+  - @memberjunction/ng-resource-permissions@5.47.0
+  - @memberjunction/ng-scheduling@5.47.0
+  - @memberjunction/ng-search@5.47.0
+  - @memberjunction/ng-shared-generic@5.47.0
+  - @memberjunction/ng-trees@5.47.0
+  - @memberjunction/ng-user-routines@5.47.0
+  - @memberjunction/ng-versions@5.47.0
+  - @memberjunction/credentials@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/integration-engine-base@5.47.0
+  - @memberjunction/interactive-component-types@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/templates-base-types@5.47.0
+  - @memberjunction/testing-engine-base@5.47.0
+  - @memberjunction/ng-export-service@5.47.0
+  - @memberjunction/ng-markdown@5.47.0
+  - @memberjunction/ng-ui-components@5.47.0
+  - @memberjunction/ng-word-cloud@5.47.0
+  - @memberjunction/lists-base@5.47.0
+  - @memberjunction/export-engine@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ng-core-entity-forms@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/tag-engine-base@5.46.0
+  - @memberjunction/api-keys-base@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/ng-base-application@5.46.0
+  - @memberjunction/ng-explorer-settings@5.46.0
+  - @memberjunction/ng-shared@5.46.0
+  - @memberjunction/ng-testing@5.46.0
+  - @memberjunction/ng-action-gallery@5.46.0
+  - @memberjunction/ng-actions@5.46.0
+  - @memberjunction/ng-agent-requests@5.46.0
+  - @memberjunction/ng-agents@5.46.0
+  - @memberjunction/ng-ai-test-harness@5.46.0
+  - @memberjunction/ng-archive-manager@5.46.0
+  - @memberjunction/ng-base-forms@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-clustering@5.46.0
+  - @memberjunction/ng-code-editor@5.46.0
+  - @memberjunction/ng-composer@5.46.0
+  - @memberjunction/ng-container-directives@5.46.0
+  - @memberjunction/ng-conversations@5.46.0
+  - @memberjunction/ng-credentials@5.46.0
+  - @memberjunction/ng-dashboard-viewer@5.46.0
+  - @memberjunction/ng-entity-relationship-diagram@5.46.0
+  - @memberjunction/ng-entity-viewer@5.46.0
+  - @memberjunction/ng-filter-builder@5.46.0
+  - @memberjunction/ng-list-management@5.46.0
+  - @memberjunction/ng-media-player@5.46.0
+  - @memberjunction/ng-map-view@5.46.0
+  - @memberjunction/ng-notifications@5.46.0
+  - @memberjunction/ng-query-viewer@5.46.0
+  - @memberjunction/ng-react@5.46.0
+  - @memberjunction/ng-record-process-studio@5.46.0
+  - @memberjunction/ng-resource-permissions@5.46.0
+  - @memberjunction/ng-scheduling@5.46.0
+  - @memberjunction/ng-search@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/ng-trees@5.46.0
+  - @memberjunction/ng-user-routines@5.46.0
+  - @memberjunction/ng-versions@5.46.0
+  - @memberjunction/credentials@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/integration-engine-base@5.46.0
+  - @memberjunction/interactive-component-types@5.46.0
+  - @memberjunction/templates-base-types@5.46.0
+  - @memberjunction/testing-engine-base@5.46.0
+  - @memberjunction/predictive-studio-core@5.46.0
+  - @memberjunction/ng-export-service@5.46.0
+  - @memberjunction/ng-markdown@5.46.0
+  - @memberjunction/ng-ui-components@5.46.0
+  - @memberjunction/ng-word-cloud@5.46.0
+  - @memberjunction/lists-base@5.46.0
+  - @memberjunction/export-engine@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ng-conversations@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/ng-core-entity-forms@5.45.1
+  - @memberjunction/ng-shared@5.45.1
+  - @memberjunction/ng-agent-requests@5.45.1
+  - @memberjunction/ng-agents@5.45.1
+  - @memberjunction/ng-ai-test-harness@5.45.1
+  - @memberjunction/graphql-dataprovider@5.45.1
+  - @memberjunction/ng-clustering@5.45.1
+  - @memberjunction/ng-user-routines@5.45.1
+  - @memberjunction/ng-explorer-settings@5.45.1
+  - @memberjunction/ng-testing@5.45.1
+  - @memberjunction/ng-list-management@5.45.1
+  - @memberjunction/ng-action-gallery@5.45.1
+  - @memberjunction/ng-actions@5.45.1
+  - @memberjunction/ng-media-player@5.45.1
+  - @memberjunction/ng-notifications@5.45.1
+  - @memberjunction/ng-react@5.45.1
+  - @memberjunction/ng-record-process-studio@5.45.1
+  - @memberjunction/ng-search@5.45.1
+  - @memberjunction/ng-versions@5.45.1
+  - @memberjunction/ng-base-forms@5.45.1
+  - @memberjunction/ng-entity-viewer@5.45.1
+  - @memberjunction/ng-dashboard-viewer@5.45.1
+  - @memberjunction/ng-credentials@5.45.1
+  - @memberjunction/ng-query-viewer@5.45.1
+  - @memberjunction/ng-resource-permissions@5.45.1
+  - @memberjunction/ng-scheduling@5.45.1
+  - @memberjunction/tag-engine-base@5.45.1
+  - @memberjunction/predictive-studio-core@5.45.1
+  - @memberjunction/api-keys-base@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/ng-base-application@5.45.1
+  - @memberjunction/ng-archive-manager@5.45.1
+  - @memberjunction/ng-base-types@5.45.1
+  - @memberjunction/ng-code-editor@5.45.1
+  - @memberjunction/ng-composer@5.45.1
+  - @memberjunction/ng-container-directives@5.45.1
+  - @memberjunction/ng-entity-relationship-diagram@5.45.1
+  - @memberjunction/ng-export-service@5.45.1
+  - @memberjunction/ng-filter-builder@5.45.1
+  - @memberjunction/ng-markdown@5.45.1
+  - @memberjunction/ng-map-view@5.45.1
+  - @memberjunction/ng-shared-generic@5.45.1
+  - @memberjunction/ng-trees@5.45.1
+  - @memberjunction/ng-ui-components@5.45.1
+  - @memberjunction/ng-word-cloud@5.45.1
+  - @memberjunction/credentials@5.45.1
+  - @memberjunction/integration-engine-base@5.45.1
+  - @memberjunction/interactive-component-types@5.45.1
+  - @memberjunction/lists-base@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/export-engine@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/templates-base-types@5.45.1
+  - @memberjunction/testing-engine-base@5.45.1
+
 ## 5.45.0
 
 ### Minor Changes

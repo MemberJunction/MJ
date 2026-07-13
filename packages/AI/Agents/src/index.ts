@@ -15,6 +15,7 @@ export * from './agent-types/loop-agent-prompt-params';
 export * from './agent-types/loop-agent-stream-extractor';
 export * from './base-agent';
 export * from './prompt-component-resolver';
+export * from './scoped-prompt-config-resolver';
 export * from './agent-run-watchdog';
 export * from './agent-types';
 export * from './AgentRunner';

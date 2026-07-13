@@ -1,5 +1,111 @@
 # @memberjunction/ng-conversations
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-agent-client@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/ng-testing@5.47.0
+  - @memberjunction/ng-artifacts@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-code-editor@5.47.0
+  - @memberjunction/ng-composer@5.47.0
+  - @memberjunction/ng-container-directives@5.47.0
+  - @memberjunction/ng-media-player@5.47.0
+  - @memberjunction/ng-notifications@5.47.0
+  - @memberjunction/ng-resource-permissions@5.47.0
+  - @memberjunction/ng-shared-generic@5.47.0
+  - @memberjunction/ng-tasks@5.47.0
+  - @memberjunction/ng-user-routines@5.47.0
+  - @memberjunction/conversations-runtime@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/interactive-component-types@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/ng-agent-client@5.47.0
+  - @memberjunction/ng-forms@5.47.0
+  - @memberjunction/ng-whiteboard@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/ai-realtime-client@5.47.0
+  - @memberjunction/ng-markdown@5.47.0
+  - @memberjunction/ng-ui-components@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/ai-agent-client@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/ng-testing@5.46.0
+  - @memberjunction/ng-artifacts@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-code-editor@5.46.0
+  - @memberjunction/ng-composer@5.46.0
+  - @memberjunction/ng-container-directives@5.46.0
+  - @memberjunction/ng-media-player@5.46.0
+  - @memberjunction/ng-notifications@5.46.0
+  - @memberjunction/ng-resource-permissions@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/ng-tasks@5.46.0
+  - @memberjunction/ng-user-routines@5.46.0
+  - @memberjunction/conversations-runtime@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/interactive-component-types@5.46.0
+  - @memberjunction/ng-agent-client@5.46.0
+  - @memberjunction/ng-forms@5.46.0
+  - @memberjunction/ng-whiteboard@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/ai-realtime-client@5.46.0
+  - @memberjunction/ng-markdown@5.46.0
+  - @memberjunction/ng-ui-components@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- 572d219: Render agent final-response streaming in the conversation chat. Adds an optional `kind` discriminator to agent streaming chunks — `'final-response'` marks deltas of the user-facing reply — passed through the server's PubSub payload; the conversation client now routes those chunks, accumulates deltas service-side, renders the growing text in the message bubble, and reconciles with the saved final message on completion. Unmarked streams (e.g. Loop-agent JSON turn envelopes) keep today's behavior exactly (dropped), so agents that don't opt in are unaffected.
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/conversations-runtime@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/ng-forms@5.45.1
+  - @memberjunction/ng-tasks@5.45.1
+  - @memberjunction/graphql-dataprovider@5.45.1
+  - @memberjunction/ng-user-routines@5.45.1
+  - @memberjunction/ng-testing@5.45.1
+  - @memberjunction/ai-agent-client@5.45.1
+  - @memberjunction/ng-artifacts@5.45.1
+  - @memberjunction/ng-media-player@5.45.1
+  - @memberjunction/ng-notifications@5.45.1
+  - @memberjunction/ng-agent-client@5.45.1
+  - @memberjunction/ng-resource-permissions@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/ai-realtime-client@5.45.1
+  - @memberjunction/ng-base-types@5.45.1
+  - @memberjunction/ng-code-editor@5.45.1
+  - @memberjunction/ng-composer@5.45.1
+  - @memberjunction/ng-container-directives@5.45.1
+  - @memberjunction/ng-markdown@5.45.1
+  - @memberjunction/ng-shared-generic@5.45.1
+  - @memberjunction/ng-ui-components@5.45.1
+  - @memberjunction/ng-whiteboard@5.45.1
+  - @memberjunction/interactive-component-types@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Minor Changes
