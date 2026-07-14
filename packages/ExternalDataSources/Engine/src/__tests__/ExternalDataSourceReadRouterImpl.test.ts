@@ -10,6 +10,9 @@ function makeFakeDriver(overrides: Partial<BaseExternalDataSourceDriver> = {}) {
     RunView: vi.fn(),
     RunNativeQuery: vi.fn(),
     LoadSingle: vi.fn(),
+    // Mirror the base driver's default resolution (bare name). SQL drivers override to schema-qualify;
+    // tests that need that behavior override ResolveObjectName here.
+    ResolveObjectName: (entity: EntityInfo) => entity.ExternalObjectName || entity.BaseTable || entity.Name,
     ...overrides,
   } as unknown as BaseExternalDataSourceDriver;
 }
@@ -74,30 +77,21 @@ describe('ExternalDataSourceReadRouterImpl', () => {
       expect(viewParams.objectName).toBe('things_table');
     });
 
-    it('qualifies the object name with SchemaName for a non-default-schema external entity (fix B)', async () => {
-      const driver = makeFakeDriver();
+    it('delegates object-name resolution to the driver and passes its result through verbatim (fix B)', async () => {
+      // The router is dialect-agnostic: whatever driver.ResolveObjectName returns is what reaches RunView.
+      // SQL drivers schema-qualify (tested in the SQL driver suites); non-SQL drivers (e.g. MongoDB) return
+      // the bare collection name (tested in the Mongo suite). Here we assert the router doesn't second-guess
+      // the driver — a regression guard against re-introducing router-side, driver-blind qualification that
+      // would break MongoDB (which treats the name as a literal collection).
+      const driver = makeFakeDriver({ ResolveObjectName: () => 'bronze.sales' });
       (driver.RunView as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, rows: [], executionTimeMs: 1 });
       mockResolve(driver);
 
-      // A bare object name in a non-default schema: without qualification the SQL driver falls back to
-      // the source's DefaultSchema and would read `dbo.sales` instead of `bronze.sales`.
       const entity = new EntityInfo({ Name: 'Bronze Sales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales' });
       await impl.RunViewExternal(entity, { EntityName: 'Bronze Sales' });
 
       const [, viewParams] = (driver.RunView as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(viewParams.objectName).toBe('bronze.sales');
-    });
-
-    it('leaves an already schema-qualified ExternalObjectName untouched (no double-qualify)', async () => {
-      const driver = makeFakeDriver();
-      (driver.RunView as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, rows: [], executionTimeMs: 1 });
-      mockResolve(driver);
-
-      const entity = new EntityInfo({ Name: 'Gold Metrics', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'gold.daily_metrics', SchemaName: 'gold', BaseTable: 'daily_metrics' });
-      await impl.RunViewExternal(entity, { EntityName: 'Gold Metrics' });
-
-      const [, viewParams] = (driver.RunView as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(viewParams.objectName).toBe('gold.daily_metrics');
     });
 
     it('fails clearly (no driver call) when offset-paginating a PK-less entity with no OrderBy', async () => {

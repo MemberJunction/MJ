@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { MJExternalDataSourceEntity } from '@memberjunction/core-entities';
 import type { ExternalViewParams } from '@memberjunction/external-data-sources';
+import type { EntityInfo } from '@memberjunction/core';
 import { SQLServerExternalDataSourceDriver } from '../SQLServerExternalDataSourceDriver';
 
 // Unit-test the pure SQL-building helpers + FK grouping — no database connection required.
@@ -60,6 +61,26 @@ describe('SQLServerExternalDataSourceDriver — SQL building', () => {
     });
     it('escapes embedded closing brackets in identifiers', () => {
       expect(d.qual(ds({ DefaultSchema: null as unknown as string }), 'we]rd')).toBe('[we]]rd]');
+    });
+  });
+
+  describe('ResolveObjectName (schema qualification from EntityInfo)', () => {
+    // The SQL-driver override the read router calls: turns an entity into the objectName that
+    // qualifyObject then quotes. Reads only ExternalObjectName / BaseTable / Name / SchemaName.
+    const entity = (o: { ExternalObjectName?: string; BaseTable?: string; Name?: string; SchemaName?: string }) =>
+      ({ ExternalObjectName: o.ExternalObjectName, BaseTable: o.BaseTable, Name: o.Name ?? 'X', SchemaName: o.SchemaName }) as unknown as EntityInfo;
+
+    it('prepends SchemaName to a bare object name in a non-default schema', () => {
+      expect(d.ResolveObjectName(entity({ ExternalObjectName: 'sales', SchemaName: 'bronze' }))).toBe('bronze.sales');
+    });
+    it('leaves an already schema-qualified name untouched (no double-qualify)', () => {
+      expect(d.ResolveObjectName(entity({ ExternalObjectName: 'gold.daily_metrics', SchemaName: 'gold' }))).toBe('gold.daily_metrics');
+    });
+    it('returns the bare name when the entity has no SchemaName', () => {
+      expect(d.ResolveObjectName(entity({ ExternalObjectName: 'sales' }))).toBe('sales');
+    });
+    it('falls back to BaseTable then Name when ExternalObjectName is unset', () => {
+      expect(d.ResolveObjectName(entity({ BaseTable: 'things', SchemaName: 'stg' }))).toBe('stg.things');
     });
   });
 

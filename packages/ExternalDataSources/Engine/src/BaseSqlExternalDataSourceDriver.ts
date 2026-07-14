@@ -1,4 +1,4 @@
-import { ExternalObjectType, ExternalSchemaRelationship } from "@memberjunction/core";
+import { ExternalObjectType, ExternalSchemaRelationship, EntityInfo } from "@memberjunction/core";
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import { BaseExternalDataSourceDriver } from "./BaseExternalDataSourceDriver";
 import { ExternalFkRow, ExternalViewParams, ExternalQueryParameter } from "./types";
@@ -217,6 +217,25 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
       return `${this.quoteIdent(dataSource.DefaultSchema)}.${this.quoteIdent(objectName)}`;
     }
     return this.quoteIdent(objectName);
+  }
+
+  /**
+   * SQL object-name resolution: schema-qualify a bare name with the entity's `SchemaName` so an object
+   * in a NON-default schema (e.g. medallion bronze/silver/gold, or any multi-schema source) resolves
+   * correctly — {@link qualifyObject} then splits on '.' and quotes each part. An already schema-qualified
+   * name (contains '.') or an entity with no `SchemaName` is returned unchanged (qualifyObject falls back
+   * to the source DefaultSchema for the bare case). `SchemaName` is the same value CodeGen used to
+   * introspect the object, so the read path and introspection stay consistent. This override is why the
+   * qualification never reaches a non-SQL driver (e.g. MongoDB), which treats the name as literal.
+   */
+  public override ResolveObjectName(entity: EntityInfo): string {
+    // Reuse the base fallback chain (ExternalObjectName ?? BaseTable ?? Name) so SQL and non-SQL drivers
+    // can never diverge on how the bare name is derived — this override only ADDS schema qualification.
+    const objectName = super.ResolveObjectName(entity);
+    if (objectName.includes('.') || !entity.SchemaName) {
+      return objectName;
+    }
+    return `${entity.SchemaName}.${objectName}`;
   }
 
   /**

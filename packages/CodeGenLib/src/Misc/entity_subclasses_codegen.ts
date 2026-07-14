@@ -150,8 +150,14 @@ export class EntitySubClassGeneratorBase {
       // Hoist the base-class imports (e.g. ReadOnlyExternalBaseEntity for external entities, or custom
       // subclass imports) into the file header, de-duplicated. Emitting each once — instead of once per
       // entity — prevents a TS2300 duplicate-identifier error in files with 2+ external entities.
+      // Only consider entities that actually emit a class: generateEntitySubClass skips PK-less entities
+      // (returns ''), so hoisting their import would leave a dangling/unused import (a build error under
+      // a downstream consumer's noUnusedLocals). Match that skip condition here.
       const subclassImports: string = [...new Set(
-        entities.map((e) => this.resolveEntityBaseClass(e).importStatement).filter((s) => s.length > 0)
+        entities
+          .filter((e) => e.PrimaryKeys.length > 0)
+          .map((e) => this.resolveEntityBaseClass(e).importStatement)
+          .filter((s) => s.length > 0)
       )].join('');
       const allContent = `${this.generateEntitySubClassFileHeader()} \n ${subclassImports}${zodContent} \n ${sContent}`;
 
@@ -177,11 +183,6 @@ export const loadModule = () => {
     `;
   }
 
-  /**
-   *
-   * @param entity
-   * @param includeFileHeader
-   */
   /**
    * Resolves an entity's generated base class and the import statement that class requires.
    * Pure (no side effects) so BOTH {@link generateEntitySubClass} and the file assembler can call it —
