@@ -16,12 +16,6 @@ function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {
   return () => importFn().then(() => {});
 }
 
-// --- @memberjunction/codegen-lib → ./plugins (1 entries) ---
-const loadCodegenLibPlugins = featureLoader(() => import('@memberjunction/codegen-lib/plugins'));
-
-// --- @memberjunction/metadata-sync → ./plugins (2 entries) ---
-const loadMetadataSyncPlugins = featureLoader(() => import('@memberjunction/metadata-sync/plugins'));
-
 // --- @memberjunction/ng-dashboards → ./actions-dashboards.module (7 entries) ---
 const loadNgDashboardsActionsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/actions-dashboards.module'));
 
@@ -81,13 +75,6 @@ const loadNgReact = featureLoader(() => import('@memberjunction/ng-react'));
  * Covers all @RegisterClass decorated classes in lazy-loaded packages.
  */
 export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
-  // @memberjunction/codegen-lib → ./plugins
-  'BaseCLIPlugin::codegen': loadCodegenLibPlugins,
-
-  // @memberjunction/metadata-sync → ./plugins
-  'BaseCLIPlugin::sync:pull': loadMetadataSyncPlugins,
-  'BaseCLIPlugin::sync:push': loadMetadataSyncPlugins,
-
   // @memberjunction/ng-dashboards → ./actions-dashboards.module
   'BaseResourceComponent::ActionExplorerResource': loadNgDashboardsActionsDashboardsModule,
   'BaseResourceComponent::ActionsCodeResource': loadNgDashboardsActionsDashboardsModule,
@@ -236,4 +223,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 113;
+export const LAZY_FEATURE_CONFIG_COUNT = 110;
