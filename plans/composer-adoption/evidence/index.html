@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Omnibar — Verified Run Evidence</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--text:#f1f5f9;--muted:#94a3b8;--brand:#4dabd5;--ok:#22c55e}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);padding:32px}
+h1{font-size:26px;margin-bottom:6px}
+.sub{color:var(--muted);margin-bottom:8px;font-size:14px}
+.badge{display:inline-flex;align-items:center;gap:8px;background:rgba(34,197,94,.12);color:var(--ok);border:1px solid rgba(34,197,94,.4);border-radius:999px;padding:6px 16px;font-weight:700;font-size:14px;margin:10px 0 28px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(620px,1fr));gap:26px}
+.card{background:var(--card);border:1px solid #334155;border-radius:14px;overflow:hidden}
+.card img{width:100%;display:block;border-bottom:1px solid #334155;cursor:zoom-in}
+.card .cap{padding:14px 18px}
+.card .cap b{font-size:14.5px}
+.card .cap p{color:var(--muted);font-size:12.5px;margin-top:4px;line-height:1.5}
+.tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:2px 8px;border-radius:999px;margin-left:8px;vertical-align:middle}
+.tag.fix{background:rgba(34,197,94,.15);color:var(--ok)}
+.tag.core{background:rgba(77,171,213,.15);color:var(--brand)}
+.footer{margin-top:30px;color:var(--muted);font-size:12.5px;line-height:1.7}
+code{background:#0b1120;padding:1px 6px;border-radius:5px;font-size:11.5px;color:var(--brand)}
+</style>
+</head>
+<body>
+<h1>Unified Command Palette (Omnibar) — Verified Run</h1>
+<div class="sub">PR #3042 · branch <code>omnibar-command-palette</code> · captured live against MJAPI + MJExplorer, 2026-07-04</div>
+<div class="badge">✔ Playwright E2E 5/5 passed (1.9m) — all three reported gaps fixed &amp; verified</div>
+
+<div class="grid">
+  <div class="card"><a href="01-header-affordance.png" target="_blank"><img src="01-header-affordance.png"></a>
+    <div class="cap"><b>1 · Header affordance</b><p>The flag-ON header: click or Ctrl+K summons the palette. Flag OFF (<code>Shell.Omnibar.Enabled=false</code>) restores the legacy search composite byte-for-byte.</p></div></div>
+
+  <div class="card"><a href="02-empty-state-hints-recents.png" target="_blank"><img src="02-empty-state-hints-recents.png"></a>
+    <div class="cap"><b>2 · Empty state</b><p>Trigger-hint chips (#, /, @) teach the palette; recents (searches + apps) below. Footer shows the live provider count from the <code>OmnibarProvider</code> registry.</p></div></div>
+
+  <div class="card"><a href="03-global-search-results.png" target="_blank"><img src="03-global-search-results.png"></a>
+    <div class="cap"><b>3 · Global search (plain text)</b><p>Cross-source SearchEngine preview — grouped Records/Files/Content, relevance bars, scope pills, guaranteed "See all results" row into the Search Results tab.</p></div></div>
+
+  <div class="card"><a href="04-hash-entities-and-records.png" target="_blank"><img src="04-hash-entities-and-records.png"></a>
+    <div class="cap"><b>4 · <code>#</code> jump-to-record</b><span class="tag fix">gap fixed</span><p>Entity matches + top records of the best entity; the record term is now scoped (query minus the matched entity name), so <code>#mj: ai agent learning cycles</code> resolves correctly.</p></div></div>
+
+  <div class="card"><a href="05-entity-list-view-opened.png" target="_blank"><img src="05-entity-list-view-opened.png"></a>
+    <div class="cap"><b>5 · Enter on an entity → list view opens</b><span class="tag fix">gap fixed</span><span class="tag core">2 core bugs</span><p>Entity rows now navigate via <code>OpenDynamicView</code>. Fixing this exposed two latent core bugs, both repaired: resource-type resolution was <code>MJ:</code>-prefix-intolerant, and the User Views resource never honored the documented <code>dynamic</code> marker.</p></div></div>
+
+  <div class="card"><a href="06-slash-commands-installed-apps.png" target="_blank"><img src="06-slash-commands-installed-apps.png"></a>
+    <div class="cap"><b>6 · <code>/</code> commands — installed apps only</b><span class="tag fix">gap fixed</span><p>The provider now reads <code>ApplicationManager.Applications</code> (the user's installed set) instead of the unfiltered system list — no more no-op rows.</p></div></div>
+
+  <div class="card"><a href="07-slash-fuzzy-scheduling.png" target="_blank"><img src="07-slash-fuzzy-scheduling.png"></a>
+    <div class="cap"><b>7 · <code>/</code> fuzzy matching + nav items</b><p>Legacy Ctrl+/ palette scoring tiers (exact &gt; starts-with &gt; contains &gt; description &gt; initials) + per-app nav destinations.</p></div></div>
+
+  <div class="card"><a href="08-at-agents-mode.png" target="_blank"><img src="08-at-agents-mode.png"></a>
+    <div class="cap"><b>8 · <code>@</code> agents mode</b><p>Delegates at runtime to ng-conversations' agent-mentions plugin (permission-filtered, zero compile dependency).</p></div></div>
+
+  <div class="card"><a href="09-chat-preaddressed-focused.png" target="_blank"><img src="09-chat-preaddressed-focused.png"></a>
+    <div class="cap"><b>9 · Agent → Chat pre-addressed + focused</b><span class="tag fix">gap fixed</span><p>Selecting Sage lands in Chat with <code>@Sage</code> staged as a DRAFT (not sent) and the composer focused — via the new <code>initialDraft</code> seam and a <code>SwitchToApp</code> fix that now delivers query params on the default-app path.</p></div></div>
+</div>
+
+<div class="footer">
+  Verification: Playwright E2E <b>5/5</b> (Ctrl+K/affordance/Escape · global search + see-all · # entities → list view · /chat app switch · @ → pre-addressed focused composer) · unit suites green (explorer-core 27, conversations 863, ng-shared) · UI CI gates clean.<br>
+  Core fixes shipped alongside: prefix-tolerant ResourceType resolution (both lookup paths) · poisoned-tab boot no longer bricks the shell (graceful close) · <code>OpenDynamicView</code> 'dynamic' marker honored · <code>SwitchToApp</code> queryParams on the default path.
+</div>
+</body>
+</html>
