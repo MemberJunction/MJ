@@ -17,7 +17,7 @@ import {
 } from '@angular/core';
 import { StartupManager } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
-import { SearchResultItem } from './search-types';
+import { SearchResultItem, RecentRecordItem } from './search-types';
 import { RecentSearch } from './search.service';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 
@@ -65,6 +65,28 @@ export class SearchSuggestComponent implements OnInit {
     /** Whether to show the recent searches section */
     @Input() ShowRecent = true;
 
+    /**
+     * Recently opened records (host-loaded, e.g. from SearchService
+     * .GetRecentlyOpenedRecords). Rendered as a "Recently Opened" section in
+     * the idle/empty state so users can jump straight back to a record they
+     * just had open — the complement to Recent Searches (queries).
+     */
+    @Input() RecentRecords: RecentRecordItem[] = [];
+
+    /**
+     * Optional promo row pinned to the dropdown's bottom edge — a host-supplied
+     * nudge (e.g. Explorer advertising its command palette). The component is
+     * deliberately ignorant of WHAT is being promoted; the host provides the
+     * copy and handles both outcomes.
+     */
+    @Input() ShowPromo = false;
+
+    /** Promo copy (one sentence). Required when ShowPromo is true. */
+    @Input() PromoText = '';
+
+    /** Label for the promo's accept action. */
+    @Input() PromoActionLabel = 'Turn on';
+
     // --- Outputs ---
 
     /** Emitted when the user selects a preview result */
@@ -78,6 +100,15 @@ export class SearchSuggestComponent implements OnInit {
 
     /** Emitted when the user clicks "Clear" on recent searches */
     @Output() ClearRecentRequested = new EventEmitter<void>();
+
+    /** Emitted when the user selects a recently opened record */
+    @Output() RecentRecordSelected = new EventEmitter<RecentRecordItem>();
+
+    /** Promo accept — carries the current query so the host can hand it off. */
+    @Output() PromoAccepted = new EventEmitter<string>();
+
+    /** Promo dismissed — the host should persist this and stop showing it. */
+    @Output() PromoDismissed = new EventEmitter<void>();
 
     // --- Internal state ---
 
@@ -138,6 +169,17 @@ export class SearchSuggestComponent implements OnInit {
             }
         }
 
+        if (this.showRecentRecordsSection) {
+            // Navigating recently opened records (indexes continue after recents)
+            const offset = this.showRecentSection ? this.VisibleRecentSearches.length : 0;
+            const recordIndex = this.HighlightedIndex - offset;
+            const visibleRecords = this.VisibleRecentRecords;
+            if (recordIndex >= 0 && recordIndex < visibleRecords.length) {
+                this.OnRecentRecordClick(visibleRecords[recordIndex]);
+                return;
+            }
+        }
+
         if (this.showPreviewSection) {
             // Navigating preview results
             const offset = this.showRecentSection ? this.VisibleRecentSearches.length : 0;
@@ -160,6 +202,13 @@ export class SearchSuggestComponent implements OnInit {
         this.HighlightedIndex = -1;
     }
 
+    /** Number of keyboard-navigable rows currently visible (recents + recently
+        opened + preview results + see-all). Public so the composite's Tab
+        handling knows when the highlight has walked off the end of the list. */
+    public get NavigableItemCount(): number {
+        return this.getNavigableItemCount();
+    }
+
     // --- Template getters ---
 
     /** Whether to show recent searches section */
@@ -170,6 +219,16 @@ export class SearchSuggestComponent implements OnInit {
     /** Whether to show preview results section */
     public get showPreviewSection(): boolean {
         return this.Query.length >= this.MinQueryLength;
+    }
+
+    /** Whether to show the recently-opened-records section (idle state only) */
+    public get showRecentRecordsSection(): boolean {
+        return this.Query.length < this.MinQueryLength && this.RecentRecords.length > 0;
+    }
+
+    /** Visible recently opened records (capped at 3) */
+    public get VisibleRecentRecords(): RecentRecordItem[] {
+        return this.RecentRecords.slice(0, 3);
     }
 
     /** Whether to show the "See all N results" footer */
@@ -203,15 +262,31 @@ export class SearchSuggestComponent implements OnInit {
         this.RecentSelected.emit(recent.Query);
     }
 
+    /** Handle clicking a recently opened record */
+    public OnRecentRecordClick(record: RecentRecordItem): void {
+        this.RecentRecordSelected.emit(record);
+    }
+
     /** Handle clicking "See all" */
     public OnSeeAllClick(): void {
         this.SeeAllRequested.emit(this.Query);
     }
 
-    /** Handle clicking "Clear" on recent searches */
+    /** Promo accept — fired on click so keyboard Enter/Space work too; the
+        template's mousedown-preventDefault keeps the input from blurring first. */
+    public OnPromoAccept(): void {
+        this.PromoAccepted.emit(this.Query);
+    }
+
+    /** Promo dismiss. */
+    public OnPromoDismiss(): void {
+        this.PromoDismissed.emit();
+    }
+
+    /** "Clear" on recent searches — click-driven so keyboard Enter/Space work;
+        the template's mousedown-preventDefault keeps the input from blurring. */
     public OnClearRecentClick(event: MouseEvent): void {
         event.stopPropagation();
-        event.preventDefault();
         this.ClearRecentRequested.emit();
     }
 
@@ -266,6 +341,9 @@ export class SearchSuggestComponent implements OnInit {
         let count = 0;
         if (this.showRecentSection) {
             count += this.VisibleRecentSearches.length;
+        }
+        if (this.showRecentRecordsSection) {
+            count += this.VisibleRecentRecords.length;
         }
         if (this.showPreviewSection) {
             count += this.VisiblePreviewResults.length;

@@ -192,3 +192,13 @@ export interface SearchExecutedEvent {
     /** Time taken in ms */
     ElapsedMs: number;
 }
+
+/** A recently opened record (from MJ: User Record Logs) surfaced in search empty states */
+export interface RecentRecordItem {
+    /** Entity name (e.g. 'MJ: AI Prompt Runs') */
+    EntityName: string;
+    /** Record primary key value */
+    RecordID: string;
+    /** Resolved display name (falls back to the ID when resolution fails) */
+    RecordName: string;
+}
