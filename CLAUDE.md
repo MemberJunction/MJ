@@ -739,6 +739,15 @@ The local check requires your changes to be committed (it diffs against `origin/
 
 The two checker scripts live at `.github/scripts/check-css-hex-tokens.sh` and `.github/scripts/check-mj-btn-override.sh`. Both also accept `--file <path>` for single-file checks.
 
+## Native-ESM Import Guard (Local — Mirror of CI Gate)
+
+The unit-test workflow imports every built `"type": "module"` package's entry point in a fresh native-ESM Node process and fails on the extensionless-relative-specifier signature in a package's own `dist/` (the `ERR_MODULE_NOT_FOUND` bug class that `tsc` + bundler builds tolerate but plain Node / Vitest-externalized deps / non-symlinked installs reject). Run it locally before pushing a `type: module` package change:
+
+- `npm run check:esm` — sweep all built `type: module` packages under `packages/` (needs a prior `npm run build`; unbuilt packages classify `NOT_BUILT` and skip)
+- `npm run check:esm:test` — the guard's own vitest suite (entry-point resolution, failure classification, CLI contract)
+
+The guard lives at `.github/scripts/check-esm-imports.mjs`. Only `OWN_DIST_MISSING_EXT` fails the gate; dependency failures, side-effect crashes, and unbuilt packages are reported but non-gating.
+
 ## Code Style Guide
 - Use TypeScript strict mode and explicit typing
 - Always use MemberJunction generated `BaseEntity` sub-classes for all data work for strong typing

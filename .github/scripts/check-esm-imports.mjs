@@ -9,7 +9,7 @@
  * one-package-at-a-time in #3137/#3138 can't recur silently.
  */
 
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, realpathSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
@@ -24,6 +24,12 @@ const FAILURE_MARKER = '__ESM_GUARD_FAILURE__';
  * Resolve a package's published ESM entry point from its package.json.
  * Precedence: exports["."].import → exports["."].default → exports (string) → main.
  * Returns the relative path string, or null when the package publishes no entry.
+ *
+ * Known limitations (zero packages in the current fleet hit either):
+ * - Nested export conditions (e.g. `{ import: { default: "..." } }`) aren't
+ *   unwrapped; they fall through to `main`.
+ * - A package with neither `exports` nor `main` returns null and is skipped as
+ *   NOT_BUILT rather than trying Node's implicit `index.js` default.
  */
 export function resolveEntryPoint(pkgJson) {
     const exp = pkgJson.exports;
@@ -106,21 +112,45 @@ function importInFreshProcess(entryPath) {
 
 /**
  * Classify a structured import failure relative to the package that owns the entry.
- * A resolution failure whose missing path lies inside the package's own directory is
- * the extensionless-specifier signature (fails CI); one pointing elsewhere is a
- * dependency problem (reported, non-gating). ERR_UNSUPPORTED_DIR_IMPORT is the same
- * bug class — an extensionless specifier that happens to resolve to a directory.
+ * A resolution failure whose missing path lies inside the package's own source/dist
+ * is the extensionless-specifier signature (fails CI); one pointing elsewhere — or
+ * into the package's own nested node_modules, which is a third-party dep's problem,
+ * not the host package's — is a dependency failure (reported, non-gating).
+ * ERR_UNSUPPORTED_DIR_IMPORT is the same bug class: an extensionless specifier that
+ * happens to resolve to a directory.
  */
 export function classifyFailure(failure, pkgDir) {
     const { code, message } = failure;
     if (code === 'ERR_MODULE_NOT_FOUND' || code === 'ERR_UNSUPPORTED_DIR_IMPORT') {
         const missing = extractMissingPath(message);
-        if (missing && resolve(missing).startsWith(resolve(pkgDir) + sep)) {
+        // Node reports realpath'd paths in resolver errors, so realpath pkgDir too —
+        // otherwise a symlinked package dir fails the startsWith and a real own-dist
+        // break gets missed (fail-open). A node_modules segment in the missing path
+        // means a nested dependency, never the host package's own dist.
+        if (
+            missing &&
+            !isUnderNodeModules(resolve(missing)) &&
+            resolve(missing).startsWith(realpathOr(pkgDir) + sep)
+        ) {
             return { status: 'OWN_DIST_MISSING_EXT', detail: firstLine(message) };
         }
         return { status: 'DEP_FAIL', detail: firstLine(message) };
     }
     return { status: 'OTHER_ERR', detail: `[${code}] ${firstLine(message)}` };
+}
+
+/** True when any path segment is `node_modules` — i.e. the path is inside a dependency tree. */
+function isUnderNodeModules(absPath) {
+    return absPath.split(sep).includes('node_modules');
+}
+
+/** realpathSync(p), falling back to a plain resolve when the path can't be resolved. */
+function realpathOr(p) {
+    try {
+        return realpathSync(resolve(p));
+    } catch {
+        return resolve(p);
+    }
 }
 
 /** Parallel child-process import checks — keeps a ~200-package sweep to a couple of minutes. */

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { resolveEntryPoint, checkPackage, sweep } from '../check-esm-imports.mjs';
+import { resolveEntryPoint, checkPackage, classifyFailure, sweep } from '../check-esm-imports.mjs';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -77,6 +77,41 @@ describe('checkPackage', () => {
     it('classifies a package whose entry file is absent as NOT_BUILT (skipped)', async () => {
         const result = await checkPackage(join(FIXTURES, 'not-built-pkg'));
         expect(result.status).toBe('NOT_BUILT');
+    });
+});
+
+describe('classifyFailure', () => {
+    const pkgDir = '/repo/packages/Victim';
+
+    it('classifies an extensionless specifier in the package own dist as OWN_DIST_MISSING_EXT', () => {
+        const failure = {
+            code: 'ERR_MODULE_NOT_FOUND',
+            message: `Cannot find module '${pkgDir}/dist/helper' imported from ${pkgDir}/dist/index.js`,
+        };
+        expect(classifyFailure(failure, pkgDir).status).toBe('OWN_DIST_MISSING_EXT');
+    });
+
+    it('classifies a break inside the package own nested node_modules as DEP_FAIL, not own-dist', () => {
+        // npm nests deps in a package's own node_modules on version conflicts; a third-party
+        // dep's broken ESM must not be blamed on the host MJ package (gating false positive).
+        const failure = {
+            code: 'ERR_MODULE_NOT_FOUND',
+            message: `Cannot find module '${pkgDir}/node_modules/brokendep/missing-thing' imported from ${pkgDir}/node_modules/brokendep/index.js`,
+        };
+        expect(classifyFailure(failure, pkgDir).status).toBe('DEP_FAIL');
+    });
+
+    it('classifies a directory import in the package own dist as OWN_DIST_MISSING_EXT', () => {
+        const failure = {
+            code: 'ERR_UNSUPPORTED_DIR_IMPORT',
+            message: `Directory import '${pkgDir}/dist/sub' is not supported resolving ES modules imported from ${pkgDir}/dist/index.js`,
+        };
+        expect(classifyFailure(failure, pkgDir).status).toBe('OWN_DIST_MISSING_EXT');
+    });
+
+    it('classifies a non-resolution error as OTHER_ERR', () => {
+        const failure = { code: 'ERR_REQUIRE_ESM', message: 'boom' };
+        expect(classifyFailure(failure, pkgDir).status).toBe('OTHER_ERR');
     });
 });
 
