@@ -18,7 +18,11 @@ import {
     ChildPromptParam,
     AIPromptParams
 } from '@memberjunction/ai-core-plus';
-import * as JSON5 from 'json5';
+// json5 is a CJS module: under this package's ESM output its import namespace has no
+// `parse` — only the default export does. `import * as JSON5` made JSON5.parse
+// undefined at runtime ("JSON5.parse is not a function"), silently disabling the
+// local JSON-repair tier and forcing every malformed payload onto the AI-repair path.
+import JSON5 from 'json5';
 
 /**
  * Best-guess MIME family for a ChatMessage content block type when the block

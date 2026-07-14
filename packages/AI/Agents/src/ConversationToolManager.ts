@@ -302,26 +302,16 @@ export class ConversationToolManager {
         }
         const maxResults = Math.min(input.maxResults || DEFAULT_SEARCH_RESULTS, MAX_SEARCH_RESULTS);
         const matchType: ConversationSearchHit['matchType'] = input.isRegex ? 'regex' : 'keyword';
-
-        let regex: RegExp | null = null;
-        if (input.isRegex) {
-            try {
-                regex = new RegExp(input.query, 'i');
-            } catch (error) {
-                throw new Error(`Invalid regular expression '${input.query}': ${error instanceof Error ? error.message : error}`);
-            }
-        }
+        const regex = this.compileSearchRegex(input.query, input.isRegex);
         const needle = input.query.toLowerCase();
 
-        const roleFilter = input.role?.toLowerCase();
         const hits: ConversationSearchHit[] = [];
         let totalMatches = 0;
         for (const detail of details) {
-            if (roleFilter && (detail.Role || '').toLowerCase() !== roleFilter) continue;
-            if (typeof input.startSequence === 'number' && detail.Sequence < input.startSequence) continue;
-            if (typeof input.endSequence === 'number' && detail.Sequence > input.endSequence) continue;
+            if (!this.passesSearchFilters(detail, input)) continue;
 
             const text = detail.Message || '';
+            // `??` (not the usual `||` fallback) — a match at index 0 is a valid hit
             const matchIndex = regex ? (text.match(regex)?.index ?? -1) : text.toLowerCase().indexOf(needle);
             if (matchIndex < 0) continue;
 
@@ -337,6 +327,27 @@ export class ConversationToolManager {
             }
         }
         return { hits, totalMatches };
+    }
+
+    /** Compiles the query as a case-insensitive regex in regex mode; null in keyword mode. */
+    private compileSearchRegex(query: string, isRegex: boolean | undefined): RegExp | null {
+        if (!isRegex) {
+            return null;
+        }
+        try {
+            return new RegExp(query, 'i');
+        } catch (error) {
+            throw new Error(`Invalid regular expression '${query}': ${error instanceof Error ? error.message : error}`);
+        }
+    }
+
+    /** Role and sequence-range filters applied to every candidate message in a search. */
+    private passesSearchFilters(detail: MJConversationDetailEntity, input: ConversationToolCall['input']): boolean {
+        const roleFilter = input.role?.toLowerCase();
+        if (roleFilter && (detail.Role || '').toLowerCase() !== roleFilter) return false;
+        if (typeof input.startSequence === 'number' && detail.Sequence < input.startSequence) return false;
+        if (typeof input.endSequence === 'number' && detail.Sequence > input.endSequence) return false;
+        return true;
     }
 
     /** A ~300-char window centered on the match, with ellipses at cut edges. */

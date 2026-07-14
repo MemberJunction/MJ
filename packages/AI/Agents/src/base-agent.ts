@@ -8257,7 +8257,19 @@ The context is now within limits. Please retry your request with the recovered c
                 // Check if this is a message expansion request
                 if (previousDecision.messageIndex !== undefined) {
                     // Handle message expansion before retrying
-                    this.executeExpandMessageStep(previousDecision, params, this._promptTurnCount);
+                    const expandFailure = this.executeExpandMessageStep(previousDecision, params, this._promptTurnCount);
+                    if (expandFailure) {
+                        // A failed expansion MUST NOT leave the loop state unchanged: the model
+                        // re-requests the identical expansion forever (observed live when a
+                        // spliced cross-turn summary message — which has no expanded form — was
+                        // requested for expansion; the silent no-op produced an unbounded Retry
+                        // loop that exhausted the process heap). Surface the failure into the
+                        // conversation so the next prompt steers the model away.
+                        params.conversationMessages.push({
+                            role: 'user',
+                            content: `Message expansion failed: ${expandFailure}`
+                        });
+                    }
                 }
                 return await this.executePromptStep(params, config, previousDecision, stepCount);
             case 'Sub-Agent':
@@ -13754,26 +13766,32 @@ The context is now within limits. Please retry your request with the recovered c
      * @param request - The expand message request
      * @param params - Agent execution parameters
      * @param currentTurn - Current turn number
+     * @returns null when the expansion succeeded; otherwise a model-facing reason the
+     * expansion is impossible. Callers must surface a non-null reason into the next
+     * prompt's context — a silent no-op leaves the loop state identical and the model
+     * re-requests the same expansion indefinitely.
      * @protected
      */
     protected executeExpandMessageStep(
         request: BaseAgentNextStep,
         params: ExecuteAgentParams,
         currentTurn: number
-    ): void {
+    ): string | null {
         const messageIndex = request.messageIndex;
         const reason = request.expandReason;
 
         if (messageIndex === undefined || messageIndex < 0 || messageIndex >= params.conversationMessages.length) {
             console.warn(`Cannot expand message: index ${messageIndex} out of bounds`);
-            return;
+            return `message index ${messageIndex} is out of bounds — do not request this expansion again.`;
         }
 
         const message = params.conversationMessages[messageIndex] as AgentChatMessage;
 
         if (!message.metadata?.canExpand || !message.metadata?.originalContent) {
             console.warn(`Cannot expand message at index ${messageIndex}: not expandable or no original content`);
-            return;
+            return message.metadata?.isConversationSummary
+                ? `message ${messageIndex} is the cross-turn conversation summary and has no expanded form. To read the underlying history, use the conversation history tools (getMessageBySequence, getMessagesByRange, searchConversation, summarizeRange) instead — do not request expansion of this message again.`
+                : `message ${messageIndex} is not expandable (it carries no compacted original content) — do not request this expansion again.`;
         }
 
         // Restore original content
@@ -13794,6 +13812,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (params.verbose) {
             console.log(`[Turn ${currentTurn}] Expanded message at index ${messageIndex}`);
         }
+        return null;
     }
 
     /**

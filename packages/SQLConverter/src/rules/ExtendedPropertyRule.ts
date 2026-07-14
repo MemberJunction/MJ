@@ -51,7 +51,11 @@ export class ExtendedPropertyRule implements IConversionRule {
   }
 
   private parseNamedParams(sql: string, schema: string): string | null {
-    const valueMatch = sql.match(/@value\s*=\s*N?'((?:[^']|'')*?)'/i);
+    // The value group must be GREEDY: with a lazy quantifier the closing ' binds to the
+    // first quote of an escaped '' pair, silently truncating descriptions at the first
+    // apostrophe. Greedy is safe — the group can consume '' pairs but never a lone ',
+    // so it always terminates at the true closing quote.
+    const valueMatch = sql.match(/@value\s*=\s*N?'((?:[^']|'')*)'/i);
     const level1TypeMatch = sql.match(/@level1type\s*=\s*N?'(\w+)'/i);
     const level1NameMatch = sql.match(/@level1name\s*=\s*N?'(\w+)'/i);
     const level2TypeMatch = sql.match(/@level2type\s*=\s*N?'(\w+)'/i);
@@ -71,8 +75,9 @@ export class ExtendedPropertyRule implements IConversionRule {
 
   private parsePositionalParams(sql: string, schema: string): string | null {
     // Match positional: sp_addextendedproperty N'MS_Description', N'value', 'SCHEMA', N'schema', 'TABLE', N'table'[, 'COLUMN', N'col']
+    // Value group is greedy for the same escaped-apostrophe reason as parseNamedParams.
     const match = sql.match(
-      /sp_addextendedproperty\s+N?'MS_Description'\s*,\s*N?'((?:[^']|'')*?)'\s*,\s*'SCHEMA'\s*,\s*N?'\w+'\s*,\s*'(\w+)'\s*,\s*N?'(\w+)'(?:\s*,\s*'(\w+)'\s*,\s*N?'(\w+)')?/i
+      /sp_addextendedproperty\s+N?'MS_Description'\s*,\s*N?'((?:[^']|'')*)'\s*,\s*'SCHEMA'\s*,\s*N?'\w+'\s*,\s*'(\w+)'\s*,\s*N?'(\w+)'(?:\s*,\s*'(\w+)'\s*,\s*N?'(\w+)')?/i
     );
 
     if (!match) return null;

@@ -211,7 +211,7 @@ export class ConversationCompactionManager {
         }
     }
 
-    /** Core pass: window → trigger check → boundary → prompt → boundary-row write. */
+    /** Core pass: window → trigger check → boundary + worth-it guards → prompt → boundary-row write. */
     private static async compactIfNeededInternal(input: CompactIfNeededInput): Promise<CompactionOutcome> {
         const warnings: string[] = [];
         if (input.Budget.ClampedToModel) {
@@ -226,60 +226,25 @@ export class ConversationCompactionManager {
             return { Fired: false, SkippedReason: `Window ~${tokensBefore} tokens is under the ${input.Budget.TriggerTokens}-token trigger`, TokensBefore: tokensBefore, Warnings: warnings };
         }
 
-        const priorSummary = window.length > 0 && window[0].metadata?.isConversationSummary
-            ? (typeof window[0].content === 'string' ? window[0].content : '')
-            : '';
-        const rawMessages = window.filter(m =>
-            !m.metadata?.isConversationSummary
-            && m.metadata?.sequence !== undefined
-            && !!m.metadata?.conversationDetailId
-        );
+        const { priorSummary, rawMessages } = this.splitWindow(window);
+        this.warnOnceIfBudgetUnsatisfiable(input, window, priorSummary, warnings);
 
-        // Unsatisfiable-budget warning: when the prior summary ALONE meets the trigger,
-        // no amount of folding can bring the window back under it — the operator needs a
-        // bigger ContextWindowMaxTokens or a higher CompactionTriggerPercent. Warn once
-        // per conversation per process; the skip paths below stop the per-turn churn.
-        const conversationKey = NormalizeUUID(input.ConversationId);
-        if (priorSummary.length > 0
-            && input.EstimateTokens([window[0]]) >= input.Budget.TriggerTokens
-            && !this.warnedConversationBudgets.has(conversationKey)) {
-            this.warnedConversationBudgets.add(conversationKey);
-            const budgetWarning = `Compaction trigger (~${input.Budget.TriggerTokens} tokens) is at or below the running summary's size — the window can never get under the trigger. Raise ContextWindowMaxTokens or CompactionTriggerPercent for this agent/type.`;
-            warnings.push(budgetWarning);
-            LogStatusEx({ message: `⚠️ [CrossTurnCompaction] Conversation ${input.ConversationId}: ${budgetWarning}` });
+        const boundary = this.chooseBoundary(rawMessages, tokensBefore, input);
+        if ('skippedReason' in boundary) {
+            return { Fired: false, SkippedReason: boundary.skippedReason, TokensBefore: tokensBefore, Warnings: warnings };
         }
 
-        const boundaryIndex = this.selectBoundaryIndex(rawMessages, input);
-        if (boundaryIndex === null) {
-            // Over the trigger but nothing foldable — either too few addressable messages,
-            // or the whole window already fits inside the post-compaction target tail
-            // (possible only with inverted trigger/target configs).
-            this.logVerbose(input, `Over trigger (~${tokensBefore} tokens) but no foldable boundary — ${rawMessages.length} addressable messages, target tail ${input.Budget.TargetTokens - SUMMARY_RESERVE_TOKENS} tokens`);
-            return { Fired: false, SkippedReason: 'No foldable boundary (too few addressable messages, or the window already fits the target tail)', TokensBefore: tokensBefore, Warnings: warnings };
-        }
-
-        // Minimum-gain guard: don't pay a summary-prompt LLM call for negligible relief.
-        // Projected post-compaction size = the summary reserve + the retained tail.
-        const boundaryMessage = rawMessages[boundaryIndex];
-        const projectedTokensAfter = SUMMARY_RESERVE_TOKENS + input.EstimateTokens(rawMessages.slice(boundaryIndex));
-        const projectedGain = tokensBefore - projectedTokensAfter;
-        if (projectedGain < MIN_COMPACTION_GAIN_TOKENS) {
-            this.logVerbose(input, `Skipping: projected gain ~${projectedGain} tokens < minimum ${MIN_COMPACTION_GAIN_TOKENS}`);
-            return { Fired: false, SkippedReason: `Projected gain (~${projectedGain} tokens) is under the ${MIN_COMPACTION_GAIN_TOKENS}-token minimum — not worth a summary prompt run`, TokensBefore: tokensBefore, Warnings: warnings };
-        }
-
-        const delta = rawMessages.slice(0, boundaryIndex);
-        const promptResult = await this.runSummaryPrompt(input, priorSummary, delta);
+        const promptResult = await this.runSummaryPrompt(input, priorSummary, rawMessages.slice(0, boundary.index));
         if (!promptResult.success) {
             return { Fired: false, TokensBefore: tokensBefore, Warnings: warnings, ErrorMessage: promptResult.errorMessage, PromptId: promptResult.promptId };
         }
 
+        const boundaryMessage = rawMessages[boundary.index];
         await this.writeBoundaryRow(input, boundaryMessage.metadata!.conversationDetailId!, promptResult.summaryText, promptResult.promptRunId);
 
-        const retainedTail = rawMessages.slice(boundaryIndex);
         const tokensAfter = input.EstimateTokens([
             { role: 'user', content: promptResult.summaryText },
-            ...retainedTail
+            ...rawMessages.slice(boundary.index)
         ]);
         this.logVerbose(input, `Compacted at sequence ${boundaryMessage.metadata!.sequence}: ~${tokensBefore} → ~${tokensAfter} tokens`);
 
@@ -293,6 +258,77 @@ export class ConversationCompactionManager {
             SummaryText: promptResult.summaryText,
             Warnings: warnings
         };
+    }
+
+    /**
+     * Splits the assembled window into the leading running summary (when the engine
+     * placed one at index 0) and the raw sequence-addressable messages eligible for
+     * folding (summary rows and non-addressable placeholders are excluded).
+     */
+    private static splitWindow(window: ConversationContextMessage[]): { priorSummary: string; rawMessages: ConversationContextMessage[] } {
+        const priorSummary = window.length > 0 && window[0].metadata?.isConversationSummary
+            ? (typeof window[0].content === 'string' ? window[0].content : '')
+            : '';
+        const rawMessages = window.filter(m =>
+            !m.metadata?.isConversationSummary
+            && m.metadata?.sequence !== undefined
+            && !!m.metadata?.conversationDetailId
+        );
+        return { priorSummary, rawMessages };
+    }
+
+    /**
+     * Unsatisfiable-budget warning: when the prior summary ALONE meets the trigger, no
+     * amount of folding can bring the window back under it — the operator needs a bigger
+     * ContextWindowMaxTokens or a higher CompactionTriggerPercent. Warns once per
+     * conversation per process; the guard skip paths in {@link chooseBoundary} stop the
+     * per-turn churn.
+     */
+    private static warnOnceIfBudgetUnsatisfiable(
+        input: CompactIfNeededInput,
+        window: ConversationContextMessage[],
+        priorSummary: string,
+        warnings: string[]
+    ): void {
+        const conversationKey = NormalizeUUID(input.ConversationId);
+        if (priorSummary.length === 0
+            || input.EstimateTokens([window[0]]) < input.Budget.TriggerTokens
+            || this.warnedConversationBudgets.has(conversationKey)) {
+            return;
+        }
+        this.warnedConversationBudgets.add(conversationKey);
+        const budgetWarning = `Compaction trigger (~${input.Budget.TriggerTokens} tokens) is at or below the running summary's size — the window can never get under the trigger. Raise ContextWindowMaxTokens or CompactionTriggerPercent for this agent/type.`;
+        warnings.push(budgetWarning);
+        LogStatusEx({ message: `⚠️ [CrossTurnCompaction] Conversation ${input.ConversationId}: ${budgetWarning}` });
+    }
+
+    /**
+     * Selects the fold boundary and applies the worth-it guards. Returns the boundary
+     * index into `rawMessages`, or a skip reason when there is no foldable boundary
+     * (too few addressable messages, or the window already fits the target tail —
+     * possible only with inverted trigger/target configs) or when the projected token
+     * relief is under {@link MIN_COMPACTION_GAIN_TOKENS} (not worth a summary-prompt
+     * LLM call).
+     */
+    private static chooseBoundary(
+        rawMessages: ConversationContextMessage[],
+        tokensBefore: number,
+        input: CompactIfNeededInput
+    ): { index: number } | { skippedReason: string } {
+        const boundaryIndex = this.selectBoundaryIndex(rawMessages, input);
+        if (boundaryIndex === null) {
+            this.logVerbose(input, `Over trigger (~${tokensBefore} tokens) but no foldable boundary — ${rawMessages.length} addressable messages, target tail ${input.Budget.TargetTokens - SUMMARY_RESERVE_TOKENS} tokens`);
+            return { skippedReason: 'No foldable boundary (too few addressable messages, or the window already fits the target tail)' };
+        }
+
+        // Minimum-gain guard: projected post-compaction size = summary reserve + retained tail.
+        const projectedTokensAfter = SUMMARY_RESERVE_TOKENS + input.EstimateTokens(rawMessages.slice(boundaryIndex));
+        const projectedGain = tokensBefore - projectedTokensAfter;
+        if (projectedGain < MIN_COMPACTION_GAIN_TOKENS) {
+            this.logVerbose(input, `Skipping: projected gain ~${projectedGain} tokens < minimum ${MIN_COMPACTION_GAIN_TOKENS}`);
+            return { skippedReason: `Projected gain (~${projectedGain} tokens) is under the ${MIN_COMPACTION_GAIN_TOKENS}-token minimum — not worth a summary prompt run` };
+        }
+        return { index: boundaryIndex };
     }
 
     /**
