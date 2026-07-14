@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Token, Tokens } from 'marked';
-import { createHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension';
-import { MarkdownEngine } from '../engine/markdown-engine';
+import { createHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension.js';
+import { MarkdownEngine } from '../engine/markdown-engine.js';
 
 /**
  * Direct access to the extension's `processAllTokens` hook. The hook does not

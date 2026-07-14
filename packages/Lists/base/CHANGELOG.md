@@ -1,5 +1,7 @@
 # @memberjunction/lists-base
 
+## 5.47.0
+
 ## 5.46.0
 
 ## 5.45.1

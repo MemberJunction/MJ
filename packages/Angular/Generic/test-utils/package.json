@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-test-utils",
-  "version": "5.46.0",
+  "version": "5.47.0",
   "private": true,
   "description": "MemberJunction: Shared DOM-test helpers for Angular component unit tests (zoneless-safe render() fixture factory).",
   "type": "module",
@@ -16,7 +16,9 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "memberjunction",
@@ -34,7 +36,7 @@
   },
   "devDependencies": {
     "@angular/core": "21.1.3",
-    "@memberjunction/core": "5.46.0",
+    "@memberjunction/core": "5.47.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

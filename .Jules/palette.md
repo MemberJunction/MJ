@@ -8,3 +8,7 @@
 ## 2024-07-04 - Adding aria-labels to Zoom Controls
 **Learning:** Icon-only buttons used for primary controls (like zoom controls) often lack proper aria-labels in custom Angular components. Additionally, the inner `<i>` tags should explicitly receive `aria-hidden="true"` so screen readers don't misinterpret or double-announce the decorative icon.
 **Action:** Always check icon-only controls for both an overarching `aria-label` and `aria-hidden="true"` on the underlying graphical icon component.
+
+## 2024-07-11 - Adding aria-hidden to decorative icons within accessible buttons
+**Learning:** When making an icon-only button accessible by adding an `aria-label` to the `<button>` element itself, it's a critical accessibility best practice to also add `aria-hidden="true"` to the inner decorative icon tag (like `<i class="fa-solid fa-xmark"></i>`). This prevents screen readers from pointlessly announcing the icon class names or getting confused by the visual elements when the parent button already provides a clear, descriptive label.
+**Action:** Always pair `aria-label="Action description"` on the wrapper button with `aria-hidden="true"` on the enclosed icon element for a clean screen reader experience.

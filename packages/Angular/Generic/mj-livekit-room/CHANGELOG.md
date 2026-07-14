@@ -1,5 +1,18 @@
 # @memberjunction/ng-mj-livekit-room
 
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-media-player@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/ng-livekit-room@5.47.0
+  - @memberjunction/livekit-room-core@5.47.0
+  - @memberjunction/global@5.47.0
+
 ## 5.46.0
 
 ### Patch Changes

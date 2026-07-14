@@ -1867,8 +1867,13 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Common scenarios: clearing inputs, focus management, dynamic content updates
 
 ### MJ UI Components (`@memberjunction/ng-ui-components`)
-- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material
-- Available components: `mjButton`, `mj-dialog`, `MJDialogService`, `mj-window`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `mj-progress-bar`, `mj-accordion-panel` (with `mjAccordionTitle` for rich HTML titles)
+- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material. **Never hand-roll a feature-specific equivalent of anything this package already provides** — check the catalog before building any control, layout region, overlay, or pattern.
+- **Canonical catalog with full APIs and usage examples: `packages/Angular/Generic/ui-components/README.md`**
+- Component overview:
+  - **Controls**: `button[mjButton]`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `[mjClickable]`
+  - **Layout & chrome**: `mj-page-layout`, `mj-page-header`, `mj-page-body` (+ `-interior` variants for left-nav shells), `mj-left-nav(-content)`, `mj-tab-nav`, `mj-page-search`, `mj-slide-panel`
+  - **Overlays**: `mj-dialog` + `MJDialogService`, `mj-confirm-dialog` + `MJConfirmService` (Promise-based `Confirm`/`ConfirmDelete`), `mj-window`, `mj-filter-popover`
+  - **Patterns**: `mj-empty-state`, `mj-stat-badge`, `mj-alert`, `mj-progress-bar`, `mj-view-toggle`, `mj-refresh-button`, `mj-filter-chip`, `mj-filter-field`, `mj-filter-panel`, `mj-applied-filters`, `mj-accordion-panel` (with `mjAccordionTitle`/`mjAccordionActions` and lazy `mjAccordionBody`)
 - Splitters: Use `angular-split` (`as-split` + `as-split-area`)
 - Grids: Use AG Grid (`ag-grid-angular`)
 - CSS classes: `.mj-input`, `.mj-textarea`, `.mj-checkbox` for styled native form elements
