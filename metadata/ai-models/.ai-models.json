@@ -19489,5 +19489,85 @@
       "lastModified": "2026-07-13T14:52:16.271Z",
       "checksum": "fbef46bfa17cf9e87f111f0f3d69d08250772968a1d8614f0fef91d3fe184ee1"
     }
+  },
+  {
+    "fields": {
+      "Name": "Grok 4.5",
+      "PowerRank": 25,
+      "Description": "xAI's flagship frontier reasoning model, released July 8, 2026. 500K token context window, native multimodal input (text, images, PDFs), tool calling, and structured output. Exposes reasoning_effort parameter (low / medium / high, default high). Priced aggressively at $2/$6 per 1M tokens with $0.50 cached-input, substantially undercutting Claude Opus 4.8 ($5/$25) while ranking as xAI's most capable model above Grok 4.20 and Grok 4.3.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 6,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Grok 4.20"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "xAILLM",
+            "APIName": "grok-4.5",
+            "MaxInputTokens": 500000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "x-ai/grok-4.5",
+            "MaxInputTokens": 500000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "StartedAt": "2026-07-08T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Grok 4.5 launch pricing on x.ai (July 8, 2026). $2/$6 per 1M tokens, $0.50 per 1M cached input tokens. 500K context, reasoning_effort (low/medium/high). Sourced from https://docs.x.ai/developers/grok-4-5 and https://openrouter.ai/x-ai/grok-4.5 as of 2026-07-13.",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
+          }
+        }
+      ]
+    }
   }
 ]
