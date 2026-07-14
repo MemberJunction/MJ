@@ -5490,6 +5490,9 @@ The context is now within limits. Please retry your request with the recovered c
                     stored.result.success,
                     stored.result.success ? undefined : stored.result.errorMessage,
                     {
+                        // toolFamily is the structured discriminator the prior-turn
+                        // carry-forward selects on — StepName is display-only.
+                        toolFamily: 'artifact',
                         artifactId: stored.artifactId,
                         tool: stored.tool,
                         input: stored.input,
@@ -5550,10 +5553,11 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Loads the previous completed root run's tool-result steps for this conversation.
-     * The 'Conversation Tool:'/'Artifact Tool:' StepName prefixes are load-bearing —
-     * they are the naming convention used by executeConversationToolCallsAsSteps /
-     * executeArtifactToolCallsAsSteps when the steps are created.
+     * Loads the previous completed root run's Tool steps for this conversation.
+     * Deliberately loads ALL completed Tool steps — eligibility for carry-forward is
+     * decided structurally by {@link BuildPriorTurnToolResultsMessage} via the
+     * `toolFamily` field the executors stamp into OutputData, never by StepName
+     * (which is a display label and free to change).
      * @private
      */
     private async loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<Array<{ StepName: string; OutputData: string | null }>> {
@@ -5573,7 +5577,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         const steps = await rv.RunView<{ StepName: string; OutputData: string | null }>({
             EntityName: 'MJ: AI Agent Run Steps',
-            ExtraFilter: `AgentRunID='${priorRunId}' AND StepType='Tool' AND Status='Completed' AND (StepName LIKE 'Conversation Tool:%' OR StepName LIKE 'Artifact Tool:%')`,
+            ExtraFilter: `AgentRunID='${priorRunId}' AND StepType='Tool' AND Status='Completed'`,
             OrderBy: 'StartedAt ASC',
             Fields: ['StepName', 'OutputData'],
             ResultType: 'simple',
@@ -5582,11 +5586,20 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Tool families whose step results are eligible for prior-turn carry-forward.
+     * Read-tool families only: memory writes, pipelines, and client tools also record
+     * `StepType='Tool'` steps but must never be replayed as reusable results.
+     */
+    public static readonly CarryForwardToolFamilies: readonly string[] = ['conversation', 'artifact'];
+
+    /**
      * Renders prior-turn tool-result steps into the carried-forward message body.
-     * Pure and static for testability: tolerant of missing/invalid OutputData JSON,
-     * keeps only successful results, caps each result and the total under `maxChars`
-     * (adding an explicit truncation note when results are dropped). Returns null when
-     * nothing usable remains.
+     * Pure and static for testability: keeps only steps whose OutputData declares a
+     * carry-forward-eligible `toolFamily` (see {@link CarryForwardToolFamilies}) —
+     * the structured contract stamped by the tool executors, independent of StepName.
+     * Tolerant of missing/invalid OutputData JSON, keeps only successful results,
+     * caps each result and the total under `maxChars` (adding an explicit truncation
+     * note when results are dropped). Returns null when nothing usable remains.
      */
     public static BuildPriorTurnToolResultsMessage(
         steps: Array<{ StepName: string; OutputData: string | null }>,
@@ -5597,12 +5610,13 @@ The context is now within limits. Please retry your request with the recovered c
         let dropped = 0;
         for (const step of steps) {
             if (!step.OutputData) continue;
-            let parsed: { tool?: string; input?: unknown; result?: { success?: boolean; data?: unknown } };
+            let parsed: { toolFamily?: string; tool?: string; input?: unknown; result?: { success?: boolean; data?: unknown } };
             try {
                 parsed = JSON.parse(step.OutputData);
             } catch {
                 continue;
             }
+            if (!parsed.toolFamily || !BaseAgent.CarryForwardToolFamilies.includes(parsed.toolFamily)) continue;
             if (parsed.result?.success !== true) continue;
 
             const raw = typeof parsed.result.data === 'string'
@@ -5696,6 +5710,9 @@ The context is now within limits. Please retry your request with the recovered c
                     executed.result.success,
                     executed.result.success ? undefined : executed.result.errorMessage,
                     {
+                        // toolFamily is the structured discriminator the prior-turn
+                        // carry-forward selects on — StepName is display-only.
+                        toolFamily: 'conversation',
                         tool: executed.tool,
                         input: executed.input,
                         result: executed.result,

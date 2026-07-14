@@ -6,10 +6,10 @@
 import { describe, it, expect } from 'vitest';
 import { BaseAgent } from '../base-agent';
 
-function step(tool: string, data: unknown, success = true, input: unknown = { sequence: 9 }): { StepName: string; OutputData: string | null } {
+function step(tool: string, data: unknown, success = true, input: unknown = { sequence: 9 }, toolFamily = 'conversation'): { StepName: string; OutputData: string | null } {
     return {
         StepName: `Conversation Tool: ${tool}`,
-        OutputData: JSON.stringify({ tool, input, result: { success, data }, durationMs: 5 }),
+        OutputData: JSON.stringify({ toolFamily, tool, input, result: { success, data }, durationMs: 5 }),
     };
 }
 
@@ -38,6 +38,28 @@ describe('BaseAgent.BuildPriorTurnToolResultsMessage', () => {
 
     it('returns null for an empty step list', () => {
         expect(BaseAgent.BuildPriorTurnToolResultsMessage([], 100_000)).toBeNull();
+    });
+
+    it('includes artifact-family results (the other carry-forward-eligible family)', () => {
+        const body = BaseAgent.BuildPriorTurnToolResultsMessage(
+            [step('get_full', { content: 'artifact body' }, true, { artifactId: 'a1' }, 'artifact')],
+            100_000
+        );
+        expect(body).toContain('get_full');
+        expect(body).toContain('artifact body');
+    });
+
+    it('excludes Tool steps without an eligible toolFamily, even when their OutputData looks successful', () => {
+        const memoryWriteShaped = {
+            StepName: 'Memory Write',
+            OutputData: JSON.stringify({ result: { success: true, data: 'note saved' } }),
+        };
+        const pipelineShaped = {
+            StepName: 'Pipeline: 3 step(s)',
+            OutputData: JSON.stringify({ tool: 'pipeline', result: { success: true, data: 'ran' } }),
+        };
+        const unknownFamily = step('someTool', 'data', true, {}, 'future-family');
+        expect(BaseAgent.BuildPriorTurnToolResultsMessage([memoryWriteShaped, pipelineShaped, unknownFamily], 100_000)).toBeNull();
     });
 
     it('caps the total size and notes omitted results', () => {
