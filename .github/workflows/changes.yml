@@ -29,8 +29,9 @@ jobs:
 
       - name: Self-test migration ID determinism detector
         # Runs on EVERY PR (even those with no migrations, like the one that introduced
-        # this check) so a regression in the load-bearing NEWID() regex surfaces here
-        # rather than the next time someone happens to add a migration.
+        # this check) so a regression in the load-bearing detectors (the NEWID() regex
+        # and the spCreate-without-@ID structural scan) surfaces here rather than the
+        # next time someone happens to add a migration.
         run: .github/scripts/check-migration-id-determinism.sh --self-test
 
       - name: Fetch PR base commit
@@ -183,20 +184,28 @@ jobs:
         id: id_determinism
         if: steps.check_migrations.outputs.has_migrations == 'true'
         # Deterministic replacement for the former Opus-powered "Claude Code Review"
-        # migration check (removed .github/workflows/claude.yml). The detector — the
-        # load-bearing NEWID() regex, its allow-list, the Flyway-only glob, and the full
-        # rationale — lives in the committed, self-testable script below (run on every PR
-        # via the "Self-test" step above), NOT inline here, so future edits can be
-        # re-validated instead of trusted. It scans only the lines this PR ADDS to changed
-        # migration files and is ADVISORY (never fails the job); hits are surfaced as a
-        # sticky PR comment + ::warning + step summary.
+        # migration check (removed .github/workflows/claude.yml). The detectors — the
+        # load-bearing NEWID() regex + allow-list, the structural spCreate-without-@ID
+        # scan, the Flyway-only glob, and the full rationale — live in the committed,
+        # self-testable script below (run on every PR via the "Self-test" step above),
+        # NOT inline here, so future edits can be re-validated instead of trusted. It
+        # scans only the lines this PR ADDS to changed migration files and is ADVISORY
+        # (never fails the job); hits are surfaced as a sticky PR comment + ::warning +
+        # step summary. Both detectors were retro-validated against all 617 committed
+        # migrations (see the script header).
         #
-        # OUT OF SCOPE (documented in the script): two violation classes carry no literal
-        # NEWID() text and are deliberately not detected — an INSERT that omits the ID
-        # column (table default NEWSEQUENTIALID() mints a fresh ID per install) and an
-        # `EXEC spCreateX` without `@ID` (the proc's ISNULL(@ID, NEWID()) fallback fires).
-        # Detecting those needs multi-line column-list / proc-arg parsing, out of scope
-        # for this line-oriented grep.
+        # IN SCOPE (both mint a non-deterministic ID, both mechanically checkable):
+        #   1. a literal NEWID() that generates an ID, and
+        #   2. an `EXEC spCreate<Entity>` invocation missing `@ID` (the proc's
+        #      ISNULL(@ID, NEWID()) fallback then fires).
+        #
+        # OUT OF SCOPE (deliberately — a judgment call, not a grep): a raw INSERT that
+        # omits the ID column (table default NEWSEQUENTIALID() mints a fresh ID). It is
+        # syntactically detectable, but omitting ID is NOT a violation in general —
+        # CodeGen/metadata-sync omit ID on bulk-metadata inserts by design (6,186 such
+        # inserts across the committed migrations, virtually all legitimate). Flagging
+        # them needs semantics — which tables' rows are FK-referenced by stable IDs —
+        # not something a structural scan can settle without a maintained allow-list.
         env:
           COMMENT_BODY_FILE: ${{ runner.temp }}/id-determinism-comment.md
         run: |
@@ -215,8 +224,12 @@ jobs:
           path: ${{ runner.temp }}/id-determinism-comment.md
 
       - name: Clear stale non-deterministic ID comment
-        # When a prior push had a violation and this one doesn't, remove the sticky comment.
-        if: steps.check_migrations.outputs.has_migrations == 'true' && steps.id_determinism.outputs.found == 'false'
+        # Remove the sticky comment whenever this push has NO current violation — which
+        # includes the case where a later push removed all migration changes entirely
+        # (has_migrations=false skips the determinism step, so `found` is empty ≠ 'true').
+        # `!cancelled()` lets it also clear a stale comment when an unrelated migration
+        # check failed. Best-effort (continue-on-error) — a no-op if there's no comment.
+        if: ${{ !cancelled() && steps.id_determinism.outputs.found != 'true' }}
         continue-on-error: true
         uses: marocchino/sticky-pull-request-comment@v2
         with:
