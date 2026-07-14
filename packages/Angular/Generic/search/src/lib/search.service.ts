@@ -8,7 +8,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject, throwError } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { IMetadataProvider, Metadata, StartupManager } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, Metadata, StartupManager } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import {
@@ -25,7 +25,8 @@ import {
     SearchFilter,
     SearchFilterOption,
     SearchProviderInfo,
-    SearchScopeInfo
+    SearchScopeInfo,
+    RecentRecordItem
 } from './search-types';
 
 /** Default minimum relevance score threshold (0-1). Results below this are filtered out. */
@@ -386,6 +387,67 @@ export class SearchService {
             console.error('[SearchService] LoadRecentSearches error:', err);
         }
         this.recentSearchesLoaded = true;
+    }
+
+    /**
+     * Record a query into recent searches WITHOUT running a search. For surfaces
+     * (e.g. the omnibar palette) where the user types a query but executes a
+     * suggestion that navigates directly — no full ExecuteSearch ever runs, so
+     * the automatic recording inside ExecuteSearch never fires for that query.
+     * Deduplicates by query text and persists via UserInfoEngine like all recents.
+     */
+    /** Resolved record-name memo — GetEntityRecordNames round-trips are cosmetic
+        and stable, so resolve each entity/record pair once per session. */
+    private recentRecordNameCache = new Map<string, string>();
+
+    /**
+     * Recently opened records for search empty states, newest first — same
+     * source as the omnibar's '#' empty state (MJ: User Record Logs via
+     * UserInfoEngine). Fail-soft: any error yields [] rather than blocking
+     * the surface. Display names resolve via GetEntityRecordNames with the
+     * record ID as fallback.
+     */
+    public async GetRecentlyOpenedRecords(max = 3): Promise<RecentRecordItem[]> {
+        try {
+            const engine = UserInfoEngine.Instance;
+            await engine.Config(false, this.Provider.CurrentUser ?? undefined); // no-op when loaded
+            const logs = [...engine.UserRecordLogs]
+                .sort((a, b) => new Date(b.LatestAt).getTime() - new Date(a.LatestAt).getTime())
+                .slice(0, max);
+            if (logs.length === 0) {
+                return [];
+            }
+            const unresolved = logs.filter((l) => !this.recentRecordNameCache.has(`${l.Entity}||${l.RecordID}`));
+            if (unresolved.length > 0) {
+                try {
+                    const results = await this.Provider.GetEntityRecordNames(
+                        unresolved.map((l) => ({ EntityName: l.Entity, CompositeKey: CompositeKey.FromID(l.RecordID) })),
+                        this.Provider.CurrentUser ?? undefined,
+                    );
+                    for (const r of results ?? []) {
+                        if (r.Success && r.RecordName) {
+                            this.recentRecordNameCache.set(`${r.EntityName}||${r.CompositeKey.GetValueByIndex(0)}`, r.RecordName);
+                        }
+                    }
+                } catch {
+                    // name lookup is cosmetic — IDs are an acceptable fallback
+                }
+            }
+            return logs.map((log) => ({
+                EntityName: log.Entity,
+                RecordID: log.RecordID,
+                RecordName: this.recentRecordNameCache.get(`${log.Entity}||${log.RecordID}`) ?? log.RecordID,
+            }));
+        } catch {
+            return [];
+        }
+    }
+
+    public RecordRecentSearch(query: string, resultCount = 0): void {
+        const trimmed = query.trim();
+        if (trimmed.length > 0) {
+            this.addToRecentSearches(trimmed, resultCount);
+        }
     }
 
     private addToRecentSearches(query: string, resultCount: number): void {

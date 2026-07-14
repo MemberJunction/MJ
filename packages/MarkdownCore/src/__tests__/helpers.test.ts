@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { formatLanguageName } from '../helpers/language';
-import { escapeHtml } from '../helpers/escape';
+import { formatLanguageName } from '../helpers/language.js';
+import { escapeHtml } from '../helpers/escape.js';
 
 describe('formatLanguageName', () => {
   it('maps known aliases to display names', () => {

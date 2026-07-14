@@ -5,16 +5,16 @@
 // renderer, etc.) inject highlighting and handle presentation.
 
 // Engine
-export * from './engine/markdown-engine';
+export * from './engine/markdown-engine.js';
 
 // Extensions (marked configuration building blocks)
-export * from './extensions/svg-renderer.extension';
-export * from './extensions/collapsible-headings.extension';
-export * from './extensions/html-block-repair.extension';
+export * from './extensions/svg-renderer.extension.js';
+export * from './extensions/collapsible-headings.extension.js';
+export * from './extensions/html-block-repair.extension.js';
 
 // Helpers
-export * from './helpers/language';
-export * from './helpers/escape';
+export * from './helpers/language.js';
+export * from './helpers/escape.js';
 
 // Types
-export * from './types/markdown.types';
+export * from './types/markdown.types.js';
