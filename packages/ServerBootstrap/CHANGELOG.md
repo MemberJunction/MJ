@@ -1,5 +1,134 @@
 # @memberjunction/server-bootstrap
 
+## 5.48.0
+
+### Minor Changes
+
+- c20723a: Add a self-hosted **HuggingFace speech-to-speech** realtime (voice) provider, sitting side-by-side with the cloud realtime providers (OpenAI, Gemini, ElevenLabs, AssemblyAI) with no host changes. It treats HuggingFace's open-source VAD → STT → LLM → TTS stack (in its OpenAI-Realtime-compatible `/v1/realtime` mode) as a `Realtime` model — private-by-design (audio never leaves owned infrastructure), cost-free, and component-swappable.
+
+  Because the endpoint is self-hosted, the shipped client-direct audio topology runs through a new provider-agnostic **MJAPI realtime proxy**: the driver mints a one-time ticket into a shared `RealtimeProxyRegistry` (`@memberjunction/ai`) and hands the browser a `wss://<mjapi-public>/realtime-proxy?ticket=…` URL, so the internal endpoint + auth never reach the browser and the box needs no browser-facing ingress. Adds the new `@memberjunction/ai-huggingface` driver package, the `HuggingFaceRealtimeClient` (`@memberjunction/ai-realtime-client`), the `RealtimeProxyServer` + single upgrade-router in `@memberjunction/server`, the class-registration manifest entry (`@memberjunction/server-bootstrap`), and the client-load wiring (`@memberjunction/ng-conversations`), plus the `Hugging Face` vendor + `HuggingFace Speech-to-Speech` model metadata (low PowerRank — opt-in). Additive only; endpoint/auth/sample-rate are deployment config.
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [80223ad]
+- Updated dependencies [8a88366]
+- Updated dependencies [2143b98]
+- Updated dependencies [c20723a]
+- Updated dependencies [a94bd16]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/server@5.48.0
+  - @memberjunction/codegen-lib@5.48.0
+  - @memberjunction/external-data-source-sqlserver@5.48.0
+  - @memberjunction/ai-agents@5.48.0
+  - @memberjunction/ai-huggingface@5.48.0
+  - @memberjunction/core-actions@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/core-entities-server@5.48.0
+  - @memberjunction/ai-agent-manager@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/database-designer-actions@5.48.0
+  - @memberjunction/database-designer-core@5.48.0
+  - @memberjunction/ai-form-builder@5.48.0
+  - @memberjunction/tag-engine-base@5.48.0
+  - @memberjunction/computer-use-engine@5.48.0
+  - @memberjunction/predictive-studio@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/ai-recommendations-rex@5.48.0
+  - @memberjunction/ai-bridge-livekit@5.48.0
+  - @memberjunction/ai-bridge-ringcentral@5.48.0
+  - @memberjunction/ai-bridge-teams@5.48.0
+  - @memberjunction/ai-bridge-twilio@5.48.0
+  - @memberjunction/ai-bridge-vonage@5.48.0
+  - @memberjunction/ai-bridge-server@5.48.0
+  - @memberjunction/remote-browser-selfhost@5.48.0
+  - @memberjunction/remote-browser-server@5.48.0
+  - @memberjunction/ai-reranker@5.48.0
+  - @memberjunction/ai-vector-dupe@5.48.0
+  - @memberjunction/ai-vectors-memory@5.48.0
+  - @memberjunction/ai-vectors-pinecone@5.48.0
+  - @memberjunction/ai-vectors-qdrant@5.48.0
+  - @memberjunction/ai-vectors-sqlserver@5.48.0
+  - @memberjunction/ai-vectors-pgvector@5.48.0
+  - @memberjunction/actions-apollo@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/actions-bizapps-accounting@5.48.0
+  - @memberjunction/actions-bizapps-crm@5.48.0
+  - @memberjunction/actions-bizapps-formbuilders@5.48.0
+  - @memberjunction/actions-bizapps-lms@5.48.0
+  - @memberjunction/actions-bizapps-social@5.48.0
+  - @memberjunction/actions-content-autotag@5.48.0
+  - @memberjunction/actions@5.48.0
+  - @memberjunction/action-runtime-host@5.48.0
+  - @memberjunction/archiving-action@5.48.0
+  - @memberjunction/archiving-engine@5.48.0
+  - @memberjunction/auth-providers@5.48.0
+  - @memberjunction/communication-types@5.48.0
+  - @memberjunction/entity-communications-base@5.48.0
+  - @memberjunction/communication-ms-graph@5.48.0
+  - @memberjunction/communication-sendgrid@5.48.0
+  - @memberjunction/content-autotagging@5.48.0
+  - @memberjunction/doc-utils@5.48.0
+  - @memberjunction/encryption@5.48.0
+  - @memberjunction/external-data-sources@5.48.0
+  - @memberjunction/external-data-source-mongodb@5.48.0
+  - @memberjunction/external-data-source-mysql@5.48.0
+  - @memberjunction/external-data-source-oracle@5.48.0
+  - @memberjunction/external-data-source-postgres@5.48.0
+  - @memberjunction/external-data-source-snowflake@5.48.0
+  - @memberjunction/integration-actions@5.48.0
+  - @memberjunction/integration-connectors@5.48.0
+  - @memberjunction/integration-engine@5.48.0
+  - @memberjunction/data-context-server@5.48.0
+  - @memberjunction/queue@5.48.0
+  - @memberjunction/storage@5.48.0
+  - @memberjunction/messaging-adapters@5.48.0
+  - @memberjunction/react-linter@5.48.0
+  - @memberjunction/record-comparison@5.48.0
+  - @memberjunction/record-set-processor@5.48.0
+  - @memberjunction/scheduling-actions@5.48.0
+  - @memberjunction/scheduling-engine-base@5.48.0
+  - @memberjunction/scheduling-engine@5.48.0
+  - @memberjunction/search-engine@5.48.0
+  - @memberjunction/server-extensions-core@5.48.0
+  - @memberjunction/templates@5.48.0
+  - @memberjunction/testing-engine@5.48.0
+  - @memberjunction/esignature@5.48.0
+  - @memberjunction/geo-core@5.48.0
+  - @memberjunction/ai-anthropic@5.48.0
+  - @memberjunction/ai-assemblyai@5.48.0
+  - @memberjunction/ai-azure@5.48.0
+  - @memberjunction/ai-bedrock@5.48.0
+  - @memberjunction/ai-betty-bot@5.48.0
+  - @memberjunction/ai-blackforestlabs@5.48.0
+  - @memberjunction/ai-cerebras@5.48.0
+  - @memberjunction/ai-cohere@5.48.0
+  - @memberjunction/ai-elevenlabs@5.48.0
+  - @memberjunction/ai-fireworks@5.48.0
+  - @memberjunction/ai-gemini@5.48.0
+  - @memberjunction/ai-groq@5.48.0
+  - @memberjunction/ai-heygen@5.48.0
+  - @memberjunction/ai-inception@5.48.0
+  - @memberjunction/ai-inworld@5.48.0
+  - @memberjunction/ai-lmstudio@5.48.0
+  - @memberjunction/ai-llamacpp@5.48.0
+  - @memberjunction/ai-local-embeddings@5.48.0
+  - @memberjunction/ai-minimax@5.48.0
+  - @memberjunction/ai-mistral@5.48.0
+  - @memberjunction/ai-ollama@5.48.0
+  - @memberjunction/ai-openai@5.48.0
+  - @memberjunction/ai-openrouter@5.48.0
+  - @memberjunction/ai-vertex@5.48.0
+  - @memberjunction/ai-zhipu@5.48.0
+  - @memberjunction/ai-xai@5.48.0
+  - @memberjunction/ai-provider-bundle@5.48.0
+  - @memberjunction/esignature-docusign@5.48.0
+  - @memberjunction/esignature-dropboxsign@5.48.0
+  - @memberjunction/esignature-pandadoc@5.48.0
+
 ## 5.47.0
 
 ### Patch Changes

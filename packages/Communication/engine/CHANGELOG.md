@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/communication-engine
 
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/lists@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/communication-types@5.48.0
+  - @memberjunction/templates@5.48.0
+  - @memberjunction/lists-base@5.48.0
+  - @memberjunction/global@5.48.0
+
 ## 5.47.0
 
 ### Patch Changes
