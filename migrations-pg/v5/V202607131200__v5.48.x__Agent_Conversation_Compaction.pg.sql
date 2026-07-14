@@ -9193,7 +9193,7 @@ COMMENT ON COLUMN __mj."AIAgentType"."ContextCompressionPromptID" IS 'Type-level
 
 COMMENT ON COLUMN __mj."AIAgentType"."ContextCompressionMessageRetentionCount" IS 'Type-level default for the number of most-recent messages kept uncompressed (the "hot tail") when context compression is applied. Overridable per agent via AIAgent.ContextCompressionMessageRetentionCount.';
 
-COMMENT ON COLUMN __mj."AIAgentType"."ContextWindowMaxTokens" IS 'Type-level default effective working-context budget, in tokens. Null means use the selected model''s MaxInputTokens. The resolved value is clamped to the model''s limit at runtime (a warning is logged if it would exceed it). Overridable per agent via AIAgent.ContextWindowMaxTokens.';
+COMMENT ON COLUMN __mj."AIAgentType"."ContextWindowMaxTokens" IS 'Type-level default effective working-context budget, in tokens. Null means use the selected model';
 
 COMMENT ON COLUMN __mj."AIAgentType"."CompactionTriggerPercent" IS 'Type-level default: the percentage of the effective context budget at which cross-turn conversation compaction is triggered. Defaults to 75. Overridable per agent via AIAgent.CompactionTriggerPercent.';
 
@@ -9201,13 +9201,13 @@ COMMENT ON COLUMN __mj."AIAgentType"."CompactionTargetPercent" IS 'Type-level de
 
 COMMENT ON COLUMN __mj."AIAgentType"."ConversationSummaryPromptID" IS 'Type-level default prompt used for cross-turn conversation compaction (the durable summary baseline). Distinct from ContextCompressionPromptID, which governs in-turn compression. Overridable per agent via AIAgent.ConversationSummaryPromptID.';
 
-COMMENT ON COLUMN __mj."AIAgent"."ContextWindowMaxTokens" IS 'Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type''s value (which, if also null, falls back to the selected model''s MaxInputTokens). The resolved value is clamped to the model''s limit at runtime.';
+COMMENT ON COLUMN __mj."AIAgent"."ContextWindowMaxTokens" IS 'Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type';
 
-COMMENT ON COLUMN __mj."AIAgent"."CompactionTriggerPercent" IS 'Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type''s value.';
+COMMENT ON COLUMN __mj."AIAgent"."CompactionTriggerPercent" IS 'Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type';
 
-COMMENT ON COLUMN __mj."AIAgent"."CompactionTargetPercent" IS 'Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type''s value.';
+COMMENT ON COLUMN __mj."AIAgent"."CompactionTargetPercent" IS 'Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type';
 
-COMMENT ON COLUMN __mj."AIAgent"."ConversationSummaryPromptID" IS 'Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type''s value.';
+COMMENT ON COLUMN __mj."AIAgent"."ConversationSummaryPromptID" IS 'Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type';
 
 
 -- ===================== Other =====================
