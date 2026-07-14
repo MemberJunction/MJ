@@ -72,8 +72,24 @@ jobs:
       - name: Create SQL Server container
         run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
 
+      # Poll until SQL Server actually answers a query, rather than a blind sleep. A cold
+      # container that merely started (but is still doing recovery/tempdb setup) will accept
+      # a connection yet stall the first heavy transaction — which is what tripped the sync
+      # push's 15s request timeout. Waiting for a real `SELECT 1` before migrate/sync ensures
+      # those run against a warm server. ~60s budget (30 × 2s); fails the step if never ready.
       - name: Wait for SQL Server to be ready
-        run: sleep 20  # Give SQL Server time to initialize
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server is ready (attempt $i)."
+              exit 0
+            fi
+            echo "Waiting for SQL Server... (attempt $i/30)"
+            sleep 2
+          done
+          echo "SQL Server did not become ready within the timeout." >&2
+          exit 1
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
@@ -101,6 +117,9 @@ jobs:
       # committed CodeGen output and the repeatable R__RefreshMetadata that refreshes every core
       # view/proc/EntityField — then reconcile the committed metadata against that schema.
       - name: Migrate — apply committed migrations to the fresh DB
+        env:
+          # Headroom over mssql's 15s default for the first heavy workload on a cold server.
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
         run: node packages/MJCLI/bin/run.js migrate
 
       - name: Sync push — reconcile committed metadata (mj sync push --ci)
