@@ -1,7 +1,7 @@
 # Lists Functionality & Performance Review — Findings and Remediation Plan
 
 **Date:** 2026-07-13 (implemented 2026-07-14)
-**Status:** IMPLEMENTED on branch `feature/lists-performance-and-fixes` — see Implementation Log at the bottom. Deferred items: unique constraint on ListDetail (needs per-deployment dedupe check), F2 real Activity section, F5 favorites-filter persistence / My Lists edit-delete, P8 Venn MaxRows caps.
+**Status:** IMPLEMENTED on branch `feature/lists-performance-and-fixes` (PR #3145) — see Implementation Log at the bottom. Deferred items: F2 real Activity section, F5 favorites-filter persistence / My Lists edit-delete, P8 Venn MaxRows caps, F7 name-field-less search UX.
 **Scope reviewed:** Lists Application dashboards (Browse / My Lists / Categories / Operations-Venn / Shared With Me), the custom `MJ: Lists` entity form, every add-to-list entry point in the UI, the `@memberjunction/ng-list-management` service/dialog, the `@memberjunction/lists` server engine + `ListOperationsResolver`, the `Add Records to List` action, `ListSource` in RecordSetProcessor, and the ListDetail schema/indexes.
 
 ---
@@ -94,12 +94,7 @@ Work on a fresh branch off `next` (e.g. `feature/lists-performance-and-fixes`). 
 
 ### Phase 3 — Database migration (one v5 migration)
 7. Add `IX_ListDetail_ListID_RecordID` nonclustered composite index and drop the redundant `IX_ListDetail_ListID` (its FK twin `IDX_AUTO_MJ_FKEY_ListDetail_ListID` stays — CodeGen manages/recreates that one). Additive/perf-only — compliant with publish-no-break policy.
-8. Optional, recommended: dedupe existing `ListDetail` rows then add `UNIQUE (ListID, RecordID)` to close the concurrent-add race (F8). Dedupe check for any target DB:
-   ```sql
-   SELECT ListID, RecordID, COUNT(*) FROM __mj.ListDetail
-   GROUP BY ListID, RecordID HAVING COUNT(*) > 1;
-   ```
-   (Run against the local dev DB `MJ_v5_43_Clean` on 2026-07-13: zero duplicates — but its Lists tables are empty; the check must be repeated on each real deployment before the constraint ships. If dupes exist anywhere, the migration must delete the newer rows first, keeping the oldest per pair.)
+8. ✅ IMPLEMENTED (2026-07-14): the migration now dedupes in-place (deletes newer rows per `(ListID, RecordID)` pair, keeping the oldest by `__mj_CreatedAt` then `ID`) and creates `UQ_ListDetail_ListID_RecordID` — a UNIQUE composite index that both closes the concurrent-add race (F8) and covers the duplicate-check predicate. Verified live: duplicate insert rejected with Msg 2601; app layers already surface per-record insert failures, so a race loser reports a failed row instead of silently duplicating.
 9. Switch `ListSource` to keyset (`AfterKey`) pagination.
 
 ### Phase 4 — Functionality fixes
@@ -132,7 +127,7 @@ Work on a fresh branch off `next` (e.g. `feature/lists-performance-and-fixes`). 
 
 **Phase 2 — write path (done, with one deliberate deviation):** server-side `ListOperations` (`insertListMembers`, now also reused by `applyDeltaMutations`; `removeDeltaRecords`) and `AddRecordsToListAction` use a **bounded-concurrency pool (10 in-flight)** instead of the plan's TransactionGroup option — on the server, TG buys atomicity not throughput (it's already next to the DB), and it would break the documented per-record `PARTIAL_SUCCESS` isolation. Concurrency preserves semantics and cuts wall clock ~10×.
 
-**Phase 3 — database (done except deferred constraint):** migration `V202607141000__v5.48.x__ListDetail_Index_Optimization.sql` adds `IX_ListDetail_ListID_RecordID` and drops the redundant `IX_ListDetail_ListID` (idempotent; already applied manually to the dev DB `MJ_v5_43_Clean` and verified). `ListSource` converted to keyset (`AfterKey`) pagination with legacy-Offset-cursor resume support + 3 new unit tests. **Deferred:** `UNIQUE (ListID, RecordID)` — ship after per-deployment dedupe checks.
+**Phase 3 — database (fully done):** migration `V202607141000__v5.48.x__ListDetail_Index_Optimization.sql` dedupes `ListDetail` in-place (keeps the oldest row per pair), creates the **UNIQUE** composite index `UQ_ListDetail_ListID_RecordID` (covers the dup-check predicate AND closes the concurrent-add race), and drops the redundant `IX_ListDetail_ListID` (idempotent; applied to the dev DB `MJ_v5_43_Clean`, uniqueness enforcement verified via rejected duplicate insert). `ListSource` converted to keyset (`AfterKey`) pagination with legacy-Offset-cursor resume support + 3 new unit tests.
 
 **Phase 4 — functionality:** F9 ✅ (fixed in BOTH surfaces — the custom `MJ: Lists` form AND `single-list-detail`, the viewer the Lists app actually opens; the latter was confirmed at runtime 2026-07-14 after the form-only fix didn't cover it), F1 ✅, F3 ✅ (`ListManagementResult.summary` added; record-form-container shows an added/removed/skipped/failed toast). **Deferred:** F2 (real Activity section), F5 (favorites-filter persistence, My Lists edit/delete), P8 (Venn MaxRows caps).
 
