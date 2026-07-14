@@ -10,7 +10,7 @@
  */
 
 import { readFileSync, readdirSync, existsSync, realpathSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { join, resolve, sep, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
 
@@ -25,11 +25,12 @@ const FAILURE_MARKER = '__ESM_GUARD_FAILURE__';
  * Precedence: exports["."].import → exports["."].default → exports (string) → main.
  * Returns the relative path string, or null when the package publishes no entry.
  *
- * Known limitations (zero packages in the current fleet hit either):
- * - Nested export conditions (e.g. `{ import: { default: "..." } }`) aren't
- *   unwrapped; they fall through to `main`.
- * - A package with neither `exports` nor `main` returns null and is skipped as
- *   NOT_BUILT rather than trying Node's implicit `index.js` default.
+ * Nested conditions (e.g. `{ import: { types, default } }`) are unwrapped one
+ * level so a built package using that valid shape isn't misclassified NOT_BUILT.
+ *
+ * Known limitation (zero packages in the current fleet hit it): a package with
+ * neither `exports` nor `main` returns null and is skipped as NOT_BUILT rather
+ * than trying Node's implicit `index.js` default.
  */
 export function resolveEntryPoint(pkgJson) {
     const exp = pkgJson.exports;
@@ -37,10 +38,27 @@ export function resolveEntryPoint(pkgJson) {
     const root = exp?.['.'];
     if (typeof root === 'string') return root;
     if (typeof root === 'object' && root !== null) {
-        if (typeof root.import === 'string') return root.import;
-        if (typeof root.default === 'string') return root.default;
+        const fromImport = unwrapCondition(root.import);
+        if (fromImport) return fromImport;
+        const fromDefault = unwrapCondition(root.default);
+        if (fromDefault) return fromDefault;
     }
     return pkgJson.main ?? null;
+}
+
+/**
+ * Resolve a single export condition to a path string. A condition is either the
+ * path directly (string) or a nested condition object (`{ node, default, ... }`),
+ * in which case we take its `default` (falling back to `import`). Returns null
+ * when no path is found.
+ */
+function unwrapCondition(condition) {
+    if (typeof condition === 'string') return condition;
+    if (typeof condition === 'object' && condition !== null) {
+        if (typeof condition.default === 'string') return condition.default;
+        if (typeof condition.import === 'string') return condition.import;
+    }
+    return null;
 }
 
 /**
@@ -48,9 +66,12 @@ export function resolveEntryPoint(pkgJson) {
  * classify the outcome: OK | OWN_DIST_MISSING_EXT | DEP_FAIL | OTHER_ERR | NOT_BUILT.
  * Only OWN_DIST_MISSING_EXT is a CI failure — it is the #3137 bug signature
  * (Node's resolver rejecting an extensionless specifier in the package's own dist/).
+ *
+ * Pass `pkgJson` when the caller already parsed the manifest (the sweep does, to
+ * avoid re-reading every package.json); it's read from disk only when omitted.
  */
-export async function checkPackage(pkgDir) {
-    const pkgJson = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
+export async function checkPackage(pkgDir, pkgJson = null) {
+    pkgJson ??= JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
     const name = pkgJson.name ?? pkgDir;
     const entry = resolveEntryPoint(pkgJson);
     if (!entry) {
@@ -112,23 +133,28 @@ function importInFreshProcess(entryPath) {
 
 /**
  * Classify a structured import failure relative to the package that owns the entry.
- * A resolution failure whose missing path lies inside the package's own source/dist
- * is the extensionless-specifier signature (fails CI); one pointing elsewhere — or
- * into the package's own nested node_modules, which is a third-party dep's problem,
- * not the host package's — is a dependency failure (reported, non-gating).
- * ERR_UNSUPPORTED_DIR_IMPORT is the same bug class: an extensionless specifier that
- * happens to resolve to a directory.
+ * The gating signature is narrow: an EXTENSIONLESS relative specifier missing from the
+ * package's own source/dist — the #3137 tsc-alias bug, which is always extensionless
+ * (a `.js`-less `./config`). ERR_UNSUPPORTED_DIR_IMPORT is the same class (an
+ * extensionless specifier that resolves to a directory). Everything else is non-gating:
+ * a missing own-dir file WITH an extension is a genuinely-absent build/codegen artifact
+ * (not this bug), and a path elsewhere — or in the package's own nested node_modules,
+ * a third-party dep's problem — is a dependency failure.
  */
 export function classifyFailure(failure, pkgDir) {
     const { code, message } = failure;
     if (code === 'ERR_MODULE_NOT_FOUND' || code === 'ERR_UNSUPPORTED_DIR_IMPORT') {
         const missing = extractMissingPath(message);
+        // A dir import is inherently extensionless; a module-not-found only qualifies
+        // when the specifier itself carried no extension (`extname` empty).
+        const isExtensionlessSignature = code === 'ERR_UNSUPPORTED_DIR_IMPORT' || (missing != null && extname(missing) === '');
         // Node reports realpath'd paths in resolver errors, so realpath pkgDir too —
         // otherwise a symlinked package dir fails the startsWith and a real own-dist
         // break gets missed (fail-open). A node_modules segment in the missing path
         // means a nested dependency, never the host package's own dist.
         if (
             missing &&
+            isExtensionlessSignature &&
             !isUnderNodeModules(resolve(missing)) &&
             resolve(missing).startsWith(realpathOr(pkgDir) + sep)
         ) {
@@ -162,25 +188,30 @@ const CONCURRENCY = 8;
  * OWN_DIST_MISSING_EXT results — the only bucket that should fail CI.
  */
 export async function sweep(rootDir) {
-    const pkgDirs = findModulePackageDirs(rootDir);
+    const pkgs = findModulePackageDirs(rootDir);
     const results = [];
     let next = 0;
     async function worker() {
-        while (next < pkgDirs.length) {
-            const dir = pkgDirs[next++];
-            results.push(await checkPackage(dir));
+        while (next < pkgs.length) {
+            const { dir, pkgJson } = pkgs[next++];
+            results.push(await checkPackage(dir, pkgJson));
         }
     }
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pkgDirs.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pkgs.length) }, worker));
     return { results, failures: results.filter((r) => r.status === 'OWN_DIST_MISSING_EXT') };
 }
 
-/** Recursively collect directories containing a package.json with `"type": "module"`. */
+/**
+ * Recursively collect `{ dir, pkgJson }` for every directory whose package.json has
+ * `"type": "module"`. The parsed manifest is handed to checkPackage so each
+ * package.json is read and parsed exactly once per sweep.
+ */
 function findModulePackageDirs(dir, out = []) {
     const pkgPath = join(dir, 'package.json');
     if (existsSync(pkgPath)) {
         try {
-            if (JSON.parse(readFileSync(pkgPath, 'utf8')).type === 'module') out.push(dir);
+            const pkgJson = JSON.parse(readFileSync(pkgPath, 'utf8'));
+            if (pkgJson.type === 'module') out.push({ dir, pkgJson });
         } catch (e) {
             console.warn(`esm-guard: skipping unparseable ${pkgPath}: ${e.message}`);
         }
@@ -211,6 +242,13 @@ async function main() {
     }
     console.log(`esm-guard: native-ESM-importing every "type": "module" package under ${rootDir} ...`);
     const { results, failures } = await sweep(rootDir);
+
+    if (results.length === 0) {
+        // Reporting OK here would be false confidence — the run verified nothing (wrong
+        // directory, or a package-free path). Fail loudly instead of green-lighting.
+        console.error(`esm-guard: no "type": "module" packages found under ${rootDir} — nothing verified. Run from the repo root or pass a valid packages path.`);
+        process.exit(2);
+    }
 
     const counts = {};
     for (const r of results) counts[r.status] = (counts[r.status] ?? 0) + 1;

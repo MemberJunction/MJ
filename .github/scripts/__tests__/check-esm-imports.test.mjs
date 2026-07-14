@@ -41,6 +41,16 @@ describe('resolveEntryPoint', () => {
         expect(resolveEntryPoint(pkg)).toBe('./dist/index.js');
     });
 
+    it('unwraps a nested import condition object with no top-level main', () => {
+        const pkg = { exports: { '.': { import: { types: './dist/index.d.ts', default: './dist/index.js' } } } };
+        expect(resolveEntryPoint(pkg)).toBe('./dist/index.js');
+    });
+
+    it('unwraps a nested default condition object', () => {
+        const pkg = { exports: { '.': { default: { node: './dist/node.js', default: './dist/index.js' } } } };
+        expect(resolveEntryPoint(pkg)).toBe('./dist/index.js');
+    });
+
     it('accepts a top-level string exports field', () => {
         const pkg = { exports: './dist/index.js' };
         expect(resolveEntryPoint(pkg)).toBe('./dist/index.js');
@@ -78,6 +88,16 @@ describe('checkPackage', () => {
         const result = await checkPackage(join(FIXTURES, 'not-built-pkg'));
         expect(result.status).toBe('NOT_BUILT');
     });
+
+    it('uses a pre-parsed pkgJson when provided instead of re-reading package.json', async () => {
+        // ok-pkg on disk is valid; an override pointing at a nonexistent entry must win,
+        // proving checkPackage honors the passed pkgJson (the sweep threads it in to
+        // avoid re-parsing every package.json).
+        const override = { name: 'overridden', type: 'module', main: 'does-not-exist.js' };
+        const result = await checkPackage(join(FIXTURES, 'ok-pkg'), override);
+        expect(result.status).toBe('NOT_BUILT');
+        expect(result.name).toBe('overridden');
+    });
 });
 
 describe('classifyFailure', () => {
@@ -97,6 +117,16 @@ describe('classifyFailure', () => {
         const failure = {
             code: 'ERR_MODULE_NOT_FOUND',
             message: `Cannot find module '${pkgDir}/node_modules/brokendep/missing-thing' imported from ${pkgDir}/node_modules/brokendep/index.js`,
+        };
+        expect(classifyFailure(failure, pkgDir).status).toBe('DEP_FAIL');
+    });
+
+    it('classifies a missing own-dist file WITH a .js extension as DEP_FAIL, not the extensionless bug', () => {
+        // A genuinely-absent generated/build file (e.g. an ungenerated manifest) is not the
+        // #3137 tsc-alias signature (that is always extensionless), so it must not gate CI.
+        const failure = {
+            code: 'ERR_MODULE_NOT_FOUND',
+            message: `Cannot find module '${pkgDir}/dist/generated/manifest.js' imported from ${pkgDir}/dist/index.js`,
         };
         expect(classifyFailure(failure, pkgDir).status).toBe('DEP_FAIL');
     });
@@ -142,5 +172,14 @@ describe('CLI', () => {
     it('exits 0 when every checked package imports cleanly', async () => {
         const result = await run(process.execPath, [SCRIPT, join(FIXTURES, 'ok-pkg')]).catch((e) => e);
         expect(result.code ?? 0).toBe(0);
+    });
+
+    it('exits non-zero when the target contains zero type:module packages (verified nothing)', async () => {
+        // A run that finds no packages must not report OK — that is false confidence
+        // (e.g. invoked from the wrong directory or against a package-free path).
+        // execFile rejects with a numeric .code on non-zero exit; resolves (no code) on 0.
+        const emptyDir = join(FIXTURES, 'cjs-pkg'); // real dir, but its only package is CJS → zero type:module
+        const result = await run(process.execPath, [SCRIPT, emptyDir]).catch((e) => e);
+        expect(typeof result.code === 'number' && result.code > 0).toBe(true);
     });
 });
