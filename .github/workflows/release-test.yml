@@ -35,15 +35,3 @@ jobs:
 
       - name: Run unit tests
         run: npm test
-
-  # Middle tier (D5.2): heavier than the Vitest PR gate, lighter than the full browser
-  # stack. Defined ONCE in the reusable integration-run.yml (Docker db-setup provisioning +
-  # the in-process deterministic aggregator) and shared with the PR gate in integration.yml,
-  # so the release and PR runs are byte-for-byte identical. RUN_AGENT_TESTS stays unset
-  # (deterministic tier only; no token cost / flakiness, D5).
-  integration-suite:
-    name: Integration Tier (deterministic)
-    needs: unit-tests
-    uses: ./.github/workflows/integration-run.yml
-    with:
-      ref: ${{ inputs.branch || 'next' }}
