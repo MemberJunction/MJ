@@ -25,3 +25,6 @@ export * from './lib/services/list-sharing.service';
 // Models
 export * from './lib/models/list-management.models';
 export * from './lib/models/list-sharing.models';
+
+// Utils
+export * from './lib/utils/record-display-field';
