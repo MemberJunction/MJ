@@ -705,7 +705,12 @@ async function createPerRequestProviders(
     { provider: p, type: 'Read-Write' }
   ];
 
-  if (!isPostgres) {
+  if (isPostgres) {
+    const rp = await tryCreateReadOnlyPostgresProvider();
+    if (rp) {
+      providers.push({ provider: rp, type: 'Read-Only' });
+    }
+  } else {
     const rp = await tryCreateReadOnlyProvider(dataSources);
     if (rp) {
       providers.push({ provider: rp, type: 'Read-Only' });
@@ -746,6 +751,46 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
   }
 
   return pgProvider;
+}
+
+/**
+ * Attempts to create a read-only PostgreSQL provider using DB_READ_ONLY_USERNAME/PASSWORD.
+ * Shares the connection pool from the primary provider. Returns null if no read-only credentials are configured.
+ */
+async function tryCreateReadOnlyPostgresProvider(): Promise<DatabaseProviderBase | null> {
+  const roUser = process.env.PG_READ_ONLY_USERNAME || process.env.DB_READ_ONLY_USERNAME;
+  const roPass = process.env.PG_READ_ONLY_PASSWORD || process.env.DB_READ_ONLY_PASSWORD;
+  if (!roUser || !roPass) {
+    return null;
+  }
+
+  try {
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
+    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
+    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
+
+    const roProvider = new PostgreSQLDataProvider();
+    const roConfig = new PostgreSQLProviderConfigData(
+      { Host: pgHost, Port: pgPort, Database: pgDatabase, User: roUser, Password: roPass },
+      mj_core_schema,
+      0,
+      undefined,
+      undefined,
+      false,
+    );
+
+    const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool };
+    if (primaryProvider?.DatabaseConnection) {
+      await roProvider.ConfigWithSharedPool(roConfig, primaryProvider.DatabaseConnection);
+    } else {
+      await roProvider.Config(roConfig);
+    }
+
+    return roProvider;
+  } catch (_err) {
+    return null;
+  }
 }
 
 /**

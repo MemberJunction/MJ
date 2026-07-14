@@ -65,6 +65,7 @@
     "@memberjunction/ai-gemini": "5.47.0",
     "@memberjunction/ai-groq": "5.47.0",
     "@memberjunction/ai-heygen": "5.47.0",
+    "@memberjunction/ai-huggingface": "5.47.0",
     "@memberjunction/ai-inception": "5.47.0",
     "@memberjunction/ai-inworld": "5.47.0",
     "@memberjunction/ai-llamacpp": "5.47.0",
