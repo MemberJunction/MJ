@@ -117,6 +117,13 @@ export interface RecentRecordAccess {
   recordName?: string;
   latestAt: Date;
   totalCount: number;
+  /**
+   * Pre-computed "N ago" relative-time label for display. Populated by the dashboard when the
+   * record set loads and refreshed on a timer, so the template binds a STABLE field instead of
+   * calling a `Date.now()`-based method during change detection (which triggers NG0100). See the
+   * DataExplorerDashboardComponent relative-time handling.
+   */
+  relativeTime?: string;
 }
 
 /**
