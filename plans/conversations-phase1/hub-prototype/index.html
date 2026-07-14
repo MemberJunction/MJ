@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Hub — Quiet Execution · Interactive Prototype</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="app">
+  <!-- ══════════ TOP NAV (MJE chrome) ══════════ -->
+  <header class="topnav">
+    <span class="logo"><i class="fa-solid fa-hexagon-nodes"></i> MemberJunction</span>
+    <span class="tab active">Conversations</span>
+    <span class="tab">Collections</span>
+    <span class="tab">Tasks</span>
+    <span class="grow"></span>
+    <button class="topbtn" id="themeBtn" title="Toggle light / dark"><i class="fa-solid fa-circle-half-stroke"></i></button>
+  </header>
+
+  <div class="body">
+    <!-- ══════════ NAVY SIDEBAR ══════════ -->
+    <aside class="side">
+      <div class="side-head"><div class="side-search"><i class="fa-solid fa-magnifying-glass"></i> Search conversations…</div></div>
+      <div class="side-newrow">
+        <button class="side-new" id="newConvBtn"><i class="fa-solid fa-plus"></i> New Conversation</button>
+        <button class="side-ghost" id="newTempBtn" title="Temporary chat — nothing saved, memory off"><i class="fa-solid fa-user-secret"></i></button>
+      </div>
+      <div class="side-scroll" id="sideTree"><!-- rendered --></div>
+      <div class="side-foot"><i class="fa-solid fa-clock-rotate-left"></i> Routines <span class="grow"></span><i class="fa-solid fa-chevron-up"></i></div>
+    </aside>
+
+    <!-- ══════════ MAIN ══════════ -->
+    <main class="main" id="main"><!-- rendered --></main>
+  </div>
+</div>
+
+<!-- ══════════ MODALS ══════════ -->
+<div class="scrim" id="scrim"></div>
+
+<div class="modal" id="shareModal" hidden>
+  <div class="modal-head" id="shareTitle">Share project</div>
+  <div class="modal-body" id="shareBody"><!-- rendered --></div>
+</div>
+
+<div class="modal" id="projectModal" hidden>
+  <div class="modal-head">New project</div>
+  <div class="modal-body">
+    <label class="f-label" for="pmName">Name</label>
+    <input class="f-input" id="pmName" placeholder="e.g. Spring Gala 2027">
+    <label class="f-label" for="pmDesc">Description <span class="opt">optional — agents read this</span></label>
+    <input class="f-input" id="pmDesc" placeholder="One line on what this project is for">
+    <div class="modal-actions">
+      <button class="btn" id="pmCreate">Create project</button>
+      <button class="btn secondary" id="pmCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="moveModal" hidden>
+  <div class="modal-head">Move conversation</div>
+  <div class="modal-body" id="moveBody"><!-- rendered --></div>
+</div>
+
+<div class="modal" id="confirmModal" hidden>
+  <div class="modal-head" id="confirmTitle">Are you sure?</div>
+  <div class="modal-body">
+    <p class="confirm-text" id="confirmText"></p>
+    <div class="modal-actions">
+      <button class="btn danger" id="confirmYes">Delete</button>
+      <button class="btn secondary" id="confirmNo">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="menu" id="menu" hidden></div>
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- ══════════ STATE MAP (the pick-it-apart panel) ══════════ -->
+<div class="statemap closed" id="stateMap">
+  <div class="sm-head" id="smHead">
+    <span class="sm-title"><i class="fa-solid fa-sitemap"></i> State map</span>
+    <span class="sm-sub">every surface · click to jump</span>
+    <i class="fa-solid fa-chevron-down sm-chev"></i>
+  </div>
+  <div class="sm-body">
+    <div class="sm-group">Data profile — every state below renders against it</div>
+    <div class="sm-item" data-jump="persona-est"><span class="n">P1</span> Established user — full seed data</div>
+    <div class="sm-item" data-jump="persona-new"><span class="n">P2</span> Brand-new user — first run, nothing exists yet</div>
+    <div class="sm-group">Hub — densities (the growth contract)</div>
+    <div class="sm-item" data-jump="hub-grown"><span class="n">S1</span> Hub · grown — tabs, running-now, artifacts, members</div>
+    <div class="sm-item" data-jump="hub-v1"><span class="n">S2</span> Hub · v1 — conversations + memory + share only</div>
+    <div class="sm-item" data-jump="hub-empty"><span class="n">S3</span> Hub · just created — first-conversation state</div>
+    <div class="sm-group">Hub — tabs (grown project)</div>
+    <div class="sm-item" data-jump="tab-conversations"><span class="n">S4</span> Conversations — the full list</div>
+    <div class="sm-item" data-jump="tab-memory"><span class="n">S5</span> Memory — manage, provisional review</div>
+    <div class="sm-item" data-jump="tab-artifacts"><span class="n">S6</span> Artifacts</div>
+    <div class="sm-item" data-jump="tab-members"><span class="n">S7</span> Members</div>
+    <div class="sm-group">Chat</div>
+    <div class="sm-item" data-jump="chat-project"><span class="n">S8</span> Chat in a project — breadcrumb, gauge, menu</div>
+    <div class="sm-item" data-jump="chat-new"><span class="n">S9</span> New chat — send to create + auto-name</div>
+    <div class="sm-item" data-jump="chat-ungrouped"><span class="n">S10</span> Ungrouped chat — no project context</div>
+    <div class="sm-item" data-jump="chat-companion"><span class="n">S11</span> Companion rail — project context beside chat</div>
+    <div class="sm-item" data-jump="chat-temporary"><span class="n">S12</span> Temporary chat — banner, memory off</div>
+    <div class="sm-group">Composer</div>
+    <div class="sm-item" data-jump="comp-mention"><span class="n">C1</span> @ mentions — agents route, people reference</div>
+    <div class="sm-item" data-jump="comp-record"><span class="n">C2</span> # records — attach a record as context</div>
+    <div class="sm-item" data-jump="comp-skill"><span class="n">C3</span> / skills — request + activation line</div>
+    <div class="sm-item" data-jump="comp-attach"><span class="n">C4</span> Attachments — upload · from artifacts</div>
+    <div class="sm-item" data-jump="comp-agent"><span class="n">C5</span> Agent picker — Sage vs Skip (remote, D15)</div>
+    <div class="sm-item" data-jump="comp-draft"><span class="n">C6</span> Draft persistence across conversations</div>
+    <div class="sm-group">Deeper flows</div>
+    <div class="sm-item" data-jump="flow-plan"><span class="n">S13</span> Plan mode — per-request chip → plan card → approve</div>
+    <div class="sm-item" data-jump="flow-remember"><span class="n">S14</span> "Remembered" moment → provisional note</div>
+    <div class="sm-item" data-jump="artifact-page"><span class="n">S15</span> Artifact — versions · edit · share · remix</div>
+    <div class="sm-item" data-jump="flow-grow"><span class="n">µ1</span> Share the sparse project — watch it grow tabs</div>
+    <div class="sm-item" data-jump="flow-workflow"><span class="n">µ2</span> Finish the running workflow — artifact arrives</div>
+    <div class="sm-item" data-jump="micro-memory"><span class="n">µ3</span> Memory row — hover → edit → forget</div>
+    <div class="sm-item" data-jump="proj-menu"><span class="n">µ4</span> Project settings — rename · describe · delete</div>
+    <div class="sm-group">Overlays</div>
+    <div class="sm-item" data-jump="modal-share"><span class="n">M1</span> Share modal — roles + invite</div>
+    <div class="sm-item" data-jump="modal-project"><span class="n">M2</span> New project modal</div>
+    <div class="sm-item" data-jump="modal-move"><span class="n">M3</span> Move conversation between projects</div>
+    <div class="sm-toggle" id="privToggle">
+      <span class="tgl on" id="privTgl"></span>
+      <span>demo: "Can Publish Artifacts Publicly" privilege — gates the public link (D11)</span>
+    </div>
+    <div class="sm-foot">Then break it: what's missing, what's wrong, what's still noisy.</div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
