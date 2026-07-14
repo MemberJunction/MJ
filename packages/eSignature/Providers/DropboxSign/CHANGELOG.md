@@ -1,5 +1,12 @@
 # @memberjunction/esignature-dropboxsign
 
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/esignature@5.47.0
+- @memberjunction/global@5.47.0
+
 ## 5.46.0
 
 ### Patch Changes

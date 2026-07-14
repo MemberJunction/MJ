@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_MARKDOWN_CONFIG } from '../types/markdown.types';
-import type { MarkdownConfig, HeadingInfo, MarkdownRenderEvent, AlertType } from '../types/markdown.types';
+import { DEFAULT_MARKDOWN_CONFIG } from '../types/markdown.types.js';
+import type { MarkdownConfig, HeadingInfo, MarkdownRenderEvent, AlertType } from '../types/markdown.types.js';
 
 describe('DEFAULT_MARKDOWN_CONFIG', () => {
   it('should enable syntax highlighting', () => {
