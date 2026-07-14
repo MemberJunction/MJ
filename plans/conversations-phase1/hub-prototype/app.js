@@ -63,7 +63,9 @@ const ESTABLISHED = {
           ] },
       ],
       workflows: [
-        { id: 'wf1', title: 'Draft win-back emails', meta: 'Sage · step 2 of 4 · started 20m ago', pct: 60, running: true },
+        { id: 'wf1', title: 'Draft win-back emails', meta: 'Sage · step 2 of 4 · started 20m ago', pct: 60, state: 'running' },
+        { id: 'wf2', title: 'Build renewal dashboard', meta: 'Skip · failed at step 3 — data source timed out · 1d ago', state: 'failed' },
+        { id: 'wf0', title: 'Segment lapsed members', meta: 'Research Agent · finished 2d ago · output: Q3 Target Segments', state: 'done' },
       ],
     },
     {
@@ -108,22 +110,54 @@ const FIRSTRUN = {
   projects: [], ungrouped: [], pinned: [],
   temporary: { id: 'tmp', title: 'Temporary chat', messages: [] },
 };
+ESTABLISHED.archived = [];
+FIRSTRUN.archived = [];
+
+function buildStressData() {
+  const d = structuredClone(ESTABLISHED);
+  const renewal = d.projects[0];
+  const extraMembers = [
+    ['JW', '#D97706', 'Jordan Wells', 'Editor'], ['PT', '#DB2777', 'Priya Tan', 'Editor'],
+    ['MB', '#0891B2', 'Marcus Bell', 'Viewer'], ['SO', '#65A30D', 'Sam Okafor', 'Viewer'], ['LC', '#9333EA', 'Lena Cruz', 'Viewer'],
+  ];
+  for (const [init, color, name, role] of extraMembers) renewal.members.push({ init, color, name, role });
+  for (let i = 0; i < 24; i++) renewal.memory.push({
+    id: 'sm' + i, status: 'active',
+    text: `Stress note ${i + 1} — a realistic-length memory sentence about renewal mechanics, cohort rules, or tone that the list must absorb gracefully.`,
+    scope: ['All agents', 'Sage', 'All agents · global'][i % 3],
+  });
+  for (let i = 0; i < 7; i++) renewal.conversations.push({
+    id: 'sc' + i, title: `A deliberately long conversation title about renewal segment ${i + 1} that will need to truncate`,
+    summary: 'Sage · a summary line that is also long enough to exercise the ellipsis behavior in narrow layouts', when: `${i + 2}d`,
+    messages: [{ who: 'user', text: 'Stress conversation.' }, { who: 'Sage', text: 'Stress reply.' }],
+  });
+  const icons = ['fa-folder', 'fa-bullhorn', 'fa-calendar-days', 'fa-chart-line', 'fa-globe'];
+  const colors = ['#B794F6', '#68D391', '#F6AD55', '#FC8181', '#5CC0ED'];
+  for (let i = 0; i < 10; i++) d.projects.push({
+    id: 'sp' + i, name: `${i + 1} — Committee Initiative With An Unreasonably Long Name ${'X'.repeat(i)}`,
+    icon: icons[i % icons.length], color: colors[i % colors.length],
+    desc: '', members: [{ init: 'AM', color: 'var(--mj-brand-primary)', name: 'Alex Morgan', role: 'Owner' }],
+    memory: [], conversations: [], artifacts: [], workflows: [],
+  });
+  return d;
+}
 
 let persona = 'established';
 let DATA = structuredClone(ESTABLISHED);
 
 function setPersona(name) {
   persona = name;
-  DATA = structuredClone(name === 'firstrun' ? FIRSTRUN : ESTABLISHED);
+  DATA = name === 'stress' ? buildStressData() : structuredClone(name === 'firstrun' ? FIRSTRUN : ESTABLISHED);
   Object.assign(state, {
     view: 'hub', projectId: DATA.projects[0] ? DATA.projects[0].id : null, tab: 'overview',
     convId: null, artifactId: null, companion: false, planArmed: false, moveConvPending: null, editingArtifact: false,
+    viewAs: { name: 'You', role: 'Owner' },
   });
   state.openProjects = new Set(DATA.projects[0] ? [DATA.projects[0].id] : []);
   composer.drafts = {};
   closeModals();
   render();
-  toast(name === 'firstrun' ? 'Brand-new user — nothing exists yet' : 'Established user — full seed data');
+  toast(name === 'firstrun' ? 'Brand-new user — nothing exists yet' : name === 'stress' ? 'Stress data — long names, 8 members, 28 notes, 12 projects' : 'Established user — full seed data');
 }
 
 /* ---------- State ---------- */
@@ -137,7 +171,8 @@ const state = {
   companion: false,       // companion rail open (project chats only)
   railMode: 'context',    // companion: 'context' | 'artifact'
   railArtifactId: null,
-  planArmed: false,       // per-request plan chip (B5 semantics — disarms on approve)
+  planArmed: false,       // legacy — plan state now lives on the per-conversation draft
+  viewAs: { name: 'You', role: 'Owner' },   // recipient-side preview (D batch)
   moveConvPending: null,  // conversation waiting for "Move → New project…"
   canPublish: true,       // demo: "Can Publish Artifacts Publicly" privilege (D11)
   editingArtifact: false,
@@ -180,6 +215,16 @@ const project = (id) => DATA.projects.find((p) => p.id === id);
 const artifact = (p, id) => p && p.artifacts.find((a) => a.id === id);
 const isGrown = (p) => p.artifacts.length > 0 || p.workflows.length > 0 || p.members.length > 1;
 
+/* View-as: preview the project as another member (recipient side of sharing) */
+const canEdit = () => state.viewAs.role !== 'Viewer';
+const canManage = () => state.viewAs.role === 'Owner';
+function viewAsStrip() {
+  if (state.viewAs.role === 'Owner') return '';
+  return `<div class="viewas-strip"><i class="fa-solid fa-eye"></i>
+    Previewing as <strong>&nbsp;${esc(state.viewAs.name)}&nbsp;</strong> · ${state.viewAs.role}
+    <span class="back" data-act="view-owner">Back to you</span></div>`;
+}
+
 function findConv(id) {
   if (id === 'tmp') return { conv: DATA.temporary, proj: null, temporary: true };
   for (const p of DATA.projects) { const c = p.conversations.find((c) => c.id === id); if (c) return { conv: c, proj: p }; }
@@ -187,11 +232,18 @@ function findConv(id) {
   const pin = DATA.pinned.find((c) => c.id === id); return pin ? { conv: pin, proj: null } : null;
 }
 
-function toast(msg) {
+function toast(msg, action) {
   const el = document.createElement('div');
-  el.className = 'toast'; el.textContent = msg;
+  el.className = 'toast';
+  el.textContent = msg;
+  if (action) {
+    const a = document.createElement('span');
+    a.className = 'toast-action'; a.textContent = action.label;
+    a.addEventListener('click', () => { el.remove(); action.fn(); });
+    el.appendChild(a);
+  }
   $('#toastWrap').appendChild(el);
-  setTimeout(() => el.remove(), 3000);
+  setTimeout(() => el.remove(), action ? 8000 : 3000);
 }
 
 /* ---------- Sidebar ---------- */
@@ -208,13 +260,21 @@ function renderSidebar() {
   for (const p of DATA.projects) {
     const open = state.openProjects.has(p.id);
     const sel = (state.view === 'hub' || state.view === 'artifact') && state.projectId === p.id;
+    const hasFresh = p.conversations.some((c) => c.fresh) || p.artifacts.some((a) => a.fresh);
     t.push(`<div class="s-proj ${sel ? 'sel' : ''} ${open ? 'open' : ''}" data-act="open-hub" data-id="${p.id}">
       <i class="fa-solid fa-chevron-right chev"></i><i class="fa-solid ${p.icon} picon" style="color:${p.color}"></i>
-      <span class="pname">${esc(p.name)}</span></div>`);
+      <span class="pname">${esc(p.name)}</span>${hasFresh && !sel ? '<span class="adot" title="New since you last looked"></span>' : ''}</div>`);
     if (open) for (const c of p.conversations.slice(0, 3))
       t.push(`<div class="s-conv ${state.view === 'chat' && state.convId === c.id ? 'active' : ''}" data-act="open-conv" data-id="${c.id}"><span class="cname">${esc(c.title)}</span><span class="cwhen">${c.when}</span></div>`);
   }
 
+  if (DATA.archived.length) {
+    t.push(`<div class="s-sect"><i class="fa-solid fa-chevron-down chev"></i> Archived <span class="grow"></span></div>`);
+    for (const p of DATA.archived)
+      t.push(`<div class="s-proj archived" data-act="restore-project" data-id="${p.id}" title="Click to restore">
+        <i class="fa-solid fa-box-archive chev" style="width:auto"></i><i class="fa-solid ${p.icon} picon" style="color:${p.color};opacity:.5"></i>
+        <span class="pname">${esc(p.name)}</span><span class="cwhen" style="font-size:10.5px;opacity:.6">restore</span></div>`);
+  }
   if (DATA.ungrouped.length) {
     t.push(`<div class="s-sect"><i class="fa-solid fa-chevron-down chev"></i> Ungrouped <span class="grow"></span></div>`);
     for (const c of DATA.ungrouped)
@@ -243,9 +303,9 @@ function hubHeader(p) {
     </div>
     <div class="qh-actions">
       ${avatars}
-      <button class="iconbtn" data-act="share" title="Share project"><i class="fa-solid fa-user-plus"></i></button>
-      <button class="btn sm" data-act="new-chat"><i class="fa-solid fa-plus"></i> New chat</button>
-      <button class="iconbtn" data-act="proj-menu" title="Project settings"><i class="fa-solid fa-ellipsis"></i></button>
+      ${canManage() ? '<button class="iconbtn" data-act="share" title="Share project"><i class="fa-solid fa-user-plus"></i></button>' : ''}
+      ${canEdit() ? '<button class="btn sm" data-act="new-chat"><i class="fa-solid fa-plus"></i> New chat</button>' : ''}
+      ${canManage() ? '<button class="iconbtn" data-act="proj-menu" title="Project settings"><i class="fa-solid fa-ellipsis"></i></button>' : ''}
     </div>
   </div>`;
 }
@@ -261,7 +321,7 @@ function convRow(c, i) {
   const right = i === 0
     ? `<span class="w">${c.when}</span><span class="continue" data-act="open-conv" data-id="${c.id}">Continue <i class="fa-solid fa-arrow-right"></i></span>`
     : `<span class="w">${c.when}</span>`;
-  return `<div class="qh-conv" data-act="open-conv" data-id="${c.id}">
+  return `<div class="qh-conv ${c.fresh ? 'fresh' : ''}" data-act="open-conv" data-id="${c.id}">
     <div class="tt"><div class="t">${esc(c.title)}</div><div class="s">${esc(c.summary)}</div></div>${right}</div>`;
 }
 
@@ -274,21 +334,23 @@ function memRow(m, manage) {
       <span class="scope">${esc(m.scope)} · provisional</span>
       <span class="keep-ops"><span data-act="mem-keep" data-id="${m.id}">Keep</span><span class="dim" data-act="mem-forget" data-id="${m.id}">Forget</span></span></div>`;
   }
-  const scope = manage
+  const scope = manage && canEdit()
     ? `<select class="f-select" data-mem-scope="${m.id}" title="Who reads this note">${MEM_SCOPES.map((s) => `<option ${s === m.scope ? 'selected' : ''}>${s}</option>`).join('')}</select>`
     : `<span class="scope">${esc(m.scope)}</span>`;
+  const ops = canEdit()
+    ? `<span class="ops">
+      <button data-act="mem-edit" data-id="${m.id}" title="Edit"><i class="fa-solid fa-pen"></i></button>
+      <button data-act="mem-forget" data-id="${m.id}" title="Forget"><i class="fa-solid fa-trash"></i></button>
+    </span>` : '';
   return `<div class="qh-mem" data-mem="${m.id}" tabindex="0">
     <span class="m">${esc(m.text)}</span>
     ${scope}
-    <span class="ops">
-      <button data-act="mem-edit" data-id="${m.id}" title="Edit"><i class="fa-solid fa-pen"></i></button>
-      <button data-act="mem-forget" data-id="${m.id}" title="Forget"><i class="fa-solid fa-trash"></i></button>
-    </span></div>`;
+    ${ops}</div>`;
 }
 
 function artRow(a) {
   const latest = a.versions[a.versions.length - 1];
-  return `<div class="qh-art" data-act="open-artifact" data-id="${a.id}"><i class="${a.icon}"></i>
+  return `<div class="qh-art ${a.fresh ? 'fresh' : ''}" data-act="open-artifact" data-id="${a.id}"><i class="${a.icon}"></i>
     <span class="t">${esc(a.title)}</span><span class="meta">v${latest.v} · ${latest.when}</span></div>`;
 }
 
@@ -313,11 +375,14 @@ function hubOverview(p) {
     p.conversations.length > 3 ? { act: 'tab', id: 'conversations', label: `All ${p.conversations.length} →` } : null,
     p.conversations.slice(0, 3).map(convRow).join('')));
 
-  const running = p.workflows.filter((w) => w.running);
-  if (running.length) {
+  const running = p.workflows.filter((w) => w.state === 'running');
+  const failed = p.workflows.filter((w) => w.state === 'failed');
+  if (running.length || failed.length) {
     const rows = running.map((w) => `<div class="qh-run"><span class="dot"></span><span class="t">${esc(w.title)}</span>
-      <span class="meta">${esc(w.meta)}</span><span class="bar"><span style="width:${w.pct}%"></span></span></div>`).join('');
-    parts.push(sect('Running now', { act: 'noop', label: 'Gantt →' }, rows));
+      <span class="meta">${esc(w.meta)}</span><span class="bar"><span style="width:${w.pct}%"></span></span></div>`).join('') +
+      failed.map((w) => `<div class="qh-run failed"><span class="dot err"></span><span class="t">${esc(w.title)}</span>
+      <span class="meta">${esc(w.meta)}</span><span class="retry" data-act="wf-retry" data-id="${w.id}">Retry</span></div>`).join('');
+    parts.push(sect(failed.length ? 'Workflows' : 'Running now', { act: 'tab', id: 'workflows', label: 'History →' }, rows));
   }
 
   if (p.artifacts.length)
@@ -360,11 +425,27 @@ function hubTabInner(p) {
     }
     case 'artifacts':
       return sect('All artifacts', null, p.artifacts.map(artRow).join('') || '<p class="qh-foot" style="margin-top:8px">No artifacts yet.</p>');
+    case 'workflows': {
+      const groups = [
+        { label: 'Running', items: p.workflows.filter((w) => w.state === 'running'), dot: '' },
+        { label: 'Needs attention', items: p.workflows.filter((w) => w.state === 'failed'), dot: 'err' },
+        { label: 'Completed', items: p.workflows.filter((w) => w.state === 'done'), dot: 'ok' },
+      ].filter((g) => g.items.length);
+      const body = groups.map((g) => sect(g.label, null, g.items.map((w) =>
+        `<div class="qh-run ${w.state}"><span class="dot ${g.dot}"></span><span class="t">${esc(w.title)}</span>
+         <span class="meta">${esc(w.meta)}</span>${
+           w.state === 'running' ? `<span class="bar"><span style="width:${w.pct}%"></span></span>` :
+           w.state === 'failed' ? `<span class="retry" data-act="wf-retry" data-id="${w.id}">Retry</span>` : ''
+         }</div>`).join(''))).join('');
+      return `<div class="chat-bread" style="margin-top:22px"><span class="home" data-act="tab" data-id="overview"><i class="fa-solid fa-arrow-left"></i> Overview</span></div>` +
+        (body || '<p class="qh-foot" style="margin-top:14px">No workflows have run in this project yet.</p>') +
+        `<p class="qh-foot"><i class="fa-solid fa-circle-info"></i>Completed workflows file their outputs to Artifacts. Failed ones wait here — nothing retries silently.</p>`;
+    }
     case 'members':
-      return sect('Members', { act: 'share', label: 'Invite →' }, p.members.map((m, i) =>
+      return sect('Members', canManage() ? { act: 'share', label: 'Invite →' } : null, p.members.map((m, i) =>
         `<div class="qh-member"><span class="avatar" style="background:${m.color}">${m.init}</span><span class="nm">${esc(m.name)}</span>${
-          m.role === 'Owner'
-            ? '<span class="role">Owner</span>'
+          m.role === 'Owner' || !canManage()
+            ? `<span class="role">${m.role}</span>`
             : `<select class="f-select" data-member-role="${i}"><option ${m.role === 'Viewer' ? 'selected' : ''}>Viewer</option><option ${m.role === 'Editor' ? 'selected' : ''}>Editor</option></select>
                <button class="iconbtn" data-act="member-remove" data-id="${i}" title="Remove from project"><i class="fa-solid fa-user-minus"></i></button>`
         }</div>`).join('')) +
@@ -381,7 +462,7 @@ function renderHub() {
     state.projectId = DATA.projects[0].id;
     return renderHub();
   }
-  $('#main').innerHTML = `<div class="qh-page">${hubHeader(p)}${hubTabs(p)}${hubTabBody(p)}</div>`;
+  $('#main').innerHTML = `${viewAsStrip()}<div class="qh-page">${hubHeader(p)}${hubTabs(p)}${hubTabBody(p)}</div>`;
   const empty = $('#emptySend'); if (empty) empty.focus();
 }
 
@@ -443,9 +524,9 @@ function renderArtifact() {
         ${editable
           ? `<button class="btn sm" data-act="art-save">Save as v${a.versions.length + 1}</button>
              <button class="btn secondary sm" data-act="art-cancel">Cancel</button>`
-          : `<button class="btn secondary sm" data-act="art-edit"><i class="fa-solid fa-pen"></i> Edit</button>
-             <button class="btn secondary sm" data-act="art-share"><i class="fa-solid fa-user-plus"></i> Share</button>
-             <button class="btn secondary sm" data-act="art-remix"><i class="fa-solid fa-code-branch"></i> Remix</button>`}
+          : `${canEdit() ? '<button class="btn secondary sm" data-act="art-edit"><i class="fa-solid fa-pen"></i> Edit</button>' : ''}
+             ${canManage() ? '<button class="btn secondary sm" data-act="art-share"><i class="fa-solid fa-user-plus"></i> Share</button>' : ''}
+             ${canEdit() ? '<button class="btn secondary sm" data-act="art-remix"><i class="fa-solid fa-code-branch"></i> Remix</button>' : ''}`}
       </div>
     </div>
     <div class="qh-sect" style="margin-top:22px">
@@ -498,6 +579,11 @@ function msgHtml(m, mi) {
   if (m.who === 'user') return `<div class="msg-user">${esc(m.text)}${msgTags(m.tags)}</div>`;
   const remembered = m.remembered
     ? `<div class="remembered"><i class="fa-solid fa-check"></i>Remembered — "${esc(m.remembered)}" · Project<span class="undo" data-act="mem-undo" data-id="${mi}">Undo</span></div>` : '';
+  if (m.error) {
+    return `<div class="msg-agent"><div class="who">${esc(m.who)}</div>
+      <div class="msg-error"><i class="fa-solid fa-triangle-exclamation"></i>${esc(m.text)}
+      <span class="retry" data-act="msg-retry" data-id="${mi}">Retry</span></div></div>`;
+  }
   const memUsed = m.memoryUsed
     ? `<div class="mem-used" data-act="open-tab-from-chat" data-id="memory" title="See what agents remember here"><i class="fa-solid fa-brain"></i>Used ${m.memoryUsed} project ${m.memoryUsed === 1 ? 'note' : 'notes'}</div>` : '';
   const skill = m.skill
@@ -678,14 +764,17 @@ function renderChat() {
   const msgs = conv.messages.map(msgHtml).join('');
   const banner = temporary
     ? `<div class="temp-banner"><i class="fa-solid fa-user-secret"></i><span><strong>Temporary</strong> — nothing here is saved, and stored memory won't be read or written.</span></div>` : '';
+  const composerOrNotice = proj && !canEdit()
+    ? `<div class="chat-composer"><div class="viewer-notice"><i class="fa-solid fa-eye"></i>View access — you can read this conversation. Ask Alex Morgan for edit access to join in.</div></div>`
+    : composerHtml(proj, 'chatInput', temporary ? 'Ask anything — off the record…' : 'Message Sage…', 'chat-send');
   const chatEl = `<div class="chat">
     ${chatHeader({ proj, title: conv.title, temporary })}
     <div class="chat-msgs"><div class="chat-col" id="msgCol">${banner}${msgs}</div></div>
-    ${composerHtml(proj, 'chatInput', temporary ? 'Ask anything — off the record…' : 'Message Sage…', 'chat-send')}
+    ${composerOrNotice}
   </div>`;
-  $('#main').innerHTML = proj && state.companion
+  $('#main').innerHTML = viewAsStrip() + (proj && state.companion
     ? `<div class="chat-wrap">${chatEl}${companionHtml(proj)}</div>`
-    : chatEl;
+    : chatEl);
   const col = $('.chat-msgs'); if (col) col.scrollTop = col.scrollHeight;
   const inp = $('#chatInput'); if (inp) inp.focus();
 }
@@ -728,6 +817,10 @@ function agentRespond(conv, p, payload) {
       p ? 'Draft the analysis with project memory applied' : 'Draft the analysis from org-wide data',
       p ? 'Save the output to this project\'s artifacts' : 'Return the result here',
     ], exec: [] } });
+    return;
+  }
+  if (/\bfail\b/i.test(text)) {
+    conv.messages.push({ who, error: true, text: 'That didn\'t work — the data source timed out before I could finish.', retryText: text.replace(/\bfail\b/ig, '').trim() || 'try again' });
     return;
   }
   if (REMEMBER_RX.test(text) && p) {
@@ -868,15 +961,13 @@ const MENU_ACTIONS = {
   },
   'proj-delete': () => {
     const p = project(state.projectId);
-    openConfirm(`Delete "${p.name}"?`,
-      `Its ${p.conversations.length} conversations move to Ungrouped; memory and artifacts are removed. This is the design question — what SHOULD deleting a project do?`,
-      () => {
-        DATA.ungrouped.push(...p.conversations);
-        DATA.projects = DATA.projects.filter((x) => x.id !== p.id);
-        state.projectId = DATA.projects[0] ? DATA.projects[0].id : null;
-        state.view = 'hub'; state.tab = 'overview';
-        render(); toast('Project deleted — conversations moved to Ungrouped');
-      });
+    openChoice(`Remove "${p.name}"?`,
+      `Archive keeps everything and gets it out of your way — restore any time. Delete moves its ${p.conversations.length} conversations to Ungrouped, keeps artifacts available in Collections, and removes project memory.`,
+      [
+        { label: 'Archive', cls: 'btn', fn: () => archiveProject(p.id) },
+        { label: 'Delete', cls: 'btn danger', fn: () => deleteProject(p.id) },
+        { label: 'Cancel', cls: 'btn secondary', fn: () => {} },
+      ]);
   },
   'proj-edit': () => openProjectModal(state.projectId),
   'conv-move': () => openMove(),
@@ -960,12 +1051,59 @@ function closeModals() {
   modalOpener = null;
 }
 
-let confirmFn = null;
-function openConfirm(title, text, fn) {
+function openChoice(title, text, buttons) {
   $('#confirmTitle').textContent = title;
   $('#confirmText').textContent = text;
-  confirmFn = fn;
+  const wrap = $('#confirmModal .modal-actions');
+  wrap.innerHTML = buttons.map((b, i) => `<button class="${b.cls}" data-choice="${i}">${esc(b.label)}</button>`).join('');
+  wrap.querySelectorAll('[data-choice]').forEach((el) =>
+    el.addEventListener('click', () => { closeModals(); buttons[Number(el.dataset.choice)].fn(); }));
   openModal('confirmModal');
+}
+
+function archiveProject(id) {
+  const p = project(id);
+  DATA.projects = DATA.projects.filter((x) => x.id !== id);
+  DATA.archived.push(p);
+  Object.assign(state, { view: 'hub', projectId: DATA.projects[0] ? DATA.projects[0].id : null, tab: 'overview', convId: null });
+  render();
+  toast(`"${p.name}" archived`, { label: 'Undo', fn: () => restoreProject(id) });
+}
+
+function restoreProject(id) {
+  const i = DATA.archived.findIndex((x) => x.id === id);
+  if (i < 0) return;
+  const p = DATA.archived.splice(i, 1)[0];
+  DATA.projects.push(p);
+  Object.assign(state, { view: 'hub', projectId: id, tab: 'overview', convId: null });
+  render();
+  toast(`"${p.name}" restored`);
+}
+
+function deleteProject(id) {
+  const p = project(id); // conversations move to Ungrouped; artifacts survive in Collections
+  DATA.ungrouped.push(...p.conversations);
+  DATA.projects = DATA.projects.filter((x) => x.id !== id);
+  const undo = { p, convIds: p.conversations.map((c) => c.id) };
+  Object.assign(state, { view: 'hub', projectId: DATA.projects[0] ? DATA.projects[0].id : null, tab: 'overview', convId: null });
+  render();
+  toast(`"${p.name}" deleted — conversations moved to Ungrouped, artifacts stay in Collections`, {
+    label: 'Undo', fn: () => {
+      DATA.ungrouped = DATA.ungrouped.filter((c) => !undo.convIds.includes(c.id));
+      undo.p.conversations = undo.p.conversations;
+      DATA.projects.push(undo.p);
+      Object.assign(state, { view: 'hub', projectId: undo.p.id, tab: 'overview' });
+      render(); toast(`"${undo.p.name}" restored`);
+    },
+  });
+}
+
+let confirmFn = null;
+function openConfirm(title, text, fn) {
+  openChoice(title, text, [
+    { label: 'Delete', cls: 'btn danger', fn },
+    { label: 'Cancel', cls: 'btn secondary', fn: () => {} },
+  ]);
 }
 
 let shareContext = { type: 'project', artifactId: null };
@@ -1012,8 +1150,14 @@ function openShare(type, artifactId) {
 
 function inviteMember() {
   const p = project(state.projectId);
-  const name = $('#shareInput').value.trim();
+  const input = $('#shareInput');
+  const name = input.value.trim();
   if (!name) return;
+  const err = $('#shareErr'); if (err) err.remove();
+  if (!name.includes(' ') && !name.includes('@')) {
+    input.insertAdjacentHTML('afterend', `<p class="f-error" id="shareErr">Couldn't find "${esc(name)}" — use a full name or an email address.</p>`);
+    return;
+  }
   const wasSparse = !isGrown(p);
   const initials = name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   const colors = ['#7C3AED', '#16A34A', '#D97706', '#DB2777'];
@@ -1096,7 +1240,7 @@ function createProject() {
 /* ---------- Simulations ---------- */
 function finishWorkflow() {
   const p = project('renewal');
-  const wf = p.workflows.find((w) => w.running);
+  const wf = p.workflows.find((w) => w.state === 'running');
   if (!wf) { toast('Nothing running — already finished'); return; }
   Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'overview', convId: null });
   render();
@@ -1107,7 +1251,7 @@ function finishWorkflow() {
     render();
     if (pct < 100) setTimeout(tick, 350);
     else {
-      wf.running = false;
+      wf.state = 'done';
       p.artifacts.unshift({ id: 'a' + Date.now(), title: 'Win-back Email Drafts', icon: 'fa-regular fa-file-lines', kind: 'Document',
         versions: [{ v: 1, when: 'now', by: 'Sage', note: 'Workflow output — three-touch win-back sequence' }] });
       render();
@@ -1123,6 +1267,7 @@ const SEEDED_JUMPS = new Set([
   'chat-project', 'chat-new', 'chat-ungrouped', 'chat-companion', 'flow-plan', 'flow-remember',
   'artifact-page', 'flow-grow', 'flow-workflow', 'micro-memory', 'proj-menu', 'modal-share', 'modal-move',
   'comp-mention', 'comp-record', 'comp-skill', 'comp-attach', 'comp-agent', 'comp-draft',
+  'view-editor', 'view-viewer', 'tab-workflows', 'flow-archive', 'flow-activity', 'flow-error',
 ]);
 
 function insertTrigger(ch) {
@@ -1137,6 +1282,21 @@ function insertTrigger(ch) {
 const JUMPS = {
   'persona-est':      () => { setPersona('established'); return 'noRender'; },
   'persona-new':      () => { setPersona('firstrun'); return 'noRender'; },
+  'persona-stress':   () => { setPersona('stress'); return 'noRender'; },
+  'view-editor':      () => { Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'overview', convId: null, viewAs: { name: 'Dana Kim', role: 'Editor' } }); render(); toast('Previewing as Dana — Editor: no share, no settings, no member management'); return 'noRender'; },
+  'view-viewer':      () => { Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'overview', convId: null, viewAs: { name: 'Ray Barnes', role: 'Viewer' } }); render(); toast('Previewing as Ray — Viewer: read everything, change nothing'); return 'noRender'; },
+  'tab-workflows':    () => Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'workflows' }),
+  'flow-archive':     () => { Object.assign(state, { view: 'hub', projectId: 'website', tab: 'overview', convId: null }); render(); MENU_ACTIONS['proj-delete'](); return 'noRender'; },
+  'flow-activity':    () => {
+    const p = project('renewal');
+    p.conversations.unshift({ id: 'fresh' + Date.now(), fresh: true, title: 'Coastal save plan', summary: 'Dana · drafted overnight — needs your eyes', when: '2h',
+      messages: [{ who: 'user', text: '(Dana) Draft a Coastal save plan.' }, { who: 'Sage', text: 'Coastal save plan drafted — usage-based win-back with a Q3 checkpoint.' }] });
+    if (p.artifacts[0]) p.artifacts[0].fresh = true;
+    Object.assign(state, { view: 'hub', projectId: 'website', tab: 'overview', convId: null });
+    render(); toast('Dana worked in Membership Renewal while you were away — note the sidebar dot');
+    return 'noRender';
+  },
+  'flow-error':       () => { Object.assign(state, { view: 'chat', convId: 'c1', projectId: 'renewal' }); render(); const ta = $('#chatInput'); ta.value = 'This will fail — run the renewal export'; draft().text = ta.value; toast('Send it — quiet error state with Retry'); return 'noRender'; },
   'hub-grown':        () => Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'overview', convId: null }),
   'hub-v1':           () => Object.assign(state, { view: 'hub', projectId: 'website', tab: 'overview', convId: null }),
   'hub-empty':        () => { closeModals(); openProjectModal(null); return 'noRender'; },
@@ -1204,6 +1364,7 @@ document.addEventListener('click', (e) => {
     case 'open-tab': Object.assign(state, { view: 'hub', tab: id }); render(); break;
     case 'open-tab-from-chat': Object.assign(state, { view: 'hub', tab: id, convId: null }); render(); break;
     case 'open-conv': { const f = findConv(id); Object.assign(state, { view: 'chat', convId: id });
+      if (f) delete f.conv.fresh;
       state.projectId = f && f.proj ? f.proj.id : null; render(); break; }
     case 'tab': state.tab = id; render(); break;
     case 'new-chat': state.view = 'newchat'; render(); break;
@@ -1271,7 +1432,8 @@ document.addEventListener('click', (e) => {
     case 'rail-context': state.railMode = 'context'; render(); break;
 
     /* artifacts */
-    case 'open-artifact': Object.assign(state, { view: 'artifact', artifactId: id, artifactVersion: null, editingArtifact: false }); render(); break;
+    case 'open-artifact': { const a2 = artifact(p(), id); if (a2) delete a2.fresh;
+      Object.assign(state, { view: 'artifact', artifactId: id, artifactVersion: null, editingArtifact: false }); render(); break; }
     case 'art-version': state.artifactVersion = Number(id); state.editingArtifact = false; render(); break;
     case 'art-edit': state.editingArtifact = true; render(); break;
     case 'art-cancel': state.editingArtifact = false; render(); break;
@@ -1320,6 +1482,14 @@ document.addEventListener('click', (e) => {
       break;
     }
 
+    case 'wf-retry': { const w = p().workflows.find((w) => w.id === id);
+      if (w) { w.state = 'running'; w.pct = 10; w.meta = w.title.startsWith('Build') ? 'Skip · step 1 of 4 · retrying' : 'retrying'; }
+      render(); toast('Retrying — back in Running now'); break; }
+    case 'view-owner': state.viewAs = { name: 'You', role: 'Owner' }; render(); toast('Back to your own access'); break;
+    case 'restore-project': restoreProject(id); break;
+    case 'msg-retry': { const f = findConv(state.convId); const em = f.conv.messages[Number(id)];
+      f.conv.messages.splice(Number(id), 1);
+      appendChatMessage(em.retryText.replace(/fail/ig, '').trim() || 'try that again'); break; }
     case 'noop': toast('Out of prototype scope'); break;
   }
 });
