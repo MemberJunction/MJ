@@ -132,6 +132,47 @@ describe('TreeComponent (DOM)', () => {
     });
   });
 
+  describe('DefaultExpansion', () => {
+    /** Nested fixture: root branch A → child branch B → leaf L, all collapsed. */
+    function nestedNodes(): TreeNode[] {
+      const grandchild = leaf({ ID: 'l', Label: 'Leaf', Level: 2, ParentID: 'b' });
+      const child = branch({ ID: 'b', Label: 'B', Level: 1, ParentID: 'a', Children: [grandchild], Expanded: false });
+      return [branch({ ID: 'a', Label: 'A', Children: [child], Expanded: false })];
+    }
+
+    it("'all' expands every branch, nested included", () => {
+      const fixture = renderTree({
+        inputs: { DefaultExpansion: 'all' },
+        setup: (i) => {
+          i.Nodes = nestedNodes();
+          i['applyInitialExpansion']();
+        },
+      });
+      expect(queryAll(fixture, '.tree-node-children').length).toBe(2);
+    });
+
+    it("'none' leaves everything collapsed", () => {
+      const fixture = renderTree({
+        inputs: { DefaultExpansion: 'none' },
+        setup: (i) => {
+          i.Nodes = nestedNodes();
+          i['applyInitialExpansion']();
+        },
+      });
+      expect(queryAll(fixture, '.tree-node-children').length).toBe(0);
+    });
+
+    it("default ('first-level') expands only root branches", () => {
+      const fixture = renderTree({
+        setup: (i) => {
+          i.Nodes = nestedNodes();
+          i['applyInitialExpansion']();
+        },
+      });
+      expect(queryAll(fixture, '.tree-node-children').length).toBe(1);
+    });
+  });
+
   describe('node rendering', () => {
     it('renders one treeitem per visible root node with data attributes', () => {
       const fixture = renderTree({

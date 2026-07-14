@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/predictive-studio-core",
   "type": "module",
-  "version": "5.44.0",
+  "version": "5.47.0",
   "description": "MemberJunction: Predictive Studio core type contracts (pipeline specs, sidecar contract, feature-step DAG, modeling plan)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

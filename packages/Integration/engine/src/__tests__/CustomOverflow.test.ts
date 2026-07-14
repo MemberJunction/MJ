@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeUnmappedFields, hasUnmappedFields, CUSTOM_OVERFLOW_COLUMN } from '../CustomOverflow.js';
+import { computeUnmappedFields, hasUnmappedFields, reconcileOverflowValue, CUSTOM_OVERFLOW_COLUMN } from '../CustomOverflow.js';
 
 describe('CustomOverflow', () => {
     describe('CUSTOM_OVERFLOW_COLUMN', () => {
@@ -57,6 +57,25 @@ describe('CustomOverflow', () => {
 
         it('is true when at least one key is present', () => {
             expect(hasUnmappedFields({ a: 1 })).toBe(true);
+        });
+    });
+
+    describe('reconcileOverflowValue (U4 — evict stale overflow keys on re-sync)', () => {
+        it('serializes the CURRENT unmapped keys to JSON', () => {
+            expect(reconcileOverflowValue({ Extra: 'x', More: 1 })).toBe('{"Extra":"x","More":1}');
+        });
+
+        it('returns null (clearing the column) when the record has NO extras — this is the eviction', () => {
+            // The bug it fixes: when a source column vanishes the unmapped set empties, and the old code
+            // skipped the write → the prior overflow JSON (with the vanished key) stuck around forever.
+            expect(reconcileOverflowValue({})).toBeNull();
+            expect(reconcileOverflowValue(null)).toBeNull();
+            expect(reconcileOverflowValue(undefined)).toBeNull();
+        });
+
+        it('a shrunk unmapped set drops the vanished key (only the surviving keys remain)', () => {
+            // Prior sync had {kept, dropped}; the source stopped sending `dropped` → reconcile emits only `kept`.
+            expect(reconcileOverflowValue({ kept: 'v' })).toBe('{"kept":"v"}');
         });
     });
 });

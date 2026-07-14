@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMMKVBoolean, useMMKVString } from 'react-native-mmkv';
@@ -16,6 +16,8 @@ import {
     setDefaultAgent,
     type AppearanceMode,
 } from '@/data/preferences';
+import { isBiometricAvailable } from '@/auth/biometric';
+import { registerForPushNotifications, unregisterDeviceToken } from '@/data/services/notifications';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
@@ -34,9 +36,11 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  *     the `@/data/preferences` helpers (`cycleAppearance`, `setDefaultAgent`).
  *   - `useAgents()` populates the default-agent picker.
  *   - `useMJ()` provides `signOut` and `authMethod`.
- *   Note: voice/push/Face-ID toggles persist their state but are functionally
- *   inert until Phase 2 wires the underlying features; full dark rendering for
- *   the Appearance choice is likewise a Phase 2 task.
+ *   Note: the Push (P2.3) and Face ID (P2.4) toggles are now wired to their
+ *   underlying device features — Face ID only enables when biometrics are
+ *   available, and Push requests permission + (un)registers the device token on
+ *   toggle. The Voice toggle still only persists its state; full dark rendering
+ *   for the Appearance choice is likewise a later task.
  * Interactions: open the default-agent picker ({@link AgentPickerModal}), cycle
  *   appearance, flip toggles, sign out (-> `/login`).
  * Mockup: `plans/mobile-app-react-native/html/profile.html`.
@@ -53,6 +57,37 @@ export default function ProfileScreen() {
     const [faceIdOn, setFaceIdOn] = useMMKVBoolean(PrefKeys.faceIdLock, prefsStorage);
 
     const appearance = (appearanceRaw as AppearanceMode | undefined) ?? 'system';
+
+    // Face ID app lock (P2.4) — the toggle is only usable when the device can
+    // actually do biometrics (hardware present + a face/fingerprint enrolled).
+    const [biometricAvailable, setBiometricAvailable] = useState(false);
+    useEffect(() => {
+        let active = true;
+        void isBiometricAvailable().then((ok) => {
+            if (active) setBiometricAvailable(ok);
+        });
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    const handleFaceIdToggle = () => {
+        if (!biometricAvailable) return;
+        setFaceIdOn(!faceIdOn);
+    };
+
+    // Push notifications (P2.3) — turning ON requests permission + registers the
+    // device token; turning OFF unregisters. All paths degrade cleanly on a
+    // simulator (permission may be granted but no real token is minted).
+    const handlePushToggle = async () => {
+        if (pushOn) {
+            setPushOn(false);
+            await unregisterDeviceToken();
+            return;
+        }
+        const result = await registerForPushNotifications();
+        setPushOn(result.granted);
+    };
 
     const user = useMemo(() => {
         if (status !== 'ready') return null;
@@ -123,7 +158,7 @@ export default function ProfileScreen() {
                         label="Push notifications"
                         sub="Approvals · agent completion · alerts"
                         value={!!pushOn}
-                        onToggle={() => setPushOn(!pushOn)}
+                        onToggle={() => void handlePushToggle()}
                     />
                 </View>
 
@@ -132,9 +167,10 @@ export default function ProfileScreen() {
                     <ToggleRow
                         icon={<Icons.Pin size={16} color={Colors.ink2} />}
                         label="Face ID app lock"
-                        sub="Lock when app goes to background"
-                        value={!!faceIdOn}
-                        onToggle={() => setFaceIdOn(!faceIdOn)}
+                        sub={biometricAvailable ? 'Lock when app goes to background' : 'Not available on this device'}
+                        value={!!faceIdOn && biometricAvailable}
+                        disabled={!biometricAvailable}
+                        onToggle={handleFaceIdToggle}
                     />
                     <SettingRow icon={<Icons.Database size={16} color={Colors.ink2} strokeWidth={2} />} label="Connected workspace" sub={workspaceHost} arrow />
                     <SettingRow icon={<Icons.Search size={16} color={Colors.ink2} strokeWidth={2} />} label="Help & feedback" arrow />
@@ -181,10 +217,14 @@ function SettingRow({ icon, label, sub, value, arrow, onPress }: { icon: React.R
     );
 }
 
-/** Settings row with a trailing on/off switch; the whole row toggles `value` via `onToggle`. */
-function ToggleRow({ icon, label, sub, value, onToggle }: { icon: React.ReactNode; label: string; sub?: string; value: boolean; onToggle: () => void }) {
+/**
+ * Settings row with a trailing on/off switch; the whole row toggles `value` via
+ * `onToggle`. When `disabled`, the row is dimmed and non-interactive (used when
+ * a feature — e.g. Face ID — isn't available on the device).
+ */
+function ToggleRow({ icon, label, sub, value, onToggle, disabled }: { icon: React.ReactNode; label: string; sub?: string; value: boolean; onToggle: () => void; disabled?: boolean }) {
     return (
-        <Pressable style={styles.row} onPress={onToggle}>
+        <Pressable style={[styles.row, disabled && styles.rowDisabled]} onPress={onToggle} disabled={disabled}>
             <View style={styles.rowIcon}>{icon}</View>
             <View style={{ flex: 1 }}>
                 <Text style={styles.rowLabel}>{label}</Text>
@@ -261,6 +301,7 @@ const styles = StyleSheet.create({
     group: { backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, borderRadius: Radius.lg, marginHorizontal: 14, marginBottom: 12, ...Shadow.card, overflow: 'hidden' },
 
     row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.line2 },
+    rowDisabled: { opacity: 0.5 },
     rowIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: Colors.surface2, alignItems: 'center', justifyContent: 'center' },
     rowLabel: { fontSize: 14.5, fontWeight: Type.medium, color: Colors.ink },
     rowSub: { fontSize: 12, color: Colors.ink3, marginTop: 1 },

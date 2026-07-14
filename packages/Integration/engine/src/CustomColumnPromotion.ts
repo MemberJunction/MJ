@@ -71,6 +71,17 @@ export interface PromotionPlanOptions {
      * column already exists is NOT re-promoted — this is what makes the loop terminate.
      */
     ExistingColumnNames?: ReadonlySet<string>;
+    /**
+     * U3 — the promotion LOCK. When true, {@link planPromotions} plans NOTHING: promotion is held until a
+     * FULL sync has run since the last schema change / rediscovery. Why it's needed: after a rediscover, an
+     * INCREMENTAL sync only re-syncs CHANGED rows, so unchanged rows still carry now-vanished keys in their
+     * overflow JSON — a coverage scan over that stale mix could phantom-promote a column the source already
+     * dropped. A full sync evicts every stale key per-row ({@link reconcileOverflowValue}), so once one has
+     * been observed the coverage scan is trustworthy and the lock can clear. The ENGINE supplies the lever;
+     * MJC owns the state (it knows when a full sync completed) and pulls it. Default (undefined/false) =
+     * unlocked, preserving current behavior for callers that don't gate.
+     */
+    LockUntilFullSync?: boolean;
 }
 
 const DEFAULT_COVERAGE_THRESHOLD = 0; // §23 — presence-based: a key seen in even one row earns a column.
@@ -101,6 +112,9 @@ export function planPromotions(
     stats: OverflowKeyStats[],
     opts: PromotionPlanOptions = {}
 ): PromotionCandidate[] {
+    // U3 — LOCKED: hold ALL promotion until a full sync has evicted stale overflow keys, so a rediscover
+    // followed by only an incremental sync can't phantom-promote a vanished column (see LockUntilFullSync).
+    if (opts.LockUntilFullSync) return [];
     const threshold = opts.CoverageThreshold ?? DEFAULT_COVERAGE_THRESHOLD;
     const existing = lowercaseSet(opts.ExistingColumnNames);
     const candidates: PromotionCandidate[] = [];
@@ -122,6 +136,60 @@ export function planPromotions(
     }
 
     return candidates.sort((a, b) => a.Key.localeCompare(b.Key));
+}
+
+/** A promoted custom column plus the two facts that decide whether it may be reclaimed (U7). */
+export interface PromotedColumnState {
+    /** The (already-promoted) real column's name. */
+    ColumnName: string;
+    /** The column was 100% NULL across the LAST FULL sync — no synced row carried a value. */
+    AllNullAcrossFullSync: boolean;
+    /** The source no longer exposes this key (absent from the latest authoritative discovery / overflow). */
+    VanishedFromSource: boolean;
+}
+
+/** Options for {@link planColumnReclamations}. Reclaim is DESTRUCTIVE, so every gate defaults to OFF/safe. */
+export interface ReclaimPlanOptions {
+    /**
+     * U7 — the master opt-in. Default OFF: nothing is EVER reclaimed unless a deployment explicitly turns
+     * it on. A promoted column is non-destructive by default (it simply lingers all-NULL); this only lets
+     * an opted-in deployment reclaim the space.
+     */
+    ReclaimVanishedColumns?: boolean;
+    /**
+     * Only reclaim once a FULL sync has been observed (every row seen), so "all-NULL" is trustworthy and
+     * not an artifact of a partial / incremental pass. MJC signals this; default false = never reclaim.
+     */
+    FullSyncCompleted?: boolean;
+}
+
+/** A column the plan says MAY be dropped, with why. Pure decision — MJC/RSU performs the actual DROP. */
+export interface ReclaimCandidate {
+    ColumnName: string;
+    Reason: string;
+}
+
+/**
+ * U7 — plans which promoted custom columns MAY be RECLAIMED (dropped) because the source stopped sending
+ * them. PURE, triple-gated, default-safe: returns [] unless the deployment opted in
+ * (`ReclaimVanishedColumns`) AND a full sync was observed (`FullSyncCompleted`); and even then, only a
+ * column that is BOTH all-NULL across that full sync AND vanished from the source is a candidate. The
+ * engine only PLANS — MJC/RSU performs the destructive DROP, symmetric to how {@link planPromotions} plans
+ * the ADD and the orchestrator executes it. Deterministic (sorted by column name).
+ */
+export function planColumnReclamations(
+    columns: PromotedColumnState[],
+    opts: ReclaimPlanOptions = {}
+): ReclaimCandidate[] {
+    // Default-safe: reclaim is opt-in AND only trustworthy after a full sync — either gate off ⇒ drop nothing.
+    if (!opts.ReclaimVanishedColumns || !opts.FullSyncCompleted) return [];
+    return columns
+        .filter(c => c.AllNullAcrossFullSync && c.VanishedFromSource)
+        .map(c => ({
+            ColumnName: c.ColumnName,
+            Reason: 'all-NULL across the last full sync and absent from the source — reclaimable',
+        }))
+        .sort((a, b) => a.ColumnName.localeCompare(b.ColumnName));
 }
 
 /**

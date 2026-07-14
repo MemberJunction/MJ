@@ -1,5 +1,103 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.47.0
+
+### Patch Changes
+
+- 936a286: Scope the view-column-order cache per connection pool instead of per provider instance (#3102). `loadViewColumnOrderCache()` ran a full `sys.columns` scan inside every `Config()`, and MJServer configures a fresh provider (or two — read-write + read-only) per GraphQL request, so the whole-database scan executed once or twice on every request (production Query Store showed ~9,664 executions/24h, the #2 query by execution count). The scan result is now held in a process-static `WeakMap<ConnectionPool, Promise<Map<viewKey, string[]>>>` shared across provider instances, keyed by the pool object so read-write/read-only or multi-database providers (where the same `schema.view` can have different physical column orders) never cross-contaminate — preventing the positional `@ResultTable` mis-routing the cache exists to guard against. Concurrent per-request `Config()` calls de-duplicate onto a single in-flight scan; a failed scan drops its entry so the next call retries (best-effort fallback to metadata-derived column order is unchanged). `Refresh()` — the hook CodeGen/migrations already drive after altering views — invalidates the pool's entry so schema changes are picked up without a restart, and a public static `InvalidateViewColumnOrderCache(pool)` covers explicit out-of-band DDL. Net effect: ~1 scan per pool per process instead of ~1–2 per request.
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/ai-vectordb@5.47.0
+  - @memberjunction/ai-vector-dupe@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/encryption@5.47.0
+  - @memberjunction/generic-database-provider@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/queue@5.47.0
+  - @memberjunction/query-processor@5.47.0
+  - @memberjunction/ai-provider-bundle@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-vectordb@5.46.0
+  - @memberjunction/ai-vector-dupe@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/actions@5.46.0
+  - @memberjunction/encryption@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/queue@5.46.0
+  - @memberjunction/query-processor@5.46.0
+  - @memberjunction/ai-provider-bundle@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/aiengine@5.45.1
+- @memberjunction/ai-vector-dupe@5.45.1
+- @memberjunction/generic-database-provider@5.45.1
+- @memberjunction/queue@5.45.1
+- @memberjunction/ai-provider-bundle@5.45.1
+- @memberjunction/ai@5.45.1
+- @memberjunction/ai-vectordb@5.45.1
+- @memberjunction/actions-base@5.45.1
+- @memberjunction/actions@5.45.1
+- @memberjunction/encryption@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/query-processor@5.45.1
+- @memberjunction/sql-dialect@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-vectordb@5.45.0
+  - @memberjunction/ai-vector-dupe@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/actions@5.45.0
+  - @memberjunction/encryption@5.45.0
+  - @memberjunction/queue@5.45.0
+  - @memberjunction/query-processor@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/ai-provider-bundle@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+
 ## 5.44.0
 
 ### Patch Changes

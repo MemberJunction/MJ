@@ -77,11 +77,11 @@
           }
           <!-- Actions -->
           <div class="ap-row-actions">
-            <button class="ap-icon-btn" title="Edit" (click)="OnEditRow(row)">
-              <i class="fa-solid fa-pen-to-square"></i>
+            <button class="ap-icon-btn" title="Edit" aria-label="Edit permission" (click)="OnEditRow(row)">
+              <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
             </button>
-            <button class="ap-icon-btn ap-icon-btn-danger" title="Remove" (click)="OnDeleteRow(row)">
-              <i class="fa-solid fa-xmark"></i>
+            <button class="ap-icon-btn ap-icon-btn-danger" title="Remove" aria-label="Remove permission" (click)="OnDeleteRow(row)">
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
             </button>
           </div>
         </div>
@@ -94,8 +94,8 @@
     <div class="ap-form" @slideDown>
       <div class="ap-form-header">
         <h4>{{ EditingRowId ? 'Edit Permission' : 'New Permission' }}</h4>
-        <button class="ap-icon-btn" (click)="OnCancelForm()">
-          <i class="fa-solid fa-xmark"></i>
+        <button class="ap-icon-btn" aria-label="Cancel" (click)="OnCancelForm()">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
         </button>
       </div>
       <!-- Grant type toggle -->

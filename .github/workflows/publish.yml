@@ -108,8 +108,17 @@ jobs:
         env:
           REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
 
+      - name: Check for version override in commit message
+        id: commit_override
+        run: |
+          COMMIT_MSG=$(git log -1 --format=%B)
+          if [[ "$COMMIT_MSG" =~ \[version:([0-9]+\.[0-9]+\.[0-9]+)\] ]]; then
+            echo "VERSION_OVERRIDE=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+            echo "Found version override in commit message: ${BASH_REMATCH[1]}"
+          fi
+
       - name: Determine next expected version
-        if: ${{ env.BRANCH == 'main' && !github.event.inputs.targetVersion }}
+        if: ${{ env.BRANCH == 'main' && !github.event.inputs.targetVersion && !steps.commit_override.outputs.VERSION_OVERRIDE }}
         id: version_check
         run: |
           git fetch --tags
@@ -128,7 +137,7 @@ jobs:
       - name: Update version and check against expected
         if: ${{ env.BRANCH == 'main' }}
         run: |
-          EXPECTED_NEXT_VERSION="${{ github.event.inputs.targetVersion || steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
+          EXPECTED_NEXT_VERSION="${{ github.event.inputs.targetVersion || steps.commit_override.outputs.VERSION_OVERRIDE || steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
           npm run version
 
           NEXT_VERSION=$(jq -r .version packages/MJServer/package.json)

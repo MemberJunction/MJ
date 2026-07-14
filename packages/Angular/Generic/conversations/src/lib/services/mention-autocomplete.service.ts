@@ -1,31 +1,32 @@
-import { Injectable } from '@angular/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJAISkillEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, EntityInfo, QueryInfo, IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase, AIAgentPermissionHelper, AISkillPermissionHelper } from '@memberjunction/ai-engine-base';
+import { BaseSingleton } from '@memberjunction/global';
+import { MentionSuggestion, MentionSuggestionPreset } from '@memberjunction/ng-composer';
 
 /**
- * Item in the autocomplete dropdown
+ * Shared engine behind the conversations composer plugins (the agent-mentions /
+ * record-mentions / skill-commands `ComposerTriggerProvider`s) and the mention-parsing
+ * consumers (message routing, saved-message badge rendering). Loads the
+ * permission-filtered agent / user / entity / query / skill caches once per session and
+ * serves ranked `MentionSuggestion` lists per trigger char.
+ *
+ * NOT an Angular DI service — it's a `BaseSingleton` engine so the
+ * ClassFactory-instantiated trigger providers (which live outside Angular DI) and the
+ * Angular components share ONE instance (one cache warm-up) via
+ * `MentionAutocompleteService.Instance`.
  */
-export interface MentionSuggestion {
-  type: 'agent' | 'user' | 'entity' | 'query' | 'skill';
-  id: string;
-  name: string;
-  displayName: string;
-  description?: string;
-  avatarUrl?: string; // Deprecated, use imageUrl
-  imageUrl?: string; // For agent LogoURL or user avatar
-  icon?: string; // FontAwesome class for agents, entities, queries, and skills
-  color?: string; // Accent color (skills use AISkill.Color for their chip/badge)
-}
+export class MentionAutocompleteService extends BaseSingleton<MentionAutocompleteService> {
+  protected constructor() {
+    super();
+  }
 
-/**
- * Service for autocomplete suggestions when typing @mentions
- */
-@Injectable({
-  providedIn: 'root'
-})
-export class MentionAutocompleteService {
+  /** The process-wide shared instance (Global Object Store backed). */
+  public static get Instance(): MentionAutocompleteService {
+    return super.getInstance<MentionAutocompleteService>();
+  }
+
   private agentsCache: MJAIAgentEntityExtended[] = [];
   private usersCache: UserInfo[] = [];
   private entitiesCache: EntityInfo[] = [];
@@ -39,7 +40,10 @@ export class MentionAutocompleteService {
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
 
-  constructor() {}
+  /** True once the caches have loaded (agents/users/entities/queries/skills). */
+  public get IsInitialized(): boolean {
+    return this.isInitialized;
+  }
 
   /**
    * Initialize the service by loading agents and users
@@ -229,7 +233,10 @@ export class MentionAutocompleteService {
           displayName: agent.Name || 'Unknown',
           description: agent.Description || undefined,
           imageUrl: agent.LogoURL || undefined, // Agent logo/avatar image
-          icon: this.getAgentIcon(agent)
+          icon: this.getAgentIcon(agent),
+          // Configuration presets ride on the suggestion — the (AI-blind) composer
+          // renders a preset picker on the inserted chip when there are 2+.
+          presets: this.getAgentPresets(agent.ID)
         });
       }
     }
@@ -244,8 +251,7 @@ export class MentionAutocompleteService {
             id: user.ID,
             name: user.Name,
             displayName: user.Name,
-            description: user.Email || undefined,
-            avatarUrl: undefined // Future: load user avatars
+            description: user.Email || undefined
           });
         }
       }
@@ -271,7 +277,7 @@ export class MentionAutocompleteService {
    */
   private getEntityAndQuerySuggestions(query: string): MentionSuggestion[] {
     const lowerQuery = query.toLowerCase().trim();
-    const MAX_SUGGESTIONS = 12;
+    const MAX_SUGGESTIONS = 50;
 
     const entityItems = this.entitiesCache.map(entity => ({
       label: entity.DisplayNameOrName,
@@ -306,6 +312,10 @@ export class MentionAutocompleteService {
       .filter(x => x.score > 0 || !lowerQuery)
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
+        // When scores tie, prioritize entities over queries
+        if (a.suggestion.type !== b.suggestion.type) {
+          return a.suggestion.type === 'entity' ? -1 : 1;
+        }
         return a.label.localeCompare(b.label);
       })
       .slice(0, MAX_SUGGESTIONS)
@@ -368,6 +378,33 @@ export class MentionAutocompleteService {
     }
 
     return 0; // No match
+  }
+
+  /**
+   * Map an agent's AI Agent Configuration presets into the composer's generic
+   * `MentionSuggestionPreset` shape so the chip's preset picker works without the
+   * composer knowing anything about agents.
+   *
+   * IMPORTANT: preset.ID is the AIAgentConfiguration.ID (preset ID), not
+   * AIConfigurationID — the backend mapping converts preset ID -> AIConfigurationID.
+   */
+  private getAgentPresets(agentId: string): MentionSuggestionPreset[] | undefined {
+    try {
+      const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(agentId, true);
+      if (!presets || presets.length === 0) {
+        return undefined;
+      }
+      return presets.map(p => ({
+        ID: p.ID,
+        Name: p.Name,
+        DisplayName: p.DisplayName || undefined,
+        Description: p.Description || undefined,
+        IsDefault: p.IsDefault
+      }));
+    } catch {
+      // Presets are a chip nicety — never let them break suggestion building
+      return undefined;
+    }
   }
 
   /**

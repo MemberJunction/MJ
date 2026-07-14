@@ -78,27 +78,34 @@ export class InteractiveFormApplyService {
             return this.fail(`Could not check for existing override: ${activeResult.Message ?? 'unknown error'}`);
         }
         const payload = this.parseActiveResult(activeResult.Message);
-        const hasExistingActive = !!payload?.Active?.OverrideID;
+        const existingOverride = payload?.Active
+            ?? payload?.Variants?.find(v => v.Status === 'Pending')
+            ?? null;
+        const hasExistingOverride = !!existingOverride?.OverrideID;
 
         // Step 2: confirm with the user.
-        const proceed = await this.confirm(hasExistingActive, entityName, payload?.Active?.ComponentVersion);
+        const proceed = await this.confirm(hasExistingOverride, entityName, existingOverride?.ComponentVersion);
         if (!proceed) {
             return { Success: false, Message: 'Cancelled by user.' };
         }
 
         // Step 3: run Create or Modify.
         const formName = (spec as unknown as { name?: string }).name ?? 'Custom Form';
-        if (hasExistingActive) {
+        if (hasExistingOverride) {
             // MJ's Modify operates on a Component *lineage* keyed by Name — the spec
             // name must match the existing Component across versions. A freshly
             // generated form usually has a different name, so align it to the existing
             // lineage (spec.name + the root `function` declaration the linter checks)
             // before modifying.
-            if (payload?.Active?.ComponentName) {
-                this.alignSpecToLineage(spec, payload.Active.ComponentName);
+            if (existingOverride!.ComponentName) {
+                this.alignSpecToLineage(spec, existingOverride!.ComponentName);
             }
+            // For Pending overrides, use in-place modification (keep iterating on
+            // the same version). For Active overrides, bump a new version so the
+            // prior version is preserved.
+            const isPending = existingOverride!.Status === 'Pending';
             const modifyResult = await this.runActionByName(client, 'Modify Interactive Form', [
-                { Name: 'OverrideID', Value: payload!.Active!.OverrideID!, Type: 'Input' },
+                { Name: 'OverrideID', Value: existingOverride!.OverrideID!, Type: 'Input' },
                 { Name: 'Spec', Value: JSON.stringify(spec), Type: 'Input' },
                 { Name: 'Notes', Value: `Applied from chat artifact at ${new Date().toISOString()}`, Type: 'Input' },
                 // A user "Apply" is a deliberate save, never an in-flight refinement —
@@ -106,9 +113,10 @@ export class InteractiveFormApplyService {
                 // in-place overwrite. Passing an explicit bump makes this deterministic
                 // across every source status (the 'in-place' default only applies to a
                 // Pending source, which is the agent's iteration loop, not this path).
-                // The prior version is demoted to Inactive on activation and stays in
-                // Form Builder's version rail.
-                { Name: 'VersionBumpKind', Value: 'minor', Type: 'Input' },
+                // Exception: if the existing override is already Pending (no Active
+                // version exists yet), use in-place to avoid creating unnecessary
+                // version history.
+                { Name: 'VersionBumpKind', Value: isPending ? 'in-place' : 'minor', Type: 'Input' },
             ]);
             // Auto-activate the resulting version too. "Apply to my form" is an explicit
             // user action — they expect the applied form to go live, not sit as a Pending
@@ -275,11 +283,15 @@ export class InteractiveFormApplyService {
     }
 
     private parseActiveResult(message: string | undefined): {
-        Active?: { OverrideID?: string; ComponentVersion?: string; ComponentName?: string };
+        Active?: { OverrideID?: string; ComponentVersion?: string; ComponentName?: string; Status?: string };
+        Variants?: Array<{ OverrideID?: string; ComponentVersion?: string; ComponentName?: string; Status?: string }>;
     } | null {
         if (!message) return null;
         try {
-            return JSON.parse(message) as { Active?: { OverrideID?: string; ComponentVersion?: string; ComponentName?: string } };
+            return JSON.parse(message) as {
+                Active?: { OverrideID?: string; ComponentVersion?: string; ComponentName?: string; Status?: string };
+                Variants?: Array<{ OverrideID?: string; ComponentVersion?: string; ComponentName?: string; Status?: string }>;
+            };
         } catch {
             return null;
         }
