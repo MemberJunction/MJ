@@ -6,7 +6,7 @@ import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunctio
 import { GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import { CapabilitiesForLevel, type ListCapabilities, type ListDelta, type ListRefreshMode, type SharePermissionLevel } from '@memberjunction/lists-base';
-import { ListSharingService } from '@memberjunction/ng-list-management';
+import { ListSharingService, GetRecordDisplayField, IsTextSearchableField, FormatRecordDisplayValue } from '@memberjunction/ng-list-management';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 import { NewItemOption } from '../../generic/Item.types';
@@ -1189,12 +1189,15 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       return;
     }
 
-    const nameField = sourceEntityInfo.Fields.find(field => field.IsNameField);
+    // NameField when present; otherwise the fallback display field
+    // (first non-PK/non-FK/non-system field). Text-typed fields also
+    // drive the LIKE search so name-less entities remain searchable.
+    const displayField = GetRecordDisplayField(sourceEntityInfo);
     const pkField = sourceEntityInfo.FirstPrimaryKey?.Name || 'ID';
 
     let filter: string | undefined;
-    if (nameField) {
-      filter = `${nameField.Name} LIKE '%${searchText}%'`;
+    if (displayField.Field && IsTextSearchableField(displayField.Field)) {
+      filter = `${displayField.Field.Name} LIKE '%${searchText.replace(/'/g, "''")}%'`;
     }
 
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -1210,7 +1213,9 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
         const recordId = String(record[pkField]);
         return {
           ID: recordId,
-          Name: nameField ? String(record[nameField.Name]) : recordId,
+          Name: displayField.Field
+            ? FormatRecordDisplayValue(recordId, record[displayField.Field.Name], displayField)
+            : recordId,
           isInList: this.existingListDetailIds.has(NormalizeUUID(recordId)),
           isSelected: false
         };

@@ -1,7 +1,7 @@
 # Lists Functionality & Performance Review — Findings and Remediation Plan
 
 **Date:** 2026-07-13 (implemented 2026-07-14)
-**Status:** IMPLEMENTED on branch `feature/lists-performance-and-fixes` (PR #3145) — see Implementation Log at the bottom. Deferred items: F2 real Activity section, F5 favorites-filter persistence / My Lists edit-delete, P8 Venn MaxRows caps, F7 name-field-less search UX.
+**Status:** IMPLEMENTED on branch `feature/lists-performance-and-fixes` (PR #3145) — see Implementation Log at the bottom. Remaining deferred item: F2 real Activity section (feature work). All perf items and the other functionality gaps (F5a, F7, P8) shipped; F5b turned out to already exist.
 **Scope reviewed:** Lists Application dashboards (Browse / My Lists / Categories / Operations-Venn / Shared With Me), the custom `MJ: Lists` entity form, every add-to-list entry point in the UI, the `@memberjunction/ng-list-management` service/dialog, the `@memberjunction/lists` server engine + `ListOperationsResolver`, the `Add Records to List` action, `ListSource` in RecordSetProcessor, and the ListDetail schema/indexes.
 
 ---
@@ -101,8 +101,8 @@ Work on a fresh branch off `next` (e.g. `feature/lists-performance-and-fixes`). 
 10. **Fix the Add Records dialog stuck spinner** (F9): `detectChanges()` after the awaited load in `openAddRecordsDialog()`, plus a sweep of the file's other `markForCheck()`-after-await sites. Smallest, most user-visible fix in the plan — can ship first/standalone.
 11. **Fix `openRecord()`** in the custom List form to actually navigate to the record (F1).
 12. Surface skipped-duplicate counts in the list-management dialog result toast (F3).
-13. Persist Browse favorites filter via `UpdateQueryParams` / `OnQueryParamsChanged` (F5a); optionally add Edit/Delete to My Lists context menu (F5b).
-14. (Optional / later) Real Activity section backed by Record Changes for the List + List Details (F2); `MaxRows` caps on Venn operand loads (P8).
+13. ✅ F5a IMPLEMENTED (2026-07-14) — favorites filter persists via **`UserInfoEngine`** (`mj.lists.browse.showOnlyFavorites`), not query params as originally sketched: the Browse component round-trips no other state through the URL, and repo rule 9 mandates server-persisted user preferences (cross-device) over per-browser state. Restored in `ngOnInit`, persisted (debounced) on every toggle/clear path. **F5b — already existed**: My Lists has had the full Edit/Duplicate/Delete context menu all along; the original review's gap claim was stale.
+14. ✅ P8 IMPLEMENTED (2026-07-14) — `ListSetOperationsService.MAX_OPERAND_RECORDS` (50,000) caps every membership/view operand load, with a `WasLastLoadTruncated` flag + console warning on hit; the Operations operand pickers cap at 500 rows. ✅ F7 IMPLEMENTED (2026-07-14) — new shared `GetRecordDisplayField` helper (`@memberjunction/ng-list-management`, unit-tested): entities without a NameField display `<ID> — <first non-PK/non-FK/non-__mj_ field>` (falling back to the first non-PK field, then ID alone), used by both Add Records dialogs AND the List form's Items grid; text-typed fallback fields also drive the LIKE search so name-less entities are searchable. **Still deferred:** F2 real Activity section backed by Record Changes.
 
 ### Verification (every phase)
 - `npm run build` + `npm run test` in each touched package; update unit tests (ListManagementService has tests that will need the new count/query shapes).

@@ -6,7 +6,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { MJListFormComponent } from '../../generated/Entities/MJList/mjlist.form.component';
 import { MJListEntity, MJListDetailEntity, MJListDetailEntityExtended, MJListCategoryEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { CompositeKey, Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
-import { ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
+import { ListShareDialogConfig, ListShareDialogResult, GetRecordDisplayField, IsTextSearchableField, FormatRecordDisplayValue } from '@memberjunction/ng-list-management';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 
 export type ListSection = 'overview' | 'items' | 'sharing' | 'activity' | 'settings';
@@ -249,10 +249,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             return;
         }
 
-        const nameFieldInfo = this.entityInfo.NameField;
+        // NameField when the entity has one; otherwise the fallback field
+        // (first non-PK/non-FK/non-system field), shown as "<id> — <value>"
+        const displayField = GetRecordDisplayField(this.entityInfo);
         const pkName = this.entityInfo.FirstPrimaryKey?.Name || 'ID';
-        if (!nameFieldInfo) {
-            // Entity has no name field — the record ID is the best label available
+        if (!displayField.Field) {
+            // Entity has only key fields — the record ID is the best label available
             for (const item of this.listItems) {
                 item.recordName = item.detail.RecordID || 'Unknown';
             }
@@ -261,7 +263,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const nameMap = new Map<string, string>();
+        const valueMap = new Map<string, unknown>();
         const ids = this.listItems
             .map(i => i.detail.RecordID)
             .filter((id): id is string => !!id);
@@ -274,12 +276,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
                 const result = await rv.RunView({
                     EntityName: this.entityInfo.Name,
                     ExtraFilter: `${pkName} IN (${inList})`,
-                    Fields: [pkName, nameFieldInfo.Name],
+                    Fields: [pkName, displayField.Field.Name],
                     ResultType: 'simple'
                 });
                 if (result.Success) {
-                    for (const row of result.Results as Array<Record<string, string>>) {
-                        nameMap.set(NormalizeUUID(String(row[pkName])), row[nameFieldInfo.Name]);
+                    for (const row of result.Results as Array<Record<string, unknown>>) {
+                        valueMap.set(NormalizeUUID(String(row[pkName])), row[displayField.Field.Name]);
                     }
                 }
             } catch (error) {
@@ -288,8 +290,9 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }
 
         for (const item of this.listItems) {
-            const name = item.detail.RecordID ? nameMap.get(NormalizeUUID(item.detail.RecordID)) : undefined;
-            item.recordName = name || item.detail.RecordID || 'Unknown';
+            const id = item.detail.RecordID || 'Unknown';
+            const value = item.detail.RecordID ? valueMap.get(NormalizeUUID(item.detail.RecordID)) : undefined;
+            item.recordName = FormatRecordDisplayValue(id, value, displayField);
         }
         finish();
     }
@@ -668,12 +671,15 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             return;
         }
 
-        const nameField = sourceEntityInfo.Fields.find(field => field.IsNameField);
+        // NameField when present; otherwise the fallback display field
+        // (first non-PK/non-FK/non-system field). Text-typed fields also
+        // drive the LIKE search so name-less entities remain searchable.
+        const displayField = GetRecordDisplayField(sourceEntityInfo);
         const pkField = sourceEntityInfo.FirstPrimaryKey?.Name || 'ID';
 
         let filter: string | undefined;
-        if (nameField) {
-            filter = `${nameField.Name} LIKE '%${searchText}%'`;
+        if (displayField.Field && IsTextSearchableField(displayField.Field)) {
+            filter = `${displayField.Field.Name} LIKE '%${searchText.replace(/'/g, "''")}%'`;
         }
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -689,7 +695,9 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
                 const recordId = String(record[pkField]);
                 return {
                     ID: recordId,
-                    Name: nameField ? String(record[nameField.Name]) : recordId,
+                    Name: displayField.Field
+                        ? FormatRecordDisplayValue(recordId, record[displayField.Field.Name], displayField)
+                        : recordId,
                     isInList: this.existingListDetailIds.has(NormalizeUUID(recordId)),
                     isSelected: false
                 };

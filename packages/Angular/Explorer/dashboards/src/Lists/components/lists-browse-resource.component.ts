@@ -2,7 +2,7 @@ import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef,
 import { RegisterClass , UUIDsEqual, MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJListCategoryEntity } from '@memberjunction/core-entities';
-import { MJListEntity, MJListDetailEntity, MJUserFavoriteEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListDetailEntity, MJUserFavoriteEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseEntity, BaseEntityEvent, Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -1893,8 +1893,24 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     }
   }
 
+  /** User-preference key for the favorites-only filter (F5a) — server-persisted so it survives reloads and follows the user across devices. */
+  private static readonly FAVORITES_FILTER_PREF_KEY = 'mj.lists.browse.showOnlyFavorites';
+
+  /** Persists the current favorites-filter state as a user preference (debounced). */
+  private persistFavoritesFilter(): void {
+    UserInfoEngine.Instance.SetSettingDebounced(
+      ListsBrowseResource.FAVORITES_FILTER_PREF_KEY,
+      String(this.showOnlyFavorites),
+    );
+  }
+
   async ngOnInit() {
     super.ngOnInit();
+    // Restore the favorites-only filter preference (synchronous cache hit —
+    // UserInfoEngine is populated during app bootstrap)
+    this.showOnlyFavorites = UserInfoEngine.Instance.GetSetting(
+      ListsBrowseResource.FAVORITES_FILTER_PREF_KEY,
+    ) === 'true';
     this.subscribeToCategoryChanges();
     await this.loadData();
     this.registerAgentTools();
@@ -2341,6 +2357,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedOwner  = (values['selectedOwner']  as string) ?? 'mine';
     this.selectedEntity = (values['selectedEntity'] as string) ?? 'all';
     this.showOnlyFavorites = values['favorites'] === 'favorites';
+    this.persistFavoritesFilter();
     this.applyFilters();
     this.buildCategoryTree();
     this.publishAgentContext();
@@ -2351,6 +2368,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedOwner = 'mine';
     this.selectedEntity = 'all';
     this.showOnlyFavorites = false;
+    this.persistFavoritesFilter();
     this.applyFilters();
     this.buildCategoryTree();
   }
@@ -2373,6 +2391,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedOwner = 'mine';
     this.selectedEntity = 'all';
     this.showOnlyFavorites = false;
+    this.persistFavoritesFilter();
     this.tagFilters = [];
     void this.recomputeTagMembership();
     this.buildCategoryTree();
@@ -2416,6 +2435,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedEntity = 'all';
     this.selectedOwner = 'mine';
     this.showOnlyFavorites = false;
+    this.persistFavoritesFilter();
     this.tagFilters = [];
     void this.recomputeTagMembership(); // empty tagFilters → clears tagFilteredListIds + re-applies
     this.buildCategoryTree();
