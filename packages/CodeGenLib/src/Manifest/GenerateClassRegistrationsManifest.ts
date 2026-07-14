@@ -1687,27 +1687,34 @@ function findClassSubpathByFile(
 /**
  * Builds a deterministic loader variable name from a package name and subpath.
  *
+ * Both package name and subpath are included to prevent collisions when
+ * different packages export the same subpath (e.g. two packages both
+ * exporting `./plugins` would otherwise both produce `loadPlugins`).
+ *
  * Examples:
- *   ('@memberjunction/ng-dashboards', './ai-dashboards.module') → 'loadAiDashboardsModule'
+ *   ('@memberjunction/ng-dashboards', './ai-dashboards.module') → 'loadNgDashboardsAiDashboardsModule'
  *   ('@memberjunction/ng-explorer-settings', '.')               → 'loadNgExplorerSettings'
+ *   ('@memberjunction/codegen-lib', './plugins')                → 'loadCodegenLibPlugins'
+ *   ('@memberjunction/metadata-sync', './plugins')              → 'loadMetadataSyncPlugins'
  */
 function buildLoaderVarName(packageName: string, subpath: string): string {
+    const pkgParts = sanitizePackageName(packageName).split('_').filter(Boolean);
+    const pkgPascal = pkgParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+
     if (subpath === '.') {
-        // Whole-package chunk: derive from package name
-        const parts = sanitizePackageName(packageName).split('_').filter(Boolean);
-        const pascalParts = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1));
-        return `load${pascalParts.join('')}`;
+        // Whole-package chunk: derive from package name only
+        return `load${pkgPascal}`;
     }
 
-    // Subpath chunk: derive from subpath name
+    // Subpath chunk: combine package name + subpath to avoid cross-package collisions
     const clean = subpath
         .replace(/^\.\//, '')
         .replace(/\.module$/, '-module')
         .replace(/\.[^.]+$/, ''); // strip file extensions
 
-    const parts = clean.split(/[-./]/).filter(Boolean);
-    const pascalParts = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1));
-    return `load${pascalParts.join('')}`;
+    const subParts = clean.split(/[-./]/).filter(Boolean);
+    const subPascal = subParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+    return `load${pkgPascal}${subPascal}`;
 }
 
 /**
