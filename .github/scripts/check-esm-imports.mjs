@@ -10,7 +10,7 @@
  */
 
 import { readFileSync, readdirSync, existsSync, realpathSync } from 'node:fs';
-import { join, resolve, sep, extname } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
 
@@ -37,26 +37,28 @@ export function resolveEntryPoint(pkgJson) {
     if (typeof exp === 'string') return exp;
     const root = exp?.['.'];
     if (typeof root === 'string') return root;
-    if (typeof root === 'object' && root !== null) {
-        const fromImport = unwrapCondition(root.import);
-        if (fromImport) return fromImport;
-        const fromDefault = unwrapCondition(root.default);
-        if (fromDefault) return fromDefault;
-    }
-    return pkgJson.main ?? null;
+    return unwrapCondition(root) ?? pkgJson.main ?? null;
 }
 
+/** Export conditions that select an entry for a Node ESM import (require/browser/types are not ours). */
+const ESM_CONDITIONS = new Set(['import', 'node', 'module', 'default']);
+
 /**
- * Resolve a single export condition to a path string. A condition is either the
- * path directly (string) or a nested condition object (`{ node, default, ... }`),
- * in which case we take its `default` (falling back to `import`). Returns null
- * when no path is found.
+ * Resolve an export condition to a path string. A condition is either the path
+ * directly (string) or a nested condition object (`{ import, node, default, ... }`),
+ * possibly nested several levels deep. Mirrors Node's algorithm: iterate keys in
+ * their declared order and take the first ESM-active condition that resolves to a
+ * string, recursing into nested condition objects. Returns null when none match.
+ * Recursion is safe: package.json exports are finite, acyclic JSON.
  */
 function unwrapCondition(condition) {
     if (typeof condition === 'string') return condition;
     if (typeof condition === 'object' && condition !== null) {
-        if (typeof condition.default === 'string') return condition.default;
-        if (typeof condition.import === 'string') return condition.import;
+        for (const [key, value] of Object.entries(condition)) {
+            if (!ESM_CONDITIONS.has(key)) continue;
+            const found = unwrapCondition(value);
+            if (found) return found;
+        }
     }
     return null;
 }
@@ -133,21 +135,26 @@ function importInFreshProcess(entryPath) {
 
 /**
  * Classify a structured import failure relative to the package that owns the entry.
- * The gating signature is narrow: an EXTENSIONLESS relative specifier missing from the
- * package's own source/dist — the #3137 tsc-alias bug, which is always extensionless
- * (a `.js`-less `./config`). ERR_UNSUPPORTED_DIR_IMPORT is the same class (an
- * extensionless specifier that resolves to a directory). Everything else is non-gating:
- * a missing own-dir file WITH an extension is a genuinely-absent build/codegen artifact
- * (not this bug), and a path elsewhere — or in the package's own nested node_modules,
- * a third-party dep's problem — is a dependency failure.
+ * The gating signature is narrow: an EXTENSIONLESS relative specifier whose target
+ * file exists WITH a JS module extension (`<missing>.js|.mjs|.cjs`) — the #3137
+ * tsc-alias bug, where the build dropped the extension the resolver requires.
+ * ERR_UNSUPPORTED_DIR_IMPORT is the same class (an extensionless specifier that
+ * resolves to a directory). Everything else is non-gating: a genuinely-absent file
+ * (no JS sibling — an ungenerated build/codegen artifact) is not this bug, and a
+ * path elsewhere — or in the package's own nested node_modules, a third-party dep's
+ * problem — is a dependency failure. `fileExists` is injectable for tests.
+ *
+ * Detecting "extensionless" from the path's own extension (`extname`) is wrong: a
+ * dotted basename like `content.types` is extensionless yet has a non-empty extname,
+ * so a real bug importing `./content.types` would slip through. Probing for the JS
+ * sibling is dot-in-name-proof and matches the true signature exactly.
  */
-export function classifyFailure(failure, pkgDir) {
+export function classifyFailure(failure, pkgDir, { fileExists = existsSync } = {}) {
     const { code, message } = failure;
     if (code === 'ERR_MODULE_NOT_FOUND' || code === 'ERR_UNSUPPORTED_DIR_IMPORT') {
         const missing = extractMissingPath(message);
-        // A dir import is inherently extensionless; a module-not-found only qualifies
-        // when the specifier itself carried no extension (`extname` empty).
-        const isExtensionlessSignature = code === 'ERR_UNSUPPORTED_DIR_IMPORT' || (missing != null && extname(missing) === '');
+        const isExtensionlessSignature =
+            code === 'ERR_UNSUPPORTED_DIR_IMPORT' || (missing != null && hasModuleSibling(missing, fileExists));
         // Node reports realpath'd paths in resolver errors, so realpath pkgDir too —
         // otherwise a symlinked package dir fails the startsWith and a real own-dist
         // break gets missed (fail-open). A node_modules segment in the missing path
@@ -163,6 +170,11 @@ export function classifyFailure(failure, pkgDir) {
         return { status: 'DEP_FAIL', detail: firstLine(message) };
     }
     return { status: 'OTHER_ERR', detail: `[${code}] ${firstLine(message)}` };
+}
+
+/** True when `<missing>.js|.mjs|.cjs` exists — the tsc-alias signature: target present, extension dropped. */
+function hasModuleSibling(missing, fileExists) {
+    return ['.js', '.mjs', '.cjs'].some((ext) => fileExists(missing + ext));
 }
 
 /** True when any path segment is `node_modules` — i.e. the path is inside a dependency tree. */
@@ -243,15 +255,23 @@ async function main() {
     console.log(`esm-guard: native-ESM-importing every "type": "module" package under ${rootDir} ...`);
     const { results, failures } = await sweep(rootDir);
 
-    if (results.length === 0) {
-        // Reporting OK here would be false confidence — the run verified nothing (wrong
-        // directory, or a package-free path). Fail loudly instead of green-lighting.
-        console.error(`esm-guard: no "type": "module" packages found under ${rootDir} — nothing verified. Run from the repo root or pass a valid packages path.`);
+    const counts = {};
+    for (const r of results) counts[r.status] = (counts[r.status] ?? 0) + 1;
+
+    // Reporting OK when nothing was actually imported is false confidence. This
+    // happens two ways: no "type": "module" packages found at all (wrong directory /
+    // package-free path), or packages exist but every entry is NOT_BUILT (check:esm
+    // run without a prior build). Fail loudly in both cases instead of green-lighting.
+    const importedCount = results.length - (counts.NOT_BUILT ?? 0);
+    if (importedCount === 0) {
+        const reason =
+            results.length === 0
+                ? `no "type": "module" packages found under ${rootDir}`
+                : `all ${results.length} "type": "module" package(s) under ${rootDir} are NOT_BUILT`;
+        console.error(`esm-guard: ${reason} — nothing verified. Run "npm run build" first, or pass a valid packages path.`);
         process.exit(2);
     }
 
-    const counts = {};
-    for (const r of results) counts[r.status] = (counts[r.status] ?? 0) + 1;
     console.log(
         `esm-guard: checked ${results.length} packages — ` +
             Object.entries(counts).map(([status, n]) => `${status}: ${n}`).join(', ')

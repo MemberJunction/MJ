@@ -46,8 +46,15 @@ describe('resolveEntryPoint', () => {
         expect(resolveEntryPoint(pkg)).toBe('./dist/index.js');
     });
 
-    it('unwraps a nested default condition object', () => {
+    it('unwraps a nested default condition, honoring Node key order (node wins over default)', () => {
+        // Node iterates conditions in declared order; `node` is active for a Node ESM
+        // import, so it is selected before the `default` fallback.
         const pkg = { exports: { '.': { default: { node: './dist/node.js', default: './dist/index.js' } } } };
+        expect(resolveEntryPoint(pkg)).toBe('./dist/node.js');
+    });
+
+    it('unwraps arbitrarily deep nested conditions (import → node → default)', () => {
+        const pkg = { exports: { '.': { import: { node: { default: './dist/index.js' } } } } };
         expect(resolveEntryPoint(pkg)).toBe('./dist/index.js');
     });
 
@@ -102,13 +109,27 @@ describe('checkPackage', () => {
 
 describe('classifyFailure', () => {
     const pkgDir = '/repo/packages/Victim';
+    // Inject the filesystem seam: the #3137 signature is a missing extensionless
+    // specifier whose JS sibling (`<missing>.js/.mjs/.cjs`) exists on disk. Tests
+    // declare which sibling paths "exist" so the check is deterministic.
+    const siblingsExist = (...paths) => ({ fileExists: (p) => paths.includes(p) });
 
     it('classifies an extensionless specifier in the package own dist as OWN_DIST_MISSING_EXT', () => {
         const failure = {
             code: 'ERR_MODULE_NOT_FOUND',
             message: `Cannot find module '${pkgDir}/dist/helper' imported from ${pkgDir}/dist/index.js`,
         };
-        expect(classifyFailure(failure, pkgDir).status).toBe('OWN_DIST_MISSING_EXT');
+        expect(classifyFailure(failure, pkgDir, siblingsExist(`${pkgDir}/dist/helper.js`)).status).toBe('OWN_DIST_MISSING_EXT');
+    });
+
+    it('gates an extensionless specifier with a DOTTED basename (content.types) whose JS sibling exists', () => {
+        // Regression guard: extname('content.types') === '.types' wrongly reads as "has an
+        // extension". The true signature is that content.types.js exists on disk.
+        const failure = {
+            code: 'ERR_MODULE_NOT_FOUND',
+            message: `Cannot find module '${pkgDir}/dist/content.types' imported from ${pkgDir}/dist/index.js`,
+        };
+        expect(classifyFailure(failure, pkgDir, siblingsExist(`${pkgDir}/dist/content.types.js`)).status).toBe('OWN_DIST_MISSING_EXT');
     });
 
     it('classifies a break inside the package own nested node_modules as DEP_FAIL, not own-dist', () => {
@@ -180,6 +201,14 @@ describe('CLI', () => {
         // execFile rejects with a numeric .code on non-zero exit; resolves (no code) on 0.
         const emptyDir = join(FIXTURES, 'cjs-pkg'); // real dir, but its only package is CJS → zero type:module
         const result = await run(process.execPath, [SCRIPT, emptyDir]).catch((e) => e);
+        expect(typeof result.code === 'number' && result.code > 0).toBe(true);
+    });
+
+    it('exits non-zero when packages exist but every one is NOT_BUILT (nothing actually imported)', async () => {
+        // Running check:esm without a prior build leaves every entry NOT_BUILT; reporting
+        // OK there is the same "verified nothing" false confidence as the empty case.
+        const allUnbuilt = join(FIXTURES, 'not-built-pkg');
+        const result = await run(process.execPath, [SCRIPT, allUnbuilt]).catch((e) => e);
         expect(typeof result.code === 'number' && result.code > 0).toBe(true);
     });
 });
