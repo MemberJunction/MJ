@@ -9,11 +9,11 @@ import {
   ResolvedMarkdownConfig,
   HeadingInfo,
   HighlightFunction
-} from '../types/markdown.types';
-import { createCollapsibleHeadingsExtension } from '../extensions/collapsible-headings.extension';
-import { createSvgRendererExtension } from '../extensions/svg-renderer.extension';
-import { createHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension';
-import { escapeHtml } from '../helpers/escape';
+} from '../types/markdown.types.js';
+import { createCollapsibleHeadingsExtension } from '../extensions/collapsible-headings.extension.js';
+import { createSvgRendererExtension } from '../extensions/svg-renderer.extension.js';
+import { createHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension.js';
+import { escapeHtml } from '../helpers/escape.js';
 
 /**
  * Options that tune a single {@link MarkdownEngine.configureMarked} call.

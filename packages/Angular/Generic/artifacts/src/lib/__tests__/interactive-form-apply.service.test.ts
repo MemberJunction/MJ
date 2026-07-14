@@ -203,6 +203,30 @@ describe('InteractiveFormApplyService', () => {
         expect(calls).toEqual(['ACT-GET-ACTIVE', 'ACT-MODIFY']);
     });
 
+    it('existing Pending override (no Active) → calls Modify Interactive Form in-place', async () => {
+        hoisted.runViewResponses.push({ Success: true, Results: [{ ID: 'ACT-GET-ACTIVE' }] });
+        hoisted.runViewResponses.push({ Success: true, Results: [{ ID: 'ACT-MODIFY' }] });
+        hoisted.actionResponses.set('ACT-GET-ACTIVE', {
+            Success: true,
+            Message: JSON.stringify({
+                Active: null,
+                Variants: [{ OverrideID: 'OVER-PENDING', ComponentID: 'COMP-PENDING', ComponentVersion: '1.0.0', Status: 'Pending' }],
+            }),
+        });
+        hoisted.actionResponses.set('ACT-MODIFY', {
+            Success: true,
+            Message: JSON.stringify({ Mode: 'in-place', ComponentID: 'COMP-PENDING', OverrideID: 'OVER-PENDING', Version: '1.0.0' }),
+        });
+
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(spec(), 'MJ: Apps', mockProvider());
+
+        expect(result.Success).toBe(true);
+        expect(result.Mode).toBe('modify-in-place');
+        const calls = hoisted.actionCalls.map(c => c.id);
+        expect(calls).toEqual(['ACT-GET-ACTIVE', 'ACT-MODIFY']);
+    });
+
     it('Get Active failure short-circuits with an error', async () => {
         hoisted.runViewResponses.push({ Success: true, Results: [{ ID: 'ACT-GET-ACTIVE' }] });
         hoisted.actionResponses.set('ACT-GET-ACTIVE', {
