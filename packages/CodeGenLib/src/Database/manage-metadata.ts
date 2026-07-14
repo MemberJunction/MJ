@@ -4877,8 +4877,13 @@ export class ManageMetadataBase {
             .replace(/-+/g, '-')            // collapse multiple hyphens
             .replace(/^-|-$/g, '');         // trim hyphens from start/end
 
-         const sSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath)
+         // Guard the INSERT with an existence check so the emitted (and re-runnable) migration SQL is
+         // idempotent. drop-schema clears an app's ApplicationEntity/EntityPermission/Entity rows but NOT
+         // its Application row, so replaying this block would otherwise collide on the Application PK.
+         const appCheckQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'Application')} WHERE ${this.qi('ID')} = '${appID}'`;
+         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath)
                        VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)})`;
+         const sSQL = this.conditionalInsert(appCheckQuery, appInsert);
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
          LogStatus(`Created new application ${appName} with Path: ${path}`);
 
@@ -4913,9 +4918,15 @@ export class ManageMetadataBase {
             r => r.Name.trim().toLowerCase() === roleDef.RoleName.trim().toLowerCase()
          );
          if (role) {
-            const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationRole')}
+            // Guard on the (ApplicationID, RoleID) unique key so the emitted migration is idempotent.
+            // This covers BOTH re-running the block after drop-schema (which leaves ApplicationRole rows
+            // intact) AND the collision with the Integration role that manageMetadata recreates
+            // out-of-band — either path would otherwise violate UQ_ApplicationRole_App_Role.
+            const roleCheckQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'ApplicationRole')} WHERE ${this.qi('ApplicationID')} = '${appId}' AND ${this.qi('RoleID')} = '${role.ID}'`;
+            const roleInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationRole')}
                                  (${this.qi('ApplicationID')}, ${this.qi('RoleID')}, ${this.qi('CanAccess')}, ${this.qi('CanAdmin')}) VALUES
                                  ('${appId}', '${role.ID}', ${this.boolLit(roleDef.CanAccess)}, ${this.boolLit(roleDef.CanAdmin)})`;
+            const sSQLInsert = this.conditionalInsert(roleCheckQuery, roleInsert);
             await this.LogSQLAndExecute(pool, sSQLInsert, `Adding role ${roleDef.RoleName} to application ${appName}`);
          } else {
             LogError(`Unable to find Role '${roleDef.RoleName}' for application ${appName}`);
