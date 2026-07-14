@@ -1198,6 +1198,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             userSearch || '_'        // User search string (generates LIKE/FTS clauses)
         ];
 
+        // IgnoreMaxRows skips the entity-level UserViewMaxRows TOP cap, so a request with it
+        // returns a DIFFERENT (larger) row set than the otherwise-identical default (capped)
+        // query for the same entity — the two must never share a cache slot (else the capped
+        // result gets served to an IgnoreMaxRows caller, or vice-versa). Appended only when
+        // true, so the common case keeps producing the exact pre-existing fingerprint and no
+        // existing cache entries are invalidated.
+        if (params.IgnoreMaxRows === true) {
+            parts.push('imr:1');
+        }
+
         // Keyset (AfterKey) seek cursor MUST be part of the fingerprint. Each keyset page
         // sends a different AfterKey but otherwise-identical params; without this, sequential
         // pages collide on the same fingerprint and the dedup/linger layer hands page N+1 the
@@ -1245,6 +1255,50 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             .join(';');
 
         return this.simpleHash(aggString);
+    }
+
+    /**
+     * Reorders cached AggregateResults to match the CALLER's requested Aggregates[] order.
+     *
+     * The aggregate fingerprint (see {@link generateAggregateHash}) is deliberately
+     * order-insensitive — it sorts the aggregates — so two semantically-identical views
+     * requested as [A,B] and [B,A] share a single cache slot (cache-efficient). But the
+     * {@link RunViewResult.AggregateResults} contract is "in same order as input Aggregates
+     * array" — PER caller. A slot warmed as [A,B] therefore hands a [B,A] caller its results
+     * in the wrong order unless we remap on the way out. This does that remap.
+     *
+     * Matching is by (expression, effective alias) — the same identity that produced the
+     * aggHash (a result's alias defaults to its expression when the request omitted one).
+     * Fail-safe: returns the input unchanged when there are no aggregates to reorder, the
+     * counts differ, or any aggregate can't be matched — so a remap is never able to drop or
+     * fabricate a result.
+     */
+    public ReorderAggregateResultsToRequest(
+        cachedResults: AggregateResult[] | undefined,
+        requestedAggregates: AggregateExpression[] | undefined
+    ): AggregateResult[] | undefined {
+        if (!cachedResults || cachedResults.length === 0 || !requestedAggregates || requestedAggregates.length === 0) {
+            return cachedResults;
+        }
+        if (cachedResults.length !== requestedAggregates.length) {
+            return cachedResults; // shape mismatch — don't risk a bad remap
+        }
+        const key = (expression: string, alias: string): string => `${expression} ${alias}`;
+        const remaining = new Map<string, AggregateResult>();
+        for (const r of cachedResults) {
+            remaining.set(key(r.expression, r.alias), r);
+        }
+        const reordered: AggregateResult[] = [];
+        for (const agg of requestedAggregates) {
+            const k = key(agg.expression, agg.alias || agg.expression);
+            const match = remaining.get(k);
+            if (!match) {
+                return cachedResults; // can't confidently remap — leave as-is
+            }
+            remaining.delete(k);
+            reordered.push(match);
+        }
+        return reordered;
     }
 
     /**

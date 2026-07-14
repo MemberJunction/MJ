@@ -2072,7 +2072,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let cachedResult: RunViewResult | undefined;
         let fingerprint: string | undefined;
 
-        if (willCache && LocalCacheManager.Instance.IsInitialized) {
+        // SECURITY (S31): the cache-hit path returns BEFORE the DB provider's read-permission
+        // gate (CheckUserReadPermissions), so a user lacking CanRead on the entity must not be
+        // allowed to consult the shared cache — it would leak rows a permitted user warmed. When
+        // we can affirmatively determine the user lacks read permission, skip the cache and fall
+        // through to the normal path, which denies with the proper error. Unknown user/entity →
+        // unchanged behavior (the DB path handles null-user / view-only semantics).
+        const cacheReadDenied = !!entity && !!contextUser && !(entity.GetUserPermisions(contextUser)?.CanRead ?? false);
+
+        if (willCache && !cacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
             const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
             fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
@@ -2092,7 +2100,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     ExecutionTime: 0, // Cached, no execution time
                     ErrorMessage: '',
                     UserViewRunID: '',
-                    AggregateResults: cached.aggregateResults // Include cached aggregate results
+                    // Order-insensitive aggHash means this slot may have been warmed with a
+                    // different Aggregates[] order — remap to THIS caller's requested order.
+                    AggregateResults: LocalCacheManager.Instance.ReorderAggregateResultsToRequest(cached.aggregateResults, params.Aggregates)
                 };
                 cacheStatus = 'hit';
                 if (!params.CacheLocal && this.TrustLocalCacheCompletely) {
@@ -2206,7 +2216,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Check local cache if enabled or if server trusts its cache completely
             // BypassCache skips cache entirely — used by maintenance actions querying for
             // records that were inserted via direct SQL (bypassing BaseEntity.Save())
-            if (batchWillCache && LocalCacheManager.Instance.IsInitialized) {
+            // SECURITY (S31): same read-permission gate as the single-RunView path — never serve
+            // (or consult) the shared cache for a user who lacks CanRead on the entity; fall
+            // through to the DB path, which denies with the proper error.
+            const batchCacheReadDenied = !!batchEntity && !!contextUser && !(batchEntity.GetUserPermisions(contextUser)?.CanRead ?? false);
+
+            if (batchWillCache && !batchCacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
                 const rlsWhereClause = this.ComputeRunViewRLSWhereClause(param, contextUser);
                 const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString, rlsWhereClause);
                 fingerprintMap.set(i, fingerprint);
@@ -2226,7 +2241,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         ExecutionTime: 0,
                         ErrorMessage: '',
                         UserViewRunID: '',
-                        AggregateResults: cached.aggregateResults // Include cached aggregate results
+                        // Order-insensitive aggHash means this slot may have been warmed with a
+                        // different Aggregates[] order — remap to THIS caller's requested order.
+                        AggregateResults: LocalCacheManager.Instance.ReorderAggregateResultsToRequest(cached.aggregateResults, param.Aggregates)
                     };
                     // if needed this will transform each result into an entity object
                     await this.TransformSimpleObjectToEntityObject(param, cachedViewResult, contextUser);
@@ -2461,7 +2478,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     ExecutionTime: 0,
                     ErrorMessage: '',
                     UserViewRunID: '',
-                    AggregateResults: cached.aggregateResults // Include cached aggregate results
+                    // Order-insensitive aggHash means this slot may have been warmed with a
+                    // different Aggregates[] order — remap to THIS caller's requested order.
+                    AggregateResults: LocalCacheManager.Instance.ReorderAggregateResultsToRequest(cached.aggregateResults, param.Aggregates)
                 };
                 // Transform to entity objects if needed
                 await this.TransformSimpleObjectToEntityObject(param, cachedResult, contextUser);
