@@ -1,3 +1,5 @@
+import type { ProviderGeocodeResult } from './providers/types';
+
 /**
  * Mapping from entity fields to a geocodable location.
  * CodeGen generates these per-entity based on LLM analysis of field names.
@@ -37,17 +39,54 @@ export interface GeocodeResult {
 }
 
 /**
- * Lightweight summary of an existing RecordGeoCode row, used by bulk lookup
- * to eliminate per-record SQL queries during batch geocoding.
- *
- * The map is keyed by `RecordID|LocationType` for O(1) lookup.
+ * Outcome of resolving an address through the layered lookup path
+ * (in-run memo → persistent GeoAddressCache → external provider).
+ * `Result` is null when the address could not be geocoded (negative result).
  */
-export interface ExistingGeoCodeInfo {
-    ID: string;
-    RecordID: string;
-    LocationType: string;
-    SourceFieldHash: string | null;
-    Status: string;
+export interface AddressLookupOutcome {
+    /** Provider-shaped result, or null when the address is not geocodable. */
+    Result: ProviderGeocodeResult | null;
+    /**
+     * Name of the provider that originally produced the result — the provider
+     * recorded on a cache hit may differ from the provider configured for the
+     * current run. Used as the GeocodingSource on RecordGeoCode.
+     */
+    SourceProvider: string;
+    /** True when the result came from the persistent address cache or the in-run memo. */
+    FromCache: boolean;
+}
+
+/**
+ * In-run memoization map for address lookups, keyed by
+ * `provider|normalizedAddress`. Callers processing many records in one run
+ * (e.g. the Scheduled Geocoding action) create one memo per run and pass it
+ * via {@link GeoSyncOptions.memo} so that duplicate addresses — including
+ * concurrent duplicates within a parallel batch — coalesce into a single
+ * cache read / provider call.
+ */
+export type GeocodeMemo = Map<string, Promise<AddressLookupOutcome>>;
+
+/**
+ * Options for GeoCodeSyncService.SyncIfChanged.
+ */
+export interface GeoSyncOptions {
+    /** Field-to-location mappings. Default: derived from EntityField.ExtendedType metadata. */
+    mappings?: GeoFieldMapping[];
+    /**
+     * Geocoding provider name to use ('google' | 'geocodio' | 'here' | custom).
+     * Default: registry resolution (config default, then priority order).
+     */
+    providerName?: string | null;
+    /** In-run memo for coalescing duplicate-address lookups. See {@link GeocodeMemo}. */
+    memo?: GeocodeMemo;
+    /**
+     * When true and the stored RecordGeoCode hash matches the record's current
+     * geo field values, the row's GeocodedAt is refreshed (no API call). Used by
+     * the scheduled job's SQL-side staleness filter (`__mj_UpdatedAt > GeocodedAt`)
+     * so hash-verified records exit the filter instead of being re-scanned every
+     * run. The save path leaves this false — a hash match there is a pure no-op.
+     */
+    touchOnHashMatch?: boolean;
 }
 
 /**

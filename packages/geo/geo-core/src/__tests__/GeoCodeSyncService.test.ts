@@ -71,6 +71,7 @@ const mockResolveState = vi.fn();
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJRecordGeoCodeEntity: class {},
+    MJGeoAddressCacheEntity: class {},
     MJCountryEntity: class {},
     MJStateProvinceEntity: class {},
     GeoDataEngine: {
@@ -89,6 +90,8 @@ const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
 import { GeoCodeSyncService } from '../GeoCodeSyncService';
+import { ComputeGeoSourceHash, NormalizeAddress, ComputeAddressHash } from '../hash';
+import type { GeocodeMemo } from '../types';
 import type { BaseEntity, EntityInfo, EntityFieldInfo, UserInfo } from '@memberjunction/core';
 
 function createMockEntityInfo(overrides: Partial<EntityInfo> = {}): EntityInfo {
@@ -221,22 +224,196 @@ describe('GeoCodeSyncService', () => {
         });
 
         it('should skip if existing geocode hash matches and status is success', async () => {
-            // Return an existing successful geocode with matching hash
+            // Return an existing successful geocode with the REAL matching hash
+            const entity = createMockEntity({ City: 'Denver', State: 'CO', Country: 'US' });
+            const hash = ComputeGeoSourceHash(entity, ['City', 'State', 'Country']);
             mockRunViewFn.mockResolvedValue({
                 Success: true,
                 Results: [{
-                    SourceFieldHash: expect.any(String),
+                    SourceFieldHash: hash,
                     Status: 'success',
                 }]
             });
 
-            const entity = createMockEntity({ City: 'Denver', State: 'CO', Country: 'US' });
             const user = createMockUser();
 
-            await GeoCodeSyncService.Instance.SyncIfChanged(entity, user);
+            const result = await GeoCodeSyncService.Instance.SyncIfChanged(entity, user);
 
-            // Should NOT have called GetEntityObject to create a new row
+            expect(result).toBeNull();
+            // Should NOT have called GetEntityObject to create a new row,
+            // and (without touchOnHashMatch) should not have saved anything
             expect(mockGetEntityObject).not.toHaveBeenCalled();
+            expect(mockSave).not.toHaveBeenCalled();
+        });
+
+        it('should refresh GeocodedAt on hash match when touchOnHashMatch is set', async () => {
+            const entity = createMockEntity({ City: 'Denver', State: 'CO', Country: 'US' });
+            const hash = ComputeGeoSourceHash(entity, ['City', 'State', 'Country']);
+            const existingRow = {
+                SourceFieldHash: hash,
+                Status: 'success',
+                GeocodedAt: null as Date | null,
+                Save: mockSave,
+            };
+            mockRunViewFn.mockImplementation(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: Record Geo Codes') {
+                    return { Success: true, Results: [existingRow] };
+                }
+                return { Success: true, Results: [] };
+            });
+
+            const result = await GeoCodeSyncService.Instance.SyncIfChanged(entity, createMockUser(), { touchOnHashMatch: true });
+
+            expect(result).toBeNull();
+            expect(mockSave).toHaveBeenCalledTimes(1);
+            expect(existingRow.GeocodedAt).toBeInstanceOf(Date);
+            expect(mockFetch).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('Address-level caching (memo + persistent GeoAddressCache)', () => {
+        const originalEnv = process.env;
+
+        beforeEach(() => {
+            // Configure geocod.io so GeocodingProviderRegistry.Resolve() returns a provider
+            process.env = { ...originalEnv, GEOCODIO_API_KEY: 'test-geocodio-key' };
+            delete process.env.GOOGLE_GEOCODING_API_KEY;
+            delete process.env.GOOGLE_MAPS_API_KEY;
+            delete process.env.HERE_API_KEY;
+        });
+
+        afterEach(() => {
+            process.env = originalEnv;
+        });
+
+        /** Route the RunView mock: cache table returns cacheRow (or empty), RecordGeoCode returns empty. */
+        function routeRunView(cacheRow: Record<string, unknown> | null) {
+            mockRunViewFn.mockImplementation(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: Geo Address Caches') {
+                    // Save on the row supports the expired-negative refresh path (write-through updates the row in place)
+                    return { Success: true, Results: cacheRow ? [{ Save: mockSave, ...cacheRow }] : [] };
+                }
+                return { Success: true, Results: [] };
+            });
+        }
+
+        it('should serve a persistent cache hit without calling the provider', async () => {
+            routeRunView({
+                Status: 'success',
+                Latitude: 39.7392,
+                Longitude: -104.9903,
+                Precision: 'exact',
+                Confidence: 1,
+                FormattedAddress: 'Denver, CO, USA',
+                GeocodingSource: 'geocodio',
+                ExpiresAt: null,
+            });
+            const entity = createMockEntity({ City: 'Denver', State: 'CO', Country: 'US' });
+
+            const result = await GeoCodeSyncService.Instance.SyncIfChanged(entity, createMockUser());
+
+            expect(mockFetch).not.toHaveBeenCalled();
+            expect(result).not.toBeNull();
+            expect(result!.Latitude).toBe(39.7392);
+            expect(result!.Longitude).toBe(-104.9903);
+            // GeocodingSource attributes the ORIGINAL provider from the cache row
+            expect(result!.Source).toBe('geocodio');
+        });
+
+        it('should honor an unexpired negative cache entry (no provider call)', async () => {
+            routeRunView({
+                Status: 'not_geocodable',
+                Latitude: null,
+                Longitude: null,
+                Precision: null,
+                Confidence: null,
+                FormattedAddress: null,
+                GeocodingSource: 'geocodio',
+                ExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            });
+            const entity = createMockEntity({ City: 'Nowhereville', State: 'ZZ', Country: 'XX' });
+
+            const result = await GeoCodeSyncService.Instance.SyncIfChanged(entity, createMockUser());
+
+            expect(mockFetch).not.toHaveBeenCalled();
+            expect(result).toBeNull();
+        });
+
+        it('should re-attempt the provider when a negative cache entry has expired', async () => {
+            routeRunView({
+                Status: 'not_geocodable',
+                Latitude: null,
+                Longitude: null,
+                Precision: null,
+                Confidence: null,
+                FormattedAddress: null,
+                GeocodingSource: 'geocodio',
+                ExpiresAt: new Date(Date.now() - 1000),
+            });
+            mockFetch.mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({
+                    results: [{
+                        address_components: {},
+                        formatted_address: 'Denver, CO',
+                        location: { lat: 39.7, lng: -104.9 },
+                        accuracy: 1,
+                        accuracy_type: 'rooftop',
+                    }],
+                }),
+            });
+            const entity = createMockEntity({ City: 'Denver', State: 'CO', Country: 'US' });
+
+            const result = await GeoCodeSyncService.Instance.SyncIfChanged(entity, createMockUser());
+
+            expect(mockFetch).toHaveBeenCalledTimes(1);
+            expect(result).not.toBeNull();
+            expect(result!.Latitude).toBe(39.7);
+        });
+
+        it('should coalesce duplicate addresses through a shared memo (one provider call)', async () => {
+            routeRunView(null); // persistent cache miss
+            mockFetch.mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({
+                    results: [{
+                        address_components: {},
+                        formatted_address: 'Denver, CO',
+                        location: { lat: 39.7, lng: -104.9 },
+                        accuracy: 1,
+                        accuracy_type: 'rooftop',
+                    }],
+                }),
+            });
+            const memo: GeocodeMemo = new Map();
+            const user = createMockUser();
+            // Same address, different casing/whitespace — normalization must unify them
+            const recordA = createMockEntity({ City: 'Denver', State: 'CO', Country: 'US' });
+            const recordB = createMockEntity({ City: '  denver ', State: 'co', Country: 'us' });
+
+            const r1 = await GeoCodeSyncService.Instance.SyncIfChanged(recordA, user, { memo });
+            const r2 = await GeoCodeSyncService.Instance.SyncIfChanged(recordB, user, { memo });
+
+            expect(mockFetch).toHaveBeenCalledTimes(1);
+            expect(r1?.Latitude).toBe(39.7);
+            expect(r2?.Latitude).toBe(39.7);
+            expect(memo.size).toBe(1);
+        });
+    });
+
+    describe('Address normalization + hashing', () => {
+        it('should lowercase, trim, and collapse whitespace', () => {
+            expect(NormalizeAddress('  123  Main St,   Denver ')).toBe('123 main st, denver');
+        });
+
+        it('should produce identical hashes for equivalent addresses', () => {
+            expect(ComputeAddressHash(NormalizeAddress('123 Main St, Denver')))
+                .toBe(ComputeAddressHash(NormalizeAddress(' 123  MAIN st,  DENVER ')));
+        });
+
+        it('should produce different hashes for different addresses', () => {
+            expect(ComputeAddressHash(NormalizeAddress('123 Main St')))
+                .not.toBe(ComputeAddressHash(NormalizeAddress('124 Main St')));
         });
     });
 
