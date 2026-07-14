@@ -1149,7 +1149,17 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.componentRefs.set(tabId, componentRef as ComponentRef<BaseResourceComponent>);
 
     } catch (e) {
+      // A tab whose resource can't resolve (e.g. a persisted tab referencing an
+      // unknown ResourceType) must NEVER brick the shell: log, signal load-complete
+      // so the boot loading screen clears, and close the poisoned tab so it doesn't
+      // re-fail on every boot from restored workspace state.
       LogError(e);
+      this.emitFirstLoadCompleteOnce();
+      try {
+        this.workspaceManager.CloseTab(tabId);
+      } catch {
+        // best-effort — leaving the tab is still recoverable via manual close
+      }
     } finally {
       this.tabsCurrentlyLoading.delete(tabId);
     }
@@ -1305,8 +1315,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // The engine loads ResourceTypes during startup and keeps them in memory.
     const resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
     if (resourceTypes && resourceTypes.length > 0) {
-      const rt = resourceTypes.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase());
-      return rt || null;
+      return TabContainerComponent.findResourceTypeTolerant(resourceTypes, resourceType);
     }
 
     // Fallback: if engine hasn't loaded yet (shouldn't happen in normal flow),
@@ -1323,11 +1332,24 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
     const result = ds.Results.find(r => r.Code.trim().toLowerCase() === 'resourcetypes');
     if (result && result.Results?.length > 0) {
-      const rt = result.Results.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase()) as MJResourceTypeEntity;
-      return rt || null;
+      return TabContainerComponent.findResourceTypeTolerant(result.Results as MJResourceTypeEntity[], resourceType);
     }
 
     return null;
+  }
+
+  /**
+   * Resolve a resource type BY NAME, tolerant of the 'MJ: ' prefix in EITHER
+   * direction — core ResourceType rows predate the prefix convention ('User Views'),
+   * while newer callers may pass 'MJ: User Views' (and vice versa). Exact match wins;
+   * prefix-normalized is the fallback, so historical and prefixed names both resolve.
+   */
+  private static findResourceTypeTolerant(rows: MJResourceTypeEntity[], resourceType: string): MJResourceTypeEntity | null {
+    const wanted = resourceType.trim().toLowerCase();
+    const normalize = (name: string) => name.trim().toLowerCase().replace(/^mj:\s*/, '');
+    return rows.find(r => r.Name.trim().toLowerCase() === wanted)
+      ?? rows.find(r => normalize(r.Name) === normalize(wanted))
+      ?? null;
   }
 
   private async getResourceTypeId(resourceType: string): Promise<string> {

@@ -70,3 +70,5 @@ export * from './lib/oauth/oauth-callback.component'
 export * from './app-routing.module'
 
 export * from './module';
+// Unified Ctrl+K command palette (OmnibarProvider registry + palette component)
+export * from './lib/omnibar/index';
