@@ -413,14 +413,24 @@ export class ListManagementService {
     }
 
     // Queue all deletes in one TransactionGroup — a single round trip
-    // instead of one per removed membership row
+    // instead of one per removed membership row. Deliberately atomic (unlike
+    // the server-side bulk paths, which trade atomicity for per-record error
+    // isolation): if Submit() fails, the transaction rolled back and no rows
+    // were removed.
     const tg = await md.CreateTransactionGroup();
     let queued = 0;
     for (const detail of toDelete) {
       try {
         detail.TransactionGroup = tg;
-        await detail.Delete();
-        queued++;
+        // With a TransactionGroup set, Delete() returns true once enqueued;
+        // false means a pre-enqueue failure (validation/permission) and the
+        // row never joined the transaction.
+        if (await detail.Delete()) {
+          queued++;
+        } else {
+          result.failed++;
+          result.errors.push(`Failed to queue removal of record ${detail.RecordID} from list ${detail.ListID}: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
       } catch (error) {
         result.failed++;
         const errorMessage = error instanceof Error ? error.message : String(error);

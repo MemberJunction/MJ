@@ -417,15 +417,26 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         try {
             // Queue all deletes in one TransactionGroup — one round trip
-            // instead of one per selected item
+            // instead of one per selected item. Deliberately atomic (unlike
+            // the server bulk paths, which trade atomicity for per-record
+            // error isolation): if Submit() fails, the transaction rolled
+            // back and NO rows were removed.
             const tg = await this.metadata.CreateTransactionGroup();
             let queued = 0;
+            let failedToQueue = 0;
             for (const id of this.selectedItems) {
                 const item = this.listItems.find(i => UUIDsEqual(i.detail.ID, id));
                 if (item) {
                     item.detail.TransactionGroup = tg;
-                    await item.detail.Delete();
-                    queued++;
+                    // With a TransactionGroup set, Delete() returns true once
+                    // enqueued; false means a pre-enqueue failure (validation/
+                    // permission) and the row never joined the transaction.
+                    if (await item.detail.Delete()) {
+                        queued++;
+                    } else {
+                        failedToQueue++;
+                        LogError(`Failed to queue list item removal: ${item.detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    }
                 }
             }
             const success = queued === 0 || await tg.Submit();
@@ -434,11 +445,19 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
                 return;
             }
 
-            this.showNotification(
-                `Removed ${count} item${count > 1 ? 's' : ''} from list`,
-                'success',
-                3000
-            );
+            if (failedToQueue > 0) {
+                this.showNotification(
+                    `Removed ${queued} item${queued === 1 ? '' : 's'} from list; ${failedToQueue} failed`,
+                    'error',
+                    4000
+                );
+            } else {
+                this.showNotification(
+                    `Removed ${count} item${count > 1 ? 's' : ''} from list`,
+                    'success',
+                    3000
+                );
+            }
 
             this.selectedItems.clear();
             await this.loadStats();
