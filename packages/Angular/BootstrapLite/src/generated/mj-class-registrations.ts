@@ -27,7 +27,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (405 classes)
+// @memberjunction/core-entities (406 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -261,6 +261,7 @@ import {
     MJFileStorageProviderEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGeoAddressCacheEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -566,7 +567,7 @@ import {
     FileBrowserResource,
 } from '@memberjunction/ng-file-storage';
 
-// @memberjunction/ng-explorer-core (13 classes)
+// @memberjunction/ng-explorer-core (9 classes)
 import {
     ArtifactResource,
     ChatConversationsResource,
@@ -574,10 +575,6 @@ import {
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
-    OmnibarAgentProvider,
-    OmnibarCommandProvider,
-    OmnibarRecordProvider,
-    OmnibarSearchProvider,
     QueryResource,
     SearchResultsResource,
     UserViewResource,
@@ -829,6 +826,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJFileStorageProviderEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGeoAddressCacheEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -1086,10 +1084,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
-    OmnibarAgentProvider,
-    OmnibarCommandProvider,
-    OmnibarRecordProvider,
-    OmnibarSearchProvider,
     QueryResource,
     SearchResultsResource,
     UserViewResource,
@@ -1099,7 +1093,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 504;
+export const CLASS_REGISTRATIONS_COUNT = 501;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

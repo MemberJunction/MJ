@@ -19303,6 +19303,98 @@ export const MJGeneratedCodeSchema = z.object({
 export type MJGeneratedCodeEntityType = z.infer<typeof MJGeneratedCodeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Geo Address Caches
+ */
+export const MJGeoAddressCacheSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AddressHash: z.string().describe(`
+        * * Field Name: AddressHash
+        * * Display Name: Address Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hex digest of the normalized address string (lowercased, trimmed, whitespace-collapsed). Unique — this is the cache key.`),
+    NormalizedAddress: z.string().describe(`
+        * * Field Name: NormalizedAddress
+        * * Display Name: Normalized Address
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: The normalized address string that produced AddressHash, stored for debuggability and audit. Not used for lookups.`),
+    Latitude: z.number().nullable().describe(`
+        * * Field Name: Latitude
+        * * Display Name: Latitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Latitude returned by the geocoding provider. NULL for not_geocodable entries.`),
+    Longitude: z.number().nullable().describe(`
+        * * Field Name: Longitude
+        * * Display Name: Longitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Longitude returned by the geocoding provider. NULL for not_geocodable entries.`),
+    Precision: z.union([z.literal('city'), z.literal('country'), z.literal('county'), z.literal('exact'), z.literal('postal_code'), z.literal('state_province')]).nullable().describe(`
+        * * Field Name: Precision
+        * * Display Name: Precision
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * city
+    *   * country
+    *   * county
+    *   * exact
+    *   * postal_code
+    *   * state_province
+        * * Description: Precision level of the cached geocode (exact, postal_code, city, county, state_province, country). NULL for not_geocodable entries.`),
+    Confidence: z.number().nullable().describe(`
+        * * Field Name: Confidence
+        * * Display Name: Confidence
+        * * SQL Data Type: decimal(5, 4)
+        * * Description: Provider-reported confidence score normalized to 0.0000–1.0000. NULL when the provider does not surface one.`),
+    FormattedAddress: z.string().nullable().describe(`
+        * * Field Name: FormattedAddress
+        * * Display Name: Formatted Address
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Formatted/canonical address string returned by the provider, stored for debuggability. NULL when not provided.`),
+    Status: z.union([z.literal('not_geocodable'), z.literal('success')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: success
+    * * Value List Type: List
+    * * Possible Values 
+    *   * not_geocodable
+    *   * success
+        * * Description: Cache entry status: success (usable coordinates) or not_geocodable (the provider could not resolve this address — negative cache entry, re-attempted after ExpiresAt).`),
+    GeocodingSource: z.string().nullable().describe(`
+        * * Field Name: GeocodingSource
+        * * Display Name: Geocoding Source
+        * * SQL Data Type: nvarchar(30)
+        * * Description: Name of the geocoding provider that produced this entry (google, geocodio, here, or a custom registered provider).`),
+    GeocodedAt: z.date().describe(`
+        * * Field Name: GeocodedAt
+        * * Display Name: Geocoded At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the provider call that produced this entry was made.`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional expiry for this entry. Used for negative (not_geocodable) entries so unresolvable addresses are periodically re-attempted; NULL means the entry does not expire.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJGeoAddressCacheEntityType = z.infer<typeof MJGeoAddressCacheSchema>;
+
+/**
  * zod schema definition for the entity MJ: Instance Configurations
  */
 export const MJInstanceConfigurationSchema = z.object({
@@ -22688,7 +22780,7 @@ export const MJOpenAppSchema = z.object({
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: App Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(64)
         * * Description: Unique lowercase identifier for the app (e.g. acme-crm). Must contain only lowercase letters, digits, and hyphens.`),
     DisplayName: z.string().describe(`
@@ -22753,12 +22845,12 @@ export const MJOpenAppSchema = z.object({
         * * Description: Optional hex color code for branding in the UI (e.g. #FF5733)`),
     ManifestJSON: z.string().describe(`
         * * Field Name: ManifestJSON
-        * * Display Name: Manifest
+        * * Display Name: Manifest JSON
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Full mj-app.json manifest stored as JSON for the currently installed version`),
     ConfigurationSchemaJSON: z.string().nullable().describe(`
         * * Field Name: ConfigurationSchemaJSON
-        * * Display Name: Configuration Schema
+        * * Display Name: Configuration Schema JSON
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON Schema defining the configuration options this app accepts`),
     InstalledByUserID: z.string().describe(`
@@ -22801,7 +22893,7 @@ export const MJOpenAppSchema = z.object({
         * * Display Name: Last Completed Step
         * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
-    * * Possible Values
+    * * Possible Values 
     *   * AngularExcludesUpdated
     *   * ConfigUpdated
     *   * DbCleanupDone
@@ -83464,6 +83556,228 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
 
 
 /**
+ * MJ: Geo Address Caches - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GeoAddressCache
+ * * Base View: vwGeoAddressCaches
+ * * @description Shared, address-level geocoding cache. Keyed by a SHA-256 hash of the normalized address string so that identical addresses across any records/entities reuse one external geocoding API result instead of each making their own call. Includes negative caching (Status=not_geocodable with ExpiresAt TTL). Writes are gated on the geocoding provider's AllowsPersistentStorage terms-of-service flag.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Geo Address Caches')
+export class MJGeoAddressCacheEntity extends BaseEntity<MJGeoAddressCacheEntityType> {
+    /**
+    * Loads the MJ: Geo Address Caches record from the database
+    * @param ID: string - primary key value to load the MJ: Geo Address Caches record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGeoAddressCacheEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AddressHash
+    * * Display Name: Address Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hex digest of the normalized address string (lowercased, trimmed, whitespace-collapsed). Unique — this is the cache key.
+    */
+    get AddressHash(): string {
+        return this.Get('AddressHash');
+    }
+    set AddressHash(value: string) {
+        this.Set('AddressHash', value);
+    }
+
+    /**
+    * * Field Name: NormalizedAddress
+    * * Display Name: Normalized Address
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: The normalized address string that produced AddressHash, stored for debuggability and audit. Not used for lookups.
+    */
+    get NormalizedAddress(): string {
+        return this.Get('NormalizedAddress');
+    }
+    set NormalizedAddress(value: string) {
+        this.Set('NormalizedAddress', value);
+    }
+
+    /**
+    * * Field Name: Latitude
+    * * Display Name: Latitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Latitude returned by the geocoding provider. NULL for not_geocodable entries.
+    */
+    get Latitude(): number | null {
+        return this.Get('Latitude');
+    }
+    set Latitude(value: number | null) {
+        this.Set('Latitude', value);
+    }
+
+    /**
+    * * Field Name: Longitude
+    * * Display Name: Longitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Longitude returned by the geocoding provider. NULL for not_geocodable entries.
+    */
+    get Longitude(): number | null {
+        return this.Get('Longitude');
+    }
+    set Longitude(value: number | null) {
+        this.Set('Longitude', value);
+    }
+
+    /**
+    * * Field Name: Precision
+    * * Display Name: Precision
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * city
+    *   * country
+    *   * county
+    *   * exact
+    *   * postal_code
+    *   * state_province
+    * * Description: Precision level of the cached geocode (exact, postal_code, city, county, state_province, country). NULL for not_geocodable entries.
+    */
+    get Precision(): 'city' | 'country' | 'county' | 'exact' | 'postal_code' | 'state_province' | null {
+        return this.Get('Precision');
+    }
+    set Precision(value: 'city' | 'country' | 'county' | 'exact' | 'postal_code' | 'state_province' | null) {
+        this.Set('Precision', value);
+    }
+
+    /**
+    * * Field Name: Confidence
+    * * Display Name: Confidence
+    * * SQL Data Type: decimal(5, 4)
+    * * Description: Provider-reported confidence score normalized to 0.0000–1.0000. NULL when the provider does not surface one.
+    */
+    get Confidence(): number | null {
+        return this.Get('Confidence');
+    }
+    set Confidence(value: number | null) {
+        this.Set('Confidence', value);
+    }
+
+    /**
+    * * Field Name: FormattedAddress
+    * * Display Name: Formatted Address
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Formatted/canonical address string returned by the provider, stored for debuggability. NULL when not provided.
+    */
+    get FormattedAddress(): string | null {
+        return this.Get('FormattedAddress');
+    }
+    set FormattedAddress(value: string | null) {
+        this.Set('FormattedAddress', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: success
+    * * Value List Type: List
+    * * Possible Values 
+    *   * not_geocodable
+    *   * success
+    * * Description: Cache entry status: success (usable coordinates) or not_geocodable (the provider could not resolve this address — negative cache entry, re-attempted after ExpiresAt).
+    */
+    get Status(): 'not_geocodable' | 'success' {
+        return this.Get('Status');
+    }
+    set Status(value: 'not_geocodable' | 'success') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: GeocodingSource
+    * * Display Name: Geocoding Source
+    * * SQL Data Type: nvarchar(30)
+    * * Description: Name of the geocoding provider that produced this entry (google, geocodio, here, or a custom registered provider).
+    */
+    get GeocodingSource(): string | null {
+        return this.Get('GeocodingSource');
+    }
+    set GeocodingSource(value: string | null) {
+        this.Set('GeocodingSource', value);
+    }
+
+    /**
+    * * Field Name: GeocodedAt
+    * * Display Name: Geocoded At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the provider call that produced this entry was made.
+    */
+    get GeocodedAt(): Date {
+        return this.Get('GeocodedAt');
+    }
+    set GeocodedAt(value: Date) {
+        this.Set('GeocodedAt', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional expiry for this entry. Used for negative (not_geocodable) entries so unresolvable addresses are periodically re-attempted; NULL means the entry does not expire.
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Instance Configurations - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: InstanceConfiguration
@@ -92094,7 +92408,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: Name
-    * * Display Name: App Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(64)
     * * Description: Unique lowercase identifier for the app (e.g. acme-crm). Must contain only lowercase letters, digits, and hyphens.
     */
@@ -92263,7 +92577,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: ManifestJSON
-    * * Display Name: Manifest
+    * * Display Name: Manifest JSON
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Full mj-app.json manifest stored as JSON for the currently installed version
     */
@@ -92276,7 +92590,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: ConfigurationSchemaJSON
-    * * Display Name: Configuration Schema
+    * * Display Name: Configuration Schema JSON
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional JSON Schema defining the configuration options this app accepts
     */
@@ -92361,7 +92675,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
     * * Display Name: Last Completed Step
     * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
-    * * Possible Values
+    * * Possible Values 
     *   * AngularExcludesUpdated
     *   * ConfigUpdated
     *   * DbCleanupDone
