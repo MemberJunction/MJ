@@ -1021,6 +1021,87 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Auto-detects IS-A (Table-Per-Type / shared-PK-FK) relationships directly from the schema and
+    * sets Entity.ParentID on each detected child — the schema-driven sibling of
+    * {@link processISARelationshipConfig} (which requires each pair to be declared in config).
+    *
+    * A child entity is IS-A when its SINGLE primary-key field is ALSO a foreign key whose target is
+    * the parent entity's SINGLE primary-key column (the Disjoint pattern, e.g. EventProduct.ID PK +
+    * FK to Product.ID). We require single-column PKs on BOTH sides and that the FK references the
+    * parent's PK column (not some other unique column), so an ordinary FK is never misclassified.
+    *
+    * Timing: runs AFTER manageEntityFields()/manageEntityRelationships() have populated IsPrimaryKey
+    * + RelatedEntityID/RelatedEntityFieldName on the field rows, and BEFORE the second-pass
+    * manageParentEntityFields() materializes the IS-A virtual fields + view JOINs. The ParentID
+    * UPDATE is written via LogSQLAndExecute so it is BOTH executed live AND serialized into the
+    * CodeGen migration — so a clean/migration-only deploy seeds ParentID too (the same guarantee the
+    * config path relies on; this is what lets a schema-detected pair survive a clean deploy).
+    *
+    * Idempotent: skips a child whose ParentID already points at the detected parent. The config-driven
+    * processISARelationshipConfig() runs immediately AFTER this, so an explicit config entry can still
+    * override a detected value.
+    */
+   protected async detectAndSetISARelationshipsFromSchema(pool: CodeGenConnection, excludeSchemas: string[]): Promise<{ success: boolean; updatedCount: number }> {
+      const schema = mj_core_schema();
+      let updatedCount = 0;
+      try {
+         const candidates = await this.runQuery(pool, this.buildISADetectionSQL(schema, excludeSchemas));
+         for (const row of candidates.recordset) {
+            if (UUIDsEqual(row.ExistingParentID, row.ParentEntityID)) {
+               continue; // already set (prior run or config) — nothing to do
+            }
+            const updateSQL = `UPDATE ${this.qs(schema, 'Entity')}
+                               SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
+                                   ${this.qi('ParentID')} = '${row.ParentEntityID}'
+                               WHERE ${this.qi('ID')} = '${row.ChildEntityID}'`;
+            await this.LogSQLAndExecute(pool, updateSQL, `Set IS-A ParentID for "${row.ChildEntityName}" -> "${row.ParentEntityName}" (auto-detected from shared PK/FK)`);
+            logStatus(`    > IS-A: auto-detected "${row.ChildEntityName}" is-a "${row.ParentEntityName}" — set ParentID`);
+            updatedCount++;
+         }
+      } catch (err) {
+         const errMessage = err instanceof Error ? err.message : String(err);
+         logError(`    > IS-A auto-detection failed: ${errMessage}`);
+         return { success: false, updatedCount };
+      }
+      return { success: true, updatedCount };
+   }
+
+   /**
+    * Builds the provider-neutral detection query for {@link detectAndSetISARelationshipsFromSchema}.
+    * Selects entities whose single, non-virtual PK column is also an FK referencing the parent's
+    * single PK column. Boolean comparisons go through boolLit() so the SQL is valid on both SQL
+    * Server (1/0) and PostgreSQL (true/false).
+    */
+   protected buildISADetectionSQL(schema: string, excludeSchemas: string[]): string {
+      const efv = this.qs(schema, 'vwEntityFields');
+      const ev = this.qs(schema, 'vwEntities');
+      const T = this.boolLit(true);
+      const F = this.boolLit(false);
+      const excludeClause = excludeSchemas.length > 0
+         ? `AND child.${this.qi('SchemaName')} NOT IN (${excludeSchemas.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})`
+         : '';
+      return `
+         SELECT childpk.${this.qi('EntityID')}       AS ${this.qi('ChildEntityID')},
+                child.${this.qi('Name')}             AS ${this.qi('ChildEntityName')},
+                childpk.${this.qi('RelatedEntityID')} AS ${this.qi('ParentEntityID')},
+                parent.${this.qi('Name')}            AS ${this.qi('ParentEntityName')},
+                child.${this.qi('ParentID')}         AS ${this.qi('ExistingParentID')}
+         FROM ${efv} childpk
+         INNER JOIN ${ev} child     ON child.${this.qi('ID')}  = childpk.${this.qi('EntityID')}
+         INNER JOIN ${ev} parent    ON parent.${this.qi('ID')} = childpk.${this.qi('RelatedEntityID')}
+         INNER JOIN ${efv} parentpk ON parentpk.${this.qi('EntityID')} = childpk.${this.qi('RelatedEntityID')}
+                                   AND parentpk.${this.qi('IsPrimaryKey')} = ${T}
+                                   AND parentpk.${this.qi('IsVirtual')} = ${F}
+         WHERE childpk.${this.qi('IsPrimaryKey')} = ${T}
+           AND childpk.${this.qi('IsVirtual')} = ${F}
+           AND childpk.${this.qi('RelatedEntityID')} IS NOT NULL
+           AND childpk.${this.qi('RelatedEntityFieldName')} = parentpk.${this.qi('Name')}
+           AND (SELECT COUNT(*) FROM ${efv} cpk WHERE cpk.${this.qi('EntityID')} = childpk.${this.qi('EntityID')}       AND cpk.${this.qi('IsPrimaryKey')} = ${T} AND cpk.${this.qi('IsVirtual')} = ${F}) = 1
+           AND (SELECT COUNT(*) FROM ${efv} ppk WHERE ppk.${this.qi('EntityID')} = childpk.${this.qi('RelatedEntityID')} AND ppk.${this.qi('IsPrimaryKey')} = ${T} AND ppk.${this.qi('IsVirtual')} = ${F}) = 1
+           ${excludeClause}`;
+   }
+
+   /**
     * Processes Entity attribute configurations from the additionalSchemaInfo config.
     * For each entry in the top-level "Entities" array, looks up the entity by
     * BaseTable + SchemaName and applies any declared attribute updates to the Entity table.
@@ -1331,6 +1412,17 @@ export class ManageMetadataBase {
 
       // LLM-assisted virtual entity field decoration — identify PKs, FKs, and descriptions
       await this.decorateVirtualEntitiesWithLLM(pool, currentUser);
+
+      // Schema-driven IS-A detection — set ParentID on any child whose single PK is also an FK to
+      // another entity's PK (Table-Per-Type). Runs BEFORE the config-driven pass so an explicit config
+      // entry can override a detected value, and BEFORE the 2nd-pass manageParentEntityFields().
+      const isaAutoResult = await this.detectAndSetISARelationshipsFromSchema(pool, excludeSchemas);
+      if (!isaAutoResult.success) {
+         bSuccess = false;
+      }
+      if (isaAutoResult.updatedCount > 0) {
+         logStatus(`    > Set ParentID on ${isaAutoResult.updatedCount} IS-A child entit${isaAutoResult.updatedCount === 1 ? 'y' : 'ies'} auto-detected from schema`);
+      }
 
       // Config-driven IS-A relationship setup — set ParentID on child entities
       // Must run AFTER entities exist but BEFORE manageEntityFields() which calls manageParentEntityFields()
