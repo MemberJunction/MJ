@@ -2109,12 +2109,14 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       this.currentUserId = md.CurrentUser?.ID || '';
 
-      // BypassCache on Lists + List Details: after a delete/duplicate, the
-      // RunView cache for these entities doesn't always reflect the latest
-      // state in time (event-driven invalidation races the immediate
-      // refresh). Trading a small perf hit for correctness here is worth
-      // it — categories and users stay cache-warm.
-      const [listsResult, categoriesResult, detailsResult, usersResult] = await rv.RunViews([
+      // BypassCache on Lists: after a delete/duplicate, the RunView cache
+      // for this entity doesn't always reflect the latest state in time
+      // (event-driven invalidation races the immediate refresh). Trading a
+      // small perf hit for correctness here is worth it — categories stay
+      // cache-warm. Owner names come from the denormalized `User` view
+      // field on each list, and item counts from batched COUNT queries —
+      // this deliberately does NOT download List Details or Users rows.
+      const [listsResult, categoriesResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Lists',
           OrderBy: 'Name',
@@ -2125,17 +2127,6 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
           EntityName: 'MJ: List Categories',
           OrderBy: 'Name',
           ResultType: 'entity_object'
-        },
-        {
-          EntityName: 'MJ: List Details',
-          Fields: ['ListID'],
-          ResultType: 'simple',
-          BypassCache: true
-        },
-        {
-          EntityName: 'MJ: Users',
-          Fields: ['ID', 'Name'],
-          ResultType: 'simple'
         }
       ]);
 
@@ -2146,8 +2137,6 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
       const lists = listsResult.Results as MJListEntity[];
       this.categories = (categoriesResult.Results || []) as MJListCategoryEntity[];
-      const details = (detailsResult.Results || []) as Array<{ ListID: string }>;
-      const users = (usersResult.Results || []) as Array<{ ID: string; Name: string }>;
 
       // Build category map
       this.categoryMap.clear();
@@ -2161,17 +2150,20 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       // flag so the first dialog open doesn't redundantly refetch.
       this.categoriesDirty = false;
 
-      // Build user map
-      const userMap = new Map<string, string>();
-      for (const user of users) {
-        userMap.set(user.ID, user.Name);
-      }
-
-      // Count items per list
+      // Per-list item counts: one batched round trip of count_only queries
+      // (each an index-seek COUNT on ListDetail.ListID server-side) instead
+      // of transferring every membership row to the client.
       const itemCounts = new Map<string, number>();
-      for (const detail of details) {
-        const count = itemCounts.get(detail.ListID) || 0;
-        itemCounts.set(detail.ListID, count + 1);
+      if (lists.length > 0) {
+        const countResults = await rv.RunViews(lists.map(list => ({
+          EntityName: 'MJ: List Details',
+          ExtraFilter: `ListID = '${list.ID}'`,
+          ResultType: 'count_only' as const,
+          BypassCache: true
+        })));
+        countResults.forEach((res, idx) => {
+          itemCounts.set(lists[idx].ID, res.Success ? res.TotalRowCount : 0);
+        });
       }
 
       // Build entity info
@@ -2198,7 +2190,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
           list,
           itemCount: itemCounts.get(list.ID) || 0,
           entityName,
-          ownerName: userMap.get(list.UserID) || 'Unknown',
+          ownerName: list.User || 'Unknown',
           isOwner: UUIDsEqual(list.UserID, this.currentUserId)
         };
       });

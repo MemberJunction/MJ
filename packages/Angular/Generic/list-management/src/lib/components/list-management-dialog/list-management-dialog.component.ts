@@ -510,7 +510,8 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
       action: 'apply',
       added: [],
       removed: [],
-      newListsCreated: this.newlyCreatedLists
+      newListsCreated: this.newlyCreatedLists,
+      summary: { added: 0, removed: 0, skipped: 0, failed: 0 }
     };
 
     try {
@@ -521,6 +522,9 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
           this.config.recordIds,
           true // Skip duplicates
         );
+        result.summary!.added += addResult.success;
+        result.summary!.skipped += addResult.skipped;
+        result.summary!.failed += addResult.failed;
 
         for (const listId of this.addedToLists) {
           const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));
@@ -540,6 +544,8 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
           [...this.removedFromLists],
           this.config.recordIds
         );
+        result.summary!.removed += removeResult.success;
+        result.summary!.failed += removeResult.failed;
 
         for (const listId of this.removedFromLists) {
           const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));

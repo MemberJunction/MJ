@@ -149,12 +149,14 @@ export class ListManagementService {
     try {
       const rv = RunView.FromMetadataProvider(this.Provider);
 
-      // Get all list details for these records
+      // Get all list details for these records — read-only lookup, so
+      // 'simple' with narrow Fields (no BaseEntity instantiation overhead)
       const recordIdFilter = recordIds.map(id => `'${id}'`).join(',');
-      const result = await rv.RunView<MJListDetailEntity>({
+      const result = await rv.RunView<{ ListID: string; RecordID: string }>({
         EntityName: 'MJ: List Details',
         ExtraFilter: `RecordID IN (${recordIdFilter})`,
-        ResultType: 'entity_object'
+        Fields: ['ListID', 'RecordID'],
+        ResultType: 'simple'
       });
 
       const membership = new Map<string, string[]>();
@@ -189,18 +191,19 @@ export class ListManagementService {
   ): Promise<MJListEntity[]> {
     const rv = RunView.FromMetadataProvider(this.Provider);
 
-    // Get list details for this record
-    const detailsResult = await rv.RunView<MJListDetailEntity>({
+    // Get list details for this record — read-only lookup
+    const detailsResult = await rv.RunView<{ ListID: string }>({
       EntityName: 'MJ: List Details',
       ExtraFilter: `RecordID = '${recordId}'`,
-      ResultType: 'entity_object'
+      Fields: ['ListID'],
+      ResultType: 'simple'
     });
 
     if (!detailsResult.Success || !detailsResult.Results || detailsResult.Results.length === 0) {
       return [];
     }
 
-    const listIds = [...new Set(detailsResult.Results.map((d: MJListDetailEntity) => d.ListID))];
+    const listIds = [...new Set(detailsResult.Results.map(d => d.ListID))];
 
     // Get the lists filtered by entity
     const listIdFilter = listIds.map(id => `'${id}'`).join(',');
@@ -238,24 +241,19 @@ export class ListManagementService {
     const viewModels: ListItemViewModel[] = [];
     const rv = RunView.FromMetadataProvider(this.Provider);
 
-    // Get item counts for all lists in one batch query
-    const listIds = lists.map(l => l.ID);
-    const listIdFilter = listIds.map(id => `'${id}'`).join(',');
-
-    // Get counts grouped by list - using a regular query since we need aggregation
-    const countsResult = await rv.RunView<MJListDetailEntity>({
-      EntityName: 'MJ: List Details',
-      ExtraFilter: listIds.length > 0 ? `ListID IN (${listIdFilter})` : '1=0',
-      ResultType: 'entity_object'
-    });
-
-    // Build count map
+    // Get item counts for all lists in one batched round trip of count_only
+    // queries — each an index-seek COUNT server-side. Never download the
+    // membership rows just to count them.
     const countMap = new Map<string, number>();
-    if (countsResult.Success && countsResult.Results) {
-      for (const detail of countsResult.Results) {
-        const current = countMap.get(detail.ListID) || 0;
-        countMap.set(detail.ListID, current + 1);
-      }
+    if (lists.length > 0) {
+      const countResults = await rv.RunViews(lists.map(list => ({
+        EntityName: 'MJ: List Details',
+        ExtraFilter: `ListID = '${list.ID}'`,
+        ResultType: 'count_only' as const
+      })));
+      countResults.forEach((res, idx) => {
+        countMap.set(lists[idx].ID, res.Success ? res.TotalRowCount : 0);
+      });
     }
 
     for (const list of lists) {
@@ -305,10 +303,11 @@ export class ListManagementService {
       const listIdFilter = listIds.map(id => `'${id}'`).join(',');
       const recordIdFilter = recordIds.map(id => `'${id}'`).join(',');
 
-      const existing = await rv.RunView<MJListDetailEntity>({
+      const existing = await rv.RunView<{ ListID: string; RecordID: string }>({
         EntityName: 'MJ: List Details',
         ExtraFilter: `ListID IN (${listIdFilter}) AND RecordID IN (${recordIdFilter})`,
-        ResultType: 'entity_object'
+        Fields: ['ListID', 'RecordID'],
+        ResultType: 'simple'
       }, md.CurrentUser);
 
       if (existing.Success && existing.Results) {
@@ -408,21 +407,33 @@ export class ListManagementService {
       return result;
     }
 
-    // Delete each matching detail
-    for (const detail of existingResult.Results || []) {
+    const toDelete = existingResult.Results || [];
+    if (toDelete.length === 0) {
+      return result;
+    }
+
+    // Queue all deletes in one TransactionGroup — a single round trip
+    // instead of one per removed membership row
+    const tg = await md.CreateTransactionGroup();
+    let queued = 0;
+    for (const detail of toDelete) {
       try {
-        const deleteResult = await detail.Delete();
-        if (deleteResult) {
-          result.success++;
-        } else {
-          result.failed++;
-          result.errors.push(`Failed to remove record ${detail.RecordID} from list ${detail.ListID}`);
-        }
+        detail.TransactionGroup = tg;
+        await detail.Delete();
+        queued++;
       } catch (error) {
         result.failed++;
         const errorMessage = error instanceof Error ? error.message : String(error);
         result.errors.push(`Error removing record: ${errorMessage}`);
       }
+    }
+
+    const submitted = queued === 0 || await tg.Submit();
+    if (submitted) {
+      result.success = queued;
+    } else {
+      result.failed += queued;
+      result.errors.push('Transaction failed to submit');
     }
 
     // Invalidate caches

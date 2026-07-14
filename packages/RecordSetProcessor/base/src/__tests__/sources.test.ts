@@ -171,7 +171,7 @@ describe('ListSource', () => {
                 return { Success: true, Results: [{ EntityID: 'ENT-9' }], TotalRowCount: 1 };
             }
             // MJ: List Details
-            return { Success: true, Results: [{ RecordID: 'a' }, { RecordID: 'b' }], TotalRowCount: 2 };
+            return { Success: true, Results: [{ ID: 'ld-1', RecordID: 'a' }, { ID: 'ld-2', RecordID: 'b' }], TotalRowCount: 2 };
         };
 
         const src = new ListSource('LIST-1');
@@ -184,6 +184,44 @@ describe('ListSource', () => {
         // first call resolved the list, second paged the details filtered by ListID
         const detailCall = fake.calls.find((c) => c.EntityName === 'MJ: List Details');
         expect(detailCall?.ExtraFilter).toBe("ListID='LIST-1'");
+        // keyset pagination: ordered by the ListDetail PK, cursor carries the last-seen ID
+        expect(detailCall?.OrderBy).toBe('ID');
+        expect(batch.NextCursor.Key).toBe('ld-2');
         expect(batch.Exhausted).toBe(true);
+    });
+
+    it('passes AfterKey when resuming from a keyset cursor', async () => {
+        fake.handler = (params) => {
+            if (params.EntityName === 'MJ: Lists') {
+                return { Success: true, Results: [{ EntityID: 'ENT-9' }], TotalRowCount: 1 };
+            }
+            return { Success: true, Results: [{ ID: 'ld-3', RecordID: 'c' }], TotalRowCount: 3 };
+        };
+
+        const src = new ListSource('LIST-1');
+        const batch = await src.NextBatch({ Key: 'ld-2' }, 5, USER, asProvider(fake));
+
+        const detailCall = fake.calls.find((c) => c.EntityName === 'MJ: List Details');
+        expect(detailCall?.AfterKey).toBeDefined();
+        expect(batch.NextCursor.Key).toBe('ld-3');
+        expect(batch.Exhausted).toBe(true);
+    });
+
+    it('honors a legacy Offset cursor for one batch, then converts to keyset', async () => {
+        fake.handler = (params) => {
+            if (params.EntityName === 'MJ: Lists') {
+                return { Success: true, Results: [{ EntityID: 'ENT-9' }], TotalRowCount: 1 };
+            }
+            return { Success: true, Results: [{ ID: 'ld-11', RecordID: 'k' }], TotalRowCount: 20 };
+        };
+
+        const src = new ListSource('LIST-1');
+        const batch = await src.NextBatch({ Offset: 10 }, 1, USER, asProvider(fake));
+
+        const detailCall = fake.calls.find((c) => c.EntityName === 'MJ: List Details');
+        expect(detailCall?.StartRow).toBe(10);
+        expect(detailCall?.AfterKey).toBeUndefined();
+        // returned cursor is keyset from here on
+        expect(batch.NextCursor.Key).toBe('ld-11');
     });
 });

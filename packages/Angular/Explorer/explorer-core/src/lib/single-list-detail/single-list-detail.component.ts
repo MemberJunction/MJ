@@ -554,24 +554,14 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       const entityInfo = md.EntityByID(this.listRecord.EntityID)!;
       const pk = entityInfo.PrimaryKeys[0].Name;
 
-      // Fetch the list's member record IDs. The grid only holds the
-      // current page, so we hit MJ: List Details directly to get the
-      // full set — same single-PK assumption guarded at dialog open.
+      // Cheap emptiness check before doing any row work
       const rv = RunView.FromMetadataProvider(md);
-      const memberResult = await rv.RunView<{ RecordID: string }>({
+      const countResult = await rv.RunView({
         EntityName: 'MJ: List Details',
         ExtraFilter: `ListID='${this.listRecord.ID}'`,
-        Fields: ['RecordID'],
-        ResultType: 'simple',
+        ResultType: 'count_only',
       });
-      if (!memberResult.Success) {
-        this.sharedService.CreateSimpleNotification(
-          `Export failed loading members: ${memberResult.ErrorMessage}`, 'error', 5000,
-        );
-        return;
-      }
-      const recordIds = (memberResult.Results ?? []).map((r) => String(r.RecordID));
-      if (recordIds.length === 0) {
+      if (countResult.Success && countResult.TotalRowCount === 0) {
         this.sharedService.CreateSimpleNotification(
           'List is empty — nothing to export.', 'info', 3000,
         );
@@ -579,13 +569,17 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
         return;
       }
 
-      // Pull underlying entity rows restricted to the chosen fields.
-      // Always include the PK so the projection round-trips cleanly.
+      // Pull underlying entity rows restricted to the chosen fields, with
+      // membership filtered SERVER-SIDE via a subquery (same pattern the
+      // member grid uses). This avoids round-tripping every member ID to
+      // the client and building an IN(...) clause that breaks on large
+      // lists. Always include the PK so the projection round-trips cleanly.
+      const listDetailInfo = md.EntityByName('MJ: List Details');
+      const listDetailsView = `${listDetailInfo?.SchemaName ?? '__mj'}.${listDetailInfo?.BaseView ?? 'vwListDetails'}`;
       const fieldsForQuery = Array.from(new Set([pk, ...selectedFields]));
-      const escaped = recordIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
       const rowResult = await rv.RunView<Record<string, unknown>>({
         EntityName: entityInfo.Name,
-        ExtraFilter: `${pk} IN (${escaped})`,
+        ExtraFilter: `${pk} IN (SELECT RecordID FROM ${listDetailsView} WHERE ListID='${this.listRecord.ID}')`,
         Fields: fieldsForQuery,
         ResultType: 'simple',
       });
@@ -1133,6 +1127,10 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     // Load existing list detail IDs to mark which records are already in the list
     await this.loadExistingListDetailIds();
     this.addDialogLoading = false;
+    // Explicit CD: the GraphQL promise resolution doesn't reliably produce an
+    // Angular tick, so without this the spinner stays up until the next user
+    // event (click/keystroke) forces a change-detection cycle.
+    this.cdr.detectChanges();
   }
 
   closeAddRecordsDialog(): void {
@@ -1176,15 +1174,18 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   private async searchRecords(searchText: string): Promise<void> {
     if (!this.listRecord || !searchText || searchText.length < 2) {
       this.addableRecords = [];
+      this.cdr.detectChanges();
       return;
     }
 
     this.addDialogLoading = true;
+    this.cdr.detectChanges();
 
     const md = this.ProviderToUse;
     const sourceEntityInfo = md.EntityByID(this.listRecord.EntityID);
     if (!sourceEntityInfo) {
       this.addDialogLoading = false;
+      this.cdr.detectChanges();
       return;
     }
 

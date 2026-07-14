@@ -217,7 +217,7 @@
               <i class="fa-solid fa-search"></i>
               <input
                 type="text"
-                placeholder="Search items..."
+                placeholder="Search this page..."
                 [(ngModel)]="itemSearchTerm" />
             </div>
             @if (isCurrentUserOwner()) {
@@ -314,8 +314,19 @@
             </table>
             <div class="items-footer">
               <span class="items-count">
-                Showing {{filteredItems.length}} of {{listItems.length}} items
+                Showing {{filteredItems.length}} of {{stats.itemCount}} items
               </span>
+              @if (totalPages > 1) {
+                <div class="items-pager">
+                  <button class="btn-icon" [disabled]="itemsPage === 0" (click)="goToPage(itemsPage - 1)" title="Previous page">
+                    <i class="fa-solid fa-chevron-left"></i>
+                  </button>
+                  <span class="page-label">Page {{itemsPage + 1}} of {{totalPages}}</span>
+                  <button class="btn-icon" [disabled]="itemsPage >= totalPages - 1" (click)="goToPage(itemsPage + 1)" title="Next page">
+                    <i class="fa-solid fa-chevron-right"></i>
+                  </button>
+                </div>
+              }
             </div>
           </div>
         }
