@@ -22,37 +22,59 @@ const FAILURE_MARKER = '__ESM_GUARD_FAILURE__';
 
 /**
  * Resolve a package's published ESM entry point from its package.json.
- * Precedence: exports["."].import → exports["."].default → exports (string) → main.
+ * Precedence: the root `exports` condition set (subpath-map "." OR a bare
+ * top-level condition object) resolved for a Node ESM import → `main`.
  * Returns the relative path string, or null when the package publishes no entry.
  *
- * Nested conditions (e.g. `{ import: { types, default } }`) are unwrapped one
- * level so a built package using that valid shape isn't misclassified NOT_BUILT.
+ * Handles the shapes Node's resolver actually honors: string exports, a "."
+ * subpath map, a BARE top-level condition set (no "."-prefixed key — Node applies
+ * the whole object as the "." conditions; the standard dual CJS/ESM shape), nested
+ * conditions to any depth, and fallback arrays.
  *
- * Known limitation (zero packages in the current fleet hit it): a package with
- * neither `exports` nor `main` returns null and is skipped as NOT_BUILT rather
- * than trying Node's implicit `index.js` default.
+ * This resolves the ROOT ("." / bare-conditions / main) entry. Subpath exports are
+ * checked separately by checkPackage via collectSubpathEntryPaths. A package with
+ * neither `exports` nor `main` returns null and is skipped as NOT_BUILT rather than
+ * trying Node's implicit `index.js` default.
  */
 export function resolveEntryPoint(pkgJson) {
     const exp = pkgJson.exports;
     if (typeof exp === 'string') return exp;
-    const root = exp?.['.'];
-    if (typeof root === 'string') return root;
-    return unwrapCondition(root) ?? pkgJson.main ?? null;
+    return unwrapCondition(selectRootExport(exp)) ?? pkgJson.main ?? null;
 }
 
-/** Export conditions that select an entry for a Node ESM import (require/browser/types are not ours). */
-const ESM_CONDITIONS = new Set(['import', 'node', 'module', 'default']);
+/**
+ * Pick the root export node from the `exports` field. Node's rule: an object with
+ * NO "."-prefixed key is itself the "." condition set; otherwise the root lives at
+ * the "." key. A top-level array is a fallback list for the root.
+ */
+function selectRootExport(exp) {
+    if (Array.isArray(exp)) return exp;
+    if (typeof exp === 'object' && exp !== null) {
+        return Object.keys(exp).some((k) => k.startsWith('.')) ? exp['.'] : exp;
+    }
+    return undefined;
+}
+
+/** Export conditions that select an entry for a Node ESM import (require/browser/types are not honored). */
+const ESM_CONDITIONS = new Set(['import', 'node', 'default']);
 
 /**
- * Resolve an export condition to a path string. A condition is either the path
- * directly (string) or a nested condition object (`{ import, node, default, ... }`),
- * possibly nested several levels deep. Mirrors Node's algorithm: iterate keys in
- * their declared order and take the first ESM-active condition that resolves to a
- * string, recursing into nested condition objects. Returns null when none match.
- * Recursion is safe: package.json exports are finite, acyclic JSON.
+ * Resolve an export condition to a path string. A condition is a path (string), a
+ * nested condition object (`{ import, node, default, ... }`) to any depth, or a
+ * fallback array. Mirrors Node's algorithm: for objects, iterate keys in declared
+ * order and take the first ESM-active condition that resolves; for arrays, take the
+ * first element that resolves. Returns null when none match. Recursion is safe:
+ * package.json exports are finite, acyclic JSON.
  */
 function unwrapCondition(condition) {
     if (typeof condition === 'string') return condition;
+    if (Array.isArray(condition)) {
+        for (const element of condition) {
+            const found = unwrapCondition(element);
+            if (found) return found;
+        }
+        return null;
+    }
     if (typeof condition === 'object' && condition !== null) {
         for (const [key, value] of Object.entries(condition)) {
             if (!ESM_CONDITIONS.has(key)) continue;
@@ -71,8 +93,9 @@ function unwrapCondition(condition) {
  *
  * Pass `pkgJson` when the caller already parsed the manifest (the sweep does, to
  * avoid re-reading every package.json); it's read from disk only when omitted.
+ * `timeoutMs` bounds the child import (default IMPORT_TIMEOUT_MS); injectable for tests.
  */
-export async function checkPackage(pkgDir, pkgJson = null) {
+export async function checkPackage(pkgDir, pkgJson = null, { timeoutMs = IMPORT_TIMEOUT_MS } = {}) {
     pkgJson ??= JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
     const name = pkgJson.name ?? pkgDir;
     const entry = resolveEntryPoint(pkgJson);
@@ -84,11 +107,40 @@ export async function checkPackage(pkgDir, pkgJson = null) {
         return { name, pkgDir, status: 'NOT_BUILT', detail: `entry ${entry} does not exist (not built?)` };
     }
 
-    const failure = await importInFreshProcess(entryPath);
-    if (!failure) {
-        return { name, pkgDir, status: 'OK', detail: '' };
+    // Check the root entry plus every concrete subpath export — a #3137 break in a
+    // subpath dist file (exports["./sub"]) breaks consumers of that subpath and would
+    // otherwise ship green. Non-existent subpath targets are skipped (a missing subpath
+    // build isn't the root package's own-dist bug). A gating break in ANY entry gates the
+    // package; otherwise the root entry's status stands (a side-effecting subpath's
+    // non-gating error doesn't muddy a clean root).
+    const subEntries = collectSubpathEntryPaths(pkgJson, pkgDir).filter((p) => p !== entryPath && existsSync(p));
+    const results = [];
+    for (const p of [entryPath, ...subEntries]) {
+        const failure = await importInFreshProcess(p, timeoutMs);
+        results.push(failure ? classifyFailure(failure, pkgDir) : { status: 'OK', detail: '' });
     }
-    return { name, pkgDir, ...classifyFailure(failure, pkgDir) };
+    const gating = results.find((r) => r.status === 'OWN_DIST_MISSING_EXT');
+    return { name, pkgDir, ...(gating ?? results[0]) };
+}
+
+/**
+ * Resolve every concrete subpath export (`exports["./sub"]`) to an absolute path.
+ * Skips the root ".", wildcard/pattern targets (containing "*"), and non-JS targets
+ * (e.g. "./package.json") — only .js/.mjs/.cjs entry points are import-checkable.
+ */
+function collectSubpathEntryPaths(pkgJson, pkgDir) {
+    const exp = pkgJson.exports;
+    if (typeof exp !== 'object' || exp === null || Array.isArray(exp)) return [];
+    const paths = [];
+    for (const [key, value] of Object.entries(exp)) {
+        if (!key.startsWith('./')) continue; // subpaths only; "." is the root, handled above
+        if (key.includes('*')) continue; // wildcard patterns aren't a single importable entry
+        const target = unwrapCondition(value);
+        if (target && MODULE_EXTS.some((ext) => target.endsWith(ext))) {
+            paths.push(resolve(pkgDir, target));
+        }
+    }
+    return paths;
 }
 
 /**
@@ -96,8 +148,13 @@ export async function checkPackage(pkgDir, pkgJson = null) {
  * pathToFileURL keeps the specifier Windows-safe (a raw C:\ path throws
  * ERR_UNSUPPORTED_ESM_URL_SCHEME). Resolves to null on success, or to a
  * structured { code, message } failure.
+ *
+ * killSignal is SIGKILL (not the default SIGTERM): a scanned entry with a
+ * graceful-shutdown SIGTERM trap plus a live handle could otherwise ignore the
+ * timeout and hang CI to the job cap. SIGKILL is uncatchable, so the timeout can
+ * always reclaim the child.
  */
-function importInFreshProcess(entryPath) {
+function importInFreshProcess(entryPath, timeoutMs = IMPORT_TIMEOUT_MS) {
     const url = pathToFileURL(entryPath).href;
     const childScript = [
         `import(${JSON.stringify(url)}).then(`,
@@ -110,13 +167,13 @@ function importInFreshProcess(entryPath) {
         execFile(
             process.execPath,
             ['--input-type=module', '-e', childScript],
-            { timeout: IMPORT_TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024 },
+            { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 10 * 1024 * 1024 },
             (error, _stdout, stderr) => {
                 if (!error) {
                     resolveResult(null);
                     return;
                 }
-                const markerLine = stderr.split('\n').find((l) => l.startsWith(FAILURE_MARKER));
+                const markerLine = stderr.split('\n').findLast((l) => l.startsWith(FAILURE_MARKER));
                 if (markerLine) {
                     try {
                         resolveResult(JSON.parse(markerLine.slice(FAILURE_MARKER.length)));
@@ -172,9 +229,17 @@ export function classifyFailure(failure, pkgDir, { fileExists = existsSync } = {
     return { status: 'OTHER_ERR', detail: `[${code}] ${firstLine(message)}` };
 }
 
-/** True when `<missing>.js|.mjs|.cjs` exists — the tsc-alias signature: target present, extension dropped. */
+const MODULE_EXTS = ['.js', '.mjs', '.cjs'];
+
+/**
+ * True when `<missing>.js|.mjs|.cjs` exists — the tsc-alias signature: target present,
+ * extension dropped. A specifier that ALREADY ends in a module extension can't be the
+ * extensionless bug, so it never qualifies (guards against a stray `foo.js.js` sibling
+ * misclassifying a genuinely-absent `./foo.js` as the signature).
+ */
 function hasModuleSibling(missing, fileExists) {
-    return ['.js', '.mjs', '.cjs'].some((ext) => fileExists(missing + ext));
+    if (MODULE_EXTS.some((ext) => missing.endsWith(ext))) return false;
+    return MODULE_EXTS.some((ext) => fileExists(missing + ext));
 }
 
 /** True when any path segment is `node_modules` — i.e. the path is inside a dependency tree. */
@@ -258,18 +323,24 @@ async function main() {
     const counts = {};
     for (const r of results) counts[r.status] = (counts[r.status] ?? 0) + 1;
 
-    // Reporting OK when nothing was actually imported is false confidence. This
-    // happens two ways: no "type": "module" packages found at all (wrong directory /
-    // package-free path), or packages exist but every entry is NOT_BUILT (check:esm
-    // run without a prior build). Fail loudly in both cases instead of green-lighting.
+    // Zero "type": "module" packages found at all means a wrong path / misconfiguration
+    // (running from the wrong directory) — a genuine error, fail hard.
+    if (results.length === 0) {
+        console.error(`esm-guard: no "type": "module" packages found under ${rootDir} — nothing verified. Run from the repo root or pass a valid packages path.`);
+        process.exit(2);
+    }
+
+    // Packages exist but every entry is NOT_BUILT: legitimate in a turbo affected-PR run
+    // (only the changed subset is built, yet the sweep covers the whole tree) — must NOT
+    // red an innocent PR. But don't print the misleading "OK — no breaks found" either;
+    // warn that nothing was actually imported, then exit 0.
     const importedCount = results.length - (counts.NOT_BUILT ?? 0);
     if (importedCount === 0) {
-        const reason =
-            results.length === 0
-                ? `no "type": "module" packages found under ${rootDir}`
-                : `all ${results.length} "type": "module" package(s) under ${rootDir} are NOT_BUILT`;
-        console.error(`esm-guard: ${reason} — nothing verified. Run "npm run build" first, or pass a valid packages path.`);
-        process.exit(2);
+        console.error(
+            `esm-guard: all ${results.length} "type": "module" package(s) under ${rootDir} are NOT_BUILT — nothing imported, nothing verified. ` +
+                `(Run "npm run build" first to check them.) Not failing: this is expected when an affected-PR build produced no built package.`
+        );
+        return;
     }
 
     console.log(

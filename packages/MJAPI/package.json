@@ -2,7 +2,7 @@
   "name": "mj_api",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
   "private": true,
   "type": "module",
   "scripts": {

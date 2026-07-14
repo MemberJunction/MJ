@@ -3,7 +3,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { resolveEntryPoint, checkPackage, classifyFailure, sweep } from '../check-esm-imports.mjs';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -63,6 +63,29 @@ describe('resolveEntryPoint', () => {
         expect(resolveEntryPoint(pkg)).toBe('./dist/index.js');
     });
 
+    it('resolves BARE top-level conditions (no "." key) to the ESM entry, not the CJS main', () => {
+        // Node treats an exports object with no "."-prefixed key as the root condition set.
+        // The dual-package shape @memberjunction/graphql-dataprovider ships: the guard must
+        // check the .mjs consumers load, NOT the .cjs main (which can't exhibit the #3137 bug).
+        const pkg = {
+            main: './dist/index.cjs',
+            exports: { require: { default: './dist/index.cjs' }, import: { default: './dist/index.mjs' } },
+        };
+        expect(resolveEntryPoint(pkg)).toBe('./dist/index.mjs');
+    });
+
+    it('resolves a fallback-array condition to its first usable string', () => {
+        const pkg = { exports: { '.': { import: ['./dist/index.mjs', './dist/fallback.mjs'] } } };
+        expect(resolveEntryPoint(pkg)).toBe('./dist/index.mjs');
+    });
+
+    it('ignores the bundler-only "module" condition Node does not honor', () => {
+        // `module` is a webpack/tsup convention Node's ESM resolver ignores; selecting it
+        // would check an entry Node never loads. import/default/main must win instead.
+        expect(resolveEntryPoint({ exports: { '.': { module: './dist/module.js', import: './dist/index.js' } } })).toBe('./dist/index.js');
+        expect(resolveEntryPoint({ main: './dist/main.js', exports: { '.': { module: './dist/module.js' } } })).toBe('./dist/main.js');
+    });
+
     it('falls back to main when exports has no usable root entry', () => {
         const pkg = { main: 'dist/index.js', exports: { './sub': './dist/sub.js' } };
         expect(resolveEntryPoint(pkg)).toBe('dist/index.js');
@@ -94,6 +117,63 @@ describe('checkPackage', () => {
     it('classifies a package whose entry file is absent as NOT_BUILT (skipped)', async () => {
         const result = await checkPackage(join(FIXTURES, 'not-built-pkg'));
         expect(result.status).toBe('NOT_BUILT');
+    });
+
+    it('gates a #3137 break in a SUBPATH export even when the root entry is clean', async () => {
+        // Only checking the root barrel misses subpath dist files (exports["./sub"]) that
+        // consumers import directly. A clean root must not mask a broken subpath.
+        const dir = join(FIXTURES, 'subpath-pkg');
+        let result;
+        try {
+            mkdirSync(join(dir, 'built'), { recursive: true });
+            writeFileSync(
+                join(dir, 'package.json'),
+                JSON.stringify({
+                    name: 'subpath-pkg',
+                    type: 'module',
+                    exports: { '.': './built/index.js', './sub': './built/sub.js' },
+                })
+            );
+            writeFileSync(join(dir, 'built', 'index.js'), 'export const ok = 1;\n'); // clean root
+            writeFileSync(join(dir, 'built', 'sub.js'), "export { deep } from './deep';\n"); // extensionless bug
+            writeFileSync(join(dir, 'built', 'deep.js'), 'export const deep = 1;\n'); // sibling exists → #3137 signature
+            result = await checkPackage(dir);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+        expect(result.status).toBe('OWN_DIST_MISSING_EXT');
+    });
+
+    it('classifies a module that throws at import as OTHER_ERR (non-gating), not a bug', async () => {
+        const dir = join(FIXTURES, 'throw-pkg');
+        let result;
+        try {
+            mkdirSync(join(dir, 'built'), { recursive: true });
+            writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'throw-pkg', type: 'module', main: 'built/index.js' }));
+            writeFileSync(join(dir, 'built', 'index.js'), 'throw new Error("boom at import");\n');
+            result = await checkPackage(dir);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+        expect(result.status).toBe('OTHER_ERR');
+    });
+
+    it('bounds a hanging import via the timeout and classifies it OTHER_ERR (CI-hang protection)', async () => {
+        // Entry keeps the event loop alive (setInterval) AND blocks import() forever, so
+        // only the timeout can reclaim it. A bare `await new Promise(()=>{})` would exit
+        // clean on Node 24 (no live handle) — the interval is what makes it truly hang.
+        const dir = join(FIXTURES, 'hang-pkg');
+        let result;
+        try {
+            mkdirSync(join(dir, 'built'), { recursive: true });
+            writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'hang-pkg', type: 'module', main: 'built/index.js' }));
+            writeFileSync(join(dir, 'built', 'index.js'), 'setInterval(() => {}, 100000);\nawait new Promise(() => {});\n');
+            result = await checkPackage(dir, null, { timeoutMs: 500 });
+        } finally {
+            rmSync(dir, { recursive: true, force: true }); // never leak the hang fixture, even on assertion/timeout failure
+        }
+        expect(result.status).toBe('OTHER_ERR');
+        expect(result.detail).toContain('TIMEOUT');
     });
 
     it('uses a pre-parsed pkgJson when provided instead of re-reading package.json', async () => {
@@ -152,12 +232,34 @@ describe('classifyFailure', () => {
         expect(classifyFailure(failure, pkgDir).status).toBe('DEP_FAIL');
     });
 
+    it('does not gate an already-extensioned missing import even if a doubled-extension sibling exists', () => {
+        // ./foo.js genuinely absent is a DEP_FAIL; a stray foo.js.js must not be read as the
+        // extensionless signature (the specifier already carries its extension).
+        const failure = {
+            code: 'ERR_MODULE_NOT_FOUND',
+            message: `Cannot find module '${pkgDir}/dist/foo.js' imported from ${pkgDir}/dist/index.js`,
+        };
+        const siblingExists = { fileExists: (p) => p === `${pkgDir}/dist/foo.js.js` };
+        expect(classifyFailure(failure, pkgDir, siblingExists).status).toBe('DEP_FAIL');
+    });
+
     it('classifies a directory import in the package own dist as OWN_DIST_MISSING_EXT', () => {
         const failure = {
             code: 'ERR_UNSUPPORTED_DIR_IMPORT',
             message: `Directory import '${pkgDir}/dist/sub' is not supported resolving ES modules imported from ${pkgDir}/dist/index.js`,
         };
         expect(classifyFailure(failure, pkgDir).status).toBe('OWN_DIST_MISSING_EXT');
+    });
+
+    it('gates when the dropped-extension sibling is .mjs or .cjs (not only .js)', () => {
+        for (const ext of ['.mjs', '.cjs']) {
+            const failure = {
+                code: 'ERR_MODULE_NOT_FOUND',
+                message: `Cannot find module '${pkgDir}/dist/mod' imported from ${pkgDir}/dist/index.js`,
+            };
+            const sib = { fileExists: (p) => p === `${pkgDir}/dist/mod${ext}` };
+            expect(classifyFailure(failure, pkgDir, sib).status).toBe('OWN_DIST_MISSING_EXT');
+        }
     });
 
     it('classifies a non-resolution error as OTHER_ERR', () => {
@@ -195,20 +297,23 @@ describe('CLI', () => {
         expect(result.code ?? 0).toBe(0);
     });
 
-    it('exits non-zero when the target contains zero type:module packages (verified nothing)', async () => {
-        // A run that finds no packages must not report OK — that is false confidence
-        // (e.g. invoked from the wrong directory or against a package-free path).
-        // execFile rejects with a numeric .code on non-zero exit; resolves (no code) on 0.
+    it('exits 2 when the target contains zero type:module packages (misconfiguration / wrong path)', async () => {
+        // Finding zero packages means a genuinely wrong path or misconfiguration — fail hard.
         const emptyDir = join(FIXTURES, 'cjs-pkg'); // real dir, but its only package is CJS → zero type:module
         const result = await run(process.execPath, [SCRIPT, emptyDir]).catch((e) => e);
-        expect(typeof result.code === 'number' && result.code > 0).toBe(true);
+        expect(result.code).toBe(2);
+        expect(result.stderr).toContain('no "type": "module" packages');
     });
 
-    it('exits non-zero when packages exist but every one is NOT_BUILT (nothing actually imported)', async () => {
-        // Running check:esm without a prior build leaves every entry NOT_BUILT; reporting
-        // OK there is the same "verified nothing" false confidence as the empty case.
+    it('warns but exits 0 when packages exist yet every one is NOT_BUILT (legitimate in affected-PR CI)', async () => {
+        // In a turbo affected-PR build only the changed subset is built, so a sweep of the
+        // whole tree is legitimately all-NOT_BUILT — that must NOT red an innocent PR. But it
+        // must warn (not print the misleading "OK — no breaks found"), so nothing is silently
+        // reported as verified when it wasn't.
         const allUnbuilt = join(FIXTURES, 'not-built-pkg');
         const result = await run(process.execPath, [SCRIPT, allUnbuilt]).catch((e) => e);
-        expect(typeof result.code === 'number' && result.code > 0).toBe(true);
+        expect(result.code ?? 0).toBe(0);
+        expect(result.stderr).toContain('NOT_BUILT');
+        expect(result.stdout).not.toContain('OK — no extensionless-specifier breaks found');
     });
 });
