@@ -10,10 +10,10 @@
 const ESTABLISHED = {
   projects: [
     {
-      id: 'renewal', name: 'Membership Renewal', icon: 'fa-arrows-rotate', color: '#0076B6',
+      id: 'renewal', name: 'Membership Renewal', icon: 'fa-arrows-rotate', color: 'var(--mj-brand-primary)',
       desc: 'FY26 renewal push — targets, win-back messaging, and the renewal dashboard.',
       members: [
-        { init: 'AM', color: '#0076B6', name: 'Alex Morgan', role: 'Owner' },
+        { init: 'AM', color: 'var(--mj-brand-primary)', name: 'Alex Morgan', role: 'Owner' },
         { init: 'DK', color: '#7C3AED', name: 'Dana Kim', role: 'Editor' },
         { init: 'RB', color: '#16A34A', name: 'Ray Barnes', role: 'Viewer' },
       ],
@@ -69,7 +69,7 @@ const ESTABLISHED = {
     {
       id: 'website', name: 'Website Refresh', icon: 'fa-globe', color: '#F6AD55',
       desc: 'New public site — IA, copy, and the launch checklist.',
-      members: [ { init: 'AM', color: '#0076B6', name: 'Alex Morgan', role: 'Owner' } ],
+      members: [ { init: 'AM', color: 'var(--mj-brand-primary)', name: 'Alex Morgan', role: 'Owner' } ],
       memory: [
         { id: 'w1', text: 'Voice: plain language, no association jargon on public pages.', scope: 'All agents', status: 'active' },
         { id: 'w2', text: 'Launch target is the September board meeting.', scope: 'All agents', status: 'active' },
@@ -99,7 +99,7 @@ const ESTABLISHED = {
   pinned: [
     { id: 'pin1', title: 'Weekly KPI check-in', when: '2h', summary: '', messages: [
       { who: 'user', text: 'Run the weekly KPI check-in.' },
-      { who: 'Sage', text: 'Membership up 1.2% WoW, renewals pacing at 94% of target, event registrations flat. Full digest attached. (Pinned conversations live outside projects — they keep no project memory.)' },
+      { who: 'Sage', text: 'Membership up 1.2% WoW, renewals pacing at 94% of target, event registrations flat. Full digest attached. (Pinning is display-only — a pinned conversation keeps whatever project it lives in.)' },
     ] },
   ],
 };
@@ -120,6 +120,7 @@ function setPersona(name) {
     convId: null, artifactId: null, companion: false, planArmed: false, moveConvPending: null, editingArtifact: false,
   });
   state.openProjects = new Set(DATA.projects[0] ? [DATA.projects[0].id] : []);
+  composer.drafts = {};
   closeModals();
   render();
   toast(name === 'firstrun' ? 'Brand-new user — nothing exists yet' : 'Established user — full seed data');
@@ -145,7 +146,7 @@ const state = {
 
 /* ---------- Composer data + state ---------- */
 const AGENTS = [
-  { name: 'Sage', icon: 'fa-robot', color: '#0076B6', desc: 'General copilot — plan mode + skills' },
+  { name: 'Sage', icon: 'fa-robot', color: 'var(--mj-brand-primary)', desc: 'General copilot — plan mode + skills' },
   { name: 'Skip', icon: 'fa-satellite-dish', color: '#7C3AED', desc: 'Analytics (remote — plan/skills delegated)' },
 ];
 const PEOPLE = [
@@ -164,15 +165,17 @@ const SKILLS = [
 ];
 const FAKE_FILES = ['board-deck.pdf', 'q3-pipeline.xlsx', 'renewal-notes.docx'];
 
-const composer = { agent: AGENTS[0], mode: 'Standard', voice: false, drafts: {}, fileIdx: 0 };
+const composer = { mode: 'Standard', voice: false, drafts: {}, fileIdx: 0 };
+const pmSel = { icon: 'fa-folder', color: '', editing: null };
+const draftAgent = () => AGENTS.find((a) => a.name === draft().agent) || AGENTS[0];
 let popCtx = null; // open mention popover: { items }
 
 function draftKey() { return `${state.view}:${state.convId || state.projectId || 'fr'}`; }
-function draft() { const k = draftKey(); return composer.drafts[k] || (composer.drafts[k] = { text: '', chips: [] }); }
+function draft() { const k = draftKey(); return composer.drafts[k] || (composer.drafts[k] = { text: '', chips: [], agent: AGENTS[0].name, planArmed: false }); }
 
 /* ---------- Helpers ---------- */
 const $ = (sel, el = document) => el.querySelector(sel);
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const project = (id) => DATA.projects.find((p) => p.id === id);
 const artifact = (p, id) => p && p.artifacts.find((a) => a.id === id);
 const isGrown = (p) => p.artifacts.length > 0 || p.workflows.length > 0 || p.members.length > 1;
@@ -226,13 +229,17 @@ function renderSidebar() {
 /* ---------- Hub ---------- */
 function hubHeader(p) {
   const grown = isGrown(p);
+  const shown = p.members.slice(0, 3);
+  const extra = p.members.length - shown.length;
   const avatars = grown && p.members.length > 1
-    ? `<span class="avstack">${p.members.map((m) => `<span class="avatar" style="background:${m.color}">${m.init}</span>`).join('')}</span>` : '';
+    ? `<span class="avstack">${shown.map((m) => `<span class="avatar" style="background:${m.color}" title="${esc(m.name)}">${m.init}</span>`).join('')}${extra > 0 ? `<span class="avatar more">+${extra}</span>` : ''}</span>` : '';
   return `<div class="qh-head">
     <span class="qh-picon" style="background:${p.color}"><i class="fa-solid ${p.icon}"></i></span>
     <div style="min-width:0">
       <h3 class="qh-title" id="hubTitle">${esc(p.name)}</h3>
-      <p class="qh-desc" id="hubDesc">${esc(p.desc)}</p>
+      ${p.desc
+        ? `<p class="qh-desc" id="hubDesc">${esc(p.desc)}</p>`
+        : `<p class="qh-desc add-desc" id="hubDesc" data-act="proj-desc-add" title="Agents read the description">+ Add description</p>`}
     </div>
     <div class="qh-actions">
       ${avatars}
@@ -252,22 +259,27 @@ function hubTabs(p) {
 
 function convRow(c, i) {
   const right = i === 0
-    ? `<span class="continue" data-act="open-conv" data-id="${c.id}">Continue <i class="fa-solid fa-arrow-right"></i></span>`
+    ? `<span class="w">${c.when}</span><span class="continue" data-act="open-conv" data-id="${c.id}">Continue <i class="fa-solid fa-arrow-right"></i></span>`
     : `<span class="w">${c.when}</span>`;
   return `<div class="qh-conv" data-act="open-conv" data-id="${c.id}">
     <div class="tt"><div class="t">${esc(c.title)}</div><div class="s">${esc(c.summary)}</div></div>${right}</div>`;
 }
 
-function memRow(m) {
+const MEM_SCOPES = ['All agents', 'Sage', 'All agents · global'];
+
+function memRow(m, manage) {
   if (m.status === 'provisional') {
-    return `<div class="qh-mem provisional" data-mem="${m.id}">
+    return `<div class="qh-mem provisional" data-mem="${m.id}" tabindex="0">
       <span class="m">${esc(m.text)}</span>
       <span class="scope">${esc(m.scope)} · provisional</span>
       <span class="keep-ops"><span data-act="mem-keep" data-id="${m.id}">Keep</span><span class="dim" data-act="mem-forget" data-id="${m.id}">Forget</span></span></div>`;
   }
-  return `<div class="qh-mem" data-mem="${m.id}">
+  const scope = manage
+    ? `<select class="f-select" data-mem-scope="${m.id}" title="Who reads this note">${MEM_SCOPES.map((s) => `<option ${s === m.scope ? 'selected' : ''}>${s}</option>`).join('')}</select>`
+    : `<span class="scope">${esc(m.scope)}</span>`;
+  return `<div class="qh-mem" data-mem="${m.id}" tabindex="0">
     <span class="m">${esc(m.text)}</span>
-    <span class="scope">${esc(m.scope)}</span>
+    ${scope}
     <span class="ops">
       <button data-act="mem-edit" data-id="${m.id}" title="Edit"><i class="fa-solid fa-pen"></i></button>
       <button data-act="mem-forget" data-id="${m.id}" title="Forget"><i class="fa-solid fa-trash"></i></button>
@@ -319,7 +331,7 @@ function hubOverview(p) {
   }
 
   if (!isGrown(p))
-    parts.push(`<p class="qh-foot"><i class="fa-solid fa-seedling"></i>Workflows, artifacts, and members appear here when those ship — nothing renders empty. Sparse projects stay this calm forever.</p>`);
+    parts.push(`<p class="qh-foot"><i class="fa-solid fa-seedling"></i>As this project grows — files, teammates, running work — they'll show up here. Nothing renders empty.</p>`);
   return parts.join('');
 }
 
@@ -336,18 +348,26 @@ function hubTabInner(p) {
       return sect('All conversations', null, p.conversations.map((c, i) => convRow(c, i === 0 ? 0 : 1)).join(''));
     case 'memory': {
       const provisional = p.memory.filter((m) => m.status === 'provisional');
-      const active = p.memory.filter((m) => m.status !== 'provisional');
+      const isGlobal = (m) => m.scope.includes('global');
+      const projNotes = p.memory.filter((m) => m.status !== 'provisional' && !isGlobal(m));
+      const globalNotes = p.memory.filter((m) => m.status !== 'provisional' && isGlobal(m));
       let out = '';
-      if (provisional.length) out += sect('New — review', null, provisional.map(memRow).join(''));
-      out += sect('What agents remember here', { act: 'mem-add', label: '+ Add note' }, active.map(memRow).join('') || '<p class="qh-foot" style="margin-top:8px">Nothing yet — notes are learned in conversation or added here.</p>');
-      out += `<p class="qh-foot"><i class="fa-solid fa-circle-info"></i>Scope controls which agents read a note; project notes never leak outside ${esc(p.name)}. New notes learned in chat arrive as provisional until you keep them.</p>`;
+      if (provisional.length) out += sect('New — review', null, provisional.map((m) => memRow(m, true)).join(''));
+      out += sect('This project', { act: 'mem-add', label: '+ Add note' }, projNotes.map((m) => memRow(m, true)).join('') || '<p class="qh-foot" style="margin-top:8px">Nothing yet — notes are learned in conversation or added here.</p>');
+      if (globalNotes.length) out += sect('Global — applies everywhere', null, globalNotes.map((m) => memRow(m, true)).join(''));
+      out += `<p class="qh-foot"><i class="fa-solid fa-circle-info"></i>Scope controls which agents read a note; project notes never leak outside ${esc(p.name)}. Global notes apply across ALL projects — editing or forgetting one here changes it everywhere.</p>`;
       return out;
     }
     case 'artifacts':
       return sect('All artifacts', null, p.artifacts.map(artRow).join('') || '<p class="qh-foot" style="margin-top:8px">No artifacts yet.</p>');
     case 'members':
-      return sect('Members', { act: 'share', label: 'Invite →' }, p.members.map((m) =>
-        `<div class="qh-member"><span class="avatar" style="background:${m.color}">${m.init}</span><span class="nm">${esc(m.name)}</span><span class="role">${m.role}</span></div>`).join('')) +
+      return sect('Members', { act: 'share', label: 'Invite →' }, p.members.map((m, i) =>
+        `<div class="qh-member"><span class="avatar" style="background:${m.color}">${m.init}</span><span class="nm">${esc(m.name)}</span>${
+          m.role === 'Owner'
+            ? '<span class="role">Owner</span>'
+            : `<select class="f-select" data-member-role="${i}"><option ${m.role === 'Viewer' ? 'selected' : ''}>Viewer</option><option ${m.role === 'Editor' ? 'selected' : ''}>Editor</option></select>
+               <button class="iconbtn" data-act="member-remove" data-id="${i}" title="Remove from project"><i class="fa-solid fa-user-minus"></i></button>`
+        }</div>`).join('')) +
         `<p class="qh-foot"><i class="fa-solid fa-circle-info"></i>Members see everything in this project. Nesting inheritance is deliberately unanswered here (hierarchy question 3).</p>`;
     default:
       return hubOverview(p);
@@ -433,7 +453,7 @@ function renderArtifact() {
       <div class="vchips" style="margin-top:8px">${chips}</div>
     </div>
     <div class="doc-preview" id="docPreview" ${editable ? 'contenteditable="true"' : ''}>
-      <h4>${esc(a.title)} <span style="font-weight:400;color:var(--mj-text-disabled)">· v${ver.v}</span></h4>
+      <h4>${esc(a.title)} <span style="font-weight:400;color:var(--mj-text-muted)">· v${ver.v}</span></h4>
       <p>${esc(ver.note)}. ${editable ? 'You are editing — this becomes a new version on save.' : 'Preview of this version\'s content.'}</p>
       <div class="skeleton" style="width:92%"></div>
       <div class="skeleton" style="width:84%"></div>
@@ -447,6 +467,9 @@ function renderArtifact() {
 /* ---------- Chat ---------- */
 function planCardHtml(m, mi) {
   const plan = m.plan;
+  if (plan.status === 'stale') {
+    return `<div class="plan-done" style="color:var(--mj-text-muted)"><i class="fa-solid fa-circle-minus" style="color:var(--mj-text-muted)"></i>Plan not run — the conversation moved on. <span class="undo" data-act="plan-rearm">Re-plan</span></div>`;
+  }
   if (plan.status === 'approved') {
     const lines = plan.exec.map((x) =>
       `<div class="exec-line ${x.state === 'run' ? 'run' : ''}"><i class="fa-solid ${x.state === 'done' ? 'fa-check' : 'fa-circle-notch'}"></i>${esc(x.text)}</div>`).join('');
@@ -475,10 +498,12 @@ function msgHtml(m, mi) {
   if (m.who === 'user') return `<div class="msg-user">${esc(m.text)}${msgTags(m.tags)}</div>`;
   const remembered = m.remembered
     ? `<div class="remembered"><i class="fa-solid fa-check"></i>Remembered — "${esc(m.remembered)}" · Project<span class="undo" data-act="mem-undo" data-id="${mi}">Undo</span></div>` : '';
+  const memUsed = m.memoryUsed
+    ? `<div class="mem-used" data-act="open-tab-from-chat" data-id="memory" title="See what agents remember here"><i class="fa-solid fa-brain"></i>Used ${m.memoryUsed} project ${m.memoryUsed === 1 ? 'note' : 'notes'}</div>` : '';
   const skill = m.skill
     ? `<div class="remembered"><i class="fa-solid fa-wand-magic-sparkles" style="color:${m.skillColor || 'var(--mj-brand-primary)'}"></i>Skill activated — ${esc(m.skill)}</div>` : '';
   const plan = m.plan ? planCardHtml(m, mi) : '';
-  return `<div class="msg-agent ${m.thinking ? 'thinking' : ''}"><div class="who">${esc(m.who)}</div>${skill}${m.text ? esc(m.text) : ''}${plan}${remembered}</div>`;
+  return `<div class="msg-agent ${m.thinking ? 'thinking' : ''}"><div class="who">${esc(m.who)}</div>${skill}${m.text ? esc(m.text) : ''}${plan}${remembered}${memUsed}</div>`;
 }
 
 function companionHtml(p) {
@@ -515,7 +540,7 @@ function companionHtml(p) {
   }).join('');
 
   return `<aside class="companion">
-    <div class="c-sect"><div class="c-label"><span class="l">Memory</span><span class="a" data-act="open-tab-from-chat" data-id="memory">Manage</span></div>${mem || '<div class="c-mem" style="color:var(--mj-text-disabled)">Nothing yet.</div>'}</div>
+    <div class="c-sect"><div class="c-label"><span class="l">Memory</span><span class="a" data-act="open-tab-from-chat" data-id="memory">Manage</span></div>${mem || '<div class="c-mem" style="color:var(--mj-text-muted)">Nothing yet.</div>'}</div>
     ${running ? `<div class="c-sect"><div class="c-label"><span class="l">Running now</span></div>${running}</div>` : ''}
     ${arts ? `<div class="c-sect"><div class="c-label"><span class="l">Artifacts</span><span class="a" data-act="open-tab-from-chat" data-id="artifacts">All</span></div>${arts}</div>` : ''}
   </aside>`;
@@ -525,13 +550,13 @@ function chatHeader({ proj, title, temporary }) {
   const bread = proj
     ? `<span class="home" data-act="open-hub" data-id="${proj.id}"><i class="fa-solid ${proj.icon}" style="color:${proj.color}"></i> ${esc(proj.name)}</span><i class="fa-solid fa-chevron-right sep"></i>`
     : '';
-  const gauge = `<span class="chat-gauge">38%<span class="pop">
+  const gauge = `<span class="chat-gauge" tabindex="0"><span class="gring" style="--pct:38"></span>38%<span class="pop">
       <div class="kv"><span class="k">Context used</span><span class="v">382K / 1M</span></div>
       <div class="kv"><span class="k">This turn</span><span class="v">+6.1K tok</span></div>
       <hr><div class="kv"><span class="k">Run cost</span><span class="v">$0.74</span></div>
     </span></span>`;
   const companionBtn = proj
-    ? `<button class="iconbtn ${state.companion ? 'on' : ''}" data-act="toggle-companion" title="Project context panel"><i class="fa-solid fa-table-columns"></i></button>` : '';
+    ? `<button class="iconbtn ${state.companion ? 'on' : ''}" data-act="toggle-companion" aria-pressed="${state.companion}" title="Project context panel"><i class="fa-solid fa-table-columns"></i></button>` : '';
   const menuBtn = state.convId && !temporary
     ? `<button class="iconbtn" data-act="conv-menu" title="Conversation options"><i class="fa-solid fa-ellipsis"></i></button>` : '';
   return `<div class="chat-head">
@@ -543,25 +568,31 @@ function chatHeader({ proj, title, temporary }) {
 function chipHtml(c, i) {
   const style = c.color ? `style="color:${c.color};border-color:color-mix(in srgb, ${c.color} 35%, transparent)"` : '';
   return `<span class="c-chip" ${style}><i class="fa-solid ${c.icon}"></i>${esc(c.label)}
-    <i class="fa-solid fa-xmark x" data-act="chip-remove" data-id="${i}"></i></span>`;
+    <button class="x" data-act="chip-remove" data-id="${i}" title="Remove"><i class="fa-solid fa-xmark"></i></button></span>`;
 }
 
 function composerHtml(proj, inputId, placeholder, sendAct) {
   const d = draft();
-  const isRemote = composer.agent.name === 'Skip';
-  const planChip = proj && !isRemote
-    ? `<span class="chip-toggle ${state.planArmed ? 'on' : ''}" data-act="toggle-plan" title="Ask for an editable plan before this request runs — one request only">
-        <i class="fa-solid fa-list-check"></i> Plan first</span>` : '';
+  const agent = draftAgent();
+  const isRemote = agent.name === 'Skip';
+  const tempChip = state.view === 'newchat'
+    ? `<span class="chip-toggle ${d.temp ? 'on temp' : ''}" data-act="toggle-temp" title="Temporary — nothing saved, no memory read or written. Locks once the conversation starts (D20).">
+        <i class="fa-solid fa-user-secret"></i> Temporary</span>` : '';
+  const planChip = isRemote
+    ? `<span class="chip-toggle disabled" data-act="plan-delegated" title="Skip runs its own planning — plan mode is delegated to the remote agent (D15)">
+        <i class="fa-solid fa-list-check"></i> Plan first</span>`
+    : `<span class="chip-toggle ${d.planArmed ? 'on' : ''}" data-act="toggle-plan" title="Ask for an editable plan before this request runs — one request only">
+        <i class="fa-solid fa-list-check"></i> Plan first</span>`;
   const chips = d.chips.length ? `<div class="chip-row">${d.chips.map(chipHtml).join('')}</div>` : '';
   return `<div class="chat-composer"><div class="box2">
     ${chips}
     <textarea id="${inputId}" rows="1" placeholder="${esc(placeholder)}">${esc(d.text)}</textarea>
     <div class="c-bar">
       <button class="iconbtn" data-act="attach-menu" title="Attach — file or artifact"><i class="fa-solid fa-paperclip"></i></button>
-      <span class="agent-pill" data-act="agent-menu" title="Which agent handles this">
-        <i class="fa-solid ${composer.agent.icon}" style="color:${composer.agent.color}"></i> ${composer.agent.name}
+      <span class="agent-pill" data-act="agent-menu" title="Which agent handles this conversation">
+        <i class="fa-solid ${agent.icon}" style="color:${agent.color}"></i> ${agent.name}
         ${isRemote ? '<span class="remote-tag">remote</span>' : ''}</span>
-      ${planChip}
+      ${planChip}${tempChip}
       <span class="chip-toggle subtle" data-act="mode-menu" title="Response mode — model preset"><i class="fa-solid fa-sliders"></i> ${composer.mode}</span>
       <span class="grow"></span>
       <button class="iconbtn ${composer.voice ? 'listening' : ''}" data-act="mic" title="Voice input"><i class="fa-solid fa-microphone"></i></button>
@@ -574,7 +605,10 @@ function composerHtml(proj, inputId, placeholder, sendAct) {
 /* Mention triggers: @ agents+people · # records · / skills */
 function triggerItems(ch, q) {
   let items = [];
-  if (ch === '@') items = [...AGENTS.map((a) => ({ label: a.name, sub: a.desc, icon: a.icon, color: a.color, kind: 'agent' })), ...PEOPLE];
+  if (ch === '@') items = [
+    ...AGENTS.map((a) => ({ label: a.name, sub: a.desc, icon: a.icon, color: a.color, kind: 'agent', group: 'Send to' })),
+    ...PEOPLE.map((p) => ({ ...p, group: 'Reference' })),
+  ];
   if (ch === '#') items = RECORDS;
   if (ch === '/') items = SKILLS.map((s) => ({ ...s, sub: 'Skill' }));
   return items.filter((it) => it.label.toLowerCase().startsWith(q));
@@ -588,16 +622,27 @@ function detectTrigger(ta) {
   if (!m) { pop.hidden = true; popCtx = null; return; }
   const items = triggerItems(m[2], m[3].toLowerCase());
   if (!items.length) { pop.hidden = true; popCtx = null; return; }
-  popCtx = { items, trigger: m[2], typed: m[3] };
-  pop.innerHTML = items.map((it, i) =>
-    `<div class="mp-item" data-act="mp-pick" data-id="${i}">
+  popCtx = { items, trigger: m[2], typed: m[3], active: 0 };
+  renderMentionPop();
+}
+
+function renderMentionPop() {
+  const pop = $('#mentionPop');
+  if (!pop || !popCtx) return;
+  let html = '', lastGroup = null;
+  popCtx.items.forEach((it, i) => {
+    if (it.group && it.group !== lastGroup) { html += `<div class="mp-group">${it.group}</div>`; lastGroup = it.group; }
+    html += `<div class="mp-item ${i === popCtx.active ? 'active' : ''}" data-act="mp-pick" data-id="${i}">
       <i class="fa-solid ${it.icon}" ${it.color ? `style="color:${it.color}"` : ''}></i>
-      <span class="l">${esc(it.label)}</span>${it.sub ? `<span class="s">${esc(it.sub)}</span>` : ''}</div>`).join('');
+      <span class="l">${esc(it.label)}</span>${it.sub ? `<span class="s">${esc(it.sub)}</span>` : ''}</div>`;
+  });
+  pop.innerHTML = html;
   pop.hidden = false;
 }
 
 function pickMention(i) {
-  const it = popCtx && popCtx.items[i];
+  const idx = i != null ? i : (popCtx ? popCtx.active : 0);
+  const it = popCtx && popCtx.items[idx];
   const ta = $('#chatInput');
   if (!it || !ta) return;
   const upto = ta.value.slice(0, ta.selectionStart);
@@ -605,7 +650,7 @@ function pickMention(i) {
   const cut = upto.replace(/([@#/])[\w-]*$/, '');
   const d = draft();
   if (it.kind === 'agent') {
-    composer.agent = AGENTS.find((a) => a.name === it.label) || composer.agent;
+    d.agent = it.label; // routes THIS conversation — scoped to the draft, never global
   } else {
     d.chips.push({ kind: it.kind, label: it.label, icon: it.icon, color: it.color });
   }
@@ -621,7 +666,7 @@ function composerPayload() {
   const d = draft();
   const text = ta.value.trim();
   if (!text && !d.chips.length) return null;
-  const payload = { text: text || '(context attached)', tags: d.chips.slice(), agent: composer.agent };
+  const payload = { text: text || '(context attached)', tags: d.chips.slice(), agent: draftAgent(), planArmed: !!d.planArmed, temp: !!d.temp };
   delete composer.drafts[draftKey()];
   return payload;
 }
@@ -655,7 +700,7 @@ function renderNewChat() {
     <div class="chat-msgs"><div class="chat-col">
       <div class="msg-agent" style="color:var(--mj-text-muted)"><div class="who">Sage</div>${intro}</div>
     </div></div>
-    ${composerHtml(p, 'chatInput', p ? `Ask anything in ${p.name}…` : 'Message Sage…', 'new-send')}
+    ${composerHtml(p, 'chatInput', p ? `Ask anything in ${p.name} — @ agents · # records · / skills` : 'Message Sage — @ agents · # records · / skills', 'new-send')}
   </div>`;
   $('#main').innerHTML = p && state.companion ? `<div class="chat-wrap">${chatEl}${companionHtml(p)}</div>` : chatEl;
   $('#chatInput').focus();
@@ -665,23 +710,23 @@ function renderNewChat() {
 const REMEMBER_RX = /\b(always|never|prefer|from now on|remember)\b/i;
 
 function normalizePayload(payload) {
-  return typeof payload === 'string' ? { text: payload, tags: [], agent: AGENTS[0] } : payload;
+  return typeof payload === 'string' ? { text: payload, tags: [], agent: AGENTS[0], planArmed: false } : payload;
 }
 
 function agentRespond(conv, p, payload) {
-  const { text, tags = [], agent = composer.agent } = normalizePayload(payload);
+  const { text, tags = [], agent = AGENTS[0], planArmed = false } = normalizePayload(payload);
   const who = agent.name;
   const skillTag = tags.find((t) => t.kind === 'skill');
 
   if (who === 'Skip') {
-    conv.messages.push({ who, text: `Handled remotely — I run my own loop, so plan mode and skills are delegated to my side (D15). ${p ? `I received ${p.name}'s context bag: description, ${p.memory.length} notes, recent artifacts.` : 'No project context attached.'}` });
+    conv.messages.push({ who, text: `Handled remotely — I run my own loop, so plan mode and skills are delegated to my side (D15). ${p ? `I received ${p.name}'s context bag: description and recent artifacts (project notes join the bag in P1.9).` : 'No project context attached.'}` });
     return;
   }
-  if (state.planArmed && p) {
+  if (planArmed) {
     conv.messages.push({ who, text: '', plan: { status: 'pending', steps: [
-      'Pull renewal cohorts and current pipeline state',
-      'Draft the analysis with project memory applied',
-      'Save the output to this project\'s artifacts',
+      'Pull the relevant data and current state',
+      p ? 'Draft the analysis with project memory applied' : 'Draft the analysis from org-wide data',
+      p ? 'Save the output to this project\'s artifacts' : 'Return the result here',
     ], exec: [] } });
     return;
   }
@@ -695,9 +740,21 @@ function agentRespond(conv, p, payload) {
   }
   const recordTags = tags.filter((t) => t.kind === 'record');
   const recordNote = recordTags.length ? ` I've loaded ${recordTags.map((t) => t.label).join(' and ')} as context.` : '';
-  const msg = { who, text: `On it — and since we're in ${p ? p.name : 'no project'}, ${p ? 'I\'m using this project\'s memory and will file outputs here.' : 'I\'m answering from org-wide data only.'}${recordNote}` };
+  const msg = { who, text: `On it — and since we're in ${p ? p.name : 'no project'}, ${p ? 'outputs will be filed here.' : 'I\'m answering from org-wide data only.'}${recordNote}` };
+  if (p && p.memory.length) msg.memoryUsed = Math.min(2, p.memory.length);
   if (skillTag) { msg.skill = skillTag.label; msg.skillColor = skillTag.color; }
   conv.messages.push(msg);
+}
+
+function startTemporaryChat(payload) {
+  DATA.temporary.messages = [{ who: 'user', text: payload.text, tags: payload.tags }, { who: 'Sage', text: '…', thinking: true }];
+  Object.assign(state, { view: 'chat', convId: 'tmp', projectId: null });
+  render();
+  setTimeout(() => {
+    DATA.temporary.messages.pop();
+    DATA.temporary.messages.push({ who: 'Sage', text: 'Answering off the record — nothing saved, no memory read or written.' });
+    render();
+  }, 800);
 }
 
 function createConversation(p, payload) {
@@ -724,6 +781,7 @@ function appendChatMessage(payload) {
   if (!found) return;
   const { conv, proj, temporary } = found;
   const norm = normalizePayload(payload);
+  for (const m of conv.messages) if (m.plan && m.plan.status === 'pending') m.plan.status = 'stale';
   conv.messages.push({ who: 'user', text: norm.text, tags: norm.tags });
   conv.messages.push({ who: norm.agent ? norm.agent.name : 'Sage', text: '…', thinking: true });
   render();
@@ -739,10 +797,9 @@ function approvePlan(mi) {
   const found = findConv(state.convId);
   const m = found.conv.messages[mi];
   m.plan.status = 'approved';
-  state.planArmed = false; // per-request: approval disarms (B5 semantics)
   m.plan.exec = m.plan.steps.map((s) => ({ text: s, state: 'wait' }));
   render();
-  toast('Plan approved — "Plan first" disarmed (per-request)');
+  toast('Plan approved — running');
   let i = 0;
   const tick = () => {
     if (i > 0) m.plan.exec[i - 1].state = 'done';
@@ -803,9 +860,9 @@ const MENU_ACTIONS = {
   'proj-desc': () => {
     const p = project(state.projectId);
     const desc = $('#hubDesc');
-    desc.innerHTML = `<input class="f-input" style="font-size:12.5px" value="${esc(p.desc)}">`;
+    desc.innerHTML = `<input class="f-input" style="font-size:12.5px" value="${esc(p.desc)}" placeholder="One line on what this project is for — agents read it">`;
     const input = $('input', desc); input.focus();
-    const commit = () => { p.desc = input.value.trim() || p.desc; render(); toast('Description updated — agents read this'); };
+    const commit = () => { p.desc = input.value.trim(); render(); if (p.desc) toast('Description updated — agents read this'); };
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') render(); });
     input.addEventListener('blur', commit);
   },
@@ -821,8 +878,28 @@ const MENU_ACTIONS = {
         render(); toast('Project deleted — conversations moved to Ungrouped');
       });
   },
+  'proj-edit': () => openProjectModal(state.projectId),
   'conv-move': () => openMove(),
   'conv-pin': () => toast('Pinned (prototype stub)'),
+  'conv-rename': () => {
+    const found = findConv(state.convId);
+    if (!found) return;
+    const titleEl = $('.chat-title');
+    titleEl.innerHTML = `<input class="f-input" style="font-size:12.5px;font-weight:600" value="${esc(found.conv.title)}">`;
+    const input = $('input', titleEl); input.focus(); input.select();
+    const commit = () => { found.conv.title = input.value.trim() || found.conv.title; render(); toast('Renamed'); };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') render(); });
+    input.addEventListener('blur', commit);
+  },
+  'conv-delete': () => {
+    const found = findConv(state.convId);
+    if (!found) return;
+    openConfirm(`Delete "${found.conv.title}"?`, 'The conversation and its messages are removed. Memory it created stays with the project (notes belong to the project, not the conversation).', () => {
+      detachConv(state.convId);
+      Object.assign(state, { view: 'hub', convId: null });
+      render(); toast('Conversation deleted — its notes remain in project memory');
+    });
+  },
   'attach-upload': () => {
     const d = draft(); const ta = $('#chatInput'); if (ta) d.text = ta.value;
     d.chips.push({ kind: 'file', label: FAKE_FILES[composer.fileIdx++ % FAKE_FILES.length], icon: 'fa-file' });
@@ -836,10 +913,11 @@ const MENU_ACTIONS = {
     render();
   },
   'set-agent': (name) => {
-    composer.agent = AGENTS.find((a) => a.name === name) || composer.agent;
-    const ta = $('#chatInput'); if (ta) draft().text = ta.value;
+    const d = draft();
+    d.agent = name; // per-conversation, never global
+    const ta = $('#chatInput'); if (ta) d.text = ta.value;
     render();
-    if (name === 'Skip') toast('Remote agent — plan mode and skills are delegated to it (D15)');
+    if (name === 'Skip') toast('Remote agent for THIS conversation — plan mode and skills are delegated (D15)');
   },
   'set-mode': (mode) => {
     composer.mode = mode;
@@ -850,12 +928,36 @@ const MENU_ACTIONS = {
 };
 
 /* ---------- Modals ---------- */
-function openModal(which) { $('#scrim').classList.add('on'); $('#' + which).hidden = false; }
+function openProjectModal(editId) {
+  const p = editId ? project(editId) : null;
+  pmSel.editing = editId;
+  pmSel.icon = p ? p.icon : 'fa-folder';
+  pmSel.color = p ? p.color : '';
+  $('#pmTitle').textContent = p ? 'Edit project' : 'New project';
+  $('#pmCreate').textContent = p ? 'Save' : 'Create project';
+  openModal('projectModal');
+  $('#pmName').value = p ? p.name : '';
+  $('#pmDesc').value = p ? p.desc : '';
+  document.querySelectorAll('#pmIcons .pm-ic').forEach((b) => b.classList.toggle('sel', b.dataset.id === pmSel.icon));
+  document.querySelectorAll('#pmColors .pm-sw').forEach((b) => b.classList.toggle('sel', b.dataset.id === pmSel.color));
+  setTimeout(() => $('#pmName').focus(), 50);
+}
+
+let modalOpener = null;
+function openModal(which) {
+  modalOpener = document.activeElement;
+  $('#scrim').classList.add('on');
+  const m = $('#' + which);
+  m.hidden = false;
+  const f = m.querySelector('input, button'); if (f) f.focus();
+}
 function closeModals() {
   $('#scrim').classList.remove('on');
   for (const id of ['shareModal', 'projectModal', 'moveModal', 'confirmModal']) $('#' + id).hidden = true;
   state.moveConvPending = null;
   hideMenu();
+  if (modalOpener && document.contains(modalOpener)) modalOpener.focus();
+  modalOpener = null;
 }
 
 let confirmFn = null;
@@ -873,8 +975,13 @@ function renderShare() {
   const a = isArtifact ? artifact(p, shareContext.artifactId) : null;
   $('#shareTitle').textContent = isArtifact ? `Share "${a.title}"` : 'Share project';
 
-  const rows = p.members.map((m) =>
-    `<div class="share-row"><span class="avatar" style="background:${m.color}">${m.init}</span><span class="nm">${esc(m.name)}</span><span class="role">${m.role}</span></div>`).join('');
+  const rows = p.members.map((m, i) =>
+    `<div class="share-row"><span class="avatar" style="background:${m.color}">${m.init}</span><span class="nm">${esc(m.name)}</span>${
+      m.role === 'Owner'
+        ? '<span class="role">Owner</span>'
+        : `<select class="f-select" data-member-role="${i}"><option ${m.role === 'Viewer' ? 'selected' : ''}>Viewer</option><option ${m.role === 'Editor' ? 'selected' : ''}>Editor</option></select>
+           <button class="iconbtn" data-act="member-remove" data-id="${i}" title="Remove from project"><i class="fa-solid fa-user-minus"></i></button>`
+    }</div>`).join('');
   const add = `<div class="share-add">
       <input class="f-input" id="shareInput" placeholder="Name or email…">
       <select class="f-select" id="shareRole"><option>Viewer</option><option>Editor</option></select>
@@ -884,7 +991,7 @@ function renderShare() {
   if (isArtifact) {
     pub = state.canPublish
       ? `<div class="pub-sect">
-          <div class="pub-row"><span class="tgl ${a.publicLink ? 'on' : ''}" data-act="pub-toggle"></span>
+          <div class="pub-row"><button class="tgl ${a.publicLink ? 'on' : ''}" role="switch" aria-checked="${!!a.publicLink}" data-act="pub-toggle"></button>
             <span class="t">Public link</span><span class="s">anyone with the link · read-only</span></div>
           ${a.publicLink ? `<div class="pub-url"><input class="f-input" readonly value="https://app.example.org/a/${a.id}?t=mj_r3ad0nly…"><button class="btn secondary sm" data-act="pub-copy">Copy</button></div>
           <p class="share-note">Server-minted, single-artifact scope, read-only (Magic Links). Revoke by turning off.</p>` : ''}
@@ -953,11 +1060,18 @@ function detachConv(id) {
 function createProject() {
   const pendingConvId = state.moveConvPending;
   const name = $('#pmName').value.trim() || 'Untitled project';
+  if (pmSel.editing) {
+    const ep = project(pmSel.editing);
+    if (ep) { ep.name = name; ep.desc = $('#pmDesc').value.trim(); ep.icon = pmSel.icon; ep.color = pmSel.color || ep.color; }
+    pmSel.editing = null;
+    closeModals(); render(); toast('Project updated');
+    return;
+  }
   const colors = ['#B794F6', '#68D391', '#F6AD55', '#FC8181', '#5CC0ED'];
   const p = {
-    id: 'p' + Date.now(), name, icon: 'fa-folder', color: colors[DATA.projects.length % colors.length],
-    desc: $('#pmDesc').value.trim() || 'No description yet — agents work better with one.',
-    members: [{ init: 'AM', color: '#0076B6', name: 'Alex Morgan', role: 'Owner' }],
+    id: 'p' + Date.now(), name, icon: pmSel.icon, color: pmSel.color || colors[DATA.projects.length % colors.length],
+    desc: $('#pmDesc').value.trim(),
+    members: [{ init: 'AM', color: 'var(--mj-brand-primary)', name: 'Alex Morgan', role: 'Owner' }],
     memory: [], conversations: [], artifacts: [], workflows: [],
   };
   DATA.projects.push(p);
@@ -1025,7 +1139,7 @@ const JUMPS = {
   'persona-new':      () => { setPersona('firstrun'); return 'noRender'; },
   'hub-grown':        () => Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'overview', convId: null }),
   'hub-v1':           () => Object.assign(state, { view: 'hub', projectId: 'website', tab: 'overview', convId: null }),
-  'hub-empty':        () => { closeModals(); openModal('projectModal'); $('#pmName').value = ''; $('#pmDesc').value = ''; setTimeout(() => $('#pmName').focus(), 50); return 'noRender'; },
+  'hub-empty':        () => { closeModals(); openProjectModal(null); return 'noRender'; },
   'tab-conversations':() => Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'conversations' }),
   'tab-memory':       () => Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'memory' }),
   'tab-artifacts':    () => Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'artifacts' }),
@@ -1035,7 +1149,7 @@ const JUMPS = {
   'chat-ungrouped':   () => Object.assign(state, { view: 'chat', convId: 'u1' }),
   'chat-companion':   () => Object.assign(state, { view: 'chat', convId: 'c1', projectId: 'renewal', companion: true, railMode: 'context' }),
   'chat-temporary':   () => { DATA.temporary.messages = []; Object.assign(state, { view: 'chat', convId: 'tmp' }); },
-  'flow-plan':        () => { Object.assign(state, { view: 'newchat', projectId: 'renewal', planArmed: true }); render(); $('#chatInput').value = 'Compare renewal rates by chapter and flag outliers'; toast('Plan armed for THIS request — send it'); return 'noRender'; },
+  'flow-plan':        () => { Object.assign(state, { view: 'newchat', projectId: 'renewal' }); draft().planArmed = true; render(); const ta = $('#chatInput'); ta.value = 'Compare renewal rates by chapter and flag outliers'; draft().text = ta.value; toast('Plan armed for THIS request — send it'); return 'noRender'; },
   'flow-remember':    () => { Object.assign(state, { view: 'chat', convId: 'c1', projectId: 'renewal' }); render(); $('#chatInput').value = 'Always loop in Dana on pipeline summaries'; toast('Send it — watch the quiet "Remembered" moment'); return 'noRender'; },
   'artifact-page':    () => Object.assign(state, { view: 'artifact', projectId: 'renewal', artifactId: 'a1', artifactVersion: null, editingArtifact: false }),
   'flow-grow':        () => { Object.assign(state, { view: 'hub', projectId: 'website', tab: 'overview', convId: null }); render(); openShare('project'); setTimeout(() => { const i = $('#shareInput'); if (i) { i.value = 'Dana Kim'; i.focus(); } }, 60); return 'noRender'; },
@@ -1043,7 +1157,7 @@ const JUMPS = {
   'micro-memory':     () => { Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'memory' }); render(); toast('Hover a memory row — pencil edits inline, trash forgets'); return 'noRender'; },
   'proj-menu':        () => { Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'overview' }); render(); const b = $('[data-act="proj-menu"]'); if (b) b.click(); return 'noRender'; },
   'modal-share':      () => { Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'overview' }); render(); openShare('project'); return 'noRender'; },
-  'modal-project':    () => { openModal('projectModal'); return 'noRender'; },
+  'modal-project':    () => { openProjectModal(null); return 'noRender'; },
   'modal-move':       () => { Object.assign(state, { view: 'chat', convId: 'c2', projectId: 'renewal' }); render(); openMove(); return 'noRender'; },
   'comp-mention':     () => { Object.assign(state, { view: 'chat', convId: 'c1', projectId: 'renewal' }); render(); insertTrigger('@'); toast('@ mentions — agents route the message, people get referenced'); return 'noRender'; },
   'comp-record':      () => { Object.assign(state, { view: 'chat', convId: 'c1', projectId: 'renewal' }); render(); insertTrigger('#'); toast('# attaches a record as context'); return 'noRender'; },
@@ -1089,15 +1203,23 @@ document.addEventListener('click', (e) => {
     case 'open-hub': Object.assign(state, { view: 'hub', projectId: id, tab: 'overview', convId: null }); state.openProjects.add(id); render(); break;
     case 'open-tab': Object.assign(state, { view: 'hub', tab: id }); render(); break;
     case 'open-tab-from-chat': Object.assign(state, { view: 'hub', tab: id, convId: null }); render(); break;
-    case 'open-conv': { const f = findConv(id); Object.assign(state, { view: 'chat', convId: id }); if (f && f.proj) state.projectId = f.proj.id; render(); break; }
+    case 'open-conv': { const f = findConv(id); Object.assign(state, { view: 'chat', convId: id });
+      state.projectId = f && f.proj ? f.proj.id : null; render(); break; }
     case 'tab': state.tab = id; render(); break;
     case 'new-chat': state.view = 'newchat'; render(); break;
-    case 'new-project': openModal('projectModal'); $('#pmName').value = ''; $('#pmDesc').value = ''; setTimeout(() => $('#pmName').focus(), 50); break;
+    case 'new-project': openProjectModal(null); break;
+    case 'pm-icon': pmSel.icon = id; document.querySelectorAll('#pmIcons .pm-ic').forEach((b) => b.classList.toggle('sel', b.dataset.id === id)); break;
+    case 'pm-color': pmSel.color = id; document.querySelectorAll('#pmColors .pm-sw').forEach((b) => b.classList.toggle('sel', b.dataset.id === id)); break;
 
     /* composer */
     case 'toggle-plan': { const d = draft(); d.text = $('#chatInput') ? $('#chatInput').value : d.text;
-      state.planArmed = !state.planArmed; render(); if (state.planArmed) toast('Plan first — armed for this request only'); break; }
-    case 'new-send': { const pl = composerPayload(); if (pl) createConversation(project(state.projectId), pl); break; }
+      d.planArmed = !d.planArmed; render(); if (d.planArmed) toast('Plan first — armed for this request only'); break; }
+    case 'plan-delegated': toast('Skip runs its own planning — plan mode is delegated (D15)'); break;
+    case 'plan-rearm': { const d = draft(); d.planArmed = true; render(); toast('Plan re-armed for your next message'); break; }
+    case 'new-send': { const pl = composerPayload(); if (!pl) break;
+      if (pl.temp) startTemporaryChat(pl); else createConversation(project(state.projectId), pl); break; }
+    case 'toggle-temp': { const d = draft(); d.temp = !d.temp; const ta = $('#chatInput'); if (ta) d.text = ta.value; render();
+      if (d.temp) toast('Temporary — locks once the conversation starts (D20)'); break; }
     case 'chat-send': { const pl = composerPayload(); if (pl) appendChatMessage(pl); break; }
     case 'fr-send': { const v = $('#frInput').value.trim(); if (v) createConversation(null, v); break; }
     case 'fr-suggest': createConversation(null, STARTERS[Number(id)].text); break;
@@ -1133,7 +1255,11 @@ document.addEventListener('click', (e) => {
     /* memory */
     case 'mem-edit': startMemoryEdit(id); break;
     case 'mem-add': addMemoryNote(); break;
-    case 'mem-forget': p().memory = p().memory.filter((m) => m.id !== id); render(); toast('Forgotten'); break;
+    case 'mem-forget': { const proj4 = p(); const note = proj4.memory.find((m) => m.id === id);
+      const doForget = () => { proj4.memory = proj4.memory.filter((m) => m.id !== id); render(); toast('Forgotten'); };
+      if (note && note.scope.includes('global')) openConfirm('Forget everywhere?', `"${note.text}" is a global note — forgetting it here removes it from ALL projects and conversations.`, doForget);
+      else doForget();
+      break; }
     case 'mem-keep': { const m = p().memory.find((m) => m.id === id); if (m) m.status = 'active'; render(); toast('Kept — now active project memory'); break; }
     case 'mem-undo': { const f = findConv(state.convId); const msg = f.conv.messages[Number(id)];
       if (msg && msg.memId && f.proj) { f.proj.memory = f.proj.memory.filter((m) => m.id !== msg.memId); delete msg.remembered; }
@@ -1162,32 +1288,53 @@ document.addEventListener('click', (e) => {
 
     /* share */
     case 'share': openShare('project'); break;
+    case 'member-remove': { const proj3 = p(); const m = proj3.members[Number(id)];
+      proj3.members.splice(Number(id), 1);
+      if (!$('#shareModal').hidden) renderShare();
+      render(); toast(`${m.name} removed${!isGrown(proj3) ? ' — the hub went back to v1 density' : ''}`); break; }
     case 'share-invite': inviteMember(); break;
     case 'share-done': closeModals(); break;
 
     /* menus */
+    case 'proj-desc-add': MENU_ACTIONS['proj-desc'](); break;
     case 'proj-menu': showMenu([
-        { act: 'proj-rename', icon: 'fa-pen', label: 'Rename project' },
+        { act: 'proj-edit', icon: 'fa-pen', label: 'Edit project…' },
+        { act: 'proj-rename', icon: 'fa-i-cursor', label: 'Rename inline' },
         { act: 'proj-desc', icon: 'fa-align-left', label: 'Edit description' },
         '-',
         { act: 'proj-delete', icon: 'fa-trash', label: 'Delete project', danger: true },
       ], el); break;
     case 'conv-menu': showMenu([
+        { act: 'conv-rename', icon: 'fa-pen', label: 'Rename conversation' },
         { act: 'conv-move', icon: 'fa-folder-open', label: 'Move to project…' },
         { act: 'conv-pin', icon: 'fa-thumbtack', label: 'Pin conversation' },
+        '-',
+        { act: 'conv-delete', icon: 'fa-trash', label: 'Delete conversation', danger: true },
       ], el); break;
     case 'move-to': moveConversation(id); break;
     case 'move-new-project': {
       const convId = state.convId;
       closeModals();
-      state.moveConvPending = convId;
-      openModal('projectModal');
-      $('#pmName').value = ''; $('#pmDesc').value = '';
-      setTimeout(() => $('#pmName').focus(), 50);
+      openProjectModal(null);
+      state.moveConvPending = convId; // set AFTER closeModals (which clears it)
       break;
     }
 
     case 'noop': toast('Out of prototype scope'); break;
+  }
+});
+
+document.addEventListener('change', (e) => {
+  if (e.target.matches('[data-member-role]')) {
+    const proj5 = project(state.projectId);
+    proj5.members[Number(e.target.dataset.memberRole)].role = e.target.value;
+    toast('Role updated');
+    if (!$('#shareModal').hidden) renderShare(); else render();
+  }
+  if (e.target.matches('[data-mem-scope]')) {
+    const proj6 = project(state.projectId);
+    const note = proj6.memory.find((m) => m.id === e.target.dataset.memScope);
+    if (note) { note.scope = e.target.value; toast('Scope updated'); render(); }
   }
 });
 
@@ -1203,7 +1350,7 @@ document.addEventListener('input', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.isComposing) {
     if (e.target.id === 'chatInput') {
-      if (popCtx) { e.preventDefault(); pickMention(0); return; }
+      if (popCtx) { e.preventDefault(); pickMention(); return; }
       if (!e.shiftKey) {
         e.preventDefault();
         const act = state.view === 'newchat' ? 'new-send' : 'chat-send';
@@ -1215,6 +1362,12 @@ document.addEventListener('keydown', (e) => {
     if (e.target.id === 'frInput') { const b = $('[data-act="fr-send"]'); if (b) b.click(); }
     if (e.target.id === 'pmName' || e.target.id === 'pmDesc') $('#pmCreate').click();
     if (e.target.id === 'shareInput') { const b = $('[data-act="share-invite"]'); if (b) b.click(); }
+  }
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && popCtx && e.target.id === 'chatInput') {
+    e.preventDefault();
+    popCtx.active = (popCtx.active + (e.key === 'ArrowDown' ? 1 : popCtx.items.length - 1)) % popCtx.items.length;
+    renderMentionPop();
+    return;
   }
   if (e.key === 'Escape') {
     if (popCtx) { const mp = $('#mentionPop'); if (mp) mp.hidden = true; popCtx = null; return; }
@@ -1237,8 +1390,10 @@ $('#privToggle').addEventListener('click', () => {
   toast(state.canPublish ? 'Privilege granted — publish appears' : 'Privilege revoked — publish is hidden, not disabled');
 });
 $('#themeBtn').addEventListener('click', () => {
+  // First click commits an explicit theme (opposite of what's showing); after that it flips.
   const r = document.documentElement;
-  r.dataset.theme = r.dataset.theme === 'dark' ? '' : 'dark';
+  const dark = r.dataset.theme === 'dark' || (!r.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+  r.dataset.theme = dark ? 'light' : 'dark';
 });
 
 render();

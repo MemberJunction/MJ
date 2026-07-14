@@ -50,6 +50,8 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mj-status-warning-text: #b45309;
+  --topnav-bg: #1e293b;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -79,6 +81,8 @@
     --mj-status-error-bg: rgba(239, 68, 68, 0.15);
     --mj-status-info-bg: rgba(59, 130, 246, 0.15);
     --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+    --mj-status-warning-text: #fbbf24;
+    --topnav-bg: #0b1220;
   }
 }
 
@@ -100,7 +104,7 @@ body { margin: 0; font-family: var(--font); color: var(--mj-text-primary); backg
 .variant-body { padding: 18px; flex: 1; }
 .variant-notes { padding: 12px 18px; background: var(--mj-bg-surface-card); border-top: 1px solid var(--mj-border-default); font-size: 13px; color: var(--mj-text-secondary); }
 .variant-notes strong { color: var(--mj-text-primary); }
-.variant-notes .tradeoff { color: var(--mj-status-warning); }
+.variant-notes .tradeoff { color: var(--mj-status-warning-text); font-weight: 600; }
 
 .btn { font: inherit; font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: var(--radius-sm); border: 1px solid transparent; cursor: pointer; background: var(--mj-brand-primary); color: #fff; display: inline-flex; align-items: center; gap: 7px; }
 .btn:hover { background: var(--mj-brand-primary-hover); }
@@ -112,7 +116,7 @@ body { margin: 0; font-family: var(--font); color: var(--mj-text-primary); backg
 
 /* ---------- The app frame (identical device to projects.html) ---------- */
 .pj-frame { height: 700px; border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); overflow: hidden; display: flex; flex-direction: column; background: var(--mj-bg-surface-card); box-shadow: var(--shadow-md); }
-.pj-topnav { height: 44px; flex: none; background: var(--mj-text-primary); display: flex; align-items: center; gap: 4px; padding: 0 14px; }
+.pj-topnav { height: 44px; flex: none; background: var(--topnav-bg); display: flex; align-items: center; gap: 4px; padding: 0 14px; }
 .pj-topnav .logo { color: color-mix(in srgb, var(--mj-text-inverse) 92%, transparent); font-weight: 800; font-size: 13px; letter-spacing: .02em; margin-right: 14px; display: flex; align-items: center; gap: 8px; }
 .pj-topnav .tab { color: color-mix(in srgb, var(--mj-text-inverse) 70%, transparent); font-size: 13px; font-weight: 600; padding: 0 12px; height: 44px; display: inline-flex; align-items: center; border-bottom: 3px solid transparent; cursor: pointer; }
 .pj-topnav .tab.active { color: var(--mj-text-inverse); border-bottom-color: var(--mj-brand-accent); }
@@ -173,7 +177,7 @@ body { margin: 0; font-family: var(--font); color: var(--mj-text-primary); backg
 .qh-sect { margin-top: 38px; }
 .qh-sect:first-of-type { margin-top: 34px; }
 .qh-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
-.qh-label .l { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--mj-text-disabled); }
+.qh-label .l { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--mj-text-muted); }
 .qh-label .a { font-size: 12px; font-weight: 600; color: var(--mj-text-muted); cursor: pointer; text-decoration: none; }
 .qh-label .a:hover { color: var(--mj-text-link); }
 
@@ -184,7 +188,7 @@ body { margin: 0; font-family: var(--font); color: var(--mj-text-primary); backg
 .qh-conv .tt .t { font-size: 14px; font-weight: 600; color: var(--mj-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qh-conv:hover .tt .t { color: var(--mj-brand-primary); }
 .qh-conv .tt .s { font-size: 12.5px; color: var(--mj-text-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.qh-conv .w { font-size: 12px; color: var(--mj-text-disabled); flex: none; }
+.qh-conv .w { font-size: 12px; color: var(--mj-text-muted); flex: none; }
 .qh-conv .continue { flex: none; font-size: 12.5px; font-weight: 600; color: var(--mj-brand-primary); }
 .qh-conv .continue i { font-size: 10px; margin-left: 3px; }
 
@@ -192,7 +196,7 @@ body { margin: 0; font-family: var(--font); color: var(--mj-text-primary); backg
 .qh-mem { display: flex; align-items: baseline; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--mj-border-subtle); }
 .qh-mem:last-of-type { border-bottom: 0; }
 .qh-mem .m { font-size: 13.5px; color: var(--mj-text-primary); min-width: 0; flex: 1; }
-.qh-mem .scope { flex: none; font-size: 11.5px; color: var(--mj-text-disabled); }
+.qh-mem .scope { flex: none; font-size: 11.5px; color: var(--mj-text-muted); }
 .qh-mem .ops { flex: none; display: none; gap: 2px; }
 .qh-mem:hover .ops, .qh-mem.demo-hover .ops { display: inline-flex; }
 .qh-mem.demo-hover { background: var(--mj-bg-surface-hover); margin: 0 -10px; padding-left: 10px; padding-right: 10px; border-radius: var(--radius-sm); }
@@ -210,13 +214,13 @@ body { margin: 0; font-family: var(--font); color: var(--mj-text-primary); backg
 /* Artifact rows: name + muted meta. Icon small and monochrome. */
 .qh-art { display: flex; align-items: baseline; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--mj-border-subtle); cursor: pointer; }
 .qh-art:last-of-type { border-bottom: 0; }
-.qh-art i { font-size: 12px; color: var(--mj-text-disabled); flex: none; transform: translateY(0.5px); }
+.qh-art i { font-size: 12px; color: var(--mj-text-muted); flex: none; transform: translateY(0.5px); }
 .qh-art .t { font-size: 13.5px; font-weight: 600; color: var(--mj-text-primary); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qh-art:hover .t { color: var(--mj-brand-primary); }
-.qh-art .meta { font-size: 12px; color: var(--mj-text-disabled); flex: none; }
+.qh-art .meta { font-size: 12px; color: var(--mj-text-muted); flex: none; }
 
 /* Density contract footnote — plain text, no box */
-.qh-foot { margin-top: 44px; font-size: 12px; color: var(--mj-text-disabled); }
+.qh-foot { margin-top: 44px; font-size: 12px; color: var(--mj-text-muted); }
 .qh-foot i { margin-right: 6px; }
 
 /* Annotation callouts under the frame */

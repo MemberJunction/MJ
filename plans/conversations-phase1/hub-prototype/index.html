@@ -14,8 +14,8 @@
   <header class="topnav">
     <span class="logo"><i class="fa-solid fa-hexagon-nodes"></i> MemberJunction</span>
     <span class="tab active">Conversations</span>
-    <span class="tab">Collections</span>
-    <span class="tab">Tasks</span>
+    <span class="tab" data-act="noop">Collections</span>
+    <span class="tab" data-act="noop">Tasks</span>
     <span class="grow"></span>
     <button class="topbtn" id="themeBtn" title="Toggle light / dark"><i class="fa-solid fa-circle-half-stroke"></i></button>
   </header>
@@ -23,13 +23,13 @@
   <div class="body">
     <!-- ══════════ NAVY SIDEBAR ══════════ -->
     <aside class="side">
-      <div class="side-head"><div class="side-search"><i class="fa-solid fa-magnifying-glass"></i> Search conversations…</div></div>
+      <div class="side-head"><div class="side-search" data-act="noop"><i class="fa-solid fa-magnifying-glass"></i> Search conversations…</div></div>
       <div class="side-newrow">
         <button class="side-new" id="newConvBtn"><i class="fa-solid fa-plus"></i> New Conversation</button>
         <button class="side-ghost" id="newTempBtn" title="Temporary chat — nothing saved, memory off"><i class="fa-solid fa-user-secret"></i></button>
       </div>
       <div class="side-scroll" id="sideTree"><!-- rendered --></div>
-      <div class="side-foot"><i class="fa-solid fa-clock-rotate-left"></i> Routines <span class="grow"></span><i class="fa-solid fa-chevron-up"></i></div>
+      <div class="side-foot" data-act="noop"><i class="fa-solid fa-clock-rotate-left"></i> Routines <span class="grow"></span><i class="fa-solid fa-chevron-up"></i></div>
     </aside>
 
     <!-- ══════════ MAIN ══════════ -->
@@ -40,18 +40,35 @@
 <!-- ══════════ MODALS ══════════ -->
 <div class="scrim" id="scrim"></div>
 
-<div class="modal" id="shareModal" hidden>
+<div class="modal" id="shareModal" role="dialog" aria-modal="true" aria-label="Share" hidden>
   <div class="modal-head" id="shareTitle">Share project</div>
   <div class="modal-body" id="shareBody"><!-- rendered --></div>
 </div>
 
-<div class="modal" id="projectModal" hidden>
-  <div class="modal-head">New project</div>
+<div class="modal" id="projectModal" role="dialog" aria-modal="true" aria-label="New project" hidden>
+  <div class="modal-head" id="pmTitle">New project</div>
   <div class="modal-body">
     <label class="f-label" for="pmName">Name</label>
     <input class="f-input" id="pmName" placeholder="e.g. Spring Gala 2027">
     <label class="f-label" for="pmDesc">Description <span class="opt">optional — agents read this</span></label>
     <input class="f-input" id="pmDesc" placeholder="One line on what this project is for">
+    <label class="f-label">Icon &amp; color <span class="opt">optional — defaults are fine</span></label>
+    <div class="pm-row" id="pmIcons">
+      <button class="pm-ic sel" data-act="pm-icon" data-id="fa-folder" title="Folder"><i class="fa-solid fa-folder"></i></button>
+      <button class="pm-ic" data-act="pm-icon" data-id="fa-arrows-rotate" title="Renewal"><i class="fa-solid fa-arrows-rotate"></i></button>
+      <button class="pm-ic" data-act="pm-icon" data-id="fa-calendar-days" title="Event"><i class="fa-solid fa-calendar-days"></i></button>
+      <button class="pm-ic" data-act="pm-icon" data-id="fa-chart-line" title="Reporting"><i class="fa-solid fa-chart-line"></i></button>
+      <button class="pm-ic" data-act="pm-icon" data-id="fa-globe" title="Web"><i class="fa-solid fa-globe"></i></button>
+      <button class="pm-ic" data-act="pm-icon" data-id="fa-bullhorn" title="Campaign"><i class="fa-solid fa-bullhorn"></i></button>
+    </div>
+    <div class="pm-row" id="pmColors">
+      <button class="pm-sw sel" data-act="pm-color" data-id="" title="Auto" style="background:conic-gradient(#B794F6,#68D391,#F6AD55,#5CC0ED,#B794F6)"></button>
+      <button class="pm-sw" data-act="pm-color" data-id="#0076B6" style="background:#0076B6"></button>
+      <button class="pm-sw" data-act="pm-color" data-id="#B794F6" style="background:#B794F6"></button>
+      <button class="pm-sw" data-act="pm-color" data-id="#68D391" style="background:#68D391"></button>
+      <button class="pm-sw" data-act="pm-color" data-id="#F6AD55" style="background:#F6AD55"></button>
+      <button class="pm-sw" data-act="pm-color" data-id="#FC8181" style="background:#FC8181"></button>
+    </div>
     <div class="modal-actions">
       <button class="btn" id="pmCreate">Create project</button>
       <button class="btn secondary" id="pmCancel">Cancel</button>
@@ -59,12 +76,12 @@
   </div>
 </div>
 
-<div class="modal" id="moveModal" hidden>
+<div class="modal" id="moveModal" role="dialog" aria-modal="true" aria-label="Move conversation" hidden>
   <div class="modal-head">Move conversation</div>
   <div class="modal-body" id="moveBody"><!-- rendered --></div>
 </div>
 
-<div class="modal" id="confirmModal" hidden>
+<div class="modal" id="confirmModal" role="dialog" aria-modal="true" aria-label="Confirm" hidden>
   <div class="modal-head" id="confirmTitle">Are you sure?</div>
   <div class="modal-body">
     <p class="confirm-text" id="confirmText"></p>
@@ -75,7 +92,7 @@
   </div>
 </div>
 
-<div class="menu" id="menu" hidden></div>
+<div class="menu" id="menu" role="menu" hidden></div>
 <div class="toast-wrap" id="toastWrap"></div>
 
 <!-- ══════════ STATE MAP (the pick-it-apart panel) ══════════ -->
@@ -124,7 +141,7 @@
     <div class="sm-item" data-jump="modal-project"><span class="n">M2</span> New project modal</div>
     <div class="sm-item" data-jump="modal-move"><span class="n">M3</span> Move conversation between projects</div>
     <div class="sm-toggle" id="privToggle">
-      <span class="tgl on" id="privTgl"></span>
+      <button class="tgl on" id="privTgl" role="switch" aria-checked="true"></button>
       <span>demo: "Can Publish Artifacts Publicly" privilege — gates the public link (D11)</span>
     </div>
     <div class="sm-foot">Then break it: what's missing, what's wrong, what's still noisy.</div>
