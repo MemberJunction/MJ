@@ -24,11 +24,18 @@ import { spawn } from 'child_process';
 const DIR = 'packages/MJServer/integration-test-scripts';
 const VERBOSE = process.argv.includes('--verbose') || process.env.INTEGRATION_VERBOSE === '1';
 
-/** Suites grouped by tier — the table + the header reflect these groups; execution runs top-to-bottom. */
-const GROUPS: { Tier: string; Gate: string; Scripts: string[] }[] = [
+/**
+ * Suites grouped by tier — the table + the header reflect these groups; execution runs top-to-bottom.
+ * `Enabled` is the tier's env gate: a disabled tier is reported SKIP without spawning any of its
+ * scripts (every script in a gated-off tier would self-skip anyway, so launching them just burns the
+ * per-script cold-boot cost). The always-on tiers still spawn and let each script decide (the client
+ * suite self-skips when MJAPI is unreachable).
+ */
+const GROUPS: { Tier: string; Gate: string; Enabled: boolean; Scripts: string[] }[] = [
     {
         Tier: 'Deterministic',
         Gate: 'server · credential-free · blocking gate',
+        Enabled: true,
         Scripts: [
             'server-cache-tests.ts',
             'runquery-cache-tests.ts',
@@ -51,11 +58,13 @@ const GROUPS: { Tier: string; Gate: string; Scripts: string[] }[] = [
     {
         Tier: 'Deterministic · client',
         Gate: 'needs a live MJAPI (skips if unreachable)',
+        Enabled: true,
         Scripts: ['remote-op-wire-progress-tests.ts'],
     },
     {
         Tier: 'Predictive Studio flows',
         Gate: process.env.PS_INTEGRATION === '1' ? 'PS_INTEGRATION=1 · Python sidecar' : 'PS_INTEGRATION not set → skip',
+        Enabled: process.env.PS_INTEGRATION === '1',
         Scripts: [
             'ps-inproc-scored-query.ts',
             'ps-inproc-scheduled-scoring.ts',
@@ -72,6 +81,7 @@ const GROUPS: { Tier: string; Gate: string; Scripts: string[] }[] = [
     {
         Tier: 'Live Model',
         Gate: process.env.RUN_AGENT_TESTS === '1' ? 'RUN_AGENT_TESTS=1 · real model calls' : 'RUN_AGENT_TESTS not set → skip',
+        Enabled: process.env.RUN_AGENT_TESTS === '1',
         Scripts: [
             'prompt-runner-tests.ts',
             'agent-runner-tests.ts',
@@ -156,6 +166,12 @@ function runSuite(script: string, tier: string, index: number, count: number): P
     });
 }
 
+/** Report a suite as SKIP without spawning it — used when its tier's env gate is off. */
+function skipSuite(script: string, tier: string): SuiteResult {
+    console.log(`  ${ICON.skip} ${LABEL.skip} ${bold(script.replace(/-tests?\.ts$/, ''))} ${dim('(tier gate off — not run)')}`);
+    return { Script: script, Tier: tier, Code: 0, Status: 'skip', DurationMs: 0 };
+}
+
 async function main(): Promise<void> {
     const total = GROUPS.reduce((a, g) => a + g.Scripts.length, 0);
     const db = `${process.env.DB_DATABASE ?? '?'} @ ${process.env.DB_HOST ?? 'localhost'}:${process.env.DB_PORT ?? '1433'}`;
@@ -173,7 +189,8 @@ async function main(): Promise<void> {
     let index = 0;
     for (const g of GROUPS) {
         for (const script of g.Scripts) {
-            results.push(await runSuite(script, g.Tier, ++index, total));
+            index++;
+            results.push(g.Enabled ? await runSuite(script, g.Tier, index, total) : skipSuite(script, g.Tier));
         }
     }
 

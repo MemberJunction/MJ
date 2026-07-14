@@ -36,7 +36,15 @@ async function reachable(url: string, apiKey: string): Promise<boolean> {
 
 async function main(): Promise<void> {
     LoadEnv();
-    const client = LoadClientConfig();
+    // A server-less box (e.g. the CI integration lane) has no MJ_API_KEY — LoadClientConfig throws.
+    // That's a SKIP condition, not a setup error: without a key/URL there is no MJAPI to test against.
+    let client: ReturnType<typeof LoadClientConfig>;
+    try {
+        client = LoadClientConfig();
+    } catch (error) {
+        console.log(`remote-op-wire-progress-tests: SKIPPED — client config unavailable (${error instanceof Error ? error.message : String(error)}). Set MJ_API_KEY + start MJAPI to run the over-the-wire RO-3 test.`);
+        process.exit(0);
+    }
     if (!(await reachable(client.Url, client.MJAPIKey))) {
         console.log(`remote-op-wire-progress-tests: SKIPPED — MJAPI not reachable at ${client.Url} (start MJAPI to run the over-the-wire RO-3 test).`);
         process.exit(0);
