@@ -687,7 +687,7 @@ import {
     VisualizeResourceComponent,
 } from '@memberjunction/ng-dashboards';
 
-// @memberjunction/ng-explorer-core (9 classes)
+// @memberjunction/ng-explorer-core (13 classes)
 import {
     ArtifactResource,
     ChatConversationsResource,
@@ -695,6 +695,10 @@ import {
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
+    OmnibarAgentProvider,
+    OmnibarCommandProvider,
+    OmnibarRecordProvider,
+    OmnibarSearchProvider,
     QueryResource,
     SearchResultsResource,
     UserViewResource,
@@ -1308,6 +1312,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
+    OmnibarAgentProvider,
+    OmnibarCommandProvider,
+    OmnibarRecordProvider,
+    OmnibarSearchProvider,
     QueryResource,
     SearchResultsResource,
     UserViewResource,
@@ -1317,7 +1325,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 605;
+export const CLASS_REGISTRATIONS_COUNT = 609;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -780,7 +780,7 @@ async function tryCreateReadOnlyPostgresProvider(): Promise<DatabaseProviderBase
       false,
     );
 
-    const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool };
+    const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (share primary provider's PG pool with the read-only provider)
     if (primaryProvider?.DatabaseConnection) {
       await roProvider.ConfigWithSharedPool(roConfig, primaryProvider.DatabaseConnection);
     } else {

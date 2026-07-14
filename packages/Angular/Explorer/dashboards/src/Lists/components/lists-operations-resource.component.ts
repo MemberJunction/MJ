@@ -2145,19 +2145,24 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     // RunViews's typed overload doesn't express tuple positions, so we
     // run them as two parallel single-typed RunView calls — same number
-    // of round trips, cleaner typing.
+    // of round trips, cleaner typing. MaxRows is a defensive cap on the
+    // operand pickers (P8) — a user with more than 500 lists/views can
+    // still find operands via the picker's search filters.
+    const PICKER_MAX_ROWS = 500;
     const [listResult, viewResult] = await Promise.all([
       rv.RunView<MJListEntity>({
         EntityName: 'MJ: Lists',
         ExtraFilter: `UserID = '${md.CurrentUser?.ID}'`,
         OrderBy: 'Name',
         ResultType: 'entity_object',
+        MaxRows: PICKER_MAX_ROWS,
       }),
       rv.RunView<MJUserViewEntity>({
         EntityName: 'MJ: User Views',
         ExtraFilter: `UserID = '${md.CurrentUser?.ID}'`,
         OrderBy: 'Name',
         ResultType: 'entity_object',
+        MaxRows: PICKER_MAX_ROWS,
       }),
     ]);
 

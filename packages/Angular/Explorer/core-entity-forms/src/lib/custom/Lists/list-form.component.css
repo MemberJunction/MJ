@@ -663,6 +663,20 @@
     padding: 12px 16px;
     background: var(--mj-bg-surface-card);
     border-top: 1px solid var(--mj-border-default);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.items-pager {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.items-pager .page-label {
+    font-size: 13px;
+    color: var(--mj-text-secondary);
 }
 
 .items-count {

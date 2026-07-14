@@ -1,0 +1,115 @@
+@if (IsOpen) {
+  <div class="omnibar-overlay" (click)="Close()"></div>
+  <div class="omnibar-palette" role="dialog" aria-modal="true" aria-label="Command palette"
+    (keydown)="OnPaletteKeydown($event)">
+
+    <div class="ob-input-row">
+      <span class="ob-lead" [class.ob-lead--trigger]="ActiveTriggerChar.length > 0">
+        @if (ActiveTriggerChar.length > 0) {
+          <b>{{ ActiveTriggerChar }}</b>
+        } @else {
+          <i class="fa-solid fa-magnifying-glass"></i>
+        }
+      </span>
+      <input #paletteInput class="ob-input" type="text" autocomplete="off" spellcheck="false"
+        role="combobox" aria-controls="ob-listbox" aria-autocomplete="list"
+        [attr.aria-expanded]="HasOptions"
+        [attr.aria-activedescendant]="ActiveDescendantId"
+        [placeholder]="ActivePlaceholder"
+        [ngModel]="Query" (ngModelChange)="OnQueryChange($event)"
+        (keydown)="OnInputKeydown($event)" />
+      <span class="ob-mode-badge">{{ ActiveModeLabel }}</span>
+      <kbd class="ob-kbd">esc</kbd>
+      <button type="button" class="ob-close" aria-label="Close" title="Close" (click)="Close()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    @if (ShowScopes && Scopes.length > 0) {
+      <div class="ob-scopes">
+        <button type="button" class="ob-scope" [class.ob-scope--on]="SelectedScopeIDs.length === 0"
+          (click)="ClearScopes()">All sources</button>
+        @for (scope of Scopes; track scope.ID) {
+          <button type="button" class="ob-scope" [class.ob-scope--on]="IsScopeSelected(scope.ID)"
+            (click)="ToggleScope(scope.ID)">{{ scope.Name }}</button>
+        }
+      </div>
+    }
+
+    <div class="ob-body">
+      @if (IsLoading) {
+        <div class="ob-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Searching…</div>
+      } @else if (Rows.length === 0 && Query.length === 0) {
+        <div class="ob-hintbar">
+          @for (hint of TriggerHints; track hint.Char) {
+            <button type="button" class="ob-hint-chip" (click)="SeedTrigger(hint.Char)">
+              <b>{{ hint.Char }}</b><span>{{ hint.Label }}</span>
+            </button>
+          }
+        </div>
+        @if (RecentRows.length > 0) {
+          <div class="ob-group-label" role="presentation">Recent</div>
+          <div id="ob-listbox" role="listbox" aria-label="Suggestions">
+          @for (row of RecentRows; track row.Suggestion.id; let i = $index) {
+            <div class="ob-row" role="option" [attr.id]="'ob-opt-' + (RecentBaseIndex + i)"
+              [attr.tabindex]="RecentBaseIndex + i === SelectedIndex ? 0 : -1"
+              [attr.aria-selected]="RecentBaseIndex + i === SelectedIndex"
+              [class.ob-row--sel]="RecentBaseIndex + i === SelectedIndex"
+              (focus)="SelectedIndex = RecentBaseIndex + i"
+              (keydown)="OnRowKeydown($event, row.Suggestion)"
+              (mouseenter)="SelectedIndex = RecentBaseIndex + i" (click)="Execute(row.Suggestion)">
+              <span class="ob-ric"><i [class]="row.Suggestion.icon || 'fa-solid fa-clock-rotate-left'"></i></span>
+              <span class="ob-rmain">
+                <span class="ob-rname">{{ row.Suggestion.displayName }}</span>
+                <span class="ob-rsub">{{ row.Suggestion.description }}</span>
+              </span>
+              <span class="ob-raux"><span class="ob-rtype">{{ row.Suggestion.type }}</span></span>
+            </div>
+          }
+          </div>
+        }
+      } @else if (Rows.length === 0) {
+        <div class="ob-empty">No matches — press <kbd class="ob-kbd">↵</kbd> to search everything for “{{ EffectiveQuery }}”.</div>
+      } @else {
+        <div id="ob-listbox" role="listbox" aria-label="Suggestions">
+        @for (row of Rows; track row.Suggestion.id; let i = $index) {
+          @if (row.GroupLabel) {
+            <div class="ob-group-label" role="presentation">{{ row.GroupLabel }}</div>
+          }
+          <div class="ob-row" role="option" [attr.id]="'ob-opt-' + i"
+            [attr.tabindex]="i === SelectedIndex ? 0 : -1"
+            [attr.aria-selected]="i === SelectedIndex"
+            [class.ob-row--sel]="i === SelectedIndex"
+            (focus)="SelectedIndex = i"
+            (keydown)="OnRowKeydown($event, row.Suggestion)"
+            (mouseenter)="SelectedIndex = i" (click)="Execute(row.Suggestion)">
+            <span class="ob-ric"><i [class]="row.Suggestion.icon || 'fa-solid fa-circle'"></i></span>
+            <span class="ob-rmain">
+              <span class="ob-rname">{{ row.Suggestion.displayName }}</span>
+              @if (row.Suggestion.description) {
+                <span class="ob-rsub">{{ row.Suggestion.description }}</span>
+              }
+            </span>
+            <span class="ob-raux">
+              @if (row.ScorePercent != null) {
+                <span class="ob-score"><i [style.width.%]="row.ScorePercent"></i></span>
+              }
+              <span class="ob-rtype">{{ row.Suggestion.type }}</span>
+              <span class="ob-go">open <kbd class="ob-kbd">↵</kbd></span>
+            </span>
+          </div>
+        }
+        </div>
+      }
+    </div>
+
+    <div class="ob-foot">
+      <span class="ob-k"><kbd class="ob-kbd">↑</kbd><kbd class="ob-kbd">↓</kbd> navigate</span>
+      <span class="ob-k"><kbd class="ob-kbd">↵</kbd> open</span>
+      <button type="button" class="ob-settings" aria-label="Command Palette settings"
+        title="Command Palette settings" (click)="RequestSettings()">
+        <i class="fa-solid fa-gear"></i>
+      </button>
+    </div>
+  </div>
+}

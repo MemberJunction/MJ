@@ -902,6 +902,16 @@ export class NavigationService implements OnDestroy {
         this.workspaceManager.SetActiveTab(appTabs[0].id);
       }
     }
+
+    // Apply requested query params on the DEFAULT path too (previously only the
+    // navItemName branch did) — e.g. the omnibar's '@agent' → Chat pre-addressing.
+    // Synchronous, so params are present before a cached resource component reattaches.
+    if (queryParams && Object.keys(queryParams).length > 0) {
+      const targetTabId = this.workspaceManager.GetActiveTabId();
+      if (targetTabId) {
+        this.applyQueryParamsToTab(targetTabId, queryParams);
+      }
+    }
   }
 
   /**

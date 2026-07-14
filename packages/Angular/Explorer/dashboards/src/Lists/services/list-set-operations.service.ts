@@ -153,6 +153,25 @@ const VENN_COLORS = [
   providedIn: 'root'
 })
 export class ListSetOperationsService {
+  /**
+   * Defensive cap on membership rows loaded per operand query (P8). Set
+   * operations are in-memory over full member sets; beyond this size the
+   * result would be wrong-by-truncation, so we cap the load and warn —
+   * callers can check {@link WasLastLoadTruncated} to surface it.
+   */
+  public static readonly MAX_OPERAND_RECORDS = 50000;
+
+  /** True when the most recent membership load hit MAX_OPERAND_RECORDS — results may be incomplete. */
+  public WasLastLoadTruncated = false;
+
+  /** Applies the operand cap: flags/warns when a membership query filled the cap. */
+  private trackTruncation(rowsReturned: number, context: string): void {
+    if (rowsReturned >= ListSetOperationsService.MAX_OPERAND_RECORDS) {
+      this.WasLastLoadTruncated = true;
+      console.warn(`[ListSetOperations] ${context} hit the ${ListSetOperationsService.MAX_OPERAND_RECORDS}-row operand cap — set-operation results may be incomplete.`);
+    }
+  }
+
   private _provider: IMetadataProvider | null = null;
   /** Set the metadata provider this service should use. Components should call this after injection. */
   public set Provider(value: IMetadataProvider | null) {
@@ -185,12 +204,15 @@ export class ListSetOperationsService {
       const listIdFilter = listIds.map(id => `'${id}'`).join(',');
 
       const rv = RunView.FromMetadataProvider(this.Provider);
+      this.WasLastLoadTruncated = false;
       const result = await rv.RunView<{ ListID: string; RecordID: string }>({
         EntityName: 'MJ: List Details',
         ExtraFilter: `ListID IN (${listIdFilter})`,
         Fields: ['ListID', 'RecordID'],
-        ResultType: 'simple'
+        ResultType: 'simple',
+        MaxRows: ListSetOperationsService.MAX_OPERAND_RECORDS
       });
+      this.trackTruncation(result.Results?.length ?? 0, 'calculateVennData');
 
       // Build sets per list
       const setsMap = new Map<string, Set<string>>();
@@ -483,7 +505,9 @@ export class ListSetOperationsService {
       ExtraFilter: `ListID IN (${listIdFilter})`,
       Fields: ['ListID', 'RecordID'],
       ResultType: 'simple',
+      MaxRows: ListSetOperationsService.MAX_OPERAND_RECORDS,
     });
+    this.trackTruncation(result.Results?.length ?? 0, 'loadMissingLists');
 
     for (const id of listIds) {
       this.listDetailsCache.set(OperandCacheKey('list', id), new Set<string>());
@@ -527,7 +551,9 @@ export class ListSetOperationsService {
       ViewID: operand.id,
       Fields: pkFields,
       ResultType: 'simple',
+      MaxRows: ListSetOperationsService.MAX_OPERAND_RECORDS,
     });
+    this.trackTruncation(result.Results?.length ?? 0, `loadSingleView(${operand.id})`);
 
     const set = new Set<string>();
     if (result.Success && result.Results) {
@@ -604,8 +630,10 @@ export class ListSetOperationsService {
       EntityName: 'MJ: List Details',
       ExtraFilter: `ListID IN (${listIdFilter})`,
       Fields: ['ListID', 'RecordID'],
-      ResultType: 'simple'
+      ResultType: 'simple',
+      MaxRows: ListSetOperationsService.MAX_OPERAND_RECORDS
     });
+    this.trackTruncation(result.Results?.length ?? 0, 'ensureListsLoaded');
 
     // Initialize sets for missing lists
     for (const id of missingIds) {
