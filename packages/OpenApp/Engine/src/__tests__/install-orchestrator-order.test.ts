@@ -55,6 +55,8 @@ vi.mock('../install/config-manager.js', () => ({
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),
+    AddExcludeSchema: vi.fn(() => ({ Success: true })),
+    RemoveExcludeSchema: vi.fn(() => ({ Success: true })),
 }));
 vi.mock('../install/history-recorder.js', () => ({
     RecordAppInstallation: vi.fn(),

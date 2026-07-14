@@ -72,8 +72,14 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     /** Placeholder text for the search input */
     @Input() Placeholder = 'Search across all your knowledge...';
 
-    /** Maximum number of results to fetch */
-    @Input() MaxResults = 25;
+    /**
+     * Maximum number of results to fetch and display. Deliberately small — the
+     * overlay is a quick-jump surface; "See all results" hands off to the full
+     * Search Results workspace for anything deeper. 8 matches the omnibar
+     * palette's RESULT count (it fetches 9 rows = 8 results + its see-all row;
+     * this overlay's see-all is a footer button, not a row).
+     */
+    @Input() MaxResults = 8;
 
     /** Whether the overlay is currently visible */
     private _IsOpen = false;
@@ -116,6 +122,28 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
      */
     @Input() EnableStreaming = false;
 
+    /**
+     * When false, the overlay does NOT claim the global Ctrl/Cmd+K chord. For hosts
+     * (e.g. the Explorer shell) that own that shortcut themselves and open the
+     * overlay programmatically — two listeners on the same chord would double-toggle.
+     * Escape/arrow handling while open is unaffected.
+     */
+    @Input() EnableGlobalShortcut = true;
+
+    /**
+     * Optional promo strip pinned to the overlay's bottom edge — a host-supplied
+     * nudge (e.g. Explorer advertising its command palette). The component is
+     * deliberately ignorant of WHAT is being promoted; the host provides the
+     * copy and handles both outcomes.
+     */
+    @Input() ShowPromo = false;
+
+    /** Promo copy (one sentence). Required when ShowPromo is true. */
+    @Input() PromoText = '';
+
+    /** Label for the promo's accept action. */
+    @Input() PromoActionLabel = 'Turn on';
+
     // --- Outputs ---
 
     @Output() IsOpenChange = new EventEmitter<boolean>();
@@ -123,6 +151,17 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     @Output() FilterChanged = new EventEmitter<SearchFilterChangeEvent>();
     @Output() SearchExecuted = new EventEmitter<SearchExecutedEvent>();
     @Output() AgentCtaClicked = new EventEmitter<string>();
+    /**
+     * Emitted when the user clicks "See all results" — carries the current query.
+     * Hosts (e.g. the Explorer shell) open the full Search Results workspace,
+     * which has scopes, relevance controls, and richer result actions than this
+     * capped quick-jump overlay. The overlay closes itself after emitting.
+     */
+    @Output() SeeAllRequested = new EventEmitter<string>();
+    /** Promo accept — carries the current query so the host can hand it off. */
+    @Output() PromoAccepted = new EventEmitter<string>();
+    /** Promo dismissed — the host should persist this and stop showing it. */
+    @Output() PromoDismissed = new EventEmitter<void>();
 
     // --- Component State ---
 
@@ -148,9 +187,19 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     /** Active stream subscription so we can cancel on a new search or destroy. */
     private currentStream: Subscription | null = null;
 
+    /** Element focused before the overlay opened — restored on close (a11y). */
+    private previousFocus: HTMLElement | null = null;
+
     /** All results flattened for keyboard navigation */
     public get FlatResults(): SearchResultItem[] {
         return this.AllResults;
+    }
+
+    /** id of the highlighted option, announced via aria-activedescendant. */
+    public get ActiveDescendantId(): string | null {
+        return this.HighlightedIndex >= 0 && this.HighlightedIndex < this.FlatResults.length
+            ? `so-opt-${this.HighlightedIndex}`
+            : null;
     }
 
     ngOnInit(): void {
@@ -169,7 +218,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
 
     @HostListener('document:keydown', ['$event'])
     HandleGlobalKeydown(event: KeyboardEvent): void {
-        if (this.isToggleShortcut(event)) {
+        if (this.EnableGlobalShortcut && this.isToggleShortcut(event)) {
             event.preventDefault();
             this.ToggleOverlay();
             return;
@@ -253,6 +302,27 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
         this.Close();
     }
 
+    /** Promo accept: emit the current query and close — the host takes over. */
+    public OnPromoAccept(): void {
+        this.PromoAccepted.emit(this.Query.trim());
+        this.Close();
+    }
+
+    /** Promo dismiss: the host persists the dismissal; hide it immediately. */
+    public OnPromoDismiss(): void {
+        this.ShowPromo = false;
+        this.PromoDismissed.emit();
+    }
+
+    /** Handle clicking "See all results" — hand off to the full Search workspace */
+    public OnSeeAllClick(): void {
+        const query = this.Query.trim();
+        if (query.length > 0) {
+            this.SeeAllRequested.emit(query);
+        }
+        this.Close();
+    }
+
     /** Handle clicking the backdrop to close */
     public OnBackdropClick(): void {
         this.Close();
@@ -296,16 +366,33 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
                 event.preventDefault();
                 this.moveHighlight(-1);
                 break;
-            case 'Enter':
+            case 'Enter': {
+                // Only claim Enter when it belongs to the combobox model (typing in
+                // the input / a focused result row). A focused BUTTON (close,
+                // see-all, filter chip, promo) must keep its native Enter
+                // activation — preventDefault here at document level would
+                // silently swallow it, or worse, open the highlighted result.
+                const active = document.activeElement as HTMLElement | null;
+                const inCombobox = active === this.searchInputRef?.nativeElement
+                    || (active?.classList.contains('result-item') ?? false);
+                if (!inCombobox) {
+                    return;
+                }
                 event.preventDefault();
                 this.SelectHighlighted();
                 break;
+            }
         }
     }
 
     private moveHighlight(direction: number): void {
         const maxIndex = this.FlatResults.length - 1;
         if (maxIndex < 0) return;
+
+        // If a result row currently holds DOM focus (roving tabindex), keep focus
+        // travelling with the highlight; from the input, only the highlight moves.
+        const rowHadFocus = document.activeElement instanceof HTMLElement
+            && document.activeElement.classList.contains('result-item');
 
         this.HighlightedIndex += direction;
         if (this.HighlightedIndex < 0) {
@@ -314,6 +401,81 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
             this.HighlightedIndex = 0;
         }
         this.cdr.detectChanges();
+
+        // Keyboard-driven moves keep the highlighted row visible. Mouse hover sets
+        // HighlightedIndex directly in the template and deliberately does NOT
+        // scroll — auto-scrolling under the pointer fights the user's hand.
+        const row = document.getElementById(`so-opt-${this.HighlightedIndex}`);
+        row?.scrollIntoView({ block: 'nearest' });
+        if (rowHadFocus) {
+            row?.focus();
+        }
+    }
+
+    /**
+     * Tab behavior inside the dialog:
+     * - On a result row, Tab / Shift+Tab step through the RESULTS themselves
+     *   (mirrors ArrowDown/Up) until walking off either end of the list — then
+     *   focus continues to the footer actions / back to the earlier controls.
+     * - Everywhere else, Tab wraps within the dialog (focus trap): input → close
+     *   → filter chips → results → footer actions → back to the input.
+     * Escape is handled by the document-level keydown.
+     */
+    public OnSpotlightKeydown(event: KeyboardEvent): void {
+        if (event.key !== 'Tab') {
+            return;
+        }
+        const activeEl = document.activeElement as HTMLElement | null;
+        if (activeEl?.classList.contains('result-item')) {
+            const last = this.FlatResults.length - 1;
+            if (!event.shiftKey && this.HighlightedIndex < last) {
+                event.preventDefault();
+                this.moveHighlight(1); // row has focus, so focus travels with it
+                return;
+            }
+            if (event.shiftKey && this.HighlightedIndex > 0) {
+                event.preventDefault();
+                this.moveHighlight(-1);
+                return;
+            }
+            // At either end: fall through so Tab leaves the list naturally.
+        }
+        const root = (event.currentTarget as HTMLElement) ?? null;
+        if (!root) {
+            return;
+        }
+        const focusables = Array.from(
+            root.querySelectorAll<HTMLElement>('input, button, .result-item[tabindex="0"], .search-recent-item[tabindex="0"]')
+        ).filter((el) => el.offsetParent !== null);
+        if (focusables.length === 0) {
+            return;
+        }
+        const active = document.activeElement as HTMLElement | null;
+        if (!event.shiftKey && active === focusables[focusables.length - 1]) {
+            event.preventDefault();
+            focusables[0].focus();
+        } else if (event.shiftKey && active === focusables[0]) {
+            event.preventDefault();
+            focusables[focusables.length - 1].focus();
+        }
+    }
+
+    /**
+     * Recent-search row activated (click or Enter/Space). Re-runs the search AND
+     * refocuses the input — the activated row leaves the DOM when recents are
+     * replaced by results, which would otherwise drop focus to <body>.
+     */
+    public OnRecentSelect(query: string): void {
+        this.OnQueryInput(query);
+        this.searchInputRef?.nativeElement?.focus();
+    }
+
+    /** Recent-search rows are keyboard-activatable (Enter/Space = click). */
+    public OnRecentKeydown(event: KeyboardEvent, query: string): void {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            this.OnRecentSelect(query);
+        }
     }
 
     private setupSearchDebounce(): void {
@@ -473,6 +635,9 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     }
 
     private onOverlayOpened(): void {
+        // Remember what had focus so Close() can hand it back (a11y: the overlay
+        // is a modal dialog — focus must return to the summoning control).
+        this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         // Focus input after view updates
         Promise.resolve().then(() => {
             this.searchInputRef?.nativeElement?.focus();
@@ -482,6 +647,10 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
 
     private onOverlayClosed(): void {
         this.HighlightedIndex = -1;
+        if (this.previousFocus?.isConnected) {
+            this.previousFocus.focus();
+        }
+        this.previousFocus = null;
     }
 
     /** Check if any filters are active (used by template) */
