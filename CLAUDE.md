@@ -881,11 +881,12 @@ protected generateSingleOperation(operation: Operation): string {
 - **ALWAYS** use `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` to find correct entity names
 - Entity names are in the `@RegisterClass` decorator JSDoc comments
 - Examples:
-  - `AIPromptEntity` → `"AI Prompts"`
-  - `AIAgentEntity` → `"AI Agents"`
-  - `AIModelEntity` → `"AI Models"`
-  - `AIPromptRunEntity` → `"MJ: AI Prompt Runs"` (newer entities use "MJ: " prefix)
-  - `AIAgentRunEntity` → `"MJ: AI Agent Runs"`
+  - `MJAIPromptEntity` → `"MJ: AI Prompts"`
+  - `MJAIAgentEntity` → `"MJ: AI Agents"`
+  - `MJAIModelEntity` → `"MJ: AI Models"`
+  - `MJAIPromptRunEntity` → `"MJ: AI Prompt Runs"`
+  - `MJAIAgentRunEntity` → `"MJ: AI Agent Runs"`
+- **As of v5.0, ALL core entities use the `MJ: ` prefix** (and `MJ*` class names) — an unprefixed name like `'AI Agents'` no longer resolves and throws `Entity AI Agents not found in metadata`
 
 ### Using Metadata Class
 - Create a single instance: `const md = new Metadata()`
@@ -954,9 +955,9 @@ function gateCacheWrite(name: string, provider?: IMetadataProvider) {
 
 ### 🚨 CRITICAL: Entity Naming Convention Warning
 
-**ALWAYS** use the correct entity names with the "MJ: " prefix where required. To prevent naming collisions on client systems, all new core entities use the "MJ: " prefix, while older entities do not.
+**ALWAYS** use the correct entity names with the "MJ: " prefix. To prevent naming collisions on client systems, ALL core entities use the "MJ: " prefix as of v5.0 — pre-v5 unprefixed names (e.g. `'AI Agents'`) no longer resolve in metadata.
 
-#### Core Entities with "MJ: " Prefix (MUST use full name):
+#### Examples of Core Entities with "MJ: " Prefix (MUST use full name):
 - **AI Entities**: `MJ: AI Agent Prompts`, `MJ: AI Agent Run Steps`, `MJ: AI Agent Runs`, `MJ: AI Agent Types`, `MJ: AI Configuration Params`, `MJ: AI Configurations`, `MJ: AI Model Costs`, `MJ: AI Model Price Types`, `MJ: AI Model Price Unit Types`, `MJ: AI Model Vendors`, `MJ: AI Prompt Models`, `MJ: AI Prompt Runs`, `MJ: AI Vendor Type Definitions`, `MJ: AI Vendor Types`, `MJ: AI Vendors`
 - **Artifact Entities**: `MJ: Artifact Types`, `MJ: Conversation Artifact Permissions`, `MJ: Conversation Artifact Versions`, `MJ: Conversation Artifacts`
 - **Dashboard Entities**: `MJ: Dashboard User Preferences`, `MJ: Dashboard User States`
@@ -965,12 +966,12 @@ function gateCacheWrite(name: string, provider?: IMetadataProvider) {
 #### Common Mistakes to Avoid:
 ```typescript
 // ❌ WRONG - Missing "MJ: " prefix
-const agentRun = await md.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', contextUser);
-const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('AI Agent Prompts', contextUser);
+const agentRun = await md.GetEntityObject<MJAIAgentRunEntity>('AI Agent Runs', contextUser);
+const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('AI Agent Prompts', contextUser);
 
 // ✅ CORRECT - Full entity name with "MJ: " prefix
-const agentRun = await md.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
-const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts', contextUser);
+const agentRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
+const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts', contextUser);
 ```
 
 **Always verify entity names** by checking `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` or the `@RegisterClass` decorator JSDoc comments.
