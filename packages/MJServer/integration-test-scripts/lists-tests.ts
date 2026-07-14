@@ -95,7 +95,7 @@ async function drain(source: ListSource, startCursor: ProcessCursor | undefined,
 async function main(): Promise<void> {
     const { user } = await bootstrapAI();
     const suite = new TestRunner('Lists live integration (deterministic — ListSource keyset pagination)');
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: integration-test harness runs as a single-provider script
 
     const entResult = await new RunView().RunView(
         { EntityName: 'MJ: Entities', ResultType: 'simple', MaxRows: 1 }, user,
