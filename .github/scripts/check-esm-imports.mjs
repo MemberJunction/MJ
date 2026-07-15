@@ -183,12 +183,28 @@ function expandStarTarget(target, pkgDir) {
     return walkFiles(scanRoot).filter((f) => f.startsWith(boundary) && f.endsWith(suffix));
 }
 
-/** Recursively collect absolute paths of regular files under dir (directories/symlinked dirs excluded). */
+/**
+ * Recursively collect absolute paths of regular files under dir. Directories and
+ * symlinked dirs are not descended (Dirent.isDirectory() is false for symlinks, so no
+ * cycles). `node_modules` and dot-directories are skipped — an export target never maps
+ * into a package's own node_modules, and walking it under a broad wildcard (`./*`) would
+ * spawn a child import per dependency file. A non-directory dir (malformed export whose
+ * scanRoot is a file) degrades to `[]` instead of throwing ENOTDIR and reddening CI.
+ */
 function walkFiles(dir, out = []) {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const full = join(dir, entry.name);
-        if (entry.isDirectory()) walkFiles(full, out);
-        else if (entry.isFile()) out.push(full);
+    let entries;
+    try {
+        entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+        return out; // ENOTDIR / EACCES on a malformed or unreadable scanRoot → skip, don't crash
+    }
+    for (const entry of entries) {
+        if (entry.isDirectory()) {
+            if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+            walkFiles(join(dir, entry.name), out);
+        } else if (entry.isFile()) {
+            out.push(join(dir, entry.name));
+        }
     }
     return out;
 }

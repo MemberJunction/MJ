@@ -3,7 +3,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { resolveEntryPoint, checkPackage, classifyFailure, sweep } from '../check-esm-imports.mjs';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -244,6 +244,48 @@ describe('checkPackage', () => {
             rmSync(dir, { recursive: true, force: true });
         }
         expect(result.status).toBe('OWN_DIST_MISSING_EXT');
+    });
+
+    it('wildcard expansion never descends into the package own node_modules (no resource blowup)', async () => {
+        // A broad "./*" makes scanRoot the package root; walkFiles must skip node_modules,
+        // or CI spawns a child import per dependency file. Assert the node_modules module is
+        // never imported (its import-time marker is never written).
+        const dir = join(FIXTURES, 'wc-nm-pkg');
+        const marker = join(dir, 'nm-imported.marker');
+        try {
+            mkdirSync(join(dir, 'node_modules', 'dep'), { recursive: true });
+            writeFileSync(
+                join(dir, 'package.json'),
+                JSON.stringify({ name: 'wc-nm', type: 'module', exports: { './*': './*.js' } })
+            );
+            writeFileSync(join(dir, 'index.js'), 'export const a = 1;\n');
+            writeFileSync(
+                join(dir, 'node_modules', 'dep', 'side.js'),
+                `import { writeFileSync as w } from 'node:fs'; w(${JSON.stringify(marker)}, 'x'); export const y = 1;\n`
+            );
+            await checkPackage(dir);
+            expect(existsSync(marker)).toBe(false); // node_modules file must not be import-checked
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('does not crash when a wildcard scanRoot resolves to a file (ENOTDIR degrades to skip)', async () => {
+        const dir = join(FIXTURES, 'wc-enotdir-pkg');
+        let result;
+        try {
+            mkdirSync(dir, { recursive: true });
+            writeFileSync(
+                join(dir, 'package.json'),
+                JSON.stringify({ name: 'wc-enotdir', type: 'module', main: 'index.js', exports: { './sub/*': './thing/*.js' } })
+            );
+            writeFileSync(join(dir, 'index.js'), 'export const a = 1;\n');
+            writeFileSync(join(dir, 'thing'), 'not a directory\n'); // scanRoot "thing" is a FILE
+            result = await checkPackage(dir); // must not throw ENOTDIR
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+        expect(result.status).toBe('OK'); // root is clean; the malformed wildcard is skipped, not fatal
     });
 
     it('classifies a module that throws at import as OTHER_ERR (non-gating), not a bug', async () => {
