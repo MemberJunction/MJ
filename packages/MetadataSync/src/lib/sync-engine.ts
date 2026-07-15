@@ -1206,8 +1206,9 @@ export class SyncEngine {
         
         // Replace the {@include} reference with the processed content.
         // Use a replacement FUNCTION so the included content is inserted verbatim —
-        // a string replacement would interpret its `$`-sequences ($$, $&, $`, $', $n)
-        // as special patterns and mangle the content.
+        // a string replacement would interpret its special `$`-sequences ($$, $&,
+        // $`, $') as replacement patterns and mangle the content. (Only those four
+        // are special for a string search; $n stays literal.)
         processedContent = processedContent.replace(fullMatch, () => processedInclude);
       } catch (error) {
         // Enhance error message with context
