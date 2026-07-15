@@ -1,5 +1,7 @@
 # @memberjunction/predictive-studio-core
 
+## 5.48.0
+
 ## 5.47.0
 
 ### Minor Changes

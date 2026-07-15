@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/cli
 
+## 5.48.0
+
+### Patch Changes
+
+- c798b90: Declare `@memberjunction/cli` as a devDependency of the MJExplorer and MJAPI apps so their `prebuild` invocation of `mj codegen manifest` always runs against a built CLI. Without the edge, turbo's affected-package PR filtering (`--filter=...[origin/next]`) never selected or ordered the CLI build, leaving the workspace `mj` bin an empty oclif shell — `Error: command codegen:manifest not found` — and MJExplorer's build then failed hard (TS2307) because its generated class-registrations manifest is gitignored and has no committed fallback. The apps themselves are unpublished (`mj_*` is changeset-ignored); this entry records the CLI-consumption contract fix in the release notes.
+- Updated dependencies [09e1b4b]
+- Updated dependencies [a94bd16]
+  - @memberjunction/generic-database-provider@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/open-app-engine@5.48.0
+  - @memberjunction/codegen-lib@5.48.0
+  - @memberjunction/metadata-sync@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/ai-cli@5.48.0
+  - @memberjunction/db-auto-doc@5.48.0
+  - @memberjunction/query-gen@5.48.0
+  - @memberjunction/server-bootstrap-lite@5.48.0
+  - @memberjunction/testing-cli@5.48.0
+  - @memberjunction/cli-core@5.48.0
+  - @memberjunction/config@5.48.0
+  - @memberjunction/installer@5.48.0
+  - @memberjunction/sql-converter@5.48.0
+  - @memberjunction/sqlglot-ts@5.48.0
+
 ## 5.47.0
 
 ### Patch Changes
