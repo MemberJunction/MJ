@@ -434,7 +434,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const records = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
         if (records.length === 0) return null;
         const transformed = this.applyTransformPreservingKeys(records[0], obj, fields);
-        return this.ToExternalRecord(transformed, ctx.ObjectName, this.FindPrimaryKeyFieldNames(fields), fields.map(f => f.Name));
+        return this.ToExternalRecord(transformed, ctx.ObjectName, this.FindPrimaryKeyFieldNames(fields));
     }
 
     // ── CRUD helpers ─────────────────────────────────────────────────
@@ -536,8 +536,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             Records: result.Records.map(r => this.ToExternalRecord(
                 this.applyTransformPreservingKeys(r, obj, fields),
                 ctx.ObjectName,
-                pkFieldNames,
-                fields.map(f => f.Name)
+                pkFieldNames
             )),
             HasMore: result.HasMore,
             NextPage: result.NextPage,
@@ -708,7 +707,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             for (const r of result.Records) {
                 for (const [k, v] of Object.entries(fkTags)) r[k] = v;
                 const transformed = this.applyTransformPreservingKeys(r, obj, fields);
-                out.push(this.ToExternalRecord(transformed, ctx.ObjectName, pkFieldNames, fields.map(f => f.Name)));
+                out.push(this.ToExternalRecord(transformed, ctx.ObjectName, pkFieldNames));
             }
             return;
         }
@@ -1173,8 +1172,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     private ToExternalRecord(
         raw: Record<string, unknown>,
         objectType: string,
-        pkFieldNames: string[],
-        declaredFieldNames?: string[]
+        pkFieldNames: string[]
     ): ExternalRecord {
         // §4 synthetic-PK fallback: only treat the PK as usable when EVERY component is present
         // (a composite key with a missing part — e.g. "abc|" — is not a stable identity). When any
@@ -1186,17 +1184,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const allPkPresent = pkFieldNames.length > 0
             && pkFieldNames.every(name => raw[name] != null && serializeKeyValue(raw[name]).length > 0);
         const externalID = pkFieldNames.map(name => serializeKeyValue(raw[name])).join('|');
-        // Keyless (content-hash) IDENTITY must be a STABLE PROJECTION over the object's DECLARED fields, NOT
-        // the full raw payload. A record's identity is a function of its declared schema — undeclared response
-        // bytes (a vendor that adds an extra field, or the T12 idempotency probe's injected marker) must NOT
-        // change which record this IS. Hashing the full raw made identity drift the moment ANY unmodeled field
-        // appeared (the GZ #22 identity-drift class). Custom/overflow fields are captured + change-detected
-        // separately; they are not identity. When no declared list is supplied (legacy callers), fall back to
-        // the full raw so behavior is unchanged.
-        const hashBasis = (declaredFieldNames && declaredFieldNames.length > 0)
-            ? Object.fromEntries(declaredFieldNames.filter(name => name in raw).map(name => [name, raw[name]]))
-            : raw;
-        const resolvedID = allPkPresent ? externalID : computeContentHash(hashBasis);
+        const resolvedID = allPkPresent ? externalID : computeContentHash(raw);
 
         // §4 cont'd — write the synthetic identity INTO the PK column. When the source never populates the
         // declared PK (nested/derived records: contact phones, event sponsors, scheduled billing, …) the row

@@ -2703,19 +2703,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             BypassCache: true, // field maps drive value mapping; a sync must see freshly-applied maps
         }, contextUser);
 
-        // A FAILED field-map load must fail LOUD, never silently return [] — an empty field-map set makes
-        // the record map with zero field maps: every column falls to __mj_integration_CustomOverflow, the
-        // content hash is computed over the overflow instead of the mapped basis (non-deterministic across
-        // syncs → redundant re-writes), and in production every mapped column is silently dropped for that
-        // sync. Throwing lets the engine's per-object error handling/retry catch a transient RunView failure
-        // instead of corrupting the sync.
-        if (!result.Success) {
-            throw new Error(
-                `LoadFieldMaps: failed to load active field maps for EntityMap '${entityMapID}': ` +
-                `${result.ErrorMessage ?? 'unknown error'}. Refusing to proceed with zero field maps.`
-            );
-        }
-        return result.Results;
+        return result.Success ? result.Results : [];
     }
 
     /** Parses the entity map's Configuration JSON (best-effort) for engine-side feature toggles. */
