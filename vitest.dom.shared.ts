@@ -50,9 +50,17 @@ export default defineConfig({
     testTimeout: 30000,
     restoreMocks: true,
     passWithNoTests: true,
-    // Angular's compiled output references `globalThis` symbols; pooling in a
-    // single fork keeps the test environment stable across files.
+    // Angular's compiled output references `globalThis` symbols, so we run in a
+    // forked process (not threads). CRITICAL: do NOT run spec files in parallel.
+    // Each DOM spec file carries a full Angular AOT compile + jsdom; with
+    // parallelism ON, one package spawns up to CPU-count heavy workers, and with
+    // several DOM packages running concurrently under turbo the peak memory OOMs
+    // CI's 16 GB runner (SIGKILL / exit 137). `fileParallelism: false` bounds a
+    // package to ONE worker at a time (the Vitest-4 replacement for the removed
+    // `poolOptions.forks.singleFork`). Pair with a turbo test `--concurrency`
+    // cap in CI to bound how many packages run at once.
     pool: 'forks',
+    fileParallelism: false,
     include: ['src/**/__tests__/**/*.test.ts', 'src/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/generated/**'],
     coverage: {

@@ -20,7 +20,7 @@ export default defineConfig({
       mergeConfig(
         domSharedConfig,
         defineConfig({
-          test: { name: 'entity-form-dialog (dom)', include: ['src/**/*.dom.test.ts'], exclude: ['**/__tests__/**'] },
+          test: { name: 'entity-form-dialog (dom)', include: ['src/**/*.dom.test.ts'], exclude: ['**/__tests__/**', '**/!(*.dom).test.ts'] },
         }),
       ),
     ],

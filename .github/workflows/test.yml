@@ -118,14 +118,18 @@ jobs:
 
       - name: Build + run unit tests
         run: |
+          # --concurrency caps how many package test tasks run at once. Angular
+          # DOM suites each spin a heavy AOT-compile + jsdom process (bounded to
+          # one fork each by vitest.dom.shared.ts); without this cap the full
+          # suite OOMs the 16 GB runner (exit 137) when several fire together.
           if [ -n "$TURBO_FILTER" ]; then
             echo "::group::Affected build"
             npx turbo run build --log-order=stream "$TURBO_FILTER"
             echo "::endgroup::"
-            npx turbo run test "$TURBO_FILTER"
+            npx turbo run test --concurrency=4 "$TURBO_FILTER"
           else
             npm run build
-            npm test
+            npm test -- --concurrency=4
           fi
 
       - name: Upload coverage
