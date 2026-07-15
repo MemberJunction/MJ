@@ -1,5 +1,22 @@
 # @memberjunction/messaging-adapters
 
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [2143b98]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai-agents@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/server-extensions-core@5.48.0
+  - @memberjunction/global@5.48.0
+
 ## 5.47.0
 
 ### Patch Changes

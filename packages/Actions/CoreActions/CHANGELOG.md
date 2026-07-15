@@ -1,5 +1,56 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.48.0
+
+### Minor Changes
+
+- bda123a: Lists performance overhaul + bug fixes. Read path: the custom List form paginates its Items section (100/page) and resolves member display names in one batched `IN` query per page instead of one query per item (a 1,000-member list drops from ~1,000 requests to 3); the Lists Browse/My Lists dashboards and the Add-to-List panel compute per-list counts via batched count_only queries instead of downloading every List Detail row; single-list-detail export filters membership server-side via a vwListDetails subquery instead of a client-built giant IN clause. Write path: client-side removals batch through TransactionGroups; server-side ListOperations bulk insert/remove and the "Add Records to List" action run with bounded concurrency (10 in-flight) while preserving per-record error isolation. ListSource switches to keyset (AfterKey) pagination with legacy Offset-cursor resume support. DB migration dedupes ListDetail in-place (keeping the oldest row per pair), adds a UNIQUE composite (ListID, RecordID) index that covers the duplicate-check predicate and closes the concurrent-add race, and drops the redundant single-column ListID index. Bug fixes: Add Records dialog spinner never cleared without a user click (missing change-detection after async loads, fixed in both the List form and single-list-detail); the List form's open-record button did nothing; silently-skipped duplicate adds now surface in a result toast (new optional `summary` on `ListManagementResult`). Also: Browse favorites filter persists as a server-side user preference; entities without a NameField now display and search on a sensible fallback field (`ID — value`, new `GetRecordDisplayField` helper); set-operation membership loads and operand pickers carry defensive MaxRows caps with truncation flagging.
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [2143b98]
+- Updated dependencies [c20723a]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/generic-database-provider@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai-agents@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/lists@5.48.0
+  - @memberjunction/record-set-processor-base@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/core-entities-server@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/ai-agent-manager@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/clustering-engine@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/ai-mcp-client@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/ai-vector-sync@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/code-execution@5.48.0
+  - @memberjunction/actions@5.48.0
+  - @memberjunction/communication-types@5.48.0
+  - @memberjunction/communication-engine@5.48.0
+  - @memberjunction/content-autotagging@5.48.0
+  - @memberjunction/external-change-detection@5.48.0
+  - @memberjunction/integration-engine@5.48.0
+  - @memberjunction/interactive-component-types@5.48.0
+  - @memberjunction/storage@5.48.0
+  - @memberjunction/react-linter@5.48.0
+  - @memberjunction/record-set-processor@5.48.0
+  - @memberjunction/search-engine@5.48.0
+  - @memberjunction/esignature@5.48.0
+  - @memberjunction/geo-core@5.48.0
+  - @memberjunction/ai-betty-bot@5.48.0
+  - @memberjunction/lists-base@5.48.0
+  - @memberjunction/export-engine@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+
 ## 5.47.0
 
 ### Patch Changes
