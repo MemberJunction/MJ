@@ -5560,7 +5560,7 @@ The context is now within limits. Please retry your request with the recovered c
      * (which is a display label and free to change).
      * @private
      */
-    private async loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<Array<{ StepName: string; OutputData: string | null }>> {
+    private async loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<Array<{ OutputData: string | null }>> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const priorRun = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Runs',
@@ -5575,11 +5575,11 @@ The context is now within limits. Please retry your request with the recovered c
             return [];
         }
 
-        const steps = await rv.RunView<{ StepName: string; OutputData: string | null }>({
+        const steps = await rv.RunView<{ OutputData: string | null }>({
             EntityName: 'MJ: AI Agent Run Steps',
             ExtraFilter: `AgentRunID='${priorRunId}' AND StepType='Tool' AND Status='Completed'`,
             OrderBy: 'StartedAt ASC',
-            Fields: ['StepName', 'OutputData'],
+            Fields: ['OutputData'],
             ResultType: 'simple',
         }, params.contextUser);
         return steps.Success ? (steps.Results || []) : [];
@@ -5594,15 +5594,15 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Renders prior-turn tool-result steps into the carried-forward message body.
-     * Pure and static for testability: keeps only steps whose OutputData declares a
-     * carry-forward-eligible `toolFamily` (see {@link CarryForwardToolFamilies}) —
-     * the structured contract stamped by the tool executors, independent of StepName.
+     * Pure and static for testability: keeps only steps whose OutputData satisfies the
+     * structured contract stamped by the tool executors — a carry-forward-eligible
+     * `toolFamily` (see {@link CarryForwardToolFamilies}) AND a non-empty `tool` name.
      * Tolerant of missing/invalid OutputData JSON, keeps only successful results,
      * caps each result and the total under `maxChars` (adding an explicit truncation
      * note when results are dropped). Returns null when nothing usable remains.
      */
     public static BuildPriorTurnToolResultsMessage(
-        steps: Array<{ StepName: string; OutputData: string | null }>,
+        steps: Array<{ OutputData: string | null }>,
         maxChars: number
     ): string | null {
         const sections: string[] = [];
@@ -5617,12 +5617,13 @@ The context is now within limits. Please retry your request with the recovered c
                 continue;
             }
             if (!parsed.toolFamily || !BaseAgent.CarryForwardToolFamilies.includes(parsed.toolFamily)) continue;
+            if (typeof parsed.tool !== 'string' || parsed.tool.length === 0) continue;
             if (parsed.result?.success !== true) continue;
 
             const raw = typeof parsed.result.data === 'string'
                 ? parsed.result.data
                 : JSON.stringify(parsed.result.data, null, 2);
-            const section = `### ${parsed.tool || step.StepName}(${JSON.stringify(parsed.input || {})})\n\`\`\`json\n${raw}\n\`\`\``;
+            const section = `### ${parsed.tool}(${JSON.stringify(parsed.input || {})})\n\`\`\`json\n${raw}\n\`\`\``;
             if (usedChars + section.length > maxChars && sections.length > 0) {
                 dropped++;
                 continue;

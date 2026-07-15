@@ -6,9 +6,8 @@
 import { describe, it, expect } from 'vitest';
 import { BaseAgent } from '../base-agent';
 
-function step(tool: string, data: unknown, success = true, input: unknown = { sequence: 9 }, toolFamily = 'conversation'): { StepName: string; OutputData: string | null } {
+function step(tool: string, data: unknown, success = true, input: unknown = { sequence: 9 }, toolFamily = 'conversation'): { OutputData: string | null } {
     return {
-        StepName: `Conversation Tool: ${tool}`,
         OutputData: JSON.stringify({ toolFamily, tool, input, result: { success, data }, durationMs: 5 }),
     };
 }
@@ -28,8 +27,8 @@ describe('BaseAgent.BuildPriorTurnToolResultsMessage', () => {
         const body = BaseAgent.BuildPriorTurnToolResultsMessage(
             [
                 step('searchConversation', undefined, false),
-                { StepName: 'Conversation Tool: x', OutputData: null },
-                { StepName: 'Artifact Tool: y', OutputData: 'not-json{{' },
+                { OutputData: null },
+                { OutputData: 'not-json{{' },
             ],
             100_000
         );
@@ -51,15 +50,23 @@ describe('BaseAgent.BuildPriorTurnToolResultsMessage', () => {
 
     it('excludes Tool steps without an eligible toolFamily, even when their OutputData looks successful', () => {
         const memoryWriteShaped = {
-            StepName: 'Memory Write',
             OutputData: JSON.stringify({ result: { success: true, data: 'note saved' } }),
         };
         const pipelineShaped = {
-            StepName: 'Pipeline: 3 step(s)',
             OutputData: JSON.stringify({ tool: 'pipeline', result: { success: true, data: 'ran' } }),
         };
         const unknownFamily = step('someTool', 'data', true, {}, 'future-family');
         expect(BaseAgent.BuildPriorTurnToolResultsMessage([memoryWriteShaped, pipelineShaped, unknownFamily], 100_000)).toBeNull();
+    });
+
+    it('excludes eligible-family steps whose OutputData is missing a tool name (contract violation)', () => {
+        const noToolName = {
+            OutputData: JSON.stringify({ toolFamily: 'conversation', input: {}, result: { success: true, data: 'orphan' } }),
+        };
+        const emptyToolName = {
+            OutputData: JSON.stringify({ toolFamily: 'conversation', tool: '', input: {}, result: { success: true, data: 'orphan' } }),
+        };
+        expect(BaseAgent.BuildPriorTurnToolResultsMessage([noToolName, emptyToolName], 100_000)).toBeNull();
     });
 
     it('caps the total size and notes omitted results', () => {
