@@ -39,6 +39,22 @@ export class IntegrationCheckRegistry extends BaseSingleton<IntegrationCheckRegi
     }
 
     /**
+     * The distinct bundle names — the `<bundle>` segment of every registered check Id. The
+     * tsx↔metadata drift-check test uses this to assert every bundle has both siblings (a tsx
+     * dispatcher script and a metadata Test record).
+     */
+    public GetBundleNames(): string[] {
+        const names = new Set<string>();
+        for (const id of this.checks.keys()) {
+            const dot = id.indexOf('.');
+            if (dot > 0) {
+                names.add(id.slice(0, dot));
+            }
+        }
+        return [...names].sort();
+    }
+
+    /**
      * Register a bundle's setup/teardown lifecycle (mutating bundles that share a fixture).
      * Both the driver and the standalone dispatcher scripts look this up by bundle name so a
      * bundle's fixture is created/torn down identically on either execution path.

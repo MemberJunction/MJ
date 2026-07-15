@@ -10,7 +10,7 @@ import { LoadDbConfig, LoadClientConfig } from '../config';
 
 const ENV_KEYS = [
     'DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'DB_DATABASE', 'DB_PLATFORM',
-    'MJ_API_KEY', 'GRAPHQL_PORT', 'GRAPHQL_ROOT_PATH', 'MJAPI_URL'
+    'MJ_API_KEY', 'GRAPHQL_PORT', 'GRAPHQL_ROOT_PATH', 'MJAPI_URL', 'MJAPI_WS_URL'
 ];
 let saved: Record<string, string | undefined>;
 
@@ -105,10 +105,19 @@ describe('LoadClientConfig', () => {
         process.env.MJ_API_KEY = 'k';
         process.env.GRAPHQL_PORT = '4000';
         process.env.GRAPHQL_ROOT_PATH = '/';
-        expect(LoadClientConfig()).toEqual({ Url: 'http://localhost:4000/', MJAPIKey: 'k' });
+        expect(LoadClientConfig()).toEqual({ Url: 'http://localhost:4000/', WsUrl: 'ws://localhost:4000/', MJAPIKey: 'k' });
 
         process.env.MJAPI_URL = 'https://api.example.com/graphql';
         expect(LoadClientConfig().Url).toBe('https://api.example.com/graphql');
+    });
+
+    it('derives WsUrl from Url (http→ws, https→wss) and honors MJAPI_WS_URL override', () => {
+        process.env.MJ_API_KEY = 'k';
+        process.env.MJAPI_URL = 'https://api.example.com/graphql';
+        expect(LoadClientConfig().WsUrl).toBe('wss://api.example.com/graphql');
+
+        process.env.MJAPI_WS_URL = 'ws://ws.example.com/subscriptions';
+        expect(LoadClientConfig().WsUrl).toBe('ws://ws.example.com/subscriptions');
     });
 
     it('normalizes a root path lacking a leading slash', () => {

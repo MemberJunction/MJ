@@ -38,6 +38,7 @@
     "@memberjunction/predictive-studio-core": "5.47.0",
     "@memberjunction/actions-base": "5.47.0",
     "@memberjunction/codegen-lib": "5.47.0",
+    "@memberjunction/open-app-engine": "5.47.0",
     "cosmiconfig": "9.0.0",
     "dotenv": "17.2.4",
     "mssql": "^12.2.0"

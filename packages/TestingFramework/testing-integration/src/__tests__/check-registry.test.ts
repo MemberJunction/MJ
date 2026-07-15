@@ -18,6 +18,9 @@ import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
+import { ListsChecks } from '../checks/lists.checks';
+import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
+import { UserRoutinesChecks } from '../checks/user-routines.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -65,7 +68,10 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['prompt-runner', PromptRunnerChecks, 1],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
-        ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3]
+        ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
+        ['lists', ListsChecks, 3],
+        ['open-app-teardown', OpenAppTeardownChecks, 2],
+        ['user-routines', UserRoutinesChecks, 16]
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {

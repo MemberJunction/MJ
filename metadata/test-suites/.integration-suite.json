@@ -234,6 +234,50 @@
             "lastModified": "2026-07-02T19:15:23.466Z",
             "checksum": "18dad2c1baab587f9937604cf5db2ca410bb19c74f2f9160d0040d58e95dc0bc"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT20 - Lists Keyset Pagination",
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B18FF73D-D1AC-4D9D-BD3F-09DC97E0A4F7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT21 - Open-App Metadata Teardown",
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C772274A-3A0C-424E-B74B-F40235B5F063"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT22 - User Routines Dispatcher",
+            "Sequence": 18,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F125ED7C-18E1-47C9-BC59-925FFA9C86E0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT23 - RLS Client Smart-Cache Isolation",
+            "Sequence": 19,
+            "Status": "Skip"
+          },
+          "primaryKey": {
+            "ID": "DCF3FFDC-5304-423F-B8F2-F55EB7DB2B30"
+          }
         }
       ]
     },

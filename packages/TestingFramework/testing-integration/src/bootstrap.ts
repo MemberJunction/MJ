@@ -303,7 +303,7 @@ export async function bootstrapIntegrationClient(): Promise<IntegrationClientCon
     const config = new GraphQLProviderConfigData(
         '',                 // JWT token — unused; the system API key authenticates us
         client.Url,
-        '',                 // wsurl — no subscriptions needed
+        client.WsUrl,       // wsurl — required by the RO-3 wire-progress subscription (RemoteOperationProgress)
         async () => '',     // refreshTokenFunction — stub; API key auth never refreshes
         '__mj',
         undefined,

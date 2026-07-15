@@ -100,12 +100,14 @@ export async function LoadDbConfig(): Promise<DbConfig> {
 
 export interface ClientConfig {
     Url: string;
+    WsUrl: string;
     MJAPIKey: string;
 }
 
 /**
  * Resolves the MJAPI GraphQL endpoint and system API key from env:
  *  - MJAPI_URL overrides everything; otherwise http://localhost:{GRAPHQL_PORT}{GRAPHQL_ROOT_PATH}
+ *  - MJAPI_WS_URL overrides the subscription endpoint; otherwise derived from Url (http→ws, https→wss)
  *  - MJ_API_KEY is the system API key MJServer accepts via the x-mj-api-key header
  */
 export function LoadClientConfig(): ClientConfig {
@@ -116,5 +118,6 @@ export function LoadClientConfig(): ClientConfig {
     const port = process.env.GRAPHQL_PORT ?? '4000';
     const rootPath = process.env.GRAPHQL_ROOT_PATH ?? '/';
     const url = process.env.MJAPI_URL ?? `http://localhost:${port}${rootPath.startsWith('/') ? rootPath : `/${rootPath}`}`;
-    return { Url: url, MJAPIKey: apiKey };
+    const wsUrl = process.env.MJAPI_WS_URL ?? url.replace(/^http/, 'ws');
+    return { Url: url, WsUrl: wsUrl, MJAPIKey: apiKey };
 }

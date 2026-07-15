@@ -1181,10 +1181,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // and MUST be part of the fingerprint to prevent cross-query cache poisoning.
         const userSearch = (params.UserSearchString ?? '').trim();
 
-        // NOTE: ViewID and ViewName are intentionally excluded from the fingerprint.
-        // Views are just containers for entity + filter + orderBy. Two different views
-        // that resolve to the same entity/filter/orderBy produce identical SQL and results,
-        // so they should share the same cache entry.
+        // NOTE: a stored view's identity IS part of the fingerprint (appended below as `vw:`).
+        // The prior assumption — "views are just containers for entity + filter + orderBy" — is
+        // false: a saved view carries its own server-side WhereClause that is NOT reflected in
+        // params.ExtraFilter (it's applied later, in InternalRunView). Without the view segment a
+        // filtered view and a plain unfiltered read of the same entity produce identical
+        // fingerprints and cross-serve — the view is handed the unfiltered slot and returns rows
+        // outside its own WhereClause (a correctness/permission leak). See the `vw:` append below.
 
         // Build human-readable fingerprint with pipe separators
         // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|Connection]
@@ -1227,6 +1230,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const rls = (rlsWhereClause ?? '').trim();
         if (rls.length > 0) {
             parts.push(`rls:${this.simpleHash(rls)}`);
+        }
+
+        // Stored-view identity. A saved view's WhereClause/OrderBy live on the view, not in
+        // params.ExtraFilter, so a view run and a plain entity read (or a different view) can
+        // otherwise collide on the same fingerprint and be cross-served the wrong rows. Keyed by
+        // ViewID / ViewName / the passed ViewEntity's PK. Appended ONLY when a view identifier is
+        // present, so plain entity+filter queries keep the exact pre-existing fingerprint (no cache
+        // invalidation). Per-view rendering is deterministic; per-user row scoping is the separate
+        // `rls:` segment above.
+        const viewKey = (params.ViewID || params.ViewName || params.ViewEntity?.PrimaryKey?.ToConcatenatedString() || '').trim();
+        if (viewKey.length > 0) {
+            parts.push(`vw:${viewKey}`);
         }
 
         // Only include connection if provided

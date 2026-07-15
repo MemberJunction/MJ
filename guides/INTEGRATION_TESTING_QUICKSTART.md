@@ -541,6 +541,13 @@ self-skip.
 - **Teardown never throws.** Best-effort deletes (`.catch(() => undefined)`) so a failing check
   still cleans up.
 - **Read `BypassCache: true`** when a check must observe true DB state.
+- **A new bundle needs BOTH siblings — a `tsx` dispatcher AND an IT `Test` record.** The bundle
+  is the single source of truth; the dispatcher (`<bundle>-tests.ts`) and the metadata record
+  (`.IT##-<bundle>.json` joined to the deterministic suite) are thin pointers to it. Generate both
+  when you add a bundle — the `sibling-parity.test.ts` drift-check fails the build if either is
+  missing (or points at a non-existent bundle). A deliberately dispatcher-less bundle
+  (driver/MJAPI-only) must be listed with a reason in that test's `NO_TSX_DISPATCHER` set and still
+  have an IT record.
 
 ### Method 1 — add a check to an existing bundle
 

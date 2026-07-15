@@ -19,7 +19,8 @@ import type {
     MJRemoteOperationEntity,
     MJMLTrainingPipelineEntity,
     MJMLModelEntity,
-    MJMLModelScoringBindingEntity
+    MJMLModelScoringBindingEntity,
+    MJUserRoutineEntity
 } from '@memberjunction/core-entities';
 import type sql from 'mssql';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
@@ -193,6 +194,47 @@ export interface RemoteOpWireProgressFixture {
     CatIds: string[];
 }
 
+/**
+ * Shared fixture for the `lists` bundle: one throwaway `MJ: Lists` row + its members (`MJ: List Details`),
+ * created in setup and reused across the ordered LS1–LS3 keyset-pagination checks, deleted after.
+ */
+export interface ListsFixture {
+    ListID: string;
+}
+
+/**
+ * Shared fixture for the `open-app-teardown` bundle: the throwaway `__mj` metadata rows seeded for the
+ * teardown scenario (a used app's SchemaInfo/Entity/EntityField + a blocking RecordChange + a link-less
+ * nav Application), reused by OAT1/OAT2 and removed in FK-safe order in teardown.
+ */
+export interface OpenAppTeardownFixture {
+    AppSchema: string;
+    EntityID: string;
+    FieldID: string;
+    RecordChangeID: string;
+    ApplicationID: string;
+    Tag: string;
+}
+
+/**
+ * Shared fixture for the `user-routines` bundle: the resolved (never-mutated) 'Calculate Expression'
+ * Action target, the mutable FK-safe teardown accumulators, and the cross-check routine references the
+ * ordered UR1–UR16 checks read/append (e.g. RoutineDue set by UR9, run by UR10/11, deleted by UR14).
+ */
+export interface UserRoutinesFixture {
+    CalcActionID: string;
+    CreatedRoutineIds: string[];
+    CreatedRecipientIds: string[];
+    OrphanedActionLogIds: string[];
+    OrphanedRunIds: string[];
+    CreatedConversationIds: string[];
+    RoutineDue?: MJUserRoutineEntity;
+    RoutineFutureStart?: MJUserRoutineEntity;
+    RoutineSunset?: MJUserRoutineEntity;
+    RoutineSeed?: MJUserRoutineEntity;
+    FirstRunId?: string | null;
+}
+
 /** The bootstrapped, run-scoped real provider stack handed to every check. */
 export interface IntegrationCheckContext {
     /** Resolved context user threaded from the engine (server) or bootstrap. */
@@ -225,6 +267,12 @@ export interface IntegrationCheckContext {
     RemoteOpAiAuthoringFixture?: RemoteOpAiAuthoringFixture;
     /** Shared fixture for the `remote-op-wire-progress` bundle (client transport). */
     RemoteOpWireProgressFixture?: RemoteOpWireProgressFixture;
+    /** Shared fixture for the `lists` bundle. */
+    ListsFixture?: ListsFixture;
+    /** Shared fixture for the `open-app-teardown` bundle. */
+    OpenAppTeardownFixture?: OpenAppTeardownFixture;
+    /** Shared fixture for the `user-routines` bundle. */
+    UserRoutinesFixture?: UserRoutinesFixture;
     /**
      * The opaque per-selector `config` bag from `Test.Configuration.checks[].config`,
      * set by the driver/script before each bundle runs. Bundles read their own keys
