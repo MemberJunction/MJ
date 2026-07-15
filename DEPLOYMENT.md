@@ -18,10 +18,17 @@ This document covers the end-to-end process for releasing a new version of Membe
 
 ## Pre-Release Checklist
 
-> **Work on a release-prep branch, not on `next` directly.** Cut
-> `release/vX.Y-prep` from the tip of `next` (`git checkout -b release/vX.Y-prep && git push -u origin release/vX.Y-prep` — same-named remote tracking, per the branch rules), land Steps 2–7's
-> commits there, and merge into `next` via a PR (e.g. #3163 for v5.48). This keeps
-> `next` green while prep is in flight and gives the release artifacts a reviewable PR.
+> **Recommended: work on a release-prep branch instead of committing to `next`
+> directly.** Cut `release/vX.Y-prep` from the tip of `next`
+> (`git checkout -b release/vX.Y-prep && git push -u origin release/vX.Y-prep` —
+> same-named remote tracking, per the branch rules), land the Step 2–7 commits
+> there, and merge into `next` via a PR (e.g. #3163 for v5.48). This keeps `next`
+> green while prep is in flight and gives the release artifacts a reviewable PR.
+>
+> **Reading the steps below:** where they say "commit/push to `next`" (Step 3.8,
+> Step 6), that is the target on the direct-to-`next` workflow. On the prep-branch
+> workflow, commit to your prep branch instead — it reaches `next` through the PR.
+> The steps use `next` as shorthand for "the branch that becomes the release."
 
 ### Step 1: Verify CI on `next`
 

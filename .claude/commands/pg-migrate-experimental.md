@@ -100,7 +100,7 @@ docker exec claude-dev bash -lc "cd /workspace/MJ && npm install && npx turbo bu
 # python + sqlglot venv (convert/verify need it). The claude-dev image may lack
 # python3-venv — without it `python3 -m venv` fails ("ensurepip is not available")
 # and leaves a BROKEN venv dir behind; install the apt package and rm the dir first.
-docker exec claude-dev bash -lc "apt-get install -y -qq python3-venv python3-pip >/dev/null 2>&1; test -x /tmp/sqlglot-venv/bin/pip || (rm -rf /tmp/sqlglot-venv && python3 -m venv /tmp/sqlglot-venv && /tmp/sqlglot-venv/bin/pip install sqlglot)"
+docker exec claude-dev bash -lc "(apt-get update -qq && apt-get install -y python3-venv python3-pip) || { echo 'APT FAILED — install python3-venv + python3-pip in claude-dev manually before continuing'; exit 1; }; test -x /tmp/sqlglot-venv/bin/pip || (rm -rf /tmp/sqlglot-venv && python3 -m venv /tmp/sqlglot-venv && /tmp/sqlglot-venv/bin/pip install sqlglot)"
 docker exec claude-dev bash -lc "/tmp/sqlglot-venv/bin/python3 -c 'import sqlglot; print(sqlglot.__version__)'"   # must print a version, else stop and fix
 # auth gate for delegated browser phase — must print AUTH_OK, else stop and have the user run `docker exec -it claude-dev claude` to OAuth
 docker exec claude-dev bash -lc 'echo "Reply with exactly: AUTH_OK" | claude --dangerously-skip-permissions -p 2>&1 | tail -3'
