@@ -1324,9 +1324,9 @@ export class ValidationService {
   }
 
   /**
-   * Validates {@include} references within file content
-   * 
-   * Recursively checks all {@include path} references in file content to ensure:
+   * Validates `{@include}` references within file content
+   *
+   * Recursively checks all `{@include path}` references in file content to ensure:
    * - Referenced files exist
    * - No circular references occur
    * - Include paths are valid

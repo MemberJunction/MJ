@@ -48,6 +48,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: [domSetupFile],
     testTimeout: 30000,
+    // Match the test timeout so setup hooks that cold-import a heavy module graph don't
+    // flake against the stingy 10s hook default (see vitest.shared.ts for the rationale).
+    hookTimeout: 30000,
     restoreMocks: true,
     passWithNoTests: true,
     // Angular's compiled output references `globalThis` symbols, so we run in a
