@@ -1135,7 +1135,7 @@ export class SyncEngine {
   }
   
   /**
-   * Process file content with {@include} references
+   * Process file content with `{@include}` references
    * 
    * Recursively processes a file's content to resolve `{@include path}` references.
    * Include references use JSDoc-style syntax and support:
