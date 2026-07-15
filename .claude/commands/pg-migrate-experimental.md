@@ -181,23 +181,35 @@ grep -rl '<RoutineName>' migrations-pg/v5/*.pg.sql
 Most were hand-ported in an earlier release. Copy any atomicity guards — token or
 lock `WHERE` clauses — exactly. Then rename `.needs-hand` to `.pg.sql`.
 
-### The converter may edit COMMITTED .pg.sql files — revert those edits
+### The converter may edit COMMITTED .pg.sql files
 
 Every `mj migrate convert` run ends with a global "EntityField Sequence
 deduplication" pass that can rewrite Sequence values inside committed
 `.pg.sql` files in place (it prints `Fixed N sequence collision(s)` naming each
-file). The committed ledger is immutable — never ship those edits. Check and
-revert immediately after every convert:
+file). The committed ledger is immutable — those edits must never ship. Two
+safeguards, in order:
+
+1. **The Phase-5 copy-back is selective** — it copies only the NEW `.pg.sql`
+   files to the host, so the converter's edits to committed files stay inside
+   the container and never reach the repo. This is the real protection: simply
+   do not copy a modified committed file back.
+2. **Keep the gate honest.** So the fresh-DB apply tests the true committed
+   ledger, restore the converter's edits *in the container* before the gate.
+   But do NOT run `git checkout --` / `git restore` blind — that is forbidden by
+   CRITICAL RULE #3 without explicit approval, and it discards ALL uncommitted
+   changes to a file, not just the dedup hunks. `git diff` each flagged file
+   first, confirm the ONLY changes are the Sequence bumps, surface them to the
+   operator, and get explicit sign-off before restoring.
 
 ```bash
 git status --porcelain migrations-pg/v5/     # any ' M ' line = dedup touched a committed file
-git checkout -- <each modified committed .pg.sql>
+git diff migrations-pg/v5/<file>             # confirm ONLY dedup Sequence bumps — then get approval before any restore
 ```
 
-The gate settles it empirically: if the fresh-database apply is clean without
-the dedup edits (it was, the time this was hit), the dedup was spurious. If the
-gate DOES fail on a `UQ_EntityField_EntityID_Sequence` collision, the defect is
-in the NEW migration — fix it there, never by editing committed files.
+The gate settles whether it even mattered: if the fresh-database apply is clean
+without the dedup edits (it was, the time this was hit), the dedup was spurious.
+If the gate DOES fail on a `UQ_EntityField_EntityID_Sequence` collision, the
+defect is in the NEW migration — fix it there, never by editing committed files.
 
 ### AST transpiler blind spots seen in practice
 
@@ -456,7 +468,7 @@ Each of these cost real time. Heed them.
 - The real gate is a clean `mj migrate` on a fresh database. A "0 gaps" result from convert is structural only.
 - Committed `.pg.sql` and `.pg-only.sql` files are immutable. Only ever produce PG counterparts for new SQL Server migrations. Never reconvert or hand-patch a committed one.
 - For `mj codegen`, always use `scripts/pg-codegen-await.mjs`. The bare CLI can fire-and-forget and exit 0 as a silent no-op.
-- The converter's own "EntityField Sequence deduplication" pass edits committed `.pg.sql` files — check `git status migrations-pg/` after every convert and revert them. The gate proves whether the dedup mattered (so far: it did not).
+- The converter's own "EntityField Sequence deduplication" pass edits committed `.pg.sql` files — check `git status migrations-pg/` after every convert. They never ship (Phase-5 copy-back is selective); restoring them in-container needs a `git diff` confirmation + explicit approval first (`git checkout --`/`git restore` are Rule-#3 destructive commands, never run blind). The gate proves whether the dedup mattered (so far: it did not).
 - The app workspaces are `mj_api` and `mj_explorer`. `@memberjunction/mjapi` and `@memberjunction/ng-explorer` do not exist — turbo errors "No package found".
 - `--file` = migration basename only, resolved against `--source-dir`.
 - `python3 -m venv` in claude-dev needs `apt-get install python3-venv` first — and a failed attempt leaves a broken venv dir that must be `rm -rf`'d.
