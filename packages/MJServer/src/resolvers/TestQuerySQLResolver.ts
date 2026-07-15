@@ -75,6 +75,9 @@ export class TestQuerySQLResult {
 
     @Field(() => String, { nullable: true, description: 'JSON-stringified applied parameters including defaults' })
     AppliedParameters?: string;
+
+    @Field(() => String, { nullable: true, description: 'The fully rendered SQL that was executed against the database. On error, reveals transformations (composition, templates, MaxRows wrapping) that may have caused the failure.' })
+    RenderedSQL?: string;
 }
 
 /**
@@ -133,6 +136,7 @@ export class TestQuerySQLResolver extends ResolverBase {
                 ExecutionTime: result.ExecutionTime,
                 ErrorMessage: result.ErrorMessage || undefined,
                 AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+                RenderedSQL: result.RenderedSQL || undefined,
             };
         } catch (err) {
             LogError(err);

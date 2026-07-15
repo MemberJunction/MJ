@@ -9,7 +9,7 @@
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import type { UserInfo, TransactionGroupBase, BaseEntity, IMetadataProvider } from '@memberjunction/core';
 import type { MJOpenAppEntity, MJOpenAppInstallHistoryEntity, MJOpenAppDependencyEntity } from '@memberjunction/core-entities';
-import type { AppStatus, InstallAction, ErrorPhase, InstalledAppInfo, AppInstallCallbacks } from '../types/open-app-types.js';
+import type { AppStatus, InstallAction, ErrorPhase, InstalledAppInfo, AppInstallCallbacks, InstallStep, UpgradeStep, RemoveStep } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 
 /**
@@ -135,6 +135,39 @@ export async function UpdateAppRecord(contextUser: UserInfo, appId: string, upda
  */
 export async function SetAppStatus(contextUser: UserInfo, appId: string, status: AppStatus): Promise<void> {
   await UpdateAppRecord(contextUser, appId, { Status: status });
+}
+
+/**
+ * Records the last install/upgrade/remove step that completed successfully for an app.
+ *
+ * The orchestrator calls this immediately after each step of `InstallApp`/`UpgradeApp`/
+ * `RemoveApp` succeeds. On a later re-entry (the app's Status is still `Installing`/
+ * `Upgrading`/`Removing`, or a caught failure left it `Error`), the orchestrator reads this
+ * back via `FindInstalledApp` and skips every step up to and including it, resuming the
+ * operation instead of restarting it from the beginning.
+ *
+ * Pass `null` to clear the checkpoint (done on terminal success, or when a fresh/non-resuming
+ * attempt discards a stale checkpoint left by a different or abandoned operation, so it can't
+ * be misread by a later, unrelated operation on the same row). Clearing the step always clears
+ * `LastCompletedStepTargetVersion` too, regardless of whether a caller passes `targetVersion` —
+ * the two columns are cleared alongside each other by design (see `UpgradeStep`'s doc comment),
+ * so a caller can never leave a stale target version behind by omitting the parameter.
+ *
+ * `targetVersion` is Upgrade-only: it pairs with the checkpoint so a resume can be told apart
+ * from a fresh upgrade request to a DIFFERENT version arriving while one was mid-flight (see
+ * `UpgradeStep`'s doc comment). Omit it for Install/Remove, which don't need it — Install's
+ * resume gate already compares `existingApp.Version === manifest.version` directly, and Remove
+ * has no "target version" concept.
+ */
+export async function SetAppStep(
+  contextUser: UserInfo,
+  appId: string,
+  step: InstallStep | UpgradeStep | RemoveStep | null,
+  provider?: IMetadataProvider,
+  targetVersion?: string,
+): Promise<void> {
+  const targetVersionUpdate = step === null ? { LastCompletedStepTargetVersion: null } : targetVersion !== undefined ? { LastCompletedStepTargetVersion: targetVersion } : {};
+  await UpdateAppRecord(contextUser, appId, { LastCompletedStep: step, ...targetVersionUpdate }, provider);
 }
 
 /**

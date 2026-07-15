@@ -33,7 +33,7 @@ The pure-TypeScript orchestration layer that sits beneath every chat surface in 
 | `DefaultAgent` | Resolve which agent handles a conversation turn via Application-Settings-driven chain (explicit → app-scoped → global → code-const Sage fallback). |
 | `Tools` | The shared `ClientToolRegistry` from `@memberjunction/ai-agent-client` — register tools the agent can invoke on the client. |
 | `AgentRunner` | Orchestrates `processMessage` — resolves the target agent, filters candidates, dispatches via `AgentClientSession`. |
-| `Streaming` | Routes per-message progress + completion events from the server's PubSub channel to consumer callbacks. |
+| `Streaming` | Routes per-message progress + completion events from the server's PubSub channel to consumer callbacks. Also routes streamed final-response content: chunks tagged `kind:'final-response'` are accumulated per message (deltas → full text so far) and dispatched via `MessageProgressUpdate.streaming`; unmarked stream chunks are dropped. |
 | `Sessions` | Observability over the AI Agent Sessions/Channels infrastructure from PR #2787. Hosts register an `ISessionsAdapter` at bootstrap; the runtime re-broadcasts session lifecycle events as `'session-started' \| 'session-channel' \| 'session-ended'`. |
 
 ## Adapter slots (the host-runtime boundary)

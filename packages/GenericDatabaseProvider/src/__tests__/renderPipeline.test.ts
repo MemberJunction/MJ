@@ -1077,6 +1077,81 @@ describe('RenderTrace', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
+// RenderTrace — verifying trace captures the SQL state at each pipeline stage
+// ════════════════════════════════════════════════════════════════════
+
+describe('RenderTrace — pipeline stage visibility', () => {
+
+    it('AfterComposition preserves Nunjucks tokens, AfterTemplates resolves them', () => {
+        stubMetadata();
+        const sql = `SELECT * FROM [dbo].[vwMembers] WHERE [Status] = {{ Status | sqlString }}`;
+        const result = RenderPipeline.Run(sql, {
+            Platform: 'sqlserver',
+            UsesTemplate: true,
+            Parameters: { Status: 'Active' },
+        });
+        // AfterComposition still has the Nunjucks token (composition runs before templates)
+        expect(result.Trace.AfterComposition).toContain('{{ Status | sqlString }}');
+        // AfterTemplates has the resolved value
+        expect(result.Trace.AfterTemplates).toContain("'Active'");
+        expect(result.Trace.AfterTemplates).not.toContain('{{ Status');
+    });
+
+    it('MaxRows wrapping is visible in FinalSQL but not in AfterTemplates', () => {
+        stubMetadata();
+        const sql = `SELECT * FROM [dbo].[vwMembers]`;
+        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
+        // AfterTemplates is the SQL BEFORE MaxRows wrapping
+        expect(result.Trace.AfterTemplates).not.toMatch(/_mj_capped/);
+        expect(result.Trace.AfterTemplates).not.toMatch(/\bTOP\b/i);
+        // FinalSQL has the cap applied
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
+    });
+
+    it('trace captures every stage for TRY_CAST query with MaxRows (the Skip failure case)', () => {
+        stubMetadata();
+        const sql = `SELECT t.ID, COUNT(DISTINCT mel.ID) AS Cnt
+FROM [document].[vwMemberEngagementLogs] mel
+INNER JOIN [__mj].[vwTaggedItems] ti ON mel.ID = TRY_CAST(ti.RecordID AS INT)
+INNER JOIN [__mj].[vwTags] t ON ti.TagID = t.ID
+WHERE mel.IsMemberInitiated = 1
+  AND mel.[Date] >= {{ StartDate | sqlDate }}
+GROUP BY t.ID
+ORDER BY Cnt DESC`;
+        const result = RenderPipeline.Run(sql, {
+            Platform: 'sqlserver',
+            MaxRows: 10,
+            UsesTemplate: true,
+            Parameters: { StartDate: '2024-01-01' },
+        });
+        // AfterComposition: Nunjucks tokens still present
+        expect(result.Trace.AfterComposition).toContain('{{ StartDate | sqlDate }}');
+        expect(result.Trace.AfterComposition).toContain('TRY_CAST');
+        // AfterTemplates: Nunjucks resolved, but no MaxRows wrapping yet
+        expect(result.Trace.AfterTemplates).toMatch(/2024-01-01/);
+        expect(result.Trace.AfterTemplates).not.toMatch(/_mj_capped/);
+        // FinalSQL: MaxRows applied (outer wrap with ORDER BY moved outside)
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
+        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        // The trace makes it possible to diagnose the transformation
+        expect(result.Trace.AfterTemplates).toMatch(/ORDER\s+BY\s+Cnt\s+DESC/i);
+    });
+
+    it('FinalSQL differs from AfterTemplates when MaxRows is applied', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('SELECT * FROM t', {
+            Platform: 'sqlserver',
+            MaxRows: 5,
+        });
+        // AfterTemplates is the pre-cap SQL
+        expect(result.Trace.AfterTemplates).toBe('SELECT * FROM t');
+        // FinalSQL has the cap
+        expect(result.FinalSQL).not.toBe(result.Trace.AfterTemplates);
+        expect(result.FinalSQL).toMatch(/\bTOP\s+5\b/i);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
 // Lexical disguise — keyword-looking content in literals/identifiers/comments
 // ════════════════════════════════════════════════════════════════════
 
@@ -1769,6 +1844,130 @@ FROM [dbo].[vwMembers] m`;
         );
         expect(result.FinalSQL).toMatch(/\bTOP\s+100\b/i);
         expect(result.FinalSQL).not.toMatch(/500000/);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// MaxRows — AST-unparseable T-SQL functions (TRY_CAST, IIF, STRING_AGG, etc.)
+//
+// node-sql-parser cannot parse certain T-SQL functions. When the AST path
+// returns 'unparseable', WrapWithMaxRows falls back to outerWrap which
+// wraps the SQL in SELECT TOP N * FROM (...). ORDER BY inside the derived
+// table is illegal on SQL Server — outerWrap must strip it and move it to
+// the outer SELECT.
+// ════════════════════════════════════════════════════════════════════
+
+describe('MaxRows row cap — AST-unparseable SQL with ORDER BY', () => {
+
+    it('TRY_CAST with ORDER BY — the exact Skip Query Writer failure pattern', () => {
+        stubMetadata();
+        const sql = `SELECT t.ID AS TagID, t.Name AS TagName, COUNT(DISTINCT mel.ID) AS EngagementCount
+FROM [document].[vwMemberEngagementLogs] mel
+INNER JOIN [__mj].[vwTaggedItems] ti ON mel.ID = TRY_CAST(ti.RecordID AS INT)
+INNER JOIN [__mj].[vwTags] t ON ti.TagID = t.ID
+WHERE mel.IsMemberInitiated = 1
+  AND ti.Entity = 'Member Engagement Logs'
+  AND mel.[Date] >= '2024-01-01'
+  AND mel.[Date] <= '2025-12-31'
+GROUP BY t.ID, t.Name
+ORDER BY EngagementCount DESC`;
+        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
+        // Must be capped (outer wrap with TOP 10)
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
+        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        // ORDER BY must NOT be inside the derived table — it must be on the outer SELECT
+        const innerMatch = result.FinalSQL.match(/\([\s\S]*\)\s+AS\s+_mj_capped/i);
+        expect(innerMatch).not.toBeNull();
+        expect(innerMatch![0]).not.toMatch(/ORDER\s+BY/i);
+        // ORDER BY must appear after _mj_capped (on the outer SELECT)
+        const afterCapped = result.FinalSQL.split('_mj_capped')[1];
+        expect(afterCapped).toMatch(/ORDER\s+BY\s+EngagementCount\s+DESC/i);
+    });
+
+    it('TRY_CAST without ORDER BY — no ORDER BY to strip', () => {
+        stubMetadata();
+        const sql = `SELECT mel.ID, TRY_CAST(mel.RecordID AS INT) AS RecordNum
+FROM [document].[vwMemberEngagementLogs] mel
+WHERE mel.IsMemberInitiated = 1`;
+        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
+        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        // No ORDER BY anywhere
+        expect(result.FinalSQL).not.toMatch(/ORDER\s+BY/i);
+    });
+
+    it('IIF function with ORDER BY', () => {
+        stubMetadata();
+        const sql = `SELECT m.ID, IIF(m.Status = 'Active', 'Yes', 'No') AS IsActive
+FROM [dbo].[vwMembers] m
+ORDER BY IsActive DESC`;
+        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
+        assertCapEnforcedOrSafelyUntouched(sql, result.FinalSQL, 10);
+        // If outer-wrapped, ORDER BY must be outside the derived table
+        if (/_mj_capped/.test(result.FinalSQL)) {
+            const innerMatch = result.FinalSQL.match(/\([\s\S]*\)\s+AS\s+_mj_capped/i);
+            expect(innerMatch![0]).not.toMatch(/ORDER\s+BY/i);
+            const afterCapped = result.FinalSQL.split('_mj_capped')[1];
+            expect(afterCapped).toMatch(/ORDER\s+BY/i);
+        }
+    });
+
+    it('STRING_AGG with ORDER BY', () => {
+        stubMetadata();
+        const sql = `SELECT DepartmentID, STRING_AGG(Name, ', ') AS Members
+FROM [dbo].[vwMembers]
+GROUP BY DepartmentID
+ORDER BY Members`;
+        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
+        assertCapEnforcedOrSafelyUntouched(sql, result.FinalSQL, 10);
+        if (/_mj_capped/.test(result.FinalSQL)) {
+            const innerMatch = result.FinalSQL.match(/\([\s\S]*\)\s+AS\s+_mj_capped/i);
+            expect(innerMatch![0]).not.toMatch(/ORDER\s+BY/i);
+        }
+    });
+
+    it('TRY_CONVERT with multi-column ORDER BY', () => {
+        stubMetadata();
+        const sql = `SELECT ID, TRY_CONVERT(DATE, CreatedAt) AS CreatedDate, Name
+FROM [dbo].[vwEvents]
+ORDER BY CreatedDate DESC, Name ASC`;
+        const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 50 });
+        assertCapEnforcedOrSafelyUntouched(sql, result.FinalSQL, 50);
+        if (/_mj_capped/.test(result.FinalSQL)) {
+            const afterCapped = result.FinalSQL.split('_mj_capped')[1];
+            expect(afterCapped).toMatch(/ORDER\s+BY\s+CreatedDate\s+DESC\s*,\s*Name\s+ASC/i);
+        }
+    });
+
+    it('end-to-end: Nunjucks template with TRY_CAST resolves and caps correctly', () => {
+        stubMetadata();
+        const sql = `SELECT t.ID, COUNT(DISTINCT mel.ID) AS Cnt
+FROM [document].[vwMemberEngagementLogs] mel
+INNER JOIN [__mj].[vwTaggedItems] ti ON mel.ID = TRY_CAST(ti.RecordID AS INT)
+INNER JOIN [__mj].[vwTags] t ON ti.TagID = t.ID
+WHERE mel.IsMemberInitiated = 1
+  AND mel.[Date] >= {{ StartDate | sqlDate }}
+  AND mel.[Date] <= {{ EndDate | sqlDate }}
+GROUP BY t.ID
+ORDER BY Cnt DESC`;
+        const result = RenderPipeline.Run(sql, {
+            Platform: 'sqlserver',
+            MaxRows: 10,
+            UsesTemplate: true,
+            Parameters: { StartDate: '2024-01-01', EndDate: '2025-12-31' },
+        });
+        // Nunjucks tokens should be resolved
+        expect(result.FinalSQL).not.toContain('{{');
+        expect(result.FinalSQL).toMatch(/2024-01-01/);
+        // Must be capped
+        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
+        // ORDER BY must not be inside the derived table
+        if (/_mj_capped/.test(result.FinalSQL)) {
+            const innerMatch = result.FinalSQL.match(/\([\s\S]*\)\s+AS\s+_mj_capped/i);
+            expect(innerMatch![0]).not.toMatch(/ORDER\s+BY/i);
+            const afterCapped = result.FinalSQL.split('_mj_capped')[1];
+            expect(afterCapped).toMatch(/ORDER\s+BY/i);
+        }
     });
 });
 

@@ -2160,6 +2160,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     deletionLog.Set('Status', d.Success ? 'Complete' : 'Error');
                     if (!d.Success) deletionLog.Set('ProcessingLog', d.Message);
                     if (!(await deletionLog.Save())) throw new Error('Error saving record merge deletion log');
+                    d.RecordMergeDeletionLogID = deletionLog.Get('ID') as string;
                 }
             } else {
                 throw new Error('Error saving record merge log');

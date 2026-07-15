@@ -1454,7 +1454,20 @@ def mj_transpile(sql: str, *, pretty: bool = True, identify: bool = True) -> dic
     # coerce 1/0 → TRUE/FALSE in seed INSERTs that target core tables (e.g. User.IsActive).
     global _BIT_COLS
     _BIT_COLS = _collect_bit_columns(sql)
-    extra = _os.environ.get("MJ_EXTRA_BIT_COLS")
+    # Registry transport: prefer a file path (MJ_EXTRA_BIT_COLS_FILE) so a large
+    # registry never has to ride an env var (which caps at ~128 KB and fails the
+    # spawn with E2BIG). Fall back to the inline MJ_EXTRA_BIT_COLS env for callers
+    # (and tests) that still set it directly.
+    extra = None
+    extra_file = _os.environ.get("MJ_EXTRA_BIT_COLS_FILE")
+    if extra_file:
+        try:
+            with open(extra_file, "r", encoding="utf-8") as _f:
+                extra = _f.read()
+        except Exception:  # noqa: BLE001
+            extra = None
+    if extra is None:
+        extra = _os.environ.get("MJ_EXTRA_BIT_COLS")
     if extra:
         try:
             _BIT_COLS |= {(t.lower(), c.lower()) for t, c in _json.loads(extra)}

@@ -1,6 +1,27 @@
 [
   {
     "fields": {
+      "Name": "Microsoft Fabric SQL Endpoint (External)",
+      "Description": "Live, read-only proxied access to a Microsoft Fabric SQL analytics endpoint or Fabric Warehouse. Speaks the SQL Server (TDS) protocol via the node-mssql driver but authenticates with a Microsoft Entra service principal (Fabric refuses SQL auth). T-SQL dialect with TOP / OFFSET-FETCH paging and INFORMATION_SCHEMA + sys.* introspection (tables, columns, primary keys, and foreign keys — on Fabric, constraints must be declared NOT ENFORCED).",
+      "DriverClass": "SQLServerExternalDriver",
+      "MetadataIntrospectionStrategy": "InformationSchema",
+      "FilterDialect": "tsql",
+      "PagingStrategy": "OffsetFetch",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "69A32B3F-CD26-425B-B402-824F7967DFDE"
+    },
+    "sync": {
+      "lastModified": "2026-07-14T20:47:49.175Z",
+      "checksum": "292895579e019e6cde0b594d6dfc24fc7cbdb1fed355a00e0a75a61f193b048c"
+    }
+  },
+  {
+    "fields": {
       "Name": "PostgreSQL (External)",
       "Description": "Live, read-only proxied access to an external PostgreSQL database via the node-postgres (pg) driver. Use for querying a Postgres instance that lives outside the MemberJunction database.",
       "DriverClass": "PostgresExternalDriver",
@@ -16,7 +37,7 @@
       "ID": "6B667710-EE23-4FA1-81BB-B867F008DD17"
     },
     "sync": {
-      "lastModified": "2026-06-15T20:41:16.512Z",
+      "lastModified": "2026-07-07T15:18:40.987Z",
       "checksum": "3b92dc18205802e246f1fdb381b2246970f9e679c8500ea5fca87202fb2eaaa3"
     }
   },
@@ -35,6 +56,10 @@
     },
     "primaryKey": {
       "ID": "94E7A2F9-42B8-4942-964F-3BCD94981BBA"
+    },
+    "sync": {
+      "lastModified": "2026-07-07T15:18:40.997Z",
+      "checksum": "8c138d92d50df0bc3dedee914a19f92800496b1457ccc68aaea9b7be9bbd6f6b"
     }
   },
   {
@@ -52,6 +77,10 @@
     },
     "primaryKey": {
       "ID": "D38EF7F6-8C96-4ED1-A626-11770D7B84ED"
+    },
+    "sync": {
+      "lastModified": "2026-07-07T15:18:41.007Z",
+      "checksum": "a4b6f2c2844906ea5fdca7cf5f9ba15ee0a03101f978bdbf3f6dfa814764364e"
     }
   },
   {
@@ -69,6 +98,10 @@
     },
     "primaryKey": {
       "ID": "B80C2CE0-A17B-43C1-95E3-C6A24117CE61"
+    },
+    "sync": {
+      "lastModified": "2026-07-07T15:18:41.018Z",
+      "checksum": "0abdb979886ac66cbee2afb5b770b51a66572a27d270e588ed3361e4a11c4144"
     }
   },
   {
@@ -86,6 +119,10 @@
     },
     "primaryKey": {
       "ID": "2464B6AE-1F10-4F0B-8499-C6EBFABBE60D"
+    },
+    "sync": {
+      "lastModified": "2026-07-07T15:18:41.028Z",
+      "checksum": "939ad2cd8d246c492a0da7ec401cd72ea0d127d0e344e1e86d1943439c8c91ac"
     }
   },
   {
@@ -103,6 +140,10 @@
     },
     "primaryKey": {
       "ID": "DEE445E3-8135-4B29-A904-B40BD5D8FC7F"
+    },
+    "sync": {
+      "lastModified": "2026-07-07T15:18:41.036Z",
+      "checksum": "d76cbad4281f68d5f487b4932388e873df68b191a7b893c5090b0fd6507858f6"
     }
   }
 ]
