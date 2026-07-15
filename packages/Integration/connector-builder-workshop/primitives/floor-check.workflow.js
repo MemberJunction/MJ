@@ -154,9 +154,11 @@ const RAW_FETCH_SCHEMA = {
     type: 'object',
     required: ['slotsContent', 'connectorFileExists'],
     properties: {
-        slotsContent: { type: 'string' },        // verbatim bytes of the slots JSON file ('' if unreadable)
+        slotsContent: { type: 'string' },        // verbatim bytes of the slots JSON file ('' if unreadable) — LEGACY, prefer slotsContentB64
+        slotsContentB64: { type: 'string' },     // base64 of the slots JSON file — immune to LLM transcription corruption on large/special-char content (leak #7 fix)
         slotsReadable: { type: 'boolean' },
-        matrixContent: { type: 'string' },        // verbatim bytes of EXTRACTION_REPORT_MATRIX.csv ('' if absent)
+        matrixContent: { type: 'string' },        // verbatim bytes of EXTRACTION_REPORT_MATRIX.csv ('' if absent) — LEGACY, prefer matrixContentB64
+        matrixContentB64: { type: 'string' },    // base64 of EXTRACTION_REPORT_MATRIX.csv (leak #7 fix)
         matrixReadable: { type: 'boolean' },      // false when the file does not exist
         connectorFileExists: { type: 'boolean' }, // result of `test -f <ConnectorFile>` (exit 0 => true)
         metadataContent: { type: 'string' },      // verbatim bytes of the .integration.json metadata file ('' if absent)
@@ -173,6 +175,7 @@ const RAW_FETCH_SCHEMA = {
         bijectionJson: { type: 'string' }, // stdout of graders/bijection.mjs over the metadata file — capability<->per-operation-column bijection ('' if it errors)
         dagJson: { type: 'string' }, // stdout of graders/dag-completeness.mjs over the metadata file — dependency-DAG completeness over ALL objects ('' if it errors)
         ioNameQualityJson: { type: 'string' }, // stdout of io-name-quality.mjs over the metadata file — IO-name catalog-quality check ('' if it errors)
+        slotPresenceJson: { type: 'string' }, // stdout of graders/slot-presence.mjs over the metadata file — ON-DISK twin of the slot-presence + nested-parent checks (large-catalog fallback when the verbatim metadataContent round-trip truncates); '' if it errors
     },
     additionalProperties: false,
 };
@@ -210,12 +213,12 @@ const enumSourcePaths = [
 const enumPathArgs = enumSourcePaths.map((p) => `'${p.replace(/'/g, "'\\''")}'`).join(' ');
 
 // ── Agent fetches RAW BYTES only — cat slots, cat matrix, test -f connector, run the deterministic enumerator. ──
-const fetched = await agent(
+const fetchPrompt =
     `You are a NON-JUDGING file reader for connector run ${runID} (vendor=${vendor}). Run these Bash commands and return ONLY their raw output. Make NO judgment about pass/fail.\n\n` +
-        `1. \`cat ${slotsPath}\` -> return its VERBATIM bytes as slotsContent (set slotsReadable=true; on error '' + slotsReadable=false).\n` +
+        `1. Run \`base64 -i ${slotsPath} | tr -d '\\n'\` and return its stdout VERBATIM as slotsContentB64 (set slotsReadable=true; on error slotsContentB64='' + slotsReadable=false). Base64, NOT raw text — this file is large and raw-text transcription through your own output has previously corrupted it (leak #7); base64 has no special characters to mangle, so copy the base64 stdout EXACTLY, do not re-derive or retype it. Leave legacy slotsContent=''.\n` +
         (matrixPath
-            ? `2. If \`test -f ${matrixPath}\` exits 0, \`cat ${matrixPath}\` -> matrixContent (matrixReadable=true). If the file does NOT exist, return matrixContent='' and matrixReadable=false.\n`
-            : `2. No matrix path provided: return matrixContent='' and matrixReadable=false.\n`) +
+            ? `2. If \`test -f ${matrixPath}\` exits 0, run \`base64 -i ${matrixPath} | tr -d '\\n'\` -> matrixContentB64 (matrixReadable=true). If the file does NOT exist, return matrixContentB64='' and matrixReadable=false. Leave legacy matrixContent=''.\n`
+            : `2. No matrix path provided: return matrixContentB64='' and matrixReadable=false.\n`) +
         (connectorFile
             ? `3. Run \`test -f ${connectorFile} && echo EXISTS || echo MISSING\` -> set connectorFileExists=true ONLY if it printed EXISTS.\n`
             : `3. No connector file path provided: return connectorFileExists=false.\n`) +
@@ -236,20 +239,94 @@ const fetched = await agent(
         `14. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/graders/bijection.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as bijectionJson (deterministic capability<->per-operation-column bijection — flags an IO whose SupportsCreate/Update/Delete/IncrementalSync is set while its required columns are blank; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
         `15. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/graders/dag-completeness.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as dagJson (deterministic dependency-DAG completeness over ALL objects — flags a dangling FK to a non-emitted object or a hard-@lookup cycle that would roll the push back; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
         `16. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/io-name-quality.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as ioNameQualityJson (deterministic IO-name catalog-quality check — flags IO names that are extraction artifacts: filenames, response/status schema titles, field-names, numbered dupes — which sync 0 rows forever; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
-        `\nDo not interpret, summarize, or validate any content. Return { slotsContent, slotsReadable, matrixContent, matrixReadable, connectorFileExists, metadataContent, metadataReadable, provenanceContent, codeEvidenceContent, connectorContent, credTypesContent, credSchemasBundle, extractorScriptContent, planContent, enumerateCatalogJson, fkLookupQualifierJson, bijectionJson, dagJson, ioNameQualityJson }.`,
-    { agentType: 'independent-reviewer', schema: RAW_FETCH_SCHEMA, phase: 'load-bijection', label: `floor-fetch:${runID}` }
-);
+        `17. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/graders/slot-presence.mjs ${metadataFile} ${slotsPath} ${provenanceFile} ${codeEvidenceFile} ${codeResult && codeResult.BuildClean ? '1' : '0'} ${connectorFile || 'none'}\` -> return its stdout VERBATIM as slotPresenceJson (deterministic ON-DISK twin of the metadata slot-presence + nested-parent checks — the large-catalog path used when the verbatim metadataContent round-trip TRUNCATES for a big catalog; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
+        `\nDo not interpret, summarize, or validate any content. Return { slotsContentB64, slotsReadable, matrixContentB64, matrixReadable, connectorFileExists, metadataContent, metadataReadable, provenanceContent, codeEvidenceContent, connectorContent, credTypesContent, credSchemasBundle, extractorScriptContent, planContent, enumerateCatalogJson, fkLookupQualifierJson, bijectionJson, dagJson, ioNameQualityJson, slotPresenceJson }.${args?.rerunNote ? `\n\n${args.rerunNote}` : ''}`;
+
+// RETRY+MERGE (2026-07-15): this single bulk reader must return MANY files + 6 grader-script outputs in one
+// response. Under a large payload it intermittently DROPS a DIFFERENT field each attempt (connection-drop /
+// truncation) → a rotating cast of FALSE `*-unreadable` / `*-missing` / coverage failures on files that are
+// valid on disk (observed repeatedly on the constant-contact run: slots, then a connection-drop, then the
+// matrix, then the write-coverage skip-list — a different one each retry). Run it up to 3× and MERGE non-empty
+// fields across attempts (first non-empty string wins; any true boolean wins), so a field dropped in one
+// attempt is recovered by another. Stop early once the critical fields are all present. Deterministic,
+// connector-agnostic; ZERO behavior change when attempt 1 already returns everything.
+const FETCH_ATTEMPTS = 3;
+let fetched = {};
+const mergeFetch = (acc, r) => {
+    if (!r || typeof r !== 'object') return;
+    for (const k of Object.keys(RAW_FETCH_SCHEMA.properties)) {
+        const v = r[k];
+        if (typeof v === 'string') {
+            if (v.trim().length > 0 && !(typeof acc[k] === 'string' && acc[k].trim().length > 0)) acc[k] = v;
+        } else if (typeof v === 'boolean') {
+            if (v === true) acc[k] = true;
+            else if (acc[k] === undefined) acc[k] = false;
+        }
+    }
+};
+const nonEmpty = (k) => typeof fetched[k] === 'string' && fetched[k].trim().length > 0;
+const fetchCritical = () =>
+    nonEmpty('slotsContentB64') &&
+    nonEmpty('metadataContent') &&
+    (!connectorFile || fetched.connectorFileExists === true) &&
+    (!matrixPath || (fetched.matrixReadable === true && nonEmpty('matrixContentB64'))) &&
+    (!enumPathArgs || nonEmpty('enumerateCatalogJson')) &&
+    nonEmpty('bijectionJson') && nonEmpty('dagJson') && nonEmpty('slotPresenceJson');
+for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
+    const r = await agent(
+        `${fetchPrompt}${attempt > 1 ? `\n\nRETRY ${attempt}/${FETCH_ATTEMPTS}: a prior attempt dropped one or more fields (connection-drop/truncation). Re-read EVERY file individually with base64 where specified and return ALL fields FULLY — do not truncate, summarize, or omit any field.` : ''}`,
+        { agentType: 'independent-reviewer', schema: RAW_FETCH_SCHEMA, phase: 'load-bijection', label: `floor-fetch:${runID}${attempt > 1 ? `:retry${attempt}` : ''}` }
+    ).catch(() => null);
+    mergeFetch(fetched, r);
+    if (fetchCritical()) break;
+}
+
+// ROBUSTNESS (large-connector fix, 2026-07-13): the single bulk file-reader above must return MANY files
+// including (for a large connector) a 1.3MB CODE_EVIDENCE + 352KB metadata; under that load it intermittently
+// DROPS a small file's field — observed on Impexium where the READABLE EXTRACTION_REPORT_MATRIX.csv came back
+// empty → a FALSE `extraction-matrix-missing` (the file base64s to 3.7KB and `test -f` passes on disk). Re-read
+// the tiny, critical matrix in its OWN dedicated agent call so it can never be crowded out, and backfill it
+// into `fetched` when the bulk read didn't return it. Deterministic, connector-agnostic, no behavior change
+// when the bulk read already succeeded.
+if (fetched && matrixPath && (!fetched.matrixReadable || !(typeof fetched.matrixContentB64 === 'string' && fetched.matrixContentB64.trim().length > 0))) {
+    // Retry the tiny dedicated re-read up to 3× — a unique per-attempt label so no attempt can replay a
+    // stale cached `matrixReadable=false` from a prior run (the exact staleness that pinned constant-contact).
+    for (let mAttempt = 1; mAttempt <= 3 && (!fetched.matrixReadable || !(typeof fetched.matrixContentB64 === 'string' && fetched.matrixContentB64.trim().length > 0)); mAttempt++) {
+        const mtx = await agent(
+            `Tiny dedicated matrix re-read (attempt ${mAttempt}) — read ONE file, nothing else, so it cannot be crowded out or truncated.\n` +
+            `Run EXACTLY:\n  test -f ${matrixPath} && base64 -i ${matrixPath} | tr -d '\\n'\n` +
+            `If it printed base64 (non-empty), return matrixContentB64=<that exact stdout, verbatim, do not retype> and matrixReadable=true. If the file does not exist, return matrixContentB64='' and matrixReadable=false. Return ONLY these two fields. The file is small (a few KB); its full base64 MUST round-trip — do not truncate or summarize.`,
+            { schema: { type: 'object', required: ['matrixReadable'], properties: { matrixContentB64: { type: 'string' }, matrixReadable: { type: 'boolean' } } }, phase: 'load-bijection', label: `floor-fetch-matrix:${runID}:a${mAttempt}` }
+        ).catch(() => null);
+        if (mtx && mtx.matrixReadable && typeof mtx.matrixContentB64 === 'string' && mtx.matrixContentB64.trim().length > 0) {
+            fetched.matrixContentB64 = mtx.matrixContentB64;
+            fetched.matrixReadable = true;
+        }
+    }
+}
 
 // ── Everything below is JS. The agent contributed only raw bytes. ──
 const failures = [];
 
+// base64-first decode (leak #7 fix): large/special-char file content transcribed raw through an LLM's
+// own structured output has repeatedly corrupted mid-transcription (non-deterministic, different mangled
+// byte each time) — base64 has no special characters to mangle, so it survives the agent round-trip
+// intact. Falls back to the legacy raw field only if a caller/cache still supplies it.
+function decodeB64OrRaw(b64, raw) {
+    if (typeof b64 === 'string' && b64.trim().length > 0) {
+        try { return Buffer.from(b64, 'base64').toString('utf-8'); } catch { /* fall through to raw */ }
+    }
+    return typeof raw === 'string' ? raw : '';
+}
+
 // Parse the slots file in JS.
 let slots = [];
-if (!fetched || !fetched.slotsReadable || typeof fetched.slotsContent !== 'string' || fetched.slotsContent.trim().length === 0) {
+const slotsContent = decodeB64OrRaw(fetched?.slotsContentB64, fetched?.slotsContent);
+if (!fetched || !fetched.slotsReadable || slotsContent.trim().length === 0) {
     failures.push({ rule: 'slots-file-unreadable', detail: `could not read slots file at ${slotsPath}` });
 } else {
     try {
-        const parsed = JSON.parse(fetched.slotsContent);
+        const parsed = JSON.parse(slotsContent);
         slots = Array.isArray(parsed?.slots) ? parsed.slots : [];
         if (slots.length === 0) {
             failures.push({ rule: 'slots-file-unreadable', detail: 'slots file parsed but contained no slots[]' });
@@ -284,6 +361,46 @@ if (!fetched || !fetched.metadataReadable || typeof fetched.metadataContent !== 
     }
 }
 
+// ── LARGE-CATALOG FALLBACK (2026-07-09) — the on-disk slot-presence grader. ──
+// The metadataContent above is the file's verbatim bytes round-tripped through the file-reader agent's
+// structured output. For a BIG catalog (e.g. Higher Logic Vanilla: 65 IOs / 824 IOFs / ~650KB pretty-
+// printed) that string TRUNCATES → the JSON.parse above throws → metaRoot is null → EVERY metadata slot
+// check below cascade-fails ('metadata-file-unreadable' + a wall of 'zero Integration Object rows'),
+// even though the file is perfectly valid on disk. graders/slot-presence.mjs reads the file DIRECTLY (no
+// round-trip, like bijection/dag/enumerate already do) and returns compact violations. When the in-
+// workflow parse FAILED but the grader parsed the real file, we neutralize the false 'metadata-file-
+// unreadable', adopt the grader's violations, and skip the in-workflow metaRoot-dependent blocks
+// (nested-parent gate + slot loop) — which cannot run without metaRoot anyway. Small connectors whose
+// verbatim parse SUCCEEDS are completely unaffected (usedSlotGrader stays false → existing path).
+let usedSlotGrader = false;
+let slotGrader = null;
+if (fetched && typeof fetched.slotPresenceJson === 'string' && fetched.slotPresenceJson.trim() !== '') {
+    try { slotGrader = JSON.parse(fetched.slotPresenceJson); } catch { slotGrader = null; }
+}
+// SLOTS-ONLY round-trip failure (leak #7 follow-up): even with base64, phase0-slots.json (33KB text ->
+// ~44KB base64) has repeatedly been TRUNCATED by the fetch agent mid-transcription (it wrote placeholder
+// text like "TRUNCATED — see /tmp/slots_b64.txt" instead of the actual base64) even though metaRoot
+// parsed FINE independently. slot-presence.mjs reads slotsFile directly off disk (no round-trip at all)
+// regardless of metaRoot's fate, so its violations are authoritative here too — neutralize the false
+// slots-file-unreadable noise and adopt the grader's real per-slot verdict, WITHOUT switching away from
+// the (successfully parsed) metaRoot path for everything else that doesn't depend on slots content.
+if (slots.length === 0 && metaRoot && slotGrader && slotGrader.rootPresent === true) {
+    for (let i = failures.length - 1; i >= 0; i--) if (failures[i].rule === 'slots-file-unreadable') failures.splice(i, 1);
+    for (const v of (Array.isArray(slotGrader.violations) ? slotGrader.violations : [])) failures.push(v);
+    log(`floor-check: slots-only fallback engaged — the slots-file round-trip was truncated by the fetch agent, but slot-presence.mjs read it directly off disk and verified ${slotGrader.filled ?? '?'} filled / ${slotGrader.verified ?? '?'} verified slot(s) (${(slotGrader.violations || []).length} violation(s)).`);
+}
+if (!metaRoot && slotGrader && slotGrader.rootPresent === true) {
+    usedSlotGrader = true;
+    // Clear BOTH metadata-file-unreadable AND slots-file-unreadable: slot-presence.mjs reads BOTH files
+    // directly off disk (no LLM round-trip for either), so a grader success subsumes both concerns —
+    // leaving slots-file-unreadable un-cleared here was the residual bug (the grader path only ever
+    // cleared the metadata-side failure, so a run where BOTH round-trips failed still surfaced a false
+    // slots-file-unreadable on top of the correctly-adopted grader violations).
+    for (let i = failures.length - 1; i >= 0; i--) if (failures[i].rule === 'metadata-file-unreadable' || failures[i].rule === 'slots-file-unreadable') failures.splice(i, 1);
+    for (const v of (Array.isArray(slotGrader.violations) ? slotGrader.violations : [])) failures.push(v);
+    log(`floor-check: large-catalog fallback engaged — parsed ${slotGrader.ioCount} IO(s)/${slotGrader.iofCount} IOF(s) via on-disk grader (${(slotGrader.violations || []).length} violation(s)); the truncated verbatim metadataContent/slotsContent was NOT trusted.`);
+}
+
 // Resolve the Integration row + IO rows + IOF rows from the parsed file.
 const pickArr = (re, ...names) => {
     if (!re || typeof re !== 'object') return [];
@@ -291,11 +408,23 @@ const pickArr = (re, ...names) => {
     const firstArr = Object.values(re).find(v => Array.isArray(v));
     return Array.isArray(firstArr) ? firstArr : [];
 };
-const integrationFields = (metaRoot && metaRoot.fields) || {};
-const ioRows = metaRoot ? pickArr(metaRoot.relatedEntities, 'MJ: Integration Objects', 'Integration Objects') : [];
-const allIOFRows = ioRows
-    .map(io => pickArr(io && io.relatedEntities, 'MJ: Integration Object Fields', 'Integration Object Fields'))
-    .flat();
+// Under the large-catalog fallback, metaRoot is null (the verbatim parse truncated) — so ioRows /
+// allIOFRows / integrationFields come from the on-disk grader's SLIM summary instead, so the downstream
+// scope-thin / fields-thin / coverage / reality-probe checks run on real counts, not empty arrays.
+const integrationFields = usedSlotGrader
+    ? (slotGrader.integrationFields || {})
+    : ((metaRoot && metaRoot.fields) || {});
+const ioRows = usedSlotGrader
+    ? (Array.isArray(slotGrader.ios) ? slotGrader.ios : [])
+    : (metaRoot ? pickArr(metaRoot.relatedEntities, 'MJ: Integration Objects', 'Integration Objects') : []);
+const allIOFRows = usedSlotGrader
+    ? [] // the slim summary omits per-IOF rows; iofRowCount below carries the count the .length checks need
+    : ioRows
+        .map(io => pickArr(io && io.relatedEntities, 'MJ: Integration Object Fields', 'Integration Object Fields'))
+        .flat();
+// The only POST-slot-loop use of allIOFRows is a `.length` magnitude check (fields-thin); under the
+// fallback that count comes from the grader (allIOFRows itself is intentionally left empty above).
+const iofRowCount = usedSlotGrader ? (Number(slotGrader.iofCount) || 0) : allIOFRows.length;
 
 // ── NESTED-OBJECT PARENT-RESOLUTION gate (deterministic; the systemic nested defect the all-object
 // test exposed). A template-var APIPath (`/events/{eventCode}/attendees/`) where the path BEFORE the
@@ -304,7 +433,8 @@ const allIOFRows = ioRows
 // in prod. The arc emits parentObjectName by construction (deriveTemplateVarParents); this REJECTS any
 // such IO that still lacks it so the defect can never reship. By-id self-refs (the {var} is the first
 // segment, no sibling parent) are NOT gated. ~110 such objects shipped unresolved across ~10 connectors.
-{
+// Skipped when the large-catalog grader fallback ran (it performs the SAME nested-parent check on disk).
+if (!usedSlotGrader) {
     const normP = (p) => '/' + String(p || '').replace(/^\/+|\/+$/g, '') + '/';
     const flatByPath = new Map();
     for (const io of ioRows) { const ap = io && io.fields && io.fields.APIPath; if (ap && !String(ap).includes('{')) flatByPath.set(normP(ap), io.fields.Name); }
@@ -437,7 +567,9 @@ let nullableSkipped = 0;
 // MetadataSource='Declared') are satisfied by their fixedValue, not by an emission.
 const isFixedValueSlot = (slot) => slot && Object.prototype.hasOwnProperty.call(slot, 'fixedValue');
 
-for (const slot of slots) {
+// Skipped when the large-catalog grader fallback ran — graders/slot-presence.mjs performed this SAME
+// per-slot value-presence + evidence loop on disk and its violations were already merged into `failures`.
+if (!usedSlotGrader) for (const slot of slots) {
     const slotId = slot?.id ?? '(unnamed)';
     const nullable = slot?.nullable === true;
     const dot = slotId.indexOf('.');
@@ -599,9 +731,9 @@ if (manifest.sourceDiffMustClose === true) {
         // under-emission (the "3 of 40 fields" class) — never on naming-convention differences.
         const FIELD_THIN = 0.3;
         if (enumConfidence === 'high' && Number.isFinite(enumFieldCount) && enumFieldCount > 0) {
-            const fieldRatio = allIOFRows.length / enumFieldCount;
+            const fieldRatio = iofRowCount / enumFieldCount;
             if (fieldRatio < FIELD_THIN && !justified) {
-                failures.push({ rule: 'fields-thin', detail: `emitted ${allIOFRows.length} IOFs of ~${enumFieldCount} fields the source's ${enumFormat} model declares across its record types (${(fieldRatio * 100).toFixed(1)}%) — tables emitted but columns largely dropped (the "3-of-40 fields" class). The extractor's 0-field hard-fail + dual-derive field diff should have caught this; if it reached the floor the emission is materially incomplete. (Aggregate magnitude check — justify via scopeDecision if the source genuinely over-declares unused fields.)` });
+                failures.push({ rule: 'fields-thin', detail: `emitted ${iofRowCount} IOFs of ~${enumFieldCount} fields the source's ${enumFormat} model declares across its record types (${(fieldRatio * 100).toFixed(1)}%) — tables emitted but columns largely dropped (the "3-of-40 fields" class). The extractor's 0-field hard-fail + dual-derive field diff should have caught this; if it reached the floor the emission is materially incomplete. (Aggregate magnitude check — justify via scopeDecision if the source genuinely over-declares unused fields.)` });
             }
         }
     } else if (enumSourcePaths.length > 0 && (!Number.isFinite(enumCount) || enumCount === 0)) {
@@ -954,7 +1086,22 @@ if (hybridE2E && hybridE2E.assertions) {
         failures.push({ rule: 'first-sync-incomplete', detail: 'at least one object reached its full rowcount only on a later pass — door-before-child ordering defect on the fresh DB (GZ #21/#28 class). Second-sync self-heal is a FAIL, not a footnote.' });
     }
     if (a.captureEngaged === false) {
-        failures.push({ rule: 'capture-not-engaged', detail: 'custom-column capture did not engage (overflow column absent on created tables, or zero customs captured while custom-marker fields were observed) — the GZ #29/#31 silent no-op class. Waivable only with vendor-confirmed-no-customs evidence.' });
+        // WAIVER (leak #8 fix): the rule's own message says "waivable only with vendor-confirmed-no-customs
+        // evidence" but no automated check for that evidence existed — every genuinely no-customs vendor
+        // would hard-fail here forever with no escape hatch. A vendor has ALREADY made this claim, with
+        // real per-object evidence, when Integration.Configuration.CustomFieldMarkerPattern is explicitly
+        // null/absent AND CustomFieldMarkerPatternNote documents WHY (a non-empty evidenced note, not a
+        // placeholder) — this is exactly the metadata-writer's own "no dynamic custom-field naming
+        // convention found" finding (see extractor-script-conventions.md), not a fabricated waiver.
+        let cfg = metaRoot?.fields?.Configuration ?? null;
+        if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch { cfg = null; } }
+        const noCustomsNote = typeof cfg?.CustomFieldMarkerPatternNote === 'string' ? cfg.CustomFieldMarkerPatternNote.trim() : '';
+        const noCustomsWaived = !cfg?.CustomFieldMarkerPattern && noCustomsNote.length > 40; // a real note, not a stub
+        if (noCustomsWaived) {
+            log(`floor-check: capture-not-engaged WAIVED — Configuration.CustomFieldMarkerPattern is null with a documented no-customs finding: "${noCustomsNote.slice(0, 160)}..."`);
+        } else {
+            failures.push({ rule: 'capture-not-engaged', detail: 'custom-column capture did not engage (overflow column absent on created tables, or zero customs captured while custom-marker fields were observed) — the GZ #29/#31 silent no-op class. Waivable only with vendor-confirmed-no-customs evidence (Configuration.CustomFieldMarkerPattern=null + a documented CustomFieldMarkerPatternNote — none found here).' });
+        }
     }
     // FAIL-OPEN GUARD (#H20): the three checks above fire only on a DEFINITE bad value (=== true/false),
     // so a null/undefined assertion (the e2e couldn't determine the outcome) slips through as a PASS.
@@ -1063,11 +1210,12 @@ const emittedIOCount = Number.isInteger(extractStats.objectsExtracted)
     : (Array.isArray(extractStats.extractedObjects) ? extractStats.extractedObjects.length : 0);
 
 if (matrixPath) {
-    if (!fetched || !fetched.matrixReadable || typeof fetched.matrixContent !== 'string' || fetched.matrixContent.trim().length === 0) {
+    const matrixContent = decodeB64OrRaw(fetched?.matrixContentB64, fetched?.matrixContent);
+    if (!fetched || !fetched.matrixReadable || matrixContent.trim().length === 0) {
         failures.push({ rule: 'extraction-matrix-missing', detail: `EXTRACTION_REPORT_MATRIX.csv not readable at ${matrixPath}` });
     } else {
         // Parse the CSV in JS: first line is the header, remaining non-empty lines are rows.
-        const lines = fetched.matrixContent.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim().length > 0);
+        const lines = matrixContent.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim().length > 0);
         const header = lines.length > 0 ? lines[0].split(',').map(h => h.trim()) : [];
         const dataLines = lines.slice(1);
         const pkIdx = header.indexOf('PKVerdict');

@@ -222,9 +222,16 @@ function buildWriteRoundTrip(cap, row) {
   const createPath = rowCol(cap, 'CreateAPIPath');
   if (!createPath) return null;
   const createMethod = String(rowCol(cap, 'CreateMethod') || 'POST').toUpperCase();
-  const updatePath = rowCol(cap, 'UpdateAPIPath') || `${createPath}/{id}`;
+  // The mock matches on METHOD + PATHNAME (query string is not part of route matching), but a connector's
+  // CRUD path template routinely carries its ID/scope in the QUERY (e.g. `/v2.0/Answer/Delete?answerKey={id}`,
+  // `/v2.0/Discussions/RemovePost?discussionPostKey={id}`). Registering the route under the full `?…={id}`
+  // path means the connector's real request (`…/Delete?answerKey=ans-1`) never matches → 404 on the write
+  // (the delete-fails-every-run class). Strip the query so the route is keyed on the pathname the mock
+  // actually matches; the connector's query params are ignored by the matcher, exactly as intended.
+  const stripQuery = (p) => (p == null ? p : String(p).split('?')[0]);
+  const updatePath = stripQuery(rowCol(cap, 'UpdateAPIPath') || `${createPath}/{id}`);
   const updateMethod = String(rowCol(cap, 'UpdateMethod') || 'PATCH').toUpperCase();
-  const deletePath = rowCol(cap, 'DeleteAPIPath') || `${createPath}/{id}`;
+  const deletePath = stripQuery(rowCol(cap, 'DeleteAPIPath') || `${createPath}/{id}`);
   const deleteMethod = String(rowCol(cap, 'DeleteMethod') || 'DELETE').toUpperCase();
   const idLoc = String(rowCol(cap, 'CreateIDLocation') || 'body').toLowerCase();
   // a safe plain-scalar string field for create/update attributes (not PK/wm/date/id/url/json)
@@ -234,10 +241,11 @@ function buildWriteRoundTrip(cap, row) {
   const fld = scalar ? scalar.fn : null;
   const createBody = { id: ID, ID, Id: ID, externalID: ID, ExternalID: ID };
   if (fld) createBody[fld] = 'mock-created';
+  const createPathClean = stripQuery(createPath);
   const headers = { 'content-type': 'application/json' };
-  if (idLoc === 'header') headers.location = `${createPath}/${ID}`;
+  if (idLoc === 'header') headers.location = `${createPathClean}/${ID}`;
   const routes = [
-    { Path: createPath, Method: createMethod, Status: 200, Body: createBody, Headers: headers },
+    { Path: createPathClean, Method: createMethod, Status: 200, Body: createBody, Headers: headers },
     { Path: updatePath, Method: updateMethod, Status: 200, Body: { ...createBody, ...(fld ? { [fld]: 'mock-updated' } : {}) } },
     { Path: deletePath, Method: deleteMethod, Status: 200, Body: { id: ID, deleted: true } },
   ];
@@ -292,26 +300,36 @@ export async function deriveLifecycleFromDeployed({ db, platform, mjSchema = '__
       ? `SELECT "ClassName" AS cn FROM ${INT} WHERE "ID" = ${lit(integrationID)}`
       : `SELECT ClassName AS cn FROM ${INT} WHERE ID = ${lit(integrationID)}`))[0];
     sourceClass = rowCol(intRow, 'cn');
-    if (sourceClass) {
-      const srcPath = pathResolve(REPO_ROOT_GEN, 'packages/Integration/connectors/src', `${sourceClass}.ts`);
-      if (existsSync(srcPath)) {
-        const src = readFileSync(srcPath, 'utf8');
-        hasDiscovery = /\b(?:public|protected|async|override)?\s*DiscoverObjects\s*\(/.test(src);
-        isAuthoritative = /DiscoveryIsAuthoritative[\s\S]{0,160}?\breturn\s+true\b/.test(src);
-      }
+    // Prefer the REAL artifact source when the caller points at it (E2E_CONNECTOR_SRC_FILE) — so
+    // discovery-capability detection reflects the connector UNDER TEST (the Integrations-repo .ts),
+    // NOT a same-named MJ workshop copy. Falls back to the workshop path by ClassName.
+    const srcOverride = process.env.E2E_CONNECTOR_SRC_FILE;
+    const srcPath = srcOverride && existsSync(srcOverride)
+      ? srcOverride
+      : (sourceClass ? pathResolve(REPO_ROOT_GEN, 'packages/Integration/connectors/src', `${sourceClass}.ts`) : null);
+    if (srcPath && existsSync(srcPath)) {
+      const src = readFileSync(srcPath, 'utf8');
+      hasDiscovery = /\b(?:public|protected|async|override)?\s*DiscoverObjects\s*\(/.test(src);
+      isAuthoritative = /DiscoveryIsAuthoritative[\s\S]{0,160}?\breturn\s+true\b/.test(src);
     }
   } catch { /* no source → honest no-discovery */ }
 
-  // 3) writeRoundTrip — a write-capable FLAT object (own route, non-template path) with a create path.
+  // 3) writeRoundTrip(s) — write-capable FLAT objects (own route, non-template path) with a create path.
+  //    writeRoundTrip = the first (back-compat, single-object bidir). writeRoundTrips = ALL of them
+  //    (E2E_WRITE_ALL coverage — phaseBidirectional round-trips EVERY writable object, not just one).
   let writeRoundTrip = null;
+  let writeRoundTrips = [];
   if (anyWrite && Array.isArray(rows)) {
     const flatByName = new Map(rows
       .filter((r) => !r.accessPath && !String(r.rawApiPath ?? r.apipath ?? '').includes('{'))
       .map((r) => [String(r.name).toLowerCase(), r]));
-    const wcap = caps.find((c) => truthyFlag(rowCol(c, 'SupportsCreate')) && rowCol(c, 'CreateAPIPath')
+    const wcaps = caps.filter((c) => (truthyFlag(rowCol(c, 'SupportsCreate')) || truthyFlag(rowCol(c, 'SupportsWrite'))) && rowCol(c, 'CreateAPIPath')
       && flatByName.has(String(rowCol(c, 'Name')).toLowerCase())
       && !/user|owner/i.test(String(rowCol(c, 'Name'))));
-    if (wcap) writeRoundTrip = buildWriteRoundTrip(wcap, flatByName.get(String(rowCol(wcap, 'Name')).toLowerCase()));
+    writeRoundTrips = wcaps
+      .map((c) => buildWriteRoundTrip(c, flatByName.get(String(rowCol(c, 'Name')).toLowerCase())))
+      .filter(Boolean);
+    writeRoundTrip = writeRoundTrips[0] ?? null;
   }
 
   return {
@@ -322,6 +340,7 @@ export async function deriveLifecycleFromDeployed({ db, platform, mjSchema = '__
     incrementalStrategy: anyWatermark ? 'watermark' : 'content-hash',
     supportsWrite: !!writeRoundTrip,
     writeRoundTrip,
+    writeRoundTrips,
     supportsScheduling: true,
     connectionTestable: true,
     derivedFromMetadata: true,
@@ -463,12 +482,17 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
   // continuation-token scheme) — WITHOUT a pagination key they treat the whole body as ONE record,
   // silently landing a single malformed row per object. Carrying a terminal (single-page, no-more,
   // no-continuation) pagination is additive + harmless for connectors that read `body.<key>` directly.
-  const wrapBody = (arr) => (envelopeKey
-    ? { [envelopeKey]: arr, pagination: { object_count: (Array.isArray(arr) ? arr.length : 0), page_number: 1, page_size: (Array.isArray(arr) ? arr.length : 0), page_count: 1, has_more_items: false, continuation: null } }
+  // PER-OBJECT envelope key. A connector whose objects each carry their OWN ResponseDataKey (e.g. Zendesk:
+  // tickets→`tickets`, users→`users`) needs EACH route body wrapped under THAT object's key, not one global
+  // key — a single global key makes every other object's `body[itsKey]` undefined → the connector lands the
+  // whole envelope as ONE malformed record (a vacuous rows>0). `key` defaults to the global envelopeKey, so
+  // connectors with a uniform/absent rdk are UNCHANGED. Pass `r.rdk || envelopeKey` per object.
+  const wrapBody = (arr, key = envelopeKey) => (key
+    ? { [key]: arr, pagination: { object_count: (Array.isArray(arr) ? arr.length : 0), page_number: 1, page_size: (Array.isArray(arr) ? arr.length : 0), page_count: 1, has_more_items: false, continuation: null } }
     : arr);
   // Inverse of wrapBody — get the row array back out of a (possibly enveloped) route Body so the
   // delta-candidate scan + delta-pass construction work identically for bare-array and enveloped fixtures.
-  const unwrapBody = (b) => (Array.isArray(b) ? b : (b && envelopeKey && Array.isArray(b[envelopeKey]) ? b[envelopeKey] : []));
+  const unwrapBody = (b, key = envelopeKey) => (Array.isArray(b) ? b : (b && key && Array.isArray(b[key]) ? b[key] : []));
   // ACCESS-PATH connectors (nested doors) need a nested door body, not a flat route-per-object.
   // Use the pure access-path manifest ONLY when EVERY routable object is access-path (e.g. neon).
   // A MIXED catalog (a few access-path objects among many flat ones — openwater had 1 of 25) must
@@ -504,17 +528,80 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
     // parent id still lands a row (coverage never regresses). Parent ids are enumerated the SAME
     // deterministic way the parent's own route builds them (mkRowFor), so they match what the connector
     // fetched from the parent and then substitutes here.
+    const objKey = r.rdk || envelopeKey; // per-object response-envelope key (Zendesk: each object's own rdk)
     const hasVar = /\{[^}]+\}/.test(String(r.apipath || ''));
-    const parentRow = (hasVar && r.parentObjectName) ? rows.find((x) => x.name === r.parentObjectName) : null;
-    if (parentRow && parentRow.pk) {
+    // Resolve the parent row: prefer Configuration.parentObjectName, but fall back to the FK-declared parent
+    // (IOF RelatedIntegrationObjectID) when parentObjectName names a phantom object — this is what lets a
+    // template-var child (e.g. Zendesk user_identities, parentObjectName='end_users' but FK→'users') get
+    // STABLE per-parent concrete routes instead of a single wildcard whose injected id ping-pongs across
+    // parents (the content-hash churn that fails idempotent.no-redundant-writes).
+    const parentRow = hasVar
+      ? ((r.parentObjectName && rows.find((x) => x.name === r.parentObjectName))
+          || (r.fkParentName && rows.find((x) => x.name === r.fkParentName))
+          || null)
+      : null;
+    // Multi-template-var path (grandchild, e.g. Zendesk custom_object_record_attachments =
+    // `/custom_objects/{custom_object_key}/records/{record_id}/attachments`): each var is injected from a
+    // DIFFERENT parent (Configuration.parentObjectNames maps var→parentObject). A single-parent replacement
+    // (all vars → one id) never matches the connector's real request, so it falls to the wildcard whose
+    // injected ids ping-pong → content-hash churn (fails idempotency). Emit a concrete route per bounded
+    // cartesian combo of each var's own parent ids so the connector's injected id-tuple hits a stable route.
+    const tmplVars = [...String(r.apipath || '').matchAll(/\{([^}]+)\}/g)].map((mm) => mm[1]);
+    if (hasVar && tmplVars.length >= 2 && r.parentObjectNames && Object.keys(r.parentObjectNames).length) {
+      const idsForVar = (v) => {
+        const pName = r.parentObjectNames[v];
+        const pRow = pName ? rows.find((x) => x.name === pName) : null;
+        if (pRow && pRow.pk) return [...new Set([1, 2, 3].map((n) => mkRowFor(pRow, n)[pRow.pk]).filter((x) => x != null).map(String))];
+        return ['1', '2', '3'];
+      };
+      const perVar = tmplVars.map(idsForVar);
+      // Bounded cartesian: cap combos so a deep multi-parent graph can't explode the route set.
+      let combos = [[]];
+      for (const ids of perVar) combos = combos.flatMap((c) => ids.map((id) => [...c, id]));
+      combos = combos.slice(0, 12);
+      // Each combo returns a UNIQUE child (distinct synthetic PK) so a given child pk maps to exactly ONE
+      // parent-id tuple. If combos shared child pks (`ci % 3`), the connector injects a DIFFERENT parent id
+      // into the SAME child on each sync (order-dependent) → the child's content-hash churns pass-to-pass
+      // (the idempotency failure). A distinct child per combo makes the injected ids stable → zero re-write.
+      combos.forEach((tuple, ci) => {
+        let cp = String(r.apipath);
+        tmplVars.forEach((v, vi) => { cp = cp.replace('{' + v + '}', tuple[vi]); });
+        routes.push({ Path: cp, Method: r.readMethod || 'GET', Status: 200, Body: wrapBody([mkRowFor(r, ci + 1)], objKey) });
+      });
+      // Wildcard fallback returns a child pk OUTSIDE the concrete set so an un-enumerated parent tuple
+      // never collides with a concrete child's pk (which would re-introduce the injected-id churn).
+      routes.push({ Path: r.apipath, Method: r.readMethod || 'GET', Status: 200, Body: wrapBody([mkRowFor(r, combos.length + 1)], objKey) });
+    } else if (parentRow && parentRow.pk) {
       const parentIds = [...new Set([1, 2, 3].map((n) => mkRowFor(parentRow, n)[parentRow.pk]).filter((v) => v != null).map(String))];
       parentIds.forEach((pid, pi) => {
         const concretePath = String(r.apipath).replace(/\{[^}]+\}/g, pid);
-        routes.push({ Path: concretePath, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, pi + 1)]) });
+        routes.push({ Path: concretePath, Method: r.readMethod || 'GET', Status: 200, Body: wrapBody([mkRowFor(r, pi + 1)], objKey) });
       });
-      routes.push({ Path: r.apipath, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, 1)]) });
+      // Wildcard fallback returns a child pk OUTSIDE the concrete set (index parentIds.length + 1) so an
+      // un-enumerated parent (e.g. a 4th parent added by a multi-page cursor hub) never collides with a
+      // concrete child's pk. A collision re-introduces the injected-id churn: a child whose OWN pk is not the
+      // parent id (so the injected parent id is captured to __mj_integration_CustomOverflow and folded into the
+      // content hash) would be written by TWO parents with different injected ids, ping-ponging its content
+      // hash across syncs → perpetual re-write (fails forward.incremental.narrowed / idempotent). This mirrors
+      // the multi-template-var branch above, which already emits mkRowFor(r, combos.length + 1) for this reason.
+      routes.push({ Path: r.apipath, Method: r.readMethod || 'GET', Status: 200, Body: wrapBody([mkRowFor(r, parentIds.length + 1)], objKey) });
     } else {
-      routes.push({ Path: r.apipath, Method: 'GET', Status: 200, Body: wrapBody(body) });
+      routes.push({ Path: r.apipath, Method: r.readMethod || 'GET', Status: 200, Body: wrapBody(body, objKey) });
+    }
+    // INCREMENTAL-EXPORT endpoint: a connector fetches an incremental object from a separate cursor/export
+    // path. Serve it as TWO Match-scoped routes so both the initial backfill AND the watermark-narrowed
+    // re-sync behave correctly (this is what lets an incremental object pass idempotency + watermark C1):
+    //   • first backfill (`?start_time=…`): the records + a terminal `after_cursor` so the connector SAVES
+    //     that cursor as its cross-run watermark (end_of_stream:false → the connector loops once more);
+    //   • cursor follow-up AND every later sync (`?cursor=…`): EMPTY + `end_of_stream:true` — the backfill
+    //     loop drains in one extra page, and the NEXT sync (which sends the saved cursor) fetches zero →
+    //     Processed/Succeeded 0 for this object → the 2nd pass narrows (no redundant writes).
+    if (r.incrementalEndpoint) {
+      const cursorTok = `${r.name}-wm-cursor`;
+      routes.push({ Path: r.incrementalEndpoint, Method: 'GET', Match: 'start_time', Status: 200,
+        Body: objKey ? { [objKey]: body, after_cursor: cursorTok, end_of_stream: false, count: body.length } : body });
+      routes.push({ Path: r.incrementalEndpoint, Method: 'GET', Match: 'cursor=', Status: 200,
+        Body: objKey ? { [objKey]: [], after_cursor: null, end_of_stream: true, count: 0 } : [] });
     }
     routeRows.push(r);
     objs.push({ Name: r.name, OrderingField: r.wm || r.pk });
@@ -577,17 +664,18 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
         if (seenPaths.has(cp)) continue;
         seenPaths.add(cp);
         const hasVar = /\{[^}]+\}/.test(cp);
+        const childKey = r.rdk || envelopeKey; // per-object envelope key for this access child
         if (parentIds && parentIds.length && hasVar) {
           parentIds.forEach((parentId, pi) => {
             const concretePath = cp.replace(/\{[^}]+\}/g, parentId);
             // One DISTINCT child per parent (scoped PK) → the connector's injected parent id is stable.
-            routes.push({ Path: concretePath, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, pi + 1)]) });
+            routes.push({ Path: concretePath, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, pi + 1)], childKey) });
           });
           // Wildcard fallback (last, so a concrete literal-exact match wins) — one record, so any
           // un-enumerated parent id still lands a row (coverage can never regress).
-          routes.push({ Path: cp, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, 1)]) });
+          routes.push({ Path: cp, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, 1)], childKey) });
         } else {
-          routes.push({ Path: cp, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, 1), mkRowFor(r, 2), mkRowFor(r, 3)]) });
+          routes.push({ Path: cp, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, 1), mkRowFor(r, 2), mkRowFor(r, 3)], childKey) });
         }
       }
       routeRows.push(r);
@@ -624,14 +712,14 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
   const routeForRow = (rr) => routes.find((rt) => rt.Path === rr.apipath) || routes[routeRows.indexOf(rr)];
   let pick = -1, updField = null;
   for (let i = 0; i < routeRows.length; i++) {
-    const rr = routeRows[i], body = unwrapBody(routeForRow(rr)?.Body);
+    const rr = routeRows[i], body = unwrapBody(routeForRow(rr)?.Body, rr.rdk || envelopeKey);
     if (!rr.pk || !Array.isArray(body) || body.length < 3 || String(rr.rawApiPath ?? rr.apipath ?? '').includes('{') || rr.accessPath) continue; // delta target must be FLAT (no parent chain to replay in the delta pass)
     const uf = rr.fields.map((f) => f.fn).find((fn) => isSafeScalarStr(body, fn, (rr.fields.find((x) => x.fn === fn) || {}).ft, rr.pk, rr.wm));
     if (uf) { pick = i; updField = uf; break; }
   }
   // Fallback: first PK-bearing object with any non-PK/non-wm string body value (excluding link/json names).
   if (pick < 0) for (let i = 0; i < routeRows.length; i++) {
-    const rr = routeRows[i], body = unwrapBody(routeForRow(rr)?.Body);
+    const rr = routeRows[i], body = unwrapBody(routeForRow(rr)?.Body, rr.rdk || envelopeKey);
     if (!rr.pk || !Array.isArray(body) || body.length < 3 || String(rr.rawApiPath ?? rr.apipath ?? '').includes('{') || rr.accessPath) continue; // delta target must be FLAT (no parent chain to replay in the delta pass)
     updField = Object.keys(body[0]).find((k) => k !== rr.pk && k !== rr.wm
       && typeof body[0][k] === 'string' && !/date|time|_links|link|url|json|fields/i.test(k)) || null;
@@ -644,7 +732,7 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
   // parent chain the delta pass can't replay. Green connectors already picked above → never reach here.
   if (pick < 0) {
     for (let i = 0; i < routeRows.length; i++) {
-      const rr = routeRows[i], body = unwrapBody(routeForRow(rr)?.Body);
+      const rr = routeRows[i], body = unwrapBody(routeForRow(rr)?.Body, rr.rdk || envelopeKey);
       if (!rr.pk || !Array.isArray(body) || body.length < 3 || String(rr.rawApiPath ?? rr.apipath ?? '').includes('{')) continue;
       updField = rr.fields.map((f) => f.fn).find((fn) => isSafeScalarStr(body, fn, (rr.fields.find((x) => x.fn === fn) || {}).ft, rr.pk, rr.wm))
         || Object.keys(body[0]).find((k) => k !== rr.pk && k !== rr.wm && typeof body[0][k] === 'string' && !/date|time|_links|link|url|json|fields/i.test(k)) || null;
@@ -653,7 +741,8 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
   }
   if (pick < 0) pick = 0; // absolute last resort: first object, no update sub-assert
   const first = routeRows[pick], r0 = routeForRow(first) || routes[pick];
-  const r0Body = unwrapBody(r0.Body);
+  const deltaKey = first.rdk || envelopeKey; // per-object envelope key for the delta target
+  const r0Body = unwrapBody(r0.Body, deltaKey);
   const pk0 = first.pk;
   const NEW_VAL = 'updated-delta';
   const deltaRow1 = { ...r0Body[0] }; if (updField) deltaRow1[updField] = NEW_VAL;
@@ -661,7 +750,7 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
     Object: first.name,
     // ExpectedDeletes ⇒ phaseDelta runs this as a FULL sync (orphan detection needs the complete set);
     // row3 absent ⇒ deleted/tombstoned, rows 1+2 present, row1's updField now equals NEW_VAL.
-    Routes: [{ Path: r0.Path, Method: 'GET', Status: 200, Body: wrapBody([deltaRow1, r0Body[1]]) }],
+    Routes: [{ Path: r0.Path, Method: 'GET', Status: 200, Body: wrapBody([deltaRow1, r0Body[1]], deltaKey) }],
     ExpectedPresent: [String(synthPk(first.name, first.pkType, 1)), String(synthPk(first.name, first.pkType, 2))],
     ExpectedDeletes: [String(synthPk(first.name, first.pkType, 3))],
   };
@@ -691,7 +780,12 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
     // bases (BaseURL/HostBaseURL/InstanceURL) AND token endpoints (TokenURL/LoginUrl/TokenUrl).
     TokenURL: `${PH}/token`, TokenEndpoint: `${PH}/token`, TokenUrl: `${PH}/token`,
     LoginUrl: PH, InstanceURL: PH, InstanceUrl: PH, HostBaseURL: PH,
-    AccountID: 'mock-account', Subdomain: 'mock', Scope: 'all', Scopes: 'all',
+    // NOTE: intentionally NO AccountId/AccountID here — tenant-anchored connectors (WildApricot) must
+    // AUTO-DISCOVER the account id from GET /accounts so it matches the fixture's account record ids;
+    // hardcoding one makes the connector's custom fetches target an id the child fixtures don't have.
+    Subdomain: 'mock', Scope: 'all', Scopes: 'all',
+    // Blackbaud SKY API: OAuth token AND a subscription-key header (bb-api-subscription-key). All casings.
+    SubscriptionKey: 'mock-subscription-key', subscriptionKey: 'mock-subscription-key', subscription_key: 'mock-subscription-key', SubscriptionId: 'mock-subscription-key',
     // Neon (Basic orgId:apiKey), OpenWater (ClientKey+ApiKey), Path LMS (applicationId/Secret or Token).
     OrgID: 'mock-org', orgId: 'mock-org', ClientKey: 'mock-client-key',
     applicationId: 'mock-app-id', applicationSecret: 'mock-app-secret',
@@ -815,6 +909,12 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
     : `SELECT ID AS id, Name AS name, APIPath AS apipath, IncrementalWatermarkField AS wm, Configuration AS cfg, ResponseDataKey AS rdk FROM ${IO} WHERE IntegrationID = ${lit(integrationID)} AND Status = 'Active' ORDER BY CASE WHEN Name LIKE '%Custom%' OR Name LIKE '%Webhook%' OR Name LIKE '%Validator%' OR Name LIKE '%Relation%' THEN 1 ELSE 0 END, Name`;
   const ioRows = await db.rows(ioSql);
   if (!ioRows?.length) return { ok: false, reason: `no deployed IntegrationObject rows for integration ${integrationID}` };
+  // Map IntegrationObject ID → Name so an IOF's RelatedIntegrationObjectID (the metadata-declared FK
+  // parent) can be resolved to the parent object name. This is the AUTHORITATIVE parent link — a child's
+  // Configuration.parentObjectName can name a phantom object (Zendesk: `/end_users/{user_id}/…` declares
+  // parentObjectName='end_users' though the real object is 'users'), whereas the IOF FK points at the real
+  // parent IO. Used below to build stable parent-scoped routes (idempotency) when parentObjectName misses.
+  const ioIdToName = new Map(ioRows.map((r) => [String(col(r, 'id')).toLowerCase(), col(r, 'name')]));
 
   // Bounded-Goldilocks exclude list: objects known to inject a sync-time defect the mock can't model
   // (e.g. neon CustomObjectValidatorRuleResponse → a content-hash key promoted to a column the table
@@ -839,10 +939,27 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
     // own route but MUST be carried so the door-embed logic nests it into its parent's records. Skipping it
     // (the old `startsWith('(')` filter) left the parent's nesting field a scalar → the nested grandchildren
     // (JudgeAssignment/Report, fetched per parent id) found no ids → 0 rows. Keep any object with a door.
-    let accessPath = null, parentObjectName = null, parentObjectNames = null;
+    let accessPath = null, parentObjectName = null, parentObjectNames = null, incrementalEndpoint = null;
+    let readMethod = 'GET';
     try {
       const j = JSON.parse(col(ioRow, 'cfg') || '{}');
       accessPath = j.AccessPath || null;
+      // Read METHOD (mirror the connector's own scheme→verb rule): a connector reads via POST when its
+      // pagination is OFFSET (StartRecord/EndRecord in the body) or MARKER-DIRECTION (Marker/Direction in
+      // the body), or when accessPath.readMethod is explicitly POST. A flat list route MUST carry that verb
+      // — else the mock (which matches on method + pathname) serves only a GET route and the connector's
+      // POST list request 404s → 0 rows for that object (the CommunityMembers/DataFeed class). Read from
+      // BOTH `paginationDetail`/`accessPath` (the connector's lowercase keys) and the capitalized variants.
+      const pd = j.paginationDetail || j.PaginationDetail || null;
+      const pdParams = Array.isArray(pd?.params) ? pd.params.map(String) : (Array.isArray(pd?.Params) ? pd.Params.map(String) : []);
+      const isOffset = pdParams.some((p) => /^StartRecord$/i.test(p)) && pdParams.some((p) => /^EndRecord$/i.test(p));
+      const isMarker = pdParams.some((p) => /^Marker$/i.test(p)) && pdParams.some((p) => /^Direction$/i.test(p));
+      const apReadMethod = String((j.accessPath || j.AccessPath || {}).readMethod || '').toUpperCase();
+      if (isOffset || isMarker || apReadMethod === 'POST') readMethod = 'POST';
+      // A connector may fetch an incremental-sync object from a SEPARATE cursor/export endpoint
+      // (e.g. Zendesk `/api/v2/incremental/tickets/cursor`) instead of the list APIPath. The mock
+      // must serve THAT path too, or the first sync 404s → 0 rows. Carry it so the builder emits a route.
+      incrementalEndpoint = typeof j.incrementalEndpoint === 'string' ? j.incrementalEndpoint : null;
       // parentObjectName(s) — the by-name nested-fetch config (an alternative to AccessPath). A child
       // whose apipath carries a parent template var (`/events/{event_id}/attendees/`) is fetched once per
       // parent record; the fixture must serve DISTINCT children per parent id so the connector's injected
@@ -857,9 +974,18 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
     if (excludeObjects.has(String(col(ioRow, 'name')).toLowerCase())) continue; // bounded-Goldilocks exclude
     const ioID = col(ioRow, 'id');
     const iofSql = pg
-      ? `SELECT "Name" AS fn, "Type" AS ft, "IsPrimaryKey" AS pk FROM ${IOF} WHERE "IntegrationObjectID" = ${lit(ioID)} AND "Status" = 'Active' ORDER BY "Sequence"`
-      : `SELECT Name AS fn, Type AS ft, IsPrimaryKey AS pk FROM ${IOF} WHERE IntegrationObjectID = ${lit(ioID)} AND Status = 'Active' ORDER BY Sequence`;
+      ? `SELECT "Name" AS fn, "Type" AS ft, "IsPrimaryKey" AS pk, "RelatedIntegrationObjectID" AS relio, "RelatedIntegrationObjectFieldName" AS relfld FROM ${IOF} WHERE "IntegrationObjectID" = ${lit(ioID)} AND "Status" = 'Active' ORDER BY "Sequence"`
+      : `SELECT Name AS fn, Type AS ft, IsPrimaryKey AS pk, RelatedIntegrationObjectID AS relio, RelatedIntegrationObjectFieldName AS relfld FROM ${IOF} WHERE IntegrationObjectID = ${lit(ioID)} AND Status = 'Active' ORDER BY Sequence`;
     const iofRows = await db.rows(iofSql);
+    // FK-declared parent (authoritative): the first IOF carrying a RelatedIntegrationObjectID that resolves
+    // to a sibling object. Preferred over Configuration.parentObjectName for building stable parent-scoped
+    // routes when the latter names a phantom object.
+    let fkParentName = null;
+    for (const f of (iofRows ?? [])) {
+      const rel = col(f, 'relio');
+      const nm = rel ? ioIdToName.get(String(rel).toLowerCase()) : null;
+      if (nm) { fkParentName = nm; break; }
+    }
     const fields = (iofRows ?? []).map((f) => ({ fn: col(f, 'fn'), ft: col(f, 'ft') })).filter((x) => x.fn);
     const pkRow = (iofRows ?? []).find((f) => { const v = col(f, 'pk'); return v === true || v === 1 || String(v).toLowerCase() === 'true'; });
     const pk = pkRow ? col(pkRow, 'fn') : null;
@@ -868,7 +994,7 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
     // streaming PK ideation, else synthetic-PK / content-hash fallback (§4). The harness must NOT drop them
     // (requiring a hard PK was the bug that made neon's 24 soft-keyless objects show as untested).
     const apForRow = accessPath ? { ...accessPath, door: prefixed(accessPath.door), entryPath: prefixed(accessPath.entryPath), alternativePaths: (accessPath.alternativePaths || []).map(prefixed) } : accessPath;
-    rows.push({ name: col(ioRow, 'name'), apipath: prefixed(apipath), rawApiPath: apipath, wm: col(ioRow, 'wm') || null, pk, pkType, fields, accessPath: apForRow, parentObjectName, parentObjectNames, rdk: col(ioRow, 'rdk') || null });
+    rows.push({ name: col(ioRow, 'name'), apipath: prefixed(apipath), rawApiPath: apipath, wm: col(ioRow, 'wm') || null, pk, pkType, fields, accessPath: apForRow, parentObjectName, parentObjectNames, fkParentName, rdk: col(ioRow, 'rdk') || null, incrementalEndpoint: incrementalEndpoint ? prefixed(incrementalEndpoint) : null, readMethod });
   }
   if (!rows.length) return { ok: false, reason: `no routable, PK-bearing deployed objects for integration ${integrationID}` };
 
