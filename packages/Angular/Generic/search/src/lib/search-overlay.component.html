@@ -3,7 +3,8 @@
     <div class="search-backdrop" (click)="OnBackdropClick()"></div>
 
     <!-- Spotlight container -->
-    <div class="search-spotlight" (click)="$event.stopPropagation()">
+    <div class="search-spotlight" role="dialog" aria-modal="true" aria-label="Search"
+         (click)="$event.stopPropagation()" (keydown)="OnSpotlightKeydown($event)">
         <!-- Search input area -->
         <div class="search-input-wrap">
             <i class="fa-solid fa-magnifying-glass search-icon"></i>
@@ -11,6 +12,11 @@
                 #searchInput
                 type="text"
                 class="search-input"
+                role="combobox"
+                aria-controls="search-overlay-listbox"
+                aria-autocomplete="list"
+                [attr.aria-expanded]="AllResults.length > 0"
+                [attr.aria-activedescendant]="ActiveDescendantId"
                 [placeholder]="Placeholder"
                 [value]="Query"
                 (input)="OnQueryInput($any($event.target).value)"
@@ -25,6 +31,9 @@
             <div class="search-shortcut-hint">
                 <kbd>ESC</kbd>
             </div>
+            <button type="button" class="search-close-btn" aria-label="Close" title="Close" (click)="Close()">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
 
         <!-- Results area -->
@@ -108,7 +117,9 @@
                         </div>
                         @for (recent of searchService.RecentSearches$.value; track recent.Query; let i = $index) {
                             @if (i < 5) {
-                                <div class="search-recent-item" (click)="OnQueryInput(recent.Query)">
+                                <div class="search-recent-item" role="button" tabindex="0"
+                                    (click)="OnRecentSelect(recent.Query)"
+                                    (keydown)="OnRecentKeydown($event, recent.Query)">
                                     <i class="fa-solid fa-clock search-recent-icon"></i>
                                     <span>{{ recent.Query }}</span>
                                     <span class="search-recent-count">{{ recent.ResultCount }} results</span>
@@ -126,9 +137,10 @@
 
             @if (AllResults.length > 0) {
                 <!-- Grouped results -->
+                <div id="search-overlay-listbox" role="listbox" aria-label="Search results">
                 @for (group of ResultGroups; track group.SourceType) {
-                    <div class="result-group">
-                        <div class="result-group-header">
+                    <div class="result-group" role="presentation">
+                        <div class="result-group-header" role="presentation">
                             <i [class]="group.Icon"></i>
                             <span class="result-group-label">{{ group.Label }}</span>
                             <span class="result-group-count">{{ group.TotalCount }}</span>
@@ -136,8 +148,13 @@
                         @for (result of group.Results; track result.ID; let ri = $index) {
                             <div
                                 class="result-item"
+                                role="option"
+                                [attr.id]="'so-opt-' + getFlatIndex(result)"
+                                [attr.tabindex]="isResultHighlighted(result) ? 0 : -1"
+                                [attr.aria-selected]="isResultHighlighted(result)"
                                 [class.result-item-highlighted]="isResultHighlighted(result)"
                                 (click)="OnResultClick(result, $event)"
+                                (focus)="HighlightedIndex = getFlatIndex(result)"
                                 (mouseenter)="HighlightedIndex = getFlatIndex(result)"
                             >
                                 <div class="result-item-icon">
@@ -163,20 +180,39 @@
                         }
                     </div>
                 }
+                </div>
 
                 <!-- Footer -->
                 <div class="search-footer">
                     <span class="search-footer-count">
                         {{ TotalCount }} results in {{ FormatElapsedTime(ElapsedMs) }}
                     </span>
-                    @if (ShowAgentCta) {
-                        <button class="agent-cta-btn agent-cta-btn-small" (click)="OnAgentCtaClick()">
-                            <i class="fa-solid fa-robot"></i>
-                            {{ AgentCtaText }}
+                    <div class="search-footer-actions">
+                        <button type="button" class="see-all-btn" (click)="OnSeeAllClick()">
+                            See all results
+                            <i class="fa-solid fa-arrow-right"></i>
                         </button>
-                    }
+                        @if (ShowAgentCta) {
+                            <button class="agent-cta-btn agent-cta-btn-small" (click)="OnAgentCtaClick()">
+                                <i class="fa-solid fa-robot"></i>
+                                {{ AgentCtaText }}
+                            </button>
+                        }
+                    </div>
                 </div>
             }
         </div>
+
+        <!-- Host-supplied promo strip (e.g. command palette nudge) -->
+        @if (ShowPromo && PromoText) {
+            <div class="search-promo">
+                <i class="fa-solid fa-wand-magic-sparkles search-promo-icon"></i>
+                <span class="search-promo-text">{{ PromoText }}</span>
+                <button type="button" class="search-promo-action" (click)="OnPromoAccept()">{{ PromoActionLabel }}</button>
+                <button type="button" class="search-promo-dismiss" aria-label="Dismiss" title="Dismiss" (click)="OnPromoDismiss()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        }
     </div>
 }

@@ -1,5 +1,42 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.48.0
+
+### Patch Changes
+
+- 09e1b4b: Fix Apply to my Form (resolve spec code, handle Pending overrides, improve # typeahead), auto-add app schemas to excludeSchemas on OpenApp install/upgrade, surface RenderedSQL through RunQueryResult and TestQuerySQL, strip ORDER BY before outer-wrapping unparseable SQL in MaxRows, fix lazy-config loader variable name collisions in codegen manifest, and add read-only provider support and missing SQL function keywords in PostgreSQL provider
+- a94bd16: Fix `mj codegen manifest --lazy-config` generating invalid TypeScript when build tooling entered the app's dependency tree. Two fixes: (1) the lazy-config dependency walk now follows runtime `dependencies` only — packages reachable solely through a root `devDependency` (e.g. `@memberjunction/cli` and its server-side tree) no longer contribute browser lazy chunks; (2) loader variable names are package-qualified when two packages expose the same subpath export, so `./plugins` in two packages can never again emit duplicate `const loadPlugins` declarations (TS2451). Broke `next` after #3139 declared the CLI as a devDependency of MJExplorer.
+- Updated dependencies [09e1b4b]
+- Updated dependencies [80223ad]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/generic-database-provider@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/postgresql-dataprovider@5.48.0
+  - @memberjunction/external-data-source-sqlserver@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/core-entities-server@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/actions@5.48.0
+  - @memberjunction/external-data-sources@5.48.0
+  - @memberjunction/external-data-source-mongodb@5.48.0
+  - @memberjunction/external-data-source-mysql@5.48.0
+  - @memberjunction/external-data-source-oracle@5.48.0
+  - @memberjunction/external-data-source-postgres@5.48.0
+  - @memberjunction/external-data-source-snowflake@5.48.0
+  - @memberjunction/server-bootstrap-lite@5.48.0
+  - @memberjunction/ai-provider-bundle@5.48.0
+  - @memberjunction/cli-core@5.48.0
+  - @memberjunction/config@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+  - @memberjunction/sql-parser@5.48.0
+
 ## 5.47.0
 
 ### Minor Changes

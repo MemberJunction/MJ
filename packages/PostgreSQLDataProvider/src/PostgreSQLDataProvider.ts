@@ -1430,7 +1430,9 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
         'NEWSEQUENTIALID', 'NEWID', 'GETUTCDATE', 'GETDATE', 'SYSDATETIMEOFFSET',
         'OBJECT_ID', 'SCOPE_IDENTITY',
         // Aggregate / scalar functions
-        'COUNT', 'MAX', 'MIN', 'SUM', 'AVG', 'COALESCE', 'CAST', 'CONVERT', 'ISNULL',
+        'COUNT', 'MAX', 'MIN', 'SUM', 'AVG', 'ROUND', 'NULLIF', 'ABS', 'CEIL', 'CEILING', 'FLOOR',
+        'SIGN', 'MOD', 'POWER', 'SQRT', 'LOG', 'EXP', 'RANDOM',
+        'COALESCE', 'CAST', 'CONVERT', 'ISNULL',
         'LEN', 'LENGTH', 'DATALENGTH', 'LOWER', 'UPPER', 'LTRIM', 'RTRIM', 'TRIM', 'REPLACE',
         'SUBSTRING', 'CHARINDEX', 'PATINDEX', 'STUFF', 'CONCAT', 'FORMAT',
         'POSITION', 'OVERLAY', 'EXTRACT', 'GREATEST', 'LEAST',
