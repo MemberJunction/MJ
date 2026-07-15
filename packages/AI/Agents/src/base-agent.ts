@@ -50,6 +50,7 @@ import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
 import { ConversationCompactionManager, CompactionOutcome, EffectiveContextBudget } from './ConversationCompactionManager';
 import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult } from './ConversationToolManager';
+import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts } from './tool-result-format';
 import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
 import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
@@ -5627,10 +5628,10 @@ The context is now within limits. Please retry your request with the recovered c
             if (typeof parsed.tool !== 'string' || parsed.tool.length === 0) continue;
             if (parsed.result?.success !== true) continue;
 
-            const raw = typeof parsed.result.data === 'string'
-                ? parsed.result.data
-                : JSON.stringify(parsed.result.data, null, 2);
-            const section = `### ${parsed.tool}(${JSON.stringify(parsed.input || {})})\n\`\`\`json\n${raw}\n\`\`\``;
+            const section = FormatToolResultSection(
+                { tool: parsed.tool, input: parsed.input },
+                RenderToolResultData(parsed.result.data)
+            );
             if (usedChars + section.length > maxChars && sections.length > 0) {
                 dropped++;
                 continue;
@@ -5753,15 +5754,12 @@ The context is now within limits. Please retry your request with the recovered c
             ? 'Conversation history tool result:'
             : `Conversation history tool results (${toolResults.length} calls):`;
         const body = toolResults.map((r, i) => {
-            const heading = `### ${i + 1}. ${r.tool}(${JSON.stringify(r.input)})`;
+            const parts: ToolResultSectionParts = { tool: r.tool, input: r.input, ordinal: i + 1 };
             if (r.result.success) {
-                const raw = typeof r.result.data === 'string'
-                    ? r.result.data
-                    : JSON.stringify(r.result.data, null, 2);
-                const data = this.capStandaloneToolResultText(raw);
-                return `${heading}\n\`\`\`json\n${data}\n\`\`\``;
+                const data = this.capStandaloneToolResultText(RenderToolResultData(r.result.data));
+                return FormatToolResultSection(parts, data);
             }
-            return `${heading}\n**Error:** ${r.result.errorMessage}`;
+            return FormatToolErrorSection(parts, r.result.errorMessage);
         }).join('\n\n');
 
         const message: AgentChatMessage = {
@@ -5799,15 +5797,12 @@ The context is now within limits. Please retry your request with the recovered c
             ? 'Artifact tool result:'
             : `Artifact tool results (${toolResults.length} calls):`;
         const body = toolResults.map((r, i) => {
-            const heading = `### ${i + 1}. ${r.artifactId}.${r.tool}(${JSON.stringify(r.input)})`;
+            const parts: ToolResultSectionParts = { tool: r.tool, input: r.input, ordinal: i + 1, signaturePrefix: r.artifactId };
             if (r.result.success) {
-                const raw = typeof r.result.data === 'string'
-                    ? r.result.data
-                    : JSON.stringify(r.result.data, null, 2);
-                const data = this.capStandaloneToolResultText(raw);
-                return `${heading}\n\`\`\`json\n${data}\n\`\`\``;
+                const data = this.capStandaloneToolResultText(RenderToolResultData(r.result.data));
+                return FormatToolResultSection(parts, data);
             }
-            return `${heading}\n**Error:** ${r.result.errorMessage}`;
+            return FormatToolErrorSection(parts, r.result.errorMessage);
         }).join('\n\n');
 
         const message: AgentChatMessage = {
