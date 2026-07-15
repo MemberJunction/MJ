@@ -64,6 +64,12 @@ vi.mock('@memberjunction/aiengine', () => ({
 
 vi.mock('@memberjunction/ai-core-plus', () => ({
     AIPromptParams: class MockParams {},
+    // Mirror of the real string-result extraction (prompt.types.ts) so the manager's
+    // summary-text handling behaves identically under the module mock.
+    ExtractPromptResultText: (result: { result?: unknown; rawResult?: string }) =>
+        (typeof result.result === 'string' && result.result.trim().length > 0)
+            ? result.result.trim()
+            : (result.rawResult || '').trim(),
 }));
 
 import { ConversationCompactionManager, EffectiveContextBudget } from '../ConversationCompactionManager';

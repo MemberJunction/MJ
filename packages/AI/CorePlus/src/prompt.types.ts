@@ -309,6 +309,18 @@ export interface AIPromptRunResult<T = unknown> {
 }
 
 /**
+ * Extracts the usable text of a string-typed prompt run: the parsed `result` when it is a
+ * non-empty string, otherwise the trimmed `rawResult` (empty string when neither exists).
+ * Lives beside {@link AIPromptRunResult} so every caller shares one extraction rule instead
+ * of re-implementing the `result`-vs-`rawResult` fallback.
+ */
+export function ExtractPromptResultText(result: AIPromptRunResult<string>): string {
+  return (typeof result.result === 'string' && result.result.trim().length > 0)
+    ? result.result.trim()
+    : (result.rawResult || '').trim();
+}
+
+/**
  * Model selection information for debugging and analysis
  */
 export class AIModelSelectionInfo {

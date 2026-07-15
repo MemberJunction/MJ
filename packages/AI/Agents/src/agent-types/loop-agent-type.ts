@@ -73,6 +73,56 @@ export class LoopAgentType extends BaseAgentType {
      */
     private consecutiveReadToolPreemptions = 0;
 
+    /**
+     * Handles the terminal-step-plus-inline-read-tools combination. Inline READ tools
+     * (artifact/conversation) are yield/await: results arrive on the NEXT turn, so a
+     * terminal step in the same response would orphan them — the tools execute and inject
+     * their results, but the run ends and the user gets "one moment…" and silence. Mirrors
+     * the Pipeline/client-tools pre-emption: force one more (non-terminal) turn so the LLM
+     * responds after reading the results. taskComplete + clientTools is excluded — the
+     * ClientTools path already re-enters the loop and consumes the injected results.
+     * memoryWrites/scratchpad are fire-and-forget writes and never trigger pre-emption.
+     *
+     * @returns The forced Retry step, or null when no pre-emption applies — including when
+     * the consecutive cap is reached (the caller then honors the terminal step; pre-emption
+     * retries are exempt from the unproductive-retry limit, so without the ceiling the
+     * combination could extend a run indefinitely).
+     */
+    private buildReadToolPreemptionStep<P>(response: LoopAgentResponse, hasClientTools: boolean): BaseAgentNextStep<P> | null {
+        const hasInlineReadTools = (response.artifactToolCalls?.length || 0) + (response.conversationToolCalls?.length || 0) > 0;
+        const wantsTerminalStep = response.nextStep?.type === 'Chat' || (response.taskComplete === true && !hasClientTools);
+
+        if (!(hasInlineReadTools && wantsTerminalStep)) {
+            this.consecutiveReadToolPreemptions = 0;
+            return null;
+        }
+        if (this.consecutiveReadToolPreemptions >= MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS) {
+            LogStatusEx({
+                message: `⚠️ Loop Agent: terminal step + inline read tools recurred ${MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS} consecutive turns — honoring the terminal step instead of forcing another turn`
+            });
+            return null;
+        }
+
+        this.consecutiveReadToolPreemptions++;
+        LogStatusEx({
+            message: '🔁 Loop Agent: inline tool call(s) combined with a terminal step — forcing one more turn so the results can be read',
+            verboseOnly: true
+        });
+        return this.createNextStep('Retry', {
+            terminate: false,
+            artifactToolCalls: response.artifactToolCalls,
+            conversationToolCalls: response.conversationToolCalls,
+            memoryWrites: response.memoryWrites,
+            scratchpad: response.scratchpad,
+            payloadChangeRequest: response.payloadChangeRequest,
+            reasoning: response.reasoning,
+            confidence: response.confidence
+            // deliberately NO errorMessage/message/retryInstructions: that keeps this
+            // retry "productive" (only errorMessage-bearing retries count toward the
+            // unproductive-retry limit) and suppresses the "Retrying due to:" message.
+        });
+    }
+
     public async InitializeAgentTypeState<ATS = any, P = any>(params: ExecuteAgentParams<any, P>): Promise<ATS> {
         // Loop agents do not require agent-type specific state initialization
         // but can be extended in the future if needed
@@ -150,47 +200,12 @@ export class LoopAgentType extends BaseAgentType {
                 });
             }
 
-            // Inline READ tools (artifact/conversation) are yield/await: results arrive on the
-            // NEXT turn, so a terminal step in the same response would orphan them — the tools
-            // execute and inject their results, but the run ends and the user gets "one
-            // moment…" and silence. Mirror the Pipeline/client-tools pre-emption: force one
-            // more (non-terminal) turn so the LLM responds after reading the results.
-            // taskComplete + clientTools is excluded — the ClientTools path already re-enters
-            // the loop and consumes the injected results. memoryWrites/scratchpad are
-            // fire-and-forget writes and never trigger pre-emption.
-            const hasClientTools = response.nextStep?.clientTools && response.nextStep.clientTools.length > 0;
-            const hasInlineReadTools = (response.artifactToolCalls?.length || 0) + (response.conversationToolCalls?.length || 0) > 0;
-            const wantsTerminalStep = response.nextStep?.type === 'Chat' || (response.taskComplete === true && !hasClientTools);
-            if (hasInlineReadTools && wantsTerminalStep) {
-                if (this.consecutiveReadToolPreemptions < MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS) {
-                    this.consecutiveReadToolPreemptions++;
-                    LogStatusEx({
-                        message: '🔁 Loop Agent: inline tool call(s) combined with a terminal step — forcing one more turn so the results can be read',
-                        verboseOnly: true
-                    });
-                    return this.createNextStep('Retry', {
-                        terminate: false,
-                        artifactToolCalls: response.artifactToolCalls,
-                        conversationToolCalls: response.conversationToolCalls,
-                        memoryWrites: response.memoryWrites,
-                        scratchpad: response.scratchpad,
-                        payloadChangeRequest: response.payloadChangeRequest,
-                        reasoning: response.reasoning,
-                        confidence: response.confidence
-                        // deliberately NO errorMessage/message/retryInstructions: that keeps this
-                        // retry "productive" (only errorMessage-bearing retries count toward the
-                        // unproductive-retry limit) and suppresses the "Retrying due to:" message.
-                    });
-                }
-                // Cap reached: the model has combined a terminal step with read tools on
-                // every forced turn. Honor its terminal intent now — pre-emption retries
-                // are exempt from the unproductive-retry limit, so without this ceiling
-                // that exemption would let the combination extend the run indefinitely.
-                LogStatusEx({
-                    message: `⚠️ Loop Agent: terminal step + inline read tools recurred ${MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS} consecutive turns — honoring the terminal step instead of forcing another turn`
-                });
-            } else {
-                this.consecutiveReadToolPreemptions = 0;
+            // Computed once here — consumed by the read-tool pre-emption AND the
+            // taskComplete gate below (client tools are yield/await, see both sites).
+            const hasClientTools = (response.nextStep?.clientTools?.length || 0) > 0;
+            const preemptionStep = this.buildReadToolPreemptionStep<P>(response, hasClientTools);
+            if (preemptionStep) {
+                return preemptionStep;
             }
 
             // Check for Chat nextStep BEFORE checking taskComplete

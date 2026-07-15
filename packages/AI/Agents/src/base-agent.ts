@@ -49,8 +49,8 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
 import { ConversationCompactionManager, CompactionOutcome, EffectiveContextBudget } from './ConversationCompactionManager';
-import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult } from './ConversationToolManager';
-import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts } from './tool-result-format';
+import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult, ConversationToolSummaryHost, ConversationToolNames } from './ConversationToolManager';
+import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts, CarryForwardToolFamily, CarryForwardToolStepOutput, CarryForwardStepRecord } from './tool-result-format';
 import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
 import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
@@ -95,7 +95,8 @@ import {
     finalizeAgentRunStep,
     AgentRunStepSaveQueue,
     AgentSkillActivationRequest,
-    AgentSkillInvocation
+    AgentSkillInvocation,
+    ExtractPromptResultText
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -5486,20 +5487,21 @@ The context is now within limits. Please retry your request with the recovered c
 
                 const stored = await this._artifactToolManager.ExecuteSingleToolCall(call);
 
+                // Typed cross-turn contract — see CarryForwardToolStepOutput (read back by
+                // BuildPriorTurnToolResultsMessage on the next run; StepName is display-only).
+                const carryForwardOutput: CarryForwardToolStepOutput = {
+                    toolFamily: CarryForwardToolFamily.Artifact,
+                    artifactId: stored.artifactId,
+                    tool: stored.tool,
+                    input: stored.input,
+                    result: stored.result,
+                    durationMs: stored.durationMs,
+                };
                 await this.finalizeStepEntity(
                     toolStep,
                     stored.result.success,
                     stored.result.success ? undefined : stored.result.errorMessage,
-                    {
-                        // toolFamily is the structured discriminator the prior-turn
-                        // carry-forward selects on — StepName is display-only.
-                        toolFamily: 'artifact',
-                        artifactId: stored.artifactId,
-                        tool: stored.tool,
-                        input: stored.input,
-                        result: stored.result,
-                        durationMs: stored.durationMs,
-                    },
+                    carryForwardOutput,
                 );
 
                 return stored;
@@ -5537,7 +5539,7 @@ The context is now within limits. Please retry your request with the recovered c
                 content: body,
                 metadata: {
                     turnAdded: 0,
-                    messageType: 'tool-result',
+                    messageType: BaseAgent.toolResultMessageType,
                     expirationTurns: 2,
                     expirationMode: 'Compact',
                     compactMode: 'First N Chars',
@@ -5561,7 +5563,7 @@ The context is now within limits. Please retry your request with the recovered c
      * (which is a display label and free to change).
      * @private
      */
-    private async loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<Array<{ OutputData: string | null }>> {
+    private async loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<CarryForwardStepRecord[]> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const priorRun = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Runs',
@@ -5576,7 +5578,7 @@ The context is now within limits. Please retry your request with the recovered c
             return [];
         }
 
-        const steps = await rv.RunView<{ OutputData: string | null }>({
+        const steps = await rv.RunView<CarryForwardStepRecord>({
             EntityName: 'MJ: AI Agent Run Steps',
             ExtraFilter: `AgentRunID='${priorRunId}' AND StepType='Tool' AND Status='Completed'`,
             OrderBy: 'StartedAt ASC',
@@ -5587,11 +5589,12 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Tool families whose step results are eligible for prior-turn carry-forward.
+     * Tool families whose step results are eligible for prior-turn carry-forward —
+     * derived from {@link CarryForwardToolFamily} (the single source the stamp sites use).
      * Read-tool families only: memory writes, pipelines, and client tools also record
      * `StepType='Tool'` steps but must never be replayed as reusable results.
      */
-    public static readonly CarryForwardToolFamilies: readonly string[] = ['conversation', 'artifact'];
+    public static readonly CarryForwardToolFamilies: readonly string[] = Object.values(CarryForwardToolFamily);
 
     /**
      * Display name of the seeded system prompt behind summarizeRange's recursive
@@ -5599,6 +5602,28 @@ The context is now within limits. Please retry your request with the recovered c
      * trimmed, case-insensitive compare — never an exact-case inline literal.
      */
     public static readonly SummarizeRangePromptName = 'Summarize Conversation Range';
+
+    /**
+     * The `messageType` marker stamped on injected tool-result messages and matched by
+     * the compaction/pruning eligibility checks — single-sourced so writers and matchers
+     * cannot drift. (Value participates in the AgentChatMessageMetadata union.)
+     */
+    private static readonly toolResultMessageType = 'tool-result' as const;
+
+    /**
+     * Header stems for injected tool-result messages. These exact headers are a contract:
+     * the loop-agent system template (loop-agent-type-system-prompt.template.md, "header
+     * `Conversation history tool result:`" / "`Artifact tool result:`") teaches the model
+     * to recognize them — change the template in lockstep.
+     */
+    private static conversationToolResultsHeader(count: number): string {
+        return count === 1 ? 'Conversation history tool result:' : `Conversation history tool results (${count} calls):`;
+    }
+
+    /** Artifact analog of {@link conversationToolResultsHeader} — same template contract. */
+    private static artifactToolResultsHeader(count: number): string {
+        return count === 1 ? 'Artifact tool result:' : `Artifact tool results (${count} calls):`;
+    }
 
     /**
      * Renders prior-turn tool-result steps into the carried-forward message body.
@@ -5610,7 +5635,7 @@ The context is now within limits. Please retry your request with the recovered c
      * note when results are dropped). Returns null when nothing usable remains.
      */
     public static BuildPriorTurnToolResultsMessage(
-        steps: Array<{ OutputData: string | null }>,
+        steps: CarryForwardStepRecord[],
         maxChars: number
     ): string | null {
         const sections: string[] = [];
@@ -5618,7 +5643,7 @@ The context is now within limits. Please retry your request with the recovered c
         let dropped = 0;
         for (const step of steps) {
             if (!step.OutputData) continue;
-            let parsed: { toolFamily?: string; tool?: string; input?: unknown; result?: { success?: boolean; data?: unknown } };
+            let parsed: Partial<CarryForwardToolStepOutput>;
             try {
                 parsed = JSON.parse(step.OutputData);
             } catch {
@@ -5657,7 +5682,7 @@ The context is now within limits. Please retry your request with the recovered c
      * prompt runner so the AIPromptRun records itself.
      * @protected
      */
-    protected buildConversationSummaryHost(params: ExecuteAgentParams): { RunSummaryPrompt(rangeText: string, lens: string): Promise<{ text: string; promptRunId?: string }> } {
+    protected buildConversationSummaryHost(params: ExecuteAgentParams): ConversationToolSummaryHost {
         return {
             RunSummaryPrompt: async (rangeText: string, lens: string) => {
                 // Trimmed, case-insensitive name lookup (the AIPromptRunner 'Repair JSON'
@@ -5669,12 +5694,11 @@ The context is now within limits. Please retry your request with the recovered c
                 }
                 const promptParams = new AIPromptParams();
                 promptParams.prompt = prompt;
+                // Keys are the summarize-range.template.md contract ({{ lens }}, {{ messages }})
                 promptParams.data = { lens, messages: rangeText };
                 promptParams.contextUser = params.contextUser;
                 const result = await this._promptRunner.ExecutePrompt<string>(promptParams);
-                const text = (typeof result.result === 'string' && result.result.trim().length > 0)
-                    ? result.result.trim()
-                    : (result.rawResult || '').trim();
+                const text = ExtractPromptResultText(result);
                 if (!result.success || text.length === 0) {
                     throw new Error(result.errorMessage || 'summarizeRange sub-call returned no content');
                 }
@@ -5717,20 +5741,21 @@ The context is now within limits. Please retry your request with the recovered c
                     toolStep.TargetLogID = executed.promptRunId;
                 }
 
+                // Typed cross-turn contract — see CarryForwardToolStepOutput (read back by
+                // BuildPriorTurnToolResultsMessage on the next run; StepName is display-only).
+                const carryForwardOutput: CarryForwardToolStepOutput = {
+                    toolFamily: CarryForwardToolFamily.Conversation,
+                    tool: executed.tool,
+                    input: executed.input,
+                    result: executed.result,
+                    durationMs: executed.durationMs,
+                    ...(executed.promptRunId && { promptRunId: executed.promptRunId }),
+                };
                 await this.finalizeStepEntity(
                     toolStep,
                     executed.result.success,
                     executed.result.success ? undefined : executed.result.errorMessage,
-                    {
-                        // toolFamily is the structured discriminator the prior-turn
-                        // carry-forward selects on — StepName is display-only.
-                        toolFamily: 'conversation',
-                        tool: executed.tool,
-                        input: executed.input,
-                        result: executed.result,
-                        durationMs: executed.durationMs,
-                        ...(executed.promptRunId && { promptRunId: executed.promptRunId }),
-                    },
+                    carryForwardOutput,
                 );
 
                 return executed;
@@ -5750,9 +5775,7 @@ The context is now within limits. Please retry your request with the recovered c
         toolResults: ConversationToolExecutionResult[],
     ): void {
         if (toolResults.length === 0) return;
-        const header = toolResults.length === 1
-            ? 'Conversation history tool result:'
-            : `Conversation history tool results (${toolResults.length} calls):`;
+        const header = BaseAgent.conversationToolResultsHeader(toolResults.length);
         const body = toolResults.map((r, i) => {
             const parts: ToolResultSectionParts = { tool: r.tool, input: r.input, ordinal: i + 1 };
             if (r.result.success) {
@@ -5767,7 +5790,7 @@ The context is now within limits. Please retry your request with the recovered c
             content: `${header}\n${body}`,
             metadata: {
                 turnAdded: this._promptTurnCount,
-                messageType: 'tool-result',
+                messageType: BaseAgent.toolResultMessageType,
                 expirationTurns: 3,
                 expirationMode: 'Compact',
                 compactMode: 'First N Chars',
@@ -5793,9 +5816,7 @@ The context is now within limits. Please retry your request with the recovered c
         toolResults: StoredToolResult[],
     ): void {
         if (toolResults.length === 0) return;
-        const header = toolResults.length === 1
-            ? 'Artifact tool result:'
-            : `Artifact tool results (${toolResults.length} calls):`;
+        const header = BaseAgent.artifactToolResultsHeader(toolResults.length);
         const body = toolResults.map((r, i) => {
             const parts: ToolResultSectionParts = { tool: r.tool, input: r.input, ordinal: i + 1, signaturePrefix: r.artifactId };
             if (r.result.success) {
@@ -13285,7 +13306,10 @@ The context is now within limits. Please retry your request with the recovered c
             : null;
         const budget = ConversationCompactionManager.ResolveEffectiveBudget(params.agent, config?.agentType || null, modelMax);
         if (budget.ClampedToModel) {
-            this.logStatus(`⚠️ [CrossTurnCompaction] Configured ContextWindowMaxTokens exceeds the model's MaxInputTokens — clamped to ${budget.MaxTokens}`, false, params);
+            // Verbose-only: this re-evaluates every turn while the budget stays mis-set, and
+            // the clamp is already captured structurally in CompactionOutcome.Warnings → the
+            // Compaction step's OutputData (§8: keep debug detail, don't spam info logs).
+            this.logStatus(`⚠️ [CrossTurnCompaction] Configured ContextWindowMaxTokens exceeds the model's MaxInputTokens — clamped to ${budget.MaxTokens}`, true, params);
         }
         return budget;
     }
@@ -13655,7 +13679,7 @@ The context is now within limits. Please retry your request with the recovered c
         const messageType = (msg as AgentChatMessage).metadata?.messageType;
         return messageType === 'action-result'
             || messageType === 'client-tool-result'
-            || messageType === 'tool-result';
+            || messageType === BaseAgent.toolResultMessageType;
     }
 
     /**
@@ -13669,7 +13693,7 @@ The context is now within limits. Please retry your request with the recovered c
         const messageType = (msg as AgentChatMessage).metadata?.messageType;
         return messageType === 'action-result'
             || messageType === 'client-tool-result'
-            || messageType === 'tool-result'
+            || messageType === BaseAgent.toolResultMessageType
             || messageType === 'sub-agent-result'
             || messageType === 'loop-result';
     }
@@ -13813,7 +13837,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!message.metadata?.canExpand || !message.metadata?.originalContent) {
             console.warn(`Cannot expand message at index ${messageIndex}: not expandable or no original content`);
             return message.metadata?.isConversationSummary
-                ? `message ${messageIndex} is the cross-turn conversation summary and has no expanded form. To read the underlying history, use the conversation history tools (getMessageBySequence, getMessagesByRange, searchConversation, summarizeRange) instead — do not request expansion of this message again.`
+                ? `message ${messageIndex} is the cross-turn conversation summary and has no expanded form. To read the underlying history, use the conversation history tools (${ConversationToolNames.join(', ')}) instead — do not request expansion of this message again.`
                 : `message ${messageIndex} is not expandable (it carries no compacted original content) — do not request this expansion again.`;
         }
 

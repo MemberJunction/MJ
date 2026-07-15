@@ -33,6 +33,7 @@ interface LoopAgentResponse {
     artifactToolCalls?: Array<{ artifactId: string; tool: string; input: Record<string, unknown> }>;
 {% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.conversationToolCalls != false and _CONVERSATION_TOOLS %}
+{# The tool-name union below is a contract — keep in sync with ConversationToolNames in packages/AI/Agents/src/ConversationToolManager.ts #}
     /** Page exact stored conversation messages back in by sequence, search history, or summarize a range through a lens (see Conversation History Tools). Results appear next turn. */
     conversationToolCalls?: Array<{ tool: 'getMessageBySequence' | 'getMessagesByRange' | 'searchConversation' | 'summarizeRange'; input: Record<string, unknown> }>;
 {% endif %}

@@ -16,8 +16,9 @@
  * Normalizes a role from EITHER vocabulary — chat roles (`user`/`assistant`/`system`)
  * or `ConversationDetail.Role` DB values (`User`/`AI`/`Error`) — into one label set,
  * so history lines read identically regardless of which path rendered them.
+ * (Internal to the format module — all consumers go through FormatSequencedHistoryLine.)
  */
-export function NormalizeHistoryRoleLabel(role: string | null | undefined): string {
+function NormalizeHistoryRoleLabel(role: string | null | undefined): string {
     switch ((role || '').trim().toLowerCase()) {
         case 'assistant':
         case 'ai':

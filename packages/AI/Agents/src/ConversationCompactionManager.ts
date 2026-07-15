@@ -24,7 +24,7 @@ import {
     MJAIAgentTypeEntity,
     MJConversationDetailEntity
 } from '@memberjunction/core-entities';
-import { AIPromptParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, ExtractPromptResultText, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { FormatSequencedHistoryLine } from './conversation-history-format';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -371,6 +371,7 @@ export class ConversationCompactionManager {
 
         const promptParams = new AIPromptParams();
         promptParams.prompt = prompt;
+        // Keys are the conversation-summary.template.md contract ({{ priorSummary }}, {{ deltaMessages }})
         promptParams.data = {
             priorSummary: priorSummary || '(none — this is the first compaction of this conversation)',
             deltaMessages: delta.map(m => this.renderDeltaMessage(m)).join('\n')
@@ -382,9 +383,7 @@ export class ConversationCompactionManager {
 
         const runner = new AIPromptRunner();
         const result = await runner.ExecutePrompt<string>(promptParams);
-        const summaryText = (typeof result.result === 'string' && result.result.trim().length > 0)
-            ? result.result.trim()
-            : (result.rawResult || '').trim();
+        const summaryText = ExtractPromptResultText(result);
 
         if (!result.success || summaryText.length === 0) {
             return { success: false, summaryText: '', promptId: prompt.ID, promptRunId: result.promptRun?.ID, errorMessage: result.errorMessage || 'Summary prompt returned no content' };

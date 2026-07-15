@@ -19,8 +19,16 @@ import { UserInfo } from '@memberjunction/core';
 import { ConversationEngine, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { FormatSequencedHistoryLine } from './conversation-history-format';
 
-/** Tool names available on `conversationToolCalls`. */
-export type ConversationToolName = 'getMessageBySequence' | 'getMessagesByRange' | 'searchConversation' | 'summarizeRange';
+/**
+ * The conversation-tool name vocabulary — single source of truth. The LLM is taught these
+ * exact strings (GetToolDocumentation + the loop-agent system template's response-type
+ * union), the dispatch switch matches them, and framework guidance messages enumerate them.
+ * Add/rename tools HERE; everything else derives from this array.
+ */
+export const ConversationToolNames = ['getMessageBySequence', 'getMessagesByRange', 'searchConversation', 'summarizeRange'] as const;
+
+/** Tool names available on `conversationToolCalls` (derived from {@link ConversationToolNames}). */
+export type ConversationToolName = typeof ConversationToolNames[number];
 
 /**
  * The seam through which `summarizeRange` runs its recursive LLM sub-call. Implemented by

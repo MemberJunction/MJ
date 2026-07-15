@@ -5,8 +5,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { BaseAgent } from '../base-agent';
+import { CarryForwardToolFamily } from '../tool-result-format';
 
-function step(tool: string, data: unknown, success = true, input: unknown = { sequence: 9 }, toolFamily = 'conversation'): { OutputData: string | null } {
+function step(tool: string, data: unknown, success = true, input: unknown = { sequence: 9 }, toolFamily: string = CarryForwardToolFamily.Conversation): { OutputData: string | null } {
     return {
         OutputData: JSON.stringify({ toolFamily, tool, input, result: { success, data }, durationMs: 5 }),
     };
@@ -41,7 +42,7 @@ describe('BaseAgent.BuildPriorTurnToolResultsMessage', () => {
 
     it('includes artifact-family results (the other carry-forward-eligible family)', () => {
         const body = BaseAgent.BuildPriorTurnToolResultsMessage(
-            [step('get_full', { content: 'artifact body' }, true, { artifactId: 'a1' }, 'artifact')],
+            [step('get_full', { content: 'artifact body' }, true, { artifactId: 'a1' }, CarryForwardToolFamily.Artifact)],
             100_000
         );
         expect(body).toContain('get_full');

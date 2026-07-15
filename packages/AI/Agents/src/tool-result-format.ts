@@ -18,6 +18,47 @@
  * @module @memberjunction/ai-agents
  */
 
+/**
+ * The tool families whose step results are eligible for prior-turn carry-forward —
+ * single source of the family values. Stamp sites and the eligibility check both
+ * derive from this map so a renamed value breaks at compile time, never silently.
+ */
+export const CarryForwardToolFamily = {
+    Conversation: 'conversation',
+    Artifact: 'artifact'
+} as const;
+
+/** One of the {@link CarryForwardToolFamily} values. */
+export type CarryForwardToolFamilyValue = typeof CarryForwardToolFamily[keyof typeof CarryForwardToolFamily];
+
+/**
+ * The cross-turn contract persisted in a tool step's `OutputData` by the conversation- and
+ * artifact-tool executors and read back by `BaseAgent.BuildPriorTurnToolResultsMessage` on
+ * the NEXT run. Write sites construct this type and the reader parses into a Partial of it,
+ * so the two sides cannot drift without a compile error.
+ */
+export interface CarryForwardToolStepOutput {
+    /** Structured carry-forward discriminator — StepName is display-only */
+    toolFamily: CarryForwardToolFamilyValue;
+    /** The tool that produced this result */
+    tool: string;
+    /** The tool's input object */
+    input: unknown;
+    /** The tool outcome; only `success === true` results are carried forward */
+    result: { success: boolean; data?: unknown; errorMessage?: string };
+    /** Invocation duration in milliseconds */
+    durationMs?: number;
+    /** Artifact-family only: the artifact the tool ran against */
+    artifactId?: string;
+    /** summarizeRange only: the recursive sub-call's AIPromptRun ID */
+    promptRunId?: string;
+}
+
+/** The minimal step projection the prior-turn carry-forward loader fetches and the renderer reads. */
+export interface CarryForwardStepRecord {
+    OutputData: string | null;
+}
+
 /** Identifies one tool call within a rendered result section. */
 export interface ToolResultSectionParts {
     /** The tool name, e.g. `getMessageBySequence` */
