@@ -68,15 +68,40 @@ docker exec sql-claude bash -c 'until /opt/mssql-tools18/bin/sqlcmd -S localhost
 docker exec postgres-claude bash -c 'until pg_isready -U mj_admin; do sleep 2; done'
 ```
 
+Pre-flight the Docker VM's memory before any build. The limits in
+docker-compose.yml are aspirational — the real budget is the VM total:
+
+```bash
+docker exec claude-dev free -h   # < 8GiB total = memory-constrained
+```
+
+On a memory-constrained VM: cap every turbo build with `--concurrency=2`
+(default concurrency OOM-kills tsc processes — exit 137), and stop
+`sql-claude`/`redis-claude` while converting (only L2 needs SQL Server, and it
+can start later). An idle-but-hot SQL container starves builds AND any host
+databases on the same VM — this masqueraded as repeated `mj migrate` timeouts
+on the host until the container was stopped.
+
+Also confirm the entrypoint actually cloned the repo: on a fresh container
+`/workspace/MJ` is sometimes missing (with empty `docker logs`). Clone it
+yourself and move on:
+
+```bash
+docker exec claude-dev bash -lc 'test -d /workspace/MJ/.git || git clone --branch next https://github.com/MemberJunction/MJ.git /workspace/MJ'
+```
+
 Sync the container to the host's exact tree on a dedicated branch. The host branch
 may not be on origin. If `git reset --hard <sha>` fails, reset to `origin/next`
 and apply a patch with `git am` from `format-patch origin/next..HEAD`. Then run:
 
 ```bash
-# build the converter toolchain
-docker exec claude-dev bash -lc "cd /workspace/MJ && npm install && npx turbo build --filter=@memberjunction/sql-converter --filter=@memberjunction/cli --filter=@memberjunction/sqlglot-ts --filter=@memberjunction/sql-dialect --filter=@memberjunction/codegen-lib"
-# python + sqlglot venv (convert/verify need it)
-docker exec claude-dev bash -lc "test -x /tmp/sqlglot-venv/bin/python3 || (python3 -m venv /tmp/sqlglot-venv && /tmp/sqlglot-venv/bin/pip install sqlglot)"
+# build the converter toolchain (--concurrency=2 on a memory-constrained VM; drop the cap on a big one)
+docker exec claude-dev bash -lc "cd /workspace/MJ && npm install && npx turbo build --filter=@memberjunction/sql-converter --filter=@memberjunction/cli --filter=@memberjunction/sqlglot-ts --filter=@memberjunction/sql-dialect --filter=@memberjunction/codegen-lib --concurrency=2"
+# python + sqlglot venv (convert/verify need it). The claude-dev image may lack
+# python3-venv — without it `python3 -m venv` fails ("ensurepip is not available")
+# and leaves a BROKEN venv dir behind; install the apt package and rm the dir first.
+docker exec claude-dev bash -lc "apt-get install -y -qq python3-venv python3-pip >/dev/null 2>&1; test -x /tmp/sqlglot-venv/bin/pip || (rm -rf /tmp/sqlglot-venv && python3 -m venv /tmp/sqlglot-venv && /tmp/sqlglot-venv/bin/pip install sqlglot)"
+docker exec claude-dev bash -lc "/tmp/sqlglot-venv/bin/python3 -c 'import sqlglot; print(sqlglot.__version__)'"   # must print a version, else stop and fix
 # auth gate for delegated browser phase — must print AUTH_OK, else stop and have the user run `docker exec -it claude-dev claude` to OAuth
 docker exec claude-dev bash -lc 'echo "Reply with exactly: AUTH_OK" | claude --dangerously-skip-permissions -p 2>&1 | tail -3'
 # magic-link must be enabled for the browser phase
@@ -86,8 +111,13 @@ docker exec claude-dev bash -lc "grep -A3 'magicLink:' /workspace/MJ/mj.config.c
 Start the slow builds in the background now. They run through Phases 1 to 3.
 
 ```bash
-# MJAPI + MJExplorer builds — needed only at the browser phase, so build them while you convert
-docker exec -d claude-dev bash -lc 'cd /workspace/MJ && npx turbo build --filter=@memberjunction/server --filter=@memberjunction/server-bootstrap --filter=@memberjunction/mjapi --filter=@memberjunction/ng-explorer > /tmp/app-build.log 2>&1 && echo APP_BUILD_DONE >> /tmp/app-build.log'
+# MJAPI + MJExplorer builds — needed only at the browser phase, so build them while you convert.
+# The app workspaces are named mj_api and mj_explorer — @memberjunction/mjapi and
+# @memberjunction/ng-explorer DO NOT EXIST and turbo errors "No package found".
+# mj_explorer's ng build needs the gitignored src/environments/environment*.ts files —
+# generate them FIRST (dummy Auth0 values are fine; magic-link works under any AUTH_TYPE):
+docker exec claude-dev bash -lc 'cd /workspace/MJ && ENVDIR=packages/MJExplorer/src/environments && mkdir -p "$ENVDIR" && for V in "environment.ts:production:true:DOCKER" "environment.development.ts:development:false:DEV" "environment.staging.ts:staging:false:STAGING"; do IFS=":" read -r F N P I <<< "$V"; test -f "$ENVDIR/$F" || printf "export const environment = {\n  GRAPHQL_URI: \"http://localhost:4000/\",\n  GRAPHQL_WS_URI: \"ws://localhost:4000/\",\n  REDIRECT_URI: \"http://localhost:4200/\",\n  AUTH_TYPE: \"auth0\",\n  NODE_ENV: \"%s\",\n  AUTOSAVE_DEBOUNCE_MS: 1200,\n  SEARCH_DEBOUNCE_MS: 800,\n  MIN_SEARCH_LENGTH: 3,\n  MJ_CORE_SCHEMA_NAME: \"__mj\",\n  production: %s,\n  APPLICATION_NAME: \"MemberJunction Explorer\",\n  APPLICATION_INSTANCE: \"%s\",\n  AUTH0_DOMAIN: \"dummy.us.auth0.com\",\n  AUTH0_CLIENTID: \"dummy-client-id\",\n} as const;\n" "$N" "$P" "$I" > "$ENVDIR/$F"; done'
+docker exec -d claude-dev bash -lc 'cd /workspace/MJ && npx turbo build --filter=mj_api --filter=mj_explorer --concurrency=2 > /tmp/app-build.log 2>&1 && echo APP_BUILD_DONE >> /tmp/app-build.log || echo APP_BUILD_FAILED >> /tmp/app-build.log'
 ```
 
 Set the environment for every PG `mj` command once, then reuse it:
@@ -107,6 +137,10 @@ MJ_CORE_SCHEMA=__mj MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3
 ```bash
 docker exec claude-dev bash -lc 'cd /workspace/MJ && MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 npx mj migrate convert --split --bake-codegen --file <V…sql> --verbose'
 ```
+
+`--file` takes the migration FILENAME only — it is resolved against
+`--source-dir` (default `migrations/v5`). Passing a path errors "not found in
+/workspace/MJ/migrations/v5" even when the file is right there.
 
 ### Metadata-sync migrations
 
@@ -146,6 +180,36 @@ grep -rl '<RoutineName>' migrations-pg/v5/*.pg.sql
 
 Most were hand-ported in an earlier release. Copy any atomicity guards — token or
 lock `WHERE` clauses — exactly. Then rename `.needs-hand` to `.pg.sql`.
+
+### The converter may edit COMMITTED .pg.sql files — revert those edits
+
+Every `mj migrate convert` run ends with a global "EntityField Sequence
+deduplication" pass that can rewrite Sequence values inside committed
+`.pg.sql` files in place (it prints `Fixed N sequence collision(s)` naming each
+file). The committed ledger is immutable — never ship those edits. Check and
+revert immediately after every convert:
+
+```bash
+git status --porcelain migrations-pg/v5/     # any ' M ' line = dedup touched a committed file
+git checkout -- <each modified committed .pg.sql>
+```
+
+The gate settles it empirically: if the fresh-database apply is clean without
+the dedup edits (it was, the time this was hit), the dedup was spurious. If the
+gate DOES fail on a `UQ_EntityField_EntityID_Sequence` collision, the defect is
+in the NEW migration — fix it there, never by editing committed files.
+
+### AST transpiler blind spots seen in practice
+
+- `;WITH cte AS (...) DELETE FROM cte` transpiles to `DELETE FROM "cte"` —
+  invalid on PG (you cannot DELETE from a CTE). Hand-port as
+  `DELETE ... USING (SELECT "ID", ROW_NUMBER() OVER (...) AS rn FROM ...) d WHERE ... AND d.rn > 1`.
+- `IF EXISTS (SELECT 1 FROM sys.indexes ...) BEGIN DROP INDEX ... END` lands as
+  an unhandled gap. PG needs no guard: `DROP INDEX IF EXISTS __mj."IndexName";`
+  (and `CREATE UNIQUE INDEX IF NOT EXISTS ...` for the create side).
+- For a small index- or data-only migration, hand-authoring the whole `.pg.sql`
+  from the SS original is faster and cleaner than patching gap comments — the
+  gate validates it either way.
 
 ### Live database for the bake
 
@@ -237,6 +301,14 @@ Create a fresh PG database, `MJ_PG_Gate`, and bootstrap its roles. Apply the who
 set, then reseed. The browser phase reuses this database, so do not drop it.
 
 ```bash
+# 0. Roles FIRST — the baseline's GRANTs reference cluster-level roles; without them
+#    the very first batch dies with `role "cdp_Developer" does not exist`:
+psql -h postgres-claude -U mj_admin -d postgres -c "DO \$\$ BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='cdp_UI') THEN CREATE ROLE \"cdp_UI\" NOLOGIN; END IF;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='cdp_Developer') THEN CREATE ROLE \"cdp_Developer\" NOLOGIN; END IF;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='cdp_Integration') THEN CREATE ROLE \"cdp_Integration\" NOLOGIN; END IF;
+END \$\$;"
+psql -h postgres-claude -U mj_admin -d MJ_PG_Gate -c 'GRANT USAGE ON SCHEMA public TO "cdp_UI","cdp_Developer","cdp_Integration";'
 # 1. mj migrate — applies the NEW baseline (Skyway auto-selects the highest B*) + deltas. Must be clean.
 DB_DATABASE=MJ_PG_Gate PG_DATABASE=MJ_PG_Gate npx mj migrate --verbose
 # 2. mj sync push — reseed metadata. MUST set DB_USERNAME/PASSWORD (else it falls back to SQL Server `sa`)
@@ -292,6 +364,12 @@ are harness artifacts, not defects.
 
 ## Phase 4 — full-stack browser test
 
+Scale this phase to the migrations under test. When the in-scope set touches no
+schema objects — index-only or metadata-only migrations — the gate + L1 + L4 +
+a clean MJAPI boot already prove everything those migrations can break; the
+browser pass mostly re-verifies the unchanged prior schema. Say so explicitly
+and confirm with the human before spending the effort. Do not silently skip it.
+
 Use one agent. The servers are already built. Log in as the Owner user.
 
 Do not build, start, or tear down the servers twice. The builds finished during
@@ -305,6 +383,26 @@ running server cannot see permission grants made after startup, because UserCach
 is loaded at startup. Do not restart to fix permissions. Pick the Owner up front.
 Magic-link works under any `AUTH_TYPE`. It activates on the `#token=` fragment and
 needs no external identity provider.
+
+Two server-side pre-conditions, or the phase dies in confusing ways:
+
+1. **Disable scheduled jobs in the gate DB before starting MJAPI.** The
+   `Entity Vector Sync - Daily` job is flagged `RunImmediatelyIfNeverRun` and
+   vectorizes ~1,200 records right after boot — on a memory-constrained VM it
+   OOM-kills MJAPI minutes after it prints "Ready" (exit 137, port silently
+   gone). `'Disabled'` is the CHECK-valid status; `'Inactive'` is rejected:
+   ```sql
+   UPDATE __mj."ScheduledJob" SET "Status"='Disabled' WHERE "Status"='Active';
+   ```
+2. **Owner magic-link redemption requires `provisioningGuard: 'warn'`** in the
+   workbench `mj.config.cjs` magicLink block. The default `'block'` refuses to
+   mint a session onto an Owner/privileged account (`provisioning_failed` on
+   redeem) — that guard is intentional production behavior. Relaxing it is
+   acceptable ONLY in the throwaway workbench gate environment, and it is a
+   security-control change: surface it to the human and get explicit sign-off
+   before flipping it. While in that block, also point `explorerUrl` at the
+   port Explorer actually serves on (the checked-in value may say 4201 while
+   the workbench serves 4200).
 
 To delegate, write a self-contained prompt to a file, copy it in with `docker cp`,
 then run it and watch for `__DONE__` with the Monitor tool. Do not poll in
@@ -358,3 +456,9 @@ Each of these cost real time. Heed them.
 - The real gate is a clean `mj migrate` on a fresh database. A "0 gaps" result from convert is structural only.
 - Committed `.pg.sql` and `.pg-only.sql` files are immutable. Only ever produce PG counterparts for new SQL Server migrations. Never reconvert or hand-patch a committed one.
 - For `mj codegen`, always use `scripts/pg-codegen-await.mjs`. The bare CLI can fire-and-forget and exit 0 as a silent no-op.
+- The converter's own "EntityField Sequence deduplication" pass edits committed `.pg.sql` files — check `git status migrations-pg/` after every convert and revert them. The gate proves whether the dedup mattered (so far: it did not).
+- The app workspaces are `mj_api` and `mj_explorer`. `@memberjunction/mjapi` and `@memberjunction/ng-explorer` do not exist — turbo errors "No package found".
+- `--file` = migration basename only, resolved against `--source-dir`.
+- `python3 -m venv` in claude-dev needs `apt-get install python3-venv` first — and a failed attempt leaves a broken venv dir that must be `rm -rf`'d.
+- Memory: `free -h` first; `--concurrency=2` every turbo build on < 8GiB VMs; stop `sql-claude`/`redis-claude` during conversion; disable ScheduledJobs in the gate DB before starting MJAPI.
+- Never run probe/status queries against a database mid-migration — they queue behind DDL locks, get picked as deadlock victims, and on a saturated server login itself times out. Wait for the runner to report.
