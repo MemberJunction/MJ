@@ -1,0 +1,6 @@
+{
+    "name": "fixture-ok-pkg",
+    "private": true,
+    "type": "module",
+    "main": "built/index.js"
+}
