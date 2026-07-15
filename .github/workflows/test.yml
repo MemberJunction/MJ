@@ -123,15 +123,17 @@ jobs:
 
       - name: Build + run unit tests
         run: |
-          # --concurrency caps how many package test tasks run at once. Angular
-          # DOM suites each spin a heavy AOT-compile + jsdom process (bounded to
-          # one fork each by vitest.dom.shared.ts); without this cap the full
-          # suite OOMs the 16 GB runner (exit 137) when several fire together.
+          # Angular DOM suites each spin heavy AOT-compile + jsdom workers (capped
+          # to 2/package by vitest.dom.shared.ts). The AFFECTED path touches only a
+          # few packages, so it runs at full turbo parallelism (fast — the common
+          # PR case). The FULL-suite backstop can fire all ~8 DOM packages at once,
+          # so it caps turbo `--concurrency` to keep peak workers (concurrency × 2)
+          # well under the 16 GB runner's limit (otherwise: OOM / exit 137).
           if [ -n "$TURBO_FILTER" ]; then
             echo "::group::Affected build"
             npx turbo run build --log-order=stream "$TURBO_FILTER"
             echo "::endgroup::"
-            npx turbo run test --concurrency=4 "$TURBO_FILTER"
+            npx turbo run test "$TURBO_FILTER"
           else
             npm run build
             npm test -- --concurrency=4

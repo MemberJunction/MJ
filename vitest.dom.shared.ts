@@ -54,16 +54,24 @@ export default defineConfig({
     restoreMocks: true,
     passWithNoTests: true,
     // Angular's compiled output references `globalThis` symbols, so we run in a
-    // forked process (not threads). CRITICAL: do NOT run spec files in parallel.
-    // Each DOM spec file carries a full Angular AOT compile + jsdom; with
-    // parallelism ON, one package spawns up to CPU-count heavy workers, and with
-    // several DOM packages running concurrently under turbo the peak memory OOMs
-    // CI's 16 GB runner (SIGKILL / exit 137). `fileParallelism: false` bounds a
-    // package to ONE worker at a time (the Vitest-4 replacement for the removed
-    // `poolOptions.forks.singleFork`). Pair with a turbo test `--concurrency`
-    // cap in CI to bound how many packages run at once.
+    // forked process (not threads). Each DOM spec file carries a full Angular AOT
+    // compile + jsdom (~1.5 GB/worker); with the default (CPU-count workers) ONE
+    // package can spawn ~nproc heavy workers, and several DOM packages running
+    // concurrently under turbo multiply that until CI's 16 GB runner OOMs
+    // (SIGKILL / exit 137). `maxWorkers: 2` bounds each package to 2 heavy
+    // workers — big suites still run ~2-wide (much faster than serial) while peak
+    // memory stays bounded. Paired with a turbo `--concurrency` cap on the CI
+    // FULL-suite path (see .github/workflows/test.yml), so the worst case
+    // (all DOM packages at once) is `concurrency × 2` workers, not `packages × nproc`.
     pool: 'forks',
-    fileParallelism: false,
+    maxWorkers: 2,
+    minWorkers: 1,
+    // In a dual-preset package the node + dom projects share a config; Vitest 4
+    // forbids sibling projects with the SAME groupOrder but DIFFERENT maxWorkers.
+    // The node preset keeps the default (unbounded) worker count, so put the dom
+    // project in its own later group — node group runs, then the memory-bounded
+    // dom group. Harmless for single-preset dom packages (one group).
+    sequence: { groupOrder: 1 },
     include: ['src/**/__tests__/**/*.test.ts', 'src/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/generated/**'],
     coverage: {
