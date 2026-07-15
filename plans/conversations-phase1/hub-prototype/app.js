@@ -355,7 +355,8 @@ function artRow(a) {
 }
 
 function sect(label, action, rows) {
-  const a = action ? `<span class="a" data-act="${action.act}" data-id="${action.id || ''}">${action.label}</span>` : '';
+  const cls = action && action.label.startsWith('+') ? 'a create' : 'a';
+  const a = action ? `<span class="${cls}" data-act="${action.act}" data-id="${action.id || ''}">${action.label}</span>` : '';
   return `<div class="qh-sect"><div class="qh-label"><span class="l">${label}</span>${a}</div>${rows}</div>`;
 }
 
@@ -419,7 +420,7 @@ function hubTabInner(p) {
       let out = '';
       if (provisional.length) out += sect('New — review', null, provisional.map((m) => memRow(m, true)).join(''));
       out += sect('This project', { act: 'mem-add', label: '+ Add note' }, projNotes.map((m) => memRow(m, true)).join('') || '<p class="qh-foot" style="margin-top:8px">Nothing yet — notes are learned in conversation or added here.</p>');
-      if (globalNotes.length) out += sect('Global — applies everywhere', null, globalNotes.map((m) => memRow(m, true)).join(''));
+      if (globalNotes.length) out += sect('Global', null, globalNotes.map((m) => memRow(m, true)).join(''));
       out += `<p class="qh-foot"><i class="fa-solid fa-circle-info"></i>Scope controls which agents read a note; project notes never leak outside ${esc(p.name)}. Global notes apply across ALL projects — editing or forgetting one here changes it everywhere.</p>`;
       return out;
     }
@@ -443,12 +444,13 @@ function hubTabInner(p) {
     }
     case 'members':
       return sect('Members', canManage() ? { act: 'share', label: 'Invite →' } : null, p.members.map((m, i) =>
-        `<div class="qh-member"><span class="avatar" style="background:${m.color}">${m.init}</span><span class="nm">${esc(m.name)}</span>${
+        `<div class="qh-member"><span class="avatar" style="background:${m.color}">${m.init}</span><span class="nm">${esc(m.name)}</span>
+         <span class="role-cluster">${
           m.role === 'Owner' || !canManage()
             ? `<span class="role">${m.role}</span>`
             : `<select class="f-select" data-member-role="${i}"><option ${m.role === 'Viewer' ? 'selected' : ''}>Viewer</option><option ${m.role === 'Editor' ? 'selected' : ''}>Editor</option></select>
                <button class="iconbtn" data-act="member-remove" data-id="${i}" title="Remove from project"><i class="fa-solid fa-user-minus"></i></button>`
-        }</div>`).join('')) +
+        }</span></div>`).join('')) +
         `<p class="qh-foot"><i class="fa-solid fa-circle-info"></i>Members see everything in this project. Nesting inheritance is deliberately unanswered here (hierarchy question 3).</p>`;
     default:
       return hubOverview(p);
@@ -851,7 +853,7 @@ function startTemporaryChat(payload) {
 }
 
 function createConversation(p, payload) {
-  const { text, tags, agent } = normalizePayload(payload);
+  const { text, tags, agent, planArmed } = normalizePayload(payload);
   const id = 'new' + Date.now();
   const conv = { id, title: text.split(' ').slice(0, 5).join(' '), summary: `${agent ? agent.name : 'Sage'} · just now`, when: 'now',
     messages: [{ who: 'user', text, tags }, { who: agent ? agent.name : 'Sage', text: '…', thinking: true }] };
@@ -861,8 +863,11 @@ function createConversation(p, payload) {
   render();
   setTimeout(() => {
     conv.messages.pop();
-    agentRespond(conv, p, { text, tags, agent });
-    const named = text.split(' ').slice(0, 4).map((w, i) => (i === 0 ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
+    agentRespond(conv, p, { text, tags, agent, planArmed });
+    let named = text.split(' ').slice(0, 4).map((w, i) => (i === 0 ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
+    const siblings = (p ? p.conversations : DATA.ungrouped).filter((c) => c.id !== conv.id);
+    let n = 2;
+    while (siblings.some((c) => c.title === named)) named = named.replace(/ · \d+$/, '') + ' · ' + n++;
     conv.title = named;
     render();
     toast(`Named by ${agent ? agent.name : 'Sage'}: "${named}"`);
@@ -1114,12 +1119,13 @@ function renderShare() {
   $('#shareTitle').textContent = isArtifact ? `Share "${a.title}"` : 'Share project';
 
   const rows = p.members.map((m, i) =>
-    `<div class="share-row"><span class="avatar" style="background:${m.color}">${m.init}</span><span class="nm">${esc(m.name)}</span>${
+    `<div class="share-row"><span class="avatar" style="background:${m.color}">${m.init}</span><span class="nm">${esc(m.name)}</span>
+     <span class="role-cluster">${
       m.role === 'Owner'
         ? '<span class="role">Owner</span>'
         : `<select class="f-select" data-member-role="${i}"><option ${m.role === 'Viewer' ? 'selected' : ''}>Viewer</option><option ${m.role === 'Editor' ? 'selected' : ''}>Editor</option></select>
            <button class="iconbtn" data-act="member-remove" data-id="${i}" title="Remove from project"><i class="fa-solid fa-user-minus"></i></button>`
-    }</div>`).join('');
+    }</span></div>`).join('');
   const add = `<div class="share-add">
       <input class="f-input" id="shareInput" placeholder="Name or email…">
       <select class="f-select" id="shareRole"><option>Viewer</option><option>Editor</option></select>
@@ -1136,7 +1142,7 @@ function renderShare() {
         </div>`
       : `<div class="pub-sect"><p class="share-note"><i class="fa-solid fa-lock" style="margin-right:6px"></i>Public link is hidden — you don't hold "Can Publish Artifacts Publicly". No dead-end toggle (D11). Flip the demo privilege in the state map to see it.</p></div>`;
   } else {
-    pub = `<p class="share-note">Members see everything in this project — conversations, memory, artifacts. Nesting inheritance: deliberately undrawn, pending the hierarchy review.</p>`;
+    pub = `<p class="share-note">Members see everything in this project — conversations, memory, and artifacts.</p>`;
   }
 
   $('#shareBody').innerHTML = rows + add + pub + `<div class="modal-actions"><button class="btn" data-act="share-done">Done</button></div>`;

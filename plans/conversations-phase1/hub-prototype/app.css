@@ -551,3 +551,41 @@ select.f-select { font: inherit; font-size: 12px; color: var(--mj-text-secondary
 .f-error { font-size: 12px; color: var(--mj-status-error); margin: 6px 0 0; }
 .toast-action { margin-left: 12px; color: var(--mj-brand-accent); cursor: pointer; font-weight: 700; }
 .s-proj.archived { opacity: .75; }
+
+
+/* ---------- Fresh-eyes critique fixes (pass 6) ---------- */
+/* #4 — every member row ends in one fixed-width right cluster, so Owner text,
+   role selects, and remove buttons share an edge instead of three edges */
+.share-row .role-cluster, .qh-member .role-cluster {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 128px;
+  flex: none;
+}
+.share-row .role-cluster .role, .qh-member .role-cluster .role { margin-left: 0; }
+
+/* #5 — memory scope selects: quiet until engaged; taxonomy shouldn't outweigh the note */
+.qh-mem .f-select {
+  border-color: transparent;
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: 11.5px;
+  padding: 2px 4px;
+  flex: none;
+}
+.qh-mem:hover .f-select, .qh-mem:focus-within .f-select, .qh-mem .f-select:focus {
+  border-color: var(--mj-border-default);
+  background: var(--mj-bg-surface);
+}
+
+/* #10 — create actions are findable; navigations stay muted */
+.qh-label .a.create { color: var(--mj-text-link); }
+
+/* Quick-list — companion caps labels match the column's 11px */
+.companion .c-label .l { font-size: 11px; }
+
+/* #9 (mitigation) — toasts sit above the composer, not on it */
+.toast-wrap { bottom: 92px; }
