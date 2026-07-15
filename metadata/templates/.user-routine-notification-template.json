@@ -1,0 +1,51 @@
+{
+  "fields": {
+    "Name": "User Routine Notification - Default",
+    "Description": "Default notification template for User Routine run results. The UserRoutineDispatcherDriver resolves this template BY NAME when a routine has no NotificationTemplateID of its own, rendering it with { routine, run, resultSummary, status } context. Two content bodies: the Text row (compact Markdown) is preferred for IN-APP notifications; the HTML row (email-styled document) is for the email channel.",
+    "UserID": "@lookup:MJ: Users.Name=System",
+    "IsActive": true
+  },
+  "relatedEntities": {
+    "MJ: Template Contents": [
+      {
+        "fields": {
+          "TemplateID": "@parent:ID",
+          "TypeID": "@lookup:MJ: Template Content Types.Name=HTML",
+          "TemplateText": "@file:templates/user-routine-notification.html",
+          "Priority": 100,
+          "IsActive": true
+        },
+        "primaryKey": {
+          "ID": "178E4F9A-5734-4E08-AEDF-12399CB7A33E"
+        },
+        "sync": {
+          "lastModified": "2026-07-07T15:18:38.583Z",
+          "checksum": "ceb2b87feeaaa65df31e737b7259e7565b952d6c27fb15c20cbb728ac73ee60f"
+        }
+      },
+      {
+        "fields": {
+          "TemplateID": "@parent:ID",
+          "TypeID": "@lookup:MJ: Template Content Types.Name=Text",
+          "TemplateText": "@file:templates/user-routine-notification.md",
+          "Priority": 200,
+          "IsActive": true
+        },
+        "primaryKey": {
+          "ID": "71B3C15B-7F85-46CE-9919-3E2C71578EAA"
+        },
+        "sync": {
+          "lastModified": "2026-07-07T15:18:38.659Z",
+          "checksum": "0bebd82938c769cadee4856b8626017386361c0c62301c3b545a928758aa112c"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "22318847-C039-4DC2-9E87-D54D33F9EF98"
+  },
+  "sync": {
+    "lastModified": "2026-07-07T15:18:37.001Z",
+    "checksum": "9e1eb8160f2c702da071c7eadbe8f7b6c4058aee716c127b92b99092712bc4ce"
+  }
+}

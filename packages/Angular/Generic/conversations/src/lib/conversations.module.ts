@@ -13,6 +13,7 @@ import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { TestingModule } from '@memberjunction/ng-testing';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { UserRoutinesModule } from '@memberjunction/ng-user-routines';
 
 // Markdown module
 import { MarkdownModule } from '@memberjunction/ng-markdown';
@@ -20,19 +21,24 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 // Resource permissions (generic share dialog)
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 
+// Composer (mention editor + dropdown + message input box) — extracted to @memberjunction/ng-composer
+import { ComposerModule } from '@memberjunction/ng-composer';
+
+// AI-aware composer wrapper (agent/record/skill trigger plugins built in)
+import { AiComposerComponent } from './components/composer/ai-composer.component';
+import { LoadComposerPlugins } from './composer-plugins/load-composer-plugins';
+
 // Components
 import { MessageItemComponent } from './components/message/message-item.component';
 import { MessageListComponent } from './components/message/message-list.component';
 import { MessageInputComponent } from './components/message/message-input.component';
-import { MessageInputBoxComponent } from './components/message/message-input-box.component';
 import { DynamicFormsModule } from '@memberjunction/ng-forms';
 import { ActionableCommandsComponent } from './components/message/actionable-commands.component';
-import { MentionDropdownComponent } from './components/mention/mention-dropdown.component';
-import { MentionEditorComponent } from './components/mention/mention-editor.component';
 import { ConversationMessageRatingComponent } from './components/message/conversation-message-rating.component';
 import { ConversationWorkspaceComponent } from './components/workspace/conversation-workspace.component';
 import { ConversationNavigationComponent } from './components/navigation/conversation-navigation.component';
 import { ConversationSidebarComponent } from './components/sidebar/conversation-sidebar.component';
+import { RoutinesSectionComponent } from './components/sidebar/routines-section.component';
 import { ConversationListComponent } from './components/conversation/conversation-list.component';
 import { ConversationChatAreaComponent } from './components/conversation/conversation-chat-area.component';
 import { ConversationEmptyStateComponent } from './components/conversation/conversation-empty-state.component';
@@ -111,20 +117,23 @@ LoadClientContextChannel();
 // Whiteboard ARTIFACT VIEWER plugin — resolved by the artifact plugin host via the
 // ClassFactory (keyed by the artifact type's DriverClass), same tree-shaking concern.
 LoadWhiteboardArtifactViewer();
+// Composer trigger-provider PLUGINS ('@' agent mentions, '#' record mentions, '/' skill
+// commands) — resolved via ClassFactory discovery by any mj-mention-editor without an
+// explicit provider list; the static call defeats tree-shaking of their @RegisterClass.
+LoadComposerPlugins();
 
 // Export all components (excluding standalone components)
 const COMPONENTS = [
   MessageItemComponent,
   MessageListComponent,
   MessageInputComponent,
-  MessageInputBoxComponent,
+  AiComposerComponent,
   ActionableCommandsComponent,
-  MentionDropdownComponent,
-  MentionEditorComponent,
   ConversationMessageRatingComponent,
   ConversationWorkspaceComponent,
   ConversationNavigationComponent,
   ConversationSidebarComponent,
+  RoutinesSectionComponent,
   ConversationListComponent,
   ConversationChatAreaComponent,
   ConversationEmptyStateComponent,
@@ -184,6 +193,8 @@ const COMPONENTS = [
     ArtifactsModule,
     TestingModule,
     SharedGenericModule,
+    UserRoutinesModule,
+    ComposerModule,
     MarkdownModule,
     DynamicFormsModule,
     ResourcePermissionsModule,
@@ -212,6 +223,9 @@ const COMPONENTS = [
   exports: [
     ...COMPONENTS,
     SearchShortcutDirective,
+    // Composer components (mj-mention-editor / mj-mention-dropdown / mj-message-input-box)
+    // remain available to consumers of this module's template surface
+    ComposerModule,
     // Standalone components
     TasksFullViewComponent,
     // PR 2c — Widget extension surface

@@ -13,7 +13,9 @@
                 <div class="suggest-section-header">
                     <i class="fa-solid fa-clock suggest-section-icon"></i>
                     <span>Recent Searches</span>
-                    <span class="suggest-clear-link" (mousedown)="OnClearRecentClick($event)">Clear</span>
+                    <button type="button" class="suggest-clear-link" aria-label="Clear recent searches"
+                        (mousedown)="$event.preventDefault()"
+                        (click)="OnClearRecentClick($event)">Clear</button>
                 </div>
                 @for (recent of VisibleRecentSearches; track recent.Query; let i = $index) {
                     <div
@@ -25,6 +27,28 @@
                         <i class="fa-solid fa-clock suggest-item-icon"></i>
                         <span class="suggest-item-text">{{ recent.Query }}</span>
                         <span class="suggest-item-meta">{{ recent.ResultCount }} results</span>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Recently opened records section (idle state) -->
+        @if (showRecentRecordsSection) {
+            <div class="suggest-section">
+                <div class="suggest-section-header">
+                    <i class="fa-solid fa-clock-rotate-left suggest-section-icon"></i>
+                    <span>Recently Opened</span>
+                </div>
+                @for (record of VisibleRecentRecords; track record.EntityName + record.RecordID; let i = $index) {
+                    <div
+                        class="suggest-item suggest-recent-item"
+                        [class.suggest-item-highlighted]="IsHighlighted((showRecentSection ? VisibleRecentSearches.length : 0) + i)"
+                        (mousedown)="OnRecentRecordClick(record); $event.preventDefault()"
+                        (mouseenter)="HighlightedIndex = (showRecentSection ? VisibleRecentSearches.length : 0) + i"
+                    >
+                        <i class="fa-solid fa-file-lines suggest-item-icon"></i>
+                        <span class="suggest-item-text">{{ record.RecordName }}</span>
+                        <span class="suggest-item-meta">{{ record.EntityName }}</span>
                     </div>
                 }
             </div>
@@ -107,10 +131,26 @@
             </div>
         }
 
-        <!-- Empty state when no recent and query too short -->
-        @if (!showRecentSection && !showPreviewSection) {
+        <!-- Empty state when no recents of either kind and query too short -->
+        @if (!showRecentSection && !showRecentRecordsSection && !showPreviewSection) {
             <div class="suggest-empty">
                 <span>Type at least {{ MinQueryLength }} characters to search</span>
+            </div>
+        }
+
+        <!-- Host-supplied promo row (e.g. command palette nudge) -->
+        @if (ShowPromo && PromoText) {
+            <div class="suggest-promo">
+                <i class="fa-solid fa-wand-magic-sparkles suggest-promo-icon"></i>
+                <span class="suggest-promo-text">{{ PromoText }}</span>
+                <button type="button" class="suggest-promo-action"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="OnPromoAccept()">{{ PromoActionLabel }}</button>
+                <button type="button" class="suggest-promo-dismiss" aria-label="Dismiss" title="Dismiss"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="OnPromoDismiss(); $event.stopPropagation()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
         }
     </div>

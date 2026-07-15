@@ -21,13 +21,16 @@ const SCRIPTS = [
     'runquery-cache-tests.ts',
     'record-process-tests.ts',
     'record-process-facade-tests.ts',
+    'lists-tests.ts',
     'rls-isolation-tests.ts',
     'api-keys-tests.ts',
     'scheduled-jobs-tests.ts',
     'field-rules-bulk-update-tests.ts',
+    'open-app-teardown-tests.ts',
     'remote-operations-tests.ts',
     'remote-op-wire-progress-tests.ts',
     'ai-skills-tests.ts',
+    'user-routines-tests.ts',
     'predictive-studio-tests.ts',
     // Predictive Studio integration tier — each SKIPs (exit 0) unless PS_INTEGRATION=1 + AssociationDemo is
     // loaded (the Python sidecar trains/scores). The ps-inproc-* run in-process; the ps-live-* drive the

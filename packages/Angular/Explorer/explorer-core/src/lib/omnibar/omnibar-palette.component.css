@@ -1,0 +1,349 @@
+/* ── Unified command palette (design source: plans/composer-adoption/mockups/omnibar-command-palette.html) ── */
+
+.omnibar-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--mj-bg-overlay);
+    z-index: 1400;
+}
+
+.omnibar-palette {
+    position: fixed;
+    left: 50%;
+    top: 96px;
+    transform: translateX(-50%);
+    width: min(680px, 92vw);
+    /* Grow to content — every fetched row plus the footer stays visible without
+       internal scroll on desktop. The viewport bound below is the only cap, so
+       .ob-body only scrolls when the screen genuinely can't fit the panel. */
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 96px - 24px);
+    background: var(--mj-bg-surface-elevated);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-xl);
+    box-shadow: var(--mj-shadow-lg, 0 20px 60px color-mix(in srgb, var(--mj-text-primary) 22%, transparent));
+    z-index: 1401;
+    overflow: hidden;
+    animation: ob-pop .13s ease-out;
+}
+
+@keyframes ob-pop {
+    from { opacity: 0; transform: translateX(-50%) scale(.985) translateY(-4px); }
+    to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
+.ob-input-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px 18px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.ob-lead {
+    color: var(--mj-text-muted);
+    font-size: 15px;
+    width: 18px;
+    text-align: center;
+}
+
+.ob-lead--trigger { color: var(--mj-brand-primary); }
+.ob-lead b { font-family: ui-monospace, monospace; }
+
+.ob-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 16px;
+    color: var(--mj-text-primary);
+    font-family: inherit;
+}
+
+.ob-input::placeholder { color: var(--mj-text-muted); }
+
+.ob-mode-badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: var(--mj-radius-full, 999px);
+    background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
+    color: var(--mj-brand-primary);
+    white-space: nowrap;
+}
+
+.ob-kbd {
+    font-family: inherit;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--mj-text-muted);
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-strong);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 1.5px 6px;
+}
+
+.ob-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: var(--mj-radius-full);
+    background: transparent;
+    color: var(--mj-text-muted);
+    font-size: var(--mj-text-sm);
+    cursor: pointer;
+    transition: var(--mj-transition-colors);
+    flex-shrink: 0;
+}
+.ob-close:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+.ob-scopes {
+    display: flex;
+    gap: 6px;
+    padding: 9px 18px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    flex-wrap: wrap;
+}
+
+.ob-scope {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: var(--mj-radius-full, 999px);
+    border: 1px solid var(--mj-border-default);
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    background: transparent;
+}
+
+.ob-scope--on {
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+    font-weight: 600;
+}
+
+.ob-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 6px 0;
+}
+
+.ob-loading,
+.ob-empty {
+    padding: 18px;
+    text-align: center;
+    color: var(--mj-text-muted);
+    font-size: 13px;
+}
+
+.ob-group-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    color: var(--mj-text-muted);
+    padding: 10px 18px 5px;
+}
+
+.ob-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 18px;
+    cursor: pointer;
+}
+
+/* Rows are focus stops (roving tabindex): the --sel background tracks focus, so
+   suppress the default outline but keep a ring for keyboard :focus-visible. */
+.ob-row:focus { outline: none; }
+.ob-row:focus-visible { outline: 2px solid var(--mj-border-focus); outline-offset: -2px; }
+
+.ob-row--sel {
+    background: color-mix(in srgb, var(--mj-brand-primary) 9%, transparent);
+    box-shadow: inset 3px 0 0 var(--mj-brand-primary);
+}
+
+.ob-ric {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
+}
+
+.ob-row--sel .ob-ric {
+    background: color-mix(in srgb, var(--mj-brand-primary) 16%, transparent);
+    color: var(--mj-brand-primary);
+}
+
+.ob-rmain { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.ob-rname {
+    font-size: 13.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--mj-text-primary);
+}
+
+.ob-rsub {
+    font-size: 11.5px;
+    color: var(--mj-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+}
+
+.ob-raux { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.ob-rtype {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--mj-radius-full, 999px);
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    text-transform: capitalize;
+}
+
+.ob-score {
+    width: 52px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--mj-bg-surface-sunken);
+    overflow: hidden;
+}
+
+.ob-score i { display: block; height: 100%; background: var(--mj-brand-primary); }
+
+.ob-go {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    opacity: 0;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.ob-row--sel .ob-go { opacity: 1; }
+
+.ob-hintbar { display: flex; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+
+.ob-hint-chip {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 13px;
+    border: 1px dashed var(--mj-border-strong);
+    border-radius: 10px;
+    cursor: pointer;
+    background: transparent;
+}
+
+.ob-hint-chip:hover {
+    border-color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
+}
+
+.ob-hint-chip b { font-family: ui-monospace, monospace; color: var(--mj-brand-primary); font-size: 14px; }
+.ob-hint-chip span { font-size: 12px; color: var(--mj-text-secondary); }
+
+.ob-foot {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 18px;
+    border-top: 1px solid var(--mj-border-subtle);
+    background: var(--mj-bg-surface-card);
+    font-size: 11.5px;
+    color: var(--mj-text-muted);
+}
+
+.ob-k { display: flex; align-items: center; gap: 5px; }
+
+/* Footer gear — the reverse door to My Profile → Command Palette. */
+.ob-settings {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    margin-left: auto;
+    border: none;
+    border-radius: var(--mj-radius-full);
+    background: transparent;
+    color: var(--mj-text-muted);
+    font-size: var(--mj-text-xs);
+    cursor: pointer;
+    transition: var(--mj-transition-colors);
+}
+.ob-settings:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+/* ========================================
+   MOBILE (matches mj-search-overlay's 640px sheet treatment so the two search
+   surfaces sit identically on small viewports)
+   ======================================== */
+@media (max-width: 640px) {
+    .omnibar-palette {
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        transform: none;
+        width: 100%;
+        height: 100dvh;
+        max-height: none; /* desktop viewport bound would clamp the full-height sheet */
+        border-radius: 0;
+        animation: none; /* ob-pop animates a translateX(-50%) that no longer applies */
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Full-height sheet: the results area absorbs all remaining space. */
+    .ob-body {
+        flex: 1;
+        min-height: 0;
+        max-height: none;
+    }
+
+    /* Keyboard chrome is meaningless on touch: esc/↵ chips, per-row 'open ↵'
+       hints, and the footer's nav-hint spans. The footer itself stays because it
+       carries the settings gear — the only in-surface door to the opt-in toggle,
+       which mobile users need too. The ✕ close button also stays. */
+    .ob-kbd,
+    .ob-go,
+    .ob-k {
+        display: none;
+    }
+
+    /* Touch-friendly hit areas for the surviving controls. */
+    .ob-close,
+    .ob-settings {
+        width: 40px;
+        height: 40px;
+        font-size: var(--mj-text-base);
+    }
+}

@@ -6,6 +6,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { moveAndResequence, resequenceItems } from './user-app-config-reorder';
 /**
  * Represents an app item in the configuration UI
  */
@@ -119,25 +120,30 @@ export class UserAppConfigComponent extends BaseAngularComponent {
   }
 
   /**
-   * Moves an app up in the order
+   * Moves an app up in the order. Positional (splice + renumber), NOT a sequence-value
+   * swap: rows can carry duplicate Sequence values (issue #3027 — e.g. a re-enabled app
+   * kept a stale value), and swapping two equal values is a silent no-op. Reordering by
+   * position then renumbering 0..n-1 always works and heals duplicates as a side effect.
    */
   MoveUp(item: AppConfigItem): void {
     const index = this.ActiveApps.indexOf(item);
     if (index > 0) {
-      this.swapSequences(item, this.ActiveApps[index - 1]);
-      this.ActiveApps = [...this.ActiveApps].sort((a, b) => a.sequence - b.sequence);
+      this.moveActiveApp(index, index - 1);
     }
   }
 
   /**
-   * Moves an app down in the order
+   * Moves an app down in the order. Positional — see {@link MoveUp} for why.
    */
   MoveDown(item: AppConfigItem): void {
     const index = this.ActiveApps.indexOf(item);
-    if (index < this.ActiveApps.length - 1) {
-      this.swapSequences(item, this.ActiveApps[index + 1]);
-      this.ActiveApps = [...this.ActiveApps].sort((a, b) => a.sequence - b.sequence);
+    if (index >= 0 && index < this.ActiveApps.length - 1) {
+      this.moveActiveApp(index, index + 1);
     }
+  }
+
+  private moveActiveApp(fromIndex: number, toIndex: number): void {
+    this.ActiveApps = moveAndResequence(this.ActiveApps, fromIndex, toIndex);
   }
 
   /**
@@ -160,6 +166,11 @@ export class UserAppConfigComponent extends BaseAngularComponent {
     this.ErrorMessage = '';
 
     try {
+      // Self-heal: renumber active apps 0..n-1 before persisting. Existing rows can
+      // carry duplicate Sequence values from older data (issue #3027); renumbering in
+      // display order marks any corrected rows dirty so this save fixes them for good.
+      this.resequenceActiveApps();
+
       const md = this.ProviderToUse;
 
       for (const item of this.AllApps) {
@@ -397,21 +408,9 @@ export class UserAppConfigComponent extends BaseAngularComponent {
   }
 
   private resequenceActiveApps(): void {
-    this.ActiveApps.forEach((item, index) => {
-      if (item.sequence !== index) {
-        item.sequence = index;
-        item.isDirty = true;
-      }
-    });
+    resequenceItems(this.ActiveApps);
   }
 
-  private swapSequences(a: AppConfigItem, b: AppConfigItem): void {
-    const tempSeq = a.sequence;
-    a.sequence = b.sequence;
-    b.sequence = tempSeq;
-    a.isDirty = true;
-    b.isDirty = true;
-  }
 
   private async updateUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
     const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');

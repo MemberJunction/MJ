@@ -206,9 +206,13 @@ export class UserViewResource extends BaseResourceComponent {
         this.cdr.detectChanges();
 
         try {
+            // NavigationService.OpenDynamicView stamps the special marker 'dynamic' as the
+            // record ID (tabs require ResourceRecordId) — that is NOT a saved-view ID.
+            const recordId = data.ResourceRecordID;
+            const isDynamicMarker = typeof recordId === 'string' && recordId.trim().toLowerCase() === 'dynamic';
             // Case 1: Load view by ID
-            if (data.ResourceRecordID) {
-                await this.loadViewById(data.ResourceRecordID);
+            if (recordId && !isDynamicMarker) {
+                await this.loadViewById(recordId);
             }
             // Case 2: Load dynamic view by entity name
             else if (data.Configuration?.Entity) {

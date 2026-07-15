@@ -53,8 +53,12 @@
 
 .suggest-clear-link {
     margin-left: auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-family: inherit;
     font-size: 0.68rem;
-    font-weight: 500;
+    font-weight: var(--mj-font-medium);
     color: var(--mj-text-link, var(--mj-brand-primary));
     cursor: pointer;
     text-transform: none;
@@ -63,6 +67,12 @@
 
 .suggest-clear-link:hover {
     text-decoration: underline;
+}
+
+.suggest-clear-link:focus-visible {
+    outline: 2px solid var(--mj-border-focus);
+    outline-offset: 2px;
+    border-radius: var(--mj-radius-sm);
 }
 
 /* Items */
@@ -305,4 +315,67 @@
 .suggest-filter-check {
     font-size: 0.65rem;
     color: var(--mj-brand-primary);
+}
+
+/* Host-supplied promo row — a quiet whisper pinned to the dropdown's bottom
+   edge, never a banner. */
+.suggest-promo {
+    display: flex;
+    align-items: center;
+    gap: var(--mj-space-2);
+    padding: var(--mj-space-2) var(--mj-space-3);
+    border-top: 1px solid var(--mj-border-subtle);
+    background: var(--mj-bg-surface-card);
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+}
+
+.suggest-promo-icon {
+    color: var(--mj-brand-primary);
+    flex-shrink: 0;
+}
+
+.suggest-promo-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.suggest-promo-action {
+    flex-shrink: 0;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-md);
+    background: transparent;
+    color: var(--mj-brand-primary);
+    font-size: 0.75rem;
+    font-weight: var(--mj-font-medium);
+    cursor: pointer;
+    transition: var(--mj-transition-colors);
+}
+
+.suggest-promo-action:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+    border-color: var(--mj-brand-primary);
+}
+
+.suggest-promo-dismiss {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: var(--mj-radius-full);
+    background: transparent;
+    color: var(--mj-text-disabled);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: var(--mj-transition-colors);
+    flex-shrink: 0;
+}
+
+.suggest-promo-dismiss:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-secondary);
 }

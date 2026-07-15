@@ -73,6 +73,10 @@ async function initializeSqlServerProvider(config: MJConfig): Promise<DatabasePr
     database: config.dbDatabase,
     user: config.dbUsername,
     password: config.dbPassword,
+    // Honor the configured per-request timeout; without it mssql falls back to its
+    // 15s default, which prematurely aborts long-running operations such as
+    // `mj app remove` dropping a large schema.
+    ...(config.dbRequestTimeout ? { requestTimeout: Number(config.dbRequestTimeout) } : {}),
     options: {
       encrypt: config.dbEncrypt === 'Y' || config.dbEncrypt === 'true' ||
                config.dbHost?.includes('.database.windows.net'),
@@ -111,6 +115,9 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
     database: config.dbDatabase,
     max: 10,
     min: 1,
+    // Mirror the SQL Server path: honor the configured per-request timeout as the
+    // PG per-statement timeout when set (pg defaults to no statement timeout).
+    ...(config.dbRequestTimeout ? { statement_timeout: Number(config.dbRequestTimeout) } : {}),
   });
 
   const testClient = await pgPool.connect();
@@ -127,6 +134,11 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
       Password: config.dbPassword,
       MaxConnections: 10,
       MinConnections: 1,
+      // The provider's OWN pool (PGConnectionManager creates a separate pg.Pool from this config) is
+      // what `provider.ExecuteSQL` — including the schema DROP on `mj app remove` — runs on. Carry the
+      // configured per-request timeout as a libpq `statement_timeout` startup option so it reaches THAT
+      // pool, not just the local connectivity-check pool above. (Otherwise the "PG parity" is inert.)
+      ...(config.dbRequestTimeout ? { Options: `-c statement_timeout=${Number(config.dbRequestTimeout)}` } : {}),
     },
     coreSchema,
     1, // must be > 0 to trigger initial metadata load (AllowRefresh gate in PostgreSQLDataProvider)

@@ -21,7 +21,7 @@ export type PSConfirmVariant = 'info' | 'warn' | 'danger';
   selector: 'ps-confirm-modal',
   imports: [CommonModule, FormsModule, MJButtonDirective],
   encapsulation: ViewEncapsulation.None,
-  styleUrls: ['../predictive-studio.shared.scss'],
+  styleUrls: ['../predictive-studio.shared.css'],
   template: `
     <div class="ps-modal-backdrop" data-testid="ps-confirm-modal" (click)="onBackdrop()">
       <div class="ps-modal" (click)="$event.stopPropagation()">

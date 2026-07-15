@@ -2,7 +2,7 @@
 
 > **Purpose** — If you're evaluating MemberJunction against stacks you already know (Next.js/Vercel, Supabase, Ruby on Rails, Django, or a hand-rolled Node + ORM + SPA), this guide gives you a fair, dimension-by-dimension comparison: what each tool is genuinely great at, where MJ differs, and how to choose. It is deliberately **not** a "MJ wins everything" pitch — different tools win different jobs, and knowing which is which saves you months.
 
-**Companion to:** [Building Applications on MemberJunction](BUILDING_APPS_ON_MJ.md).
+**Companions:** [Building Applications on MemberJunction](BUILDING_APPS_ON_MJ.md) · [Agent Framework Comparison](AGENT_FRAMEWORK_COMPARISON.md) (MJ vs. LangGraph, CrewAI, AG2/AutoGen & other agent frameworks).
 
 ---
 

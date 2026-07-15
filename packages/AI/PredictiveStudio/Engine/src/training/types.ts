@@ -68,6 +68,26 @@ export interface IRecordLoader {
    * @param provider optional provider for multi-provider correctness
    */
   nextModelVersion(pipelineId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number>;
+
+  /**
+   * Resolve the sidecar **driver key** for an algorithm from its
+   * `MJ: ML Algorithms.DriverClass` (e.g. `xgboost`, `logistic_regression`).
+   *
+   * The pipeline view exposes `Algorithm` as the algorithm's display *Name*
+   * (`XGBoost`, `Multilayer Perceptron`), which is NOT what the sidecar registry
+   * keys on — it requires the lowercase `DriverClass`. The engine therefore
+   * resolves the driver key by id rather than trusting the display name.
+   *
+   * Optional so in-memory test fakes (which set `pipeline.Algorithm` directly to
+   * the driver key) need not implement it — the engine falls back to
+   * `pipeline.Algorithm` when this is absent or returns `null`.
+   *
+   * @param algorithmId `MJ: ML Algorithms` primary-key value
+   * @param contextUser request user
+   * @param provider optional provider for multi-provider correctness
+   * @returns the `DriverClass` driver key, or `null` when not found
+   */
+  resolveAlgorithmDriverKey?(algorithmId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<string | null>;
 }
 
 /**

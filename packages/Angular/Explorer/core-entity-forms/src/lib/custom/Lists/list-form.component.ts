@@ -5,8 +5,8 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { MJListFormComponent } from '../../generated/Entities/MJList/mjlist.form.component';
 import { MJListEntity, MJListDetailEntity, MJListDetailEntityExtended, MJListCategoryEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
-import { ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
+import { CompositeKey, Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
+import { ListShareDialogConfig, ListShareDialogResult, GetRecordDisplayField, IsTextSearchableField, FormatRecordDisplayValue } from '@memberjunction/ng-list-management';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 
 export type ListSection = 'overview' | 'items' | 'sharing' | 'activity' | 'settings';
@@ -89,6 +89,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public itemSearchTerm = '';
     public selectedItems = new Set<string>();
     public isSelectAllChecked = false;
+
+    // Items pagination — the Items grid loads one page at a time so large
+    // lists (thousands of members) don't pull the entire membership into the
+    // browser. Display-name resolution is likewise batched per page.
+    public itemsPage = 0;
+    public readonly itemsPageSize = 100;
 
     // Edit state
     public isEditingName = false;
@@ -174,7 +180,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             console.error('Error loading list data:', error);
             this.explorerError = 'Failed to load list data';
         } finally {
-            this.cdr.markForCheck();
+            this.cdr.detectChanges();
         }
     }
 
@@ -190,11 +196,11 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }
     }
 
-    private async loadItems(): Promise<void> {
+    private async loadItems(page: number = 0): Promise<void> {
         if (!this.record?.IsSaved) return;
 
         this.isLoadingItems = true;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
 
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -202,56 +208,104 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
                 EntityName: 'MJ: List Details',
                 ExtraFilter: `ListID = '${this.record.ID}'`,
                 OrderBy: '__mj_CreatedAt DESC',
+                StartRow: page * this.itemsPageSize,
+                MaxRows: this.itemsPageSize,
                 ResultType: 'entity_object'
             });
 
             if (result.Success) {
+                this.itemsPage = page;
                 this.listItems = result.Results.map(detail => ({
                     detail,
                     recordName: detail.RecordID || 'Loading...',
                     isLoading: true
                 }));
+                this.selectedItems.clear();
+                this.isSelectAllChecked = false;
 
-                // Load record names asynchronously
-                this.loadRecordNames();
+                // Resolve display names for this page in one batched query
+                await this.loadRecordNames();
             }
         } catch (error) {
             console.error('Error loading list items:', error);
         } finally {
             this.isLoadingItems = false;
-            this.cdr.markForCheck();
+            this.cdr.detectChanges();
         }
     }
 
+    /**
+     * Resolves display names for the current page of items with a single
+     * batched `PK IN (...)` query per 250 items — never one query per item.
+     */
     private async loadRecordNames(): Promise<void> {
-        if (!this.entityInfo) return;
+        const finish = () => {
+            for (const item of this.listItems) item.isLoading = false;
+            this.cdr.detectChanges();
+        };
+
+        if (!this.entityInfo || this.listItems.length === 0) {
+            finish();
+            return;
+        }
+
+        // NameField when the entity has one; otherwise the fallback field
+        // (first non-PK/non-FK/non-system field), shown as "<id> — <value>"
+        const displayField = GetRecordDisplayField(this.entityInfo);
+        const pkName = this.entityInfo.FirstPrimaryKey?.Name || 'ID';
+        if (!displayField.Field) {
+            // Entity has only key fields — the record ID is the best label available
+            for (const item of this.listItems) {
+                item.recordName = item.detail.RecordID || 'Unknown';
+            }
+            finish();
+            return;
+        }
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        // Get the name field - NameField is EntityFieldInfo or undefined
-        const nameFieldInfo = this.entityInfo.NameField;
-        const nameFieldName = nameFieldInfo ? nameFieldInfo.Name : 'ID';
+        const valueMap = new Map<string, unknown>();
+        const ids = this.listItems
+            .map(i => i.detail.RecordID)
+            .filter((id): id is string => !!id);
 
-        for (const item of this.listItems) {
+        const CHUNK_SIZE = 250;
+        for (let start = 0; start < ids.length; start += CHUNK_SIZE) {
+            const chunk = ids.slice(start, start + CHUNK_SIZE);
+            const inList = chunk.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
             try {
                 const result = await rv.RunView({
                     EntityName: this.entityInfo.Name,
-                    ExtraFilter: `ID = '${item.detail.RecordID}'`,
-                    Fields: [nameFieldName],
-                    ResultType: 'simple',
-                    MaxRows: 1
+                    ExtraFilter: `${pkName} IN (${inList})`,
+                    Fields: [pkName, displayField.Field.Name],
+                    ResultType: 'simple'
                 });
-
-                if (result.Success && result.Results.length > 0) {
-                    const record = result.Results[0] as Record<string, string>;
-                    item.recordName = record[nameFieldName] || item.detail.RecordID || '';
+                if (result.Success) {
+                    for (const row of result.Results as Array<Record<string, unknown>>) {
+                        valueMap.set(NormalizeUUID(String(row[pkName])), row[displayField.Field.Name]);
+                    }
                 }
             } catch (error) {
-                item.recordName = item.detail.RecordID || 'Unknown';
-            } finally {
-                item.isLoading = false;
+                // Fall through — unresolved items display their RecordID
             }
         }
-        this.cdr.markForCheck();
+
+        for (const item of this.listItems) {
+            const id = item.detail.RecordID || 'Unknown';
+            const value = item.detail.RecordID ? valueMap.get(NormalizeUUID(item.detail.RecordID)) : undefined;
+            item.recordName = FormatRecordDisplayValue(id, value, displayField);
+        }
+        finish();
+    }
+
+    // === Items pagination ===
+
+    public get totalPages(): number {
+        return Math.max(1, Math.ceil(this.stats.itemCount / this.itemsPageSize));
+    }
+
+    public async goToPage(page: number): Promise<void> {
+        if (page < 0 || page >= this.totalPages || page === this.itemsPage) return;
+        await this.loadItems(page);
     }
 
     private async loadStats(): Promise<void> {
@@ -289,7 +343,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             console.error('Error loading stats:', error);
         } finally {
             this.isLoadingStats = false;
-            this.cdr.markForCheck();
+            this.cdr.detectChanges();
         }
     }
 
@@ -313,7 +367,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         if (navItem?.disabled) return;
 
         this.activeSection = section;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     // === Items Management ===
@@ -336,7 +390,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             this.selectedItems.add(id);
         }
         this.updateSelectAllState();
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public toggleSelectAll(): void {
@@ -348,7 +402,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             }
         }
         this.isSelectAllChecked = !this.isSelectAllChecked;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     private updateSelectAllState(): void {
@@ -365,22 +419,52 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         if (!(await this.confirmService.ConfirmDelete({ message: confirmMessage }))) return;
 
         try {
+            // Queue all deletes in one TransactionGroup — one round trip
+            // instead of one per selected item. Deliberately atomic (unlike
+            // the server bulk paths, which trade atomicity for per-record
+            // error isolation): if Submit() fails, the transaction rolled
+            // back and NO rows were removed.
+            const tg = await this.metadata.CreateTransactionGroup();
+            let queued = 0;
+            let failedToQueue = 0;
             for (const id of this.selectedItems) {
                 const item = this.listItems.find(i => UUIDsEqual(i.detail.ID, id));
                 if (item) {
-                    await item.detail.Delete();
+                    item.detail.TransactionGroup = tg;
+                    // With a TransactionGroup set, Delete() returns true once
+                    // enqueued; false means a pre-enqueue failure (validation/
+                    // permission) and the row never joined the transaction.
+                    if (await item.detail.Delete()) {
+                        queued++;
+                    } else {
+                        failedToQueue++;
+                        LogError(`Failed to queue list item removal: ${item.detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    }
                 }
             }
+            const success = queued === 0 || await tg.Submit();
+            if (!success) {
+                this.showNotification('Error removing items from list', 'error', 4000);
+                return;
+            }
 
-            this.showNotification(
-                `Removed ${count} item${count > 1 ? 's' : ''} from list`,
-                'success',
-                3000
-            );
+            if (failedToQueue > 0) {
+                this.showNotification(
+                    `Removed ${queued} item${queued === 1 ? '' : 's'} from list; ${failedToQueue} failed`,
+                    'error',
+                    4000
+                );
+            } else {
+                this.showNotification(
+                    `Removed ${count} item${count > 1 ? 's' : ''} from list`,
+                    'success',
+                    3000
+                );
+            }
 
             this.selectedItems.clear();
-            await this.loadItems();
             await this.loadStats();
+            await this.loadItems(Math.min(this.itemsPage, this.totalPages - 1));
             this.updateNavBadges();
         } catch (error) {
             console.error('Error removing items:', error);
@@ -395,8 +479,13 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public openRecord(item: ListItemViewModel): void {
         if (!this.entityInfo || !item.detail.RecordID) return;
 
-        // Use SharedService to open the record
-        this.sharedService.InvokeManualResize();
+        if (this.entityInfo.PrimaryKeys.length > 1) {
+            // ListDetail.RecordID stores a single-PK value; composite-PK
+            // entities aren't representable here
+            this.showNotification('Cannot open records for entities with composite primary keys', 'info', 3000);
+            return;
+        }
+        SharedService.Instance.OpenEntityRecord(this.entityInfo.Name, CompositeKey.FromID(item.detail.RecordID));
     }
 
     // === Inline Editing ===
@@ -404,7 +493,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public startEditingName(): void {
         this.editingName = this.record.Name;
         this.isEditingName = true;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public async saveNameEdit(): Promise<void> {
@@ -423,18 +512,18 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }
 
         this.isEditingName = false;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public cancelNameEdit(): void {
         this.isEditingName = false;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public startEditingDescription(): void {
         this.editingDescription = this.record.Description || '';
         this.isEditingDescription = true;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public async saveDescriptionEdit(): Promise<void> {
@@ -448,12 +537,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }
 
         this.isEditingDescription = false;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public cancelDescriptionEdit(): void {
         this.isEditingDescription = false;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     // === Helpers ===
@@ -507,12 +596,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             this.showNotification('Failed to update category', 'error', 3000);
         }
 
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public async refreshItems(): Promise<void> {
-        await this.loadItems();
         await this.loadStats();
+        await this.loadItems(Math.min(this.itemsPage, this.totalPages - 1));
         this.updateNavBadges();
     }
 
@@ -530,7 +619,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         // Load existing list detail IDs to mark which records are already in the list
         await this.loadExistingListDetailIds();
         this.addDialogLoading = false;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public closeAddRecordsDialog(): void {
@@ -541,7 +630,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.addDialogSaving = false;
         this.addProgress = 0;
         this.addTotal = 0;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     private async loadExistingListDetailIds(): Promise<void> {
@@ -568,26 +657,29 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     private async searchRecords(searchText: string): Promise<void> {
         if (!this.record || !searchText || searchText.length < 2) {
             this.addableRecords = [];
-            this.cdr.markForCheck();
+            this.cdr.detectChanges();
             return;
         }
 
         this.addDialogLoading = true;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
 
         const sourceEntityInfo = this.metadata.EntityByID(this.record.EntityID);
         if (!sourceEntityInfo) {
             this.addDialogLoading = false;
-            this.cdr.markForCheck();
+            this.cdr.detectChanges();
             return;
         }
 
-        const nameField = sourceEntityInfo.Fields.find(field => field.IsNameField);
+        // NameField when present; otherwise the fallback display field
+        // (first non-PK/non-FK/non-system field). Text-typed fields also
+        // drive the LIKE search so name-less entities remain searchable.
+        const displayField = GetRecordDisplayField(sourceEntityInfo);
         const pkField = sourceEntityInfo.FirstPrimaryKey?.Name || 'ID';
 
         let filter: string | undefined;
-        if (nameField) {
-            filter = `${nameField.Name} LIKE '%${searchText}%'`;
+        if (displayField.Field && IsTextSearchableField(displayField.Field)) {
+            filter = `${displayField.Field.Name} LIKE '%${searchText.replace(/'/g, "''")}%'`;
         }
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -603,7 +695,9 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
                 const recordId = String(record[pkField]);
                 return {
                     ID: recordId,
-                    Name: nameField ? String(record[nameField.Name]) : recordId,
+                    Name: displayField.Field
+                        ? FormatRecordDisplayValue(recordId, record[displayField.Field.Name], displayField)
+                        : recordId,
                     isInList: this.existingListDetailIds.has(NormalizeUUID(recordId)),
                     isSelected: false
                 };
@@ -611,13 +705,13 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }
 
         this.addDialogLoading = false;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public toggleRecordSelection(record: AddableRecord): void {
         if (record.isInList) return; // Can't select records already in list
         record.isSelected = !record.isSelected;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public get selectedAddableRecords(): AddableRecord[] {
@@ -628,12 +722,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.addableRecords.forEach(r => {
             if (!r.isInList) r.isSelected = true;
         });
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public deselectAllAddable(): void {
         this.addableRecords.forEach(r => r.isSelected = false);
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public async confirmAddRecords(): Promise<void> {
@@ -643,7 +737,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.addDialogSaving = true;
         this.addTotal = recordsToAdd.length;
         this.addProgress = 0;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
 
         // Use transaction group for bulk insert
         const tg = await this.metadata.CreateTransactionGroup();
@@ -671,7 +765,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             LogError('Error adding records to list');
             this.showNotification('Failed to add some records', 'error', 2500);
             this.addDialogSaving = false;
-            this.cdr.markForCheck();
+            this.cdr.detectChanges();
         }
     }
 
@@ -683,7 +777,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.showAddFromViewDialog = true;
         this.userViewsToAdd = [];
         this.userViewsToAddIds.clear();
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
 
         if (!this.userViews) {
             await this.loadEntityViews();
@@ -697,14 +791,14 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.showAddFromViewLoader = false;
         this.addFromViewProgress = 0;
         this.addFromViewTotal = 0;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     private async loadEntityViews(): Promise<void> {
         if (!this.record || !this.record.Entity) return;
 
         this.showAddFromViewLoader = true;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const runViewResult = await rv.RunView<MJUserViewEntityExtended>({
@@ -720,7 +814,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }
 
         this.showAddFromViewLoader = false;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public toggleViewSelection(view: MJUserViewEntityExtended): void {
@@ -732,7 +826,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             this.userViewsToAdd.push(view);
             this.userViewsToAddIds.add(NormalizeUUID(view.ID));
         }
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public isViewSelected(view: MJUserViewEntityExtended): boolean {
@@ -744,7 +838,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         this.showAddFromViewLoader = true;
         this.fetchingRecordsToSave = true;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
@@ -771,12 +865,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.addFromViewTotal = recordsToAdd.length;
         this.addFromViewProgress = 0;
         this.fetchingRecordsToSave = false;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
 
         if (recordsToAdd.length === 0) {
             this.showNotification('All records already in list', 'info', 2500);
             this.showAddFromViewLoader = false;
-            this.cdr.markForCheck();
+            this.cdr.detectChanges();
             return;
         }
 
@@ -808,7 +902,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             LogError('Error adding records from view to list');
             this.showNotification('Failed to add some records', 'error', 2500);
             this.showAddFromViewLoader = false;
-            this.cdr.markForCheck();
+            this.cdr.detectChanges();
         }
     }
 
@@ -826,7 +920,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             isOwner: this.isCurrentUserOwner()
         };
         this.showShareDialog = true;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public onShareDialogComplete(result: ListShareDialogResult): void {
@@ -837,16 +931,16 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             // Refresh stats to update share counts
             this.loadStats().then(() => {
                 this.updateNavBadges();
-                this.cdr.markForCheck();
+                this.cdr.detectChanges();
             });
         }
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public onShareDialogCancel(): void {
         this.showShareDialog = false;
         this.shareDialogConfig = null;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     // ==========================================
@@ -859,22 +953,22 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         // need preservation across this transition.
         this.showShareDialog = false;
         this.showInvitationsDialog = true;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public closeInvitationsDialog(): void {
         this.showInvitationsDialog = false;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public openAuditLogDialog(): void {
         this.showShareDialog = false;
         this.showAuditLogDialog = true;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 
     public closeAuditLogDialog(): void {
         this.showAuditLogDialog = false;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
     }
 }

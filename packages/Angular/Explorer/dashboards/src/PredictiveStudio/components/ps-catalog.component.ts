@@ -43,7 +43,7 @@ const USE_CASE_ICONS: Record<string, string> = {
   selector: 'ps-catalog',
   imports: [CommonModule, MJButtonDirective],
   encapsulation: ViewEncapsulation.None,
-  styleUrls: ['../predictive-studio.shared.scss', './ps-catalog.component.scss'],
+  styleUrls: ['../predictive-studio.shared.css', './ps-catalog.component.css'],
   template: `
     <div class="ps-panel ps-catalog" data-testid="ps-catalog-panel">
       <!-- Guide me scenario picker -->

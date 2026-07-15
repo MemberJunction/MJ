@@ -1,5 +1,81 @@
 # @memberjunction/ng-workspace-initializer
 
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+- Updated dependencies [d1e1a15]
+  - @memberjunction/ng-explorer-core@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ng-shared@5.48.0
+  - @memberjunction/ng-auth-services@5.48.0
+  - @memberjunction/ng-shared-generic@5.48.0
+  - @memberjunction/graphql-dataprovider@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ng-auth-services@5.47.0
+  - @memberjunction/ng-explorer-core@5.47.0
+  - @memberjunction/ng-shared@5.47.0
+  - @memberjunction/ng-shared-generic@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/ng-auth-services@5.46.0
+  - @memberjunction/ng-explorer-core@5.46.0
+  - @memberjunction/ng-shared@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-explorer-core@5.45.1
+- @memberjunction/ng-shared@5.45.1
+- @memberjunction/graphql-dataprovider@5.45.1
+- @memberjunction/ng-auth-services@5.45.1
+- @memberjunction/ng-shared-generic@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/graphql-dataprovider@5.45.0
+  - @memberjunction/ng-explorer-core@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ng-auth-services@5.45.0
+  - @memberjunction/ng-shared@5.45.0
+  - @memberjunction/ng-shared-generic@5.45.0
+
 ## 5.44.0
 
 ### Patch Changes

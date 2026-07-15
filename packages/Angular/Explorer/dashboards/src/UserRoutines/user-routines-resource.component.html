@@ -1,0 +1,44 @@
+<mj-page-layout>
+  <mj-page-header Title="Routines" Icon="fa-solid fa-business-time"
+    Subtitle="Schedule AI agents to run for you — and get notified about the results">
+    <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
+    <div meta>
+      <mj-stat-badge [Count]="FilteredCount" [Total]="TotalCount" Label="routines"></mj-stat-badge>
+    </div>
+    <div actions>
+      @if (ActiveView !== 'list') {
+        <button mjButton variant="outline" size="sm" (click)="BackToList()">
+          <i class="fa-solid fa-arrow-left"></i> Back to list
+        </button>
+      }
+      <mj-refresh-button (Clicked)="RefreshData()"></mj-refresh-button>
+      <button mjButton variant="primary" size="sm" (click)="NewRoutine()">
+        <i class="fa-solid fa-plus"></i> New Routine
+      </button>
+    </div>
+    <div toolbar>
+      <mj-page-search Placeholder="Search routines..." [Value]="SearchText"
+        (ValueChange)="OnSearchChange($event)"></mj-page-search>
+      <mj-filter-popover Label="Filters" Icon="fa-solid fa-filter"
+        [ActiveCount]="ActiveFilterCount" [ShowClearAll]="ActiveFilterCount > 0"
+        (ClearAllRequested)="ResetFilters()">
+        <mj-filter-panel [Fields]="FilterFields" [Values]="FilterValues"
+          (ValuesChange)="OnFilterValuesChange($event)" (Reset)="ResetFilters()"></mj-filter-panel>
+      </mj-filter-popover>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    <mj-user-routines-command-center #commandCenter class="routines-cc"
+      [Provider]="ProviderToUse"
+      [ShowHeader]="false"
+      [SearchText]="SearchText"
+      [StatusFilter]="StatusFilter"
+      [SelectedRoutineID]="SelectedRoutineID"
+      (SelectedRoutineIDChange)="OnSelectedRoutineIDChange($event)"
+      (ViewChanged)="OnViewChanged($event)"
+      (CountsChanged)="OnCountsChanged($event)"
+      (HistoryRecordOpened)="OnHistoryRecordOpened($event)">
+    </mj-user-routines-command-center>
+  </mj-page-body>
+</mj-page-layout>
