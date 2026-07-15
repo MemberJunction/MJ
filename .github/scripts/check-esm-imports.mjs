@@ -18,7 +18,7 @@
  * DEP_FAIL is printed so it stays visible; fixing it belongs in the owning package.
  */
 
-import { readFileSync, readdirSync, existsSync, realpathSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, realpathSync, statSync } from 'node:fs';
 import { join, resolve, sep, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
@@ -359,7 +359,13 @@ function findModulePackageDirs(dir, out = []) {
             console.warn(`esm-guard: skipping unparseable ${pkgPath}: ${e.message}`);
         }
     }
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    let entries;
+    try {
+        entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+        return out; // unreadable dir (ENOTDIR/EACCES) → skip, don't crash the sweep (mirrors walkFiles)
+    }
+    for (const entry of entries) {
         if (!entry.isDirectory()) continue;
         if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name.startsWith('.')) continue;
         findModulePackageDirs(join(dir, entry.name), out);
@@ -381,6 +387,13 @@ async function main() {
     const rootDir = resolve(process.argv[2] ?? 'packages');
     if (!existsSync(rootDir)) {
         console.error(`esm-guard: root directory not found: ${rootDir}`);
+        process.exit(2);
+    }
+    // A file (or non-directory) arg would otherwise crash the sweep with an unhandled
+    // ENOTDIR at exit 1 — the same exit code a real gating failure uses. Route operator
+    // error to the clean exit-2 misconfiguration path instead.
+    if (!statSync(rootDir).isDirectory()) {
+        console.error(`esm-guard: ${rootDir} is not a directory — pass a directory to sweep (e.g. "packages").`);
         process.exit(2);
     }
     console.log(`esm-guard: native-ESM-importing every "type": "module" package under ${rootDir} ...`);

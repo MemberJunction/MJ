@@ -453,6 +453,15 @@ describe('CLI', () => {
         expect(result.stderr).toContain('no "type": "module" packages');
     });
 
+    it('exits 2 (not a crashing 1) when the target path is a FILE, not a directory', async () => {
+        // A file arg must route to the clean exit-2 misconfiguration path, not crash with an
+        // unhandled ENOTDIR at exit 1 (which collides with the real gating exit code).
+        const fileArg = join(SCRIPT); // the guard script itself is a file
+        const result = await run(process.execPath, [SCRIPT, fileArg]).catch((e) => e);
+        expect(result.code).toBe(2);
+        expect(result.stderr).toContain('not a directory');
+    });
+
     it('warns but exits 0 when packages exist yet every one is NOT_BUILT (legitimate in affected-PR CI)', async () => {
         // In a turbo affected-PR build only the changed subset is built, so a sweep of the
         // whole tree is legitimately all-NOT_BUILT — that must NOT red an innocent PR. But it
