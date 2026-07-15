@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Placement Board — Conversations Redesign Accounting</title>
+<style>
+:root {
+  --brand: #0076b6; --text: #1e293b; --text-2: #475569; --muted: #64748b;
+  --bg: #f8fafc; --surface: #ffffff; --line: #e2e8f0; --line-soft: #f1f5f9;
+  --ok: #16a34a; --sketch: #d97706; --design: #7c3aed; --decision: #dc2626; --del: #64748b; --keep: #0891b2;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --brand: #4cb3e3; --text: #f1f5f9; --text-2: #cbd5e1; --muted: #94a3b8;
+    --bg: #0f172a; --surface: #1e293b; --line: #334155; --line-soft: #293648;
+    --ok: #4ade80; --sketch: #fbbf24; --design: #c4b5fd; --decision: #f87171; --del: #94a3b8; --keep: #67e8f9;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.5; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 32px 28px 80px; }
+h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+.sub { color: var(--muted); font-size: 13.5px; margin: 0 0 20px; max-width: 860px; }
+.sub b { color: var(--text-2); }
+
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 26px; position: sticky; top: 0; background: var(--bg); padding: 12px 0; z-index: 5; border-bottom: 1px solid var(--line-soft); }
+.pill { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--text-2); display: inline-flex; align-items: center; gap: 7px; }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; }
+.pill .n { color: var(--muted); font-weight: 700; }
+.pill.active { border-color: var(--brand); color: var(--text); box-shadow: 0 0 0 1px var(--brand) inset; }
+.pill.all.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+#q { margin-left: auto; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; width: 220px; outline: none; }
+#q:focus { border-color: var(--brand); }
+
+.surface { margin-top: 30px; }
+.s-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.s-name { font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.s-meter { font-size: 11.5px; color: var(--muted); }
+.s-bar { flex: 1; max-width: 160px; height: 4px; border-radius: 999px; background: var(--line-soft); overflow: hidden; }
+.s-bar i { display: block; height: 100%; background: var(--ok); border-radius: 999px; }
+.items { display: flex; flex-wrap: wrap; gap: 6px; }
+.item { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 5px 10px 5px 8px; font-size: 12.5px; color: var(--text-2); display: inline-flex; align-items: center; gap: 7px; cursor: default; }
+.item .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.item.hide { display: none; }
+.item[title] { cursor: help; }
+.item b { color: var(--text); font-weight: 600; }
+
+.legend { font-size: 12px; color: var(--muted); margin-top: 40px; border-top: 1px solid var(--line-soft); padding-top: 14px; max-width: 860px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Placement Board — everything to account for</h1>
+  <p class="sub">Every accountable behavior in the conversations redesign, from
+  <b>BASELINE-INVENTORY.md</b> (shipped product, code-verified) plus the prototype's new layer.
+  <b>The placement rule:</b> a surface is done only when every item here has an address.
+  Statuses update by editing the data block in this file. Sources: GAPLIST items in
+  parentheses; hover an item for detail.</p>
+
+  <div class="controls" id="controls"></div>
+  <div id="board"></div>
+
+  <p class="legend"><b>Statuses.</b>
+  <span style="color:var(--ok)">●</span> placed — working in the prototype or settled in the design of record ·
+  <span style="color:var(--sketch)">●</span> sketch — exists in prototype, needs the polished version ·
+  <span style="color:var(--design)">●</span> needs design — no drawn answer yet (gaplist item) ·
+  <span style="color:var(--decision)">●</span> needs decision — blocked on a human call first ·
+  <span style="color:var(--keep)">●</span> keep as-is — shipped surface that survives unchanged behind the new skin ·
+  <span style="color:var(--del)">●</span> propose delete — shipped stub; recommend removal on the record.</p>
+</div>
+
+<script>
+const S = { ok: 'placed', sk: 'sketch', dg: 'needs design', dc: 'needs decision', kp: 'keep as-is', dl: 'propose delete' };
+const DATA = [
+['Shell & navigation', [
+  ['Workspace tabs (Chats/Collections/Tasks)', 'kp'],
+  ['Global search entry + Ctrl+K', 'dc', 'Merge with #3042 omnibar? (GAPLIST 2.5)'],
+  ['Deep links (conversation/artifact/version/session/task)', 'kp', 'Contract — must survive any shell'],
+  ['Host slots (6) + cancelable before-events + adapters', 'kp', 'Integration contract'],
+  ['Chat overlay mode (bubble, resize, unread, handoff)', 'dg', 'GAPLIST 2.6'],
+  ['Sidebar resize / collapse / pin (persisted)', 'dg', 'GAPLIST 1.3'],
+  ['Mobile slide-over sidebar', 'dg'],
+  ['Browser title tracks conversation', 'kp'],
+]],
+['Sidebar & organization', [
+  ['Live filter (name + description)', 'ok', 'Implemented 07-15'],
+  ['Conversation description previews', 'ok', 'Implemented 07-15'],
+  ['Drag conversation → project / Ungrouped', 'ok', 'Implemented 07-15'],
+  ['Rename dialog (Name + Description)', 'ok', 'Implemented 07-15'],
+  ['Auto-naming (AI, guarded) + dedupe', 'ok', 'Simulated in prototype; real in product'],
+  ['Pinned conversations section', 'sk'],
+  ['Move-to-project (menu + modal + create-at-need)', 'ok'],
+  ['Project create/edit modal (icon + color)', 'sk', 'GAPLIST 1.10 — full 20/20 picker'],
+  ['Nesting: subfolders, drag reparent, counts', 'dc', 'SHIPPED behavior vs flat prototype — Amith review (GAPLIST 1.4)'],
+  ['Group-by-folder / flat toggle', 'dg', 'GAPLIST 1.3'],
+  ['Multi-select + bulk delete', 'dg', 'GAPLIST 1.3'],
+  ['Notification badges (priority, pulse, NEW)', 'dg', 'GAPLIST 2.8'],
+  ['Active-task spinner on rows', 'dg'],
+  ['Shared-with-me indicator', 'dg'],
+  ['Routines entry (badge, +, command center)', 'kp', 'Own design gate (Option B) — survives'],
+  ['Archive section + restore', 'ok', 'Prototype-new (position #7)'],
+]],
+['Project hub (new layer)', [
+  ['Hub overview + growth contract (3 densities)', 'ok', 'Positions #12, growth contract'],
+  ['Hub tabs (Conversations/Memory/Artifacts/Members)', 'ok'],
+  ['Workflows: running/failed/history + retry', 'ok', 'Position #8'],
+  ['Members: roles, invite, remove, view-as', 'ok', 'Position #6'],
+  ['Archive-first delete + undo', 'ok', 'Position #7'],
+  ['Teammate activity signal (dot + new tags)', 'ok', 'Position #9'],
+  ['Empty / first-run states', 'sk', 'GAPLIST 1.11'],
+  ['Hub ↔ chat breadcrumb', 'ok'],
+]],
+['Message row', [
+  ['Flat avatar rows, both parties', 'ok', 'Position #13, adopted 07-15'],
+  ['Name + time header, generation-time pill', 'ok'],
+  ['Markdown + collapsible headings', 'dg', 'GAPLIST 1.1'],
+  ['Mention token badges', 'sk'],
+  ['Submitted-form pills', 'sk'],
+  ['Inline edit + "(edited)"', 'dg', 'GAPLIST 1.1'],
+  ['Delete last-and-below', 'dg', 'GAPLIST 1.1'],
+  ['Retry on error', 'ok', 'Prototype has error+retry'],
+  ['Pin message + pinned panel', 'dg', 'GAPLIST 1.1 / 2.9'],
+  ['Actionable command chips', 'dg', 'GAPLIST 1.1'],
+  ['Per-message artifact cards', 'dg', 'GAPLIST 1.1'],
+  ['Run inspector (steps/tokens/cost)', 'dg', 'GAPLIST 1.2'],
+  ['Attachment grid + fullscreen viewer', 'dg', 'GAPLIST 2.10'],
+  ['Rating 1–10 + consent + role grant', 'dg', 'GAPLIST 1.8'],
+  ['Live final-response streaming', 'kp', 'Merged to next 07-08; keep'],
+  ['Reactions (shipped hidden)', 'dl'],
+  ['Jump-to-date (stub)', 'dl'],
+  ['Msg save/share/export handlers (stubs)', 'dl'],
+  ['Thread panel (orphaned entry)', 'dc', 'Revive or delete — decide (GAPLIST 2.7)'],
+  ['Shift+click diagnostics (dev)', 'kp'],
+]],
+['Composer', [
+  ['@ / # / / triggers + grouped popover', 'ok', 'Position #5'],
+  ['@ includes human users', 'sk', 'GAPLIST 1.5'],
+  ['In-chip agent config presets', 'dg', 'GAPLIST 1.5'],
+  ['Attachments (limits, validation, previews)', 'sk', 'GAPLIST 1.5'],
+  ['Paste image / drag-drop files', 'dg', 'GAPLIST 1.5'],
+  ['Attach-from-artifact', 'sk'],
+  ['Plan chip — per-request semantics', 'dc', 'THE D5 re-lock (GAPLIST 1.12)'],
+  ['Temporary chip (locks at first send)', 'ok', 'Position #11, D20'],
+  ['Mode presets (Draft/Standard/High)', 'ok'],
+  ['Voice entry (instant call + picker + consent)', 'dg', 'GAPLIST 1.5 / 2.4'],
+  ['Draft persistence per conversation', 'ok', 'Position #2'],
+  ['Skill warning toasts + auto-retry', 'dg'],
+  ['Keyboard grammar (Enter/Shift/arrows/Esc)', 'ok', 'Fix baseline Enter vs Ctrl+Enter inconsistency'],
+]],
+['Plan approval', [
+  ['Plan card: editable, approve/reject', 'ok', 'Prototype per-request version'],
+  ['Stale-plan decay + re-plan', 'ok', 'Position #4'],
+  ['Sticky vs per-request semantics', 'dc', 'D5 — Amith review'],
+  ['Reject → reason → forced re-plan', 'sk'],
+  ['Out-of-conversation request panel', 'dg', 'GAPLIST 1.12'],
+]],
+['Memory (new layer)', [
+  ['"Remembered" inline moment + undo', 'ok', 'Amith-endorsed; the crown jewel'],
+  ['Scope-at-capture (Keep/Edit + scope)', 'sk', 'Harvested from Option C (GAPLIST 1.13)'],
+  ['Provisional → keep/forget lifecycle', 'ok'],
+  ['Memory tab: project vs global, scope edit', 'ok', 'Position #10'],
+  ['Global-forget confirm', 'ok'],
+  ['"Used N project memories" transparency', 'ok', 'Designed everywhere, shipped nowhere — protect'],
+  ['Incognito reads/writes nothing', 'ok', 'D20'],
+]],
+['Artifacts', [
+  ['Viewer at real scale (7 tabs, live React, analyze)', 'dg', 'GAPLIST 2.1 — largest single gap'],
+  ['Versions (append-only, edit → new version)', 'sk', 'Parcel G'],
+  ['Publish w/ privilege gate (D11)', 'ok', 'Prototype models it; product link cosmetic'],
+  ['Save-to-collection + drag-to-project', 'dg', 'GAPLIST 1.13 harvest'],
+  ['Remix', 'sk'],
+  ['Apply to my Form (form-role artifacts)', 'dg', 'GAPLIST 2.1'],
+  ['Usage tracking (viewed/opened/shared…)', 'kp'],
+]],
+['Collections', [
+  ['Finder workspace (shelf, ranges, menus, drag)', 'dg', 'GAPLIST 2.2'],
+  ['Sidebar tree + share cascade', 'dg', 'GAPLIST 2.2'],
+  ['Collections ↔ projects boundary', 'dc', 'One-line intent needed (DESIGN-NOTES)'],
+]],
+['Tasks & agents', [
+  ['Tasks full view (Gantt, dependencies)', 'dg', 'GAPLIST 2.3'],
+  ['Tasks dropdown + floating panels', 'dg', 'GAPLIST 2.3'],
+  ['Active-agent chip + cancel-run', 'dg', 'GAPLIST 2.3'],
+]],
+['Voice / realtime', [
+  ['Live overlay (controls, captions, density)', 'dg', 'GAPLIST 2.4'],
+  ['Channels (whiteboard/media/remote browser)', 'dg', 'GAPLIST 2.4'],
+  ['Delegation cards + cancel', 'dg'],
+  ['Session review + timeline card', 'dg'],
+]],
+['Sharing & export', [
+  ['Conversation share (roles, remove)', 'sk', 'GAPLIST 1.7'],
+  ['Real public link (D11 magic link)', 'dc', 'Parcel G; product toggle is cosmetic TODAY (trust bug)'],
+  ['Artifact / collection share', 'dg', 'GAPLIST 1.7'],
+  ['Members modal (in-memory stub)', 'dl', 'Superseded by real sharing'],
+  ['Export modal (4 formats + options)', 'dg', 'GAPLIST 1.9'],
+]],
+['Search', [
+  ['Search panel (6 scopes, dates, recents)', 'dg', 'GAPLIST 2.5'],
+  ['Project-scoped search behavior', 'dc', 'DESIGN-NOTES boundary'],
+]],
+];
+
+const COLORS = { ok: 'var(--ok)', sk: 'var(--sketch)', dg: 'var(--design)', dc: 'var(--decision)', kp: 'var(--keep)', dl: 'var(--del)' };
+let filter = null, query = '';
+
+function counts() {
+  const c = { ok: 0, sk: 0, dg: 0, dc: 0, kp: 0, dl: 0, total: 0 };
+  for (const [, items] of DATA) for (const [, st] of items) { c[st]++; c.total++; }
+  return c;
+}
+
+function renderControls() {
+  const c = counts();
+  const pills = [`<button class="pill all ${filter === null ? 'active' : ''}" data-f="">All <span class="n">${c.total}</span></button>`];
+  for (const k of ['ok', 'sk', 'dg', 'dc', 'kp', 'dl'])
+    pills.push(`<button class="pill ${filter === k ? 'active' : ''}" data-f="${k}"><span class="dot" style="background:${COLORS[k]}"></span>${S[k]} <span class="n">${c[k]}</span></button>`);
+  pills.push('<input id="q" placeholder="Filter items…" value="' + query.replace(/"/g, '&quot;') + '">');
+  document.getElementById('controls').innerHTML = pills.join('');
+}
+
+function renderBoard() {
+  const q = query.toLowerCase();
+  document.getElementById('board').innerHTML = DATA.map(([name, items]) => {
+    const shown = items.filter(([label, st, note]) =>
+      (!filter || st === filter) && (!q || label.toLowerCase().includes(q) || (note || '').toLowerCase().includes(q)));
+    if (!shown.length) return '';
+    const done = items.filter(([, st]) => st === 'ok' || st === 'kp').length;
+    return `<div class="surface">
+      <div class="s-head"><span class="s-name">${name}</span>
+        <span class="s-bar"><i style="width:${Math.round(done / items.length * 100)}%"></i></span>
+        <span class="s-meter">${done}/${items.length} settled</span></div>
+      <div class="items">${shown.map(([label, st, note]) =>
+        `<span class="item" ${note ? `title="${note.replace(/"/g, '&quot;')}"` : ''}><span class="dot" style="background:${COLORS[st]}"></span>${label}</span>`).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+document.addEventListener('click', (e) => {
+  const p = e.target.closest('.pill');
+  if (!p) return;
+  filter = p.dataset.f || null;
+  renderControls(); renderBoard();
+  const qEl = document.getElementById('q'); if (qEl) qEl.value = query;
+});
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'q') { query = e.target.value; renderBoard(); }
+});
+
+renderControls();
+renderBoard();
+</script>
+</body>
+</html>

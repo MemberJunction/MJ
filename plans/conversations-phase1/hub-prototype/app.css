@@ -255,10 +255,17 @@ body { margin: 0; font-family: var(--font); color: var(--mj-text-primary); backg
 .chat-head .grow { flex: 1; }
 .chat-msgs { flex: 1; overflow: auto; padding: 26px 24px; }
 .chat-col { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
-.msg-user { align-self: flex-end; max-width: 78%; background: var(--mj-bg-surface-sunken); color: var(--mj-text-primary); border-radius: 14px 14px 4px 14px; padding: 10px 14px; font-size: 13.5px; }
-.msg-agent { align-self: stretch; font-size: 13.5px; color: var(--mj-text-primary); }
-.msg-agent .who { font-size: 11px; font-weight: 700; color: var(--mj-text-muted); margin-bottom: 3px; letter-spacing: .04em; text-transform: uppercase; }
-.msg-agent.thinking { color: var(--mj-text-muted); font-style: italic; }
+/* Flat avatar rows, both parties (position #13 — product idiom, bubbles removed) */
+.msg { display: flex; gap: 10px; align-items: flex-start; }
+.msg-av { width: 28px; height: 28px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; margin-top: 1px; }
+.msg-av.is-user { background: var(--mj-text-secondary); font-size: 10px; font-weight: 700; letter-spacing: .02em; }
+.msg-main { flex: 1; min-width: 0; }
+.msg-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+.msg-name { font-size: 12.5px; font-weight: 700; color: var(--mj-text-primary); }
+.msg-time { font-size: 11px; color: var(--mj-text-muted); }
+.msg-dur { margin-left: auto; font-size: 11px; color: var(--mj-text-muted); display: inline-flex; align-items: center; gap: 4px; }
+.msg-text { font-size: 13.5px; color: var(--mj-text-primary); }
+.msg-text.thinking { color: var(--mj-text-muted); font-style: italic; }
 .chat-composer { flex: none; padding: 0 24px 20px; }
 .chat-composer .box { max-width: 680px; margin: 0 auto; border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); background: var(--mj-bg-surface); padding: 10px 8px 10px 16px; display: flex; align-items: center; gap: 8px; }
 .chat-composer .box:focus-within { border-color: var(--mj-brand-primary); }
@@ -496,8 +503,8 @@ select.f-select { font: inherit; font-size: 12px; color: var(--mj-text-secondary
 .mp-item .s { margin-left: auto; font-size: 11.5px; color: var(--mj-text-muted); }
 
 .msg-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
-.msg-user .mtag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; background: color-mix(in srgb, var(--mj-bg-surface) 25%, transparent); border-radius: 999px; padding: 1px 8px; color: inherit; opacity: .9; }
-.msg-user .mtag i { font-size: 9.5px; }
+.msg-tags .mtag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; border: 1px solid var(--mj-border-default); border-radius: 999px; padding: 1px 8px; color: var(--mj-text-secondary); }
+.msg-tags .mtag i { font-size: 9.5px; }
 
 /* Collapsed state map = compact pill, never covers the composer */
 .statemap.closed { width: auto; }
@@ -589,3 +596,22 @@ select.f-select { font: inherit; font-size: 12px; color: var(--mj-text-secondary
 
 /* #9 (mitigation) — toasts sit above the composer, not on it */
 .toast-wrap { bottom: 92px; }
+
+
+/* ---------- Baseline parity: sidebar drag-and-drop ---------- */
+.s-conv[draggable="true"] { cursor: grab; }
+.s-conv[draggable="true"]:active { cursor: grabbing; }
+.s-proj.drop-hover, .s-sect.drop-hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 28%, transparent);
+  outline: 1px dashed color-mix(in srgb, var(--mj-brand-on-secondary) 45%, transparent);
+  outline-offset: -1px;
+}
+
+
+/* ---------- Baseline parity: sidebar filter + description previews ---------- */
+.side-search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; font: inherit; font-size: 13px; color: var(--mj-brand-on-secondary); }
+.side-search input::placeholder { color: color-mix(in srgb, var(--mj-brand-on-secondary) 55%, transparent); }
+.s-conv { align-items: flex-start; }
+.s-conv .ctxt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.s-conv .csub { font-size: 11px; font-weight: 400; line-height: 1.3; color: color-mix(in srgb, var(--mj-brand-on-secondary) 52%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.s-conv.active .csub { color: color-mix(in srgb, #ffffff 75%, transparent); }

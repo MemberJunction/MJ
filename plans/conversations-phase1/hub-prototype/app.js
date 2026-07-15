@@ -26,10 +26,10 @@ const ESTABLISHED = {
       conversations: [
         { id: 'c1', title: 'Q3 renewal targets', summary: 'Sage flagged 3 at-risk renewals, $890K exposure', when: '1d',
           messages: [
-            { who: 'user', text: 'Which renewals are at risk this quarter?' },
-            { who: 'Sage', text: 'Three accounts look at-risk: Meridian ($420K, sponsor left in May), Coastal ($310K, usage down 40%), and Brightline ($160K, invoice disputes). Combined exposure is $890K. Want a save plan for each?' },
-            { who: 'user', text: 'Yes — start with Meridian.' },
-            { who: 'Sage', text: 'Drafting the Meridian save plan now. First step is re-establishing an exec sponsor; I\'ve pulled the stakeholder map from this project\'s earlier conversation and flagged two candidates.' },
+            { who: 'user', text: 'Which renewals are at risk this quarter?', when: '1d' },
+            { who: 'Sage', when: '1d', dur: '0:05', text: 'Three accounts look at-risk: Meridian ($420K, sponsor left in May), Coastal ($310K, usage down 40%), and Brightline ($160K, invoice disputes). Combined exposure is $890K. Want a save plan for each?' },
+            { who: 'user', text: 'Yes — start with Meridian.', when: '1d' },
+            { who: 'Sage', when: '1d', dur: '0:08', text: 'Drafting the Meridian save plan now. First step is re-establishing an exec sponsor; I\'ve pulled the stakeholder map from this project\'s earlier conversation and flagged two candidates.' },
           ] },
         { id: 'c2', title: 'Lapsed member win-back copy', summary: 'Sage · draft 2 of the win-back sequence', when: '2d',
           messages: [
@@ -174,6 +174,7 @@ const state = {
   planArmed: false,       // legacy — plan state now lives on the per-conversation draft
   viewAs: { name: 'You', role: 'Owner' },   // recipient-side preview (D batch)
   moveConvPending: null,  // conversation waiting for "Move → New project…"
+  sideFilter: '',         // sidebar live filter (baseline parity)
   canPublish: true,       // demo: "Can Publish Artifacts Publicly" privilege (D11)
   editingArtifact: false,
   openProjects: new Set(['renewal']),
@@ -247,25 +248,44 @@ function toast(msg, action) {
 }
 
 /* ---------- Sidebar ---------- */
+function sideConvRow(c, { top = false, draggable = true, icon = '' } = {}) {
+  const active = state.view === 'chat' && state.convId === c.id;
+  const sub = c.summary ? `<span class="csub">${esc(c.summary)}</span>` : '';
+  return `<div class="s-conv ${top ? 'top' : ''} ${active ? 'active' : ''}"${draggable ? ` draggable="true" data-drag-conv="${c.id}"` : ''} data-act="open-conv" data-id="${c.id}">
+    ${icon}<span class="ctxt"><span class="cname">${esc(c.title)}</span>${sub}</span><span class="cwhen">${c.when || ''}</span></div>`;
+}
+
+function sideMatch(c) {
+  const q = state.sideFilter.trim().toLowerCase();
+  if (!q) return true;
+  return c.title.toLowerCase().includes(q) || (c.summary || '').toLowerCase().includes(q);
+}
+
 function renderSidebar() {
   const t = [];
-  if (DATA.pinned.length) {
+  if (DATA.pinned.filter(sideMatch).length) {
     t.push(`<div class="s-sect"><i class="fa-solid fa-chevron-down chev"></i><i class="fa-solid fa-thumbtack pin"></i> Pinned <span class="grow"></span></div>`);
-    for (const c of DATA.pinned) t.push(`<div class="s-conv top ${state.view === 'chat' && state.convId === c.id ? 'active' : ''}" data-act="open-conv" data-id="${c.id}"><span class="cname">${esc(c.title)}</span><span class="cwhen">${c.when}</span></div>`);
+    for (const c of DATA.pinned.filter(sideMatch)) t.push(sideConvRow(c, { top: true, draggable: false }));
   }
 
   t.push(`<div class="s-sect"><i class="fa-solid fa-chevron-down chev"></i> Projects <span class="add" data-act="new-project" title="New project"><i class="fa-solid fa-plus"></i></span></div>`);
   if (!DATA.projects.length)
     t.push(`<div class="s-empty">Group related work when you're ready — shared memory, outputs, and people.</div>`);
+  const q = state.sideFilter.trim().toLowerCase();
+  let filterHits = 0;
   for (const p of DATA.projects) {
-    const open = state.openProjects.has(p.id);
+    const nameMatch = !q || p.name.toLowerCase().includes(q);
+    const matching = p.conversations.filter(sideMatch);
+    if (q && !nameMatch && !matching.length) continue;
+    const open = q ? matching.length > 0 : state.openProjects.has(p.id);
     const sel = (state.view === 'hub' || state.view === 'artifact') && state.projectId === p.id;
     const hasFresh = p.conversations.some((c) => c.fresh) || p.artifacts.some((a) => a.fresh);
-    t.push(`<div class="s-proj ${sel ? 'sel' : ''} ${open ? 'open' : ''}" data-act="open-hub" data-id="${p.id}">
+    t.push(`<div class="s-proj ${sel ? 'sel' : ''} ${open ? 'open' : ''}" data-drop-target="${p.id}" data-act="open-hub" data-id="${p.id}">
       <i class="fa-solid fa-chevron-right chev"></i><i class="fa-solid ${p.icon} picon" style="color:${p.color}"></i>
       <span class="pname">${esc(p.name)}</span>${hasFresh && !sel ? '<span class="adot" title="New since you last looked"></span>' : ''}</div>`);
-    if (open) for (const c of p.conversations.slice(0, 3))
-      t.push(`<div class="s-conv ${state.view === 'chat' && state.convId === c.id ? 'active' : ''}" data-act="open-conv" data-id="${c.id}"><span class="cname">${esc(c.title)}</span><span class="cwhen">${c.when}</span></div>`);
+    const shown = q ? matching.slice(0, 5) : p.conversations.slice(0, 3);
+    if (open) for (const c of shown) { t.push(sideConvRow(c)); filterHits++; }
+    if (q) filterHits++; // the project row itself matched or contained matches
   }
 
   if (DATA.archived.length) {
@@ -275,11 +295,13 @@ function renderSidebar() {
         <i class="fa-solid fa-box-archive chev" style="width:auto"></i><i class="fa-solid ${p.icon} picon" style="color:${p.color};opacity:.5"></i>
         <span class="pname">${esc(p.name)}</span><span class="cwhen" style="font-size:10.5px;opacity:.6">restore</span></div>`);
   }
-  if (DATA.ungrouped.length) {
-    t.push(`<div class="s-sect"><i class="fa-solid fa-chevron-down chev"></i> Ungrouped <span class="grow"></span></div>`);
-    for (const c of DATA.ungrouped)
-      t.push(`<div class="s-conv top ${state.view === 'chat' && state.convId === c.id ? 'active' : ''}" data-act="open-conv" data-id="${c.id}"><span class="cname">${esc(c.title)}</span><span class="cwhen">${c.when}</span></div>`);
+  const ungroupedShown = DATA.ungrouped.filter(sideMatch);
+  if (ungroupedShown.length || (!q && DATA.projects.some((p) => p.conversations.length))) {
+    t.push(`<div class="s-sect" data-drop-target="__none"><i class="fa-solid fa-chevron-down chev"></i> Ungrouped <span class="grow"></span></div>`);
+    for (const c of ungroupedShown) t.push(sideConvRow(c, { top: true }));
   }
+  if (q && !filterHits && !ungroupedShown.length && !DATA.pinned.filter(sideMatch).length)
+    t.push(`<div class="s-empty">Nothing matches "${esc(state.sideFilter.trim())}".</div>`);
   if (DATA.temporary.messages.length || (state.view === 'chat' && state.convId === 'tmp'))
     t.push(`<div class="s-conv top ${state.convId === 'tmp' ? 'active' : ''}" data-act="open-conv" data-id="tmp"><i class="fa-solid fa-user-secret ghost-ic"></i><span class="cname" style="font-style:italic">Temporary chat</span><span class="cwhen">now</span></div>`);
 
@@ -577,21 +599,36 @@ function msgTags(tags) {
     `<span class="mtag" ${t.color ? `style="color:${t.color}"` : ''}><i class="fa-solid ${t.icon}"></i>${esc(t.label)}</span>`).join('')}</div>`;
 }
 
+const AGENT_AVATARS = {
+  Sage: { icon: 'fa-robot', color: 'var(--mj-brand-primary)' },
+  Skip: { icon: 'fa-satellite-dish', color: '#7C3AED' },
+};
+
+/* Flat avatar rows for BOTH parties — the shipped product idiom (position #13).
+   Bubbles were a prototype invention; removed 2026-07-15. */
 function msgHtml(m, mi) {
-  if (m.who === 'user') return `<div class="msg-user">${esc(m.text)}${msgTags(m.tags)}</div>`;
-  const remembered = m.remembered
-    ? `<div class="remembered"><i class="fa-solid fa-check"></i>Remembered — "${esc(m.remembered)}" · Project<span class="undo" data-act="mem-undo" data-id="${mi}">Undo</span></div>` : '';
+  const isUser = m.who === 'user';
+  const a = AGENT_AVATARS[m.who] || AGENT_AVATARS.Sage;
+  const avatar = isUser
+    ? '<span class="msg-av is-user">AM</span>'
+    : `<span class="msg-av" style="background:${a.color}"><i class="fa-solid ${a.icon}"></i></span>`;
+  const head = `<div class="msg-head"><span class="msg-name">${isUser ? 'Alex Morgan' : esc(m.who)}</span>${
+    m.when ? `<span class="msg-time">${esc(m.when)}</span>` : ''}${
+    !isUser && m.dur ? `<span class="msg-dur"><i class="fa-regular fa-clock"></i>${esc(m.dur)}</span>` : ''}</div>`;
+  let body;
   if (m.error) {
-    return `<div class="msg-agent"><div class="who">${esc(m.who)}</div>
-      <div class="msg-error"><i class="fa-solid fa-triangle-exclamation"></i>${esc(m.text)}
-      <span class="retry" data-act="msg-retry" data-id="${mi}">Retry</span></div></div>`;
+    body = `<div class="msg-error"><i class="fa-solid fa-triangle-exclamation"></i>${esc(m.text)}<span class="retry" data-act="msg-retry" data-id="${mi}">Retry</span></div>`;
+  } else {
+    const remembered = m.remembered
+      ? `<div class="remembered"><i class="fa-solid fa-check"></i>Remembered — "${esc(m.remembered)}" · Project<span class="undo" data-act="mem-undo" data-id="${mi}">Undo</span></div>` : '';
+    const memUsed = m.memoryUsed
+      ? `<div class="mem-used" data-act="open-tab-from-chat" data-id="memory" title="See what agents remember here"><i class="fa-solid fa-brain"></i>Used ${m.memoryUsed} project ${m.memoryUsed === 1 ? 'note' : 'notes'}</div>` : '';
+    const skill = m.skill
+      ? `<div class="remembered"><i class="fa-solid fa-wand-magic-sparkles" style="color:${m.skillColor || 'var(--mj-brand-primary)'}"></i>Skill activated — ${esc(m.skill)}</div>` : '';
+    const plan = m.plan ? planCardHtml(m, mi) : '';
+    body = `${skill}${m.text ? `<div class="msg-text ${m.thinking ? 'thinking' : ''}">${esc(m.text)}</div>` : ''}${plan}${remembered}${memUsed}${msgTags(m.tags)}`;
   }
-  const memUsed = m.memoryUsed
-    ? `<div class="mem-used" data-act="open-tab-from-chat" data-id="memory" title="See what agents remember here"><i class="fa-solid fa-brain"></i>Used ${m.memoryUsed} project ${m.memoryUsed === 1 ? 'note' : 'notes'}</div>` : '';
-  const skill = m.skill
-    ? `<div class="remembered"><i class="fa-solid fa-wand-magic-sparkles" style="color:${m.skillColor || 'var(--mj-brand-primary)'}"></i>Skill activated — ${esc(m.skill)}</div>` : '';
-  const plan = m.plan ? planCardHtml(m, mi) : '';
-  return `<div class="msg-agent ${m.thinking ? 'thinking' : ''}"><div class="who">${esc(m.who)}</div>${skill}${m.text ? esc(m.text) : ''}${plan}${remembered}${memUsed}</div>`;
+  return `<div class="msg">${avatar}<div class="msg-main">${head}${body}</div></div>`;
 }
 
 function companionHtml(p) {
@@ -784,12 +821,12 @@ function renderChat() {
 function renderNewChat() {
   const p = project(state.projectId);
   const intro = p
-    ? `Working inside ${esc(p.name)} — I'll use this project's ${p.memory.length} notes and keep anything we learn here.`
+    ? `Working inside ${p.name} — I'll use this project's ${p.memory.length} notes and keep anything we learn here.`
     : `No project — this starts in Ungrouped. Move it into a project later if it grows into something.`;
   const chatEl = `<div class="chat">
     ${chatHeader({ proj: p, title: 'New conversation', temporary: false })}
     <div class="chat-msgs"><div class="chat-col">
-      <div class="msg-agent" style="color:var(--mj-text-muted)"><div class="who">Sage</div>${intro}</div>
+      ${msgHtml({ who: 'Sage', text: intro }, 0)}
     </div></div>
     ${composerHtml(p, 'chatInput', p ? `Ask anything in ${p.name} — @ agents · # records · / skills` : 'Message Sage — @ agents · # records · / skills', 'new-send')}
   </div>`;
@@ -810,7 +847,7 @@ function agentRespond(conv, p, payload) {
   const skillTag = tags.find((t) => t.kind === 'skill');
 
   if (who === 'Skip') {
-    conv.messages.push({ who, text: `Handled remotely — I run my own loop, so plan mode and skills are delegated to my side (D15). ${p ? `I received ${p.name}'s context bag: description and recent artifacts (project notes join the bag in P1.9).` : 'No project context attached.'}` });
+    conv.messages.push({ who, when: 'now', dur: '0:02', text: `Handled remotely — I run my own loop, so plan mode and skills are delegated to my side (D15). ${p ? `I received ${p.name}'s context bag: description and recent artifacts (project notes join the bag in P1.9).` : 'No project context attached.'}` });
     return;
   }
   if (planArmed) {
@@ -822,7 +859,7 @@ function agentRespond(conv, p, payload) {
     return;
   }
   if (/\bfail\b/i.test(text)) {
-    conv.messages.push({ who, error: true, text: 'That didn\'t work — the data source timed out before I could finish.', retryText: text.replace(/\bfail\b/ig, '').trim() || 'try again' });
+    conv.messages.push({ who, when: 'now', error: true, text: 'That didn\'t work — the data source timed out before I could finish.', retryText: text.replace(/\bfail\b/ig, '').trim() || 'try again' });
     return;
   }
   if (REMEMBER_RX.test(text) && p) {
@@ -830,12 +867,12 @@ function agentRespond(conv, p, payload) {
     const clean = note[0].toUpperCase() + note.slice(1).replace(/\.*$/, '.');
     const id = 'prov' + Date.now();
     p.memory.unshift({ id, text: clean, scope: 'All agents', status: 'provisional' });
-    conv.messages.push({ who, text: 'Got it — noted for this project.', remembered: clean, memId: id });
+    conv.messages.push({ who, when: 'now', dur: '0:02', text: 'Got it — noted for this project.', remembered: clean, memId: id });
     return;
   }
   const recordTags = tags.filter((t) => t.kind === 'record');
   const recordNote = recordTags.length ? ` I've loaded ${recordTags.map((t) => t.label).join(' and ')} as context.` : '';
-  const msg = { who, text: `On it — and since we're in ${p ? p.name : 'no project'}, ${p ? 'outputs will be filed here.' : 'I\'m answering from org-wide data only.'}${recordNote}` };
+  const msg = { who, when: 'now', dur: '0:04', text: `On it — and since we're in ${p ? p.name : 'no project'}, ${p ? 'outputs will be filed here.' : 'I\'m answering from org-wide data only.'}${recordNote}` };
   if (p && p.memory.length) msg.memoryUsed = Math.min(2, p.memory.length);
   if (skillTag) { msg.skill = skillTag.label; msg.skillColor = skillTag.color; }
   conv.messages.push(msg);
@@ -856,7 +893,7 @@ function createConversation(p, payload) {
   const { text, tags, agent, planArmed } = normalizePayload(payload);
   const id = 'new' + Date.now();
   const conv = { id, title: text.split(' ').slice(0, 5).join(' '), summary: `${agent ? agent.name : 'Sage'} · just now`, when: 'now',
-    messages: [{ who: 'user', text, tags }, { who: agent ? agent.name : 'Sage', text: '…', thinking: true }] };
+    messages: [{ who: 'user', text, tags, when: 'now' }, { who: agent ? agent.name : 'Sage', text: '…', thinking: true }] };
   if (p) p.conversations.unshift(conv);
   else DATA.ungrouped.unshift(conv); // no project — first-run / ungrouped sends land here
   state.view = 'chat'; state.convId = id;
@@ -880,7 +917,7 @@ function appendChatMessage(payload) {
   const { conv, proj, temporary } = found;
   const norm = normalizePayload(payload);
   for (const m of conv.messages) if (m.plan && m.plan.status === 'pending') m.plan.status = 'stale';
-  conv.messages.push({ who: 'user', text: norm.text, tags: norm.tags });
+  conv.messages.push({ who: 'user', text: norm.text, tags: norm.tags, when: 'now' });
   conv.messages.push({ who: norm.agent ? norm.agent.name : 'Sage', text: '…', thinking: true });
   render();
   setTimeout(() => {
@@ -980,12 +1017,10 @@ const MENU_ACTIONS = {
   'conv-rename': () => {
     const found = findConv(state.convId);
     if (!found) return;
-    const titleEl = $('.chat-title');
-    titleEl.innerHTML = `<input class="f-input" style="font-size:12.5px;font-weight:600" value="${esc(found.conv.title)}">`;
-    const input = $('input', titleEl); input.focus(); input.select();
-    const commit = () => { found.conv.title = input.value.trim() || found.conv.title; render(); toast('Renamed'); };
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') render(); });
-    input.addEventListener('blur', commit);
+    openModal('convModal');
+    $('#cmName').value = found.conv.title;
+    $('#cmDesc').value = found.conv.summary || '';
+    setTimeout(() => { $('#cmName').focus(); $('#cmName').select(); }, 50);
   },
   'conv-delete': () => {
     const found = findConv(state.convId);
@@ -1049,7 +1084,7 @@ function openModal(which) {
 }
 function closeModals() {
   $('#scrim').classList.remove('on');
-  for (const id of ['shareModal', 'projectModal', 'moveModal', 'confirmModal']) $('#' + id).hidden = true;
+  for (const id of ['shareModal', 'projectModal', 'moveModal', 'confirmModal', 'convModal']) $('#' + id).hidden = true;
   state.moveConvPending = null;
   hideMenu();
   if (modalOpener && document.contains(modalOpener)) modalOpener.focus();
@@ -1189,11 +1224,17 @@ function openMove() {
   openModal('moveModal');
 }
 
-function moveConversation(targetId) {
-  const conv = detachConv(state.convId);
-  if (!conv) return;
+function moveConvTo(convId, targetId) {
+  const conv = detachConv(convId);
+  if (!conv) return false;
   if (targetId === '__none') DATA.ungrouped.unshift(conv);
-  else { const t = project(targetId); t.conversations.unshift(conv); state.projectId = targetId; state.openProjects.add(targetId); }
+  else { const t = project(targetId); if (!t) return false; t.conversations.unshift(conv); state.openProjects.add(targetId); }
+  return true;
+}
+
+function moveConversation(targetId) {
+  if (!moveConvTo(state.convId, targetId)) return;
+  if (targetId !== '__none') state.projectId = targetId;
   closeModals(); render();
   toast(targetId === '__none' ? 'Moved to Ungrouped' : `Moved to ${project(targetId).name}`);
 }
@@ -1321,6 +1362,7 @@ const JUMPS = {
   'flow-grow':        () => { Object.assign(state, { view: 'hub', projectId: 'website', tab: 'overview', convId: null }); render(); openShare('project'); setTimeout(() => { const i = $('#shareInput'); if (i) { i.value = 'Dana Kim'; i.focus(); } }, 60); return 'noRender'; },
   'flow-workflow':    () => { finishWorkflow(); return 'noRender'; },
   'micro-memory':     () => { Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'memory' }); render(); toast('Hover a memory row — pencil edits inline, trash forgets'); return 'noRender'; },
+  'micro-dnd':        () => { Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'overview', convId: null }); state.openProjects.add('renewal'); render(); toast('Grab a conversation row in the sidebar and drop it on another project or Ungrouped'); return 'noRender'; },
   'proj-menu':        () => { Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'overview' }); render(); const b = $('[data-act="proj-menu"]'); if (b) b.click(); return 'noRender'; },
   'modal-share':      () => { Object.assign(state, { view: 'hub', projectId: 'renewal', tab: 'overview' }); render(); openShare('project'); return 'noRender'; },
   'modal-project':    () => { openProjectModal(null); return 'noRender'; },
@@ -1500,6 +1542,41 @@ document.addEventListener('click', (e) => {
   }
 });
 
+/* Sidebar drag-and-drop — baseline parity with the shipped folders feature */
+document.addEventListener('dragstart', (e) => {
+  const row = e.target.closest('[data-drag-conv]');
+  if (!row) return;
+  e.dataTransfer.setData('text/plain', row.dataset.dragConv);
+  e.dataTransfer.effectAllowed = 'move';
+});
+document.addEventListener('dragover', (e) => {
+  const t = e.target.closest('[data-drop-target]');
+  if (!t) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  t.classList.add('drop-hover');
+});
+document.addEventListener('dragleave', (e) => {
+  const t = e.target.closest('[data-drop-target]');
+  if (t) t.classList.remove('drop-hover');
+});
+document.addEventListener('drop', (e) => {
+  const t = e.target.closest('[data-drop-target]');
+  if (!t) return;
+  e.preventDefault();
+  t.classList.remove('drop-hover');
+  const convId = e.dataTransfer.getData('text/plain');
+  if (!convId) return;
+  const targetId = t.dataset.dropTarget;
+  const f = findConv(convId);
+  const already = targetId === '__none' ? (f && !f.proj) : (f && f.proj && f.proj.id === targetId);
+  if (already) return;
+  if (moveConvTo(convId, targetId)) {
+    render();
+    toast(targetId === '__none' ? 'Moved to Ungrouped' : `Moved to ${project(targetId).name}`);
+  }
+});
+
 document.addEventListener('change', (e) => {
   if (e.target.matches('[data-member-role]')) {
     const proj5 = project(state.projectId);
@@ -1515,6 +1592,7 @@ document.addEventListener('change', (e) => {
 });
 
 document.addEventListener('input', (e) => {
+  if (e.target.id === 'sideFilter') { state.sideFilter = e.target.value; renderSidebar(); return; }
   if (e.target.id !== 'chatInput') return;
   const ta = e.target;
   ta.style.height = 'auto';
@@ -1537,6 +1615,7 @@ document.addEventListener('keydown', (e) => {
     if (e.target.id === 'emptySend') { const b = $('[data-act="empty-send"]'); if (b) b.click(); }
     if (e.target.id === 'frInput') { const b = $('[data-act="fr-send"]'); if (b) b.click(); }
     if (e.target.id === 'pmName' || e.target.id === 'pmDesc') $('#pmCreate').click();
+    if (e.target.id === 'cmName' || e.target.id === 'cmDesc') $('#cmSave').click();
     if (e.target.id === 'shareInput') { const b = $('[data-act="share-invite"]'); if (b) b.click(); }
   }
   if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && popCtx && e.target.id === 'chatInput') {
@@ -1553,6 +1632,15 @@ document.addEventListener('keydown', (e) => {
 
 $('#scrim').addEventListener('click', closeModals);
 $('#pmCancel').addEventListener('click', closeModals);
+$('#cmCancel').addEventListener('click', closeModals);
+$('#cmSave').addEventListener('click', () => {
+  const found = findConv(state.convId);
+  if (found) {
+    found.conv.title = $('#cmName').value.trim() || found.conv.title;
+    found.conv.summary = $('#cmDesc').value.trim();
+  }
+  closeModals(); render(); toast('Renamed');
+});
 $('#pmCreate').addEventListener('click', createProject);
 $('#confirmNo').addEventListener('click', closeModals);
 $('#confirmYes').addEventListener('click', () => { closeModals(); if (confirmFn) { confirmFn(); confirmFn = null; } });

@@ -63,7 +63,10 @@ HARD CONSTRAINTS:
 OUTPUT FORMAT: return (1) a short rationale of what you changed and why, (2) the exact
 CSS additions/replacements as copy-pasteable blocks with selectors matching app.css,
 (3) any markup changes as minimal find/replace pairs. Do not return a full rewritten
-file.
+file. (4) THE PLACEMENT ACCOUNT — the surface's complete baseline item list (provided
+in the prompt) with an address for every item: at-rest / on-hover / overflow / consolidated
+into X / deleted-on-record. A design with unplaced items is incomplete; do not present
+one as finished.
 ```
 
 ---

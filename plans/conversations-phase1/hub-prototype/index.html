@@ -23,7 +23,7 @@
   <div class="body">
     <!-- ══════════ NAVY SIDEBAR ══════════ -->
     <aside class="side">
-      <div class="side-head"><div class="side-search" data-act="noop"><i class="fa-solid fa-magnifying-glass"></i> Search conversations…</div></div>
+      <div class="side-head"><div class="side-search"><i class="fa-solid fa-magnifying-glass"></i><input id="sideFilter" placeholder="Search conversations…" autocomplete="off"></div></div>
       <div class="side-newrow">
         <button class="side-new" id="newConvBtn"><i class="fa-solid fa-plus"></i> New Conversation</button>
         <button class="side-ghost" id="newTempBtn" title="Temporary chat — nothing saved, memory off"><i class="fa-solid fa-user-secret"></i></button>
@@ -72,6 +72,20 @@
     <div class="modal-actions">
       <button class="btn" id="pmCreate">Create project</button>
       <button class="btn secondary" id="pmCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="convModal" role="dialog" aria-modal="true" aria-label="Rename conversation" hidden>
+  <div class="modal-head">Rename conversation</div>
+  <div class="modal-body">
+    <label class="f-label" for="cmName">Name</label>
+    <input class="f-input" id="cmName">
+    <label class="f-label" for="cmDesc">Description <span class="opt">shows in the sidebar — agents read it</span></label>
+    <input class="f-input" id="cmDesc" placeholder="One line on what this conversation is about">
+    <div class="modal-actions">
+      <button class="btn" id="cmSave">Save</button>
+      <button class="btn secondary" id="cmCancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -136,6 +150,7 @@
     <div class="sm-item" data-jump="flow-grow"><span class="n">µ1</span> Share the sparse project — watch it grow tabs</div>
     <div class="sm-item" data-jump="flow-workflow"><span class="n">µ2</span> Finish the running workflow — artifact arrives</div>
     <div class="sm-item" data-jump="micro-memory"><span class="n">µ3</span> Memory row — hover → edit → forget</div>
+    <div class="sm-item" data-jump="micro-dnd"><span class="n">µ5</span> Drag a conversation between projects (baseline parity)</div>
     <div class="sm-item" data-jump="proj-menu"><span class="n">µ4</span> Project settings — rename · describe · delete</div>
     <div class="sm-group">Sharing &amp; lifecycle</div>
     <div class="sm-item" data-jump="view-editor"><span class="n">V1</span> View as Editor — Dana's version of the hub</div>

@@ -22,6 +22,7 @@
 | 10 | **Memory scope is managed in the Memory tab** (project vs global sections, scope dropdowns); forgetting a global note demands a confirm because the blast radius is org-wide. | S5 |
 | 11 | **Incognito is a creation-time choice that locks at first send** (D20). The chip lives on the new-chat composer only. | S12, S9 |
 | 12 | **Project icon + color are settable but never demanded** — create modal offers them under "optional — defaults are fine"; the default is a colored folder. | M2 |
+| 13 | **Messages are flat avatar rows for BOTH parties** — the shipped product idiom (avatar + name + time header, generation-time pill on agent replies). Bubbles were a prototype invention, rejected 2026-07-15; this also resolves the pass-6 "only filled shape" critique. | S8 |
 
 ## Deliberately undrawn (boundaries — each needs one line of ratified intent, not a build)
 
@@ -39,6 +40,30 @@
    production; the prototype's move-modal is an *additional* path, not a replacement. (Brief
    criterion 3 requires nothing gets harder.)
 6. **Group chat / multi-human presence.** P1.8's lane. The member list here is access control, not presence.
+
+## Baseline parity checklist (from PARITY-AUDIT.md §2 — live behavior the redesign must keep)
+
+> Principle (Matt, 2026-07-15): anything the shipped product does either WORKS in this prototype
+> or carries an explicit conscious-regression entry here. An audit doc alone is not an answer.
+
+| Baseline behavior (shipped today) | Prototype status |
+|---|---|
+| Drag conversation → project / → Ungrouped, with drop-target highlight | ✅ implemented 2026-07-15 |
+| Nested folders: subfolder create, drag reparent, descendant counts | ⬜ OPEN — conflicts with "nesting undrawn"; Amith-review agenda item |
+| Sidebar filter box (live name/description filter) | ✅ implemented 2026-07-15 (filters projects + conversations + summaries, empty state) |
+| Group-by-folder / flat toggle | ⬜ |
+| Multi-select mode + bulk delete | ⬜ |
+| Rename = dialog w/ Name + Description (agents read description) | ✅ implemented 2026-07-15 |
+| Folder modal: 20 colors + custom, 20-icon grid, live preview | ◐ prototype has 6 icons / 5 swatches — sketch-level, upgrade at build |
+| Conversation description previews under sidebar titles | ✅ implemented 2026-07-15 |
+| @agent chips w/ per-mention config-preset dropdown | ⬜ |
+| @ mentions include human users; paste-image; drag-drop files | ◐ people-as-reference exists; paste/drop absent |
+| Message actions: inline edit, delete-last-and-below, retry, elapsed pill, command chips, per-message artifact cards | ⬜ chat idiom reconciliation first (see below) |
+| Header state chips: pins, artifacts, members, shared-by | ⬜ decision: quiet direction may consolidate — decide against the list |
+| Flat avatar-row message idiom (BOTH parties; no user bubbles in product) | ✅ implemented 2026-07-15 (position #13) — unblocks the message-actions row |
+| Live component artifacts (React, interactive) + 7-tab viewer | ⬜ prototype artifact page is a sketch; note scale honestly in reviews |
+| Agent run inspector (gear: steps/tokens/cost/links) | ⬜ |
+| Rating (1–10 dialog + consent), export modal, share modal parity | ⬜ |
 
 ## Prototype-only shortcuts (do not copy to production)
 
