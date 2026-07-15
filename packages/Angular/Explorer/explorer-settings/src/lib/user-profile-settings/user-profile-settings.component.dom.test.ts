@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { renderComponentFixture, query, queryAll, hasClass, attr, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, attr, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SharedService } from '@memberjunction/ng-shared';
 import { UserProfileSettingsComponent } from './user-profile-settings.component';
@@ -87,7 +87,8 @@ describe('UserProfileSettingsComponent (DOM)', () => {
     fixture.detectChanges();
     expect(query(fixture, '.icon-section')).not.toBeNull();
     expect(queryAll(fixture, '.icon-category').length).toBeGreaterThan(0);
-    expect(hasClass(fixture, '.icon-section', 'icon-section') || true).toBe(true);
+    // The icon-search box is part of the Icon tab — assert it actually rendered.
+    expect(query(fixture, '.icon-search-container .mj-search-input')).not.toBeNull();
   });
 
   it('marks an icon as selected after selectIcon and reflects it in aria-checked', async () => {

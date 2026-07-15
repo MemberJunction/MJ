@@ -39,8 +39,6 @@ const MANUAL_DEFERRALS = {
   SingleSearchResultComponent: 'Resource-page host — resolves a route/resource and delegates via global navigation/provider; page-level (browser/e2e).',
   CategoriesListViewComponent: 'Inline nested-SCSS `styles:[...]` block that jsdom cannot parse ("Could not parse CSS stylesheet"), which freezes the view after first render — not fixable without editing component source.',
   AgentAdvancedSettingsDialogComponent: 'Component class body is entirely commented out (deprecated/superseded) — no active template or logic to test.',
-  ModelPromptPriorityMatrixComponent: 'Loads matrix data from the global Metadata provider directly in ngOnInit (no injectable provider seam) — needs a production refactor to inject the provider before it can render in isolation.',
-  PromptVersionControlComponent: 'Loads version data from the global Metadata provider directly in ngOnInit (no injectable provider seam) — needs a production refactor to inject the provider before it can render in isolation.',
   TemplateEditorComponent: 'Reads TemplateEngineBase.Instance.TemplateContentTypes (static-singleton data source) in ngOnInit — cannot be constructed in isolation without a production refactor to inject that engine.',
   UpdateNotificationComponent: 'Lives in the `service-worker` package, which is node-only (no `@analogjs/vite-plugin-angular`, no `@memberjunction/ng-test-utils`, node-only vitest preset). Its entire output is inside an `@if (updateAvailable$ | async)` block that needs the Angular AOT compile path; wiring that up would require editing package.json + vitest.config + a new tsconfig.spec.json. The backing `UpdateNotificationService` has its own logic tests.',
 };

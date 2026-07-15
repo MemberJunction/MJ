@@ -2,6 +2,7 @@ import { Component, Input } from '@angular/core';
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
+import type { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { createFakeProvider, useFakeGlobalProvider, query, queryAll } from '@memberjunction/ng-test-utils';
 import { AnalyticsAgentRunsComponent } from './agent-run-analysis.component';
 
@@ -21,8 +22,15 @@ class StubEmptyState {
   @Input() Title = '';
 }
 
-const AGENT_RUNS = [
-  { ID: 'a1', Agent: 'Sales Agent', AgentID: 'ag1', Status: 'Complete', Success: true, StartedAt: '2026-01-05T09:00:00Z', CompletedAt: '2026-01-05T09:00:30Z', TotalCost: 0.05, TotalPromptIterations: 2 },
+// Status is derived from the entity union so an impossible literal (e.g. the old 'Complete')
+// fails to compile — the DB CHECK values are 'Completed' / 'Failed' / ... (CLAUDE.md §2c).
+interface AgentRunFixture {
+  ID: string; Agent: string; AgentID: string;
+  Status: MJAIAgentRunEntity['Status'];
+  Success: boolean; StartedAt: string; CompletedAt: string; TotalCost: number; TotalPromptIterations: number;
+}
+const AGENT_RUNS: AgentRunFixture[] = [
+  { ID: 'a1', Agent: 'Sales Agent', AgentID: 'ag1', Status: 'Completed', Success: true, StartedAt: '2026-01-05T09:00:00Z', CompletedAt: '2026-01-05T09:00:30Z', TotalCost: 0.05, TotalPromptIterations: 2 },
   { ID: 'a2', Agent: 'Support Agent', AgentID: 'ag2', Status: 'Failed', Success: false, StartedAt: '2026-01-05T10:00:00Z', CompletedAt: '2026-01-05T10:00:20Z', TotalCost: 0.02, TotalPromptIterations: 1 },
 ];
 const PROMPT_RUNS = [{ ID: 'p1', AgentRunID: 'a1', Cost: 0.01, TokensUsed: 500, RunAt: '2026-01-05T09:00:10Z' }];
@@ -65,6 +73,13 @@ describe('AnalyticsAgentRunsComponent (DOM)', () => {
     expect(queryAll(fixture, '.data-table tbody tr').length).toBe(AGENT_RUNS.length);
     const agents = queryAll(fixture, '.cell-agent').map((e) => e.textContent?.trim());
     expect(agents).toEqual(expect.arrayContaining(['Sales Agent', 'Support Agent']));
+    // The 'Completed' run must render its status pill (text + status-completed class) —
+    // this is the completed render path that the old impossible 'Complete' value never exercised.
+    const statusPills = queryAll(fixture, '.status-pill');
+    expect(statusPills.map((p) => p.textContent?.trim())).toEqual(expect.arrayContaining(['Completed', 'Failed']));
+    expect(statusPills.some((p) => p.classList.contains('status-completed'))).toBe(true);
+    // And the success stat reflects the one Success=true run (1 of 2 = 50%).
+    expect(fixture.componentInstance.Stats.SuccessRate).toBeCloseTo(50);
   });
 
   it('renders the cost-attribution rows + legend when there is agent cost', async () => {

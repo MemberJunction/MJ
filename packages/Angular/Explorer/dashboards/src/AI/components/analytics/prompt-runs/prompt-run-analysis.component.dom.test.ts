@@ -2,6 +2,7 @@ import { Component, Input } from '@angular/core';
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
+import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { createFakeProvider, useFakeGlobalProvider, query, queryAll } from '@memberjunction/ng-test-utils';
 import { AnalyticsPromptRunsComponent } from './prompt-run-analysis.component';
 
@@ -23,9 +24,16 @@ class StubEmptyState {
   @Input() Title = '';
 }
 
-const RUNS = [
+// Status is derived from the entity union so an impossible literal (e.g. the old 'Error')
+// fails to compile — the DB CHECK values are 'Completed' / 'Failed' / ... (CLAUDE.md §2c).
+interface PromptRunFixture {
+  ID: string; RunAt: string; Prompt: string; PromptID: string; Model: string; ModelID: string;
+  Status: MJAIPromptRunEntity['Status'];
+  Success: boolean; ExecutionTimeMS: number; TokensUsed: number; Cost: number;
+}
+const RUNS: PromptRunFixture[] = [
   { ID: 'r1', RunAt: '2026-01-05T09:00:00Z', Prompt: 'Summarize', PromptID: 'p1', Model: 'GPT-4o', ModelID: 'm1', Status: 'Completed', Success: true, ExecutionTimeMS: 1200, TokensUsed: 700, Cost: 0.02 },
-  { ID: 'r2', RunAt: '2026-01-05T10:00:00Z', Prompt: 'Classify', PromptID: 'p2', Model: 'Claude', ModelID: 'm2', Status: 'Error', Success: false, ExecutionTimeMS: 800, TokensUsed: 400, Cost: 0.01 },
+  { ID: 'r2', RunAt: '2026-01-05T10:00:00Z', Prompt: 'Classify', PromptID: 'p2', Model: 'Claude', ModelID: 'm2', Status: 'Failed', Success: false, ExecutionTimeMS: 800, TokensUsed: 400, Cost: 0.01 },
 ];
 
 async function render(rows: unknown[]): Promise<ComponentFixture<AnalyticsPromptRunsComponent>> {
@@ -72,6 +80,15 @@ describe('AnalyticsPromptRunsComponent (DOM)', () => {
     expect(queryAll(fixture, '.chart-bar-wrapper').length).toBeGreaterThan(0);
     expect(query(fixture, '.empty-row')).toBeNull();
     expect(queryAll(fixture, '.runs-table tbody tr').length).toBe(RUNS.length);
+    // The 'Failed' run must render its status pill (text + pill-failed class) — the failed
+    // render path the old impossible 'Error' value never exercised.
+    const pills = queryAll(fixture, '.runs-table .status-pill');
+    expect(pills.map((p) => p.textContent?.trim())).toEqual(expect.arrayContaining(['Completed', 'Failed']));
+    expect(pills.some((p) => p.classList.contains('pill-failed'))).toBe(true);
+    // The Status breakdown card must include a Failed row too.
+    expect(fixture.componentInstance.StatusBreakdown.map((s) => s.name)).toEqual(
+      expect.arrayContaining(['Completed', 'Failed']),
+    );
   });
 
   it('moves the active class when a different metric chip is clicked', async () => {

@@ -29,12 +29,18 @@ const PROMPT_TYPES = [
   { ID: 'pt-completion', Name: 'Completion' },
 ];
 
-/** Minimal entity double: settable field bag + NewRecord/Set no-ops so create paths never throw. */
+/**
+ * Minimal entity double: settable field bag + NewRecord/Set no-ops so create paths never throw.
+ * Name/Description start EMPTY on purpose — the component is supposed to COMPUTE the template
+ * name (`${promptName} Template`) and description; pre-seeding them would make the render
+ * assertion pass even if the component stopped computing. `.Name = ...` in the component is a
+ * plain property assignment, which the setter on this bag captures.
+ */
 function makeEntityStub(name: string): Record<string, unknown> {
   return {
     ID: `${name}-id`,
-    Name: name === 'template' ? 'New Prompt Template' : '',
-    Description: name === 'template' ? 'Template for New Prompt' : '',
+    Name: '',
+    Description: '',
     NewRecord: () => true,
     Set: () => undefined,
     Get: () => undefined,
@@ -113,10 +119,13 @@ describe('CreatePromptDialogComponent (DOM)', () => {
     expect(values).toContain('existing');
   });
 
-  it('shows the new-template editor panel with the created template name (new mode default)', async () => {
+  it('shows the new-template editor panel with the COMPUTED template name (new mode default)', async () => {
     const fixture = await render();
     expect(query(fixture, '.template-editor-section')).not.toBeNull();
+    // The stub started with an empty Name; the component must have computed `${promptName} Template`
+    // (promptName defaults to 'New Prompt') — so the rendered name proves the computation happened.
     expect(query(fixture, '.template-name')?.textContent).toContain('New Prompt Template');
+    expect(query(fixture, '.template-description')?.textContent).toContain('Template for New Prompt');
     expect(query(fixture, 'mj-template-editor')).not.toBeNull();
   });
 

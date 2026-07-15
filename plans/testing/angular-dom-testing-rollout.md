@@ -227,6 +227,31 @@ The "keep tests honest" half of the tooling gameplan lands here, alongside the c
 - **Mutation testing** (tooling-roadmap #5): verify the tests actually catch bugs, once there's a real body of them.
 - Document the live-media e2e suite location/runner for the excluded WebRTC paths.
 
+**Batched from the Phase-3 code review (recorded so they don't evaporate):**
+
+- **Prefer DOM events over instance-method calls.** A handful of specs invoke the handler directly
+  (`cancel()`, `closeDialog()`, toggle methods) instead of clicking the element — those pass even if the
+  template `(click)` binding is deleted, which is the exact regression a DOM test should catch. Convert to
+  `query(...).click()`.
+- **Cast hygiene.** ~10 `as never` and several `as unknown as X` casts erase compile-time drift detection
+  (and skirt the no-`any`/`unknown` rule). Replace with `satisfies Pick<…>` or typed partial fixtures. The
+  `test:types` gate above is what would police this.
+- **Magic-number selectors in SVG renderer specs.** `flame-cascade`/`constellation`/`subway-lines`/
+  `flowchart` key off styling constants (`stroke-width === '1.4'`); a design tweak breaks the "count" tests
+  confusingly. Switch to a `data-*` attribute hook.
+- **Prototype-patch teardown.** The flow specs patch `SVGElement.prototype.getBBox`/`getTotalLength` and the
+  omnibar spec registers a ClassFactory class with no `afterAll` restore — safe today only because
+  `fileParallelism: false` + per-file isolation contain them. Add teardown so they don't leak if isolation
+  is ever relaxed for speed.
+- **Consolidate duplicated stubs.** ~50 lines of copy-pasted CVA stubs (`StubNumericInput`/`StubDropdown`)
+  and `StubLoading`/`StubEmptyState` across 7+ specs belong in `@memberjunction/ng-test-utils`.
+- **Classifier heuristic refinements.** The `\w*Engine\w*\.Instance` singleton regex matches *any* usage
+  (incl. click-handler-only, e.g. `EntityLinkPillComponent`) and `mj-page-header` substring-matches
+  `mj-page-header-interior` (bucketing tab widgets like `ClassifyTagsTabComponent` as page-level). These are
+  scoping-heuristic imperfections, not blocking — refine or hand-audit the borderline entries.
+- **Lint/CI guard for a `*.dom.test.ts` placed inside `__tests__/`** — the dual-project split silently
+  excludes it from *both* projects, and `passWithNoTests: true` hides the silence.
+
 ### LiveKit pilot — shipped + remaining
 
 **Shipped** (`ng-livekit-room`, dual node+dom preset; 6 DOM spec files / 45 tests, existing 26 node specs preserved):

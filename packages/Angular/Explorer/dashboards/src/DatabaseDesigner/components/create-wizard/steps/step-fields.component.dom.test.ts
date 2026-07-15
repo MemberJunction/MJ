@@ -19,7 +19,10 @@ class FieldsGridStub {
   @Output() ColumnsChanged = new EventEmitter<ColumnSpec[]>();
 }
 
-const COLUMNS = [{ name: 'id' }, { name: 'title' }] as unknown as ColumnSpec[];
+const COLUMNS: ColumnSpec[] = [
+  { Name: 'id', Type: 'uuid', IsNullable: false },
+  { Name: 'title', Type: 'string', MaxLength: 200, IsNullable: true },
+];
 
 const render = () =>
   renderComponentFixture(StepFieldsComponent, {
@@ -45,7 +48,7 @@ describe('StepFieldsComponent (DOM)', () => {
   it('re-emits ColumnsChanged when the grid reports a change', () => {
     const fixture = render();
     const changed = capture(fixture.componentInstance.ColumnsChanged);
-    const next = [{ name: 'id' }] as unknown as ColumnSpec[];
+    const next: ColumnSpec[] = [{ Name: 'id', Type: 'uuid', IsNullable: false }];
     gridStub(fixture).ColumnsChanged.emit(next);
     expect(changed).toEqual([next]);
   });

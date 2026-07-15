@@ -44,8 +44,14 @@ describe('EntityPermissionsSelectorWithGridComponent (DOM)', () => {
     expect(query(render({}, [] as never), 'mj-entity-permissions-grid')).toBeNull();
   });
 
-  it('reveals the inner permission grid once CurrentEntity is set', () => {
-    const fixture = render({ CurrentEntity: { Name: 'Users' } });
+  it('reveals the inner permission grid, auto-selecting the first entity from the provider catalog', () => {
+    // The reveal is driven by ngOnInit sorting ProviderToUse.Entities and setting CurrentEntity to
+    // the first one (a `CurrentEntity` @Input would be overwritten by ngOnInit, so it's not the real
+    // lever). ENTITIES = [Users, Accounts] sorts to [Accounts, Users], so 'Accounts' is auto-selected.
+    const fixture = render();
+    // The auto-selected entity is the first sorted one, proving the provider catalog drove the reveal.
+    expect(fixture.componentInstance.CurrentEntity?.Name).toBe('Accounts');
+    // And the `@if (CurrentEntity)` grid is now in the DOM as a result.
     expect(query(fixture, 'mj-entity-permissions-grid')).not.toBeNull();
   });
 });

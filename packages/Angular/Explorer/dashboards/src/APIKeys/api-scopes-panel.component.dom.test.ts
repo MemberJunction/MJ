@@ -44,12 +44,15 @@ const scope = (over: Partial<Record<string, unknown>>) =>
 
 const UI = [StubLoading, StubEmptyState, StubWindow, StubWindowTitlebar, StubButton, StubDropdown];
 
-async function render(scopes: unknown[]) {
+async function render(scopes: unknown[], onSetup?: (instance: APIScopesPanelComponent) => void) {
   const provider = createFakeProvider({ runViewResults: scopes });
   const fixture = renderComponentFixture(APIScopesPanelComponent, {
     imports: [CommonModule, FormsModule, ...UI],
     declarations: [APIScopesPanelComponent],
     inputs: { Provider: provider },
+    // setup runs after inputs are set but BEFORE the first detectChanges (which
+    // triggers ngOnInit -> loadData), so callers can observe outputs across the load.
+    setup: onSetup ? (instance) => onSetup(instance) : undefined,
   });
   for (let i = 0; i < 5; i++) await new Promise(r => setTimeout(r, 0));
   fixture.detectChanges(false);
@@ -100,8 +103,15 @@ describe('APIScopesPanelComponent (DOM)', () => {
   });
 
   it('does not emit ScopeUpdated on load (only after a save)', async () => {
-    const fixture = await render([scope({ ID: 's1', Name: 'entity' })]);
-    const updates = capture(fixture.componentInstance.ScopeUpdated);
+    // Subscribe BEFORE the load runs (setup fires before the first detectChanges,
+    // which triggers ngOnInit -> loadData). ScopeUpdated only emits from saveScope(),
+    // so a clean load must produce zero emissions.
+    let updates: void[] = [];
+    const fixture = await render([scope({ ID: 's1', Name: 'entity' })], (instance) => {
+      updates = capture(instance.ScopeUpdated);
+    });
+    // Load completed and the tree rendered — proves we actually exercised the load path.
+    expect(fixture.componentInstance.FlatScopes.length).toBe(1);
     expect(updates.length).toBe(0);
   });
 });
