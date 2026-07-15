@@ -19,7 +19,7 @@ import { MJQueryEntityServer } from './MJQueryEntityServer.server';
  * the dialect variant doesn't exist yet), then creates QuerySQL child records.
  *
  * The QueryEngine cache uses BaseEngine's `CacheLocal: true`, so by the time
- * AfterSave fires the `_querySQLs` array already contains the new record —
+ * Save() returns the `_querySQLs` array already contains the new record —
  * no force refresh needed.
  */
 @RegisterClass(BaseEntity, 'MJ: Query SQLs')
@@ -44,8 +44,22 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
         return true;
     }
 
+    /**
+     * Ensures QueryEngine is loaded. In CLI/sync contexts, Config() may not
+     * have been called yet. This is a no-op if already loaded (BaseEngine
+     * skips reloading when data is already cached and forceRefresh is false).
+     */
+    private async ensureQueryEngineLoaded(): Promise<void> {
+        if (QueryEngine.Instance.Queries.length === 0) {
+            await QueryEngine.Instance.Config(false, this.ContextCurrentUser);
+        }
+    }
+
     private async triggerParentExtractionIfDialectMatches(): Promise<void> {
         const currentPlatform = resolveDbPlatformFromEnv() ?? 'sqlserver';
+
+        await this.ensureQueryEngineLoaded();
+
         if (!this.isDialectForPlatform(currentPlatform)) {
             return;
         }
@@ -55,8 +69,10 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
             return;
         }
 
-        // The parent query has SQL to extract — re-run the pipeline now that
-        // the dialect variant is available in the QueryEngine cache.
+        // The parent query has SQL to extract — re-run the pipeline. The
+        // QueryEngine cache already has our QuerySQL record (CacheLocal event
+        // fires synchronously in super.Save()), so resolveExtractionSQL()
+        // will find the dialect variant via GetPlatformSQL().
         if (parentQuery.SQL && parentQuery.SQL.trim().length > 0) {
             LogStatus(`[MJQuerySQLEntityServer] Triggering re-extraction on "${parentQuery.Name}" — dialect variant saved for ${currentPlatform}`);
             await parentQuery.RerunExtraction();
@@ -65,7 +81,8 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
 
     /**
      * Checks whether this QuerySQL record's SQLDialectID corresponds to the
-     * given database platform by looking up the dialect's PlatformKey.
+     * given database platform by looking up the dialect's PlatformKey in
+     * QueryEngine's cached SQLDialects.
      */
     private isDialectForPlatform(platform: DatabasePlatform): boolean {
         const dialect = QueryEngine.Instance.SQLDialects.find(
@@ -75,9 +92,6 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
     }
 
     private loadParentQuery(): MJQueryEntityServer | null {
-        // Read from QueryEngine's in-memory cache — no database round-trip.
-        // The cache stores MJQueryEntityServer instances at runtime because
-        // CacheLocal: true uses GetEntityObject which resolves the server subclass.
         const query = QueryEngine.Instance.Queries.find(
             q => UUIDsEqual(q.ID, this.QueryID)
         );

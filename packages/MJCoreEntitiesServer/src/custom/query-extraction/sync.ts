@@ -350,6 +350,14 @@ function updateFieldIfChanged(
 ): boolean {
     let hasChanges = false;
 
+    // Update name if casing changed (e.g. PascalCase → lowercase for PG).
+    // QueryField names must match the SQL output exactly because result row
+    // property access is case-sensitive — row["JoinYear"] vs row["joinyear"].
+    if (existing.Name !== extracted.name) {
+        existing.Name = extracted.name;
+        hasChanges = true;
+    }
+
     if (existing.Description !== extracted.description) {
         existing.Description = extracted.description;
         hasChanges = true;
