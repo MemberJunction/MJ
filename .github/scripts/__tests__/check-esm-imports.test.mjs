@@ -190,6 +190,62 @@ describe('checkPackage', () => {
         expect(result.status).toBe('OWN_DIST_MISSING_EXT');
     });
 
+    it('wildcard expansion honors the literal prefix around the star (does not glob unrelated files)', async () => {
+        // "./commands/cmd-*" must expand to cmd-*.js only. A broken sibling that is NOT an
+        // exported entry must not be import-checked (that would be a false-positive gate).
+        const dir = join(FIXTURES, 'wc-prefix-pkg');
+        let result;
+        try {
+            mkdirSync(join(dir, 'built', 'commands'), { recursive: true });
+            writeFileSync(
+                join(dir, 'package.json'),
+                JSON.stringify({ name: 'wc-prefix', type: 'module', exports: { './commands/cmd-*': './built/commands/cmd-*.js' } })
+            );
+            writeFileSync(join(dir, 'built', 'commands', 'cmd-real.js'), 'export const c = 1;\n'); // exported, clean
+            writeFileSync(join(dir, 'built', 'commands', 'other.js'), "export { x } from './broken';\n"); // NOT exported, broken
+            writeFileSync(join(dir, 'built', 'commands', 'broken.js'), 'export const x = 1;\n');
+            result = await checkPackage(dir);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+        expect(result.status).toBe('OK');
+    });
+
+    it('wildcard expansion skips a directory whose name matches the pattern (no dir-import false positive)', async () => {
+        const dir = join(FIXTURES, 'wc-dir-pkg');
+        let result;
+        try {
+            mkdirSync(join(dir, 'built', 'commands', 'weird.js'), { recursive: true }); // a DIRECTORY named weird.js
+            writeFileSync(
+                join(dir, 'package.json'),
+                JSON.stringify({ name: 'wc-dir', type: 'module', exports: { './commands/*': './built/commands/*.js' } })
+            );
+            writeFileSync(join(dir, 'built', 'commands', 'ok.js'), 'export const ok = 1;\n');
+            result = await checkPackage(dir);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+        expect(result.status).toBe('OK'); // the weird.js directory must not be dir-imported and gated
+    });
+
+    it('wildcard expansion checks nested files under the star (Node * spans path separators)', async () => {
+        const dir = join(FIXTURES, 'wc-nested-pkg');
+        let result;
+        try {
+            mkdirSync(join(dir, 'built', 'commands', 'sub'), { recursive: true });
+            writeFileSync(
+                join(dir, 'package.json'),
+                JSON.stringify({ name: 'wc-nested', type: 'module', exports: { './commands/*': './built/commands/*.js' } })
+            );
+            writeFileSync(join(dir, 'built', 'commands', 'sub', 'deep.js'), "export { z } from './helper';\n"); // nested bug
+            writeFileSync(join(dir, 'built', 'commands', 'sub', 'helper.js'), 'export const z = 1;\n');
+            result = await checkPackage(dir);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+        expect(result.status).toBe('OWN_DIST_MISSING_EXT');
+    });
+
     it('classifies a module that throws at import as OTHER_ERR (non-gating), not a bug', async () => {
         const dir = join(FIXTURES, 'throw-pkg');
         let result;

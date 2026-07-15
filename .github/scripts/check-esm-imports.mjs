@@ -7,10 +7,19 @@
  * Node's native ESM resolver rejects them at load time (ERR_MODULE_NOT_FOUND) —
  * this guard fails CI only on that own-dist signature, so the bug class caught
  * one-package-at-a-time in #3137/#3138 can't recur silently.
+ *
+ * SCOPE (by design): only `"type": "module"` packages are swept. A break that lives
+ * in a NON-type:module sibling (e.g. an Angular ng-packagr library) surfaces — through
+ * a type:module consumer that imports it — as a non-gating DEP_FAIL, not a gating
+ * failure, because the missing path is another package's dist, not the checked
+ * package's own. Those libraries are consumed by bundlers (Angular/esbuild/webpack)
+ * that tolerate extensionless specifiers and are never imported by native Node, so the
+ * break is real for a native-ESM consumer but inert for their actual consumers. The
+ * DEP_FAIL is printed so it stays visible; fixing it belongs in the owning package.
  */
 
 import { readFileSync, readdirSync, existsSync, realpathSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { join, resolve, sep, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
 
@@ -152,18 +161,36 @@ function collectSubpathEntryPaths(pkgJson, pkgDir) {
 }
 
 /**
- * Expand a single-star export target (`./dist/commands/*.js`) to the absolute paths of
- * the JS module files it matches. Only a lone `*` in the basename is supported (the
- * common package pattern); `**` or multi-star targets are skipped as too broad.
+ * Expand a single-star export target (`./dist/commands/*.js`, `./dist/cmd-*.js`) to the
+ * absolute paths of the JS module FILES it matches. Node's `*` spans path separators, so
+ * this walks the scan directory recursively and matches on the target's literal prefix
+ * AND suffix around the star — honoring `cmd-*` (not just `*`), skipping directories that
+ * happen to match the pattern (a dir-import would false-positive gate), and including
+ * nested files. Only a lone `*` is supported; `**`/multi-star targets are skipped as too broad.
  */
 function expandStarTarget(target, pkgDir) {
-    if ((target.match(/\*/g) ?? []).length !== 1 || target.includes('**')) return [];
-    const dir = resolve(pkgDir, target.slice(0, target.lastIndexOf('/')));
-    if (!existsSync(dir)) return [];
-    const suffix = target.slice(target.lastIndexOf('*') + 1); // e.g. ".js"
-    return readdirSync(dir)
-        .filter((f) => f.endsWith(suffix) && MODULE_EXTS.some((ext) => f.endsWith(ext)))
-        .map((f) => join(dir, f));
+    if ((target.match(/\*/g) ?? []).length !== 1) return [];
+    const starIdx = target.indexOf('*');
+    const rawPrefix = target.slice(0, starIdx); // e.g. "./dist/commands/" or "./dist/cmd-"
+    const suffix = target.slice(starIdx + 1); // e.g. ".js"
+    if (!MODULE_EXTS.some((ext) => suffix.endsWith(ext))) return []; // only import-checkable targets
+    const absPrefix = resolve(pkgDir, rawPrefix);
+    // The star boundary: a trailing "/" means any file under the dir; otherwise a literal
+    // basename prefix (cmd-). scanRoot is the deepest real directory to walk from.
+    const boundary = rawPrefix.endsWith('/') ? absPrefix + sep : absPrefix;
+    const scanRoot = rawPrefix.endsWith('/') ? absPrefix : dirname(absPrefix);
+    if (!existsSync(scanRoot)) return [];
+    return walkFiles(scanRoot).filter((f) => f.startsWith(boundary) && f.endsWith(suffix));
+}
+
+/** Recursively collect absolute paths of regular files under dir (directories/symlinked dirs excluded). */
+function walkFiles(dir, out = []) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walkFiles(full, out);
+        else if (entry.isFile()) out.push(full);
+    }
+    return out;
 }
 
 /**
