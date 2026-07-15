@@ -1204,8 +1204,11 @@ export class SyncEngine {
           new Set(visitedPaths) // Pass a copy to allow the same file in different branches
         );
         
-        // Replace the {@include} reference with the processed content
-        processedContent = processedContent.replace(fullMatch, processedInclude);
+        // Replace the {@include} reference with the processed content.
+        // Use a replacement FUNCTION so the included content is inserted verbatim —
+        // a string replacement would interpret its `$`-sequences ($$, $&, $`, $', $n)
+        // as special patterns and mangle the content.
+        processedContent = processedContent.replace(fullMatch, () => processedInclude);
       } catch (error) {
         // Enhance error message with context
         throw new Error(`Failed to process {@include ${trimmedPath}} in ${filePath}: ${error}`);
