@@ -50,8 +50,8 @@
 - [S] Export · Share
 - [S] Test-run indicator (QA context)
 
-## Message rows (flat avatar rows, both parties — shipped idiom)
-- [S] Avatar + name + timestamp header; agent turns add generation-time
+## Message rows (user turns = filled bubbles; agent turns = flat avatar rows — ratified 2026-07-15)
+- [S] Agent turns: avatar + name + timestamp header, plus generation-time
 - [S] Markdown with collapsible headings; mention tokens render as colored badges
 - [S] Streaming: agent's final response streams live into the row
 - [S] Submitted-form pills (a user's structured responses render as compact pills)

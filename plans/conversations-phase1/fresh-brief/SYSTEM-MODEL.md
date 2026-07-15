@@ -16,7 +16,7 @@ Workspace (everything a signed-in user sees)
 │   │
 │   ├── Conversations — a chat with agents; each has a pinned default agent,
 │   │   │               a response-mode preset, and a plan-mode preference
-│   │   ├── Messages        — flat avatar rows for BOTH parties (user and agent);
+│   │   ├── Messages        — user turns are filled bubbles; agent turns are flat avatar rows;
 │   │   │                     agent turns carry generation time and are inspectable
 │   │   ├── Agent runs      — one per agent turn: steps, tokens, cost, status ("the invoice")
 │   │   ├── Attachments     — files/images on messages

@@ -22,7 +22,7 @@
 | 10 | **Memory scope is managed in the Memory tab** (project vs global sections, scope dropdowns); forgetting a global note demands a confirm because the blast radius is org-wide. | S5 |
 | 11 | **Incognito is a creation-time choice that locks at first send** (D20). The chip lives on the new-chat composer only. | S12, S9 |
 | 12 | **Project icon + color are settable but never demanded** — create modal offers them under "optional — defaults are fine"; the default is a colored folder. | M2 |
-| 13 | **Messages are flat avatar rows for BOTH parties** — the shipped product idiom (avatar + name + time header, generation-time pill on agent replies). Bubbles were a prototype invention, rejected 2026-07-15; this also resolves the pass-6 "only filled shape" critique. | S8 |
+| 13 | **User messages are filled bubbles; agent turns are flat avatar rows** (avatar + name + time header, generation-time pill). REVERSED 2026-07-15 (Matt, reviewing the Composed Shell canvas): the earlier same-day rejection of bubbles is overturned — the asymmetric idiom (bubbles for you, rows for the agent) is what every chat product has trained users on and aids who-said-what scanning. Consciously reopens two items the flat-rows position had claimed: shipped-idiom parity for user turns, and the pass-6 "only filled shape" critique. | S8 |
 
 ## Deliberately undrawn (boundaries — each needs one line of ratified intent, not a build)
 
