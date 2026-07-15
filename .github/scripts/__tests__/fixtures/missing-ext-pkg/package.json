@@ -1,0 +1,6 @@
+{
+    "name": "fixture-missing-ext-pkg",
+    "private": true,
+    "type": "module",
+    "main": "built/index.js"
+}

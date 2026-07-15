@@ -1,0 +1,6 @@
+{
+    "name": "fixture-dep-fail-pkg",
+    "private": true,
+    "type": "module",
+    "main": "built/index.js"
+}
