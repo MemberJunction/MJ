@@ -749,7 +749,7 @@ After successfully deleting the record, the tool updates the JSON file with a `d
 
 ## Content Composition
 
-### {@include} References in Files
+### `{@include}` References in Files
 Enable content composition within non-JSON files (like .md, .html, .txt) using JSDoc-style include syntax:
 - Pattern: `{@include path/to/file.ext}`
 - Supports relative paths from the containing file

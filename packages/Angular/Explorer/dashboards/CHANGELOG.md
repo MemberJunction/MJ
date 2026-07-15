@@ -1,5 +1,78 @@
 # @memberjunction/ng-dashboards
 
+## 5.48.0
+
+### Minor Changes
+
+- bda123a: Lists performance overhaul + bug fixes. Read path: the custom List form paginates its Items section (100/page) and resolves member display names in one batched `IN` query per page instead of one query per item (a 1,000-member list drops from ~1,000 requests to 3); the Lists Browse/My Lists dashboards and the Add-to-List panel compute per-list counts via batched count_only queries instead of downloading every List Detail row; single-list-detail export filters membership server-side via a vwListDetails subquery instead of a client-built giant IN clause. Write path: client-side removals batch through TransactionGroups; server-side ListOperations bulk insert/remove and the "Add Records to List" action run with bounded concurrency (10 in-flight) while preserving per-record error isolation. ListSource switches to keyset (AfterKey) pagination with legacy Offset-cursor resume support. DB migration dedupes ListDetail in-place (keeping the oldest row per pair), adds a UNIQUE composite (ListID, RecordID) index that covers the duplicate-check predicate and closes the concurrent-add race, and drops the redundant single-column ListID index. Bug fixes: Add Records dialog spinner never cleared without a user click (missing change-detection after async loads, fixed in both the List form and single-list-detail); the List form's open-record button did nothing; silently-skipped duplicate adds now surface in a result toast (new optional `summary` on `ListManagementResult`). Also: Browse favorites filter persists as a server-side user preference; entities without a NameField now display and search on a sensible fallback field (`ID — value`, new `GetRecordDisplayField` helper); set-operation membership loads and operand pickers carry defensive MaxRows caps with truncation flagging.
+
+### Patch Changes
+
+- fbaf5fd: Fix: the Data Explorer home dashboard no longer throws `NG0100: ExpressionChangedAfterItHasBeenCheckedError` from its Recent Records relative-time labels. The template bound `formatRelativeTime(record.latestAt)`, which reads `Date.now()` and was therefore evaluated during change detection; when a CD cycle crossed a minute boundary the two dev-mode passes produced different strings. The label is now pre-computed into `RecentRecordAccess.relativeTime` when the record set loads and on a 30s timer (cleared in `ngOnDestroy`), and the template binds that stable field — so no template binding reads `Date.now()` during change detection.
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+- Updated dependencies [d1e1a15]
+  - @memberjunction/ng-conversations@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ng-core-entity-forms@5.48.0
+  - @memberjunction/ng-base-forms@5.48.0
+  - @memberjunction/ng-list-management@5.48.0
+  - @memberjunction/ng-shared@5.48.0
+  - @memberjunction/ng-composer@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ng-dashboard-viewer@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/tag-engine-base@5.48.0
+  - @memberjunction/api-keys-base@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/ng-base-application@5.48.0
+  - @memberjunction/ng-explorer-settings@5.48.0
+  - @memberjunction/ng-testing@5.48.0
+  - @memberjunction/ng-action-gallery@5.48.0
+  - @memberjunction/ng-actions@5.48.0
+  - @memberjunction/ng-agent-requests@5.48.0
+  - @memberjunction/ng-agents@5.48.0
+  - @memberjunction/ng-ai-test-harness@5.48.0
+  - @memberjunction/ng-archive-manager@5.48.0
+  - @memberjunction/ng-base-types@5.48.0
+  - @memberjunction/ng-clustering@5.48.0
+  - @memberjunction/ng-code-editor@5.48.0
+  - @memberjunction/ng-container-directives@5.48.0
+  - @memberjunction/ng-credentials@5.48.0
+  - @memberjunction/ng-entity-relationship-diagram@5.48.0
+  - @memberjunction/ng-entity-viewer@5.48.0
+  - @memberjunction/ng-filter-builder@5.48.0
+  - @memberjunction/ng-media-player@5.48.0
+  - @memberjunction/ng-map-view@5.48.0
+  - @memberjunction/ng-notifications@5.48.0
+  - @memberjunction/ng-query-viewer@5.48.0
+  - @memberjunction/ng-react@5.48.0
+  - @memberjunction/ng-record-process-studio@5.48.0
+  - @memberjunction/ng-resource-permissions@5.48.0
+  - @memberjunction/ng-scheduling@5.48.0
+  - @memberjunction/ng-search@5.48.0
+  - @memberjunction/ng-shared-generic@5.48.0
+  - @memberjunction/ng-trees@5.48.0
+  - @memberjunction/ng-user-routines@5.48.0
+  - @memberjunction/ng-versions@5.48.0
+  - @memberjunction/credentials@5.48.0
+  - @memberjunction/graphql-dataprovider@5.48.0
+  - @memberjunction/integration-engine-base@5.48.0
+  - @memberjunction/interactive-component-types@5.48.0
+  - @memberjunction/templates-base-types@5.48.0
+  - @memberjunction/testing-engine-base@5.48.0
+  - @memberjunction/ng-markdown@5.48.0
+  - @memberjunction/predictive-studio-core@5.48.0
+  - @memberjunction/ng-export-service@5.48.0
+  - @memberjunction/ng-ui-components@5.48.0
+  - @memberjunction/ng-word-cloud@5.48.0
+  - @memberjunction/lists-base@5.48.0
+  - @memberjunction/export-engine@5.48.0
+  - @memberjunction/global@5.48.0
+
 ## 5.47.0
 
 ### Minor Changes
