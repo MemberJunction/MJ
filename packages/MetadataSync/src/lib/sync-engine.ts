@@ -1156,7 +1156,7 @@ export class SyncEngine {
    * const content = 'This is a {@include ./shared/header.md} example';
    * 
    * // Resolves to:
-   * const result = await processFileContentWithIncludes('/path/to/file.md', content);
+   * const result = await processFileContentWithIncludes(content, '/path/to/file.md');
    * // 'This is a [contents of header.md] example'
    * ```
    */

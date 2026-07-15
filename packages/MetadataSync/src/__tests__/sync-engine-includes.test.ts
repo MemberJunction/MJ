@@ -34,10 +34,9 @@ describe('SyncEngine {@include} composition', () => {
     const content = 'BEFORE {@include ./snippet.md} AFTER';
 
     // processFileContentWithIncludes is private; exercised directly here because
-    // the defect lives in its composition step, not in a caller.
-    const result = await (engine as unknown as {
-      processFileContentWithIncludes(content: string, filePath: string): Promise<string>;
-    }).processFileContentWithIncludes(content, mainPath);
+    // the defect lives in its composition step, not in a caller. Bracket access
+    // stays bound to the real signature (no cast, no hand-copied shape).
+    const result = await engine['processFileContentWithIncludes'](content, mainPath);
 
     expect(result).toBe(`BEFORE ${snippet} AFTER`);
   });
