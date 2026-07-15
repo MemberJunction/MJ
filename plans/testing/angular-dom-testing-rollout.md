@@ -193,16 +193,35 @@ is documented in-spec** with its reason — no silent gaps, no faked green.
 - **Exit criteria:** every Generic package has a DOM `vitest.config` + meaningful DOM specs for its primary
   components — **met**, except the three deferrals above. A formal coverage _threshold_ lands in Phase 4.
 
-### Phase 3 — `packages/Angular/Explorer/**` rollout
+### Phase 3 — `packages/Angular/Explorer/**` rollout ✅ COMPLETE
 
 - Same approach for Explorer packages (`explorer-core`, `dashboards`, `core-entity-forms`, `shared`, …).
   Heavier components (resource wrappers, dashboards) lean on mocked providers + `NavigationService` fakes.
-- **Exit criteria:** Explorer packages covered to the agreed threshold.
+- **Exit criteria:** Explorer packages covered to the agreed threshold. **Met: 100% in-scope coverage
+  (129/129 unit-DOM-testable components), bar was 85%.** Deferred buckets (generated forms, page-level,
+  static-singleton data sources, custom forms extending generated forms, and a reviewed-individually list)
+  are catalogued in [`phase-3-explorer-deferral-register.md`](phase-3-explorer-deferral-register.md) — no
+  silent gaps. Coverage is measured by `scripts/classify-explorer-components.mjs`.
 
 ### Phase 4 — Gates & coverage (incl. tooling-roadmap #4 + #5)
 
 The "keep tests honest" half of the tooling gameplan lands here, alongside the coverage gate:
 
+- **Spec type-check gate (`test:types`) — DEFERRED HERE FROM PHASE 3.** DOM specs are currently
+  type-checked by *nothing* in the normal loop: the build `tsconfig.json` excludes `*.test.ts` (correct —
+  per ANGULAR_TESTING_GUIDE §3c, tests must not ship in `dist`), and the vitest/esbuild path is
+  transpile-only (it strips types and even silently erases broken `import type` statements). During Phase 3
+  this let a batch of real spec type errors — wrong `import type` paths, `Subject`-typed component outputs
+  used where `EventEmitter` was expected, un-cast DOM elements — pass `vitest` green while failing the CI
+  `ngc` build. They were fixed reactively; the gate makes it impossible to reintroduce.
+  **Plan:** add `"test:types": "tsc --noEmit -p tsconfig.spec.json"` to each DOM package and run it from the
+  package's `test` script (`npm run test:types && vitest run`) so the existing `turbo run test` in CI
+  enforces it with **zero CI-config change**. **Prerequisite:** one pre-existing latent error must be fixed
+  first — `packages/Angular/Explorer/dashboards/src/__tests__/mcp-dashboard-tools-index.test.ts` calls
+  `new MCPDashboardComponent(cdr, svc)` with 2 args but the constructor now takes 3 (came in from `next`,
+  latent because it's excluded from the build and transpiled by vitest). As of end-of-Phase-3, all
+  `*.dom.test.ts` across the 8 Explorer DOM packages ARE `tsc --noEmit -p tsconfig.spec.json`-clean, so
+  wiring the gate is now low-friction.
 - Add a coverage threshold for Angular packages in CI (start lenient, ratchet up).
 - **Guardrails** (tooling-roadmap #4): lint/CI rules for spec naming + anti-patterns.
 - **Mutation testing** (tooling-roadmap #5): verify the tests actually catch bugs, once there's a real body of them.
