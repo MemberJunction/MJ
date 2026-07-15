@@ -166,7 +166,7 @@ describe('ConversationToolManager', () => {
             const [rangeText, lens] = host.RunSummaryPrompt.mock.calls[0];
             expect(lens).toBe('budget decisions only');
             expect(rangeText).toContain('[seq 1] User:');
-            expect(rangeText).toContain('[seq 4] AI:');
+            expect(rangeText).toContain('[seq 4] Assistant:');
             expect(rangeText).not.toContain('[seq 5]');
         });
 

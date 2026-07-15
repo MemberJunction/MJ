@@ -25,6 +25,7 @@ import {
     MJConversationDetailEntity
 } from '@memberjunction/core-entities';
 import { AIPromptParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { FormatSequencedHistoryLine } from './conversation-history-format';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
 
@@ -401,17 +402,19 @@ export class ConversationCompactionManager {
             }
             LogError(`ConversationSummaryPromptID ${overrideId} not found in AIEngine prompt cache — falling back to the system prompt`);
         }
-        return AIEngine.Instance.Prompts.find(p => p.Name === CONVERSATION_SUMMARY_PROMPT_NAME);
+        // Trimmed, case-insensitive compare (the AIPromptRunner 'Repair JSON' lookup style)
+        // so cosmetic re-casing of the seeded prompt's display name can't disable compaction.
+        const targetName = CONVERSATION_SUMMARY_PROMPT_NAME.toLowerCase();
+        return AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === targetName);
     }
 
-    /** One delta line: `[seq N] Role: text` with a per-message size cap. */
+    /** One delta line (shared `[seq N] Role: text` shape) with a per-message size cap. */
     private static renderDeltaMessage(message: ConversationContextMessage): string {
-        const roleLabel = message.role === 'assistant' ? 'Assistant' : message.role === 'system' ? 'System' : 'User';
         const text = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
         const capped = text.length > MAX_DELTA_MESSAGE_CHARS
             ? `${text.slice(0, MAX_DELTA_MESSAGE_CHARS)}\n[truncated — ${text.length.toLocaleString()} chars total]`
             : text;
-        return `[seq ${message.metadata?.sequence}] ${roleLabel}: ${capped}`;
+        return FormatSequencedHistoryLine(message.metadata?.sequence, message.role, capped);
     }
 
     /**

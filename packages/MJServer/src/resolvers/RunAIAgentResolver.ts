@@ -1504,17 +1504,6 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
-     * Map ConversationDetail Role to ChatMessage role
-     */
-    private mapDetailRoleToMessageRole(role: string): 'user' | 'assistant' | 'system' {
-        const roleLower = (role || '').toLowerCase();
-        if (roleLower === 'user') return 'user';
-        if (roleLower === 'assistant' || roleLower === 'agent' || roleLower === 'ai') return 'assistant';
-        if (roleLower === 'system') return 'system';
-        return 'user'; // Default to user
-    }
-
-    /**
      * Batch load input artifact versions for conversation details.
      * Returns a map of ConversationDetailID -> ArtifactVersion[]
      */

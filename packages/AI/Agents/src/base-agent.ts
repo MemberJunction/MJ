@@ -5593,6 +5593,13 @@ The context is now within limits. Please retry your request with the recovered c
     public static readonly CarryForwardToolFamilies: readonly string[] = ['conversation', 'artifact'];
 
     /**
+     * Display name of the seeded system prompt behind summarizeRange's recursive
+     * sub-call (see metadata/prompts/.summarize-range-prompt.json). Resolved with a
+     * trimmed, case-insensitive compare — never an exact-case inline literal.
+     */
+    public static readonly SummarizeRangePromptName = 'Summarize Conversation Range';
+
+    /**
      * Renders prior-turn tool-result steps into the carried-forward message body.
      * Pure and static for testability: keeps only steps whose OutputData satisfies the
      * structured contract stamped by the tool executors — a carry-forward-eligible
@@ -5652,9 +5659,12 @@ The context is now within limits. Please retry your request with the recovered c
     protected buildConversationSummaryHost(params: ExecuteAgentParams): { RunSummaryPrompt(rangeText: string, lens: string): Promise<{ text: string; promptRunId?: string }> } {
         return {
             RunSummaryPrompt: async (rangeText: string, lens: string) => {
-                const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Summarize Conversation Range');
+                // Trimmed, case-insensitive name lookup (the AIPromptRunner 'Repair JSON'
+                // style) so cosmetic re-casing of the seeded prompt can't break the tool.
+                const targetName = BaseAgent.SummarizeRangePromptName.toLowerCase();
+                const prompt = AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === targetName);
                 if (!prompt) {
-                    throw new Error(`The 'Summarize Conversation Range' system prompt is not present in this environment`);
+                    throw new Error(`The '${BaseAgent.SummarizeRangePromptName}' system prompt is not present in this environment`);
                 }
                 const promptParams = new AIPromptParams();
                 promptParams.prompt = prompt;

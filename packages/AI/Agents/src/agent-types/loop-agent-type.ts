@@ -52,9 +52,26 @@ import { ConversationMessageResolver } from '../utils/ConversationMessageResolve
  * }
  * ```
  */
+/**
+ * Maximum consecutive turns the inline-read-tool pre-emption may force before the
+ * terminal step is honored anyway. The pre-emption retries are deliberately
+ * "productive" (exempt from the unproductive-retry limit) because each one injects
+ * fresh tool results — but a model that insists on terminal-plus-read-tools every
+ * turn must not be able to extend the run indefinitely on that exemption.
+ */
+const MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS = 3;
+
 @RegisterClass(BaseAgentType, "LoopAgentType")
 export class LoopAgentType extends BaseAgentType {
     private _evaluator = new SafeExpressionEvaluator();
+
+    /**
+     * Consecutive inline-read-tool pre-emptions forced so far. Per-run safe: a fresh
+     * LoopAgentType instance is created for each agent run (ClassFactory.CreateInstance
+     * in BaseAgentType.GetAgentTypeInstance). Reset whenever a response arrives without
+     * the terminal-step-plus-read-tools combination.
+     */
+    private consecutiveReadToolPreemptions = 0;
 
     public async InitializeAgentTypeState<ATS = any, P = any>(params: ExecuteAgentParams<any, P>): Promise<ATS> {
         // Loop agents do not require agent-type specific state initialization
@@ -145,23 +162,35 @@ export class LoopAgentType extends BaseAgentType {
             const hasInlineReadTools = (response.artifactToolCalls?.length || 0) + (response.conversationToolCalls?.length || 0) > 0;
             const wantsTerminalStep = response.nextStep?.type === 'Chat' || (response.taskComplete === true && !hasClientTools);
             if (hasInlineReadTools && wantsTerminalStep) {
+                if (this.consecutiveReadToolPreemptions < MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS) {
+                    this.consecutiveReadToolPreemptions++;
+                    LogStatusEx({
+                        message: '🔁 Loop Agent: inline tool call(s) combined with a terminal step — forcing one more turn so the results can be read',
+                        verboseOnly: true
+                    });
+                    return this.createNextStep('Retry', {
+                        terminate: false,
+                        artifactToolCalls: response.artifactToolCalls,
+                        conversationToolCalls: response.conversationToolCalls,
+                        memoryWrites: response.memoryWrites,
+                        scratchpad: response.scratchpad,
+                        payloadChangeRequest: response.payloadChangeRequest,
+                        reasoning: response.reasoning,
+                        confidence: response.confidence
+                        // deliberately NO errorMessage/message/retryInstructions: that keeps this
+                        // retry "productive" (only errorMessage-bearing retries count toward the
+                        // unproductive-retry limit) and suppresses the "Retrying due to:" message.
+                    });
+                }
+                // Cap reached: the model has combined a terminal step with read tools on
+                // every forced turn. Honor its terminal intent now — pre-emption retries
+                // are exempt from the unproductive-retry limit, so without this ceiling
+                // that exemption would let the combination extend the run indefinitely.
                 LogStatusEx({
-                    message: '🔁 Loop Agent: inline tool call(s) combined with a terminal step — forcing one more turn so the results can be read',
-                    verboseOnly: true
+                    message: `⚠️ Loop Agent: terminal step + inline read tools recurred ${MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS} consecutive turns — honoring the terminal step instead of forcing another turn`
                 });
-                return this.createNextStep('Retry', {
-                    terminate: false,
-                    artifactToolCalls: response.artifactToolCalls,
-                    conversationToolCalls: response.conversationToolCalls,
-                    memoryWrites: response.memoryWrites,
-                    scratchpad: response.scratchpad,
-                    payloadChangeRequest: response.payloadChangeRequest,
-                    reasoning: response.reasoning,
-                    confidence: response.confidence
-                    // deliberately NO errorMessage/message/retryInstructions: that keeps this
-                    // retry "productive" (only errorMessage-bearing retries count toward the
-                    // unproductive-retry limit) and suppresses the "Retrying due to:" message.
-                });
+            } else {
+                this.consecutiveReadToolPreemptions = 0;
             }
 
             // Check for Chat nextStep BEFORE checking taskComplete

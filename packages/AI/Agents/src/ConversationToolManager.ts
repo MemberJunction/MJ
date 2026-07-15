@@ -17,6 +17,7 @@
 
 import { UserInfo } from '@memberjunction/core';
 import { ConversationEngine, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { FormatSequencedHistoryLine } from './conversation-history-format';
 
 /** Tool names available on `conversationToolCalls`. */
 export type ConversationToolName = 'getMessageBySequence' | 'getMessagesByRange' | 'searchConversation' | 'summarizeRange';
@@ -233,12 +234,12 @@ export class ConversationToolManager {
         };
     }
 
-    /** `[seq N] Role: text` rendering with a total input budget for the sub-call model. */
+    /** `[seq N] Role: text` rendering (shared shape) with a total input budget for the sub-call model. */
     private renderRangeForSummary(details: MJConversationDetailEntity[]): string {
         const lines: string[] = [];
         let usedChars = 0;
         for (const detail of details) {
-            const line = `[seq ${detail.Sequence}] ${detail.Role || 'User'}: ${detail.Message || ''}`;
+            const line = FormatSequencedHistoryLine(detail.Sequence, detail.Role, detail.Message || '');
             usedChars += line.length;
             if (usedChars > MAX_SUMMARIZE_INPUT_CHARS && lines.length > 0) {
                 lines.push(`[input capped at ~${MAX_SUMMARIZE_INPUT_CHARS.toLocaleString()} characters — messages from sequence ${detail.Sequence} onward omitted; summarize a narrower range to cover them]`);
