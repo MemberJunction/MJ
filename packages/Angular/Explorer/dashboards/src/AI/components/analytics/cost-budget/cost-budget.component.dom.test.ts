@@ -1,5 +1,5 @@
 import { Component, Input } from '@angular/core';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
 import { createFakeProvider, useFakeGlobalProvider, query, queryAll } from '@memberjunction/ng-test-utils';
@@ -75,10 +75,27 @@ describe('AnalyticsCostBudgetComponent (DOM)', () => {
     expect(query(fixture, '.export-btn')?.textContent).toContain('Export CSV');
   });
 
-  it('produces a CSV header row when ExportCSV runs on loaded data', async () => {
+  it('produces a CSV with the header row and one line per model when ExportCSV runs', async () => {
     installProvider({ runViewResults: [] });
     const fixture = await render(rowsFn);
-    // downloadCSV touches the DOM (anchor + click) which jsdom supports; just assert it doesn't throw.
-    expect(() => fixture.componentInstance.ExportCSV()).not.toThrow();
+    // downloadCSV wraps the CSV text in `new Blob([csv])`; jsdom's Blob has no .text(), so capture
+    // the CSV string straight from the Blob constructor's first part. Assert CONTENT, not non-throw.
+    let csv = '';
+    const RealBlob = globalThis.Blob;
+    // Must be a `function` (not an arrow) so vitest can invoke it with `new` (Blob is a constructor).
+    const spy = vi.spyOn(globalThis, 'Blob').mockImplementation(function (parts?: BlobPart[], options?: BlobPropertyBag) {
+      const first = parts?.[0];
+      if (typeof first === 'string') csv = first;
+      return new RealBlob(parts, options);
+    });
+    fixture.componentInstance.ExportCSV();
+    spy.mockRestore();
+    expect(csv.length).toBeGreaterThan(0);
+    const lines = csv.split('\n');
+    expect(lines[0]).toBe(
+      'Model,Vendor,Runs,Input Tokens,Output Tokens,Cache Read Tokens,Cache Write Tokens,Cache Hit Rate %,Input Cost,Output Cost,Total Cost,Cache Saved,% of Total',
+    );
+    // rowsFn seeds two distinct models → header + two data rows.
+    expect(lines.length).toBe(3);
   });
 });
