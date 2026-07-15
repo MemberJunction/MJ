@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Component, Input } from '@angular/core';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, text, capture } from '@memberjunction/ng-test-utils';
-import type { SearchResultItem } from '../../knowledge-hub.types';
+import type { SearchResultItem } from '@memberjunction/ng-search';
 import { SearchResultDetailComponent } from './search-result-detail.component';
 
 /**

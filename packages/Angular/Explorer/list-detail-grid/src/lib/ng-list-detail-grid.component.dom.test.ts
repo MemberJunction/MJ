@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { provideRouter } from '@angular/router';
+import { RouterModule } from '@angular/router';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ListDetailGridComponent } from './ng-list-detail-grid.component';
@@ -21,8 +21,8 @@ import { ListDetailGridModule } from '../module';
 
 function render(inputs: Record<string, unknown> = {}) {
   return renderComponentFixture(ListDetailGridComponent, {
-    imports: [ListDetailGridModule],
-    providers: [{ provide: SharedService, useValue: {} as unknown as SharedService }, provideRouter([])],
+    imports: [ListDetailGridModule, RouterModule.forRoot([])],
+    providers: [{ provide: SharedService, useValue: {} as unknown as SharedService }],
     inputs,
   });
 }

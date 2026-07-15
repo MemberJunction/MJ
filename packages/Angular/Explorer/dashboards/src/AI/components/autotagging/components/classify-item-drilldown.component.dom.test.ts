@@ -43,7 +43,7 @@ const TAG_ROWS = [
 
 const provider = () =>
   createFakeProvider({
-    runViewResults: (params: RunViewParams) => (params.EntityName === 'MJ: Content Item Tags' ? TAG_ROWS : [ITEM_ROW]),
+    runViewResults: (params: RunViewParams): Record<string, unknown>[] => (params.EntityName === 'MJ: Content Item Tags' ? TAG_ROWS : [ITEM_ROW]),
   });
 
 const renderEmpty = () =>

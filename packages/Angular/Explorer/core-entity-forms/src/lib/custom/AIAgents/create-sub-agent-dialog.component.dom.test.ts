@@ -4,7 +4,7 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { IMetadataProvider } from '@memberjunction/core';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
-import { CreateSubAgentDialogComponent, CreateSubAgentConfig } from './create-sub-agent-dialog.component';
+import { CreateSubAgentDialogComponent, CreateSubAgentConfig, CreateSubAgentResult } from './create-sub-agent-dialog.component';
 import { AIAgentManagementService } from './ai-agent-management.service';
 
 /**
@@ -89,8 +89,8 @@ describe('CreateSubAgentDialogComponent (DOM)', () => {
 
   it('renders an <option> per loaded agent type in the Type dropdown', async () => {
     const fixture = await render();
-    const typeSelect = query<HTMLSelectElement>(fixture, 'select#typeID')!;
-    const optionText = Array.from(typeSelect.options).map((o) => o.textContent?.trim());
+    const typeSelect = query(fixture, 'select#typeID') as HTMLSelectElement;
+    const optionText = Array.from(typeSelect.options).map((o: HTMLOptionElement) => o.textContent?.trim());
     expect(optionText).toContain('Standard');
     expect(optionText).toContain('Loop');
   });
@@ -105,7 +105,8 @@ describe('CreateSubAgentDialogComponent (DOM)', () => {
 
   it('emits null via result and fires DialogClose on Cancel', async () => {
     const fixture = await render();
-    const results = capture(fixture.componentInstance.result);
+    const results: Array<CreateSubAgentResult | null> = [];
+    fixture.componentInstance.result.subscribe((r) => results.push(r));
     const closed = capture(fixture.componentInstance.DialogClose);
     buttonByText(fixture, 'Cancel').click();
     expect(results).toEqual([null]);
@@ -118,7 +119,8 @@ describe('CreateSubAgentDialogComponent (DOM)', () => {
     fixture.componentInstance.subAgentForm.patchValue({ name: 'My Helper', typeID: 't-standard' });
     fixture.componentRef.changeDetectorRef.markForCheck();
     fixture.detectChanges(false);
-    const results = capture(fixture.componentInstance.result);
+    const results: Array<CreateSubAgentResult | null> = [];
+    fixture.componentInstance.result.subscribe((r) => results.push(r));
     const closed = capture(fixture.componentInstance.DialogClose);
     buttonByText(fixture, 'Create Sub-Agent').click();
     expect(results.length).toBe(1);

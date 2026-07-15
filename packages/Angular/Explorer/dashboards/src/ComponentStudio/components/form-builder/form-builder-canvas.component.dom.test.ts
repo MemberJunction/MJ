@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
-import type { FormCanvasModel } from '../../../component-studio.types';
+import type { FormCanvasModel } from '../../services/form-canvas-model';
 import { FormBuilderCanvasComponent } from './form-builder-canvas.component';
 
 /**

@@ -40,7 +40,7 @@ const ITEM_ROWS = [
 
 const provider = () =>
   createFakeProvider({
-    runViewResults: (params: RunViewParams) => {
+    runViewResults: (params: RunViewParams): Record<string, unknown>[] => {
       if (params.EntityName === 'MJ: Content Process Runs') return [{ SourceID: 'src-1', StartTime: null, EndTime: null }];
       if (params.EntityName === 'MJ: Content Item Tags') return [{ ItemID: 'i1' }, { ItemID: 'i1' }];
       return ITEM_ROWS; // MJ: Content Items

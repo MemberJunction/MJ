@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { FormsModule } from '@angular/forms';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
-import type { HomeAppPinnedItem } from '../home-app.types';
+import type { HomeAppPinnedItem } from '@memberjunction/ng-shared';
 import { ActionPinRunnerDialogComponent } from './action-pin-runner-dialog.component';
 
 /**

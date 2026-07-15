@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderComponentFixture, queryAll } from '@memberjunction/ng-test-utils';
 import { WizardStepIndicatorComponent } from './wizard-step-indicator.component';
+import type { WizardStepDef } from '../../database-designer.types';
 
 /**
  * DOM coverage for <mj-entity-wizard-step-indicator> — a pure-display OnPush step breadcrumb. No
@@ -13,7 +14,7 @@ const STEPS = [
   { id: 'basics', label: 'Basics', isComplete: true, isActive: false },
   { id: 'fields', label: 'Fields', isComplete: false, isActive: true },
   { id: 'review', label: 'Review', isComplete: false, isActive: false },
-] as never;
+] as unknown as WizardStepDef[];
 
 const render = (Steps: unknown = STEPS) =>
   renderComponentFixture(WizardStepIndicatorComponent, { declarations: [WizardStepIndicatorComponent], inputs: { Steps } });

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, capture, useFakeGlobalProvider } from '@memberjunction/ng-test-utils';
 import { StepRelationshipsComponent } from './step-relationships.component';
+import type { EntityInfo } from '@memberjunction/core';
 import type { ColumnSpec, ForeignKeySpec } from '../../../database-designer.types';
 
 /**
@@ -16,7 +17,7 @@ import type { ColumnSpec, ForeignKeySpec } from '../../../database-designer.type
 const FAKE_ENTITIES = [
   { ID: 'e1', SchemaName: 'crm', BaseTable: 'Account', Fields: [{ Name: 'ID', Type: 'uniqueidentifier', IsVirtual: false }] },
   { ID: 'e2', SchemaName: 'crm', BaseTable: 'Contact', Fields: [{ Name: 'ID', Type: 'uniqueidentifier', IsVirtual: false }] },
-];
+] as unknown as EntityInfo[];
 
 const col = (Name: string): ColumnSpec => ({ Name, Type: 'uuid', IsNullable: true }) as ColumnSpec;
 

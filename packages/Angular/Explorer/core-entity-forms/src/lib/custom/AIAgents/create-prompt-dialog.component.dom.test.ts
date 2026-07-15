@@ -5,7 +5,7 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { IMetadataProvider } from '@memberjunction/core';
 import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 import { query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
-import { CreatePromptDialogComponent, CreatePromptConfig } from './create-prompt-dialog.component';
+import { CreatePromptDialogComponent, CreatePromptConfig, CreatePromptResult } from './create-prompt-dialog.component';
 import { AIPromptManagementService } from '../AIPrompts/ai-prompt-management.service';
 
 /**
@@ -96,7 +96,7 @@ describe('CreatePromptDialogComponent (DOM)', () => {
 
   it('renders the required Name field bound to the form control', async () => {
     const fixture = await render();
-    const nameInput = query<HTMLInputElement>(fixture, 'input#promptName')!;
+    const nameInput = query(fixture, 'input#promptName') as HTMLInputElement;
     expect(nameInput).not.toBeNull();
     // Drive the control and confirm the DOM reflects it (two-way binding via formControlName).
     fixture.componentInstance.promptForm.patchValue({ name: 'Greeting' });
@@ -107,7 +107,7 @@ describe('CreatePromptDialogComponent (DOM)', () => {
 
   it('renders both template-mode radio options', async () => {
     const fixture = await render();
-    const radios = queryAll<HTMLInputElement>(fixture, 'input.radio-input');
+    const radios = queryAll(fixture, 'input.radio-input') as HTMLInputElement[];
     const values = radios.map((r) => r.value);
     expect(values).toContain('new');
     expect(values).toContain('existing');
@@ -122,7 +122,8 @@ describe('CreatePromptDialogComponent (DOM)', () => {
 
   it('emits null via result and fires DialogClose on Cancel', async () => {
     const fixture = await render();
-    const results = capture(fixture.componentInstance.result);
+    const results: Array<CreatePromptResult | null> = [];
+    fixture.componentInstance.result.subscribe((r) => results.push(r));
     const closed = capture(fixture.componentInstance.DialogClose);
     buttonByText(fixture, 'Cancel').click();
     expect(results).toEqual([null]);
@@ -134,7 +135,8 @@ describe('CreatePromptDialogComponent (DOM)', () => {
     fixture.componentInstance.promptForm.patchValue({ name: 'My Prompt', typeID: 'pt-chat' });
     fixture.componentRef.changeDetectorRef.markForCheck();
     fixture.detectChanges(false);
-    const results = capture(fixture.componentInstance.result);
+    const results: Array<CreatePromptResult | null> = [];
+    fixture.componentInstance.result.subscribe((r) => results.push(r));
     const closed = capture(fixture.componentInstance.DialogClose);
     buttonByText(fixture, 'Create Prompt').click();
     expect(results.length).toBe(1);

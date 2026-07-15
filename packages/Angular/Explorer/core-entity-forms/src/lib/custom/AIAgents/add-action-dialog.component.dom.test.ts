@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
 import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { RunViewParams } from '@memberjunction/core';
 import { AddActionDialogComponent } from './add-action-dialog.component';
 
 /**
@@ -31,7 +32,8 @@ const CATEGORIES = [
 
 function fakeProvider() {
   return createFakeProvider({
-    runViewResults: (params) => (params.EntityName === 'MJ: Actions' ? ACTIONS : CATEGORIES),
+    runViewResults: (params: RunViewParams): Record<string, unknown>[] =>
+      params.EntityName === 'MJ: Actions' ? ACTIONS : CATEGORIES,
   });
 }
 
@@ -83,7 +85,7 @@ describe('AddActionDialogComponent (DOM)', () => {
 
   it('shows the empty state when the search matches no actions', async () => {
     const fixture = await render();
-    const searchInput = query<HTMLInputElement>(fixture, '.search-input')!;
+    const searchInput = query(fixture, '.search-input') as HTMLInputElement;
     searchInput.value = 'zzz-no-match';
     searchInput.dispatchEvent(new Event('input'));
     await new Promise((r) => setTimeout(r, 350)); // debounceTime(300)
@@ -106,20 +108,22 @@ describe('AddActionDialogComponent (DOM)', () => {
 
   it('emits the selected actions via result on Add Selected', async () => {
     const fixture = await render();
-    const results = capture(fixture.componentInstance.result);
+    const results: Array<{ ID: string }[]> = [];
+    fixture.componentInstance.result.subscribe((r) => results.push(r));
     const closed = capture(fixture.componentInstance.DialogClose);
     (queryAll(fixture, '.action-card')[1] as HTMLElement).click();
     fixture.componentRef.changeDetectorRef.markForCheck();
     fixture.detectChanges(false);
     buttonByText(fixture, 'Add Selected').click();
     expect(results.length).toBe(1);
-    expect((results[0] as Array<{ ID: string }>).map((a) => a.ID)).toEqual(['a2']);
+    expect(results[0].map((a) => a.ID)).toEqual(['a2']);
     expect(closed.length).toBe(1);
   });
 
   it('emits an empty result on Cancel', async () => {
     const fixture = await render();
-    const results = capture(fixture.componentInstance.result);
+    const results: Array<{ ID: string }[]> = [];
+    fixture.componentInstance.result.subscribe((r) => results.push(r));
     buttonByText(fixture, 'Cancel').click();
     expect(results).toEqual([[]]);
   });

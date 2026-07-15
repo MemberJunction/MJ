@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Component, Input } from '@angular/core';
 import { MJEmptyStateComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
-import type { DrilldownRecord } from '../../../knowledge-hub.types';
+import type { DrilldownRecord } from './record-drilldown.component';
 import { RecordDrilldownComponent } from './record-drilldown.component';
 
 /**

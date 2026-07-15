@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
-import type { MJActionEntityExtended, MJActionCategoryEntity } from '@memberjunction/core-entities';
+import type { MJActionCategoryEntity } from '@memberjunction/core-entities';
+import type { MJActionEntityExtended } from '@memberjunction/actions-base';
 import { ActionListItemComponent } from './action-list-item.component';
 
 /**

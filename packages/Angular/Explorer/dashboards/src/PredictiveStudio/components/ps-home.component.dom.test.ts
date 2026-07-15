@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
-import type { PredictiveStudioEngine } from '../predictive-studio.engine';
+import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSHomeComponent } from './ps-home.component';
 
 /**

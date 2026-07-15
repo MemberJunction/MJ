@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
-import type { FormCanvasModel } from '../../../component-studio.types';
+import type { FormCanvasModel } from '../../services/form-canvas-model';
 import { FormBuilderRightPanelComponent } from './form-builder-right-panel.component';
 
 /**
