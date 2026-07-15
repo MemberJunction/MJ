@@ -144,6 +144,52 @@ describe('checkPackage', () => {
         expect(result.status).toBe('OWN_DIST_MISSING_EXT');
     });
 
+    it('gates a broken subpath even when the package has NO root entry (subpath-only exports)', async () => {
+        // A subpath-only package (no "." key, no main) resolves to no root entry, but its
+        // built subpath dist is real importable surface — a #3137 break there must still gate,
+        // not silently classify NOT_BUILT.
+        const dir = join(FIXTURES, 'subonly-pkg');
+        let result;
+        try {
+            mkdirSync(join(dir, 'built'), { recursive: true });
+            writeFileSync(
+                join(dir, 'package.json'),
+                JSON.stringify({ name: 'subonly-pkg', type: 'module', exports: { './plugin': './built/plugin.js' } })
+            );
+            writeFileSync(join(dir, 'built', 'plugin.js'), "export { helper } from './helper';\n"); // extensionless bug
+            writeFileSync(join(dir, 'built', 'helper.js'), 'export const helper = 1;\n'); // sibling → #3137 signature
+            result = await checkPackage(dir);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+        expect(result.status).toBe('OWN_DIST_MISSING_EXT');
+    });
+
+    it('gates a #3137 break in a WILDCARD subpath export (e.g. oclif ./commands/*)', async () => {
+        // db-auto-doc exports "./dist/commands/*" for dynamically-loaded oclif command files
+        // the root barrel never re-exports. A single-star pattern must expand and check each.
+        const dir = join(FIXTURES, 'wildcard-pkg');
+        let result;
+        try {
+            mkdirSync(join(dir, 'built', 'commands'), { recursive: true });
+            writeFileSync(
+                join(dir, 'package.json'),
+                JSON.stringify({
+                    name: 'wildcard-pkg',
+                    type: 'module',
+                    exports: { '.': './built/index.js', './commands/*': './built/commands/*.js' },
+                })
+            );
+            writeFileSync(join(dir, 'built', 'index.js'), 'export const ok = 1;\n'); // clean root barrel
+            writeFileSync(join(dir, 'built', 'commands', 'analyze.js'), "export { run } from './core';\n"); // extensionless bug
+            writeFileSync(join(dir, 'built', 'commands', 'core.js'), 'export const run = 1;\n'); // sibling → #3137 signature
+            result = await checkPackage(dir);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+        expect(result.status).toBe('OWN_DIST_MISSING_EXT');
+    });
+
     it('classifies a module that throws at import as OTHER_ERR (non-gating), not a bug', async () => {
         const dir = join(FIXTURES, 'throw-pkg');
         let result;
@@ -215,11 +261,15 @@ describe('classifyFailure', () => {
     it('classifies a break inside the package own nested node_modules as DEP_FAIL, not own-dist', () => {
         // npm nests deps in a package's own node_modules on version conflicts; a third-party
         // dep's broken ESM must not be blamed on the host MJ package (gating false positive).
+        // Inject an EXISTING JS sibling for the missing path so hasModuleSibling is true — this
+        // forces the isUnderNodeModules exclusion to be the ONLY reason the result is DEP_FAIL
+        // (otherwise the test passes vacuously because the sibling doesn't exist).
         const failure = {
             code: 'ERR_MODULE_NOT_FOUND',
             message: `Cannot find module '${pkgDir}/node_modules/brokendep/missing-thing' imported from ${pkgDir}/node_modules/brokendep/index.js`,
         };
-        expect(classifyFailure(failure, pkgDir).status).toBe('DEP_FAIL');
+        const sib = siblingsExist(`${pkgDir}/node_modules/brokendep/missing-thing.js`);
+        expect(classifyFailure(failure, pkgDir, sib).status).toBe('DEP_FAIL');
     });
 
     it('classifies a missing own-dist file WITH a .js extension as DEP_FAIL, not the extensionless bug', () => {

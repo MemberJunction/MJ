@@ -98,24 +98,28 @@ function unwrapCondition(condition) {
 export async function checkPackage(pkgDir, pkgJson = null, { timeoutMs = IMPORT_TIMEOUT_MS } = {}) {
     pkgJson ??= JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
     const name = pkgJson.name ?? pkgDir;
+
+    // Build the set of concrete, existing entry points: the root entry (".", bare
+    // conditions, or main) plus every concrete subpath export. Both are import-checked —
+    // a #3137 break in a subpath dist file (exports["./sub"]) breaks consumers of that
+    // subpath and would otherwise ship green. This union is computed BEFORE the NOT_BUILT
+    // decision so a subpath-only package (no root) or a package with an unbuilt root but a
+    // built subpath still has its real importable surface checked.
     const entry = resolveEntryPoint(pkgJson);
-    if (!entry) {
-        return { name, pkgDir, status: 'NOT_BUILT', detail: 'no entry point in exports/main' };
-    }
-    const entryPath = resolve(pkgDir, entry);
-    if (!existsSync(entryPath)) {
-        return { name, pkgDir, status: 'NOT_BUILT', detail: `entry ${entry} does not exist (not built?)` };
+    const rootPath = entry ? resolve(pkgDir, entry) : null;
+    const rootExists = rootPath != null && existsSync(rootPath);
+    const subEntries = collectSubpathEntryPaths(pkgJson, pkgDir).filter((p) => p !== rootPath && existsSync(p));
+    const entries = [...(rootExists ? [rootPath] : []), ...subEntries];
+
+    if (entries.length === 0) {
+        const detail = entry ? `entry ${entry} does not exist (not built?)` : 'no entry point in exports/main';
+        return { name, pkgDir, status: 'NOT_BUILT', detail };
     }
 
-    // Check the root entry plus every concrete subpath export — a #3137 break in a
-    // subpath dist file (exports["./sub"]) breaks consumers of that subpath and would
-    // otherwise ship green. Non-existent subpath targets are skipped (a missing subpath
-    // build isn't the root package's own-dist bug). A gating break in ANY entry gates the
-    // package; otherwise the root entry's status stands (a side-effecting subpath's
-    // non-gating error doesn't muddy a clean root).
-    const subEntries = collectSubpathEntryPaths(pkgJson, pkgDir).filter((p) => p !== entryPath && existsSync(p));
+    // A gating break in ANY entry gates the package; otherwise the first entry's status
+    // stands (a side-effecting subpath's non-gating error doesn't muddy a clean root).
     const results = [];
-    for (const p of [entryPath, ...subEntries]) {
+    for (const p of entries) {
         const failure = await importInFreshProcess(p, timeoutMs);
         results.push(failure ? classifyFailure(failure, pkgDir) : { status: 'OK', detail: '' });
     }
@@ -125,22 +129,41 @@ export async function checkPackage(pkgDir, pkgJson = null, { timeoutMs = IMPORT_
 
 /**
  * Resolve every concrete subpath export (`exports["./sub"]`) to an absolute path.
- * Skips the root ".", wildcard/pattern targets (containing "*"), and non-JS targets
- * (e.g. "./package.json") — only .js/.mjs/.cjs entry points are import-checkable.
+ * Skips the root "." and non-JS targets (e.g. "./package.json"). A single-star
+ * pattern (`"./commands/*": "./dist/commands/*.js"` — e.g. oclif command files
+ * loaded dynamically and never statically re-exported by the root) is expanded by
+ * globbing the target directory, so those files are import-checked too.
  */
 function collectSubpathEntryPaths(pkgJson, pkgDir) {
     const exp = pkgJson.exports;
     if (typeof exp !== 'object' || exp === null || Array.isArray(exp)) return [];
     const paths = [];
     for (const [key, value] of Object.entries(exp)) {
-        if (!key.startsWith('./')) continue; // subpaths only; "." is the root, handled above
-        if (key.includes('*')) continue; // wildcard patterns aren't a single importable entry
+        if (!key.startsWith('./') || key === '.') continue; // subpaths only; "." handled above
         const target = unwrapCondition(value);
-        if (target && MODULE_EXTS.some((ext) => target.endsWith(ext))) {
+        if (typeof target !== 'string') continue;
+        if (target.includes('*')) {
+            paths.push(...expandStarTarget(target, pkgDir));
+        } else if (MODULE_EXTS.some((ext) => target.endsWith(ext))) {
             paths.push(resolve(pkgDir, target));
         }
     }
     return paths;
+}
+
+/**
+ * Expand a single-star export target (`./dist/commands/*.js`) to the absolute paths of
+ * the JS module files it matches. Only a lone `*` in the basename is supported (the
+ * common package pattern); `**` or multi-star targets are skipped as too broad.
+ */
+function expandStarTarget(target, pkgDir) {
+    if ((target.match(/\*/g) ?? []).length !== 1 || target.includes('**')) return [];
+    const dir = resolve(pkgDir, target.slice(0, target.lastIndexOf('/')));
+    if (!existsSync(dir)) return [];
+    const suffix = target.slice(target.lastIndexOf('*') + 1); // e.g. ".js"
+    return readdirSync(dir)
+        .filter((f) => f.endsWith(suffix) && MODULE_EXTS.some((ext) => f.endsWith(ext)))
+        .map((f) => join(dir, f));
 }
 
 /**
