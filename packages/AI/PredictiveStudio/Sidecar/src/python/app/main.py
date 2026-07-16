@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from fastapi import FastAPI, HTTPException
 
-from . import algorithms, artifacts, metrics, preprocessing, survival_wrappers
+from . import algorithms, artifacts, forecast_wrappers, metrics, preprocessing, survival_wrappers
 from .schemas import (
     HealthResponse,
     PredictRequest,
@@ -69,8 +69,15 @@ def train(req: TrainRequest) -> TrainResponse:
             detail="Inline `data` is required (data_ref shared-storage is not "
             "implemented in v1).",
         )
+    is_forecast = forecast_wrappers.is_forecast(req.algorithm)
     is_survival = survival_wrappers.is_survival(req.algorithm)
-    if is_survival:
+    if is_forecast:
+        if req.series_spec is None:
+            raise HTTPException(status_code=400, detail="Forecasting algorithms require `series_spec` (time_col, value_col, horizon).")
+        for c in (req.series_spec.time_col, req.series_spec.value_col):
+            if c not in req.data.columns:
+                raise HTTPException(status_code=400, detail=f"Series column '{c}' not found in data columns.")
+    elif is_survival:
         if req.target_spec is None:
             raise HTTPException(status_code=400, detail="Survival algorithms require `target_spec` (duration_col, event_col).")
         for c in (req.target_spec.duration_col, req.target_spec.event_col):
@@ -84,7 +91,8 @@ def train(req: TrainRequest) -> TrainResponse:
 
     started = time.perf_counter()
     try:
-        result = _run_survival_training(req) if is_survival else _run_training(req)
+        result = (_run_forecast_training(req) if is_forecast else
+                  _run_survival_training(req) if is_survival else _run_training(req))
     except algorithms.AlgorithmNotSupportedError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
@@ -112,6 +120,40 @@ def train(req: TrainRequest) -> TrainResponse:
         duration_sec=round(duration, 4),
         holdout_metrics=result.get("holdout_metrics"),
     )
+
+
+def _run_forecast_training(req) -> Dict[str, Any]:
+    """Forecasting branch (Doc 3 T5). Sorts the series by time, holds out the trailing
+    `horizon` window (time-ordered — NEVER random), fits on the head, forecasts the
+    horizon, and reports MASE vs the in-sample seasonal-naive floor."""
+    ss = req.series_spec
+    cols = list(req.data.columns)
+    ti, vi = cols.index(ss.time_col), cols.index(ss.value_col)
+    rows = sorted(req.data.rows, key=lambda r: r[ti])
+    y = np.array([float(r[vi]) for r in rows])
+    h = int(ss.horizon)
+    m = int(ss.seasonal_periods or 1)
+    if len(y) <= h + m:
+        raise ValueError(f"series too short ({len(y)}) for horizon {h} + season {m}.")
+
+    y_train, y_test = y[:-h], y[-h:]
+    model = forecast_wrappers.build_forecast(
+        req.algorithm, {**dict(req.hyperparameters), "seasonal_periods": ss.seasonal_periods})
+    model.fit(y_train)
+    y_pred = model.forecast(h)
+    holdout_mase = forecast_wrappers.mase(y_train, y_test, y_pred, m)
+
+    # refit on the FULL series for the production forecaster
+    prod = forecast_wrappers.build_forecast(
+        req.algorithm, {**dict(req.hyperparameters), "seasonal_periods": ss.seasonal_periods})
+    prod.fit(y)
+    return {
+        "estimator": prod, "fitted": {"output_columns": [ss.value_col], "series_spec": ss.model_dump()},
+        "metrics": {"mase": holdout_mase},
+        "feature_importance": {},
+        "training_row_count": len(y),
+        "holdout_metrics": {"mase": holdout_mase},
+    }
 
 
 def _run_survival_training(req) -> Dict[str, Any]:

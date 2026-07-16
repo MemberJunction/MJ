@@ -1482,7 +1482,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=ARIMA"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -1543,8 +1544,8 @@
       "ID": "B6B1A11C-7309-4BA2-BB2F-EBF1C79B3020"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:32.971Z",
-      "checksum": "6210c5d3f2d5cabc5391741bf8961c52964ca885354a4f49df36bbec9a9ba7bf"
+      "lastModified": "2026-07-16T08:14:35.529Z",
+      "checksum": "64270198d94c0d9df174c13d3db3f0e4c4f0744bffad48586f3dacedd2ea1e20"
     }
   },
   {
@@ -1623,7 +1624,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=ETS (Exponential Smoothing)"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -1684,8 +1686,8 @@
       "ID": "D4D09C8E-0E13-4ED8-BDFA-C15C916BCEB7"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:32.992Z",
-      "checksum": "8fdafdb985218a4f713e0a76f0faf75772f0f493e3afc79272123150932cb48d"
+      "lastModified": "2026-07-16T08:14:35.544Z",
+      "checksum": "f37e2a2ef1ac48a3846e65cbed79f53809d860ee07a3ae2aeb5de7dcec17cdb2"
     }
   },
   {
@@ -1764,7 +1766,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Seasonal Naive"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -1808,8 +1811,8 @@
       "ID": "0E1E7D3B-B6F0-47AD-964D-06AF06E3E3F1"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.026Z",
-      "checksum": "8768f7013c6362fafd3ef5fbe29f50f607e680de6591d0dd5040809325dd683c"
+      "lastModified": "2026-07-16T08:14:35.598Z",
+      "checksum": "50df94becb4f97857666e56d6249001bdf0f4b9593118e1ac8182d387e8881b2"
     }
   },
   {
@@ -1826,7 +1829,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Simple Moving Average"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -1887,8 +1891,8 @@
       "ID": "6184CEA8-1866-45F3-ABED-A8F2A2ECFF4E"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.037Z",
-      "checksum": "5e46d6af4fde67a22b075d72c532028484dad94a6cc6f432d3c6bb053503439e"
+      "lastModified": "2026-07-16T08:14:35.585Z",
+      "checksum": "d99dd2a31c17bd01e42516b2cd8119f4018193afbbae3a30e4b1de8521cfefc1"
     }
   },
   {

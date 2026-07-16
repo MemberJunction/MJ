@@ -92,6 +92,15 @@ class SurvivalTargetSpec(BaseModel):
     event_col: str
 
 
+class SeriesSpec(BaseModel):
+    """Forecasting series spec (Doc 3 T5)."""
+
+    time_col: str
+    value_col: str
+    horizon: int
+    seasonal_periods: Optional[int] = None
+
+
 class TrainRequest(BaseModel):
     """``POST /train`` request body."""
 
@@ -106,6 +115,7 @@ class TrainRequest(BaseModel):
     # `target?`. Supervised families still set it.
     target: Optional[str] = None
     target_spec: Optional[SurvivalTargetSpec] = None
+    series_spec: Optional[SeriesSpec] = None
     data: Optional[MatrixData] = None
     data_ref: Optional[str] = None  # shared-storage handle (not implemented in v1)
     # The locked holdout (plan §8.2): rows carved off by the orchestrator BEFORE

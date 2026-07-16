@@ -454,5 +454,77 @@
       "lastModified": "2026-07-16T08:11:08.819Z",
       "checksum": "15c1d01973257c4de8e0f6b4e352a0d1dd34bcb87b11f8b9be9d9ada6b488afa"
     }
+  },
+  {
+    "fields": {
+      "Name": "ETS (Exponential Smoothing)",
+      "Description": "ETS (Exponential Smoothing) — T5 forecasting.",
+      "ProblemTypes": "forecasting",
+      "DriverClass": "ets",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "BD6E706A-0735-4FF8-9277-75350F47277B"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T08:14:30.978Z",
+      "checksum": "314162d6e4b515120d4dea87c3966e8b7e2729465906a52b81829877d6bfe465"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ARIMA",
+      "Description": "ARIMA — T5 forecasting.",
+      "ProblemTypes": "forecasting",
+      "DriverClass": "arima",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DF3F1CD4-D578-4963-B0C0-95E9958D8098"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T08:14:30.994Z",
+      "checksum": "6ba3f90fc5ae6935fb965e08784ad2de9d0791d6de43f518bf6437faae3ef9e0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Seasonal Naive",
+      "Description": "Seasonal Naive — T5 forecasting.",
+      "ProblemTypes": "forecasting",
+      "DriverClass": "seasonal_naive",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "87C42DEB-3F57-4B19-B0DB-0B6D1E6F481E"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T08:14:31.009Z",
+      "checksum": "0b33a40e1c8b311a2cc0b270623b3f6d2a45351f506ab7d1d4317cfe45214797"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Simple Moving Average",
+      "Description": "Simple Moving Average — T5 forecasting.",
+      "ProblemTypes": "forecasting",
+      "DriverClass": "sma",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "7DD13BA4-7419-4DEA-9E15-E2ECB720BDFA"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T08:14:31.021Z",
+      "checksum": "5f0ad05810ec29f2d2fadb9ca2d6aa5badc7ccc61ab0d7862076f7fb81258142"
+    }
   }
 ]

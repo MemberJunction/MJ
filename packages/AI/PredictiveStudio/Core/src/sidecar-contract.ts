@@ -136,6 +136,22 @@ export interface SurvivalTargetSpec {
   event_col: string;
 }
 
+/**
+ * The forecasting series spec — names the time + value columns and the horizon
+ * (Doc 3 T5). The series is a single time-ordered column of values; validation is
+ * a trailing-window holdout, never a random split.
+ */
+export interface SeriesSpec {
+  /** Column name of the time index (ordered ascending). */
+  time_col: string;
+  /** Column name of the value to forecast. */
+  value_col: string;
+  /** Forecast horizon (number of future steps). */
+  horizon: number;
+  /** Seasonal period length (e.g. 12 monthly), when known. */
+  seasonal_periods?: number;
+}
+
 export interface TrainRequest {
   /** Sidecar algorithm driver key (e.g. `xgboost`, `lightgbm`, `logistic_regression`). */
   algorithm: string;
@@ -162,6 +178,8 @@ export interface TrainRequest {
    * mutually exclusive with `target`.
    */
   target_spec?: SurvivalTargetSpec;
+  /** The forecasting series spec (Doc 3 T5); present ONLY for the forecasting family. */
+  series_spec?: SeriesSpec;
   /** Inline matrix data (mutually exclusive with `data_ref`). */
   data?: MatrixData;
   /** Shared-storage handle to the matrix (Parquet/Arrow), used for very large sets. */

@@ -223,6 +223,7 @@ def _dummy_regressor(problem_type: str, hp: Dict[str, Any]):
 # --- T2: statsmodels count/GLM families (optional extra; sklearn-wrapped) ---
 from app import glm_wrappers as _glm  # noqa: E402
 from app import survival_wrappers as _surv  # noqa: E402
+from app import forecast_wrappers as _fc  # noqa: E402
 
 
 def _glm_factory(maker):
@@ -271,6 +272,11 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "cox_ph": _survival_placeholder,
     "weibull_aft": _survival_placeholder,
     "km": _survival_placeholder,
+    # T5 forecasting — handled by the forecast branch in main.py
+    "seasonal_naive": _survival_placeholder,
+    "sma": _survival_placeholder,
+    "ets": _survival_placeholder,
+    "arima": _survival_placeholder,
 }
 
 
@@ -295,6 +301,10 @@ _DRIVER_REQUIREMENTS = {
     "cox_ph": _surv._HAVE_LIFELINES,
     "weibull_aft": _surv._HAVE_LIFELINES,
     "km": _surv._HAVE_LIFELINES,
+    "seasonal_naive": True,
+    "sma": True,
+    "ets": _fc._HAVE_STATSMODELS_TS,
+    "arima": _fc._HAVE_STATSMODELS_TS,
 }
 
 
