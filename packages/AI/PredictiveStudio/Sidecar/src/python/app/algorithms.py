@@ -245,6 +245,9 @@ from app import sequence_wrappers as _seq  # noqa: E402
 from app import unsupervised_wrappers as _uns  # noqa: E402
 from app import rubric_wrappers as _rub  # noqa: E402
 from app import calibration_wrappers as _cal  # noqa: E402
+from app import clv_wrappers as _clv  # noqa: E402
+from app import reco_wrappers as _reco  # noqa: E402
+from app import pattern_wrappers as _pat  # noqa: E402
 
 
 def _glm_factory(maker):
@@ -343,6 +346,12 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     # Calibration (sklearn, no dep) — handled by the calibration branch in main.py
     "platt": _survival_placeholder,
     "isotonic": _survival_placeholder,
+    # T7 CLV / reco / pattern — handled by their own branches in main.py
+    "bg_nbd": _survival_placeholder,
+    "pareto_nbd": _survival_placeholder,
+    "gamma_gamma": _survival_placeholder,
+    "implicit_als": _survival_placeholder,
+    "association_rules": _survival_placeholder,
 }
 
 
@@ -390,6 +399,11 @@ _DRIVER_REQUIREMENTS = {
     "pca": True, "isolation_forest": True, "lda": True,
     "umap": _uns._HAVE_UMAP,
     "platt": True, "isotonic": True,
+    "bg_nbd": _clv._HAVE_LIFETIMES,
+    "pareto_nbd": _clv._HAVE_LIFETIMES,
+    "gamma_gamma": _clv._HAVE_LIFETIMES,
+    "implicit_als": _reco._HAVE_IMPLICIT,
+    "association_rules": _pat._HAVE_MLXTEND,
 }
 
 

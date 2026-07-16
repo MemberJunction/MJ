@@ -18,8 +18,9 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from fastapi import FastAPI, HTTPException
 
-from . import (algorithms, artifacts, calibration_wrappers, forecast_wrappers, metrics,
-               preprocessing, sequence_wrappers, survival_wrappers, unsupervised_wrappers)
+from . import (algorithms, artifacts, calibration_wrappers, clv_wrappers, forecast_wrappers,
+               metrics, pattern_wrappers, preprocessing, reco_wrappers, sequence_wrappers,
+               survival_wrappers, unsupervised_wrappers)
 from .schemas import (
     HealthResponse,
     PredictRequest,
@@ -71,11 +72,22 @@ def train(req: TrainRequest) -> TrainResponse:
             "implemented in v1).",
         )
     is_calibration = calibration_wrappers.is_calibration(req.algorithm)
+    is_clv = clv_wrappers.is_clv(req.algorithm)
+    is_reco = reco_wrappers.is_reco(req.algorithm)
+    is_pattern = pattern_wrappers.is_pattern(req.algorithm)
     is_unsup = unsupervised_wrappers.is_unsupervised(req.algorithm)
     is_sequence = sequence_wrappers.is_sequence(req.algorithm)
     is_forecast = forecast_wrappers.is_forecast(req.algorithm)
     is_survival = survival_wrappers.is_survival(req.algorithm)
-    if is_calibration:
+    if is_clv:
+        if req.clv_spec is None:
+            raise HTTPException(status_code=400, detail="CLV/BTYD models require `clv_spec` (frequency_col, recency_col, T_col).")
+    elif is_reco:
+        if req.reco_spec is None:
+            raise HTTPException(status_code=400, detail="Recommender requires `reco_spec` (user_col, item_col).")
+    elif is_pattern:
+        pass  # association rules mine the binary basket feature matrix directly
+    elif is_calibration:
         if req.target not in req.data.columns:
             raise HTTPException(status_code=400, detail=f"Calibrator requires a `target` column; '{req.target}' not found.")
     elif is_unsup:
@@ -103,7 +115,10 @@ def train(req: TrainRequest) -> TrainResponse:
 
     started = time.perf_counter()
     try:
-        result = (_run_calibration_training(req) if is_calibration else
+        result = (_run_clv_training(req) if is_clv else
+                  _run_reco_training(req) if is_reco else
+                  _run_pattern_training(req) if is_pattern else
+                  _run_calibration_training(req) if is_calibration else
                   _run_unsupervised_training(req) if is_unsup else
                   _run_sequence_training(req) if is_sequence else
                   _run_forecast_training(req) if is_forecast else
@@ -135,6 +150,88 @@ def train(req: TrainRequest) -> TrainResponse:
         duration_sec=round(duration, 4),
         holdout_metrics=result.get("holdout_metrics"),
     )
+
+
+def _run_clv_training(req) -> Dict[str, Any]:
+    """CLV / BTYD branch (Doc 3 T7). Reads the RFM summary columns from `clv_spec`,
+    fits a lifetimes model, and reports the fitted latent params (the recovery target)
+    + mean predicted future purchases / value over the horizon."""
+    cs = req.clv_spec
+    cols = list(req.data.columns)
+    rows = req.data.rows
+
+    def col(name):
+        i = cols.index(name)
+        return np.array([float(r[i]) for r in rows])
+
+    frequency, recency, T = col(cs.frequency_col), col(cs.recency_col), col(cs.T_col)
+    monetary = col(cs.monetary_col) if cs.monetary_col else None
+    model = clv_wrappers.build_clv(req.algorithm, dict(req.hyperparameters))
+    model.fit(frequency, recency, T, monetary)
+
+    if req.algorithm == "gamma_gamma":
+        pred = model.predict(cs.predict_horizon, frequency, monetary)
+        pred_metric = {"mean_expected_value": float(np.nanmean(pred))}
+    else:
+        pred = model.predict(cs.predict_horizon or 90.0, frequency, recency, T)
+        pred_metric = {"mean_expected_purchases": float(np.nanmean(pred))}
+
+    params = {f"param_{k}": v for k, v in model.params().items()}
+    return {
+        "estimator": model,
+        "fitted": {"output_columns": [cs.frequency_col], "clv_spec": cs.model_dump()},
+        "metrics": {**params, **pred_metric},
+        "feature_importance": {},
+        "training_row_count": len(rows),
+    }
+
+
+def _run_reco_training(req) -> Dict[str, Any]:
+    """Recommendation branch (Doc 3 T7). Reads (user, item, value) triples from
+    `reco_spec`, fits implicit ALS, and reports the factorization fit + shape. The
+    fitted user/item factors are the latent-embedding output."""
+    rs = req.reco_spec
+    cols = list(req.data.columns)
+    rows = req.data.rows
+    ui, ii = cols.index(rs.user_col), cols.index(rs.item_col)
+    users = [r[ui] for r in rows]
+    items = [r[ii] for r in rows]
+    if rs.value_col:
+        vi = cols.index(rs.value_col)
+        values = [float(r[vi]) for r in rows]
+    else:
+        values = [1.0] * len(rows)  # implicit: presence = confidence 1
+
+    model = reco_wrappers.build_reco(
+        req.algorithm, {**dict(req.hyperparameters), "factors": rs.factors or 16})
+    model.fit(users, items, values)
+    return {
+        "estimator": model,
+        "fitted": {"output_columns": [rs.user_col], "reco_spec": rs.model_dump()},
+        "metrics": model.metrics(),
+        "feature_importance": {},
+        "training_row_count": len(rows),
+    }
+
+
+def _run_pattern_training(req) -> Dict[str, Any]:
+    """Association-rule branch (Doc 3 T7). Treats the feature matrix as a one-hot
+    basket (rows=transactions, columns=items), mines frequent itemsets → rules, and
+    reports the rule count + max lift. The rules ARE the model (no per-row predict)."""
+    cols = list(req.data.columns)
+    item_names = [f.Name for f in req.feature_schema] if req.feature_schema else cols
+    idx = [cols.index(c) for c in item_names]
+    matrix = np.array([[float(r[j]) for j in idx] for r in req.data.rows])
+
+    model = pattern_wrappers.build_pattern(req.algorithm, dict(req.hyperparameters))
+    model.fit(matrix, item_names)
+    return {
+        "estimator": model,
+        "fitted": {"output_columns": item_names, "rules": model.rules_},
+        "metrics": model.metrics(),
+        "feature_importance": {},
+        "training_row_count": len(req.data.rows),
+    }
 
 
 def _run_calibration_training(req) -> Dict[str, Any]:

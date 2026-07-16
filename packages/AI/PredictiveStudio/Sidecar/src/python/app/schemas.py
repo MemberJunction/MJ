@@ -109,6 +109,27 @@ class SequenceSpec(BaseModel):
     n_states: Optional[int] = 3
 
 
+class CLVSpec(BaseModel):
+    """CLV / BTYD spec (Doc 3 T7): the RFM summary columns the lifetimes models
+    consume. ``monetary_col`` is required only by Gamma-Gamma (spend per txn)."""
+
+    frequency_col: str
+    recency_col: str
+    T_col: str
+    monetary_col: Optional[str] = None
+    predict_horizon: Optional[float] = 90.0  # units of T (e.g. days) to project purchases
+
+
+class RecoSpec(BaseModel):
+    """Recommendation spec (Doc 3 T7): the interaction-triple columns for ALS.
+    ``value_col`` (confidence / rating) is optional — absent means implicit 1s."""
+
+    user_col: str
+    item_col: str
+    value_col: Optional[str] = None
+    factors: Optional[int] = 16
+
+
 class TrainRequest(BaseModel):
     """``POST /train`` request body."""
 
@@ -125,6 +146,8 @@ class TrainRequest(BaseModel):
     target_spec: Optional[SurvivalTargetSpec] = None
     series_spec: Optional[SeriesSpec] = None
     sequence_spec: Optional[SequenceSpec] = None
+    clv_spec: Optional[CLVSpec] = None
+    reco_spec: Optional[RecoSpec] = None
     data: Optional[MatrixData] = None
     data_ref: Optional[str] = None  # shared-storage handle (not implemented in v1)
     # The locked holdout (plan §8.2): rows carved off by the orchestrator BEFORE

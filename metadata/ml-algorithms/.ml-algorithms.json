@@ -822,5 +822,60 @@
       "SupportsFeatureImportance": false,
       "Status": "Active"
     }
+  },
+  {
+    "fields": {
+      "Name": "BG/NBD",
+      "Description": "BG/NBD \u2014 Beta-Geometric/NBD repeat-purchase + dropout CLV model (lifetimes).",
+      "ProblemTypes": "clv",
+      "DriverClass": "bg_nbd",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gamma-Gamma",
+      "Description": "Gamma-Gamma \u2014 expected monetary value per transaction (lifetimes; pairs with BG/NBD).",
+      "ProblemTypes": "clv",
+      "DriverClass": "gamma_gamma",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pareto/NBD",
+      "Description": "Pareto/NBD \u2014 continuous-dropout repeat-purchase CLV model (lifetimes).",
+      "ProblemTypes": "clv",
+      "DriverClass": "pareto_nbd",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Implicit ALS",
+      "Description": "Implicit ALS \u2014 implicit-feedback matrix factorization over interaction triples (implicit).",
+      "ProblemTypes": "recommendation",
+      "DriverClass": "implicit_als",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Association Rules",
+      "Description": "Association Rules \u2014 apriori frequent-itemset \u2192 rule mining over baskets (mlxtend).",
+      "ProblemTypes": "pattern-mining",
+      "DriverClass": "association_rules",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
   }
 ]

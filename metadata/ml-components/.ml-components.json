@@ -1024,7 +1024,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=BG/NBD"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -1137,7 +1138,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Gamma-Gamma"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -1233,7 +1235,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Pareto/NBD"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -3447,7 +3450,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Association Rules"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -3589,7 +3593,8 @@
       "SupportsFeatureImportance": false,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Implicit ALS"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
