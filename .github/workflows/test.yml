@@ -21,8 +21,10 @@ on:
       - '.github/scripts/check-esm-imports.mjs'
       - '.github/scripts/vitest.config.mts'
       - '.github/scripts/__tests__/**'
-      # The DOM-spec placement guard runs in this workflow too.
+      # The DOM-spec guards/gates run in this workflow too.
       - 'scripts/check-dom-spec-placement.mjs'
+      - 'scripts/check-spec-antipatterns.mjs'
+      - 'scripts/classify-explorer-components.mjs'
   # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
@@ -97,11 +99,23 @@ jobs:
           ENVEOF
           sed -i 's/^          //' packages/MJExplorer/src/environments/environment.ts
 
-      # Fast pure-file guard (no build needed): a *.dom.test.ts placed inside __tests__/ is
-      # silently excluded from BOTH projects of a dual-preset package (and passWithNoTests
-      # hides the silence). Fails loud here instead.
+      # Fast pure-file guards (no build needed), all Phase-4 "keep tests honest" gates:
+      # 1) A *.dom.test.ts placed inside __tests__/ is silently excluded from BOTH projects
+      #    of a dual-preset package (and passWithNoTests hides the silence). Fails loud here.
+      # 2) Anti-pattern lint: vacuous assertions (expect(true), || true), skipped specs,
+      #    blanket schemas, any/never casts — the test-theater patterns human review kept
+      #    having to catch by hand in Phase 3.
+      # 3) Explorer DOM coverage gate: new Explorer components land as in-scope-uncovered by
+      #    default, so shipping a testable component without a DOM spec drops the percentage —
+      #    this fails the PR before the gap becomes silent. (Lenient 85 vs. the current 100.)
       - name: DOM-spec placement guard
         run: node scripts/check-dom-spec-placement.mjs packages
+
+      - name: DOM-spec anti-pattern lint
+        run: node scripts/check-spec-antipatterns.mjs packages
+
+      - name: Explorer DOM coverage gate
+        run: node scripts/classify-explorer-components.mjs --min 85
 
       # Decide what to run:
       #  - pull_request: only packages changed since the base branch PLUS everything that
