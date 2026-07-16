@@ -3786,7 +3786,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=HMM (Gaussian)"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -3898,8 +3899,8 @@
       "ID": "440BF844-933C-43C0-946A-1796D1536978"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.347Z",
-      "checksum": "0fe2359e37b9c83d14d7fae93981474b8b367c7a7f8b4f5ea5642fe986dc9bc1"
+      "lastModified": "2026-07-16T08:19:58.734Z",
+      "checksum": "b4a34af71251b64fa7bc161bd9de6e49e029b8d4a3387f464b5d93e31b21c964"
     }
   },
   {

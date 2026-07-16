@@ -562,5 +562,23 @@
       "lastModified": "2026-07-16T08:16:35.624Z",
       "checksum": "a129e82541dff58dc097550488a1ac126d90d48f8ef6d4f1345fd5fcb6b2f9ef"
     }
+  },
+  {
+    "fields": {
+      "Name": "HMM (Gaussian)",
+      "Description": "HMM (Gaussian) — T6 sequence-state (hmmlearn, optional extra).",
+      "ProblemTypes": "sequence-state",
+      "DriverClass": "hmm",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D0325DB7-FE42-4777-B9D8-A823354693C9"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T08:19:53.863Z",
+      "checksum": "7e88821d6bd1b69263e047825b9f50f7785f726c08809b4448bb9df74df11024"
+    }
   }
 ]

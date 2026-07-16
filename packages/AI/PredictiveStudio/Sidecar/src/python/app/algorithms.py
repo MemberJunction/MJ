@@ -224,6 +224,7 @@ def _dummy_regressor(problem_type: str, hp: Dict[str, Any]):
 from app import glm_wrappers as _glm  # noqa: E402
 from app import survival_wrappers as _surv  # noqa: E402
 from app import forecast_wrappers as _fc  # noqa: E402
+from app import sequence_wrappers as _seq  # noqa: E402
 
 
 def _glm_factory(maker):
@@ -279,6 +280,7 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "arima": _survival_placeholder,
     "theta": _survival_placeholder,
     "croston": _survival_placeholder,
+    "hmm": _survival_placeholder,
 }
 
 
@@ -309,6 +311,7 @@ _DRIVER_REQUIREMENTS = {
     "arima": _fc._HAVE_STATSMODELS_TS,
     "theta": _fc._HAVE_STATSMODELS_TS,
     "croston": True,
+    "hmm": _seq._HAVE_HMMLEARN,
 }
 
 

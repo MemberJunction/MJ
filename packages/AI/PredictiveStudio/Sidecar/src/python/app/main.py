@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from fastapi import FastAPI, HTTPException
 
-from . import algorithms, artifacts, forecast_wrappers, metrics, preprocessing, survival_wrappers
+from . import algorithms, artifacts, forecast_wrappers, metrics, preprocessing, sequence_wrappers, survival_wrappers
 from .schemas import (
     HealthResponse,
     PredictRequest,
@@ -69,9 +69,13 @@ def train(req: TrainRequest) -> TrainResponse:
             detail="Inline `data` is required (data_ref shared-storage is not "
             "implemented in v1).",
         )
+    is_sequence = sequence_wrappers.is_sequence(req.algorithm)
     is_forecast = forecast_wrappers.is_forecast(req.algorithm)
     is_survival = survival_wrappers.is_survival(req.algorithm)
-    if is_forecast:
+    if is_sequence:
+        if req.sequence_spec is None:
+            raise HTTPException(status_code=400, detail="Sequence-state algorithms require `sequence_spec` (group_col, order_col).")
+    elif is_forecast:
         if req.series_spec is None:
             raise HTTPException(status_code=400, detail="Forecasting algorithms require `series_spec` (time_col, value_col, horizon).")
         for c in (req.series_spec.time_col, req.series_spec.value_col):
@@ -91,7 +95,8 @@ def train(req: TrainRequest) -> TrainResponse:
 
     started = time.perf_counter()
     try:
-        result = (_run_forecast_training(req) if is_forecast else
+        result = (_run_sequence_training(req) if is_sequence else
+                  _run_forecast_training(req) if is_forecast else
                   _run_survival_training(req) if is_survival else _run_training(req))
     except algorithms.AlgorithmNotSupportedError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -120,6 +125,27 @@ def train(req: TrainRequest) -> TrainResponse:
         duration_sec=round(duration, 4),
         holdout_metrics=result.get("holdout_metrics"),
     )
+
+
+def _run_sequence_training(req) -> Dict[str, Any]:
+    """Sequence-state branch (Doc 3 T6). Groups rows into per-entity sequences, fits a
+    Gaussian HMM over the observations, and reports the fit log-likelihood + state count.
+    The fitted HMM decodes the per-row latent state at /predict (the cadence-state feature)."""
+    sq = req.sequence_spec
+    cols = list(req.data.columns)
+    feature_cols = [f.Name for f in req.feature_schema] if req.feature_schema else \
+        [c for c in cols if c not in (sq.group_col, sq.order_col)]
+    X, lengths, _order = sequence_wrappers.group_sequences(
+        req.data.rows, cols, sq.group_col, sq.order_col, feature_cols)
+    model = sequence_wrappers.build_sequence(req.algorithm, {"n_states": sq.n_states or 3})
+    model.fit(X, lengths)
+    ll = model.log_likelihood(X, lengths)
+    return {
+        "estimator": model, "fitted": {"output_columns": feature_cols, "sequence_spec": sq.model_dump()},
+        "metrics": {"log_likelihood": ll, "n_states": float(sq.n_states or 3)},
+        "feature_importance": {},
+        "training_row_count": len(req.data.rows),
+    }
 
 
 def _run_forecast_training(req) -> Dict[str, Any]:

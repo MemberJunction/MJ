@@ -101,6 +101,14 @@ class SeriesSpec(BaseModel):
     seasonal_periods: Optional[int] = None
 
 
+class SequenceSpec(BaseModel):
+    """Sequence-state spec (Doc 3 T6)."""
+
+    group_col: str
+    order_col: str
+    n_states: Optional[int] = 3
+
+
 class TrainRequest(BaseModel):
     """``POST /train`` request body."""
 
@@ -116,6 +124,7 @@ class TrainRequest(BaseModel):
     target: Optional[str] = None
     target_spec: Optional[SurvivalTargetSpec] = None
     series_spec: Optional[SeriesSpec] = None
+    sequence_spec: Optional[SequenceSpec] = None
     data: Optional[MatrixData] = None
     data_ref: Optional[str] = None  # shared-storage handle (not implemented in v1)
     # The locked holdout (plan §8.2): rows carved off by the orchestrator BEFORE

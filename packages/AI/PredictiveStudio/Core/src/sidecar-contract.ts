@@ -152,6 +152,20 @@ export interface SeriesSpec {
   seasonal_periods?: number;
 }
 
+/**
+ * The sequence-state spec (Doc 3 T6) — rows grouped by `group_col` and ordered by
+ * `order_col`; the model infers latent state over each per-group sequence. The
+ * observation columns are the `feature_schema`.
+ */
+export interface SequenceSpec {
+  /** Column grouping rows into per-entity sequences. */
+  group_col: string;
+  /** Column ordering rows within a group (ascending). */
+  order_col: string;
+  /** Number of hidden states to infer. */
+  n_states?: number;
+}
+
 export interface TrainRequest {
   /** Sidecar algorithm driver key (e.g. `xgboost`, `lightgbm`, `logistic_regression`). */
   algorithm: string;
@@ -180,6 +194,8 @@ export interface TrainRequest {
   target_spec?: SurvivalTargetSpec;
   /** The forecasting series spec (Doc 3 T5); present ONLY for the forecasting family. */
   series_spec?: SeriesSpec;
+  /** The sequence-state spec (Doc 3 T6); present ONLY for the sequence-state family. */
+  sequence_spec?: SequenceSpec;
   /** Inline matrix data (mutually exclusive with `data_ref`). */
   data?: MatrixData;
   /** Shared-storage handle to the matrix (Parquet/Arrow), used for very large sets. */
