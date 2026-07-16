@@ -71,7 +71,7 @@ function skipIfUnusable(fx: RlsFixture | undefined, checkId: string): fx is RlsF
  * Emails of the purpose-built RLS test users seeded via version-controlled metadata. These
  * principals (users + the "Integration Test: RLS Scoped Reader" role + its entity-permission grant)
  * live in the SIBLING `metadata-integration-fixtures/` root — NOT the default-pushed `metadata/`
- * tree — so they never land in a production DB that only syncs `metadata/` (R2). A/B are each in
+ * tree — so they never land in a production DB that only syncs `metadata/`. A/B are each in
  * ONLY that role → genuinely scoped (non-exempt) on SEEDED_RLS_ENTITY; the no-grant user has no
  * roles. Kept in sync with the fixtures by convention (change both together).
  */

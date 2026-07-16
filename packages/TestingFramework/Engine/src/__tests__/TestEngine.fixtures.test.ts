@@ -85,8 +85,10 @@ function fakeType(): MJTestTypeEntity {
 function fakeTests(names: string[]): MJTestEntity[] {
     return names.map((Name, i) => ({ ID: `test-${i}`, Name, TypeID: TYPE_ID, Variables: null, RepeatCount: null, MaxExecutionTimeMS: null } as unknown as MJTestEntity));
 }
-function fakeSuiteTests(tests: MJTestEntity[]): MJTestSuiteTestEntity[] {
-    return tests.map((t, i) => ({ SuiteID: SUITE_ID, TestID: t.ID, Sequence: i + 1, Status: 'Active' } as unknown as MJTestSuiteTestEntity));
+function fakeSuiteTests(tests: MJTestEntity[], statuses?: Array<string | null>): MJTestSuiteTestEntity[] {
+    return tests.map((t, i) => ({
+        SuiteID: SUITE_ID, TestID: t.ID, Sequence: i + 1, Status: statuses ? statuses[i] : 'Active'
+    } as unknown as MJTestSuiteTestEntity));
 }
 
 // The engine surface we spy/stub. Casting to this shape (not `any`) lets us reach the
@@ -102,8 +104,12 @@ interface EnginePrivates {
 
 let suiteRunCounter = 0;
 
-/** Spy the engine's cache getters + entity create/update so RunSuite runs DB-free. */
-function wireEngine(tests: MJTestEntity[]): TestEngine {
+/**
+ * Spy the engine's cache getters + entity create/update so RunSuite runs DB-free.
+ * `statuses` (optional) sets each membership's MJTestSuiteTest.Status in parallel to `tests`;
+ * omit for the default all-`'Active'` behavior.
+ */
+function wireEngine(tests: MJTestEntity[], statuses?: Array<string | null>): TestEngine {
     const engine = TestEngine.Instance;
     const priv = engine as unknown as EnginePrivates;
     priv._driverCache.clear(); // never reuse a driver instance across tests
@@ -112,7 +118,7 @@ function wireEngine(tests: MJTestEntity[]): TestEngine {
     vi.spyOn(engine, 'GetTestsForSuite').mockReturnValue(tests);
     vi.spyOn(engine, 'GetTestByID').mockImplementation((id: string) => tests.find(t => t.ID === id));
     vi.spyOn(engine, 'GetTestTypeByID').mockReturnValue(fakeType());
-    vi.spyOn(engine, 'TestSuiteTests', 'get').mockReturnValue(fakeSuiteTests(tests));
+    vi.spyOn(engine, 'TestSuiteTests', 'get').mockReturnValue(fakeSuiteTests(tests, statuses));
 
     vi.spyOn(priv, 'createSuiteRun').mockImplementation(async () => {
         suiteRunCounter++;
@@ -193,6 +199,24 @@ describe('TestEngine suite-scoped fixture lifecycle', () => {
 
         expect(behavior.teardownCalls).toBe(1);
         expect(updateSuiteRunSpy).toHaveBeenCalledTimes(1); // ran despite the teardown throw
+    });
+
+    it('excludes non-Active suite memberships (Skip / Disabled) and runs Active + null-status tests (C5)', async () => {
+        const tests = fakeTests(['ActiveTest', 'SkipTest', 'DisabledTest', 'NullStatusTest']);
+        const executed: string[] = [];
+        behavior.executeFor = async (name) => { executed.push(name); return passResult(); };
+        // Membership statuses parallel to `tests`: only 'Active' and null (defensive default) run.
+        const engine = wireEngine(tests, ['Active', 'Skip', 'Disabled', null]);
+
+        const result = await engine.RunSuite(SUITE_ID, { verbose: false }, USER);
+
+        // Skip/Disabled memberships never reach the driver; Active + null-status do.
+        expect(executed.sort()).toEqual(['ActiveTest', 'NullStatusTest']);
+        expect(result.testResults).toHaveLength(2);
+        expect(result.testResults.map(r => r.testName).sort()).toEqual(['ActiveTest', 'NullStatusTest']);
+        // The suite fixture lifecycle still brackets the filtered run exactly once.
+        expect(behavior.setupCalls).toBe(1);
+        expect(behavior.teardownCalls).toBe(1);
     });
 
     it('gives each suite run a FRESH fixture context (no leak through the cached driver)', async () => {

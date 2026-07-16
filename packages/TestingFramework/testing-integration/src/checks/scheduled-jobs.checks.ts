@@ -93,9 +93,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('scheduled-jobs', {
         // need — the engine's lease + run-lifecycle + stats contract runs identically on success or failure.
         job.Configuration = JSON.stringify({ RecordProcessID: '00000000-0000-0000-0000-000000000000' });
         Assert(await job.Save(), `creating the test scheduled job failed: ${job.LatestResult?.CompleteMessage}`);
-        await engine.Config(true, ctx.User); // make the engine aware of the new job
-
+        // Publish the fixture handle IMMEDIATELY after the save — before the throwable Config refresh
+        // below — so a crash there can never orphan the just-created job; Teardown always sweeps it.
         ctx.ScheduledJobsFixture = { Job: job };
+        await engine.Config(true, ctx.User); // make the engine aware of the new job
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         if (!ctx.ScheduledJobsFixture) {

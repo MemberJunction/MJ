@@ -84,6 +84,4 @@ metadata/test-suites/
 └── .integration-suite.json  # "Integration Test Suite" + ordered MJ: Test Suite Tests (IT03 = Skip)
 ```
 
-See the full S/C/Q → checkId mapping in
-[`packages/TestingFramework/testing-integration/CHECK_MAP.md`](../../../packages/TestingFramework/testing-integration/CHECK_MAP.md)
-and the orientation doc [`guides/INTEGRATION_TESTING_QUICKSTART.md`](../../../guides/INTEGRATION_TESTING_QUICKSTART.md).
+See the orientation doc [`guides/INTEGRATION_TESTING_QUICKSTART.md`](../../../guides/INTEGRATION_TESTING_QUICKSTART.md).

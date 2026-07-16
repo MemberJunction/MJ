@@ -583,9 +583,6 @@ npx tsx packages/MJServer/integration-test-scripts/dataset-cache-tests.ts
 MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test run --name "IT07 - Dataset Cache (DatasetCache category)"
 ```
 
-Keep the bundle's entry in
-[`CHECK_MAP.md`](../packages/TestingFramework/testing-integration/CHECK_MAP.md) current.
-
 ### Method 2 — create a new bundle (new coverage area)
 
 **1. Write the bundle** — `src/checks/<area>.checks.ts`:
@@ -790,9 +787,8 @@ Script-only suites (no bundle): `lists-tests.ts`, `user-routines-tests.ts`,
 scripts.
 
 > Some checks are **executable bug reproductions**: they encode the *correct* invariant and
-> stay red until the product fix lands. The ledger — symptom, root cause, proposed fix per
-> check — is
-> [`CACHE_INTEGRITY_BUGS.md`](../packages/TestingFramework/testing-integration/CACHE_INTEGRITY_BUGS.md).
+> stay red until the product fix lands. Each documents its symptom, root cause, and proposed
+> fix inline in the bundle source.
 
 ### 5.2 Key paths
 
@@ -809,9 +805,6 @@ scripts.
 
 ### 5.3 Further reading
 
-- **Check ↔ Test map:**
-  [`CHECK_MAP.md`](../packages/TestingFramework/testing-integration/CHECK_MAP.md) — every check
-  id, its bundle, its Test row, and its gating.
 - **Suite deep dive:**
   [`packages/MJServer/integration-test-scripts/README.md`](../packages/MJServer/integration-test-scripts/README.md)
   — the design under test per suite, the full check inventories, and the hard-won gotchas

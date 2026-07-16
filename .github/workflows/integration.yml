@@ -151,6 +151,22 @@ jobs:
       - name: Sync push — seed the RLS integration fixtures (sibling root)
         run: node packages/MJCLI/bin/run.js sync push --dir=metadata-integration-fixtures --ci
 
+      # Assert the fixtures actually landed. `mj sync push` can, in principle, exit 0 without
+      # seeding (e.g. a silent no-op); if the 3 @integration.test principals are absent, the
+      # deterministic RLS8/9/10 checks skip-as-pass and the tier's strongest coverage silently
+      # stops running while the gate stays green. Fail loudly here instead (R2 follow-up).
+      - name: Verify RLS integration fixtures were seeded
+        run: |
+          COUNT=$(docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -d test -h -1 -W \
+            -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM __mj.[User] WHERE Email LIKE '%@integration.test';")
+          COUNT=$(echo "$COUNT" | tr -d '[:space:]')
+          echo "Seeded @integration.test fixture users: ${COUNT}/3"
+          if [ "${COUNT:-0}" -lt 3 ]; then
+            echo "::error::RLS integration fixtures were not seeded (found ${COUNT}/3 @integration.test users). The fixtures sync push may have exited 0 without seeding — the deterministic RLS8/9/10 checks would silently skip-as-pass. Re-run: mj sync push --dir=metadata-integration-fixtures" >&2
+            exit 1
+          fi
+
       # The deterministic aggregator: run-all.ts spawns each suite via `npx tsx` and gates the
       # job on its 0/1/2 exit contract (0 = all passed/skipped, 1 = failures, 2 = bootstrap
       # error). PS_INTEGRATION / RUN_AGENT_TESTS are deliberately unset (no token cost /
