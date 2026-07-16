@@ -332,6 +332,7 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "kalman_dlm": _survival_placeholder,
     "markov_switching": _survival_placeholder,
     "var": _survival_placeholder,
+    "prophet": _survival_placeholder,
     "hmm": _survival_placeholder,
     "markov_chain": _survival_placeholder,
     # T3 unsupervised (sklearn, no dep) — handled by the unsupervised branch
@@ -393,6 +394,7 @@ _DRIVER_REQUIREMENTS = {
     "kalman_dlm": _fc._HAVE_STATSMODELS_TS,
     "markov_switching": _fc._HAVE_STATSMODELS_TS,
     "var": _fc._HAVE_STATSMODELS_TS,
+    "prophet": _fc._HAVE_PROPHET,
     "hmm": _seq._HAVE_HMMLEARN,
     "markov_chain": True,
     "kmeans": True, "dbscan": True, "gmm": True, "hierarchical": True,

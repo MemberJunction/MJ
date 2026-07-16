@@ -877,5 +877,16 @@
       "SupportsFeatureImportance": false,
       "Status": "Active"
     }
+  },
+  {
+    "fields": {
+      "Name": "Prophet",
+      "Description": "Prophet \u2014 additive trend+seasonality+holidays forecaster (optional heavy extra).",
+      "ProblemTypes": "forecasting",
+      "DriverClass": "prophet",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
   }
 ]

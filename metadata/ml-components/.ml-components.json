@@ -1715,7 +1715,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Prophet"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [

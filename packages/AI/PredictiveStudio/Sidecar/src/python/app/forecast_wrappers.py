@@ -17,6 +17,14 @@ from typing import Any, Dict
 import numpy as np
 
 try:
+    import pandas as pd
+    from prophet import Prophet
+
+    _HAVE_PROPHET = True
+except Exception:  # pragma: no cover
+    _HAVE_PROPHET = False
+
+try:
     from statsmodels.tsa.arima.model import ARIMA
     from statsmodels.tsa.forecasting.theta import ThetaModel
     from statsmodels.tsa.holtwinters import ExponentialSmoothing
@@ -205,6 +213,35 @@ class _MarkovSwitching:
         return np.full(h, self._level)
 
 
+class _Prophet:
+    """Prophet: additive trend + seasonality + holidays forecaster. The sidecar
+    contract passes a bare value series + horizon, so we synthesize a daily date
+    index (the real calendar handling lives upstream); Prophet fits trend/seasonality
+    and forecasts the horizon. Heaviest optional extra (pulls cmdstanpy)."""
+
+    def __init__(self, seasonal_periods: int | None = None, **hp: Any):
+        self.seasonal_periods = seasonal_periods
+        self._model = None
+        self._n = 0
+
+    def fit(self, y):
+        ya = np.asarray(y, dtype=float)
+        self._n = len(ya)
+        ds = pd.date_range("2000-01-01", periods=self._n, freq="D")
+        df = pd.DataFrame({"ds": ds, "y": ya})
+        weekly = bool(self.seasonal_periods and self.seasonal_periods == 7)
+        yearly = bool(self.seasonal_periods and self.seasonal_periods >= 12 and self._n >= 2 * self.seasonal_periods)
+        self._model = Prophet(weekly_seasonality=weekly, yearly_seasonality=yearly,
+                              daily_seasonality=False)
+        self._model.fit(df)
+        return self
+
+    def forecast(self, h: int):
+        future = self._model.make_future_dataframe(periods=h, freq="D")
+        fc = self._model.predict(future)
+        return np.asarray(fc["yhat"].values[-h:])
+
+
 class _VAR:
     """Vector autoregression: a MULTIVARIATE forecaster where each series is a
     linear function of the recent lags of ALL series (cross-series dynamics). Fits
@@ -245,11 +282,20 @@ _FORECAST_REGISTRY = {
     "kalman_dlm": _KalmanDLM,
     "markov_switching": _MarkovSwitching,
     "var": _VAR,
+    "prophet": _Prophet,
 }
 
 # floors + croston need no statsmodels; the rest do
 _NEEDS_STATSMODELS = {"ets", "arima", "theta", "structural_ts", "kalman_dlm",
                       "markov_switching", "var"}
+
+
+def runnable(algorithm: str) -> bool:
+    if algorithm not in _FORECAST_REGISTRY:
+        return False
+    if algorithm == "prophet":
+        return _HAVE_PROPHET
+    return algorithm not in _NEEDS_STATSMODELS or _HAVE_STATSMODELS_TS
 
 
 def is_multivariate(algorithm: str) -> bool:
@@ -259,12 +305,6 @@ def is_multivariate(algorithm: str) -> bool:
 
 def is_forecast(algorithm: str) -> bool:
     return algorithm in _FORECAST_REGISTRY
-
-
-def runnable(algorithm: str) -> bool:
-    if algorithm not in _FORECAST_REGISTRY:
-        return False
-    return algorithm not in _NEEDS_STATSMODELS or _HAVE_STATSMODELS_TS
 
 
 def build_forecast(algorithm: str, hp: Dict[str, Any]):
