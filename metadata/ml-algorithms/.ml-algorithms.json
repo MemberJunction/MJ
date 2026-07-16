@@ -526,5 +526,41 @@
       "lastModified": "2026-07-16T08:14:31.021Z",
       "checksum": "5f0ad05810ec29f2d2fadb9ca2d6aa5badc7ccc61ab0d7862076f7fb81258142"
     }
+  },
+  {
+    "fields": {
+      "Name": "Theta Method",
+      "Description": "Theta Method — T5 forecasting.",
+      "ProblemTypes": "forecasting",
+      "DriverClass": "theta",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "1D6BE3C9-4025-4D9C-B4D1-C1C32B8B842D"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T08:16:35.608Z",
+      "checksum": "6734a9f16d346823ade1df69c379061678b0d6968f250b5407ed7ab0218a5ed8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Croston's Method",
+      "Description": "Croston's Method — T5 forecasting.",
+      "ProblemTypes": "forecasting",
+      "DriverClass": "croston",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E44FAB58-5872-4FA2-8D5D-33AAC4E495A4"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T08:16:35.624Z",
+      "checksum": "a129e82541dff58dc097550488a1ac126d90d48f8ef6d4f1345fd5fcb6b2f9ef"
+    }
   }
 ]

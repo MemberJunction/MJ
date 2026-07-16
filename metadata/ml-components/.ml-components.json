@@ -1562,7 +1562,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Croston's Method"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -1606,8 +1607,8 @@
       "ID": "8D0FFDD6-02D6-4473-A6C6-B3CDD81B5F81"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:32.983Z",
-      "checksum": "5edcd7e5e21390c4f5cc14da999f0139367919d3d4ca2acf724a8dffbbe157bb"
+      "lastModified": "2026-07-16T08:16:40.164Z",
+      "checksum": "07a2b4be4ac7f17e923ed28499d4cfd599dc4155e6c0638e62a45e50980b8175"
     }
   },
   {
@@ -1909,7 +1910,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Theta Method"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -1953,8 +1955,8 @@
       "ID": "6E3430BB-E397-4906-9D0A-0E399F3CBDF9"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.047Z",
-      "checksum": "22734701db0152408ff478d53106a1d5e0e7274ad282dacab90343719c60ee80"
+      "lastModified": "2026-07-16T08:16:40.199Z",
+      "checksum": "9081f1ab226875e784d9df0136be1a148ddc6ab1835356c55c904ec510056527"
     }
   },
   {

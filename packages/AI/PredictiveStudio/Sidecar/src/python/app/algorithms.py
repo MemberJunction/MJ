@@ -277,6 +277,8 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "sma": _survival_placeholder,
     "ets": _survival_placeholder,
     "arima": _survival_placeholder,
+    "theta": _survival_placeholder,
+    "croston": _survival_placeholder,
 }
 
 
@@ -305,6 +307,8 @@ _DRIVER_REQUIREMENTS = {
     "sma": True,
     "ets": _fc._HAVE_STATSMODELS_TS,
     "arima": _fc._HAVE_STATSMODELS_TS,
+    "theta": _fc._HAVE_STATSMODELS_TS,
+    "croston": True,
 }
 
 

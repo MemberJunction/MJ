@@ -18,6 +18,7 @@ import numpy as np
 
 try:
     from statsmodels.tsa.arima.model import ARIMA
+    from statsmodels.tsa.forecasting.theta import ThetaModel
     from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
     _HAVE_STATSMODELS_TS = True
@@ -93,15 +94,63 @@ class _ARIMA:
         return np.asarray(self._result.forecast(h))
 
 
+class _Theta:
+    """The Theta method — a competition-strong, simple decomposition forecaster."""
+
+    def __init__(self, seasonal_periods: int | None = None, **hp: Any):
+        self.seasonal_periods = seasonal_periods
+        self._result = None
+
+    def fit(self, y):
+        ya = np.asarray(y, dtype=float)
+        period = self.seasonal_periods if (self.seasonal_periods and len(ya) >= 2 * self.seasonal_periods) else None
+        self._result = ThetaModel(ya, period=period).fit()
+        return self
+
+    def forecast(self, h: int):
+        return np.asarray(self._result.forecast(h))
+
+
+class _Croston:
+    """Croston's method for intermittent (sparse, bursty) demand — separately
+    smooths the nonzero demand size and the inter-arrival interval, held flat."""
+
+    def __init__(self, alpha: float = 0.1, **hp: Any):
+        self.alpha = float(alpha)
+        self._rate = 0.0
+
+    def fit(self, y):
+        ya = np.asarray(y, dtype=float)
+        nz = np.flatnonzero(ya > 0)
+        if len(nz) == 0:
+            self._rate = 0.0
+            return self
+        sizes = ya[nz]
+        intervals = np.diff(np.concatenate([[-1], nz]))  # gaps between nonzero points
+        z = sizes[0]
+        p = intervals[0]
+        a = self.alpha
+        for i in range(1, len(sizes)):
+            z = a * sizes[i] + (1 - a) * z
+            p = a * intervals[i] + (1 - a) * p
+        self._rate = float(z / max(p, 1e-9))
+        return self
+
+    def forecast(self, h: int):
+        return np.full(h, self._rate)
+
+
 _FORECAST_REGISTRY = {
     "seasonal_naive": _SeasonalNaive,
     "sma": _SMA,
     "ets": _ETS,
     "arima": _ARIMA,
+    "theta": _Theta,
+    "croston": _Croston,
 }
 
-# floors need no statsmodels; ETS/ARIMA do
-_NEEDS_STATSMODELS = {"ets", "arima"}
+# floors + croston need no statsmodels; ETS/ARIMA/theta do
+_NEEDS_STATSMODELS = {"ets", "arima", "theta"}
 
 
 def is_forecast(algorithm: str) -> bool:
