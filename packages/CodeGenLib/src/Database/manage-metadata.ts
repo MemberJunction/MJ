@@ -8,7 +8,7 @@ import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, dbPlatform, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExternalDataSourceReadRouter, ExternalSchemaObject, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
-import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
+import { logError, logMessage, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
@@ -1021,56 +1021,62 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Auto-detects IS-A (Table-Per-Type / shared-PK-FK) relationships directly from the schema and
-    * sets Entity.ParentID on each detected child — the schema-driven sibling of
-    * {@link processISARelationshipConfig} (which requires each pair to be declared in config).
+    * ADVISORY ONLY — reports schema shapes that LOOK like an undeclared IS-A (Table-Per-Type)
+    * relationship, and never mutates metadata. IS-A intent must be DECLARED, either in the
+    * additionalSchemaInfo config ({@link processISARelationshipConfig}) or via an `@lookup` on
+    * Entity.ParentID in a metadata-sync file. This pass only tells you when the schema looks like
+    * you may have MEANT to declare one.
     *
-    * A child entity is IS-A when its SINGLE primary-key field is ALSO a foreign key whose target is
-    * the parent entity's SINGLE primary-key column (the Disjoint pattern, e.g. EventProduct.ID PK +
-    * FK to Product.ID). We require single-column PKs on BOTH sides and that the FK references the
-    * parent's PK column (not some other unique column), so an ordinary FK is never misclassified.
+    * WHY ADVISORY AND NOT AUTOMATIC: the physical shape (a single PK that is also an FK to the
+    * parent's single PK) is NECESSARY but NOT SUFFICIENT for IS-A. An ordinary 1:1 extension /
+    * detail table has the exact same shape and is physically indistinguishable from a Disjoint
+    * subtype. Stamping ParentID on such a false positive silently activates the IS-A runtime —
+    * including delete-cascade-to-parent (BaseEntity.shouldDeleteParentAfterChildDelete: "Disjoint:
+    * always cascade delete to parent") — so deleting the extension row would delete the row it
+    * extends. That is unrecoverable data loss inferred from an ambiguous signal, so we log and let
+    * a human decide instead.
     *
-    * Timing: runs AFTER manageEntityFields()/manageEntityRelationships() have populated IsPrimaryKey
-    * + RelatedEntityID/RelatedEntityFieldName on the field rows, and BEFORE the second-pass
-    * manageParentEntityFields() materializes the IS-A virtual fields + view JOINs. The ParentID
-    * UPDATE is written via LogSQLAndExecute so it is BOTH executed live AND serialized into the
-    * CodeGen migration — so a clean/migration-only deploy seeds ParentID too (the same guarantee the
-    * config path relies on; this is what lets a schema-detected pair survive a clean deploy).
+    * Candidates already declared (ParentID set to the same parent) are silent — nothing to advise.
     *
-    * Idempotent: skips a child whose ParentID already points at the detected parent. The config-driven
-    * processISARelationshipConfig() runs immediately AFTER this, so an explicit config entry can still
-    * override a detected value.
+    * @returns candidateCount — undeclared IS-A-shaped pairs reported (0 when the schema is clean).
     */
-   protected async detectAndSetISARelationshipsFromSchema(pool: CodeGenConnection, excludeSchemas: string[]): Promise<{ success: boolean; updatedCount: number }> {
+   protected async adviseISACandidatesFromSchema(pool: CodeGenConnection, excludeSchemas: string[]): Promise<{ success: boolean; candidateCount: number }> {
       const schema = mj_core_schema();
-      let updatedCount = 0;
+      let candidateCount = 0;
       try {
          const candidates = await this.runQuery(pool, this.buildISADetectionSQL(schema, excludeSchemas));
          for (const row of candidates.recordset) {
             if (UUIDsEqual(row.ExistingParentID, row.ParentEntityID)) {
-               continue; // already set (prior run or config) — nothing to do
+               continue; // already declared as this parent — nothing to advise
             }
-            const updateSQL = `UPDATE ${this.qs(schema, 'Entity')}
-                               SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
-                                   ${this.qi('ParentID')} = '${row.ParentEntityID}'
-                               WHERE ${this.qi('ID')} = '${row.ChildEntityID}'`;
-            await this.LogSQLAndExecute(pool, updateSQL, `Set IS-A ParentID for "${row.ChildEntityName}" -> "${row.ParentEntityName}" (auto-detected from shared PK/FK)`);
-            logStatus(`    > IS-A: auto-detected "${row.ChildEntityName}" is-a "${row.ParentEntityName}" — set ParentID`);
-            updatedCount++;
+            // Greppable prefix so an agent debugging an IS-A-shaped failure can find this line.
+            logWarning(`    > IS-A CANDIDATE: "${row.ChildEntityName}" has a single primary key that is also a foreign key to "${row.ParentEntityName}"'s primary key — the shape of an IS-A (Table-Per-Type) child, but Entity.ParentID is NOT set, so IS-A behavior is OFF for it.`);
+            logWarning(`      This may be a FALSE POSITIVE: an ordinary 1:1 extension table has the identical shape. No metadata was changed.`);
+            logWarning(`      If "${row.ChildEntityName}" IS-A "${row.ParentEntityName}", declare it — set ParentID via the additionalSchemaInfo "ISARelationships" config, or via an @lookup on ParentID in a metadata-sync Entities file. Otherwise ignore this.`);
+            candidateCount++;
          }
       } catch (err) {
          const errMessage = err instanceof Error ? err.message : String(err);
-         logError(`    > IS-A auto-detection failed: ${errMessage}`);
-         return { success: false, updatedCount };
+         logError(`    > IS-A candidate advisory failed: ${errMessage}`);
+         return { success: false, candidateCount };
       }
-      return { success: true, updatedCount };
+      return { success: true, candidateCount };
    }
 
    /**
-    * Builds the provider-neutral detection query for {@link detectAndSetISARelationshipsFromSchema}.
+    * Builds the provider-neutral candidate query for {@link adviseISACandidatesFromSchema}.
     * Selects entities whose single, non-virtual PK column is also an FK referencing the parent's
     * single PK column. Boolean comparisons go through boolLit() so the SQL is valid on both SQL
     * Server (1/0) and PostgreSQL (true/false).
+    *
+    * Guards below narrow this to PHYSICAL, real-table evidence. They cannot make the signal
+    * sufficient (a 1:1 extension table is still indistinguishable — hence advisory-only), but they
+    * suppress the classes of candidate that are definitively NOT IS-A:
+    *   - child.VirtualEntity = 0    — a virtual entity/view has no real table to be a subtype of.
+    *   - childpk.IsSoftForeignKey = 0 — the FK must be a real DB constraint. Soft FKs are asserted
+    *                                    by config or INFERRED BY AN LLM (decorateVirtualEntitiesWithLLM
+    *                                    runs immediately before this), so they are not evidence.
+    *   - childpk.EntityID <> childpk.RelatedEntityID — a self-referencing PK/FK is not a subtype.
     */
    protected buildISADetectionSQL(schema: string, excludeSchemas: string[]): string {
       const efv = this.qs(schema, 'vwEntityFields');
@@ -1096,9 +1102,139 @@ export class ManageMetadataBase {
            AND childpk.${this.qi('IsVirtual')} = ${F}
            AND childpk.${this.qi('RelatedEntityID')} IS NOT NULL
            AND childpk.${this.qi('RelatedEntityFieldName')} = parentpk.${this.qi('Name')}
+           AND childpk.${this.qi('IsSoftForeignKey')} = ${F}
+           AND childpk.${this.qi('EntityID')} <> childpk.${this.qi('RelatedEntityID')}
+           AND child.${this.qi('VirtualEntity')} = ${F}
+           AND parent.${this.qi('VirtualEntity')} = ${F}
            AND (SELECT COUNT(*) FROM ${efv} cpk WHERE cpk.${this.qi('EntityID')} = childpk.${this.qi('EntityID')}       AND cpk.${this.qi('IsPrimaryKey')} = ${T} AND cpk.${this.qi('IsVirtual')} = ${F}) = 1
            AND (SELECT COUNT(*) FROM ${efv} ppk WHERE ppk.${this.qi('EntityID')} = childpk.${this.qi('RelatedEntityID')} AND ppk.${this.qi('IsPrimaryKey')} = ${T} AND ppk.${this.qi('IsVirtual')} = ${F}) = 1
            ${excludeClause}`;
+   }
+
+   /**
+    * FORWARD VALIDATION — verifies that every DECLARED IS-A relationship (any Entity with a
+    * non-null ParentID) actually satisfies what the IS-A runtime requires. Never mutates metadata.
+    *
+    * Channel-agnostic BY DESIGN: it validates the END STATE of Entity.ParentID, so it covers the
+    * additionalSchemaInfo "ISARelationships" config, an `@lookup` on ParentID in a metadata-sync
+    * file, and any future channel — one check instead of one per declaration mechanism.
+    *
+    * The severity split follows a single rule: FAIL only on a CERTAINTY, warn on an inference.
+    *   HARD ERROR (the runtime provably cannot work — the declaration is broken):
+    *     - Child has a composite PK. The runtime routes ONE shared PK value between child and
+    *       parent; it has no model for a multi-column subtype key.
+    *     - Parent has a composite PK. Same reason, from the other side.
+    *     - ParentID does not resolve to an existing entity. BaseEntity.InitializeParentEntity()
+    *       silently `return`s when ParentEntityInfo is null, so IS-A quietly does nothing — this
+    *       converts that silent no-op into a loud build failure.
+    *     - Child PK type <> parent PK type. Parent and child SHARE one PK value (Save() writes the
+    *       child's PK into the parent's PK via ParentEntityFieldNames; loads match the child by the
+    *       parent's PK value), so the value must be legal as BOTH PKs. Note a physical FK already
+    *       guarantees matching types — this only ever fires on a soft/declared IS-A, which is
+    *       exactly the case with no DB constraint to catch it.
+    *   WARNING (the declaration may be perfectly valid — we just cannot corroborate it):
+    *     - Single PK on both sides and ParentID resolves, but the child PK has no FK to the parent
+    *       PK. The runtime never reads that FK metadata (ParentEntityInfo resolves from ParentID;
+    *       ParentEntityFieldNames never consults RelatedEntityID), so this works at runtime. It is
+    *       reported because it usually means a missing DB constraint, not a broken declaration.
+    *     - The FK backing the declaration is a soft FK. Accepted — just noted.
+    *
+    * Timing: runs AFTER every ParentID-writing pass (config + any previously-synced @lookup) and
+    * BEFORE the 2nd-pass manageParentEntityFields() materializes IS-A virtual fields + view JOINs,
+    * so a broken declaration fails before it produces generated code.
+    */
+   protected async validateISARelationships(pool: CodeGenConnection): Promise<{ success: boolean; errorCount: number; warningCount: number }> {
+      const schema = mj_core_schema();
+      let errorCount = 0;
+      let warningCount = 0;
+      try {
+         const results = await this.runQuery(pool, this.buildISAValidationSQL(schema));
+         // A composite PK on either side makes the PK LEFT JOINs fan out to one row per PK column.
+         // Each declared child gets exactly ONE verdict, so collapse to the first row per child —
+         // the PK COUNT columns (scalar subqueries) carry the composite case regardless of the row.
+         const seenChildren = new Set<string>();
+         for (const row of results.recordset) {
+            if (seenChildren.has(row.ChildEntityID)) continue;
+            seenChildren.add(row.ChildEntityID);
+
+            const pair = `"${row.ChildEntityName}" (ParentID -> ${row.ParentEntityName ? `"${row.ParentEntityName}"` : row.ParentID})`;
+
+            if (!row.ParentEntityName) {
+               logError(`    > IS-A INVALID: ${pair} — ParentID does not resolve to any entity. IS-A would silently do nothing at runtime. Fix or remove the declaration.`);
+               errorCount++;
+               continue;
+            }
+            if (row.ChildPKCount !== 1) {
+               logError(`    > IS-A INVALID: ${pair} — the child has a composite primary key (${row.ChildPKCount} columns). IS-A requires a single-column primary key shared with the parent.`);
+               errorCount++;
+               continue;
+            }
+            if (row.ParentPKCount !== 1) {
+               logError(`    > IS-A INVALID: ${pair} — the parent has a composite primary key (${row.ParentPKCount} columns). IS-A requires a single-column primary key shared with the child.`);
+               errorCount++;
+               continue;
+            }
+            if (row.ChildPKType && row.ParentPKType && row.ChildPKType.trim().toLowerCase() !== row.ParentPKType.trim().toLowerCase()) {
+               logError(`    > IS-A INVALID: ${pair} — primary-key type mismatch: child "${row.ChildPKName}" is ${row.ChildPKType}, parent "${row.ParentPKName}" is ${row.ParentPKType}. The parent and child SHARE one primary-key value, so the types must match.`);
+               errorCount++;
+               continue;
+            }
+            if (!row.ChildPKRelatedEntityID) {
+               logWarning(`    > IS-A UNVERIFIED: ${pair} — declared, but the child's primary key "${row.ChildPKName}" has no foreign key to the parent's primary key. This WORKS at runtime (IS-A keys off ParentID, not the FK), but usually means the database is missing the child->parent FK constraint that enforces the shared key.`);
+               warningCount++;
+            } else if (!UUIDsEqual(row.ChildPKRelatedEntityID, row.ParentID)) {
+               logWarning(`    > IS-A UNVERIFIED: ${pair} — the child's primary key "${row.ChildPKName}" is a foreign key to a DIFFERENT entity ("${row.ChildPKRelatedEntityName}") than the declared parent. Confirm the declaration is correct.`);
+               warningCount++;
+            } else if (row.ChildPKIsSoftForeignKey) {
+               logWarning(`    > IS-A: ${pair} — declaration accepted; note its child->parent link is a SOFT foreign key (no database constraint enforces the shared primary key).`);
+               warningCount++;
+            }
+         }
+      } catch (err) {
+         const errMessage = err instanceof Error ? err.message : String(err);
+         logError(`    > IS-A validation failed: ${errMessage}`);
+         return { success: false, errorCount, warningCount };
+      }
+      return { success: errorCount === 0, errorCount, warningCount };
+   }
+
+   /**
+    * Builds the provider-neutral query behind {@link validateISARelationships}: one row per
+    * DECLARED IS-A child (Entity.ParentID IS NOT NULL) carrying everything the severity rules need.
+    * LEFT JOINs throughout so an unresolvable ParentID still returns a row (that is a hard error,
+    * not a missing row).
+    */
+   protected buildISAValidationSQL(schema: string): string {
+      const efv = this.qs(schema, 'vwEntityFields');
+      const ev = this.qs(schema, 'vwEntities');
+      const T = this.boolLit(true);
+      const F = this.boolLit(false);
+      const pkCount = (entityIdExpr: string) =>
+         `(SELECT COUNT(*) FROM ${efv} pkc WHERE pkc.${this.qi('EntityID')} = ${entityIdExpr} AND pkc.${this.qi('IsPrimaryKey')} = ${T} AND pkc.${this.qi('IsVirtual')} = ${F})`;
+      return `
+         SELECT child.${this.qi('ID')}        AS ${this.qi('ChildEntityID')},
+                child.${this.qi('Name')}      AS ${this.qi('ChildEntityName')},
+                child.${this.qi('ParentID')}  AS ${this.qi('ParentID')},
+                parent.${this.qi('Name')}     AS ${this.qi('ParentEntityName')},
+                ${pkCount(`child.${this.qi('ID')}`)}       AS ${this.qi('ChildPKCount')},
+                ${pkCount(`child.${this.qi('ParentID')}`)} AS ${this.qi('ParentPKCount')},
+                childpk.${this.qi('Name')}                 AS ${this.qi('ChildPKName')},
+                childpk.${this.qi('Type')}                 AS ${this.qi('ChildPKType')},
+                childpk.${this.qi('RelatedEntityID')}      AS ${this.qi('ChildPKRelatedEntityID')},
+                childpk.${this.qi('IsSoftForeignKey')}     AS ${this.qi('ChildPKIsSoftForeignKey')},
+                fkTarget.${this.qi('Name')}                AS ${this.qi('ChildPKRelatedEntityName')},
+                parentpk.${this.qi('Name')}                AS ${this.qi('ParentPKName')},
+                parentpk.${this.qi('Type')}                AS ${this.qi('ParentPKType')}
+         FROM ${ev} child
+         LEFT JOIN ${ev} parent     ON parent.${this.qi('ID')} = child.${this.qi('ParentID')}
+         LEFT JOIN ${efv} childpk   ON childpk.${this.qi('EntityID')} = child.${this.qi('ID')}
+                                   AND childpk.${this.qi('IsPrimaryKey')} = ${T}
+                                   AND childpk.${this.qi('IsVirtual')} = ${F}
+         LEFT JOIN ${efv} parentpk  ON parentpk.${this.qi('EntityID')} = child.${this.qi('ParentID')}
+                                   AND parentpk.${this.qi('IsPrimaryKey')} = ${T}
+                                   AND parentpk.${this.qi('IsVirtual')} = ${F}
+         LEFT JOIN ${ev} fkTarget   ON fkTarget.${this.qi('ID')} = childpk.${this.qi('RelatedEntityID')}
+         WHERE child.${this.qi('ParentID')} IS NOT NULL`;
    }
 
    /**
@@ -1413,22 +1549,33 @@ export class ManageMetadataBase {
       // LLM-assisted virtual entity field decoration — identify PKs, FKs, and descriptions
       await this.decorateVirtualEntitiesWithLLM(pool, currentUser);
 
-      // Schema-driven IS-A detection — set ParentID on any child whose single PK is also an FK to
-      // another entity's PK (Table-Per-Type). Runs BEFORE the config-driven pass so an explicit config
-      // entry can override a detected value, and BEFORE the 2nd-pass manageParentEntityFields().
-      const isaAutoResult = await this.detectAndSetISARelationshipsFromSchema(pool, excludeSchemas);
-      if (!isaAutoResult.success) {
-         bSuccess = false;
-      }
-      if (isaAutoResult.updatedCount > 0) {
-         logStatus(`    > Set ParentID on ${isaAutoResult.updatedCount} IS-A child entit${isaAutoResult.updatedCount === 1 ? 'y' : 'ies'} auto-detected from schema`);
-      }
-
       // Config-driven IS-A relationship setup — set ParentID on child entities
       // Must run AFTER entities exist but BEFORE manageEntityFields() which calls manageParentEntityFields()
       const isaConfigResult = await this.processISARelationshipConfig(pool);
       if (isaConfigResult.updatedCount > 0) {
          logStatus(`    > Set ParentID on ${isaConfigResult.updatedCount} IS-A child entit${isaConfigResult.updatedCount === 1 ? 'y' : 'ies'} from config`);
+      }
+
+      // Advisory only — report schema shapes that look like an UNDECLARED IS-A. Never mutates
+      // metadata: the shape is necessary but not sufficient (a 1:1 extension table is identical),
+      // and a false positive would silently enable delete-cascade-to-parent. Declaration is the
+      // author's call; this just surfaces the candidate. Runs AFTER the config pass so anything
+      // already declared stays silent.
+      const isaAdvisory = await this.adviseISACandidatesFromSchema(pool, excludeSchemas);
+      if (!isaAdvisory.success) {
+         bSuccess = false;
+      }
+      if (isaAdvisory.candidateCount > 0) {
+         logWarning(`    > ${isaAdvisory.candidateCount} undeclared IS-A candidate${isaAdvisory.candidateCount === 1 ? '' : 's'} found (see above) — no metadata was changed.`);
+      }
+
+      // Forward validation — verify every DECLARED IS-A (ParentID set by ANY channel: config,
+      // @lookup metadata sync, or a prior run) satisfies what the runtime requires. Hard-fails the
+      // run on a broken declaration BEFORE manageParentEntityFields() generates code from it.
+      const isaValidation = await this.validateISARelationships(pool);
+      if (!isaValidation.success) {
+         logError(`    > IS-A validation failed: ${isaValidation.errorCount} invalid IS-A declaration${isaValidation.errorCount === 1 ? '' : 's'} (see above). Fix or remove ${isaValidation.errorCount === 1 ? 'it' : 'them'} — the IS-A runtime cannot work as declared.`);
+         bSuccess = false;
       }
 
       // Config-driven Entity attribute updates (e.g., AllowMultipleSubtypes, TrackRecordChanges)
