@@ -1,0 +1,2 @@
+# CatBoost — ordered gradient boosting (strong on categoricals). CPU wheels.
+catboost>=1.2

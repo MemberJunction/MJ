@@ -1,0 +1,2 @@
+# CLV / BTYD models (BG-NBD, Pareto-NBD, Gamma-Gamma).
+lifetimes>=0.11

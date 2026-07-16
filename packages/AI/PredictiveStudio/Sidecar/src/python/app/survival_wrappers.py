@@ -32,6 +32,15 @@ except Exception:  # pragma: no cover
     _HAVE_LIFELINES = False
 
 
+try:
+    from sksurv.ensemble import RandomSurvivalForest
+    from sksurv.util import Surv
+
+    _HAVE_SKSURV = True
+except Exception:  # pragma: no cover
+    _HAVE_SKSURV = False
+
+
 _DURATION = "__duration__"
 _EVENT = "__event__"
 
@@ -141,10 +150,40 @@ class _AFTWrapper:
         return [{"times": times, "survival": [float(v) for v in sf[col].values]} for col in sf.columns]
 
 
+class _RSFWrapper:
+    """Random Survival Forest (scikit-survival): a tree ensemble that splits on the
+    log-rank statistic — non-parametric, captures non-linear + interaction effects
+    on the hazard that Cox's proportional-hazards assumption cannot. risk = the
+    ensemble risk score; curve = the predicted survival function per row."""
+
+    def __init__(self, n_estimators: int = 100, min_samples_leaf: int = 15, **hp: Any):
+        self._rsf = RandomSurvivalForest(
+            n_estimators=int(n_estimators), min_samples_leaf=int(min_samples_leaf),
+            n_jobs=-1, random_state=0, **hp)
+        self._feature_names: List[str] = []
+
+    def fit(self, X, durations, events, feature_names: List[str]):
+        self._feature_names = feature_names
+        y = Surv.from_arrays(event=np.asarray(events, dtype=bool),
+                             time=np.asarray(durations, dtype=float))
+        self._rsf.fit(np.asarray(X, dtype=float), y)
+        return self
+
+    def risk(self, X):
+        return np.asarray(self._rsf.predict(np.asarray(X, dtype=float))).ravel()
+
+    def curve(self, X):
+        fns = self._rsf.predict_survival_function(np.asarray(X, dtype=float))
+        times = [float(t) for t in self._rsf.unique_times_]
+        return [{"times": times, "survival": [float(fn(t)) for t in self._rsf.unique_times_]}
+                for fn in fns]
+
+
 _SURVIVAL_REGISTRY = {
     "cox_ph": _CoxPHWrapper,
     "weibull_aft": _WeibullAFTWrapper,
     "aft": _AFTWrapper,
+    "rsf": _RSFWrapper,
     "km": _KaplanMeierWrapper,
 }
 

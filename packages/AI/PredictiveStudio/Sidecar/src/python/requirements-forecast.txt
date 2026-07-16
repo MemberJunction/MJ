@@ -1,0 +1,4 @@
+# Forecasting extras: statsmodels state-space/regime models + Prophet.
+# Prophet is the heaviest (pulls cmdstanpy); keep it optional.
+statsmodels>=0.14
+prophet>=1.1

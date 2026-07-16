@@ -1426,7 +1426,8 @@
       "SupportsFeatureImportance": false,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=UMAP"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -2590,7 +2591,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=CatBoost"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -4738,7 +4740,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Random Survival Forest"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [

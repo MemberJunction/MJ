@@ -1,0 +1,2 @@
+# UMAP dim-reduction (pulls numba). Optional unsupervised extra.
+umap-learn>=0.5

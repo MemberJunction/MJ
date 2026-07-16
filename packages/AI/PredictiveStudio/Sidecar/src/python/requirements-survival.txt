@@ -1,1 +1,2 @@
 lifelines>=0.30
+scikit-survival>=0.22

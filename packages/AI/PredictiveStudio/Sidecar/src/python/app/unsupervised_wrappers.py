@@ -17,6 +17,13 @@ from sklearn.ensemble import IsolationForest
 from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 
+try:
+    from umap import UMAP
+
+    _HAVE_UMAP = True
+except Exception:  # pragma: no cover
+    _HAVE_UMAP = False
+
 
 def _kmeans(hp):
     return KMeans(**{"n_init": 10, "random_state": 0, **hp})
@@ -46,6 +53,10 @@ def _lda(hp):
     return LatentDirichletAllocation(**{"random_state": 0, **hp})
 
 
+def _umap(hp):
+    return UMAP(**{"random_state": 0, "n_components": 2, **hp})
+
+
 _UNSUP_REGISTRY = {
     "kmeans": _kmeans,
     "dbscan": _dbscan,
@@ -54,13 +65,21 @@ _UNSUP_REGISTRY = {
     "pca": _pca,
     "isolation_forest": _isolation_forest,
     "lda": _lda,
+    "umap": _umap,
 }
 
 # how each family produces per-row output (used at /predict; recorded on the fitted payload)
 _OUTPUT_KIND = {
     "kmeans": "cluster", "dbscan": "cluster", "gmm": "cluster", "hierarchical": "cluster",
-    "pca": "vector", "isolation_forest": "anomaly_score", "lda": "vector",
+    "pca": "vector", "isolation_forest": "anomaly_score", "lda": "vector", "umap": "vector",
 }
+
+# optional-dependency runnability (all others are pure sklearn — always runnable)
+_REQUIREMENTS = {"umap": _HAVE_UMAP}
+
+
+def runnable(algorithm: str) -> bool:
+    return _REQUIREMENTS.get(algorithm, True)
 
 
 def is_unsupervised(algorithm: str) -> bool:
@@ -104,5 +123,12 @@ def fit_and_metric(algorithm: str, estimator, X: np.ndarray) -> Dict[str, float]
         # LDA needs non-negative counts; clip to be safe on arbitrary features
         estimator.fit(np.clip(Xa, 0, None))
         return {"perplexity": float(estimator.perplexity(np.clip(Xa, 0, None)))}
+    if algorithm == "umap":
+        emb = estimator.fit_transform(Xa)
+        # trustworthiness: how well the low-D embedding preserves local neighborhoods
+        from sklearn.manifold import trustworthiness
+        n_nb = min(10, max(2, len(Xa) - 1))
+        return {"trustworthiness": float(trustworthiness(Xa, emb, n_neighbors=n_nb)),
+                "n_components": float(estimator.n_components)}
     estimator.fit(Xa)
     return {}

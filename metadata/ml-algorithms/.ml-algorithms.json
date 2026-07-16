@@ -789,5 +789,38 @@
       "SupportsFeatureImportance": false,
       "Status": "Active"
     }
+  },
+  {
+    "fields": {
+      "Name": "CatBoost",
+      "Description": "CatBoost \u2014 ordered gradient boosting, strong on categoricals (optional extra).",
+      "ProblemTypes": "classification",
+      "DriverClass": "catboost",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Random Survival Forest",
+      "Description": "Random Survival Forest \u2014 non-parametric log-rank-split survival ensemble (scikit-survival).",
+      "ProblemTypes": "survival",
+      "DriverClass": "rsf",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "UMAP",
+      "Description": "UMAP \u2014 non-linear manifold dim-reduction to an embedding (umap-learn, optional extra).",
+      "ProblemTypes": "dim-reduction",
+      "DriverClass": "umap",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
   }
 ]

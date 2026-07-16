@@ -48,6 +48,13 @@ try:
 except Exception:  # pragma: no cover
     _HAVE_LGBM = False
 
+try:
+    from catboost import CatBoostClassifier, CatBoostRegressor
+
+    _HAVE_CATBOOST = True
+except Exception:  # pragma: no cover
+    _HAVE_CATBOOST = False
+
 
 # A factory takes (problem_type, hyperparameters) and returns an estimator.
 EstimatorFactory = Callable[[str, Dict[str, Any]], Any]
@@ -97,6 +104,16 @@ def _lightgbm(problem_type: str, hp: Dict[str, Any]):
     if problem_type == "classification":
         return LGBMClassifier(**common)
     return LGBMRegressor(**common)
+
+
+def _catboost(problem_type: str, hp: Dict[str, Any]):
+    """Build a CatBoost classifier/regressor (ordered boosting; strong on categoricals).
+    Quiet + no on-disk training artifacts (allow_writing_files=False for a stateless kernel)."""
+    _require(_HAVE_CATBOOST, "catboost")
+    common = {"verbose": False, "allow_writing_files": False, **hp}
+    if problem_type == "classification":
+        return CatBoostClassifier(**common)
+    return CatBoostRegressor(**common)
 
 
 def _logistic_regression(problem_type: str, hp: Dict[str, Any]):
@@ -267,6 +284,7 @@ def _survival_placeholder(problem_type: str, hp: Dict[str, Any]):
 _REGISTRY: Dict[str, EstimatorFactory] = {
     "xgboost": _xgboost,
     "lightgbm": _lightgbm,
+    "catboost": _catboost,
     "logistic_regression": _logistic_regression,
     "random_forest": _random_forest,
     "ridge": _ridge,
@@ -298,6 +316,7 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "cox_ph": _survival_placeholder,
     "weibull_aft": _survival_placeholder,
     "aft": _survival_placeholder,
+    "rsf": _survival_placeholder,
     "km": _survival_placeholder,
     # T5 forecasting — handled by the forecast branch in main.py
     "seasonal_naive": _survival_placeholder,
@@ -320,6 +339,7 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "pca": _survival_placeholder,
     "isolation_forest": _survival_placeholder,
     "lda": _survival_placeholder,
+    "umap": _survival_placeholder,
     # Calibration (sklearn, no dep) — handled by the calibration branch in main.py
     "platt": _survival_placeholder,
     "isotonic": _survival_placeholder,
@@ -339,6 +359,7 @@ def supported_algorithms() -> List[str]:
 _DRIVER_REQUIREMENTS = {
     "xgboost": _HAVE_XGB,
     "lightgbm": _HAVE_LGBM,
+    "catboost": _HAVE_CATBOOST,
     "poisson": _glm._HAVE_STATSMODELS,
     "neg_binomial": _glm._HAVE_STATSMODELS,
     "tweedie": _glm._HAVE_STATSMODELS,
@@ -351,6 +372,7 @@ _DRIVER_REQUIREMENTS = {
     "cox_ph": _surv._HAVE_LIFELINES,
     "weibull_aft": _surv._HAVE_LIFELINES,
     "aft": _surv._HAVE_LIFELINES,
+    "rsf": _surv._HAVE_SKSURV,
     "km": _surv._HAVE_LIFELINES,
     "seasonal_naive": True,
     "sma": True,
@@ -366,6 +388,7 @@ _DRIVER_REQUIREMENTS = {
     "markov_chain": True,
     "kmeans": True, "dbscan": True, "gmm": True, "hierarchical": True,
     "pca": True, "isolation_forest": True, "lda": True,
+    "umap": _uns._HAVE_UMAP,
     "platt": True, "isotonic": True,
 }
 
