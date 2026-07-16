@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { CommonModule } from '@angular/common';
-import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
-import { query, queryAll, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
+import { query, queryAll, text, hasClass, click, capture, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { ScheduledJobSummaryComponent } from './scheduled-job-summary.component';
 import { ScheduledJobService } from '../../services/scheduled-job.service';
 
@@ -18,14 +17,6 @@ import { ScheduledJobService } from '../../services/scheduled-job.service';
  */
 
 /** Stub for <mj-loading> — mirrors the `size` attribute bound in the template. */
-@Component({
-  standalone: true,
-  selector: 'mj-loading',
-  template: '',
-})
-class StubLoadingComponent {
-  @Input() size = '';
-}
 
 interface FakeJob {
   Name: string;

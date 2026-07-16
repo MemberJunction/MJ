@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Component, Input, Pipe, PipeTransform, Directive } from '@angular/core';
+import { Component, Pipe, PipeTransform, Directive } from '@angular/core';
 import type { ComponentFixture } from '@angular/core/testing';
 import type { EntityInfo, RunViewParams } from '@memberjunction/core';
 import type { ProcessedMessage } from '@memberjunction/communication-types';
 import type { MJTemplateEntityExtended } from '@memberjunction/core-entities';
-import { renderComponentFixture, query, queryAll, text, click, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, click, capture, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { EntityCommunicationsPreviewComponent } from './preview.component';
 
 /**
@@ -30,12 +30,6 @@ import { EntityCommunicationsPreviewComponent } from './preview.component';
 
 @Directive({ standalone: false, selector: '[mjButton]' })
 class MjButtonStub {}
-
-@Component({ standalone: false, selector: 'mj-loading', template: '' })
-class MjLoadingStub {
-  @Input() showText = true;
-  @Input() size = '';
-}
 
 @Pipe({ standalone: false, name: 'mjSafeRichHtml' })
 class SafeRichHtmlStubPipe implements PipeTransform {
@@ -80,7 +74,8 @@ function makeMessage(subject: string, body: string): ProcessedMessage {
 describe('EntityCommunicationsPreviewComponent (DOM)', () => {
   function render(setState: (instance: EntityCommunicationsPreviewComponent) => void): ComponentFixture<PreviewTestComponent> {
     return renderComponentFixture(PreviewTestComponent, {
-      declarations: [PreviewTestComponent, MjButtonStub, MjLoadingStub, SafeRichHtmlStubPipe],
+      imports: [StubLoadingComponent],
+      declarations: [PreviewTestComponent, MjButtonStub, SafeRichHtmlStubPipe],
       inputs: { entityInfo: entityInfoStub, runViewParams: runViewParamsStub },
       setup: (instance) => {
         // Neutralize the real data load so the render reflects only the state we set.

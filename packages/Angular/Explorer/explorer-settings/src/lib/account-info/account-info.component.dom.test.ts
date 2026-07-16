@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input } from '@angular/core';
-import { renderComponentFixture, query, text, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, text, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { AccountInfoComponent } from './account-info.component';
 import type { IMetadataProvider } from '@memberjunction/core';
 
@@ -12,11 +11,6 @@ import type { IMetadataProvider } from '@memberjunction/core';
  * fails exercises the error branch. `mj-loading` is a lightweight stub. The load is async, so we
  * render with autoDetect + flush microtasks past whenStable before asserting.
  */
-
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class LoadingStub {
-  @Input() text = '';
-}
 
 function providerWithUser(loadOk: boolean): IMetadataProvider {
   const fake = createFakeProvider({ currentUser: { ID: 'u1' } });
@@ -33,7 +27,7 @@ function providerWithUser(loadOk: boolean): IMetadataProvider {
 
 async function render(loadOk = true) {
   const fixture = renderComponentFixture(AccountInfoComponent, {
-    imports: [LoadingStub],
+    imports: [StubLoadingComponent],
     declarations: [AccountInfoComponent],
     inputs: { Provider: providerWithUser(loadOk) },
     autoDetect: true,

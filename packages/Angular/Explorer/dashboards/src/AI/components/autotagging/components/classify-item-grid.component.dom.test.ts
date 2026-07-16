@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { renderComponentFixture, query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, capture, createFakeProvider, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import type { RunViewParams } from '@memberjunction/core';
 import type { RowClickedEvent } from 'ag-grid-community';
 import { ClassifyItemGridComponent } from './classify-item-grid.component';
@@ -14,16 +14,6 @@ import type { ClassifyItemGridRow } from '../shared/classify.types';
  * up via `(ItemSelected)`. Async load uses the non-strict re-render + microtask dance.
  */
 
-@Component({ selector: 'mj-empty-state', standalone: true, template: '' })
-class StubEmptyState {
-  @Input() Icon = '';
-  @Input() Title = '';
-}
-@Component({ selector: 'mj-loading', standalone: true, template: '' })
-class StubLoading {
-  @Input() text = '';
-  @Input() size = '';
-}
 @Component({ selector: 'ag-grid-angular', standalone: true, template: '' })
 class StubAgGrid {
   @Input() theme: unknown;
@@ -52,14 +42,14 @@ const provider = () =>
 const renderEmpty = () =>
   renderComponentFixture(ClassifyItemGridComponent, {
     declarations: [ClassifyItemGridComponent],
-    imports: [StubEmptyState, StubLoading, StubAgGrid],
+    imports: [StubEmptyStateComponent, StubLoadingComponent, StubAgGrid],
     inputs: { Provider: provider() },
   });
 
 const renderLoaded = async () => {
   const fixture = renderComponentFixture(ClassifyItemGridComponent, {
     declarations: [ClassifyItemGridComponent],
-    imports: [StubEmptyState, StubLoading, StubAgGrid],
+    imports: [StubEmptyStateComponent, StubLoadingComponent, StubAgGrid],
     inputs: { Provider: provider() },
   });
   fixture.componentRef.setInput('RunID', 'run-1'); // triggers loadItems()

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { renderComponentFixture, query, text } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, text, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component';
 import { AIAgentRunCostService } from './ai-agent-run-cost.service';
 
@@ -12,18 +11,9 @@ import { AIAgentRunCostService } from './ai-agent-run-cost.service';
  * cost service (never called on these paths) and the heavy `mj-empty-state` child.
  */
 
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<ng-content></ng-content>' })
-class EmptyStateStub {
-  @Input() Variant = '';
-  @Input() Message = '';
-  @Input() ActionText = '';
-  @Input() ActionIcon = '';
-  @Output() Action = new EventEmitter<void>();
-}
-
 const render = (setup?: (i: AIAgentRunAnalyticsComponent) => void) =>
   renderComponentFixture(AIAgentRunAnalyticsComponent, {
-    imports: [EmptyStateStub],
+    imports: [StubEmptyStateComponent],
     declarations: [AIAgentRunAnalyticsComponent],
     providers: [{ provide: AIAgentRunCostService, useValue: {} }],
     setup,

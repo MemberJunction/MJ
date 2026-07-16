@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input } from '@angular/core';
+import { Component } from '@angular/core';
 import { Subject } from 'rxjs';
 import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
-import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, capture, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { ComponentBrowserComponent } from './component-browser.component';
 import { ComponentStudioStateService } from '../../services/component-studio-state.service';
 
@@ -13,9 +13,6 @@ import { ComponentStudioStateService } from '../../services/component-studio-sta
  * (toggle + From Artifact/File/Text), which emit NewComponent / ImportFrom* outputs. mj-loading +
  * mj-empty-state are stubbed; mjButton imported. Single synchronous render.
  */
-
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class LoadingStub { @Input() text = ''; }
 
 // Minimal state service: empty collections + default-returning helpers so the list body renders empty.
 function fakeState(): ComponentStudioStateService {
@@ -34,7 +31,7 @@ function fakeState(): ComponentStudioStateService {
 
 const render = () =>
   renderComponentFixture(ComponentBrowserComponent, {
-    imports: [MJButtonDirective, MJEmptyStateComponent, LoadingStub],
+    imports: [MJButtonDirective, MJEmptyStateComponent, StubLoadingComponent],
     declarations: [ComponentBrowserComponent],
     providers: [{ provide: ComponentStudioStateService, useValue: fakeState() }],
   });

@@ -1,9 +1,8 @@
-import { Component, Input } from '@angular/core';
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
-import { createFakeProvider, useFakeGlobalProvider, query, queryAll } from '@memberjunction/ng-test-utils';
+import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsPromptRunsComponent } from './prompt-run-analysis.component';
 
 /**
@@ -16,13 +15,6 @@ import { AnalyticsPromptRunsComponent } from './prompt-run-analysis.component';
  * `OnChartMetricChange`, which flips `ActiveChartMetric` and marks the chip active. `mj-loading` /
  * `mj-empty-state` stubbed; explicit `detectChanges(false)` (LoadData toggles IsLoading).
  */
-
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading {}
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<div class="stub-empty">{{ Title }}</div>' })
-class StubEmptyState {
-  @Input() Title = '';
-}
 
 // Status is derived from the entity union so an impossible literal (e.g. the old 'Error')
 // fails to compile — the DB CHECK values are 'Completed' / 'Failed' / ... (CLAUDE.md §2c).
@@ -37,7 +29,7 @@ const RUNS: PromptRunFixture[] = [
 ];
 
 async function render(rows: unknown[]): Promise<ComponentFixture<AnalyticsPromptRunsComponent>> {
-  TestBed.configureTestingModule({ declarations: [AnalyticsPromptRunsComponent], imports: [StubLoading, StubEmptyState] });
+  TestBed.configureTestingModule({ declarations: [AnalyticsPromptRunsComponent], imports: [StubLoadingComponent, StubEmptyStateComponent] });
   const fixture = TestBed.createComponent(AnalyticsPromptRunsComponent);
   fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: (_p: RunViewParams) => rows }));
   fixture.detectChanges(false);

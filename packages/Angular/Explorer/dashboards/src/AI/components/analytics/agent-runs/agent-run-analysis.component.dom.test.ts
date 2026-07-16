@@ -1,9 +1,8 @@
-import { Component, Input } from '@angular/core';
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
 import type { MJAIAgentRunEntity } from '@memberjunction/core-entities';
-import { createFakeProvider, useFakeGlobalProvider, query, queryAll } from '@memberjunction/ng-test-utils';
+import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsAgentRunsComponent } from './agent-run-analysis.component';
 
 /**
@@ -14,13 +13,6 @@ import { AnalyticsAgentRunsComponent } from './agent-run-analysis.component';
  * rows → attribution rows + a recent-runs table. Clicking a sortable header calls `OnSort`, which
  * toggles `SortDir` and re-renders (the caret icon flips). `mj-loading` / `mj-empty-state` stubbed.
  */
-
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading {}
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<div class="stub-empty">{{ Title }}</div>' })
-class StubEmptyState {
-  @Input() Title = '';
-}
 
 // Status is derived from the entity union so an impossible literal (e.g. the old 'Complete')
 // fails to compile — the DB CHECK values are 'Completed' / 'Failed' / ... (CLAUDE.md §2c).
@@ -39,7 +31,7 @@ const rowsByEntity = (p: RunViewParams): unknown[] =>
   p.EntityName === 'MJ: AI Agent Runs' ? AGENT_RUNS : p.EntityName === 'MJ: AI Prompt Runs' ? PROMPT_RUNS : [];
 
 async function render(rowsFn: (p: RunViewParams) => unknown[]): Promise<ComponentFixture<AnalyticsAgentRunsComponent>> {
-  TestBed.configureTestingModule({ declarations: [AnalyticsAgentRunsComponent], imports: [StubLoading, StubEmptyState] });
+  TestBed.configureTestingModule({ declarations: [AnalyticsAgentRunsComponent], imports: [StubLoadingComponent, StubEmptyStateComponent] });
   const fixture = TestBed.createComponent(AnalyticsAgentRunsComponent);
   fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: rowsFn }));
   fixture.detectChanges(false);

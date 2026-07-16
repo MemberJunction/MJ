@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input } from '@angular/core';
-import { renderComponentFixture, query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, capture, createFakeProvider, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import type { RunViewParams } from '@memberjunction/core';
 import { ClassifyItemDrilldownComponent } from './classify-item-drilldown.component';
 
@@ -11,18 +10,6 @@ import { ClassifyItemDrilldownComponent } from './classify-item-drilldown.compon
  * ProviderToUse — a fake provider returns canned rows keyed by EntityName. `(OpenRecordRequested)`
  * bubbles up when Open Record is clicked. Async load needs the non-strict re-render + microtask dance.
  */
-
-@Component({ selector: 'mj-empty-state', standalone: true, template: '<ng-content></ng-content>' })
-class StubEmptyState {
-  @Input() Icon = '';
-  @Input() Title = '';
-  @Input() Message = '';
-}
-@Component({ selector: 'mj-loading', standalone: true, template: '' })
-class StubLoading {
-  @Input() text = '';
-  @Input() size = '';
-}
 
 const ITEM_ROW = {
   ID: 'item-1',
@@ -49,7 +36,7 @@ const provider = () =>
 const renderEmpty = () =>
   renderComponentFixture(ClassifyItemDrilldownComponent, {
     declarations: [ClassifyItemDrilldownComponent],
-    imports: [StubEmptyState, StubLoading],
+    imports: [StubEmptyStateComponent, StubLoadingComponent],
     inputs: { Provider: provider() },
   });
 
@@ -57,7 +44,7 @@ const renderEmpty = () =>
 const renderLoaded = async () => {
   const fixture = renderComponentFixture(ClassifyItemDrilldownComponent, {
     declarations: [ClassifyItemDrilldownComponent],
-    imports: [StubEmptyState, StubLoading],
+    imports: [StubEmptyStateComponent, StubLoadingComponent],
     inputs: { Provider: provider() },
   });
   fixture.componentRef.setInput('ItemID', 'item-1');

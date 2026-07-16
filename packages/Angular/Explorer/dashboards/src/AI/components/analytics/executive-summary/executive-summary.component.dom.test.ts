@@ -2,7 +2,7 @@ import { Component, Input } from '@angular/core';
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
-import { createFakeProvider, query, queryAll, capture } from '@memberjunction/ng-test-utils';
+import { createFakeProvider, query, queryAll, capture, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsExecutiveSummaryComponent } from './executive-summary.component';
 import { AIInstrumentationService, DashboardKPIs, ChartData } from '../../../services/ai-instrumentation.service';
 
@@ -22,12 +22,6 @@ class StubChart {
   @Input() title = '';
   @Input() config: unknown;
 }
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading {}
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<div class="stub-empty">{{ Title }}</div>' })
-class StubEmptyState {
-  @Input() Title = '';
-}
 
 const EMPTY_CHART: ChartData = { executionTrends: [], costByModel: [], performanceMatrix: [], tokenEfficiency: [] };
 
@@ -45,7 +39,7 @@ function render(): { fixture: ComponentFixture<AnalyticsExecutiveSummaryComponen
   const service = new FakeInstrumentationService();
   TestBed.configureTestingModule({
     declarations: [AnalyticsExecutiveSummaryComponent],
-    imports: [StubChart, StubLoading, StubEmptyState],
+    imports: [StubChart, StubLoadingComponent, StubEmptyStateComponent],
     providers: [{ provide: AIInstrumentationService, useValue: service }],
   });
   const fixture = TestBed.createComponent(AnalyticsExecutiveSummaryComponent);

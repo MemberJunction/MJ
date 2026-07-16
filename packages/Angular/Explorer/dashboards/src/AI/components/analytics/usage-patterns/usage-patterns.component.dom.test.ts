@@ -1,8 +1,7 @@
-import { Component, Input } from '@angular/core';
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
-import { createFakeProvider, useFakeGlobalProvider, query, queryAll, capture } from '@memberjunction/ng-test-utils';
+import { createFakeProvider, useFakeGlobalProvider, query, queryAll, capture, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsUsagePatternsComponent } from './usage-patterns.component';
 
 /**
@@ -14,13 +13,6 @@ import { AnalyticsUsagePatternsComponent } from './usage-patterns.component';
  * explicitly (`detectChanges(false)`) because `loadData()` toggles `IsLoading` across an await.
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading {}
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<div class="stub-empty">{{ Title }}</div>' })
-class StubEmptyState {
-  @Input() Title = '';
-}
-
 const RUNS = [
   { RunAt: '2026-01-05T09:15:00Z' }, // Monday
   { RunAt: '2026-01-05T09:40:00Z' },
@@ -30,7 +22,7 @@ const RUNS = [
 async function render(rows: unknown[] = RUNS): Promise<ComponentFixture<AnalyticsUsagePatternsComponent>> {
   TestBed.configureTestingModule({
     declarations: [AnalyticsUsagePatternsComponent],
-    imports: [StubLoading, StubEmptyState],
+    imports: [StubLoadingComponent, StubEmptyStateComponent],
   });
   const fixture = TestBed.createComponent(AnalyticsUsagePatternsComponent);
   const provider = createFakeProvider({ runViewResults: (_p: RunViewParams) => rows });

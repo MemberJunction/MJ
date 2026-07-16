@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { Component, forwardRef, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
-import { FormsModule, ReactiveFormsModule, NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { query, queryAll, capture, createFakeProvider, StubDropdownComponent, StubNumericInputComponent } from '@memberjunction/ng-test-utils';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import {
   SubAgentAdvancedSettingsDialogComponent,
@@ -23,54 +22,6 @@ import {
  * markForCheck → detectChanges(false) (zoneless). MJ form controls are lightweight CVA stubs;
  * MJButtonDirective is the real one.
  */
-
-@Component({
-  standalone: true,
-  selector: 'mj-numeric-input',
-  template: `<input type="number" class="mj-numeric-input" [value]="value ?? ''" (input)="onInput($event)" />`,
-  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => StubNumericInput), multi: true }],
-})
-class StubNumericInput implements ControlValueAccessor {
-  @Input() Min = 0;
-  @Input() Format = '0';
-  value: number | null = null;
-  private onChange: (v: number | null) => void = () => {};
-  private onTouched: () => void = () => {};
-  writeValue(v: number | null): void { this.value = v; }
-  registerOnChange(fn: (v: number | null) => void): void { this.onChange = fn; }
-  registerOnTouched(fn: () => void): void { this.onTouched = fn; }
-  onInput(e: Event): void {
-    const v = (e.target as HTMLInputElement).value;
-    this.value = v === '' ? null : Number(v);
-    this.onChange(this.value);
-    this.onTouched();
-  }
-}
-
-@Component({
-  standalone: true,
-  selector: 'mj-dropdown',
-  template: `<select class="mj-dropdown" (change)="onSelect($event)"></select>`,
-  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => StubDropdown), multi: true }],
-})
-class StubDropdown implements ControlValueAccessor {
-  @Input() Data: unknown;
-  @Input() TextField = '';
-  @Input() ValueField = '';
-  @Input() ValuePrimitive = true;
-  @Input() DefaultItem: unknown;
-  value: unknown;
-  private onChange: (v: unknown) => void = () => {};
-  private onTouched: () => void = () => {};
-  writeValue(v: unknown): void { this.value = v; }
-  registerOnChange(fn: (v: unknown) => void): void { this.onChange = fn; }
-  registerOnTouched(fn: () => void): void { this.onTouched = fn; }
-  onSelect(e: Event): void {
-    this.value = (e.target as HTMLSelectElement).value;
-    this.onChange(this.value);
-    this.onTouched();
-  }
-}
 
 // A partial MJAIAgentEntityExtended — the dialog only reads these fields off the model.
 function makeSubAgent(overrides: Partial<MJAIAgentEntityExtended> = {}): MJAIAgentEntityExtended {
@@ -100,7 +51,7 @@ interface RenderOpts {
 
 async function render(opts: RenderOpts = {}): Promise<ComponentFixture<SubAgentAdvancedSettingsDialogComponent>> {
   TestBed.configureTestingModule({
-    imports: [CommonModule, FormsModule, ReactiveFormsModule, MJButtonDirective, StubNumericInput, StubDropdown],
+    imports: [CommonModule, FormsModule, ReactiveFormsModule, MJButtonDirective, StubNumericInputComponent, StubDropdownComponent],
     declarations: [SubAgentAdvancedSettingsDialogComponent],
   });
   const fixture = TestBed.createComponent(SubAgentAdvancedSettingsDialogComponent);

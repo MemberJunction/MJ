@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { renderComponentFixture, query, queryAll, text, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { Component, Input } from '@angular/core';
+import { renderComponentFixture, query, queryAll, text, createFakeProvider, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -15,19 +15,9 @@ import { ApplicationSettingsComponent } from './application-settings.component';
  * mjButton resolves via the real directive; SharedService is a bare stub (only used on save).
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class LoadingStub {
-  @Input() text = '';
-}
 @Component({ standalone: true, selector: 'mj-alert', template: '<ng-content></ng-content>' })
 class AlertStub {
   @Input() Variant = '';
-}
-@Component({ standalone: true, selector: 'mj-empty-state', template: '' })
-class EmptyStateStub {
-  @Input() Size = '';
-  @Input() Icon = '';
-  @Input() Title = '';
 }
 
 const systemApps = [
@@ -37,7 +27,7 @@ const systemApps = [
 
 async function render() {
   const fixture = renderComponentFixture(ApplicationSettingsComponent, {
-    imports: [MJButtonDirective, LoadingStub, AlertStub, EmptyStateStub],
+    imports: [MJButtonDirective, StubLoadingComponent, AlertStub, StubEmptyStateComponent],
     declarations: [ApplicationSettingsComponent],
     providers: [
       { provide: ApplicationManager, useValue: { GetAuthorizedSystemApps: () => systemApps } },

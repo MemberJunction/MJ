@@ -8,7 +8,7 @@ import type { EntityInfo } from '@memberjunction/core';
 import type { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
-import { query, queryAll, text, click, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { query, queryAll, text, click, capture, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { RecordChangesComponent, RestoreVersionEvent } from './ng-record-changes.component';
 
 /**
@@ -42,13 +42,6 @@ class StubSlidePanel {
   @Input() MinWidthPx: unknown;
   @Input() MaxWidthRatio: unknown;
   @Output() Closed = new EventEmitter<void>();
-}
-
-@Component({ standalone: false, selector: 'mj-loading', template: '<span class="stub-loading">{{ text }}</span>' })
-class StubLoading {
-  @Input() text = '';
-  @Input() size: unknown;
-  @Input() showText: unknown;
 }
 
 @Component({ standalone: false, selector: 'mj-restore-preview-panel', template: '' })
@@ -148,8 +141,8 @@ function provider(changes = CHANGES) {
 
 async function render(inputs: Record<string, unknown>): Promise<ComponentFixture<RecordChangesComponent>> {
   TestBed.configureTestingModule({
-    imports: [CommonModule, FormsModule, MJEmptyStateComponent],
-    declarations: [RecordChangesComponent, StubSlidePanel, StubLoading, StubRestorePreview, StubLabelCreate],
+    imports: [CommonModule, FormsModule, MJEmptyStateComponent, StubLoadingComponent],
+    declarations: [RecordChangesComponent, StubSlidePanel, StubRestorePreview, StubLabelCreate],
     providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } }],
   });
   const fixture = TestBed.createComponent(RecordChangesComponent);

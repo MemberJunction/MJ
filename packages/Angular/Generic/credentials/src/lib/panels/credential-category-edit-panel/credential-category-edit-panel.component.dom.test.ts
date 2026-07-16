@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComponentFixture } from '@angular/core/testing';
-import { renderComponentFixture, query, queryAll, text, click, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, click, capture, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { CredentialCategoryEditPanelComponent } from './credential-category-edit-panel.component';
 
 /**
@@ -18,8 +17,6 @@ import { CredentialCategoryEditPanelComponent } from './credential-category-edit
  */
 
 // Stub for the <mj-loading> element referenced in the template.
-@Component({ standalone: false, selector: 'mj-loading', template: '<span class="stub-loading">loading</span>' })
-class LoadingStubComponent {}
 
 const CATEGORIES = [
   { ID: 'c1', Name: 'Production', ParentID: null, Description: null, IconClass: null },
@@ -31,8 +28,8 @@ function render(
   setup?: (c: CredentialCategoryEditPanelComponent) => void,
 ): ComponentFixture<CredentialCategoryEditPanelComponent> {
   return renderComponentFixture(CredentialCategoryEditPanelComponent, {
-    imports: [CommonModule, FormsModule],
-    declarations: [CredentialCategoryEditPanelComponent, LoadingStubComponent],
+    imports: [CommonModule, FormsModule, StubLoadingComponent],
+    declarations: [CredentialCategoryEditPanelComponent],
     inputs: { Provider: createFakeProvider({ runViewResults: CATEGORIES }), isOpen: true, ...inputs },
     setup,
   });

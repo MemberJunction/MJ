@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { renderComponentFixture, query, queryAll, text, hasClass, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, hasClass, createFakeProvider, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import type { RunViewParams } from '@memberjunction/core';
 import { APIUsagePanelComponent } from './api-usage-panel.component';
 
@@ -15,11 +14,6 @@ import { APIUsagePanelComponent } from './api-usage-panel.component';
  * Async ngOnInit flips IsLoading, so tests await microtasks then a non-strict detectChanges.
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading { @Input() text = ''; }
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<span class="stub-empty">{{ Title }}</span>' })
-class StubEmptyState { @Input() Variant = ''; @Input() Icon = ''; @Input() Title = ''; @Input() Message = ''; @Input() Size = ''; }
-
 const log = (over: Partial<Record<string, unknown>>) =>
   ({ ID: '', APIKeyID: 'k1', Endpoint: '/x', Method: 'GET', StatusCode: 200, ResponseTimeMs: 100, __mj_CreatedAt: new Date().toISOString(), ...over });
 
@@ -30,7 +24,7 @@ async function render(logs: unknown[], keys: unknown[] = [key({})]) {
     runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: API Keys' ? keys : logs),
   });
   const fixture = renderComponentFixture(APIUsagePanelComponent, {
-    imports: [CommonModule, StubLoading, StubEmptyState],
+    imports: [CommonModule, StubLoadingComponent, StubEmptyStateComponent],
     declarations: [APIUsagePanelComponent],
     inputs: { Provider: provider },
   });

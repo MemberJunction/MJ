@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input } from '@angular/core';
+
 import { CommonModule } from '@angular/common';
-import { renderComponentFixture, query, text, hasClass, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, text, hasClass, capture, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { APIKeyEditPanelComponent } from './api-key-edit-panel.component';
 
 /**
@@ -13,12 +13,9 @@ import { APIKeyEditPanelComponent } from './api-key-edit-panel.component';
  * is synchronous here (no async init without a KeyId), so a single default render is NG0100-safe.
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading { @Input() text = ''; }
-
 const render = (Visible: boolean) =>
   renderComponentFixture(APIKeyEditPanelComponent, {
-    imports: [CommonModule, StubLoading],
+    imports: [CommonModule, StubLoadingComponent],
     declarations: [APIKeyEditPanelComponent],
     inputs: { Visible, KeyId: null },
   });

@@ -1,11 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJConversationEntity } from '@memberjunction/core-entities';
-import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { ExportModalComponent } from './export-modal.component';
 import { ExportService } from '../../services/export.service';
 import { DialogService } from '../../services/dialog.service';
@@ -21,8 +20,6 @@ import { ToastService } from '../../services/toast.service';
  * four format options + default selection, the format-specific option branches, the
  * canExport gating on the Export button, the error branch, and the action outputs.
  */
-@Component({ standalone: false, selector: 'mj-loading', template: '<span class="stub-loading">loading</span>' })
-class StubLoadingComponent {}
 
 describe('ExportModalComponent (DOM)', () => {
   const conversation = { ID: 'c1', Name: 'My Chat' } as unknown as MJConversationEntity;
@@ -33,8 +30,8 @@ describe('ExportModalComponent (DOM)', () => {
 
   const render = (inputs: Record<string, unknown> = {}, setup?: (c: ExportModalComponent) => void) =>
     renderComponentFixture(ExportModalComponent, {
-      imports: [CommonModule, FormsModule, MJDialogComponent, MJDialogActionsComponent, MJButtonDirective],
-      declarations: [ExportModalComponent, StubLoadingComponent],
+      imports: [CommonModule, FormsModule, MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, StubLoadingComponent],
+      declarations: [ExportModalComponent],
       providers: [
         { provide: ExportService, useValue: exportServiceStub },
         { provide: DialogService, useValue: {} },

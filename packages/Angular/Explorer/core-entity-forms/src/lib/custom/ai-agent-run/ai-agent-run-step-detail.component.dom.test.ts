@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Component, Input, forwardRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
-import { renderComponentFixture, query, text, attr, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, text, attr, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { AIAgentRunStepDetailComponent } from './ai-agent-run-step-detail.component';
 import type { TimelineItem } from './ai-agent-run-timeline.component';
 
@@ -43,13 +43,6 @@ class DeepDiffStub {
   @Input() treatNullAsUndefined = false;
 }
 
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<ng-content></ng-content>' })
-class EmptyStateStub {
-  @Input() Icon = '';
-  @Input() Size = '';
-  @Input() Title = '';
-}
-
 const item = (over: Partial<TimelineItem> = {}): TimelineItem => ({
   id: 's1',
   type: 'step',
@@ -67,7 +60,7 @@ const item = (over: Partial<TimelineItem> = {}): TimelineItem => ({
 
 const render = (selectedTimelineItem: TimelineItem | null) =>
   renderComponentFixture(AIAgentRunStepDetailComponent, {
-    imports: [CommonModule, FormsModule, CodeEditorStub, DeepDiffStub, EmptyStateStub],
+    imports: [CommonModule, FormsModule, CodeEditorStub, DeepDiffStub, StubEmptyStateComponent],
     declarations: [AIAgentRunStepDetailComponent],
     inputs: { selectedTimelineItem },
     autoDetect: true,

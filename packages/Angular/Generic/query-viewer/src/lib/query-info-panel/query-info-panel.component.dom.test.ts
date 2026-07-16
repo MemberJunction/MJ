@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
-import { query, queryAll, text, click, capture, hasClass } from '@memberjunction/ng-test-utils';
+import { query, queryAll, text, click, capture, hasClass, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { MJQueryEntityExtended, MJQueryFieldEntity, MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
@@ -45,12 +45,6 @@ class CodeEditorStubComponent {
 }
 
 /** Stub for <mj-empty-state> (empty fields/params/SQL sections) — template sets Size/Icon/Title. */
-@Component({ standalone: true, selector: 'mj-empty-state', template: '' })
-class EmptyStateStubComponent {
-  @Input() Size = '';
-  @Input() Icon = '';
-  @Input() Title = '';
-}
 
 function field(name: string, sqlType: string): MJQueryFieldEntity {
   return { Name: name, SQLFullType: sqlType, SQLBaseType: sqlType, Description: null, SourceEntity: null, SourceFieldName: null } as MJQueryFieldEntity;
@@ -88,7 +82,7 @@ function render(inputs: Record<string, unknown>): ComponentFixture<QueryInfoPane
       MJAccordionModule,
       MarkdownStubComponent,
       CodeEditorStubComponent,
-      EmptyStateStubComponent,
+      StubEmptyStateComponent,
     ],
     declarations: [QueryInfoPanelComponent],
   });

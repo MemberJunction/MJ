@@ -3,7 +3,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
-import { query } from '@memberjunction/ng-test-utils';
+import { query, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { AgentRequestDialogComponent } from './agent-request-dialog.component';
 import { AgentRequestPanelResult } from '../panels/agent-request-panel/agent-request-panel.component';
 
@@ -21,11 +21,6 @@ import { AgentRequestPanelResult } from '../panels/agent-request-panel/agent-req
  * stubs (below) so the template compiles without any blanket schema.
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class MjLoadingStubComponent {
-  @Input() text = '';
-}
-
 @Component({ standalone: true, selector: 'mj-agent-request-panel', template: '' })
 class AgentRequestPanelStubComponent {
   @Input() Request: MJAIAgentRequestEntity | null = null;
@@ -38,7 +33,7 @@ describe('AgentRequestDialogComponent (DOM)', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
-      imports: [CommonModule, MjLoadingStubComponent, AgentRequestPanelStubComponent],
+      imports: [CommonModule, StubLoadingComponent, AgentRequestPanelStubComponent],
       declarations: [AgentRequestDialogComponent],
     });
   });

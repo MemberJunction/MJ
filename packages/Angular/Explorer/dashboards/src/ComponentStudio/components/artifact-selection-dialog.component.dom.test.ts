@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input } from '@angular/core';
+import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective, MJEmptyStateComponent, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { ArtifactSelectionDialogComponent } from './artifact-selection-dialog.component';
 
 /**
@@ -19,17 +19,12 @@ import { ArtifactSelectionDialogComponent } from './artifact-selection-dialog.co
 class DialogStub {}
 @Component({ standalone: true, selector: 'mj-dialog-actions', template: '<ng-content></ng-content>' })
 class DialogActionsStub {}
-@Component({ standalone: true, selector: 'mj-loading', template: '<div class="stub-loading"></div>' })
-class LoadingStub {
-  @Input() text = '';
-  @Input() size = '';
-}
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 async function render() {
   const fixture = renderComponentFixture(ArtifactSelectionDialogComponent, {
-    imports: [CommonModule, FormsModule, MJButtonDirective, MJEmptyStateComponent, DialogStub, DialogActionsStub, LoadingStub],
+    imports: [CommonModule, FormsModule, MJButtonDirective, MJEmptyStateComponent, DialogStub, DialogActionsStub, StubLoadingComponent],
     declarations: [ArtifactSelectionDialogComponent],
     providers: [
       { provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } },
