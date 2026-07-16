@@ -23,7 +23,8 @@ export class MJMLAlgorithmFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMLTrainingRuns', sectionName: 'ML Training Runs', isExpanded: false },
             { sectionKey: 'mJMLTrainingPipelines', sectionName: 'ML Training Pipelines', isExpanded: false },
             { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false },
-            { sectionKey: 'mJMLAlgorithmUseCaseRankings', sectionName: 'ML Algorithm Use Case Rankings', isExpanded: false }
+            { sectionKey: 'mJMLAlgorithmUseCaseRankings', sectionName: 'ML Algorithm Use Case Rankings', isExpanded: false },
+            { sectionKey: 'mJMLComponents', sectionName: 'ML Components', isExpanded: false }
         ]);
     }
 }

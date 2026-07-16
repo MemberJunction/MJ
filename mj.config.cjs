@@ -132,6 +132,9 @@ module.exports = {
   // Default for CodeGen with larger batches, if this 
   // isn't in place, hard default of 5 is fallback, much slower
   advancedGeneration: {
+    // OFF for the MCF fresh-DB codegen: keyless LLM enrichment fails/degrades silently;
+    // deterministic NameRulesBySchema path is what we want (see PLAN.md A7.1).
+    enableAdvancedGeneration: false,
     batchSize: 15,
   },
 
