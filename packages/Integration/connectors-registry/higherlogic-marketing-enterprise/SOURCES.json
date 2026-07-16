@@ -1,0 +1,44 @@
+{
+  "Vendor": "Higher Logic Marketing Enterprise (formerly Real Magnet / MagnetMail)",
+  "Sources": [
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "Notes": "SOAP 1.1/1.2 WSDL contract for the 'MagnetMail Web Service' (targetNamespace http://www.magnetmail.net/). This is the machine-readable contract of record for this vendor -- treated at the OpenAPI/GraphQL-SDL tier for ranking purposes since it is the ONLY machine-readable schema the vendor exposes (no OpenAPI/Swagger/GraphQL SDL/Postman collection exists for this legacy ASMX/.NET SOAP service). Fetched via plain HTTP GET (no auth required to read the WSDL itself; auth (username/password via Authenticate + the mmAuthHeader SOAP header) is required to actually INVOKE operations). Saved RAW to sources/mmapi.wsdl.xml (222,862 bytes). 55 wsdl:operation entries parsed programmatically -- 55 also independently confirmed by the .asmx service-description page's operation-link count (cross-check, see EnumerationStdoutCount).",
+      "LocalPath": "sources/mmapi.wsdl.xml",
+      "CoversTaxonomies": [
+        "Recipients", "Groups", "Messages", "Message Categories", "Group Categories", "Tracking/Reporting",
+        "Uploads/List Import", "Unsubscribes/Suppression", "Saved Searches", "Event Signup", "User/Account",
+        "Recipient Fields", "Recipient History", "Personify Subscription Mapping", "Error Reference", "Authentication"
+      ]
+    },
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Notes": "The .asmx service-description page (a GET on the SOAP endpoint itself renders an ASP.NET-generated operations index: one <a href=\"mmapi.asmx?op=<Name>\"> link per operation, plus a one-line description for several). Used PURELY as an independent cross-check on the WSDL operation count -- 55 operation links counted, matching the WSDL's 55 <wsdl:operation> entries exactly. Also confirms host reachability/TLS/IIS stack independent of the WSDL parse. Saved RAW to sources/mmapi.asmx.html (20,397 bytes).",
+      "LocalPath": "sources/mmapi.asmx.html",
+      "CoversTaxonomies": ["(cross-check only -- operation-name + count corroboration, no field-level schema)"]
+    },
+    {
+      "URL": "N/A",
+      "AccessStatus": "404",
+      "SourceTier": 3,
+      "SourceCategory": "OfficialDocs",
+      "Notes": "Higher Logic's current public developer-docs domains (developer.higherlogic.com / help.higherlogic.com and successors) do not carry any surviving Real Magnet / MagnetMail / 'Marketing Enterprise' API reference as of this audit -- Higher Logic's public dev-docs focus entirely on the Vanilla/Community, Thrive, and AMS/Impexium-adjacent product lines. No prose developer-portal page for this specific SOAP API was found reachable. Web search corroborates: MagnetMail/Real Magnet was acquired by Higher Logic and rebranded 'Higher Logic Marketing Enterprise'; the only living technical artifact operators report using is this same mmapi.asmx WSDL (hlma-apie1.magnetmail.net), consistent with a legacy product kept alive on its original endpoint post-acquisition rather than re-documented on Higher Logic's current docs stack.",
+      "LocalPath": null,
+      "CoversTaxonomies": []
+    }
+  ],
+  "EnumerationStdoutCount": 55,
+  "WsdlPath": "sources/mmapi.wsdl.xml",
+  "IndependentCrossCheck": {
+    "wsdlOperationCount": 55,
+    "asmxServiceDescriptionPageOperationLinkCount": 55,
+    "namedComplexTypeCount_nonArrayOf": 82,
+    "match": true
+  }
+}

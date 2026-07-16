@@ -1,0 +1,412 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/higherlogic-thrive/scripts/verify-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T18:28:40.250Z",
+      "StructuredOutput": {
+        "urlChecks": {
+          "helpPageUS": {
+            "url": "https://api.connectedcommunity.org/v2.0/Help",
+            "status": 200,
+            "ok": true
+          },
+          "helpPageMirror": {
+            "url": "https://api.higherlogic.com/v2.0/Help",
+            "status": 200,
+            "ok": true
+          },
+          "helpPageCanada": {
+            "url": "https://api.onlinecommunity.ca/v2.0/Help",
+            "status": 200,
+            "ok": true
+          },
+          "bareUS": {
+            "url": "https://api.connectedcommunity.org/",
+            "status": 200,
+            "ok": true
+          },
+          "bareCanada": {
+            "url": "https://api.onlinecommunity.ca/",
+            "status": 200,
+            "ok": true
+          }
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.NavigationBaseURL"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/higherlogic-thrive/scripts/verify-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T18:28:40.250Z",
+      "StructuredOutput": {
+        "urlChecks": {
+          "helpPageUS": {
+            "url": "https://api.connectedcommunity.org/v2.0/Help",
+            "status": 200,
+            "ok": true
+          },
+          "helpPageMirror": {
+            "url": "https://api.higherlogic.com/v2.0/Help",
+            "status": 200,
+            "ok": true
+          },
+          "helpPageCanada": {
+            "url": "https://api.onlinecommunity.ca/v2.0/Help",
+            "status": 200,
+            "ok": true
+          },
+          "bareUS": {
+            "url": "https://api.connectedcommunity.org/",
+            "status": 200,
+            "ok": true
+          },
+          "bareCanada": {
+            "url": "https://api.onlinecommunity.ca/",
+            "status": 200,
+            "ok": true
+          }
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.RegionalBaseURLs"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/higherlogic-thrive/scripts/verify-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T18:28:40.250Z",
+      "StructuredOutput": {
+        "login": {
+          "sourceFile": "sources/ops/POST-api-v2.0-Authentication-Login.html",
+          "bodyModelName": "LoginCredentials",
+          "bodyFieldsConfirmed": [
+            "Username",
+            "Password"
+          ],
+          "responseModelName": "AuthToken",
+          "responseFieldsConfirmed": [
+            "Token"
+          ],
+          "rawExcerpt": "POST api/v2.0/Authentication/Login #bottom { background: #f68026; position: fixed; left: 0; right: 0; bottom: 0; font-weight: bold; color: #ffffff; padding: 7px; } Higher Logic API Home Help Page Home POST api/v2.0/Authentication/Login Generates a Authentication Token for the user with the specified credentials. Request Information URI Parameters None. Body Parameters Username and Password for a u"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.AuthFlow"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/higherlogic-thrive/scripts/verify-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T18:28:40.250Z",
+      "StructuredOutput": {
+        "widget": {
+          "sourceFile": "sources/ops/POST-api-v2.0-Authentication-Widget.html",
+          "bodyModelName": "WidgetToken",
+          "bodyFieldsConfirmed": [
+            "token"
+          ],
+          "responseModelName": "TenantInfo",
+          "responseFieldsConfirmed": [
+            "IAMKey",
+            "TenantShortName",
+            "TenantCode",
+            "DomainUrl",
+            "DomainLoginUrl"
+          ],
+          "rawExcerpt": "POST api/v2.0/Authentication/Widget #bottom { background: #f68026; position: fixed; left: 0; right: 0; bottom: 0; font-weight: bold; color: #ffffff; padding: 7px; } Higher Logic API Home Help Page Home POST api/v2.0/Authentication/Widget Used to Authenticate to the Widgets Platform Request Information URI Parameters None. Body Parameters An encrypted token, provided by the Connected Community CCAd"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.AlternativeAuthMechanisms"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/higherlogic-thrive/scripts/verify-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T18:28:40.250Z",
+      "StructuredOutput": {
+        "getTenantDetail": {
+          "sourceFile": "sources/ops/GET-api-v2.0-Authentication-GetTenantDetail_communityUrl.html",
+          "uriParamsConfirmed": [
+            "communityUrl"
+          ],
+          "responseModelName": "TenantDetail",
+          "responseFieldsConfirmed": [
+            "TenantKey",
+            "FullName",
+            "ShortName",
+            "HomePage"
+          ],
+          "rawExcerpt": "GET api/v2.0/Authentication/GetTenantDetail?communityUrl={communityUrl} #bottom { background: #f68026; position: fixed; left: 0; right: 0; bottom: 0; font-weight: bold; color: #ffffff; padding: 7px; } Higher Logic API Home Help Page Home GET api/v2.0/Authentication/GetTenantDetail?communityUrl={communityUrl} Returns information about a Tenant for a given Connected Community Site Url. Request Information URI Parameters Name Description Type Additional information communityUrl The Url for a Connec"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.RegionalBaseURLs.tenantIdentificationNote"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/higherlogic-thrive/scripts/enumerate-helppage.mjs",
+      "ScriptRunAt": "2026-07-08T18:28:40.250Z",
+      "StructuredOutput": {
+        "controllerCount": 25,
+        "totalOperations": 236,
+        "controllers": [
+          "Announcements",
+          "Answer",
+          "Authentication",
+          "AutomationRules",
+          "Blogs",
+          "Comments",
+          "Communities",
+          "Contacts",
+          "DataFeed",
+          "Demographics",
+          "Discussions",
+          "Events",
+          "EventSessions",
+          "ExternalActivity",
+          "ExternalSearch",
+          "Federation",
+          "Friends",
+          "Ideation",
+          "Messaging",
+          "Question",
+          "RegistrantClass",
+          "ResourceLibrary",
+          "System",
+          "Tagging",
+          "Volunteer"
+        ],
+        "hasWebhookController": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WebhooksAvailable"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/higherlogic-thrive/scripts/enumerate-helppage.mjs",
+      "ScriptRunAt": "2026-07-08T18:28:40.250Z",
+      "StructuredOutput": {
+        "controllerCount": 25,
+        "totalOperations": 236
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.RoutingConvention"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-09T18:24:43.796Z",
+      "StructuredOutput": {
+        "IOCreated": 34,
+        "IOFCreated": 546,
+        "leaves": 34
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-09T18:26:16.421Z",
+      "StructuredOutput": {
+        "IOCreated": 34,
+        "IOFCreated": 546,
+        "leaves": 34
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-09T18:27:24.822Z",
+      "StructuredOutput": {
+        "IOCreated": 34,
+        "IOFCreated": 546,
+        "leaves": 34
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-09T18:28:15.457Z",
+      "StructuredOutput": {
+        "IOCreated": 34,
+        "IOFCreated": 546,
+        "leaves": 34
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "sources/ops/Contacts-GetContact.html",
+      "ScriptRunAt": "2026-07-10T00:09:50.479Z",
+      "StructuredOutput": {
+        "field": "UpdatedByContactKey",
+        "type": "globally unique identifier (scalar guid)",
+        "fkTarget": "Contacts (self)",
+        "signal": "SOURCE_STUDY.md line 153: UpdatedByContactKey->Contacts (self); same *ByContactKey->Contacts pattern applied on EventSessions/Volunteers/CommunityMembers",
+        "value": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Contacts.UpdatedByContactKey.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "sources/ops/GET-api-v2.0-Communities-GetMyCommunityInvitations.html",
+      "ScriptRunAt": "2026-07-10T00:09:50.479Z",
+      "StructuredOutput": {
+        "field": "ContactKey",
+        "type": "globally unique identifier (scalar guid)",
+        "fkTarget": "Contacts",
+        "signal": "vendor-wide <Object>Key-references-<Object> naming convention codified in Configuration.universalPK; Contacts emitted in-run",
+        "value": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.CommunityInvitations.ContactKey.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "sources/ops/GET-api-v2.0-Communities-GetMyCommunityInvitations.html",
+      "ScriptRunAt": "2026-07-10T00:09:50.479Z",
+      "StructuredOutput": {
+        "field": "InvitedByContactKey",
+        "type": "globally unique identifier (scalar guid)",
+        "fkTarget": "Contacts",
+        "signal": "identical field name/shape to CommunityMembers.InvitedByContactKey (already FK->Contacts in prior round); sibling IO copy previously missed",
+        "value": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.CommunityInvitations.InvitedByContactKey.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.562Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "Announcements"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Announcements.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.566Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "Answers"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Answers.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.566Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "AutomationRuleContactData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.AutomationRuleContactData.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.567Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "Blogs"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Blogs.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.568Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "CommunityInvitations"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.CommunityInvitations.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.568Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "Contacts"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Contacts.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.569Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "DiscussionPosts"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.DiscussionPosts.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.570Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "DiscussionThreads"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.DiscussionThreads.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.570Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "EventSessions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.EventSessions.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.571Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "Events"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Events.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.571Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "Ideas"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Ideas.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.572Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "Questions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Questions.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.572Z",
+      "StructuredOutput": {
+        "decision": "emit",
+        "io": "VolunteerOpportunities"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.VolunteerOpportunities.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/fill-incremental-watermarks.mjs",
+      "ScriptRunAt": "2026-07-10T04:35:04.573Z",
+      "StructuredOutput": {
+        "decision": "already-set",
+        "io": "EventRegistrants"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.EventRegistrants.IncrementalWatermarkField"
+    }
+  ]
+}

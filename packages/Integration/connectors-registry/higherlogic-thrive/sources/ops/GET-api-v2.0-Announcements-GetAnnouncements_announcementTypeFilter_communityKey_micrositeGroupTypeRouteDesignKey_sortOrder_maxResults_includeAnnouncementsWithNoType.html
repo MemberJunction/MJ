@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/Announcements/GetAnnouncements?announcementTypeFilter={announcementTypeFilter}&amp;communityKey={communityKey}&amp;micrositeGroupTypeRouteDesignKey={micrositeGroupTypeRouteDesignKey}&amp;sortOrder={sortOrder}&amp;maxResults={maxResults}&amp;includeAnnouncementsWithNoType={includeAnnouncementsWithNoType}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/Announcements/GetAnnouncements?announcementTypeFilter={announcementTypeFilter}&amp;communityKey={communityKey}&amp;micrositeGroupTypeRouteDesignKey={micrositeGroupTypeRouteDesignKey}&amp;sortOrder={sortOrder}&amp;maxResults={maxResults}&amp;includeAnnouncementsWithNoType={includeAnnouncementsWithNoType}</h1>
+<div>
+    <p>Returns a list of Announcements given the specified criteria.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">announcementTypeFilter</td>
+                    <td class="parameter-documentation">
+                        <p>Comma-separated list of AnnouncementTypes to return. Optional: Returns all if none specified.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Default value is </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">communityKey</td>
+                    <td class="parameter-documentation">
+                        <p>Filters results by a specific CommunityKey Guid. Optional: Returns all if none specified.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Default value is </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">micrositeGroupTypeRouteDesignKey</td>
+                    <td class="parameter-documentation">
+                        <p>Filters results by a specific micrositeGroupTypeRouteDesignKey. Optional: Returns all if none specified.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Default value is </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">sortOrder</td>
+                    <td class="parameter-documentation">
+                        <p>Specify SQL-style sort order in a comma-separated string. Optional: Defaults to CreatedOn Date, in descending order if none specified.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Default value is </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">maxResults</td>
+                    <td class="parameter-documentation">
+                        <p>The maximum results to return. Optional: Defaults to 100 if not specified.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Default value is 100</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">includeAnnouncementsWithNoType</td>
+                    <td class="parameter-documentation">
+                        <p>If Set to true; returns announcements with no AnnouncementType set. If set to false; returns only announcements specified in the &#39;announcementTypeFilter&#39; parameter.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Default value is True</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>List of Announcements.</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=Announcement">Announcement</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">AnnouncementKey</td>
+                    <td class="parameter-documentation">
+                        <p>The primary key for the announcement.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AnnouncementText</td>
+                    <td class="parameter-documentation">
+                        <p>The announcement content/body.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AnnouncementTitle</td>
+                    <td class="parameter-documentation">
+                        <p>Title of the announcement.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AnnouncementType</td>
+                    <td class="parameter-documentation">
+                        <p>Type of announcement, otherwise string.Empty.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityKey</td>
+                    <td class="parameter-documentation">
+                        <p>If the announcement is associated to a community, is the primary key for the community, otherwise Guid.Empty.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityName</td>
+                    <td class="parameter-documentation">
+                        <p>If the announcement is associated to a community, is the name of the community, otherwise not included.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedByContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>The primary key of the contact who created the announcement.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactDisplayName</td>
+                    <td class="parameter-documentation">
+                        <p>The display name of the contact who created the announcement.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToContactProfile</td>
+                    <td class="parameter-documentation">
+                        <p>The url that links to the profile of the contact who created the announcement.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactLargePictureUrl</td>
+                    <td class="parameter-documentation">
+                        <p>The url of the large picture of the contact who created the announcement.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactSmallPictureUrl</td>
+                    <td class="parameter-documentation">
+                        <p>The url of the small picture of the contact who created the announcement.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>The DateTime at which the announcement was created.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsLoggingEnabled</td>
+                    <td class="parameter-documentation">
+                        <p>If logging is enabled for this item.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkText</td>
+                    <td class="parameter-documentation">
+                        <p>URL Text given at creation the text to be displayed with the LinkUrl. Optional, else is string.Empty.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkUrl</td>
+                    <td class="parameter-documentation">
+                        <p>Additional URL given at creation. Optional, else is string.Empty.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">MicrositeGroupTypeRouteDesignKey</td>
+                    <td class="parameter-documentation">
+                        <p>The primary key for the MicrositeGroupTypeRouteDesign for the announcement.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">OpenNewWindow</td>
+                    <td class="parameter-documentation">
+                        <p>If the LinkUrl should open in a new window.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Tags</td>
+                    <td class="parameter-documentation">
+                        <p>All of the tags indexed for the item. This includes user tags and admin based tags.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=ItemTagResponse">ItemTagResponse</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UpdatedByContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>The primary key of the contact who last updated the announcement.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UpdatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>The DateTime at which the announcement was last updated.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UserPermissions</td>
+                    <td class="parameter-documentation">
+                        <p>Permissions for actions the current user can take</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of string
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;AnnouncementKey&quot;: &quot;6bb73ef5-77b0-4ac9-8dc5-09950d0cb776&quot;,
+    &quot;AnnouncementText&quot;: &quot;sample string 2&quot;,
+    &quot;AnnouncementTitle&quot;: &quot;sample string 3&quot;,
+    &quot;AnnouncementType&quot;: &quot;sample string 4&quot;,
+    &quot;CommunityKey&quot;: &quot;dd622c60-f977-46c5-acb6-5a010dfa31ab&quot;,
+    &quot;CommunityName&quot;: &quot;sample string 6&quot;,
+    &quot;CreatedByContactKey&quot;: &quot;d814154e-9823-48f8-9e35-ba55d97eea67&quot;,
+    &quot;ContactDisplayName&quot;: &quot;sample string 8&quot;,
+    &quot;LinkToContactProfile&quot;: &quot;sample string 9&quot;,
+    &quot;ContactLargePictureUrl&quot;: &quot;sample string 10&quot;,
+    &quot;ContactSmallPictureUrl&quot;: &quot;sample string 11&quot;,
+    &quot;CreatedOn&quot;: &quot;2026-07-08T07:08:03.7248751Z&quot;,
+    &quot;IsLoggingEnabled&quot;: true,
+    &quot;LinkText&quot;: &quot;sample string 14&quot;,
+    &quot;LinkUrl&quot;: &quot;sample string 15&quot;,
+    &quot;MicrositeGroupTypeRouteDesignKey&quot;: &quot;f7b66786-1e11-4897-8bc6-67dcb90eb88d&quot;,
+    &quot;OpenNewWindow&quot;: true,
+    &quot;Tags&quot;: [
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagType&quot;: &quot;sample string 2&quot;
+      },
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagType&quot;: &quot;sample string 2&quot;
+      }
+    ],
+    &quot;UpdatedByContactKey&quot;: &quot;2e7484fc-54fd-4bbc-bd10-4e1d37e68a16&quot;,
+    &quot;UpdatedOn&quot;: &quot;2026-07-08T07:08:03.7248751Z&quot;,
+    &quot;UserPermissions&quot;: [
+      &quot;sample string 1&quot;,
+      &quot;sample string 2&quot;
+    ]
+  },
+  {
+    &quot;AnnouncementKey&quot;: &quot;6bb73ef5-77b0-4ac9-8dc5-09950d0cb776&quot;,
+    &quot;AnnouncementText&quot;: &quot;sample string 2&quot;,
+    &quot;AnnouncementTitle&quot;: &quot;sample string 3&quot;,
+    &quot;AnnouncementType&quot;: &quot;sample string 4&quot;,
+    &quot;CommunityKey&quot;: &quot;dd622c60-f977-46c5-acb6-5a010dfa31ab&quot;,
+    &quot;CommunityName&quot;: &quot;sample string 6&quot;,
+    &quot;CreatedByContactKey&quot;: &quot;d814154e-9823-48f8-9e35-ba55d97eea67&quot;,
+    &quot;ContactDisplayName&quot;: &quot;sample string 8&quot;,
+    &quot;LinkToContactProfile&quot;: &quot;sample string 9&quot;,
+    &quot;ContactLargePictureUrl&quot;: &quot;sample string 10&quot;,
+    &quot;ContactSmallPictureUrl&quot;: &quot;sample string 11&quot;,
+    &quot;CreatedOn&quot;: &quot;2026-07-08T07:08:03.7248751Z&quot;,
+    &quot;IsLoggingEnabled&quot;: true,
+    &quot;LinkText&quot;: &quot;sample string 14&quot;,
+    &quot;LinkUrl&quot;: &quot;sample string 15&quot;,
+    &quot;MicrositeGroupTypeRouteDesignKey&quot;: &quot;f7b66786-1e11-4897-8bc6-67dcb90eb88d&quot;,
+    &quot;OpenNewWindow&quot;: true,
+    &quot;Tags&quot;: [
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagType&quot;: &quot;sample string 2&quot;
+      },
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagType&quot;: &quot;sample string 2&quot;
+      }
+    ],
+    &quot;UpdatedByContactKey&quot;: &quot;2e7484fc-54fd-4bbc-bd10-4e1d37e68a16&quot;,
+    &quot;UpdatedOn&quot;: &quot;2026-07-08T07:08:03.7248751Z&quot;,
+    &quot;UserPermissions&quot;: [
+      &quot;sample string 1&quot;,
+      &quot;sample string 2&quot;
+    ]
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfAnnouncement xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+  &lt;Announcement&gt;
+    &lt;AnnouncementKey&gt;6bb73ef5-77b0-4ac9-8dc5-09950d0cb776&lt;/AnnouncementKey&gt;
+    &lt;AnnouncementText&gt;sample string 2&lt;/AnnouncementText&gt;
+    &lt;AnnouncementTitle&gt;sample string 3&lt;/AnnouncementTitle&gt;
+    &lt;AnnouncementType&gt;sample string 4&lt;/AnnouncementType&gt;
+    &lt;CommunityKey&gt;dd622c60-f977-46c5-acb6-5a010dfa31ab&lt;/CommunityKey&gt;
+    &lt;CommunityName&gt;sample string 6&lt;/CommunityName&gt;
+    &lt;ContactDisplayName&gt;sample string 8&lt;/ContactDisplayName&gt;
+    &lt;ContactLargePictureUrl&gt;sample string 10&lt;/ContactLargePictureUrl&gt;
+    &lt;ContactSmallPictureUrl&gt;sample string 11&lt;/ContactSmallPictureUrl&gt;
+    &lt;CreatedByContactKey&gt;d814154e-9823-48f8-9e35-ba55d97eea67&lt;/CreatedByContactKey&gt;
+    &lt;CreatedOn&gt;2026-07-08T03:08:03.7248751-04:00&lt;/CreatedOn&gt;
+    &lt;IsLoggingEnabled&gt;true&lt;/IsLoggingEnabled&gt;
+    &lt;LinkText&gt;sample string 14&lt;/LinkText&gt;
+    &lt;LinkToContactProfile&gt;sample string 9&lt;/LinkToContactProfile&gt;
+    &lt;LinkUrl&gt;sample string 15&lt;/LinkUrl&gt;
+    &lt;MicrositeGroupTypeRouteDesignKey&gt;f7b66786-1e11-4897-8bc6-67dcb90eb88d&lt;/MicrositeGroupTypeRouteDesignKey&gt;
+    &lt;OpenNewWindow&gt;true&lt;/OpenNewWindow&gt;
+    &lt;Tags xmlns:d3p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Tagging&quot;&gt;
+      &lt;d3p1:ItemTagResponse&gt;
+        &lt;d3p1:Tag&gt;sample string 1&lt;/d3p1:Tag&gt;
+        &lt;d3p1:TagType&gt;sample string 2&lt;/d3p1:TagType&gt;
+      &lt;/d3p1:ItemTagResponse&gt;
+      &lt;d3p1:ItemTagResponse&gt;
+        &lt;d3p1:Tag&gt;sample string 1&lt;/d3p1:Tag&gt;
+        &lt;d3p1:TagType&gt;sample string 2&lt;/d3p1:TagType&gt;
+      &lt;/d3p1:ItemTagResponse&gt;
+    &lt;/Tags&gt;
+    &lt;UpdatedByContactKey&gt;2e7484fc-54fd-4bbc-bd10-4e1d37e68a16&lt;/UpdatedByContactKey&gt;
+    &lt;UpdatedOn&gt;2026-07-08T03:08:03.7248751-04:00&lt;/UpdatedOn&gt;
+    &lt;UserPermissions xmlns:d3p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+      &lt;d3p1:string&gt;sample string 1&lt;/d3p1:string&gt;
+      &lt;d3p1:string&gt;sample string 2&lt;/d3p1:string&gt;
+    &lt;/UserPermissions&gt;
+  &lt;/Announcement&gt;
+  &lt;Announcement&gt;
+    &lt;AnnouncementKey&gt;6bb73ef5-77b0-4ac9-8dc5-09950d0cb776&lt;/AnnouncementKey&gt;
+    &lt;AnnouncementText&gt;sample string 2&lt;/AnnouncementText&gt;
+    &lt;AnnouncementTitle&gt;sample string 3&lt;/AnnouncementTitle&gt;
+    &lt;AnnouncementType&gt;sample string 4&lt;/AnnouncementType&gt;
+    &lt;CommunityKey&gt;dd622c60-f977-46c5-acb6-5a010dfa31ab&lt;/CommunityKey&gt;
+    &lt;CommunityName&gt;sample string 6&lt;/CommunityName&gt;
+    &lt;ContactDisplayName&gt;sample string 8&lt;/ContactDisplayName&gt;
+    &lt;ContactLargePictureUrl&gt;sample string 10&lt;/ContactLargePictureUrl&gt;
+    &lt;ContactSmallPictureUrl&gt;sample string 11&lt;/ContactSmallPictureUrl&gt;
+    &lt;CreatedByContactKey&gt;d814154e-9823-48f8-9e35-ba55d97eea67&lt;/CreatedByContactKey&gt;
+    &lt;CreatedOn&gt;2026-07-08T03:08:03.7248751-04:00&lt;/CreatedOn&gt;
+    &lt;IsLoggingEnabled&gt;true&lt;/IsLoggingEnabled&gt;
+    &lt;LinkText&gt;sample string 14&lt;/LinkText&gt;
+    &lt;LinkToContactProfile&gt;sample string 9&lt;/LinkToContactProfile&gt;
+    &lt;LinkUrl&gt;sample string 15&lt;/LinkUrl&gt;
+    &lt;MicrositeGroupTypeRouteDesignKey&gt;f7b66786-1e11-4897-8bc6-67dcb90eb88d&lt;/MicrositeGroupTypeRouteDesignKey&gt;
+    &lt;OpenNewWindow&gt;true&lt;/OpenNewWindow&gt;
+    &lt;Tags xmlns:d3p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Tagging&quot;&gt;
+      &lt;d3p1:ItemTagResponse&gt;
+        &lt;d3p1:Tag&gt;sample string 1&lt;/d3p1:Tag&gt;
+        &lt;d3p1:TagType&gt;sample string 2&lt;/d3p1:TagType&gt;
+      &lt;/d3p1:ItemTagResponse&gt;
+      &lt;d3p1:ItemTagResponse&gt;
+        &lt;d3p1:Tag&gt;sample string 1&lt;/d3p1:Tag&gt;
+        &lt;d3p1:TagType&gt;sample string 2&lt;/d3p1:TagType&gt;
+      &lt;/d3p1:ItemTagResponse&gt;
+    &lt;/Tags&gt;
+    &lt;UpdatedByContactKey&gt;2e7484fc-54fd-4bbc-bd10-4e1d37e68a16&lt;/UpdatedByContactKey&gt;
+    &lt;UpdatedOn&gt;2026-07-08T03:08:03.7248751-04:00&lt;/UpdatedOn&gt;
+    &lt;UserPermissions xmlns:d3p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+      &lt;d3p1:string&gt;sample string 1&lt;/d3p1:string&gt;
+      &lt;d3p1:string&gt;sample string 2&lt;/d3p1:string&gt;
+    &lt;/UserPermissions&gt;
+  &lt;/Announcement&gt;
+&lt;/ArrayOfAnnouncement&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

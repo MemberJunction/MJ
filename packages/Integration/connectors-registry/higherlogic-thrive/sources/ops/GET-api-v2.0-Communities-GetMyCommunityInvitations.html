@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/Communities/GetMyCommunityInvitations</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/Communities/GetMyCommunityInvitations</h1>
+<div>
+    <p>Retrieve all Community Invitations.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>Details of any open Community Invitations, along with information about the related Community.</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=CommunityInvitation">CommunityInvitation</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">ChangedDate</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Comment</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Community</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=Community">Community</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityInvitationKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactFirstLast</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EndDate</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">InvitationText</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">InvitedByContact</td>
+                    <td class="parameter-documentation">
+                        <p>Contact that sent the invite.</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=ContactConcise">ContactConcise</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">InvitedByContactKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">InvitedByDisplayName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">InvitedOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsActive</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsAdmin</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsBanned</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsLoggingEnabled</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToInvitedByLargeImage</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToInvitedBySmallImage</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;ChangedDate&quot;: &quot;2026-07-08T17:53:36.3553423Z&quot;,
+    &quot;Comment&quot;: &quot;sample string 2&quot;,
+    &quot;Community&quot;: null,
+    &quot;CommunityKey&quot;: &quot;c45b1110-a356-4fbc-b30b-682ef98892c4&quot;,
+    &quot;CommunityInvitationKey&quot;: &quot;c34b7912-ce60-4697-a52d-191006bbcf5e&quot;,
+    &quot;ContactFirstLast&quot;: &quot;sample string 5&quot;,
+    &quot;ContactKey&quot;: &quot;0bf18758-943b-427e-978a-be035c74c223&quot;,
+    &quot;EndDate&quot;: &quot;2026-07-08T17:53:36.3553423Z&quot;,
+    &quot;InvitationText&quot;: &quot;sample string 8&quot;,
+    &quot;InvitedByContact&quot;: {
+      &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+      &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+      &quot;ContactKey&quot;: &quot;8befffc0-f10c-4bc9-b280-5deb788611a1&quot;,
+      &quot;FirstName&quot;: &quot;sample string 4&quot;,
+      &quot;LastName&quot;: &quot;sample string 5&quot;,
+      &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+      &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+      &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+      &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+      &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.3553423Z&quot;,
+      &quot;UpdatedByContactKey&quot;: &quot;27e02c00-88bd-42ee-8342-bf555f28c0db&quot;,
+      &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+      &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+      &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+      &quot;Designation&quot;: &quot;sample string 15&quot;,
+      &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+      &quot;InformalName&quot;: &quot;sample string 17&quot;,
+      &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+      &quot;IsCompany&quot;: true,
+      &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+      &quot;AMSDirectoryOptOut&quot;: true,
+      &quot;HLDirectoryOptOut&quot;: true,
+      &quot;HLContactMeOptOut&quot;: true,
+      &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+      &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:36.3558967Z&quot;
+    },
+    &quot;InvitedByContactKey&quot;: &quot;ced182e1-600d-468b-a46a-0b9299adbe08&quot;,
+    &quot;InvitedByDisplayName&quot;: &quot;sample string 10&quot;,
+    &quot;InvitedOn&quot;: &quot;2026-07-08T17:53:36.3558967Z&quot;,
+    &quot;IsActive&quot;: true,
+    &quot;IsAdmin&quot;: true,
+    &quot;IsBanned&quot;: true,
+    &quot;IsLoggingEnabled&quot;: true,
+    &quot;LinkToInvitedByLargeImage&quot;: &quot;sample string 16&quot;,
+    &quot;LinkToInvitedBySmallImage&quot;: &quot;sample string 17&quot;
+  },
+  {
+    &quot;ChangedDate&quot;: &quot;2026-07-08T17:53:36.3553423Z&quot;,
+    &quot;Comment&quot;: &quot;sample string 2&quot;,
+    &quot;Community&quot;: null,
+    &quot;CommunityKey&quot;: &quot;c45b1110-a356-4fbc-b30b-682ef98892c4&quot;,
+    &quot;CommunityInvitationKey&quot;: &quot;c34b7912-ce60-4697-a52d-191006bbcf5e&quot;,
+    &quot;ContactFirstLast&quot;: &quot;sample string 5&quot;,
+    &quot;ContactKey&quot;: &quot;0bf18758-943b-427e-978a-be035c74c223&quot;,
+    &quot;EndDate&quot;: &quot;2026-07-08T17:53:36.3553423Z&quot;,
+    &quot;InvitationText&quot;: &quot;sample string 8&quot;,
+    &quot;InvitedByContact&quot;: {
+      &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+      &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+      &quot;ContactKey&quot;: &quot;8befffc0-f10c-4bc9-b280-5deb788611a1&quot;,
+      &quot;FirstName&quot;: &quot;sample string 4&quot;,
+      &quot;LastName&quot;: &quot;sample string 5&quot;,
+      &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+      &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+      &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+      &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+      &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.3553423Z&quot;,
+      &quot;UpdatedByContactKey&quot;: &quot;27e02c00-88bd-42ee-8342-bf555f28c0db&quot;,
+      &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+      &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+      &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+      &quot;Designation&quot;: &quot;sample string 15&quot;,
+      &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+      &quot;InformalName&quot;: &quot;sample string 17&quot;,
+      &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+      &quot;IsCompany&quot;: true,
+      &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+      &quot;AMSDirectoryOptOut&quot;: true,
+      &quot;HLDirectoryOptOut&quot;: true,
+      &quot;HLContactMeOptOut&quot;: true,
+      &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+      &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:36.3558967Z&quot;
+    },
+    &quot;InvitedByContactKey&quot;: &quot;ced182e1-600d-468b-a46a-0b9299adbe08&quot;,
+    &quot;InvitedByDisplayName&quot;: &quot;sample string 10&quot;,
+    &quot;InvitedOn&quot;: &quot;2026-07-08T17:53:36.3558967Z&quot;,
+    &quot;IsActive&quot;: true,
+    &quot;IsAdmin&quot;: true,
+    &quot;IsBanned&quot;: true,
+    &quot;IsLoggingEnabled&quot;: true,
+    &quot;LinkToInvitedByLargeImage&quot;: &quot;sample string 16&quot;,
+    &quot;LinkToInvitedBySmallImage&quot;: &quot;sample string 17&quot;
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfCommunityInvitation xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+  &lt;CommunityInvitation&gt;
+    &lt;ChangedDate&gt;2026-07-08T13:53:36.3553423-04:00&lt;/ChangedDate&gt;
+    &lt;Comment&gt;sample string 2&lt;/Comment&gt;
+    &lt;Community i:nil=&quot;true&quot; /&gt;
+    &lt;CommunityInvitationKey&gt;c34b7912-ce60-4697-a52d-191006bbcf5e&lt;/CommunityInvitationKey&gt;
+    &lt;CommunityKey&gt;c45b1110-a356-4fbc-b30b-682ef98892c4&lt;/CommunityKey&gt;
+    &lt;ContactFirstLast&gt;sample string 5&lt;/ContactFirstLast&gt;
+    &lt;ContactKey&gt;0bf18758-943b-427e-978a-be035c74c223&lt;/ContactKey&gt;
+    &lt;EndDate&gt;2026-07-08T13:53:36.3553423-04:00&lt;/EndDate&gt;
+    &lt;InvitationText&gt;sample string 8&lt;/InvitationText&gt;
+    &lt;InvitedByContact&gt;
+      &lt;AMSDirectoryOptOut&gt;true&lt;/AMSDirectoryOptOut&gt;
+      &lt;AgreedToTermsDateTime&gt;2026-07-08T13:53:36.3558967-04:00&lt;/AgreedToTermsDateTime&gt;
+      &lt;CompanyLegacyContactKey&gt;sample string 20&lt;/CompanyLegacyContactKey&gt;
+      &lt;CompanyName&gt;sample string 12&lt;/CompanyName&gt;
+      &lt;CompanyTitle&gt;sample string 13&lt;/CompanyTitle&gt;
+      &lt;ContactKey&gt;8befffc0-f10c-4bc9-b280-5deb788611a1&lt;/ContactKey&gt;
+      &lt;ContactStatusCode&gt;sample string 8&lt;/ContactStatusCode&gt;
+      &lt;Designation&gt;sample string 15&lt;/Designation&gt;
+      &lt;DisplayName&gt;sample string 6&lt;/DisplayName&gt;
+      &lt;EmailAddress&gt;sample string 7&lt;/EmailAddress&gt;
+      &lt;FirstName&gt;sample string 4&lt;/FirstName&gt;
+      &lt;HLContactMeOptOut&gt;true&lt;/HLContactMeOptOut&gt;
+      &lt;HLDirectoryOptOut&gt;true&lt;/HLDirectoryOptOut&gt;
+      &lt;InformalName&gt;sample string 17&lt;/InformalName&gt;
+      &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+      &lt;LargePictureUrl&gt;sample string 24&lt;/LargePictureUrl&gt;
+      &lt;LastName&gt;sample string 5&lt;/LastName&gt;
+      &lt;LegacyContactKey&gt;sample string 16&lt;/LegacyContactKey&gt;
+      &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+      &lt;MiddleName&gt;sample string 18&lt;/MiddleName&gt;
+      &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+      &lt;PrefixCode&gt;sample string 9&lt;/PrefixCode&gt;
+      &lt;SuffixCode&gt;sample string 14&lt;/SuffixCode&gt;
+      &lt;UpdatedByContactKey&gt;27e02c00-88bd-42ee-8342-bf555f28c0db&lt;/UpdatedByContactKey&gt;
+      &lt;UpdatedOn&gt;2026-07-08T13:53:36.3553423-04:00&lt;/UpdatedOn&gt;
+    &lt;/InvitedByContact&gt;
+    &lt;InvitedByContactKey&gt;ced182e1-600d-468b-a46a-0b9299adbe08&lt;/InvitedByContactKey&gt;
+    &lt;InvitedByDisplayName&gt;sample string 10&lt;/InvitedByDisplayName&gt;
+    &lt;InvitedOn&gt;2026-07-08T13:53:36.3558967-04:00&lt;/InvitedOn&gt;
+    &lt;IsActive&gt;true&lt;/IsActive&gt;
+    &lt;IsAdmin&gt;true&lt;/IsAdmin&gt;
+    &lt;IsBanned&gt;true&lt;/IsBanned&gt;
+    &lt;IsLoggingEnabled&gt;true&lt;/IsLoggingEnabled&gt;
+    &lt;LinkToInvitedByLargeImage&gt;sample string 16&lt;/LinkToInvitedByLargeImage&gt;
+    &lt;LinkToInvitedBySmallImage&gt;sample string 17&lt;/LinkToInvitedBySmallImage&gt;
+  &lt;/CommunityInvitation&gt;
+  &lt;CommunityInvitation&gt;
+    &lt;ChangedDate&gt;2026-07-08T13:53:36.3553423-04:00&lt;/ChangedDate&gt;
+    &lt;Comment&gt;sample string 2&lt;/Comment&gt;
+    &lt;Community i:nil=&quot;true&quot; /&gt;
+    &lt;CommunityInvitationKey&gt;c34b7912-ce60-4697-a52d-191006bbcf5e&lt;/CommunityInvitationKey&gt;
+    &lt;CommunityKey&gt;c45b1110-a356-4fbc-b30b-682ef98892c4&lt;/CommunityKey&gt;
+    &lt;ContactFirstLast&gt;sample string 5&lt;/ContactFirstLast&gt;
+    &lt;ContactKey&gt;0bf18758-943b-427e-978a-be035c74c223&lt;/ContactKey&gt;
+    &lt;EndDate&gt;2026-07-08T13:53:36.3553423-04:00&lt;/EndDate&gt;
+    &lt;InvitationText&gt;sample string 8&lt;/InvitationText&gt;
+    &lt;InvitedByContact&gt;
+      &lt;AMSDirectoryOptOut&gt;true&lt;/AMSDirectoryOptOut&gt;
+      &lt;AgreedToTermsDateTime&gt;2026-07-08T13:53:36.3558967-04:00&lt;/AgreedToTermsDateTime&gt;
+      &lt;CompanyLegacyContactKey&gt;sample string 20&lt;/CompanyLegacyContactKey&gt;
+      &lt;CompanyName&gt;sample string 12&lt;/CompanyName&gt;
+      &lt;CompanyTitle&gt;sample string 13&lt;/CompanyTitle&gt;
+      &lt;ContactKey&gt;8befffc0-f10c-4bc9-b280-5deb788611a1&lt;/ContactKey&gt;
+      &lt;ContactStatusCode&gt;sample string 8&lt;/ContactStatusCode&gt;
+      &lt;Designation&gt;sample string 15&lt;/Designation&gt;
+      &lt;DisplayName&gt;sample string 6&lt;/DisplayName&gt;
+      &lt;EmailAddress&gt;sample string 7&lt;/EmailAddress&gt;
+      &lt;FirstName&gt;sample string 4&lt;/FirstName&gt;
+      &lt;HLContactMeOptOut&gt;true&lt;/HLContactMeOptOut&gt;
+      &lt;HLDirectoryOptOut&gt;true&lt;/HLDirectoryOptOut&gt;
+      &lt;InformalName&gt;sample string 17&lt;/InformalName&gt;
+      &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+      &lt;LargePictureUrl&gt;sample string 24&lt;/LargePictureUrl&gt;
+      &lt;LastName&gt;sample string 5&lt;/LastName&gt;
+      &lt;LegacyContactKey&gt;sample string 16&lt;/LegacyContactKey&gt;
+      &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+      &lt;MiddleName&gt;sample string 18&lt;/MiddleName&gt;
+      &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+      &lt;PrefixCode&gt;sample string 9&lt;/PrefixCode&gt;
+      &lt;SuffixCode&gt;sample string 14&lt;/SuffixCode&gt;
+      &lt;UpdatedByContactKey&gt;27e02c00-88bd-42ee-8342-bf555f28c0db&lt;/UpdatedByContactKey&gt;
+      &lt;UpdatedOn&gt;2026-07-08T13:53:36.3553423-04:00&lt;/UpdatedOn&gt;
+    &lt;/InvitedByContact&gt;
+    &lt;InvitedByContactKey&gt;ced182e1-600d-468b-a46a-0b9299adbe08&lt;/InvitedByContactKey&gt;
+    &lt;InvitedByDisplayName&gt;sample string 10&lt;/InvitedByDisplayName&gt;
+    &lt;InvitedOn&gt;2026-07-08T13:53:36.3558967-04:00&lt;/InvitedOn&gt;
+    &lt;IsActive&gt;true&lt;/IsActive&gt;
+    &lt;IsAdmin&gt;true&lt;/IsAdmin&gt;
+    &lt;IsBanned&gt;true&lt;/IsBanned&gt;
+    &lt;IsLoggingEnabled&gt;true&lt;/IsLoggingEnabled&gt;
+    &lt;LinkToInvitedByLargeImage&gt;sample string 16&lt;/LinkToInvitedByLargeImage&gt;
+    &lt;LinkToInvitedBySmallImage&gt;sample string 17&lt;/LinkToInvitedBySmallImage&gt;
+  &lt;/CommunityInvitation&gt;
+&lt;/ArrayOfCommunityInvitation&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

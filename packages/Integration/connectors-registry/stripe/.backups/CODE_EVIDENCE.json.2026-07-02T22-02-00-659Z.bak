@@ -1,0 +1,289 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/sources/full-accounting-ledger-FINAL.json",
+      "ScriptRunAt": "2026-07-02T19:57:32.000Z",
+      "StructuredOutput": {
+        "enumeratedUniverse": 1703,
+        "coverable": 33,
+        "deletedVariantFolded": 11,
+        "outOfScopeFamilyCount": 450,
+        "outOfScopeFamilyNamedBuckets": 18,
+        "informational": 2,
+        "webhookEventNames": 151,
+        "subShapeOfCoverable": 839,
+        "otherCoreObjectsOutsideRequested34": 232,
+        "sum": 1703,
+        "match": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/sources/stripe-fk-detection.json",
+      "ScriptRunAt": "2026-07-02T19:57:32.000Z",
+      "StructuredOutput": {
+        "mechanism": "x-expansionResources vendor extension walk over all 33 in-scope schemas",
+        "totalFKFieldsDetected": 106,
+        "topFKTargets": {
+          "customer": 11,
+          "account": 10,
+          "balance_transaction": 9,
+          "charge": 8,
+          "invoice": 6
+        },
+        "note": "Distinguishes true FKs (anyOf[bare-string, $ref] + x-expansionResources) from embedded sub-objects that use $ref but have no x-expansionResources (e.g. charge.billing_details) -- the latter correctly excluded as non-FK."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*.relationship-model"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/sources/stripe-extraction-v2.json",
+      "ScriptRunAt": "2026-07-02T19:57:32.000Z",
+      "StructuredOutput": {
+        "mechanism": "walked spec3.json paths + components.schemas for the 33 in-scope leaves",
+        "objectsWithCursorPagination": 28,
+        "objectsWithNoListEndpoint": [
+          "source",
+          "token"
+        ],
+        "objectsWithCreatedWatermark": 24,
+        "objectsWithoutCreatedWatermark": [
+          "payment_method",
+          "subscription_item",
+          "quote",
+          "payment_link",
+          "source",
+          "token"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PaginationDefaults"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/sources/stripe-extraction-v2.json",
+      "ScriptRunAt": "2026-07-02T19:57:32.000Z",
+      "StructuredOutput": {
+        "mechanism": "grep content-type across all POST/PUT/PATCH requestBody definitions in spec3.json",
+        "formUrlencodedCount": 292,
+        "jsonCount": 0,
+        "otherCount": 1,
+        "otherException": "POST /v1/files (multipart/form-data, out-of-scope)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WriteBodyEncoding"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/sources/enumeration-union.json",
+      "ScriptRunAt": "2026-07-02T19:57:32.000Z",
+      "StructuredOutput": {
+        "enumerator": "enumerate-catalog.mjs",
+        "spec3json": {
+          "format": "openapi-json",
+          "count": 1431,
+          "fieldCount": 6661,
+          "confidence": "high"
+        },
+        "spec3sdkjson": {
+          "format": "openapi-json",
+          "count": 1703,
+          "fieldCount": 7039,
+          "confidence": "high"
+        },
+        "postmanCollection": {
+          "format": "unrecognized",
+          "count": 0,
+          "fieldCount": null,
+          "confidence": "low",
+          "reason": "structured {path,host,variable} URL objects with no top-level raw field -- a real, narrow gap in the shared enumerator for this URL encoding style, documented not silently ignored"
+        },
+        "unionCount": 1706
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-02T20:31:11.937Z",
+      "StructuredOutput": {
+        "enumeratedCandidates": 141,
+        "emittedIOs": 55,
+        "emittedIOFs": 1321,
+        "skipped": 86,
+        "specSchemaCount": 1703
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/SOURCE_STUDY.md",
+      "ScriptRunAt": "2026-07-02T21:03:59.695Z",
+      "StructuredOutput": {
+        "finding": "universal-id-PK",
+        "rule": "Every in-scope schema has a required, non-expandable `id: string` (description \"Unique identifier for the object.\") + an `object` discriminator enum — both universal and Tier-1 ExplicitStatement.",
+        "pkEmittedOn": "id",
+        "iosWithPrimaryKey": 52,
+        "iosTotal": 55,
+        "zeroPKSingletons": [
+          "balance",
+          "balance_settings",
+          "cash_balance"
+        ],
+        "zeroPKReason": "Genuine Stripe singleton objects with no `id` property — provable-only zero-PK is correct, not a gap.",
+        "prefixContract": "NOT encoded — Stripe explicitly disclaims a canonical/contractual ID-prefix list (§4.5); prefixes are informational only.",
+        "source": "SOURCE_STUDY.md §4.5"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.*.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/sources/stripe-fk-detection.json",
+      "ScriptRunAt": "2026-07-02T21:03:59.695Z",
+      "StructuredOutput": {
+        "mechanism": "x-expansionResources vendor-extension walk over all in-scope schemas",
+        "totalFKFieldsDetected": 106,
+        "fkFieldsEmitted": 104,
+        "emittedFilter": "Emitted only when the FK target resolves to a sibling IO actually emitted this run (out-of-scope targets left FK-less per the resolve-only-to-a-sibling-IO rule).",
+        "fkKindsDistinguished": {
+          "expandable-fk": "anyOf[bare-string, $ref] + x-expansionResources → true scalar FK (emitted as RelatedIntegrationObjectID)",
+          "embedded-subobject": "$ref WITHOUT x-expansionResources (e.g. charge.billing_details) → column, NOT an FK",
+          "nested-list-envelope": "a list/collection of records → access-path, NOT a scalar FK"
+        },
+        "targetResolution": "104/104 emitted RelatedIntegrationObjectID values resolve to a real, emitted sibling IO name in this run (zero dangling/mismatched, incl. dotted `checkout.session`).",
+        "source": "sources/stripe-fk-detection.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.*.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/scripts/amend-round2.mjs",
+      "ScriptRunAt": "2026-07-02T22:01:40.240Z",
+      "StructuredOutput": {
+        "finding": "watermark-field-not-in-object",
+        "object": "invoiceitem",
+        "before": "created",
+        "after": "date",
+        "proof": "spec3.sdk.json components.schemas.invoiceitem.properties = [amount, currency, customer, customer_account, date, description, discountable, discounts, id, invoice, livemode, metadata, net_amount, object, parent, period, pricing, proration, proration_details, quantity, quantity_decimal, tax_rates, test_clock] — `date` present, `created` ABSENT.",
+        "dateFieldDesc": "Time at which the object was created. Measured in seconds since the Unix epoch.",
+        "listFilterParam": "/v1/invoiceitems GET exposes a `created` deepObject range-filter param (\"Only return invoice items that were created during the given date interval\") — so the outbound filter stays created[gte] while the record-cursor read from returned rows is `date`.",
+        "sweep": "All 29 SupportsIncrementalSync=true IOs cross-checked against their own spec property list; invoiceitem is the SOLE violation. The other 28 (account, charge, customer, invoice, payout, subscription, ...) genuinely carry a `created` property.",
+        "source": "packages/Integration/connectors-registry/stripe/sources/spec3.sdk.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.invoiceitem.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/scripts/amend-round2.mjs",
+      "ScriptRunAt": "2026-07-02T22:02:00.352Z",
+      "StructuredOutput": {
+        "finding": "watermark-field-not-in-object",
+        "object": "invoiceitem",
+        "before": "created",
+        "after": "date",
+        "proof": "spec3.sdk.json components.schemas.invoiceitem.properties = [amount, currency, customer, customer_account, date, description, discountable, discounts, id, invoice, livemode, metadata, net_amount, object, parent, period, pricing, proration, proration_details, quantity, quantity_decimal, tax_rates, test_clock] — `date` present, `created` ABSENT.",
+        "dateFieldDesc": "Time at which the object was created. Measured in seconds since the Unix epoch.",
+        "listFilterParam": "/v1/invoiceitems GET exposes a `created` deepObject range-filter param (\"Only return invoice items that were created during the given date interval\") — so the outbound filter stays created[gte] while the record-cursor read from returned rows is `date`.",
+        "sweep": "All 29 SupportsIncrementalSync=true IOs cross-checked against their own spec property list; invoiceitem is the SOLE violation. The other 28 (account, charge, customer, invoice, payout, subscription, ...) genuinely carry a `created` property.",
+        "source": "packages/Integration/connectors-registry/stripe/sources/spec3.sdk.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.invoiceitem.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/scripts/amend-round2.mjs",
+      "ScriptRunAt": "2026-07-02T22:02:00.352Z",
+      "StructuredOutput": {
+        "finding": "in-scope-promotion",
+        "object": "country_spec",
+        "category": "Connect (Platform/Accounts)",
+        "apiPath": "/v1/country_specs",
+        "supportsWrite": false,
+        "createPath": null,
+        "updatePath": null,
+        "deletePath": null,
+        "pagination": "Cursor",
+        "incremental": false,
+        "watermarkField": null,
+        "fieldCount": 8,
+        "fkCount": 0,
+        "pk": "id",
+        "rationale": "Top-level GET-list syncable record in the core payments/billing/connect/checkout surface. Paths/write-ops/pagination/watermark all derived from the spec (provable-only).",
+        "source": "packages/Integration/connectors-registry/stripe/sources/spec3.sdk.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.country_spec"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/scripts/amend-round2.mjs",
+      "ScriptRunAt": "2026-07-02T22:02:00.352Z",
+      "StructuredOutput": {
+        "finding": "in-scope-promotion",
+        "object": "exchange_rate",
+        "category": "Money Movement",
+        "apiPath": "/v1/exchange_rates",
+        "supportsWrite": false,
+        "createPath": null,
+        "updatePath": null,
+        "deletePath": null,
+        "pagination": "Cursor",
+        "incremental": false,
+        "watermarkField": null,
+        "fieldCount": 3,
+        "fkCount": 0,
+        "pk": "id",
+        "rationale": "Top-level GET-list syncable record in the core payments/billing/connect/checkout surface. Paths/write-ops/pagination/watermark all derived from the spec (provable-only).",
+        "source": "packages/Integration/connectors-registry/stripe/sources/spec3.sdk.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.exchange_rate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/scripts/amend-round2.mjs",
+      "ScriptRunAt": "2026-07-02T22:02:00.352Z",
+      "StructuredOutput": {
+        "finding": "in-scope-promotion",
+        "object": "review",
+        "category": "Core Payments",
+        "apiPath": "/v1/reviews",
+        "supportsWrite": false,
+        "createPath": null,
+        "updatePath": null,
+        "deletePath": null,
+        "pagination": "Cursor",
+        "incremental": true,
+        "watermarkField": "created",
+        "fieldCount": 14,
+        "fkCount": 2,
+        "pk": "id",
+        "rationale": "Top-level GET-list syncable record in the core payments/billing/connect/checkout surface. Paths/write-ops/pagination/watermark all derived from the spec (provable-only).",
+        "source": "packages/Integration/connectors-registry/stripe/sources/spec3.sdk.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.review"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/scripts/amend-round2.mjs",
+      "ScriptRunAt": "2026-07-02T22:02:00.352Z",
+      "StructuredOutput": {
+        "finding": "in-scope-promotion",
+        "object": "tax_code",
+        "category": "Products & Pricing",
+        "apiPath": "/v1/tax_codes",
+        "supportsWrite": false,
+        "createPath": null,
+        "updatePath": null,
+        "deletePath": null,
+        "pagination": "Cursor",
+        "incremental": false,
+        "watermarkField": null,
+        "fieldCount": 4,
+        "fkCount": 0,
+        "pk": "id",
+        "rationale": "Top-level GET-list syncable record in the core payments/billing/connect/checkout surface. Paths/write-ops/pagination/watermark all derived from the spec (provable-only).",
+        "source": "packages/Integration/connectors-registry/stripe/sources/spec3.sdk.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tax_code"
+    }
+  ]
+}

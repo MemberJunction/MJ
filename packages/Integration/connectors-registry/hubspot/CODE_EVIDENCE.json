@@ -7258,6 +7258,74 @@
       },
       "SchemaValidationStatus": "Passed",
       "TargetField": "integration.Configuration.skippedObjects"
+    },
+    {
+      "ScriptPath": "scripts/amend-round-delta2.mjs",
+      "ScriptRunAt": "2026-07-02T08:16:42.684Z",
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_aeo_prompts",
+      "StructuredOutput": {
+        "emittedIOs": [
+          "marketing_aeo_prompts",
+          "marketing_aeo_prompt_runs",
+          "marketing_aeo_recommendations",
+          "settings_teams",
+          "webhooks_journal"
+        ],
+        "goalsStatus": "Disabled",
+        "clearedIsForeignKey": 120,
+        "clearedIsMutable": 25,
+        "clearedParentObjectName": 4,
+        "clearedParentObjectIDFieldName": 4
+      }
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/hubspot/scripts/probeamend-pagination.mjs",
+      "ScriptRunAt": "2026-07-02T15:23:12.243Z",
+      "StructuredOutput": {
+        "probeAmend": "pagination:skip->after",
+        "object": "contacts",
+        "priorVerdict": "WRONG — 'skip' did NOT advance (silently-ignored-param class)",
+        "correction": "Configuration.pagination.skipParam='after' + cursorResponsePath='paging.next.after' (opaque cursor token), sourced from OpenAPI spec param `after` (type:string).",
+        "reprobeVerdict": "CONFIRMED — 'after' advanced past page 1 via token cursor (paging.next.after)",
+        "reprobeArtifact": "packages/Integration/connectors-registry/hubspot/runs/probeamend/reprobe-verdicts-resolved.json",
+        "metadataSha256": "bbecf9fa68606ec1e64abc2f71bce7ee7d4883f25304bfe0435acb452a919818",
+        "resolved": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts.Configuration.pagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/hubspot/scripts/probeamend-pagination.mjs",
+      "ScriptRunAt": "2026-07-02T15:23:12.243Z",
+      "StructuredOutput": {
+        "probeAmend": "pagination:skip->after",
+        "object": "companies",
+        "priorVerdict": "WRONG — 'skip' did NOT advance (silently-ignored-param class)",
+        "correction": "Configuration.pagination.skipParam='after' + cursorResponsePath='paging.next.after' (opaque cursor token), sourced from OpenAPI spec param `after` (type:string).",
+        "reprobeVerdict": "CONFIRMED — 'after' advanced past page 1 via token cursor (paging.next.after)",
+        "reprobeArtifact": "packages/Integration/connectors-registry/hubspot/runs/probeamend/reprobe-verdicts-resolved.json",
+        "metadataSha256": "bbecf9fa68606ec1e64abc2f71bce7ee7d4883f25304bfe0435acb452a919818",
+        "resolved": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.companies.Configuration.pagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/hubspot/scripts/probeamend-pagination.mjs",
+      "ScriptRunAt": "2026-07-02T15:23:12.243Z",
+      "StructuredOutput": {
+        "probeAmend": "pagination:skip->after",
+        "object": "deals",
+        "priorVerdict": "WRONG — 'skip' did NOT advance (silently-ignored-param class)",
+        "correction": "Configuration.pagination.skipParam='after' + cursorResponsePath='paging.next.after' (opaque cursor token), sourced from OpenAPI spec param `after` (type:string).",
+        "reprobeVerdict": "CONFIRMED — 'after' advanced past page 1 via token cursor (paging.next.after)",
+        "reprobeArtifact": "packages/Integration/connectors-registry/hubspot/runs/probeamend/reprobe-verdicts-resolved.json",
+        "metadataSha256": "bbecf9fa68606ec1e64abc2f71bce7ee7d4883f25304bfe0435acb452a919818",
+        "resolved": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.deals.Configuration.pagination"
     }
   ]
 }

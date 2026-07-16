@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/Contacts/GetContactContributions</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/Contacts/GetContactContributions</h1>
+<div>
+    <p>Returns a list of published items a given Contact has authored.
+            The list includes Announcements, Blogs, Discussion Messages, Library Entries, Questions, and Answers.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p>Properties to apply to return a paginated/scrollable list of items</p>
+
+<a href="/Help/ResourceModel?modelName=ContactContributionRequest">ContactContributionRequest</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">ContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>The key of the Contact whose contributions to return</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SortOrder</td>
+                    <td class="parameter-documentation">
+                        <p>Sort Order possible values: asc or desc. Default: desc</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">NumberToReturn</td>
+                    <td class="parameter-documentation">
+                        <p>Number of items to return in the feed. Valid number to return is between 0 and 25. Default is 10.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Direction</td>
+                    <td class="parameter-documentation">
+                        <p>Direction to fetch from the specified marker
+               up (Larger Value)
+               down (Smaller Value)</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Marker</td>
+                    <td class="parameter-documentation">
+                        <p>Origin marker that can be used to grab the next set of feed items based on a marker from a previous request.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Request Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;ContactKey&quot;: &quot;951ccf54-8e01-413d-9024-3884f1ef4b0b&quot;,
+  &quot;SortOrder&quot;: &quot;sample string 2&quot;,
+  &quot;NumberToReturn&quot;: 3,
+  &quot;Direction&quot;: &quot;sample string 4&quot;,
+  &quot;Marker&quot;: &quot;sample string 5&quot;
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ContactContributionRequest xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.DataFeed&quot;&gt;
+  &lt;Direction&gt;sample string 4&lt;/Direction&gt;
+  &lt;Marker&gt;sample string 5&lt;/Marker&gt;
+  &lt;NumberToReturn&gt;3&lt;/NumberToReturn&gt;
+  &lt;ContactKey&gt;951ccf54-8e01-413d-9024-3884f1ef4b0b&lt;/ContactKey&gt;
+  &lt;SortOrder&gt;sample string 2&lt;/SortOrder&gt;
+&lt;/ContactContributionRequest&gt;
+</pre>
+        </div>
+</div>
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>A list of items and pagination/scrolling properties</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=DataFeedItem">DataFeedItem</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">ItemKey</td>
+                    <td class="parameter-documentation">
+                        <p>The primary key associated with the item based on its content type</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Title</td>
+                    <td class="parameter-documentation">
+                        <p>Title</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Body</td>
+                    <td class="parameter-documentation">
+                        <p>Description</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Contributor</td>
+                    <td class="parameter-documentation">
+                        <p>Author or Contributor of the data feed item</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=DataFeedContributor">DataFeedContributor</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ParentContainer</td>
+                    <td class="parameter-documentation">
+                        <p>Parent in which the data feed item is contained. Ex: Community</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=DataFeedParentContainer">DataFeedParentContainer</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ActionText</td>
+                    <td class="parameter-documentation">
+                        <p>Action Taken Text</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreateDate</td>
+                    <td class="parameter-documentation">
+                        <p>UTC timestamp for when the item was created. Use only if PublishedDate is not available.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PublishedDate</td>
+                    <td class="parameter-documentation">
+                        <p>UTC timestamp for when the item was published to users on the site</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PublicationStatus</td>
+                    <td class="parameter-documentation">
+                        <p>Item status determined by PublishedOn date - the possible statuses include &quot;scheduled&quot;, &quot;draft&quot;, and &quot;published&quot;</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Date01</td>
+                    <td class="parameter-documentation">
+                        <p>Custom date field used for certain content types such as the start date for events. As well as
+            best response date for questions and answers.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Date02</td>
+                    <td class="parameter-documentation">
+                        <p>Custom date field used for certain content types such as the end date for events</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">HasRecommended</td>
+                    <td class="parameter-documentation">
+                        <p>Whether or not the current user has liked/recommended the feed item</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">HasReplied</td>
+                    <td class="parameter-documentation">
+                        <p>Whether or not the current user has replied/commented on the feed item</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Bool01</td>
+                    <td class="parameter-documentation">
+                        <p>Generic boolean value specific to the type, ex: Whether or not the current user has registered for the item/event.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Bool02</td>
+                    <td class="parameter-documentation">
+                        <p>Generic boolean value specific to the type, ex: Whether or not the item/event is open for registration.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ItemType</td>
+                    <td class="parameter-documentation">
+                        <p>The type of content, such as blog, announcement, ...</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToViewItem</td>
+                    <td class="parameter-documentation">
+                        <p>Provides a URL to view the item on the website</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Tags</td>
+                    <td class="parameter-documentation">
+                        <p>All the tags indexed for the item. This includes user tags and admin based tags</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=ItemTagResponse">ItemTagResponse</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RecommendationCount</td>
+                    <td class="parameter-documentation">
+                        <p>The number of times the item has been &quot;recommended&quot; or &quot;liked&quot;</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AttachmentsContainer</td>
+                    <td class="parameter-documentation">
+                        <p>The attachment container info, the attachments within the container, and their necessary metadata related to the specified item</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=DataFeedAttachmentsContainer">DataFeedAttachmentsContainer</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ResponseCount</td>
+                    <td class="parameter-documentation">
+                        <p>The number of responses for the thread that the item is contained in. If it is not contained within a thread it should not return.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Text01</td>
+                    <td class="parameter-documentation">
+                        <p>Custom text field used for certain content types such as the location for events</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Text02</td>
+                    <td class="parameter-documentation">
+                        <p>Custom text field used for certain content types such as the start/end date string for events</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Text03</td>
+                    <td class="parameter-documentation">
+                        <p>Custom text field used for certain content types such as the event type name for events</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Text04</td>
+                    <td class="parameter-documentation">
+                        <p>Custom text field used for certain content types such as the registration type for events</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FeaturedImageUrl</td>
+                    <td class="parameter-documentation">
+                        <p>Returns a link to an image/icon to display for the data feed item</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ThreadKey</td>
+                    <td class="parameter-documentation">
+                        <p>The ID of the thread containing the item</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Marker</td>
+                    <td class="parameter-documentation">
+                        <p>Item origin marker</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;ItemKey&quot;: &quot;07517e4b-c744-459e-beb4-d8d8a7cb1b90&quot;,
+    &quot;Title&quot;: &quot;sample string 2&quot;,
+    &quot;Body&quot;: &quot;sample string 3&quot;,
+    &quot;Contributor&quot;: {
+      &quot;ContactKey&quot;: &quot;a4b19a43-504b-4e2b-bbcd-9286cb30cef0&quot;,
+      &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+      &quot;FirstName&quot;: &quot;sample string 3&quot;,
+      &quot;LastName&quot;: &quot;sample string 4&quot;,
+      &quot;DisplayName&quot;: &quot;sample string 5&quot;,
+      &quot;ViewUrl&quot;: &quot;sample string 6&quot;
+    },
+    &quot;ParentContainer&quot;: {
+      &quot;ContainerKey&quot;: &quot;4286aff9-4085-4af6-8a8e-0d40d519d2ff&quot;,
+      &quot;ContainerName&quot;: &quot;sample string 2&quot;,
+      &quot;ContainerType&quot;: &quot;sample string 3&quot;
+    },
+    &quot;ActionText&quot;: &quot;sample string 4&quot;,
+    &quot;CreateDate&quot;: &quot;2026-07-08T17:53:36.598096Z&quot;,
+    &quot;PublishedDate&quot;: &quot;2026-07-08T17:53:36.598096Z&quot;,
+    &quot;PublicationStatus&quot;: &quot;published&quot;,
+    &quot;Date01&quot;: &quot;2026-07-08T17:53:36.598096Z&quot;,
+    &quot;Date02&quot;: &quot;2026-07-08T17:53:36.598096Z&quot;,
+    &quot;HasRecommended&quot;: true,
+    &quot;HasReplied&quot;: true,
+    &quot;Bool01&quot;: true,
+    &quot;Bool02&quot;: true,
+    &quot;ItemType&quot;: &quot;sample string 13&quot;,
+    &quot;LinkToViewItem&quot;: &quot;sample string 14&quot;,
+    &quot;Tags&quot;: [
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagType&quot;: &quot;sample string 2&quot;
+      },
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagType&quot;: &quot;sample string 2&quot;
+      }
+    ],
+    &quot;RecommendationCount&quot;: 15,
+    &quot;AttachmentsContainer&quot;: {
+      &quot;DocumentKey&quot;: &quot;b1d5048b-ddcd-490e-a2cb-93ddf524d0e9&quot;,
+      &quot;Attachments&quot;: [
+        {
+          &quot;AttachmentKey&quot;: &quot;80a3318e-88c9-403f-a018-0e6c026ed047&quot;,
+          &quot;AttachmentName&quot;: &quot;sample string 2&quot;,
+          &quot;AttachmentUrl&quot;: &quot;sample string 3&quot;,
+          &quot;ViewUrl&quot;: &quot;sample string 4&quot;,
+          &quot;MimeType&quot;: &quot;sample string 5&quot;
+        },
+        {
+          &quot;AttachmentKey&quot;: &quot;80a3318e-88c9-403f-a018-0e6c026ed047&quot;,
+          &quot;AttachmentName&quot;: &quot;sample string 2&quot;,
+          &quot;AttachmentUrl&quot;: &quot;sample string 3&quot;,
+          &quot;ViewUrl&quot;: &quot;sample string 4&quot;,
+          &quot;MimeType&quot;: &quot;sample string 5&quot;
+        }
+      ]
+    },
+    &quot;ResponseCount&quot;: 16,
+    &quot;Text01&quot;: &quot;sample string 17&quot;,
+    &quot;Text02&quot;: &quot;sample string 18&quot;,
+    &quot;Text03&quot;: &quot;sample string 19&quot;,
+    &quot;Text04&quot;: &quot;sample string 20&quot;,
+    &quot;FeaturedImageUrl&quot;: &quot;sample string 21&quot;,
+    &quot;ThreadKey&quot;: &quot;f7ef7813-d0fd-43c8-a429-1ec63b94e7c8&quot;,
+    &quot;Marker&quot;: &quot;sample string 23&quot;
+  },
+  {
+    &quot;ItemKey&quot;: &quot;07517e4b-c744-459e-beb4-d8d8a7cb1b90&quot;,
+    &quot;Title&quot;: &quot;sample string 2&quot;,
+    &quot;Body&quot;: &quot;sample string 3&quot;,
+    &quot;Contributor&quot;: {
+      &quot;ContactKey&quot;: &quot;a4b19a43-504b-4e2b-bbcd-9286cb30cef0&quot;,
+      &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+      &quot;FirstName&quot;: &quot;sample string 3&quot;,
+      &quot;LastName&quot;: &quot;sample string 4&quot;,
+      &quot;DisplayName&quot;: &quot;sample string 5&quot;,
+      &quot;ViewUrl&quot;: &quot;sample string 6&quot;
+    },
+    &quot;ParentContainer&quot;: {
+      &quot;ContainerKey&quot;: &quot;4286aff9-4085-4af6-8a8e-0d40d519d2ff&quot;,
+      &quot;ContainerName&quot;: &quot;sample string 2&quot;,
+      &quot;ContainerType&quot;: &quot;sample string 3&quot;
+    },
+    &quot;ActionText&quot;: &quot;sample string 4&quot;,
+    &quot;CreateDate&quot;: &quot;2026-07-08T17:53:36.598096Z&quot;,
+    &quot;PublishedDate&quot;: &quot;2026-07-08T17:53:36.598096Z&quot;,
+    &quot;PublicationStatus&quot;: &quot;published&quot;,
+    &quot;Date01&quot;: &quot;2026-07-08T17:53:36.598096Z&quot;,
+    &quot;Date02&quot;: &quot;2026-07-08T17:53:36.598096Z&quot;,
+    &quot;HasRecommended&quot;: true,
+    &quot;HasReplied&quot;: true,
+    &quot;Bool01&quot;: true,
+    &quot;Bool02&quot;: true,
+    &quot;ItemType&quot;: &quot;sample string 13&quot;,
+    &quot;LinkToViewItem&quot;: &quot;sample string 14&quot;,
+    &quot;Tags&quot;: [
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagType&quot;: &quot;sample string 2&quot;
+      },
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagType&quot;: &quot;sample string 2&quot;
+      }
+    ],
+    &quot;RecommendationCount&quot;: 15,
+    &quot;AttachmentsContainer&quot;: {
+      &quot;DocumentKey&quot;: &quot;b1d5048b-ddcd-490e-a2cb-93ddf524d0e9&quot;,
+      &quot;Attachments&quot;: [
+        {
+          &quot;AttachmentKey&quot;: &quot;80a3318e-88c9-403f-a018-0e6c026ed047&quot;,
+          &quot;AttachmentName&quot;: &quot;sample string 2&quot;,
+          &quot;AttachmentUrl&quot;: &quot;sample string 3&quot;,
+          &quot;ViewUrl&quot;: &quot;sample string 4&quot;,
+          &quot;MimeType&quot;: &quot;sample string 5&quot;
+        },
+        {
+          &quot;AttachmentKey&quot;: &quot;80a3318e-88c9-403f-a018-0e6c026ed047&quot;,
+          &quot;AttachmentName&quot;: &quot;sample string 2&quot;,
+          &quot;AttachmentUrl&quot;: &quot;sample string 3&quot;,
+          &quot;ViewUrl&quot;: &quot;sample string 4&quot;,
+          &quot;MimeType&quot;: &quot;sample string 5&quot;
+        }
+      ]
+    },
+    &quot;ResponseCount&quot;: 16,
+    &quot;Text01&quot;: &quot;sample string 17&quot;,
+    &quot;Text02&quot;: &quot;sample string 18&quot;,
+    &quot;Text03&quot;: &quot;sample string 19&quot;,
+    &quot;Text04&quot;: &quot;sample string 20&quot;,
+    &quot;FeaturedImageUrl&quot;: &quot;sample string 21&quot;,
+    &quot;ThreadKey&quot;: &quot;f7ef7813-d0fd-43c8-a429-1ec63b94e7c8&quot;,
+    &quot;Marker&quot;: &quot;sample string 23&quot;
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfDataFeedItem xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.DataFeed&quot;&gt;
+  &lt;DataFeedItem&gt;
+    &lt;ActionText&gt;sample string 4&lt;/ActionText&gt;
+    &lt;AttachmentsContainer&gt;
+      &lt;Attachments&gt;
+        &lt;DataFeedAttachment&gt;
+          &lt;AttachmentKey&gt;80a3318e-88c9-403f-a018-0e6c026ed047&lt;/AttachmentKey&gt;
+          &lt;AttachmentName&gt;sample string 2&lt;/AttachmentName&gt;
+          &lt;AttachmentUrl&gt;sample string 3&lt;/AttachmentUrl&gt;
+          &lt;MimeType&gt;sample string 5&lt;/MimeType&gt;
+          &lt;ViewUrl&gt;sample string 4&lt;/ViewUrl&gt;
+        &lt;/DataFeedAttachment&gt;
+        &lt;DataFeedAttachment&gt;
+          &lt;AttachmentKey&gt;80a3318e-88c9-403f-a018-0e6c026ed047&lt;/AttachmentKey&gt;
+          &lt;AttachmentName&gt;sample string 2&lt;/AttachmentName&gt;
+          &lt;AttachmentUrl&gt;sample string 3&lt;/AttachmentUrl&gt;
+          &lt;MimeType&gt;sample string 5&lt;/MimeType&gt;
+          &lt;ViewUrl&gt;sample string 4&lt;/ViewUrl&gt;
+        &lt;/DataFeedAttachment&gt;
+      &lt;/Attachments&gt;
+      &lt;DocumentKey&gt;b1d5048b-ddcd-490e-a2cb-93ddf524d0e9&lt;/DocumentKey&gt;
+    &lt;/AttachmentsContainer&gt;
+    &lt;Body&gt;sample string 3&lt;/Body&gt;
+    &lt;Bool01&gt;true&lt;/Bool01&gt;
+    &lt;Bool02&gt;true&lt;/Bool02&gt;
+    &lt;Contributor&gt;
+      &lt;ContactKey&gt;a4b19a43-504b-4e2b-bbcd-9286cb30cef0&lt;/ContactKey&gt;
+      &lt;DisplayName&gt;sample string 5&lt;/DisplayName&gt;
+      &lt;FirstName&gt;sample string 3&lt;/FirstName&gt;
+      &lt;LastName&gt;sample string 4&lt;/LastName&gt;
+      &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+      &lt;ViewUrl&gt;sample string 6&lt;/ViewUrl&gt;
+    &lt;/Contributor&gt;
+    &lt;CreateDate&gt;2026-07-08T13:53:36.598096-04:00&lt;/CreateDate&gt;
+    &lt;Date01&gt;2026-07-08T13:53:36.598096-04:00&lt;/Date01&gt;
+    &lt;Date02&gt;2026-07-08T13:53:36.598096-04:00&lt;/Date02&gt;
+    &lt;FeaturedImageUrl&gt;sample string 21&lt;/FeaturedImageUrl&gt;
+    &lt;HasRecommended&gt;true&lt;/HasRecommended&gt;
+    &lt;HasReplied&gt;true&lt;/HasReplied&gt;
+    &lt;ItemKey&gt;07517e4b-c744-459e-beb4-d8d8a7cb1b90&lt;/ItemKey&gt;
+    &lt;ItemType&gt;sample string 13&lt;/ItemType&gt;
+    &lt;LinkToViewItem&gt;sample string 14&lt;/LinkToViewItem&gt;
+    &lt;Marker&gt;sample string 23&lt;/Marker&gt;
+    &lt;ParentContainer&gt;
+      &lt;ContainerKey&gt;4286aff9-4085-4af6-8a8e-0d40d519d2ff&lt;/ContainerKey&gt;
+      &lt;ContainerName&gt;sample string 2&lt;/ContainerName&gt;
+      &lt;ContainerType&gt;sample string 3&lt;/ContainerType&gt;
+    &lt;/ParentContainer&gt;
+    &lt;PublishedDate&gt;2026-07-08T13:53:36.598096-04:00&lt;/PublishedDate&gt;
+    &lt;RecommendationCount&gt;15&lt;/RecommendationCount&gt;
+    &lt;ResponseCount&gt;16&lt;/ResponseCount&gt;
+    &lt;Tags xmlns:d3p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Tagging&quot;&gt;
+      &lt;d3p1:ItemTagResponse&gt;
+        &lt;d3p1:Tag&gt;sample string 1&lt;/d3p1:Tag&gt;
+        &lt;d3p1:TagType&gt;sample string 2&lt;/d3p1:TagType&gt;
+      &lt;/d3p1:ItemTagResponse&gt;
+      &lt;d3p1:ItemTagResponse&gt;
+        &lt;d3p1:Tag&gt;sample string 1&lt;/d3p1:Tag&gt;
+        &lt;d3p1:TagType&gt;sample string 2&lt;/d3p1:TagType&gt;
+      &lt;/d3p1:ItemTagResponse&gt;
+    &lt;/Tags&gt;
+    &lt;Text01&gt;sample string 17&lt;/Text01&gt;
+    &lt;Text02&gt;sample string 18&lt;/Text02&gt;
+    &lt;Text03&gt;sample string 19&lt;/Text03&gt;
+    &lt;Text04&gt;sample string 20&lt;/Text04&gt;
+    &lt;ThreadKey&gt;f7ef7813-d0fd-43c8-a429-1ec63b94e7c8&lt;/ThreadKey&gt;
+    &lt;Title&gt;sample string 2&lt;/Title&gt;
+  &lt;/DataFeedItem&gt;
+  &lt;DataFeedItem&gt;
+    &lt;ActionText&gt;sample string 4&lt;/ActionText&gt;
+    &lt;AttachmentsContainer&gt;
+      &lt;Attachments&gt;
+        &lt;DataFeedAttachment&gt;
+          &lt;AttachmentKey&gt;80a3318e-88c9-403f-a018-0e6c026ed047&lt;/AttachmentKey&gt;
+          &lt;AttachmentName&gt;sample string 2&lt;/AttachmentName&gt;
+          &lt;AttachmentUrl&gt;sample string 3&lt;/AttachmentUrl&gt;
+          &lt;MimeType&gt;sample string 5&lt;/MimeType&gt;
+          &lt;ViewUrl&gt;sample string 4&lt;/ViewUrl&gt;
+        &lt;/DataFeedAttachment&gt;
+        &lt;DataFeedAttachment&gt;
+          &lt;AttachmentKey&gt;80a3318e-88c9-403f-a018-0e6c026ed047&lt;/AttachmentKey&gt;
+          &lt;AttachmentName&gt;sample string 2&lt;/AttachmentName&gt;
+          &lt;AttachmentUrl&gt;sample string 3&lt;/AttachmentUrl&gt;
+          &lt;MimeType&gt;sample string 5&lt;/MimeType&gt;
+          &lt;ViewUrl&gt;sample string 4&lt;/ViewUrl&gt;
+        &lt;/DataFeedAttachment&gt;
+      &lt;/Attachments&gt;
+      &lt;DocumentKey&gt;b1d5048b-ddcd-490e-a2cb-93ddf524d0e9&lt;/DocumentKey&gt;
+    &lt;/AttachmentsContainer&gt;
+    &lt;Body&gt;sample string 3&lt;/Body&gt;
+    &lt;Bool01&gt;true&lt;/Bool01&gt;
+    &lt;Bool02&gt;true&lt;/Bool02&gt;
+    &lt;Contributor&gt;
+      &lt;ContactKey&gt;a4b19a43-504b-4e2b-bbcd-9286cb30cef0&lt;/ContactKey&gt;
+      &lt;DisplayName&gt;sample string 5&lt;/DisplayName&gt;
+      &lt;FirstName&gt;sample string 3&lt;/FirstName&gt;
+      &lt;LastName&gt;sample string 4&lt;/LastName&gt;
+      &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+      &lt;ViewUrl&gt;sample string 6&lt;/ViewUrl&gt;
+    &lt;/Contributor&gt;
+    &lt;CreateDate&gt;2026-07-08T13:53:36.598096-04:00&lt;/CreateDate&gt;
+    &lt;Date01&gt;2026-07-08T13:53:36.598096-04:00&lt;/Date01&gt;
+    &lt;Date02&gt;2026-07-08T13:53:36.598096-04:00&lt;/Date02&gt;
+    &lt;FeaturedImageUrl&gt;sample string 21&lt;/FeaturedImageUrl&gt;
+    &lt;HasRecommended&gt;true&lt;/HasRecommended&gt;
+    &lt;HasReplied&gt;true&lt;/HasReplied&gt;
+    &lt;ItemKey&gt;07517e4b-c744-459e-beb4-d8d8a7cb1b90&lt;/ItemKey&gt;
+    &lt;ItemType&gt;sample string 13&lt;/ItemType&gt;
+    &lt;LinkToViewItem&gt;sample string 14&lt;/LinkToViewItem&gt;
+    &lt;Marker&gt;sample string 23&lt;/Marker&gt;
+    &lt;ParentContainer&gt;
+      &lt;ContainerKey&gt;4286aff9-4085-4af6-8a8e-0d40d519d2ff&lt;/ContainerKey&gt;
+      &lt;ContainerName&gt;sample string 2&lt;/ContainerName&gt;
+      &lt;ContainerType&gt;sample string 3&lt;/ContainerType&gt;
+    &lt;/ParentContainer&gt;
+    &lt;PublishedDate&gt;2026-07-08T13:53:36.598096-04:00&lt;/PublishedDate&gt;
+    &lt;RecommendationCount&gt;15&lt;/RecommendationCount&gt;
+    &lt;ResponseCount&gt;16&lt;/ResponseCount&gt;
+    &lt;Tags xmlns:d3p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Tagging&quot;&gt;
+      &lt;d3p1:ItemTagResponse&gt;
+        &lt;d3p1:Tag&gt;sample string 1&lt;/d3p1:Tag&gt;
+        &lt;d3p1:TagType&gt;sample string 2&lt;/d3p1:TagType&gt;
+      &lt;/d3p1:ItemTagResponse&gt;
+      &lt;d3p1:ItemTagResponse&gt;
+        &lt;d3p1:Tag&gt;sample string 1&lt;/d3p1:Tag&gt;
+        &lt;d3p1:TagType&gt;sample string 2&lt;/d3p1:TagType&gt;
+      &lt;/d3p1:ItemTagResponse&gt;
+    &lt;/Tags&gt;
+    &lt;Text01&gt;sample string 17&lt;/Text01&gt;
+    &lt;Text02&gt;sample string 18&lt;/Text02&gt;
+    &lt;Text03&gt;sample string 19&lt;/Text03&gt;
+    &lt;Text04&gt;sample string 20&lt;/Text04&gt;
+    &lt;ThreadKey&gt;f7ef7813-d0fd-43c8-a429-1ec63b94e7c8&lt;/ThreadKey&gt;
+    &lt;Title&gt;sample string 2&lt;/Title&gt;
+  &lt;/DataFeedItem&gt;
+&lt;/ArrayOfDataFeedItem&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

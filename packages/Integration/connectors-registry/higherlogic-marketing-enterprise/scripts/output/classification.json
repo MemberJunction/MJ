@@ -1,0 +1,1048 @@
+{
+  "EnumerationStdoutCount": 55,
+  "namedComplexTypeCount_nonArrayOf": 82,
+  "reachableCount": 76,
+  "coverableCount": 44,
+  "informationalCount": 29,
+  "containerFoldedCount": 3,
+  "unreachableNamedCount": 6,
+  "coverableLeaves": [
+    "Error",
+    "EventSignUp",
+    "ExtendedField",
+    "GroupCategory",
+    "GroupRecipient",
+    "GroupRecipients",
+    "JobToGroup",
+    "Links",
+    "MagnetMailQueries",
+    "MailRecipientGroup",
+    "MessageCategory",
+    "MessageDetails",
+    "MessageLinkTrackingData",
+    "MessageList",
+    "MessageSentTrackingData",
+    "MessageTrackingData",
+    "PaidItem",
+    "PersonifySubscriptionMapping",
+    "QuestionItem",
+    "Recipient",
+    "RecipientExtended",
+    "RecipientExtendedField",
+    "RecipientSuppressionList",
+    "Registrant",
+    "TrackingData",
+    "TrackingDetails",
+    "Unsubscribe",
+    "UnsubscribeTrackingData",
+    "UploadColumnMapping",
+    "UploadInitialJob",
+    "UploadInitialQueueStatus",
+    "User",
+    "email_history",
+    "fax_history",
+    "fieldDefn",
+    "form_history",
+    "link",
+    "newsletter",
+    "recipient_history",
+    "recp_track",
+    "recp_unsubscribe",
+    "sendNotification",
+    "subscription",
+    "website_link"
+  ],
+  "coverableWithAccessPath": [
+    {
+      "type": "Error",
+      "door": "Error",
+      "doorOps": [
+        "getErrorDetails"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "EventSignUp",
+      "door": "EventSignUp",
+      "doorOps": [
+        "CreateEventSignUp"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "ExtendedField",
+      "door": "ExtendedField",
+      "doorOps": [
+        "GetEnhancedPersonalizedFields"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "GroupCategory",
+      "door": "GroupCategory",
+      "doorOps": [
+        "GetGroupCategory",
+        "GetAllGroupCategories"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "GroupRecipient",
+      "door": "GroupRecipients",
+      "doorOps": [
+        "getGroupRecipients"
+      ],
+      "nestingPath": "recipients[]"
+    },
+    {
+      "type": "GroupRecipients",
+      "door": "GroupRecipients",
+      "doorOps": [
+        "getGroupRecipients"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "JobToGroup",
+      "door": "MessageList",
+      "doorOps": [
+        "getMessages",
+        "getMessagesUTC"
+      ],
+      "nestingPath": "GroupsEmailSentTo[]"
+    },
+    {
+      "type": "Links",
+      "door": "Links",
+      "doorOps": [
+        "getLinkURLs"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "MagnetMailQueries",
+      "door": "MagnetMailQueries",
+      "doorOps": [
+        "getSavedSearches"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "MailRecipientGroup",
+      "door": "MailRecipientGroup",
+      "doorOps": [
+        "getGroupDetails"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "MessageCategory",
+      "door": "MessageCategory",
+      "doorOps": [
+        "GetMessageCategory"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "MessageDetails",
+      "door": "MessageDetails",
+      "doorOps": [
+        "createMagnetMailMessage",
+        "editMagnetMailMessage",
+        "GetMessageDetails"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "MessageLinkTrackingData",
+      "door": "MessageLinkTrackingResults",
+      "doorOps": [
+        "GetMessageLinkTracking"
+      ],
+      "nestingPath": "data[]"
+    },
+    {
+      "type": "MessageList",
+      "door": "MessageList",
+      "doorOps": [
+        "getMessages",
+        "getMessagesUTC"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "MessageSentTrackingData",
+      "door": "MessageSentTrackingResults",
+      "doorOps": [
+        "GetMessageSentTracking"
+      ],
+      "nestingPath": "data[]"
+    },
+    {
+      "type": "MessageTrackingData",
+      "door": "MessageOpenTrackingResults",
+      "doorOps": [
+        "GetMessageOpenTracking"
+      ],
+      "nestingPath": "data[]"
+    },
+    {
+      "type": "PaidItem",
+      "door": "EventSignUp",
+      "doorOps": [
+        "CreateEventSignUp"
+      ],
+      "nestingPath": "PaidItems[]"
+    },
+    {
+      "type": "PersonifySubscriptionMapping",
+      "door": "PersonifySubscriptionMappingSearchResults",
+      "doorOps": [
+        "SearchPersonifySubscriptionMappings"
+      ],
+      "nestingPath": "data[]"
+    },
+    {
+      "type": "QuestionItem",
+      "door": "EventSignUp",
+      "doorOps": [
+        "CreateEventSignUp"
+      ],
+      "nestingPath": "Registrants[] -> QuestionItem[]"
+    },
+    {
+      "type": "Recipient",
+      "door": "Recipient",
+      "doorOps": [
+        "getRecipientDetails",
+        "runSavedSearch",
+        "getRecipientGroups"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "RecipientExtended",
+      "door": "RecipientExtended",
+      "doorOps": [
+        "getSuppressedRecipientList"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "RecipientExtendedField",
+      "door": "RecipientExtended",
+      "doorOps": [
+        "getSuppressedRecipientList"
+      ],
+      "nestingPath": "extended_field[]"
+    },
+    {
+      "type": "RecipientSuppressionList",
+      "door": "RecipientSuppressionList",
+      "doorOps": [
+        "uploadSuppressionList"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "Registrant",
+      "door": "EventSignUp",
+      "doorOps": [
+        "CreateEventSignUp"
+      ],
+      "nestingPath": "Registrants[]"
+    },
+    {
+      "type": "TrackingData",
+      "door": "TrackingData",
+      "doorOps": [
+        "getOverallTracking",
+        "getTrackingData"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "TrackingDetails",
+      "door": "TrackingDetails",
+      "doorOps": [
+        "getDetailedTracking",
+        "getDetailedTrackingUTC"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "Unsubscribe",
+      "door": "Unsubscribe",
+      "doorOps": [
+        "unsubscribeRecipients",
+        "unsubscribeRecipients"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "UnsubscribeTrackingData",
+      "door": "UnsubscribeTrackingResults",
+      "doorOps": [
+        "GetUnsubscribeTracking"
+      ],
+      "nestingPath": "data[]"
+    },
+    {
+      "type": "UploadColumnMapping",
+      "door": "UploadInitialJob",
+      "doorOps": [
+        "UploadListInitialQueue",
+        "UploadListInitialQueue"
+      ],
+      "nestingPath": "Settings -> ColumnMappings[]"
+    },
+    {
+      "type": "UploadInitialJob",
+      "door": "UploadInitialJob",
+      "doorOps": [
+        "UploadListInitialQueue",
+        "UploadListInitialQueue"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "UploadInitialQueueStatus",
+      "door": "UploadInitialQueueStatus",
+      "doorOps": [
+        "GetUploadInitialQueueJobStatus"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "User",
+      "door": "User",
+      "doorOps": [
+        "getUserDetails"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "email_history",
+      "door": "recipient_history",
+      "doorOps": [
+        "getRecipientHistory"
+      ],
+      "nestingPath": "emailHistory[]"
+    },
+    {
+      "type": "fax_history",
+      "door": "recipient_history",
+      "doorOps": [
+        "getRecipientHistory"
+      ],
+      "nestingPath": "faxHistory[]"
+    },
+    {
+      "type": "fieldDefn",
+      "door": "fieldDefn",
+      "doorOps": [
+        "getRecipientFields"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "form_history",
+      "door": "recipient_history",
+      "doorOps": [
+        "getRecipientHistory"
+      ],
+      "nestingPath": "formHistory[]"
+    },
+    {
+      "type": "link",
+      "door": "recipient_history",
+      "doorOps": [
+        "getRecipientHistory"
+      ],
+      "nestingPath": "emailHistory[] -> links[]"
+    },
+    {
+      "type": "newsletter",
+      "door": "newsletter",
+      "doorOps": [
+        "sendMessageToGroup"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "recipient_history",
+      "door": "recipient_history",
+      "doorOps": [
+        "getRecipientHistory"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "recp_track",
+      "door": "TrackingDetails",
+      "doorOps": [
+        "getDetailedTracking",
+        "getDetailedTrackingUTC"
+      ],
+      "nestingPath": "RecipientDetails[]"
+    },
+    {
+      "type": "recp_unsubscribe",
+      "door": "recp_unsubscribe",
+      "doorOps": [
+        "getUnsubscribes",
+        "getSpamComplaints"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "sendNotification",
+      "door": "sendNotification",
+      "doorOps": [
+        "sendMessageToGroup"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "subscription",
+      "door": "subscription",
+      "doorOps": [
+        "getSubscribedRecipients"
+      ],
+      "nestingPath": "(direct)"
+    },
+    {
+      "type": "website_link",
+      "door": "recipient_history",
+      "doorOps": [
+        "getRecipientHistory"
+      ],
+      "nestingPath": "emailHistory[] -> links[] -> website_links[]"
+    }
+  ],
+  "informationalLedger": [
+    {
+      "type": "AuthenticationResult",
+      "fieldCount": 9,
+      "role": "INFORMATIONAL",
+      "bucket": "operation-outcome-status"
+    },
+    {
+      "type": "createEditMessageResult",
+      "fieldCount": 7,
+      "role": "INFORMATIONAL",
+      "bucket": "operation-outcome-status"
+    },
+    {
+      "type": "CreditCardBillingInfo",
+      "fieldCount": 6,
+      "role": "INFORMATIONAL",
+      "bucket": "nested-write-config"
+    },
+    {
+      "type": "CreditCardInfo",
+      "fieldCount": 6,
+      "role": "INFORMATIONAL",
+      "bucket": "nested-write-config"
+    },
+    {
+      "type": "EmailToGroupResult",
+      "fieldCount": 5,
+      "role": "INFORMATIONAL",
+      "bucket": "operation-outcome-status"
+    },
+    {
+      "type": "EmailToIndividualResult",
+      "fieldCount": 5,
+      "role": "INFORMATIONAL",
+      "bucket": "operation-outcome-status"
+    },
+    {
+      "type": "error",
+      "fieldCount": 5,
+      "role": "INFORMATIONAL",
+      "bucket": "nested-write-config"
+    },
+    {
+      "type": "EventSignupResult",
+      "fieldCount": 5,
+      "role": "INFORMATIONAL",
+      "bucket": "operation-outcome-status"
+    },
+    {
+      "type": "MessageLinkTrackingResults",
+      "fieldCount": 1,
+      "role": "INFORMATIONAL",
+      "bucket": "list-wrapper-container"
+    },
+    {
+      "type": "MessageLinkTrackingSearchCriteria",
+      "fieldCount": 2,
+      "role": "INFORMATIONAL",
+      "bucket": "query-criteria-shape"
+    },
+    {
+      "type": "MessageOpenTrackingResults",
+      "fieldCount": 1,
+      "role": "INFORMATIONAL",
+      "bucket": "list-wrapper-container"
+    },
+    {
+      "type": "MessageSentTrackingResults",
+      "fieldCount": 1,
+      "role": "INFORMATIONAL",
+      "bucket": "list-wrapper-container"
+    },
+    {
+      "type": "MessageTrackingSearchCriteria",
+      "fieldCount": 1,
+      "role": "INFORMATIONAL",
+      "bucket": "query-criteria-shape"
+    },
+    {
+      "type": "PaidItemAPISignupValidationStatusResult",
+      "fieldCount": 4,
+      "role": "INFORMATIONAL",
+      "bucket": "operation-outcome-status"
+    },
+    {
+      "type": "PaidItemSignupResult",
+      "fieldCount": 7,
+      "role": "INFORMATIONAL",
+      "bucket": "operation-outcome-status"
+    },
+    {
+      "type": "PaymentInfo",
+      "fieldCount": 2,
+      "role": "INFORMATIONAL",
+      "bucket": "nested-write-config"
+    },
+    {
+      "type": "PersonifyObject",
+      "fieldCount": 2,
+      "role": "INFORMATIONAL",
+      "bucket": "nested-write-config"
+    },
+    {
+      "type": "PersonifySubscriptionMappingSearchCriteria",
+      "fieldCount": 1,
+      "role": "INFORMATIONAL",
+      "bucket": "query-criteria-shape"
+    },
+    {
+      "type": "PersonifySubscriptionMappingSearchResults",
+      "fieldCount": 1,
+      "role": "INFORMATIONAL",
+      "bucket": "list-wrapper-container"
+    },
+    {
+      "type": "RecipientSearchCriteria",
+      "fieldCount": 52,
+      "role": "INFORMATIONAL",
+      "bucket": "query-criteria-shape"
+    },
+    {
+      "type": "RecipientSearchResults",
+      "fieldCount": 1,
+      "role": "INFORMATIONAL",
+      "bucket": "list-wrapper-container"
+    },
+    {
+      "type": "RecipientSuppressionResult",
+      "fieldCount": 2,
+      "role": "INFORMATIONAL",
+      "bucket": "operation-outcome-status"
+    },
+    {
+      "type": "RegistrantSignupResult",
+      "fieldCount": 12,
+      "role": "INFORMATIONAL",
+      "bucket": "operation-outcome-status"
+    },
+    {
+      "type": "saveResult",
+      "fieldCount": 4,
+      "role": "INFORMATIONAL",
+      "bucket": "operation-outcome-status"
+    },
+    {
+      "type": "SaveResult",
+      "fieldCount": 4,
+      "role": "INFORMATIONAL",
+      "bucket": "operation-outcome-status"
+    },
+    {
+      "type": "UnsubscribeSearchCriteria",
+      "fieldCount": 3,
+      "role": "INFORMATIONAL",
+      "bucket": "query-criteria-shape"
+    },
+    {
+      "type": "UnsubscribeTrackingResults",
+      "fieldCount": 1,
+      "role": "INFORMATIONAL",
+      "bucket": "list-wrapper-container"
+    },
+    {
+      "type": "UploadJobSettings",
+      "fieldCount": 7,
+      "role": "INFORMATIONAL",
+      "bucket": "nested-write-config"
+    },
+    {
+      "type": "UploadListResult",
+      "fieldCount": 20,
+      "role": "INFORMATIONAL",
+      "bucket": "operation-outcome-status"
+    }
+  ],
+  "containerFoldedLedger": [
+    {
+      "type": "group",
+      "fieldCount": 7,
+      "role": "CONTAINER-FOLDED",
+      "bucket": "alias-of-richer-type",
+      "foldedInto": "MailRecipientGroup",
+      "foldRule": "name-subset"
+    },
+    {
+      "type": "Message",
+      "fieldCount": 6,
+      "role": "CONTAINER-FOLDED",
+      "bucket": "alias-of-richer-type",
+      "foldedInto": "MessageDetails",
+      "foldRule": "name-subset"
+    },
+    {
+      "type": "RecipientGroup",
+      "fieldCount": 7,
+      "role": "CONTAINER-FOLDED",
+      "bucket": "alias-of-richer-type",
+      "foldedInto": "MailRecipientGroup",
+      "foldRule": "positional-type-sequence"
+    }
+  ],
+  "unreachableNamedTypes": [
+    "DateRangeSearchCriteria",
+    "PagedSearchCriteria",
+    "PagedSearchResults",
+    "SearchCriteria",
+    "TrackingDataBase",
+    "mmAuthHeader"
+  ],
+  "opToTypeMap": [
+    {
+      "op": "sendEmailToIndividual",
+      "direction": "response",
+      "rawType": "EmailToIndividualResult",
+      "resolvedType": "EmailToIndividualResult"
+    },
+    {
+      "op": "sendMessageToGroup",
+      "direction": "response",
+      "rawType": "EmailToGroupResult",
+      "resolvedType": "EmailToGroupResult"
+    },
+    {
+      "op": "sendMessageToGroup",
+      "direction": "request",
+      "rawType": "newsletter",
+      "resolvedType": "newsletter"
+    },
+    {
+      "op": "sendMessageToGroup",
+      "direction": "request",
+      "rawType": "sendNotification",
+      "resolvedType": "sendNotification"
+    },
+    {
+      "op": "getRecipientHistory",
+      "direction": "response",
+      "rawType": "recipient_history",
+      "resolvedType": "recipient_history"
+    },
+    {
+      "op": "getUnsubscribes",
+      "direction": "response",
+      "rawType": "ArrayOfRecp_unsubscribe",
+      "resolvedType": "recp_unsubscribe"
+    },
+    {
+      "op": "getSpamComplaints",
+      "direction": "response",
+      "rawType": "ArrayOfRecp_unsubscribe",
+      "resolvedType": "recp_unsubscribe"
+    },
+    {
+      "op": "getRecipientDetails",
+      "direction": "response",
+      "rawType": "Recipient",
+      "resolvedType": "Recipient"
+    },
+    {
+      "op": "getUserDetails",
+      "direction": "response",
+      "rawType": "User",
+      "resolvedType": "User"
+    },
+    {
+      "op": "getMessages",
+      "direction": "response",
+      "rawType": "ArrayOfMessageList",
+      "resolvedType": "MessageList"
+    },
+    {
+      "op": "getMessagesUTC",
+      "direction": "response",
+      "rawType": "ArrayOfMessageList",
+      "resolvedType": "MessageList"
+    },
+    {
+      "op": "getLinkURLs",
+      "direction": "response",
+      "rawType": "ArrayOfLinks",
+      "resolvedType": "Links"
+    },
+    {
+      "op": "getOverallTracking",
+      "direction": "response",
+      "rawType": "TrackingData",
+      "resolvedType": "TrackingData"
+    },
+    {
+      "op": "getDetailedTracking",
+      "direction": "response",
+      "rawType": "TrackingDetails",
+      "resolvedType": "TrackingDetails"
+    },
+    {
+      "op": "getDetailedTrackingUTC",
+      "direction": "response",
+      "rawType": "TrackingDetails",
+      "resolvedType": "TrackingDetails"
+    },
+    {
+      "op": "addGroup",
+      "direction": "response",
+      "rawType": "SaveResult",
+      "resolvedType": "SaveResult"
+    },
+    {
+      "op": "getGroups",
+      "direction": "response",
+      "rawType": "ArrayOfGroup",
+      "resolvedType": "group"
+    },
+    {
+      "op": "getGroupsUTC",
+      "direction": "response",
+      "rawType": "ArrayOfGroup",
+      "resolvedType": "group"
+    },
+    {
+      "op": "uploadListQueue",
+      "direction": "response",
+      "rawType": "UploadListResult",
+      "resolvedType": "UploadListResult"
+    },
+    {
+      "op": "uploadListQueueTest",
+      "direction": "response",
+      "rawType": "UploadListResult",
+      "resolvedType": "UploadListResult"
+    },
+    {
+      "op": "getUploadJobStatus",
+      "direction": "response",
+      "rawType": "UploadListResult",
+      "resolvedType": "UploadListResult"
+    },
+    {
+      "op": "getUploadJobStatusUTC",
+      "direction": "response",
+      "rawType": "UploadListResult",
+      "resolvedType": "UploadListResult"
+    },
+    {
+      "op": "getRecipientFields",
+      "direction": "response",
+      "rawType": "ArrayOfFieldDefn",
+      "resolvedType": "fieldDefn"
+    },
+    {
+      "op": "editRecipient",
+      "direction": "response",
+      "rawType": "saveResult",
+      "resolvedType": "saveResult"
+    },
+    {
+      "op": "addRecipient",
+      "direction": "response",
+      "rawType": "saveResult",
+      "resolvedType": "saveResult"
+    },
+    {
+      "op": "createMagnetMailMessage",
+      "direction": "response",
+      "rawType": "createEditMessageResult",
+      "resolvedType": "createEditMessageResult"
+    },
+    {
+      "op": "createMagnetMailMessage",
+      "direction": "request",
+      "rawType": "MessageDetails",
+      "resolvedType": "MessageDetails"
+    },
+    {
+      "op": "editMagnetMailMessage",
+      "direction": "response",
+      "rawType": "createEditMessageResult",
+      "resolvedType": "createEditMessageResult"
+    },
+    {
+      "op": "editMagnetMailMessage",
+      "direction": "request",
+      "rawType": "MessageDetails",
+      "resolvedType": "MessageDetails"
+    },
+    {
+      "op": "getSavedSearches",
+      "direction": "response",
+      "rawType": "ArrayOfMagnetMailQueries",
+      "resolvedType": "MagnetMailQueries"
+    },
+    {
+      "op": "runSavedSearch",
+      "direction": "response",
+      "rawType": "ArrayOfRecipient",
+      "resolvedType": "Recipient"
+    },
+    {
+      "op": "getSubscribedRecipients",
+      "direction": "response",
+      "rawType": "ArrayOfSubscription",
+      "resolvedType": "subscription"
+    },
+    {
+      "op": "getErrorDetails",
+      "direction": "response",
+      "rawType": "Error",
+      "resolvedType": "Error"
+    },
+    {
+      "op": "uploadSuppressionList",
+      "direction": "response",
+      "rawType": "RecipientSuppressionResult",
+      "resolvedType": "RecipientSuppressionResult"
+    },
+    {
+      "op": "uploadSuppressionList",
+      "direction": "request",
+      "rawType": "RecipientSuppressionList",
+      "resolvedType": "RecipientSuppressionList"
+    },
+    {
+      "op": "getSuppressedRecipientList",
+      "direction": "response",
+      "rawType": "ArrayOfRecipientExtended",
+      "resolvedType": "RecipientExtended"
+    },
+    {
+      "op": "getRecipientGroups",
+      "direction": "response",
+      "rawType": "ArrayOfRecipientGroup",
+      "resolvedType": "RecipientGroup"
+    },
+    {
+      "op": "getRecipientGroups",
+      "direction": "request",
+      "rawType": "Recipient",
+      "resolvedType": "Recipient"
+    },
+    {
+      "op": "searchForRecipients",
+      "direction": "response",
+      "rawType": "RecipientSearchResults",
+      "resolvedType": "RecipientSearchResults"
+    },
+    {
+      "op": "searchForRecipients",
+      "direction": "request",
+      "rawType": "RecipientSearchCriteria",
+      "resolvedType": "RecipientSearchCriteria"
+    },
+    {
+      "op": "Authenticate",
+      "direction": "response",
+      "rawType": "AuthenticationResult",
+      "resolvedType": "AuthenticationResult"
+    },
+    {
+      "op": "getTrackingData",
+      "direction": "response",
+      "rawType": "TrackingData",
+      "resolvedType": "TrackingData"
+    },
+    {
+      "op": "getMessageList",
+      "direction": "response",
+      "rawType": "ArrayOfMessage",
+      "resolvedType": "Message"
+    },
+    {
+      "op": "getMessageListUtc",
+      "direction": "response",
+      "rawType": "ArrayOfMessage",
+      "resolvedType": "Message"
+    },
+    {
+      "op": "unsubscribeRecipients",
+      "direction": "response",
+      "rawType": "ArrayOfUnsubscribe",
+      "resolvedType": "Unsubscribe"
+    },
+    {
+      "op": "unsubscribeRecipients",
+      "direction": "request",
+      "rawType": "ArrayOfUnsubscribe",
+      "resolvedType": "Unsubscribe"
+    },
+    {
+      "op": "getGroupDetails",
+      "direction": "response",
+      "rawType": "MailRecipientGroup",
+      "resolvedType": "MailRecipientGroup"
+    },
+    {
+      "op": "getGroupRecipients",
+      "direction": "response",
+      "rawType": "GroupRecipients",
+      "resolvedType": "GroupRecipients"
+    },
+    {
+      "op": "GetMessageLinkTracking",
+      "direction": "response",
+      "rawType": "MessageLinkTrackingResults",
+      "resolvedType": "MessageLinkTrackingResults"
+    },
+    {
+      "op": "GetMessageLinkTracking",
+      "direction": "request",
+      "rawType": "MessageLinkTrackingSearchCriteria",
+      "resolvedType": "MessageLinkTrackingSearchCriteria"
+    },
+    {
+      "op": "GetMessageSentTracking",
+      "direction": "response",
+      "rawType": "MessageSentTrackingResults",
+      "resolvedType": "MessageSentTrackingResults"
+    },
+    {
+      "op": "GetMessageSentTracking",
+      "direction": "request",
+      "rawType": "MessageTrackingSearchCriteria",
+      "resolvedType": "MessageTrackingSearchCriteria"
+    },
+    {
+      "op": "GetMessageOpenTracking",
+      "direction": "response",
+      "rawType": "MessageOpenTrackingResults",
+      "resolvedType": "MessageOpenTrackingResults"
+    },
+    {
+      "op": "GetMessageOpenTracking",
+      "direction": "request",
+      "rawType": "MessageTrackingSearchCriteria",
+      "resolvedType": "MessageTrackingSearchCriteria"
+    },
+    {
+      "op": "GetUnsubscribeTracking",
+      "direction": "response",
+      "rawType": "UnsubscribeTrackingResults",
+      "resolvedType": "UnsubscribeTrackingResults"
+    },
+    {
+      "op": "GetUnsubscribeTracking",
+      "direction": "request",
+      "rawType": "UnsubscribeSearchCriteria",
+      "resolvedType": "UnsubscribeSearchCriteria"
+    },
+    {
+      "op": "GetMessageDetails",
+      "direction": "response",
+      "rawType": "MessageDetails",
+      "resolvedType": "MessageDetails"
+    },
+    {
+      "op": "SearchPersonifySubscriptionMappings",
+      "direction": "response",
+      "rawType": "PersonifySubscriptionMappingSearchResults",
+      "resolvedType": "PersonifySubscriptionMappingSearchResults"
+    },
+    {
+      "op": "SearchPersonifySubscriptionMappings",
+      "direction": "request",
+      "rawType": "PersonifySubscriptionMappingSearchCriteria",
+      "resolvedType": "PersonifySubscriptionMappingSearchCriteria"
+    },
+    {
+      "op": "GetMessageCategory",
+      "direction": "response",
+      "rawType": "ArrayOfMessageCategory",
+      "resolvedType": "MessageCategory"
+    },
+    {
+      "op": "GetGroupCategory",
+      "direction": "response",
+      "rawType": "GroupCategory",
+      "resolvedType": "GroupCategory"
+    },
+    {
+      "op": "GetAllGroupCategories",
+      "direction": "response",
+      "rawType": "ArrayOfGroupCategory",
+      "resolvedType": "GroupCategory"
+    },
+    {
+      "op": "UploadListInitialQueue",
+      "direction": "response",
+      "rawType": "UploadInitialJob",
+      "resolvedType": "UploadInitialJob"
+    },
+    {
+      "op": "UploadListInitialQueue",
+      "direction": "request",
+      "rawType": "UploadInitialJob",
+      "resolvedType": "UploadInitialJob"
+    },
+    {
+      "op": "GetEnhancedPersonalizedFields",
+      "direction": "response",
+      "rawType": "ArrayOfExtendedField",
+      "resolvedType": "ExtendedField"
+    },
+    {
+      "op": "GetUploadInitialQueueJobStatus",
+      "direction": "response",
+      "rawType": "UploadInitialQueueStatus",
+      "resolvedType": "UploadInitialQueueStatus"
+    },
+    {
+      "op": "CreateEventSignUp",
+      "direction": "response",
+      "rawType": "EventSignupResult",
+      "resolvedType": "EventSignupResult"
+    },
+    {
+      "op": "CreateEventSignUp",
+      "direction": "request",
+      "rawType": "EventSignUp",
+      "resolvedType": "EventSignUp"
+    }
+  ],
+  "accountingCheck": {
+    "E_reachable": 76,
+    "sumOfBuckets": 76,
+    "balances": true
+  }
+}

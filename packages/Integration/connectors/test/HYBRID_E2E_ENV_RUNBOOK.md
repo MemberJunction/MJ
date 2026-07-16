@@ -70,12 +70,22 @@ SQLCMD -Q "CREATE DATABASE MJ_SS_E2E;"
 
 # 0b. Baseline it (SQL Server migrations, authored dialect): ~8s, current version.
 DB_PLATFORM=sqlserver DB_HOST=localhost DB_PORT=1444 DB_DATABASE=MJ_SS_E2E DB_USERNAME=sa DB_PASSWORD=Claude2Sql99 \
-  DB_TRUST_SERVER_CERTIFICATE=Y MJ_CORE_SCHEMA=__mj CODEGEN_DB_USERNAME=sa CODEGEN_DB_PASSWORD=Claude2Sql99 \
+  DB_TRUST_SERVER_CERTIFICATE=true MJ_CORE_SCHEMA=__mj CODEGEN_DB_USERNAME=sa CODEGEN_DB_PASSWORD=Claude2Sql99 \
   node packages/MJCLI/bin/run.js migrate --dir ./migrations/v5
 
 # 0c. VERIFY IT'S CLEAN — this MUST be 0. If not, the baseline is degraded; do not proceed.
-SQLCMD -h -1 -Q "SET NOCOUNT ON; SELECT count(*) FROM __mj.Entity e WHERE NOT EXISTS(SELECT 1 FROM __mj.EntityField f WHERE f.EntityID=e.ID);"
+SQLCMD -d MJ_SS_E2E -h -1 -Q "SET NOCOUNT ON; SELECT count(*) FROM __mj.Entity e WHERE NOT EXISTS(SELECT 1 FROM __mj.EntityField f WHERE f.EntityID=e.ID);"
 # (a clean fresh baseline → 0 malformed; a degraded reused DB → >0)
+
+# 0d. VERIFY the schema POPULATED (migrate applies baseline rank-1 + incrementals → ~374 __mj
+# tables / ~372 entities). A correctly-migrated fresh DB looks like: tables ~374, entities ~372.
+SQLCMD -d MJ_SS_E2E -h -1 -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM __mj.Entity;"   # MUST be ~370+
+# 🚨 QUERY-CONTEXT GOTCHA (a real false-negative that aborted a working run): NEVER verify with
+# `SELECT COUNT(*) FROM sys.tables WHERE schema_id=SCHEMA_ID('__mj')` UNLESS the connection's
+# current DB is MJ_SS_E2E. SCHEMA_ID('__mj') resolves in the CONNECTION's default DB (master →
+# NULL → a false 0), even if you three-part-prefix `MJ_SS_E2E.sys.tables`. ALWAYS pass
+# `-d MJ_SS_E2E` (as above) or use fully-qualified `MJ_SS_E2E.__mj.<Table>` names. `mj migrate`
+# printing "N applied" + exit 0 is authoritative; a `SCHEMA_ID` "0" without -d is the bug, not migrate.
 ```
 **Use `MJ_SS_E2E` (the fresh DB) for EVERY subsequent step** — set `DB_DATABASE` and
 `HS_LIVE_DB_NAME` to it, not a reused workbench DB.
@@ -147,9 +157,41 @@ GENKEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64
 TEST_KEY=sk-proj-2-3-4-5-6-7-8-9-10-11-12-13-14-16-17-18-19-20-21-22-23-24-25-26-27-28-29
 DB_PLATFORM=sqlserver \
 DB_HOST=localhost DB_PORT=1444 DB_DATABASE=MJ_SS_E2E DB_USERNAME=sa DB_PASSWORD=Claude2Sql99 \
-DB_TRUST_SERVER_CERTIFICATE=Y \
+CODEGEN_DB_USERNAME=sa CODEGEN_DB_PASSWORD=Claude2Sql99 \
+DB_TRUST_SERVER_CERTIFICATE=true DB_ENCRYPT=false MJ_CODEGEN_NO_AFTER=1 ALLOW_RUNTIME_SCHEMA_UPDATE=1 \
 GRAPHQL_PORT=4007 MJ_API_KEY="$TEST_KEY" MJ_BASE_ENCRYPTION_KEY="$GENKEY" NODE_ENV=development \
 nohup ../../node_modules/.bin/tsx src/index.ts > /tmp/ss-mjapi-4007.log 2>&1 &
+# 🚨 ALLOW_RUNTIME_SCHEMA_UPDATE=1 IS MANDATORY. ApplyAll's Runtime Schema Update (which creates the
+# connector's entity tables + triggers the in-process RSU CodeGen) is GATED on this flag — without it
+# ApplyAll fails immediately with "Runtime Schema Update is disabled. Set ALLOW_RUNTIME_SCHEMA_UPDATE=1
+# to enable." and the sync never starts (verified 2026-07-09 on the HLV build).
+# 🚨 CODEGEN_DB_USERNAME/CODEGEN_DB_PASSWORD ARE MANDATORY. The in-process RSU CodeGen spawns a CHILD
+# process (.rsu_codegen_*.mjs) that reads its DB login from mj.config.cjs `codeGenLogin`/`codeGenPassword`
+# = process.env.CODEGEN_DB_USERNAME/CODEGEN_DB_PASSWORD — NOT DB_USERNAME/DB_PASSWORD. Without them the
+# child dies "ConnectionError: Login failed for user ''." AFTER creating the entity TABLES but BEFORE it
+# generates the views/sprocs → ApplyAll fails "CodeGen failed" → 0 rows. Set them to the same sa creds as
+# DB_USERNAME/DB_PASSWORD (verified 2026-07-09 on the HLV build).
+# 🚨 MJ_CODEGEN_NO_AFTER=1 IS MANDATORY at MJAPI launch. mj.config.cjs reads it to return `commands: []`
+# so the in-process RSU CodeGen (which ApplyAll triggers when it registers the connector's new entities)
+# SKIPS its post-generation AFTER commands — the `npm run build`×N + `npm start` that would otherwise run.
+# Those AFTER commands are REDUNDANT during the e2e (MJAPI is already up; the entity views/sprocs are
+# applied by the codegen's OWN SQL-execution step, which runs BEFORE the AFTER commands) and they FAIL FAST
+# (each `npm` exits in ~0.08s → "Process exited with code 254") in the tsx-launched MJAPI's child-process
+# env → the RSU reports `RunCodeGen:failed` EVEN THOUGH `ExecuteMigration:success` (the SQL WAS applied) →
+# ApplyAll is falsely reported failed → the sync aborts with entityMapCount:0 / 0 rows. Setting =1 makes the
+# RSU codegen stop after SQL execution → RunCodeGen:success → ApplyAll succeeds → the sync lands rows.
+# (Verified 2026-07-09 on the HLV build: without it the tables ARE created but ApplyAll false-fails on the
+# npm AFTER-command; with it the RSU completes cleanly.)
+# 🚨 DB_TRUST_SERVER_CERTIFICATE MUST be `true` (or `1`), NEVER `Y`. mj.config.cjs parses this as
+# `=== '1' || === 'true'` — so `Y` silently becomes trustServerCertificate=FALSE. MJAPI's own pooled
+# connection tolerates that (DB_ENCRYPT=false skips TLS for it), but the IN-PROCESS RSU CodeGen that
+# ApplyAll triggers uses its OWN CodeGenLib connection which STILL rejects the self-signed cert with
+# trust=false — it then GENERATES the new connector entities' view/sproc SQL to disk but FAILS TO APPLY
+# it to the DB (a swallowed "self-signed certificate" connection error). The sync then dies with
+# "Cannot find object 'vwXxx'/'spCreateXxx'" and lands 0 rows (applyAllRan:false). With `=true` the RSU
+# CodeGen connects + applies the entity SQL. DB_ENCRYPT=false alone does NOT fix codegen — trust=true is
+# required (verified 2026-07-09 on the HLV build: `mj codegen` failed on the cert with `Y`, succeeded
+# with `true`, creating vwRanks/spCreateAddon/vwDiscussions).
 ```
 MJAPI validates the GraphQL `x-mj-api-key` header against `MJ_API_KEY` — it MUST be in this
 launch env (golden rule 7). Wait for health (boot runs in-process CodeGen — allow ~30–60s). A

@@ -1,0 +1,392 @@
+[
+  {
+    "fields": {
+      "Name": "whova",
+      "ClassName": "WhovaConnector",
+      "NavigationBaseURL": "https://whova.com",
+      "Description": "Whova events / conference management platform connector. No vendor-published machine-readable API contract (OpenAPI/Postman/SDK) exists as of 2026-07-02; the only credential-free-provable programmatic surface is Whova's own Zapier app (3 triggers: Get Attendees, Get Orders, Get Registrants; 1 write action: Create or Update Attendee), all scoped by a required Event parameter. Base URL, auth scheme, and rate limits for Whova's underlying private API are not documented publicly and are recorded as gaps pending a live credential or vendor partnership contact.",
+      "Configuration": {
+        "universalPK": null,
+        "universalPKNote": "No vendor-documented primary-key convention found anywhere in the credential-free surface (no OpenAPI x-primary-key, no prose statement of an 'id' field). Per-object PK determination is deferred to per-IO extraction evidence or runtime D4 SoftPKClassifier — do not assume a vendor-wide 'id' convention without a doc marker.",
+        "AuthFlow": null,
+        "AuthFlowNote": "UNDOCUMENTED. Whova has no direct/native REST API for third-party self-integration; CRM/system integration is routed exclusively through Whova's own Zapier app (Zendesk article 28473285536795 title: 'How do I integrate CRM via Zapier?'). Zapier abstracts the underlying auth scheme behind its own connected-account OAuth/API-key flow, so the actual credential shape Whova's backend expects (API key vs OAuth2 vs partner token) is invisible from any credential-free source. Escalated as a gap in SOURCE_STUDY.md §5 (last row) rather than guessed. A wrong guess here (e.g. assuming 'api-key') would violate the provable-only / no-InferredFromContext-for-hard-constraints rule.",
+        "AuthHeaderPattern": null,
+        "PaginationDefaults": null,
+        "PaginationDefaultsNote": "UNDOCUMENTED. Zapier's public trigger/action listing shows input field lists only, not response payload shapes, pagination cursors, or page-size parameters. No OpenAPI spec exists to declare a pagination scheme (SOURCE_STUDY.md §0 — SchemaContractStatus=NoMachineReadableContractFound). Per-IO PaginationType is set to the safe enum default None pending discovery; do not assume Cursor/Offset/PageNumber without evidence.",
+        "IncrementalSyncCapability": {
+          "supported": null,
+          "note": "UNDOCUMENTED at the integration level. Zapier's trigger descriptions ('Triggers when there is a change in the attendee list' / 'order list' / 'registration form responses') imply Zapier itself polls for deltas, but no incremental query parameter (e.g. an updated-since filter or watermark field) is documented in the public trigger listing. Do not set SupportsIncrementalSync=true on any IO without an explicit watermark field per connector-provenance-conventions.md hard-constraint rule."
+        },
+        "WebhooksAvailable": false,
+        "WebhooksNote": "No webhook subscription/management endpoint documented anywhere in the credential-free surface (Zapier's own triggers are Zapier-side polling constructs, not a Whova-exposed webhook API). Recorded false as the honest default — not confirmed absent, just never evidenced present.",
+        "BulkOperationsAvailable": false,
+        "BulkNote": "No batch/bulk endpoint documented. The only write surface found is the single-record 'Create or Update Attendee' Zapier action.",
+        "APIVersioningStrategy": null,
+        "APIVersioningNote": "UNDOCUMENTED — no API path, spec, or version header was ever observed (no machine-readable contract exists per SOURCE_STUDY.md §0).",
+        "TokenRefreshStrategy": null,
+        "ErrorResponseShape": null,
+        "ErrorResponseShapeNote": "UNDOCUMENTED. No error response body shape, status code catalog, or rate-limit error code was found in any credential-free source.",
+        "CustomObjectMarkerPattern": null,
+        "CustomFieldMarkerPattern": {
+          "pattern": null,
+          "note": "Whova exposes a large vendor-provided MENU of organizer-configurable optional attendee-profile custom fields (pronouns, role, credentials, chapter, department, major, program, school, affiliation, industry, expertise, education level, certifications, awards, graduating class, portfolio, project examples, skills, teaching level, mentor/investor flags, interests, hobbies, networking goals — source: https://whova.com/blog/attendee-profile-custom-fields/). This is a per-event opt-in field catalog, not a fixed schema, and no naming-prefix convention (comparable to HubSpot's p_<accountID>_<name>) is documented for distinguishing custom vs. system fields at the API level. Field-mapping/customs-capture logic should treat any attendee field outside the Zapier action's documented required/optional list (Event, First Name, Last Name, Email, Title, Affiliation/Company, Location, Ticket Types, Audience Type, Categories) as potentially custom.",
+          "eventScoping": "Every discovered trigger/action is scoped by a required 'Event' parameter — Whova is a multi-tenant-per-organizer, single-tenant-per-event platform. The connector's object model should treat Event as a required per-sync-scope parameter (configured via CompanyIntegration.Configuration), not as a syncable Events IO itself. Source: https://zapier.com/apps/whova/integrations."
+        },
+        "WriteCapability": {
+          "supported": true,
+          "scope": "Attendees only (Create or Update Attendee action)",
+          "create": "Yes — Attendees, via the 'Create or Update Attendee' Zapier action (also functions as upsert — same action creates or updates by matching Email within the Event).",
+          "update": "Yes — same action, upsert semantics (no separate distinct create vs. update endpoint documented).",
+          "delete": "UNDOCUMENTED — no delete action found for Attendees or any other object in the credential-free surface.",
+          "otherObjects": "Orders and Registrants are READ-ONLY (Zapier triggers only — 'Get Orders', 'Get Registrants' — no corresponding write action exists for either in the discovered surface). A pull-only default for Orders/Registrants and pull+limited-push for Attendees is the evidence-supported capability shape; treating the whole vendor as uniformly read-only OR uniformly bidirectional would both be capability-dishonest per connector-code-conventions.md.",
+          "sourceUrls": [
+            "https://zapier.com/apps/whova/integrations",
+            "https://zapier.com/apps/whova/integrations/salesforce"
+          ]
+        },
+        "ConcurrencyControl": "none",
+        "ConcurrencyControlNote": "No ETag, If-Match, If-Unmodified-Since, or version field is documented anywhere in the credential-free surface (there is no API reference at all beyond the Zapier action's flat input-field list). Conflict resolution must use snapshot-3-way only — do not recommend MostRecent.",
+        "DeleteSemantics": "none",
+        "DeleteSemanticsNote": "No delete operation of any kind is documented for any Whova object in the credential-free surface. DeleteBehavior for any future bidirectional EntityMap cannot be set until a delete surface is discovered (live credential or vendor contact).",
+        "DefaultSyncDirection": "Pull",
+        "DefaultSyncDirectionNote": "Read-only default for every object per connector-code-conventions.md safety discipline, regardless of the documented Attendees write action. Bidirectional (even for Attendees, the only object with any documented write capability) requires sandbox validation first — see BidirectionalPreconditions below.",
+        "DefaultConflictResolution": "DestWins",
+        "DefaultConflictResolutionReason": "ConcurrencyControl=none (no ETag/version field documented anywhere) rules out MostRecent as a safe default. DestWins is the conservative default if/when Attendees is ever enabled for bidirectional sync — it overwrites the MJ destination with Whova's source-of-truth on pull, avoiding silent conflict-loss in either direction until a real concurrency signal is discovered.",
+        "BidirectionalPreconditions": [
+          "Obtain a live/sandbox Whova credential and empirically confirm the actual request/response shape of the 'Create or Update Attendee' write path (field types, upsert-match key behavior, error codes) — currently known only from Zapier's flat input-field list, never from a real API reference.",
+          "Confirm whether Whova exposes ANY delete/archive operation for Attendees before allowing DeleteBehavior other than 'never delete via sync'.",
+          "Confirm whether a concurrency signal (ETag/version/last-modified-on-write) exists on the live API — current evidence (none discovered) implies conflict resolution can only be snapshot-3-way, which is a materially weaker safety net than MostRecent.",
+          "Confirm the true auth scheme (currently UNDOCUMENTED — Zapier abstracts it) so credential rotation/expiry and write-retry semantics can be implemented correctly.",
+          "Validate write behavior against a sandbox/test event before any bidirectional EntityMap touches a client's real event data — per the read-first, bidirectional-opt-in discipline, this must never be turned on by default."
+        ],
+        "OutOfScopeObjectFamilies": [
+          {
+            "Family": "sessions",
+            "Reason": "Field-category within Attendees export only (\"sessions checked in\", \"sessions on agenda\"); no independent trigger/action/endpoint discovered."
+          },
+          {
+            "Family": "agenda",
+            "Reason": "Same as sessions -- attendee-export field-category, not an independent object."
+          },
+          {
+            "Family": "speakers",
+            "Reason": "Zero programmatic evidence; only unofficial third-party scraper marketing pages mention speaker fields."
+          },
+          {
+            "Family": "exhibitors",
+            "Reason": "Richly documented UI/dashboard object with no discovered Zapier trigger/action or API surface."
+          },
+          {
+            "Family": "sponsors",
+            "Reason": "Same as exhibitors -- documented custom-form fields, zero programmatic surface found."
+          },
+          {
+            "Family": "registrations",
+            "Reason": "Possible duplicate naming of 'registrants' (the actual discovered Zapier trigger); no independent evidence of a distinct Registrations object."
+          },
+          {
+            "Family": "tickets",
+            "Reason": "Surfaces only as an optional enum field (Ticket Types) on the Attendee write action, not an independently queryable catalog object."
+          },
+          {
+            "Family": "contacts",
+            "Reason": "No Whova-native Contacts object found distinct from Attendees; likely refers to the CRM-side target in Zapier automations, not a Whova object."
+          },
+          {
+            "Family": "surveys",
+            "Reason": "Attendee-export field-category (\"surveys submitted\"), not an independent syncable object in the discovered surface."
+          },
+          {
+            "Family": "polls",
+            "Reason": "No mention found anywhere in the credential-free surface researched."
+          },
+          {
+            "Family": "check_ins",
+            "Reason": "Attendee-export field-category (check-in status, days checked in), not an independent object with its own CRUD/trigger surface."
+          },
+          {
+            "Family": "messages",
+            "Reason": "No mention found anywhere in the credential-free surface; only referenced as a general product feature on the marketing site."
+          },
+          {
+            "Family": "community",
+            "Reason": "No mention found anywhere in the credential-free surface researched."
+          }
+        ]
+      }
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "Name": "Attendees",
+            "DisplayName": "Attendees",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": false,
+            "Source": "Declared",
+            "IncludeInActionGeneration": true,
+            "Category": "Event Data",
+            "PaginationType": "None",
+            "SupportsPagination": false,
+            "Status": "Active",
+            "Configuration": {
+              "eventScoped": true,
+              "eventScopeNote": "Every Whova trigger/action requires an 'Event' scoping parameter. Event is a per-sync-scope input (configured via CompanyIntegration.Configuration), NOT a synced column or FK on this record.",
+              "zapierSurface": {
+                "trigger": "Get Attendees",
+                "action": "Create or Update Attendee (upsert by Email within Event)"
+              },
+              "schemaContractStatus": "NoMachineReadableContractFound",
+              "WriteCapabilityNote": "SupportsWrite downgraded to false in amendment round 1 for bijection consistency: a documented 'Create or Update Attendee' write action exists at the Zapier level (see Integration.Configuration.WriteCapability), but NO REST path/method/body-shape is documented for Whova's private backend, so CreateAPIPath/CreateMethod cannot be honestly populated credential-free. The write capability is real but unverifiable structurally; it is re-enabled at runtime once a credentialed path is discovered. Downgrading (rather than fabricating a path) keeps the per-IO capability<->column contract consistent."
+            },
+            "IntegrationID": "@parent:ID",
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "CreateAPIPath": null,
+            "CreateMethod": null,
+            "CreateBodyShape": null,
+            "CreateBodyKey": null,
+            "CreateIDLocation": null,
+            "UpdateAPIPath": null,
+            "UpdateMethod": null
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "FirstName",
+                  "DisplayName": "First Name",
+                  "Description": "Attendee's first name (required on the Create or Update Attendee action).",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active",
+                  "Sequence": 0,
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "LastName",
+                  "DisplayName": "Last Name",
+                  "Description": "Attendee's last name (required on the Create or Update Attendee action).",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active",
+                  "Sequence": 1,
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "Email",
+                  "DisplayName": "Email",
+                  "Description": "Attendee's email address. Serves as the upsert-match key for the Create or Update Attendee action (Whova matches on Email within the Event). Documented required + unique-within-event.",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": true,
+                  "Source": "Declared",
+                  "Status": "Active",
+                  "Sequence": 2,
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "Title",
+                  "DisplayName": "Title",
+                  "Description": "Attendee's job title (optional).",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active",
+                  "Sequence": 3,
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "AffiliationCompany",
+                  "DisplayName": "Affiliation/Company",
+                  "Description": "Attendee's affiliation / company / institution (optional).",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active",
+                  "Sequence": 4,
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "Location",
+                  "DisplayName": "Location",
+                  "Description": "Attendee's location (optional).",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active",
+                  "Sequence": 5,
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "TicketTypes",
+                  "DisplayName": "Ticket Types",
+                  "Description": "Ticket type(s) assigned to the attendee (optional). Appears as an enum-like value on the action; the underlying tickets catalog is not a separately-syncable object in the credential-free surface.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active",
+                  "Sequence": 6,
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "AudienceType",
+                  "DisplayName": "Audience Type",
+                  "Description": "Attendance mode: 'in_person' or 'remote' (optional, documented value set). Documented value set: in_person,remote.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active",
+                  "Sequence": 7,
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "Categories",
+                  "DisplayName": "Categories",
+                  "Description": "Attendee category / categories used for segmentation and export filtering (optional).",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active",
+                  "Sequence": 8,
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Orders",
+            "DisplayName": "Orders",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": false,
+            "Source": "Declared",
+            "IncludeInActionGeneration": true,
+            "Category": "Event Data",
+            "PaginationType": "None",
+            "SupportsPagination": false,
+            "Status": "Active",
+            "Configuration": {
+              "eventScoped": true,
+              "eventScopeNote": "Every Whova trigger/action requires an 'Event' scoping parameter. Event is a per-sync-scope input (configured via CompanyIntegration.Configuration), NOT a synced column or FK on this record.",
+              "zapierSurface": {
+                "trigger": "Get Orders (read-only)"
+              },
+              "schemaContractStatus": "NoMachineReadableContractFound"
+            },
+            "IntegrationID": "@parent:ID"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "Event",
+                  "DisplayName": "Event",
+                  "Description": "The Whova event that scopes this record. Documented required input field on the Zapier trigger. Whova is single-tenant-per-event; Event is the required scoping parameter for every trigger/action (configured via CompanyIntegration.Configuration and echoed onto each fetched record).",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active",
+                  "Sequence": 0,
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Registrants",
+            "DisplayName": "Registrants",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": false,
+            "Source": "Declared",
+            "IncludeInActionGeneration": true,
+            "Category": "Event Data",
+            "PaginationType": "None",
+            "SupportsPagination": false,
+            "Status": "Active",
+            "Configuration": {
+              "eventScoped": true,
+              "eventScopeNote": "Every Whova trigger/action requires an 'Event' scoping parameter. Event is a per-sync-scope input (configured via CompanyIntegration.Configuration), NOT a synced column or FK on this record.",
+              "zapierSurface": {
+                "trigger": "Get Registrants (read-only; registration-question form responses)"
+              },
+              "schemaContractStatus": "NoMachineReadableContractFound"
+            },
+            "IntegrationID": "@parent:ID"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "Event",
+                  "DisplayName": "Event",
+                  "Description": "The Whova event that scopes this record. Documented required input field on the Zapier trigger. Whova is single-tenant-per-event; Event is the required scoping parameter for every trigger/action (configured via CompanyIntegration.Configuration and echoed onto each fetched record).",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Source": "Declared",
+                  "Status": "Active",
+                  "Sequence": 0,
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

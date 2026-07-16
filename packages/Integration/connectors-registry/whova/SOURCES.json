@@ -1,0 +1,174 @@
+{
+  "Vendor": "Whova",
+  "GeneratedAt": "2026-07-02T00:00:00.000Z",
+  "SchemaContractStatus": "NoMachineReadableContractFound",
+  "SchemaContractEvidence": {
+    "Checked": "https://apitracker.io/a/whova",
+    "RawSignal": "\"apiSpecs\":[],\"apis\":[],\"postmanCollections\":[]",
+    "Note": "API Tracker's profile page renders generic 'OpenAPI/Swagger specs' and 'Postman / Insomnia collections' UI chrome (dimmed icon badges, no href on the 'Run in Postman' anchor) for EVERY vendor in its directory regardless of whether real artifacts exist. The page's own embedded JSON state (apiSpecs, apis, postmanCollections) is empty for Whova. The dedicated /a/whova/specifications sub-page states explicitly: \"We don't have API specifications for Whova yet.\" Confirmed by fetching all four API-Tracker sub-pages (overview, /apis, /developers, /specifications) — none contain a resolvable spec URL.",
+    "SavedRawFile": "sources/apitracker.whova.overview.html",
+    "SecondPassConfirmation": "A follow-up decisive hunt (2026-07-02, second pass) independently exhausted every remaining credential-free channel and found NO additional spec: (1) apiorb.com's page surfaced ONE new candidate URL, https://whova.com/resources/how-to-guides/api-integration/ — fetched directly, returned HTTP 404 (confirmed dead link / boilerplate reference on apiorb's templated page, not a real Whova resource). (2) Direct path probing of https://whova.com/{developers,developer,api,api-integration,docs/api,developer/api,api/docs,developers/api} all 302-redirect to the Whova homepage (Whova's server pattern for any unrecognized path — i.e. none of these paths exist as distinct resources); {resources/api,resources/developer-api,pages/api,resources/how-to-guides/api,resources/api-integration} all 404. (3) whova.com/pages/integrations/ and whova.com/developers (post-redirect) contain zero mention of API/REST/webhook/OpenAPI/Swagger/Postman — purely a partner-recruitment/marketing page. (4) whova.com/blog/whova-integration-eventbrite-cvent-constant-contact-regfox-zapier/ confirms Whova's integrations are uniformly INBOUND (Whova consumes Eventbrite/Cvent/Constant-Contact/RegFox/Glue-Up API keys to pull registration data IN) — no outbound Whova-side API for third parties. (5) The Zendesk help-center article 'How do I integrate CRM via Zapier?' (recovered via WebSearch snippet since whova.zendesk.com is Cloudflare-challenge-blocked, confirmed via direct curl returning a 403 'Just a moment...' JS/cookie challenge page, not a WebFetch-specific block) states explicitly that CRM integration is done via Zapier trigger app 'Whova' + 'Get Attendees' trigger — corroborating no direct/native REST API exists for organizers. (6) github.com/Whova has exactly one repo (a stale CocoaPods Specs fork) — no SDK, no OpenAPI spec, no client library. (7) No PyPI/npm package exists for Whova. (8) No SwaggerHub entry exists for Whova. (9) No public Postman workspace exists for Whova (only generic Postman docs surfaced). (10) A 2017/2018 third-party writeup ('How we hacked the SourceCon 2018 Attendee List in 2 hours', Medium) documents an UNDOCUMENTED, UNAUTHENTICATED internal mobile-app API reverse-engineered via Charles Proxy traffic interception — this is explicitly NOT a legitimate credential-free source per the connector-credential-testing legal boundary (never bypass/reverse-engineer undocumented internal endpoints not published for public consumption); it is retained here only as evidence the 'is there a hidden API' question has been asked before and correctly excluded, not as a usable source. VERDICT UNCHANGED AND NOW DOUBLY CONFIRMED: no machine-readable, credential-free API contract exists for Whova. HONEST-NA is proven, not assumed."
+  },
+  "Sources": [
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["Attendees", "Orders", "Registrants (Registration Form Responses)"],
+      "AccessNotes": "Fetched directly, 200. This is Whova's own published Zapier app surface (Whova is the app owner/maintainer of record on the Zapier platform) and is the ONLY reachable enumeration of Whova's programmatic trigger/action surface. Documents 3 triggers (Get Attendees, Get Orders, Get Registrants) and 1 write action (Create or Update Attendee) with required/optional field lists for the write action. This is the closest thing to an authoritative 'API contract' available credential-free for Whova -- treated as Tier 2 (official-structured, vendor-authored on a third-party platform) rather than Tier 1 (no vendor-hosted reference)."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations/salesforce",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["Attendees"],
+      "AccessNotes": "Fetched directly, 200. Confirms the Create-or-Update-Attendee action field list (Event, First Name, Last Name, Email required; Title, Affiliation/Company, Location, Ticket Types, Audience Type, Categories optional)."
+    },
+    {
+      "URL": "https://whova.zendesk.com/hc/en-us/articles/36234286423963-How-can-organizers-export-a-custom-report",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["Attendees", "Registrants (Registration Form Responses)", "Check-ins", "Surveys", "Session Feedback"],
+      "AccessNotes": "WebFetch returned 403 Forbidden (Zendesk bot-block on whova.zendesk.com). Retried with 3x exponential backoff via WebFetch (1s/3s/9s) -- still 403. Retried via Bash curl with a standard desktop User-Agent -- also 403 (Zendesk-side bot rule, not a WebFetch-specific block). Content recovered indirectly via WebSearch snippet extraction, which surfaced the article's substance: organizers export via Attendees -> Analytics & Exports -> Export, with two report options (Option 1: survey responses + session feedback + check-in data; Option 2: Option 1 plus registration-form responses, gated on Whova Registration being enabled)."
+    },
+    {
+      "URL": "https://whova.zendesk.com/hc/en-us/articles/207292877-How-do-I-export-my-Attendees-List",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["Attendees"],
+      "AccessNotes": "Same Zendesk 403 bot-block pattern as the sibling article above; not independently re-verified via curl (same host, same block expected). Surfaced via WebSearch snippet: Attendees -> Manage Attendees -> Export Attendees -> Export Basic attendee list, filterable by ticket type / category."
+    },
+    {
+      "URL": "https://whova.zendesk.com/hc/en-us/articles/28473285536795-How-do-I-integrate-CRM-via-Zapier",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["Attendees"],
+      "AccessNotes": "Zendesk 403 on both WebFetch and curl (Mozilla UA). Title confirms the article's scope: CRM integration is routed exclusively through Zapier, corroborating that Whova has no direct/native REST API for organizers to self-integrate. RE-CONFIRMED on second pass (2026-07-02): direct curl now returns the raw Cloudflare 'Just a moment...' managed-challenge HTML (403, cRay present, JS/cookie challenge required) -- proving this is a Cloudflare bot-wall on the whova.zendesk.com zone, not a WebFetch quirk. WebSearch snippet recovery reconfirms article body: 'Attendees > Integrations > CRM Integration via Zapier... search and select Whova as your trigger app and select Get Attendees as the trigger.'"
+    },
+    {
+      "URL": "https://whova.com/blog/custom-attendee-data-export/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["Attendees", "Check-ins", "Surveys", "Session Feedback", "Registrants (Registration Form Responses)"],
+      "AccessNotes": "Fetched directly, 200 (whova.com main domain, unlike zendesk subdomain, is not bot-blocked). Documents the default exportable attendee field set: attendee names, check-in status, days checked in, sessions checked in, sessions on agenda, surveys submitted, session feedback submitted -- plus custom registration-form multiple-choice fields, filterable by ticket type and attendee category."
+    },
+    {
+      "URL": "https://whova.com/blog/attendee-profile-custom-fields/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["Attendees"],
+      "AccessNotes": "Fetched directly, 200. Documents the custom attendee-profile field catalog (pronouns, role, credentials, chapter, department, major, program, school, affiliation, industry, expertise, education level, certifications, awards, graduating class, portfolio, project examples, skills, teaching level, networking/business-opportunity fields, interests/hobbies). These are vendor-configurable custom fields, not a fixed schema -- informational for field-mapping/customs-handling logic, not a coverable taxonomy of its own."
+    },
+    {
+      "URL": "https://whova.com/pages/whova-app-exhibitor-guide/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["Exhibitors/Booths (documented, no discovered write/read API surface)"],
+      "AccessNotes": "Fetched directly, 200. Documents exhibitor/booth profile fields (company info, logo, contact, promo offers, staff, leads) and lead-collection/QR-scan mechanics. No Zapier trigger/action exists for exhibitors -- this taxonomy is INFORMATIONAL/documented-only, not coverable from the credential-free surface (see Gaps)."
+    },
+    {
+      "URL": "https://whova.com/blog/sponsor-exhibitor-form-custom-fields/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["Exhibitors/Booths (documented, no discovered write/read API surface)"],
+      "AccessNotes": "Fetched directly, 200. Documents sponsor/exhibitor custom form field types (radio, checkbox, short answer, paragraph, consent) and example uses (logistics, social links, booking links). Same scope-gap as above."
+    },
+    {
+      "URL": "https://whova.com/faq/is-there-any-way-for-me-to-export-attendees/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Fetched directly, 200, but content is STALE/CONTRADICTORY -- states 'Whova does not support this function as of now' for attendee export, directly contradicted by the Zendesk help-center articles and the custom-export blog post which describe a working export feature. Retained in SOURCES.json only as a documented contradiction; NOT used as evidence for any TargetField. Downgraded to Tier 3 due to demonstrated staleness."
+    },
+    {
+      "URL": "https://apitracker.io/a/whova",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Fetched directly, 200, and via Bash curl (raw HTML saved to sources/apitracker.whova.overview.html). Third-party API directory/aggregator, NOT vendor-owned. Used only to DISPROVE the existence of a machine-readable contract (embedded JSON shows apiSpecs:[], apis:[], postmanCollections:[]). Not used as a source of any field/object claim."
+    },
+    {
+      "URL": "https://apitracker.io/a/whova/specifications",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Fetched directly. Page explicitly states 'We don't have API specifications for Whova yet' -- corroborates SchemaContractStatus."
+    },
+    {
+      "URL": "https://apitracker.io/a/whova/apis",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Re-fetched on second pass (2026-07-02). Confirms only internal navigation links (/a/whova/sdks, /a/whova/specifications) -- no actual endpoint list, no spec URL, no Postman/SDK links resolve to real artifacts."
+    },
+    {
+      "URL": "https://www.apiorb.com/apis/whova-api",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Fetched directly, 200. Generic third-party API-cataloging site; page text is boilerplate/templated (mentions 'GraphQL playground', 'OAuth playground', 'Sandbox environment' etc. that are almost certainly template chrome, not vendor-confirmed features -- no concrete Whova-specific technical details, no linked spec). Not used as evidence for any field/object claim; retained only to document that this path was checked and yielded nothing actionable. Re-checked on second pass: the page's single concrete link, 'View Documentation' -> https://whova.com/resources/how-to-guides/api-integration/, was fetched directly and returned HTTP 404 -- confirming this is dead/fabricated boilerplate on apiorb's templated listing page, not a real Whova resource."
+    },
+    {
+      "URL": "https://whova.com/resources/how-to-guides/api-integration/",
+      "AccessStatus": "404",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Second-pass candidate surfaced from apiorb.com's 'View Documentation' link. Fetched directly via WebFetch, returned HTTP 404 Not Found. Confirmed dead link -- apiorb.com's directory listing is templated/fabricated for this vendor, not a real citation."
+    },
+    {
+      "URL": "https://whova.com/blog/whova-integration-eventbrite-cvent-constant-contact-regfox-zapier/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Second-pass fetch, 200. Vendor's own blog confirming its registration-system integrations are uniformly INBOUND (Whova consumes third-party API keys from Cvent/Eventbrite/Constant-Contact/RegFox to pull registrant data INTO Whova). No mention of Whova exposing its own API/webhook/export mechanism for third parties to read FROM Whova, other than via Zapier. Directly supports the HONEST-NA verdict: Whova's documented API surface is consumption-only, not provision."
+    },
+    {
+      "URL": "https://whova.com/developers",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Second-pass probe. HTTP 302 redirects to https://whova.com/ (Whova's server issues a 302-to-homepage for any unrecognized path, confirmed identically for /developer, /api, /api-integration, /developer/api, /api/docs, /developers/api, /docs/api). Final fetched content (whova.com homepage) contains zero mention of API/developer/OpenAPI/Swagger/Postman. Proves no /developers path exists as a distinct resource."
+    },
+    {
+      "URL": "https://whova.com/pages/integrations/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Second-pass fetch, 200 (301 from /pages/integrations). Pure partner-recruitment/marketing page ('Connect Whova with the tools you already use—CRM, AMS, payment, marketing, streaming, and more.'). Zero mentions of API, REST, webhook, OpenAPI, Swagger, or Postman. No technical documentation, only a partnership CTA."
+    },
+    {
+      "URL": "https://github.com/Whova",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialSDK",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Second-pass check of the vendor's official GitHub organization. Exactly one public repository, a stale fork of CocoaPods/Specs (the CocoaPods master dependency repo -- unrelated to any Whova API, almost certainly a leftover from iOS build tooling). No SDK, no OpenAPI/Swagger spec, no client library, no API-related repo of any kind."
+    },
+    {
+      "URL": "https://whova.zendesk.com/hc/en-us/sections/28217804279707-Integrations",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["Attendees"],
+      "AccessNotes": "Second-pass check of the full Zendesk Integrations section listing. Direct curl returned HTTP 403 with a raw Cloudflare managed-challenge page (title 'Just a moment...', cRay identifier present, JS+cookie challenge required) -- definitively confirms this is a Cloudflare bot-wall on the whova.zendesk.com zone (not a WebFetch-specific block, not a transient failure). WebSearch snippet recovery lists the section's contents: Mailchimp integration, Constant Contact integration, CRM via Zapier, Export Registration to CRM via Zapier, connecting to Zapier for registration orders. All integration articles route through Zapier or direct data-source API-key entry (Whova consuming other platforms) -- none describe a Whova-side API for external consumption."
+    }
+  ]
+}

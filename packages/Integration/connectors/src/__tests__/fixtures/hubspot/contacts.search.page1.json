@@ -1,0 +1,36 @@
+{
+  "total": 2,
+  "results": [
+    {
+      "id": "710",
+      "properties": {
+        "hs_object_id": "710",
+        "email": "example+10@example.com",
+        "firstname": "<scrubbed-name-10>",
+        "hs_lastmodifieddate": "1772800000000",
+        "createdate": "2026-03-05T00:00:00.000Z"
+      },
+      "createdAt": "2026-03-05T00:00:00.000Z",
+      "updatedAt": "2026-03-05T00:00:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "711",
+      "properties": {
+        "hs_object_id": "711",
+        "email": "example+11@example.com",
+        "firstname": "<scrubbed-name-11>",
+        "hs_lastmodifieddate": "1772900000000",
+        "createdate": "2026-03-06T00:00:00.000Z"
+      },
+      "createdAt": "2026-03-06T00:00:00.000Z",
+      "updatedAt": "2026-03-06T00:00:00.000Z",
+      "archived": false
+    }
+  ],
+  "paging": {
+    "next": {
+      "after": "2"
+    }
+  }
+}

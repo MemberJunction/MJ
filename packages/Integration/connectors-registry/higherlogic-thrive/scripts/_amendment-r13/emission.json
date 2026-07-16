@@ -1,0 +1,164 @@
+[
+  {
+    "objectName": "RegistrantClasses",
+    "fieldsExtracted": 1,
+    "gapsRemaining": [
+      "iof.RegistrantClasses.*.field-set (doc-generation bug hides response model)",
+      "io.RegistrantClasses.PK (deferred to runtime D4)"
+    ],
+    "claims": [
+      {
+        "slot": "io.RegistrantClasses.APIPath",
+        "value": "/v2.0/RegistrantClass/GetRegistrantClasses",
+        "sourcePath": "sources/ops/GET-api-v2.0-RegistrantClass-GetRegistrantClasses_Active.html"
+      },
+      {
+        "slot": "io.RegistrantClasses.PaginationType",
+        "value": "None",
+        "sourcePath": "sources/ops/GET-api-v2.0-RegistrantClass-GetRegistrantClasses_Active.html"
+      },
+      {
+        "slot": "io.RegistrantClasses.SupportsWrite",
+        "value": false,
+        "sourcePath": "sources/ops/GET-api-v2.0-RegistrantClass-GetRegistrantClasses_Active.html"
+      },
+      {
+        "slot": "io.RegistrantClasses.Configuration",
+        "value": "{\"accessPath\":{\"door\":\"RegistrantClass/GetRegistrantClasses\",\"path\":\"/v2.0/RegistrantClass/GetRegistrantClasses\",\"nesting\":[],\"door_args\":[\"Active\"],\"fieldOp\":\"api/v2.0/RegistrantClass/GetRegistrantClasses\"},\"sourceModel\":\"RegistrantClass\",\"fieldListGap\":\"vendor doc-generation bug substitutes HttpResponseMessage for the RegistrantClass response model; no documented response field set and no write endpoint to recover one from. Consistent with EventTypes (pre-recovery) and EventSessions/Questions (kept alive despite comparable/worse gaps).\"}",
+        "sourcePath": "SOURCE_STUDY.md"
+      },
+      {
+        "slot": "iof.RegistrantClasses.RegistrantClassKey.IsPrimaryKey",
+        "value": false,
+        "sourcePath": "SOURCE_STUDY.md"
+      }
+    ],
+    "matrixRow": {
+      "IOName": "RegistrantClasses",
+      "ExistingConnectorTs": "n/a",
+      "ExistingMetadataJson": "no",
+      "OpenAPIxPK": "no",
+      "OpenAPIPathOps": "yes",
+      "OpenAPILocationHeader": "no",
+      "VendorDocsProseScan": "yes",
+      "SDKTypes": "n/a",
+      "PostmanCommunity": "n/a",
+      "NamingConvention": "yes",
+      "CrossIOMatch": "no",
+      "PKVerdict": "defer",
+      "FKVerdict": "defer",
+      "EvidenceCount": 2
+    }
+  },
+  {
+    "objectName": "BlogComments",
+    "fieldsExtracted": 6,
+    "gapsRemaining": [],
+    "claims": [
+      {
+        "slot": "iof.BlogComments.ItemKey.Configuration.ReferencedType",
+        "value": "Blogs",
+        "sourcePath": "SOURCE_STUDY.md"
+      },
+      {
+        "slot": "iof.BlogComments.ItemKey.RelatedIntegrationObjectID",
+        "value": "@lookup:MJ: Integration Objects.Name=Blogs&IntegrationID=@parent:IntegrationID",
+        "sourcePath": "SOURCE_STUDY.md"
+      },
+      {
+        "slot": "iof.BlogComments.ItemKey.RelatedIntegrationObjectFieldName",
+        "value": "BlogKey",
+        "sourcePath": "SOURCE_STUDY.md"
+      }
+    ],
+    "matrixRow": {
+      "IOName": "BlogComments",
+      "ExistingConnectorTs": "n/a",
+      "ExistingMetadataJson": "yes",
+      "OpenAPIxPK": "no",
+      "OpenAPIPathOps": "yes",
+      "OpenAPILocationHeader": "no",
+      "VendorDocsProseScan": "yes",
+      "SDKTypes": "n/a",
+      "PostmanCommunity": "n/a",
+      "NamingConvention": "yes",
+      "CrossIOMatch": "yes",
+      "PKVerdict": "emit",
+      "FKVerdict": "emit-N",
+      "EvidenceCount": 1
+    }
+  },
+  {
+    "objectName": "Comments",
+    "fieldsExtracted": 6,
+    "gapsRemaining": [
+      "iof.Comments.ItemKey FK target (polymorphic parent — access-path only, no single resolvable target)"
+    ],
+    "claims": [
+      {
+        "slot": "iof.Comments.ItemKey.Configuration.ReferencedType",
+        "value": null,
+        "sourcePath": "SOURCE_STUDY.md"
+      },
+      {
+        "slot": "iof.Comments.ItemKey.RelatedIntegrationObjectFieldName",
+        "value": null,
+        "sourcePath": "SOURCE_STUDY.md"
+      }
+    ],
+    "matrixRow": {
+      "IOName": "Comments",
+      "ExistingConnectorTs": "n/a",
+      "ExistingMetadataJson": "yes",
+      "OpenAPIxPK": "no",
+      "OpenAPIPathOps": "yes",
+      "OpenAPILocationHeader": "no",
+      "VendorDocsProseScan": "yes",
+      "SDKTypes": "n/a",
+      "PostmanCommunity": "n/a",
+      "NamingConvention": "yes",
+      "CrossIOMatch": "no",
+      "PKVerdict": "emit",
+      "FKVerdict": "defer",
+      "EvidenceCount": 1
+    }
+  },
+  {
+    "objectName": "CommunityMembers",
+    "fieldsExtracted": 35,
+    "gapsRemaining": [],
+    "claims": [
+      {
+        "slot": "iof.CommunityMembers.CommunityKey.IsPrimaryKey",
+        "value": true,
+        "sourcePath": "SOURCE_STUDY.md"
+      },
+      {
+        "slot": "iof.CommunityMembers.CommunityKey.RelatedIntegrationObjectID",
+        "value": "@lookup:MJ: Integration Objects.Name=Communities&IntegrationID=@parent:IntegrationID",
+        "sourcePath": "SOURCE_STUDY.md"
+      },
+      {
+        "slot": "iof.CommunityMembers.CommunityKey.Configuration.ReferencedType",
+        "value": "Communities",
+        "sourcePath": "SOURCE_STUDY.md"
+      }
+    ],
+    "matrixRow": {
+      "IOName": "CommunityMembers",
+      "ExistingConnectorTs": "n/a",
+      "ExistingMetadataJson": "yes",
+      "OpenAPIxPK": "no",
+      "OpenAPIPathOps": "yes",
+      "OpenAPILocationHeader": "no",
+      "VendorDocsProseScan": "yes",
+      "SDKTypes": "n/a",
+      "PostmanCommunity": "n/a",
+      "NamingConvention": "yes",
+      "CrossIOMatch": "yes",
+      "PKVerdict": "emit",
+      "FKVerdict": "emit-N",
+      "EvidenceCount": 1
+    }
+  }
+]

@@ -1,0 +1,9 @@
+[
+  {
+    "io": {
+      "Name": "ExternalActivity",
+      "DeleteAPIPath": "/v2.0/ExternalActivity/Delete?externalActivityKey={id}&legacyActivityKey={id}",
+      "DeleteIDLocation": "path"
+    }
+  }
+]

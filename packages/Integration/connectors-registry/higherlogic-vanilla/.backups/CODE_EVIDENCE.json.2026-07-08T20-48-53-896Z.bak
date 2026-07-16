@@ -1,0 +1,849 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-auth-ratelimit-webhook-kb.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "jwtSigningAlgorithm": "HS256",
+        "jwtHeaderPattern": "Authorization: Bearer <jwt>",
+        "jwtIsAddon": true,
+        "sourceArticle": "kb/articles/122-authenticating-api-v2-calls-with-jwt (resolved+name-verified, NOT the misleadingly-guessed kb/articles/42-* URL which actually serves an unrelated CORS article)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.AlternativeAuthMechanisms.jwtApiAuth"
+    },
+    {
+      "ScriptPath": "scripts/extract-auth-ratelimit-webhook-kb.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "roleTokenIssueEndpoint": "POST /api/v2/tokens/roles",
+        "roleTokenQueryParam": "role-token",
+        "roleTokenLimitedEndpoints": [
+          "GET /api/v2/users/:userID",
+          "GET /api/v2/subcommunities",
+          "GET /api/v2/products",
+          "GET /api/v2/users/524314"
+        ],
+        "roleTokenLifetimeMinutesApprox": "1-3",
+        "sourceArticle": "kb/articles/436-authenticating-api-v2-calls-with-role-tokens (resolved+name-verified, NOT the misleadingly-guessed kb/articles/43-* URL)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.AlternativeAuthMechanisms.roleTokens"
+    },
+    {
+      "ScriptPath": "scripts/extract-auth-ratelimit-webhook-kb.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "webhookSignatureHeader": "X-Vanilla-Signature",
+        "webhookSignatureAlgorithm": "HMAC-SHA1",
+        "webhookRequiresStaffEnablement": true,
+        "sourceArticle": "kb/articles/262-webhooks (resolved+name-verified)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WebhooksSignatureAlgorithm"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "paginationSample": [
+          {
+            "path": "/discussions",
+            "hasPage": true,
+            "hasLimit": true,
+            "limitDefault": 30,
+            "limitMax": 100,
+            "limitMin": 1,
+            "sortEnum": [
+              "dateLastComment",
+              "dateInserted",
+              "discussionID",
+              "-dateLastComment",
+              "-dateInserted",
+              "-discussionID"
+            ],
+            "hasFields": true,
+            "hasDateUpdatedFilter": true,
+            "hasDateInsertedFilter": true
+          },
+          {
+            "path": "/users",
+            "hasPage": true,
+            "hasLimit": true,
+            "limitDefault": 30,
+            "limitMax": 500,
+            "limitMin": 1,
+            "sortEnum": [
+              "dateInserted",
+              "dateLastActive",
+              "name",
+              "userID",
+              "points",
+              "countPosts",
+              "dateFollowed",
+              "-dateInserted",
+              "-dateLastActive",
+              "-name",
+              "-userID",
+              "-points",
+              "-countPosts",
+              "-dateFollowed",
+              "groups.dateInserted",
+              "-groups.dateInserted"
+            ],
+            "hasFields": true,
+            "hasDateUpdatedFilter": true,
+            "hasDateInsertedFilter": true
+          },
+          {
+            "path": "/categories",
+            "hasPage": true,
+            "hasLimit": true,
+            "limitDefault": null,
+            "limitMax": 100,
+            "limitMin": 1,
+            "sortEnum": [
+              "categoryID",
+              "-categoryID",
+              "name",
+              "-name",
+              "dateFollowed",
+              "-dateFollowed"
+            ],
+            "hasFields": true,
+            "hasDateUpdatedFilter": false,
+            "hasDateInsertedFilter": false
+          },
+          {
+            "path": "/comments",
+            "hasPage": true,
+            "hasLimit": true,
+            "limitDefault": "30",
+            "limitMax": 100,
+            "limitMin": 1,
+            "sortEnum": [
+              "dateInserted",
+              "-dateInserted",
+              "commentID",
+              "-commentID",
+              "score",
+              "-score",
+              "-experimentalTrending"
+            ],
+            "hasFields": true,
+            "hasDateUpdatedFilter": true,
+            "hasDateInsertedFilter": true
+          },
+          {
+            "path": "/roles",
+            "hasPage": false,
+            "hasLimit": false,
+            "limitDefault": null,
+            "limitMax": null,
+            "limitMin": null,
+            "sortEnum": null,
+            "hasFields": true,
+            "hasDateUpdatedFilter": false,
+            "hasDateInsertedFilter": false
+          }
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PaginationDefaults"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "dateUpdatedFilterConfirmedOn": [
+          "/discussions",
+          "/users",
+          "/comments"
+        ],
+        "dateUpdatedFilterAbsentOn": [
+          "/categories",
+          "/roles"
+        ],
+        "vendorWideWatermarkCounts": {
+          "hasDateUpdatedWatermark": 23,
+          "insertOnlyWatermark": 10,
+          "totalCoverable": 51
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "bulkLikePaths": [
+          "/discussions/resolve-bulk",
+          "/badges/{id}/bulk-users"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.BulkOperationsAvailable"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "servers": [
+          {
+            "url": "https://open.vanillaforums.com/api/v2"
+          },
+          {
+            "url": "https://success.vanillaforums.com/api/v2"
+          }
+        ],
+        "specVersion": "3.0.3"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.APIVersioningStrategy"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "topErrorSchemaRef": [
+          "#/components/schemas/BasicError",
+          15
+        ],
+        "refCount": 15,
+        "basicErrorSchema": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "description": "Verbose description of the error.",
+              "type": "string"
+            },
+            "status": {
+              "description": "Response status code.",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "message",
+            "status"
+          ],
+          "x-addon": "dashboard"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ErrorResponseShape"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "profileFieldApiNameDescription": "The ID of the profile field."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.CustomFieldMarkerPattern"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "totalCoverable": 51,
+        "withCreate": 37,
+        "withUpdate": 33,
+        "withDelete": 32,
+        "fullCRUD": 25,
+        "readOnly": [
+          "AutomationDispatch",
+          "ProductMessage",
+          "RoleApplication",
+          "Sessions",
+          "UserFragment",
+          "UserMentions",
+          "UserNote",
+          "Widget"
+        ],
+        "hasDateUpdatedWatermark": 23,
+        "insertOnlyWatermark": 10
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WriteCapability"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "ifMatchCount": 0,
+        "etagCount": 4,
+        "etagContexts": [
+          "ties\":{\"partNumber\":{\"type\":\"integer\"},\"eTag\":{\"type\":\"string\"}}}}}}},\"x-addon\":",
+          "ema\":{\"$ref\":\"#/components/schemas/DeleteTagInfo\"}}}},\"401\":{\"$ref\":\"#/component",
+          "messages\"],\"x-addon\":\"dashboard\"},\"DeleteTagInfo\":{\"type\":\"object\",\"description\"",
+          "board\"},\"CacheBusterParameter\":{\"name\":\"etag\",\"in\":\"query\",\"description\":\"Whethe"
+        ],
+        "ifUnmodifiedCount": 0
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ConcurrencyControl"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "ifMatchCount": 0,
+        "etagCount": 4,
+        "etagContexts": [
+          "ties\":{\"partNumber\":{\"type\":\"integer\"},\"eTag\":{\"type\":\"string\"}}}}}}},\"x-addon\":",
+          "ema\":{\"$ref\":\"#/components/schemas/DeleteTagInfo\"}}}},\"401\":{\"$ref\":\"#/component",
+          "messages\"],\"x-addon\":\"dashboard\"},\"DeleteTagInfo\":{\"type\":\"object\",\"description\"",
+          "board\"},\"CacheBusterParameter\":{\"name\":\"etag\",\"in\":\"query\",\"description\":\"Whethe"
+        ],
+        "ifUnmodifiedCount": 0
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.DefaultConflictResolution"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "articleStatusEnum": [
+          "undeleted",
+          "deleted",
+          "published"
+        ],
+        "hasArticleDeleteVerb": false,
+        "sampleHardDeleteObjects": [
+          {
+            "path": "/discussions/{id}",
+            "hasDelete": true
+          },
+          {
+            "path": "/comments/{id}",
+            "hasDelete": true
+          },
+          {
+            "path": "/users/{id}",
+            "hasDelete": true
+          },
+          {
+            "path": "/categories/{id}",
+            "hasDelete": true
+          },
+          {
+            "path": "/groups/{id}",
+            "hasDelete": true
+          }
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.DeleteSemantics"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-08T17:53:39.101Z",
+      "StructuredOutput": {
+        "IOCreated": 58,
+        "IOFCreated": 556,
+        "coverableDoors": 51,
+        "nestedRecordTypes": 7,
+        "source": "sources/vanilla-openapi.merged.v3.json (union of open.vanillaforums.com/api/v2/openapi/v3 + success.vanillaforums.com KB-1842-embedded spec)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-08T17:53:39.101Z",
+      "StructuredOutput": {
+        "rule": "addressing-path param GET /users/{id} → userID is the PK",
+        "pkFields": [
+          "Addon:addonID",
+          "Appeal:appealID",
+          "Authenticator:authenticatorID",
+          "AutomationDispatch:automationRuleDispatchUUID",
+          "Category:categoryID",
+          "Collection:collectionID",
+          "Comment:commentID",
+          "Conversation:conversationID",
+          "DataSource:dataSourceID",
+          "Discussion:discussionID",
+          "Draft:draftID",
+          "EmailTemplate:emailTemplatesID",
+          "Escalation:recordID",
+          "Export:exportUUID",
+          "Icon:iconUUID",
+          "Locale:localeID",
+          "MediaItem:mediaID",
+          "Message:messageID",
+          "ModerationMessage:moderationMessageID",
+          "Notification:notificationID",
+          "Poll:pollID",
+          "ProductMessage:productMessageID",
+          "ProfileField:apiName",
+          "Rank:rankID",
+          "ReactionType:urlCode",
+          "ReportReason:reportReasonID",
+          "Report:reportID",
+          "RoleApplication:roleRequestID",
+          "Role:roleID",
+          "Rule:ruleID"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.User.userID.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-08T17:53:39.101Z",
+      "StructuredOutput": {
+        "rule": "field name resolves to emitted sibling IO PK + description motif; @lookup with &IntegrationID=@parent:IntegrationID",
+        "example": "Comment.discussionID → Discussion (\"The ID of the discussion.\")"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Comment.discussionID.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-08T17:53:39.101Z",
+      "StructuredOutput": {
+        "rule": "per-operation CRUD columns emitted when the OpenAPI door exposes POST/PATCH/DELETE",
+        "writeCapableObjects": 43
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Discussion.SupportsWrite"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-08T17:53:39.101Z",
+      "StructuredOutput": {
+        "rule": "watermark = dateUpdated (else dateInserted) when present as a documented list-filter query param",
+        "incrementalObjects": [
+          "Appeal:dateInserted",
+          "AutomationDispatch:dateUpdated",
+          "Collection:dateUpdated",
+          "Comment:dateUpdated",
+          "Discussion:dateUpdated",
+          "Draft:dateUpdated",
+          "Escalation:dateInserted",
+          "Report:dateInserted",
+          "User:dateUpdated"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Discussion.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-08T17:53:39.101Z",
+      "StructuredOutput": {
+        "rule": "APIPath = the door list path walked from spec.paths",
+        "sample": [
+          "Addon:/addons",
+          "Appeal:/appeals",
+          "Authenticator:/authenticators",
+          "AutomationDispatch:/automation-rules/dispatches",
+          "Category:/categories",
+          "Collection:/collections",
+          "Comment:/comments",
+          "Conversation:/conversations",
+          "DataSource:/data-sources",
+          "Discussion:/discussions"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Discussion.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.Session.sessionID.IsPrimaryKey",
+          "iof.Session.userID.RelatedIntegrationObjectID"
+        ],
+        "addedFields": [
+          "sessionID",
+          "userID",
+          "dateInserted",
+          "dateUpdated",
+          "dateExpires"
+        ],
+        "fkEdges": 1,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Session"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.Report.reportID.IsPrimaryKey",
+          "iof.Report.recordUserID.RelatedIntegrationObjectID",
+          "iof.Report.insertUserID.RelatedIntegrationObjectID",
+          "iof.Report.reportedUserID.RelatedIntegrationObjectID",
+          "iof.Report.updateUserID.RelatedIntegrationObjectID"
+        ],
+        "addedFields": [
+          "reportID",
+          "recordUserID",
+          "recordDateInserted",
+          "recordDateUpdated",
+          "insertUserID",
+          "reportedUserID",
+          "updateUserID"
+        ],
+        "fkEdges": 4,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Report"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.ReportReason.reportReasonID.IsPrimaryKey",
+          "iof.ReportReason.insertUserID.RelatedIntegrationObjectID",
+          "iof.ReportReason.updateUserID.RelatedIntegrationObjectID"
+        ],
+        "addedFields": [
+          "reportReasonID",
+          "name",
+          "description",
+          "dateInserted",
+          "dateUpdated",
+          "insertUserID",
+          "updateUserID",
+          "sort",
+          "roleIDs",
+          "roles",
+          "deleted"
+        ],
+        "fkEdges": 2,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.ReportReason"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.UserNote.userNoteID.IsPrimaryKey",
+          "iof.UserNote.userID.RelatedIntegrationObjectID",
+          "iof.UserNote.insertUserID.RelatedIntegrationObjectID",
+          "iof.UserNote.updateUserID.RelatedIntegrationObjectID"
+        ],
+        "addedFields": [
+          "userNoteID",
+          "type",
+          "userID",
+          "body",
+          "format",
+          "insertUserID",
+          "updateUserID"
+        ],
+        "fkEdges": 3,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UserNote"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.OnlineUser.userID.RelatedIntegrationObjectID",
+          "iof.OnlineUser.userID.IsPrimaryKey",
+          "iof.OnlineUser.name.IsPrimaryKey"
+        ],
+        "addedFields": [
+          "userID",
+          "timestamp"
+        ],
+        "fkEdges": 1,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.OnlineUser"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.EventParticipant.eventID.RelatedIntegrationObjectID",
+          "iof.EventParticipant.eventID.IsPrimaryKey",
+          "iof.EventParticipant.userID.RelatedIntegrationObjectID",
+          "iof.EventParticipant.userID.IsPrimaryKey"
+        ],
+        "addedFields": [
+          "eventID",
+          "userID"
+        ],
+        "fkEdges": 2,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.EventParticipant"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.GroupApplicant.userID.RelatedIntegrationObjectID",
+          "iof.GroupApplicant.userID.IsPrimaryKey",
+          "io.GroupApplicant.CreateAPIPath",
+          "io.GroupApplicant.UpdateAPIPath"
+        ],
+        "addedFields": [
+          "userID"
+        ],
+        "fkEdges": 1,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupApplicant"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.GroupInvite.insertUserID.RelatedIntegrationObjectID",
+          "iof.GroupInvite.userID.RelatedIntegrationObjectID",
+          "iof.GroupInvite.userID.IsPrimaryKey",
+          "io.GroupInvite.CreateAPIPath",
+          "io.GroupInvite.DeleteAPIPath"
+        ],
+        "addedFields": [
+          "insertUserID",
+          "userID"
+        ],
+        "fkEdges": 2,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupInvite"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.GroupMember.insertUserID.RelatedIntegrationObjectID",
+          "iof.GroupMember.userID.RelatedIntegrationObjectID",
+          "iof.GroupMember.userID.IsPrimaryKey",
+          "io.GroupMember.CreateAPIPath",
+          "io.GroupMember.DeleteAPIPath"
+        ],
+        "addedFields": [
+          "insertUserID",
+          "userID"
+        ],
+        "fkEdges": 2,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupMember"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.GroupTag.tagID.RelatedIntegrationObjectID",
+          "iof.GroupTag.tagID.IsPrimaryKey"
+        ],
+        "addedFields": [
+          "tagID"
+        ],
+        "fkEdges": 1,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupTag"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.UserBadge.badgeID.RelatedIntegrationObjectID",
+          "iof.UserBadge.badgeID.IsPrimaryKey"
+        ],
+        "addedFields": [
+          "badgeID"
+        ],
+        "fkEdges": 1,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UserBadge"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.WebhookDelivery.webhookDeliveryID.IsPrimaryKey",
+          "iof.WebhookDelivery.webhookID.RelatedIntegrationObjectID"
+        ],
+        "addedFields": [
+          "webhookDeliveryID",
+          "webhookID",
+          "requestBody",
+          "requestHeaders",
+          "responseBody",
+          "responseHeaders"
+        ],
+        "fkEdges": 1,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.WebhookDelivery"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.RoleApplication.roleID.RelatedIntegrationObjectID",
+          "iof.RoleApplication.userID.RelatedIntegrationObjectID",
+          "iof.RoleApplication.statusUserID.RelatedIntegrationObjectID",
+          "iof.RoleApplication.insertUserID.RelatedIntegrationObjectID",
+          "iof.RoleApplication.updateUserID.RelatedIntegrationObjectID",
+          "io.RoleApplication.CreateAPIPath",
+          "io.RoleApplication.UpdateAPIPath",
+          "io.RoleApplication.DeleteAPIPath"
+        ],
+        "addedFields": [
+          "type",
+          "roleID",
+          "userID",
+          "status",
+          "statusUserID",
+          "attributes",
+          "insertUserID",
+          "updateUserID"
+        ],
+        "fkEdges": 5,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.RoleApplication"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "note": "FK-detection applied to the 13 flagged objects (delta round 1). Scalar <base>ID/*UserID → emitted sibling IO via RelatedIntegrationObjectID.",
+        "fkEdgesAdded": 26,
+        "objects": [
+          "Session",
+          "Report",
+          "ReportReason",
+          "UserNote",
+          "OnlineUser",
+          "EventParticipant",
+          "GroupApplicant",
+          "GroupInvite",
+          "GroupMember",
+          "GroupTag",
+          "UserBadge",
+          "WebhookDelivery",
+          "RoleApplication"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "pipeline.fk-detection"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "round": 2,
+        "ioUpserts": 6,
+        "iofUpserts": 198,
+        "deletes": 4,
+        "fieldsAdded": 166,
+        "fksWired": 62,
+        "newNested": [
+          "ArticleRevision",
+          "ConversationParticipant",
+          "PollVote"
+        ],
+        "source": "sources/vanilla-openapi.merged.v3.json (merged open.vanillaforums.com + success.vanillaforums.com KB-1842 OpenAPI v3)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "PascalCase TS class symbol",
+        "value": "HigherLogicVanillaConnector",
+        "fixes": "B2"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.ClassName"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "full canonical schema re-flatten + resolveFK vendor-wide",
+        "fixes": "B1",
+        "example": "Discussion.categoryID->Category, groupID->Group, insertUserID/lastUserID->User, statusID->Status"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Discussion.categoryID.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "clean delete+recreate; removed fabricated `id`, corrected urlCode->urlcode",
+        "fixes": "B3"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Tag.urlcode"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "nested listable component ArticleRevision via /articles/{id}/revisions",
+        "fixes": "B4"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.ArticleRevision.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "nested writable /conversations/{id}/participants, composite PK conversationID+userID",
+        "fixes": "B5"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.ConversationParticipant.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "nested read /polls/{id}/votes, composite PK pollID+userID+pollOptionID",
+        "fixes": "A2"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.PollVote.APIPath"
+    }
+  ]
+}

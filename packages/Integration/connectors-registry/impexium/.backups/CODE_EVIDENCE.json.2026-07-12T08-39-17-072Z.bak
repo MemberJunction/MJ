@@ -1,0 +1,237 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "pageSegmentPathCount": 46,
+        "totalListPathCount": 55,
+        "pageSegmentSamples": [
+          "/api/v1/Shopping/AbandonedCheckOuts/{Page Number}",
+          "/api/v1/Exhibits/{Exhibit Code}/Exhibitors/{Page Number}",
+          "/api/v1/Products/Exams/{Page Number}",
+          "/api/v1/Events/{Event Code}/Registrations/{Page Number}",
+          "/api/v1/Courses/{Code}/Attendees/{Page Number}",
+          "/api/v1/Customers/Members/FindByName/{Name}/{Page Number}"
+        ],
+        "explicitPageSizeFound": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PaginationDefaults"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": [
+        {
+          "path": "/api/v1/Products/Exams/{Page Number}",
+          "param": "changedSince",
+          "description": "When a date (yyyy-MM-ddTHH:mm:ss (UTC)) is specified, only Exams modified after this date will be displayed."
+        },
+        {
+          "path": "/api/v1/Events/{Event Code}/Registrations/{Page Number}",
+          "param": "registeredSince",
+          "description": "Registered Since"
+        },
+        {
+          "path": "/api/v1/Individuals/{ID or Record Number}/Purchases/{Page Number}",
+          "param": "purchasedSince",
+          "description": "yyyy-MM-ddTHH:mm:ss"
+        },
+        {
+          "path": "/api/v1/Events/{Event Code}/Cancellations/{Page Number}",
+          "param": "cancelledSince",
+          "description": "The initial date to search cancellations (yyyy-MM-ddTHH:mm:ss)"
+        }
+      ],
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "paths": [
+          "/api/v1/Webhooks/{Id}",
+          "/api/v1/Webhooks/IndividualCreated",
+          "/api/v1/Webhooks/Individual.Deleted",
+          "/api/v1/Webhooks/Individual.RequestToBeForgotten",
+          "/api/v1/Webhooks/ProductPurchased",
+          "/api/v1/Webhooks/CommitteeMemberUpdated",
+          "/api/v1/Webhooks/PurchaseCancelled",
+          "/api/v1/Webhooks/RequestUpdated",
+          "/api/v1/Webhooks/EmailUpdated",
+          "/api/v1/Webhooks/Customer.CustomFieldValueUpdated",
+          "/api/v1/Webhooks/Customer.Merged",
+          "/api/v1/Webhooks/Customer.RelationshipUpdated",
+          "/api/v1/Webhooks/Customer.PhoneUpdated",
+          "/api/v1/Webhooks/Customer.AddressUpdated",
+          "/api/v1/Webhooks/Event.Registration.Substituted",
+          "/api/v1/Webhooks/Purchase.Paid",
+          "/api/v1/Webhooks/Membership.Terminated"
+        ],
+        "triggerCount": 16,
+        "deletePathExists": true,
+        "signatureHeaderDocumented": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WebhooksAvailable"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "totalOperations": 121,
+        "operationsWithNon2xxResponseDocumented": 0,
+        "note": "Every sampled operation declares ONLY a 200 response schema; zero operations declare a 4xx/5xx response schema anywhere in the spec."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ErrorResponseShape"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "postCount": 50,
+        "putCount": 10,
+        "deleteCount": 6,
+        "getCount": 55
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WriteCapability"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "definitionCount": 73,
+        "idFieldCounts": {
+          "id": 20,
+          "recordNumber": 12
+        },
+        "note": "20 of 73 definitions use bare 'id'; 12 use 'recordNumber' — no single field name clears a >=95% vendor-wide convention threshold."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.IdentifierConventionNote"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "paths": [
+          "/api/v1/CustomData/{Table Name}/{ID}"
+        ],
+        "note": "DELETE-only path with no GET/POST/schema documented anywhere in the spec."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.CustomObjectMarkerPattern"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:39:16.911Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "leaf": "Individuals",
+        "category": "People",
+        "backingDefinition": "definitions[IndividualData]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:39:16.911Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": "/api/v1/Individuals/{Page Number}",
+        "swaggerPath": "/api/v1/Individuals/{Page Number}",
+        "note": "documented list/read path (page segment templated)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:39:16.911Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": "PageNumber",
+        "pageSegmentInPath": true,
+        "evidence": "path carries a {Page Number}/{pageNumber}/{Page} segment"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.PaginationType"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:39:16.911Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": true,
+        "evidence": "page-number path segment present"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.SupportsPagination"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:39:16.911Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": false,
+        "watermarkQueryParam": null,
+        "evidence": "no documented since/changed/modified in:query parameter on this path"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:39:16.911Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": true,
+        "create": true,
+        "update": false,
+        "delete": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.SupportsWrite"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:39:16.911Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "path": "/api/v1/Individuals",
+        "method": "POST",
+        "evidence": "POST operation documented at /api/v1/Individuals"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.CreateAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:39:16.911Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "method": "POST",
+        "path": "/api/v1/Individuals"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.CreateMethod"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:39:16.911Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "bodyShape": "flat",
+        "bodyKey": null,
+        "evidence": "request body is the attributes verbatim (flat) per the operation's in:body parameter schema"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.CreateBodyShape"
+    }
+  ]
+}

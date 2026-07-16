@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "HostUrl": {
+      "type": "string",
+      "title": "Tenant Host URL",
+      "description": "Per-tenant re:Members AMS (Impexium) raw REST host, e.g. https://abc.mpxapi.com. Confirmed Tier-1 (apiProperties.json 'hostUrl' connection parameter). Every API path is relative to this host with an /api/v1/ prefix.",
+      "isSecret": false,
+      "order": 0
+    },
+    "AppId": {
+      "type": "string",
+      "title": "App ID (candidate A -- unverified)",
+      "description": "App-init identifier for the hypothesized app+user handshake against the raw host (strongest-evidence candidate, NOT confirmed by a live round-trip). Leave blank if the tenant instead uses the single API-key fallback (see ApiKey).",
+      "isSecret": false,
+      "order": 1
+    },
+    "AppKey": {
+      "type": "string",
+      "title": "App Key (candidate A -- unverified)",
+      "description": "App-init secret for the hypothesized app+user handshake. Presented alongside AppId + AppName (+ end-user login) to obtain an Access-Token/App-Token pair. Unverified -- see Configuration.AuthModel in the Integration record for the full evidence trail.",
+      "isSecret": true,
+      "order": 2
+    },
+    "AppName": {
+      "type": "string",
+      "title": "App Name (candidate A -- unverified)",
+      "description": "App-init display name for the hypothesized app+user handshake.",
+      "isSecret": false,
+      "order": 3
+    },
+    "UserEmail": {
+      "type": "string",
+      "title": "User Email (candidate A -- unverified)",
+      "description": "End-user login email presented during the app-init handshake, per candidate A. Only needed if the app+user model is confirmed live.",
+      "isSecret": false,
+      "order": 4
+    },
+    "UserPassword": {
+      "type": "string",
+      "title": "User Password (candidate A -- unverified)",
+      "description": "End-user login password presented during the app-init handshake, per candidate A.",
+      "isSecret": true,
+      "order": 5
+    },
+    "ApiKey": {
+      "type": "string",
+      "title": "API Key (candidate B -- alternate/fallback surface)",
+      "description": "Single x-api-key header value. Confirmed Tier-1 for the Microsoft-certified Power Platform connector's Azure APIM proxy layer only (apiDefinition.swagger.json securityDefinitions) -- NOT confirmed as the raw host's own auth scheme. Recorded as a cheaply swappable fallback per Configuration.AuthModel.resolution.",
+      "isSecret": true,
+      "order": 6
+    }
+  },
+  "required": [
+    "HostUrl"
+  ]
+}

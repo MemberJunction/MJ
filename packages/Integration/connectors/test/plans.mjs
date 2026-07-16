@@ -1618,6 +1618,56 @@ export async function growthzoneProbeLive({ baseUrl, clientId, clientSecret, ref
     return out;
 }
 
+/**
+ * HubSpot CREDENTIALED RealityProbe (v2 S7 — ARCHITECTURE_REFACTOR.md P2/P9). Runs the pinned
+ * DETERMINISTIC reality-probe.mjs as a child with the broker-held token in ITS env only (PROBE_TOKEN);
+ * the token never appears in argv or output, and Authorization headers are never recorded. The probe
+ * emits VERDICTS on declared claims (path→status+records, pagination advance, PK-populated, watermark,
+ * write-surface existence) and NEVER authors metadata. READ-ONLY: GETs + OPTIONS only — write-surface
+ * evidence is OPTIONS/405/401, never a write call. Returns the FULL scrubbed verdicts.json contents so
+ * the caller can record them verbatim (no secret material ever transits — the probe scrubs auth/PII).
+ */
+export async function hubspotProbeLive({ token }, scrub) {
+    const out = { ok: false, plan: 'hubspot-probe-live', steps: {} };
+    const { execFileSync, readFileSync } = { ...(await import('node:child_process')), ...(await import('node:fs')) };
+    const { resolve, dirname } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
+    const probe = resolve(repoRoot, 'packages/Integration/connector-builder-workshop/scripts/reality-probe.mjs');
+    const metadata = process.env.HS_PROBE_METADATA || resolve(repoRoot, 'metadata/integrations/hubspot/.hubspot.integration.json');
+    const baseUrl = process.env.HS_PROBE_BASE_URL || 'https://api.hubapi.com';
+    // The broker runs as user `mjbroker`; the run's output/ dir is owned by the operator, so a direct
+    // write there EACCESes. Write to a broker-writable temp dir; the operator copies verdicts.json into
+    // the run output afterward (verdicts carry no secret — probe scrubs auth headers + records no creds).
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const outDir = mkdtempSync(resolve(tmpdir(), 'hs-probe-live-'));
+    const objects = process.env.HS_PROBE_OBJECTS || 'contacts,companies,deals';
+    const qps = process.env.HS_PROBE_QPS || '2';
+    const probeArgs = [probe, '--metadata', metadata, '--base-url', baseUrl, '--token-env', 'PROBE_TOKEN', '--out', outDir, '--objects', objects, '--qps', qps];
+    let stdout = '';
+    try {
+        stdout = execFileSync(process.execPath, probeArgs, {
+            env: { ...process.env, PROBE_TOKEN: token }, encoding: 'utf-8', timeout: 15 * 60 * 1000, maxBuffer: 32 * 1024 * 1024,
+        });
+    } catch (e) {
+        const stderr = e && e.stderr ? String(e.stderr) : '';
+        const childOut = e && e.stdout ? String(e.stdout) : '';
+        const status = e && e.status != null ? e.status : (e && e.signal ? `signal ${e.signal}` : '?');
+        out.error = scrub(`probe child failed (exit ${status}): ${(stderr || childOut || (e instanceof Error ? e.message : String(e)))}`.slice(0, 1500));
+        return out;
+    }
+    try {
+        const summary = JSON.parse(readFileSync(resolve(outDir, 'verdicts.json'), 'utf-8'));
+        // The probe already scrubs auth headers + records no credential bytes; verdicts carry only
+        // object/field NAMES + statuses + rate-limit header NAMES. Return the full summary verbatim.
+        out.steps.probe = summary;
+        out.steps.stdout = scrub(String(stdout).slice(0, 1000));
+        out.ok = true;
+    } catch (e) { out.error = scrub(`verdict read failed: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200)); }
+    return out;
+}
+
 async function connectorE2EHybridPlan(values, scrub) { // eslint-disable-line no-unused-vars -- scrub kept for signature symmetry (runner scrubs result)
     const cfg = connectorE2eCfgFromEnv();
     if (!cfg.connector) return { ok: false, error: 'connector-e2e-hybrid requires E2E_CONNECTOR (registry connector dir name)' };
@@ -1672,79 +1722,8 @@ async function connectorE2EHybridPlan(values, scrub) { // eslint-disable-line no
 /** Hybrid-mode e2e (reference-mode, limited-token) — writes:false; credentials only via broker. */
 export async function connectorE2EHybrid(values, scrub) { return connectorE2EHybridPlan(values, scrub); }
 
-/**
- * ACGI read-only OBSERVE probe — credential-FREE endpoint reconnaissance.
- *
- * Purpose: learn the SHAPE of ACGI's Association Anywhere + Certelligence demo web services
- * WITHOUT the agent ever seeing the URLs OR any credential. The demo URLs live in the broker's
- * env as ACGI_URLS (whitespace / comma / newline separated) and are declared as a SECRET here, so
- * the runner auto-redacts every occurrence of a URL from the result — the agent gets back only
- * status codes, content-types, auth-scheme headers (WWW-Authenticate), and the XML/WSDL operation
- * + element NAMES (which are not the URL), enough to classify the API and pick the discovery source.
- *
- * NO credential is declared or used — this is unauthenticated GET reconnaissance only. Writes:false.
- * A later authenticated probe will declare the credential as a separate, tighter-permissioned secret.
- */
-export async function acgiObserve({ urls }, scrub) {
-    const list = String(urls || '').split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
-    const out = { ok: false, plan: 'acgi-observe', endpointCount: list.length, endpoints: [] };
-    if (list.length === 0) { out.error = 'ACGI_URLS was empty — set it in the broker env to one or more demo URLs.'; return out; }
-
-    // Common ways a .NET/Java XML web service exposes its contract.
-    const VARIANTS = ['', '?wsdl', '?WSDL', '?singleWsdl', '?xsd=xsd0'];
-
-    function classify(body, contentType) {
-        const ct = (contentType || '').toLowerCase();
-        const head = body.slice(0, 4000);
-        const isWsdl = /<(wsdl:)?definitions[\s>]/i.test(head) || /wsdl\.xsd|soap[/]wsdl/i.test(head);
-        const isXml = ct.includes('xml') || /^\s*<\?xml/i.test(head) || (/^\s*</.test(head) && !ct.includes('html'));
-        const isHtml = ct.includes('html') || /<html[\s>]/i.test(head);
-        return { isWsdl, isXml, isHtml };
-    }
-    function names(body) {
-        // Distinct element / operation NAMES (not values) — reveals the API vocabulary safely.
-        const uniq = (a) => [...new Set(a)];
-        const ops = [...body.matchAll(/<(?:wsdl:)?operation\s+name="([^"]+)"/gi)].map(m => m[1]);
-        const svc = [...body.matchAll(/<(?:wsdl:)?(?:message|portType|service|binding)\s+name="([^"]+)"/gi)].map(m => m[1]);
-        const els = [...body.matchAll(/<([A-Za-z][\w.:-]*)[\s>]/g)].map(m => m[1]);
-        return { operations: uniq(ops).slice(0, 60), messagesPortsServices: uniq(svc).slice(0, 40), distinctElements: uniq(els).slice(0, 40) };
-    }
-    async function probe(base, variant) {
-        const url = base.replace(/\/+$/, '') + variant;
-        try {
-            const resp = await fetch(url, { method: 'GET', redirect: 'manual', headers: { 'Accept': 'application/xml, text/xml, */*' } });
-            const body = await resp.text();
-            const cls = classify(body, resp.headers.get('content-type'));
-            return {
-                variant: variant || '(base)',
-                status: resp.status,
-                contentType: resp.headers.get('content-type'),
-                wwwAuthenticate: resp.headers.get('www-authenticate'),
-                server: resp.headers.get('server'),
-                redirected: resp.headers.get('location') ? true : false, // location itself withheld (may echo the URL)
-                bytes: body.length,
-                ...cls,
-                ...(cls.isWsdl || cls.isXml ? { names: names(body) } : {}),
-                snippet: scrub(body.slice(0, 500)),
-            };
-        } catch (e) {
-            return { variant: variant || '(base)', error: scrub(e instanceof Error ? e.message : String(e)) };
-        }
-    }
-
-    for (let i = 0; i < list.length; i++) {
-        const probes = [];
-        for (const v of VARIANTS) probes.push(await probe(list[i], v));
-        out.endpoints.push({ index: i, probes });
-    }
-    out.ok = true;
-    return out;
-}
 
 export const PLANS = {
-    // ACGI read-only OBSERVE — credential-free endpoint reconnaissance. Demo URLs live in the broker
-    // env as ACGI_URLS (declared secret → auto-scrubbed from the result). No token, read-only. writes:false.
-    'acgi-observe': { secrets: { urls: 'ACGI_URLS' }, run: acgiObserve, writes: false },
     'connector-e2e-hybrid': {
         secrets: { dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
         run: connectorE2EHybrid, writes: false,
@@ -1835,6 +1814,10 @@ export const PLANS = {
     // Tier-2 association read-only proof (no DB, no mutation) — real contacts/companies +
     // the v4 batch/read association endpoint. Safe against live data.
     'hubspot-tier2-assoc': { secrets: { token: 'HUBSPOT_API_KEY' }, run: hubspotTier2Assoc, writes: false },
+    // CREDENTIALED RealityProbe (v2 S7) — runs the pinned reality-probe.mjs as a child with the
+    // token in PROBE_TOKEN only (never in argv/output). READ-ONLY: GETs + OPTIONS; write-surface
+    // evidence is OPTIONS/405/401, never a write call. Returns scrubbed verdict counts + artifact.
+    'hubspot-probe-live': { secrets: { token: 'HUBSPOT_API_KEY' }, run: hubspotProbeLive, writes: false },
     // Tier-2 full Apply/sync includes Create/Update against the external system, so it is
     // writes:true and gated behind allowWrite. Body lands when the workbench dual-dialect
     // harness is built; the gate is enforced regardless (refused before run() is reached).

@@ -1,0 +1,44 @@
+[
+  {
+    "ioName": "DemographicChoices",
+    "iof": {
+      "Name": "DemographicTypeKey",
+      "DisplayName": "Demographic Type Key",
+      "Description": "FK to DemographicTypes — flattened from the response's nested DemographicType.DemographicTypeKey.",
+      "Type": "String",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 4,
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=DemographicTypes&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "DemographicTypeKey",
+      "Configuration": {
+        "ReferencedType": "DemographicTypes"
+      }
+    }
+  },
+  {
+    "ioName": "Volunteers",
+    "iof": {
+      "Name": "VolunteerContactKey",
+      "DisplayName": "Volunteer Contact Key",
+      "Description": "FK to Contacts — flattened from the response's nested VolunteerContact.ContactKey (the volunteering member).",
+      "Type": "String",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 17,
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "ContactKey",
+      "Configuration": {
+        "ReferencedType": "Contacts"
+      }
+    }
+  }
+]

@@ -1,0 +1,3960 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "BaseURL": "http://127.0.0.1:9",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "Username": "mock-user@example.com",
+    "Password": "mock-pass",
+    "RefreshToken": "mock-refresh-token",
+    "AdminEmail": "mock-admin@example.com",
+    "Token": "mock-token",
+    "AccessToken": "mock-token",
+    "apiKey": "mock-token",
+    "APIKey": "mock-token",
+    "ApiKey": "mock-token",
+    "ApiSecret": "mock-api-secret",
+    "apiSecret": "mock-api-secret",
+    "Secret": "mock-secret",
+    "AppKey": "mock-app-key",
+    "AppSecret": "mock-app-secret",
+    "PrivateToken": "mock-private-token",
+    "PublicKey": "mock-public-key",
+    "TokenURL": "http://127.0.0.1:9/token",
+    "TokenEndpoint": "http://127.0.0.1:9/token",
+    "TokenUrl": "http://127.0.0.1:9/token",
+    "LoginUrl": "http://127.0.0.1:9",
+    "InstanceURL": "http://127.0.0.1:9",
+    "InstanceUrl": "http://127.0.0.1:9",
+    "HostBaseURL": "http://127.0.0.1:9",
+    "AccountID": "mock-account",
+    "Subdomain": "mock",
+    "Scope": "all",
+    "Scopes": "all",
+    "OrgID": "mock-org",
+    "orgId": "mock-org",
+    "ClientKey": "mock-client-key",
+    "applicationId": "mock-app-id",
+    "applicationSecret": "mock-app-secret",
+    "AuthFlow": "client_credentials",
+    "PrivateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDmQcln2pQ/dZX+\nrdKuBa3VF/Kvo6DRZpw7Ffxc2SptzeihCCz5q6BqK5xM8RXx75m2ScwOt8SpYIB9\nRa5dm7PfCBfxtHtMeA0BhD4+EJe0A4gLaa4/tM11I2xvfWEQpLhbOdgSgb0vIYPW\n1FrPBp8Nde2pzpYT5NMw9+o+GrLDk2O+mi8ijflSQI7Q0CeQEROz7zQscfkH/45E\n1ZewxQnySnfJDLKbNV3rNuwRYi53rHew6AH6dUjtEKJb+KsG5/vQYYfM6CWzGi6n\naX3eeOf6WxS2GMbeAn1JRByagpqHpa2H4L3lEzLpmTbi0PtPmKEifgWOkMCFVt7E\n7Vv4rldFAgMBAAECggEABVJVP/vim+oxIpxh13kfdg1Xo+I5lUgJ1FPDFreY2MYp\nhOSWJYRnRgzmpTXtNpToYzjRaTBWGz61DtrNbNxsYSXkEnIEEisJdz+B221cFDer\nV+2EBB+USrYcNiIaXDLHuqlblRHqjWxONROIsGrhbNjiOp/LrX9cYjADT0F5YDZn\nRmNAt2UecHgJc2GhZXeTSXGnNB+pavaa0PPtaEygEJ8sCBs5YKIvtuJUBz563vcM\nfNS4/GPq0V//3r/ZNH2ALkejt6kbBmfctEwop48Z0r+lmYiD36iBp/nHUp0xiLd9\nWxvgpAry9rIghY3YdYf1Q//K8Y6DjO3S3Qk44SU3AQKBgQD+OcwDbSt2QoPCHGo4\n1K8Lecv4Tf8ztCMW4T8twAZJFNe2nXE/Fotbk2HYT2WpmAJSpKP6IxsS7K7FSYz3\nqEcUfxlA4EvqbRIR1M8Ku8DVZeJWxlIaFB+5bEZ1SVA72D8JZH6PgIWluqzZPAFB\nN1Sst+UXdgy1NQy0oGmNsRFDzwKBgQDn3Sq3bha1f1GohXRy8No+I6s8sgU26X2+\nOW8HbFhhx/GEcn5a+pjS1pXv4uoiJo0qs7khy0GOWLHg45hT/QthuIYi/HifaZmd\neMRuAA5fydtjJUcc/BM4ED3FrGCKwbTwUZj77Wk2Xr0slChmmDHnlBvQHwewI+Nw\na3x/AaA0qwKBgFwSJI/tHrtytXM8hT/Vzxtx3ewsm0tnZvnnU9FG5T/ce49Yj+YQ\nTSI6S0pi3ue/9L9nfzedNTXyYA11aMdcu3lx2nyDfxsEq3Gnx+AURW9DuehBZQSq\n2x51V0Ms7RDvbU0Ch0+DdWOjKux17eJnnpP6+c44Y7vQ3awhGHlHcoBDAoGAXUQv\nvJ1B8TwHotwb3WhYwYojhUSuqEn/1JbRvJCudJay5e4QOZR4CMdchKQoPhh3zGeC\n3r8d3Z573tRuH8q321UYT9Zyxtz5d8huazkGjy1pXFZQZq5XJMQTtQIDy4zjtY99\nFEmJet9dBSOLpMkvudFv5qW0t/uXr07tQ0FqKgUCgYB3hNutKGwKwEHxtxnb7dA3\nhb4xn9Bd7vQuv2Td1sQVlPTcqCrJTb/CetSb9I8QR+jOeShF2iTtzDXbQhmnfQID\n1iihXjL03cR1tzUv0nb0UBbg3yrySBXoR+KOXybVVb+KE3DlsuB6B8nRhuE6u/cN\nZukUhlInr3rnVucvqIWnLA==\n-----END PRIVATE KEY-----\n",
+    "ConsumerKey": "mock-consumer",
+    "ConsumerSecret": "mock-consumer-secret",
+    "TokenId": "mock-token-id",
+    "TokenSecret": "mock-token-secret",
+    "TokenID": "mock-token-id",
+    "TenantId": "mock-tenant-id",
+    "TenantID": "mock-tenant-id",
+    "tenantId": "mock-tenant-id",
+    "Tenant": "mock-tenant"
+  },
+  "Routes": [
+    {
+      "Path": "/events/Event-1/attendees/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "attendees": [
+          {
+            "affiliate": "affiliate 1",
+            "answers": "answers 1",
+            "assigned_unit": "assigned_unit 1",
+            "barcodes": "barcodes 1",
+            "cancelled": true,
+            "changed": "2026-06-10T01:30:00Z",
+            "checked_in": true,
+            "contact_list_preferences": "contact_list_preferences 1",
+            "costs": "costs 1",
+            "created": "2026-06-10T01:30:00Z",
+            "delivery_method": "delivery_method 1",
+            "event": "event 1",
+            "event_id": "event_id-1",
+            "guestlist_id": "guestlist_id-1",
+            "id": "Attendee-1",
+            "invited_by": "invited_by 1",
+            "order": "order 1",
+            "order_id": "order_id-1",
+            "profile": "profile 1",
+            "questions": "questions 1",
+            "refunded": true,
+            "resource_uri": "resource_uri 1",
+            "status": "active",
+            "survey_responses": "survey_responses 1",
+            "team": "team 1",
+            "ticket_class_id": "ticket_class_id-1",
+            "ticket_class_name": "ticket_class_name 1",
+            "variant_id": "variant_id-1",
+            "changed_since": "2026-06-11T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-2/attendees/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "attendees": [
+          {
+            "affiliate": "affiliate 2",
+            "answers": "answers 2",
+            "assigned_unit": "assigned_unit 2",
+            "barcodes": "barcodes 2",
+            "cancelled": false,
+            "changed": "2026-06-11T02:30:00Z",
+            "checked_in": false,
+            "contact_list_preferences": "contact_list_preferences 2",
+            "costs": "costs 2",
+            "created": "2026-06-11T02:30:00Z",
+            "delivery_method": "delivery_method 2",
+            "event": "event 2",
+            "event_id": "event_id-2",
+            "guestlist_id": "guestlist_id-2",
+            "id": "Attendee-2",
+            "invited_by": "invited_by 2",
+            "order": "order 2",
+            "order_id": "order_id-2",
+            "profile": "profile 2",
+            "questions": "questions 2",
+            "refunded": false,
+            "resource_uri": "resource_uri 2",
+            "status": "pending",
+            "survey_responses": "survey_responses 2",
+            "team": "team 2",
+            "ticket_class_id": "ticket_class_id-2",
+            "ticket_class_name": "ticket_class_name 2",
+            "variant_id": "variant_id-2",
+            "changed_since": "2026-06-12T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-3/attendees/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "attendees": [
+          {
+            "affiliate": "affiliate 3",
+            "answers": "answers 3",
+            "assigned_unit": "assigned_unit 3",
+            "barcodes": "barcodes 3",
+            "cancelled": true,
+            "changed": "2026-06-12T03:30:00Z",
+            "checked_in": true,
+            "contact_list_preferences": "contact_list_preferences 3",
+            "costs": "costs 3",
+            "created": "2026-06-12T03:30:00Z",
+            "delivery_method": "delivery_method 3",
+            "event": "event 3",
+            "event_id": "event_id-3",
+            "guestlist_id": "guestlist_id-3",
+            "id": "Attendee-3",
+            "invited_by": "invited_by 3",
+            "order": "order 3",
+            "order_id": "order_id-3",
+            "profile": "profile 3",
+            "questions": "questions 3",
+            "refunded": true,
+            "resource_uri": "resource_uri 3",
+            "status": "completed",
+            "survey_responses": "survey_responses 3",
+            "team": "team 3",
+            "ticket_class_id": "ticket_class_id-3",
+            "ticket_class_name": "ticket_class_name 3",
+            "variant_id": "variant_id-3",
+            "changed_since": "2026-06-13T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/{event_id}/attendees/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "attendees": [
+          {
+            "affiliate": "affiliate 1",
+            "answers": "answers 1",
+            "assigned_unit": "assigned_unit 1",
+            "barcodes": "barcodes 1",
+            "cancelled": true,
+            "changed": "2026-06-10T01:30:00Z",
+            "checked_in": true,
+            "contact_list_preferences": "contact_list_preferences 1",
+            "costs": "costs 1",
+            "created": "2026-06-10T01:30:00Z",
+            "delivery_method": "delivery_method 1",
+            "event": "event 1",
+            "event_id": "event_id-1",
+            "guestlist_id": "guestlist_id-1",
+            "id": "Attendee-1",
+            "invited_by": "invited_by 1",
+            "order": "order 1",
+            "order_id": "order_id-1",
+            "profile": "profile 1",
+            "questions": "questions 1",
+            "refunded": true,
+            "resource_uri": "resource_uri 1",
+            "status": "active",
+            "survey_responses": "survey_responses 1",
+            "team": "team 1",
+            "ticket_class_id": "ticket_class_id-1",
+            "ticket_class_name": "ticket_class_name 1",
+            "variant_id": "variant_id-1",
+            "changed_since": "2026-06-11T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/reports/attendees/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "data": "data 1",
+            "event_ids": "event_ids 1",
+            "timezone": "America/New_York",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "data": "data 2",
+            "event_ids": "event_ids 2",
+            "timezone": "America/New_York",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "data": "data 3",
+            "event_ids": "event_ids 3",
+            "timezone": "America/New_York",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 3,
+          "page_number": 1,
+          "page_size": 3,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/balance/Organization-1/events/Event-1/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "currency": "USD",
+            "event_id": "event_id-1",
+            "latest_order_id": "latest_order_id-1",
+            "latest_timestamp": "latest_timestamp 1",
+            "organization_id": "Acme Corp",
+            "value": "value 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/balance/Organization-1/events/Event-2/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "currency": "USD",
+            "event_id": "event_id-2",
+            "latest_order_id": "latest_order_id-2",
+            "latest_timestamp": "latest_timestamp 2",
+            "organization_id": "Globex LLC",
+            "value": "value 2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/balance/Organization-1/events/Event-3/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "currency": "USD",
+            "event_id": "event_id-3",
+            "latest_order_id": "latest_order_id-3",
+            "latest_timestamp": "latest_timestamp 3",
+            "organization_id": "Initech",
+            "value": "value 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/balance/Organization-2/events/Event-1/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "currency": "USD",
+            "event_id": "event_id-4",
+            "latest_order_id": "latest_order_id-4",
+            "latest_timestamp": "latest_timestamp 4",
+            "organization_id": "Acme Corp",
+            "value": "value 4",
+            "mj_e2e_custom_attr": "custom-4"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/balance/Organization-2/events/Event-2/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "currency": "USD",
+            "event_id": "event_id-5",
+            "latest_order_id": "latest_order_id-5",
+            "latest_timestamp": "latest_timestamp 5",
+            "organization_id": "Globex LLC",
+            "value": "value 5",
+            "mj_e2e_custom_attr": "custom-5"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/balance/Organization-2/events/Event-3/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "currency": "USD",
+            "event_id": "event_id-6",
+            "latest_order_id": "latest_order_id-6",
+            "latest_timestamp": "latest_timestamp 6",
+            "organization_id": "Initech",
+            "value": "value 6",
+            "mj_e2e_custom_attr": "custom-6"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/balance/Organization-3/events/Event-1/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "currency": "USD",
+            "event_id": "event_id-7",
+            "latest_order_id": "latest_order_id-7",
+            "latest_timestamp": "latest_timestamp 7",
+            "organization_id": "Acme Corp",
+            "value": "value 7",
+            "mj_e2e_custom_attr": "custom-7"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/balance/Organization-3/events/Event-2/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "currency": "USD",
+            "event_id": "event_id-8",
+            "latest_order_id": "latest_order_id-8",
+            "latest_timestamp": "latest_timestamp 8",
+            "organization_id": "Globex LLC",
+            "value": "value 8",
+            "mj_e2e_custom_attr": "custom-8"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/balance/Organization-3/events/Event-3/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "currency": "USD",
+            "event_id": "event_id-9",
+            "latest_order_id": "latest_order_id-9",
+            "latest_timestamp": "latest_timestamp 9",
+            "organization_id": "Initech",
+            "value": "value 9",
+            "mj_e2e_custom_attr": "custom-9"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/balance/{public_organization_id}/events/{public_event_id}/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "currency": "USD",
+            "event_id": "event_id-10",
+            "latest_order_id": "latest_order_id-10",
+            "latest_timestamp": "latest_timestamp 10",
+            "organization_id": "Acme Corp",
+            "value": "value 10",
+            "mj_e2e_custom_attr": "custom-10"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-1/canned_questions/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "choices": "choices 1",
+            "default_value": "default_value 1",
+            "editable": true,
+            "group_display_header": "group_display_header 1",
+            "group_id": "group_id-1",
+            "id": "Canned Question-1",
+            "include": true,
+            "question": "question 1",
+            "required": true,
+            "resource_uri": "resource_uri 1",
+            "respondent": "respondent 1",
+            "ticket_classes": "ticket_classes 1",
+            "type": "standard",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-2/canned_questions/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "choices": "choices 2",
+            "default_value": "default_value 2",
+            "editable": false,
+            "group_display_header": "group_display_header 2",
+            "group_id": "group_id-2",
+            "id": "Canned Question-2",
+            "include": false,
+            "question": "question 2",
+            "required": false,
+            "resource_uri": "resource_uri 2",
+            "respondent": "respondent 2",
+            "ticket_classes": "ticket_classes 2",
+            "type": "premium",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-3/canned_questions/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "choices": "choices 3",
+            "default_value": "default_value 3",
+            "editable": true,
+            "group_display_header": "group_display_header 3",
+            "group_id": "group_id-3",
+            "id": "Canned Question-3",
+            "include": true,
+            "question": "question 3",
+            "required": true,
+            "resource_uri": "resource_uri 3",
+            "respondent": "respondent 3",
+            "ticket_classes": "ticket_classes 3",
+            "type": "basic",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/{event_id}/canned_questions/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "choices": "choices 1",
+            "default_value": "default_value 1",
+            "editable": true,
+            "group_display_header": "group_display_header 1",
+            "group_id": "group_id-1",
+            "id": "Canned Question-1",
+            "include": true,
+            "question": "question 1",
+            "required": true,
+            "resource_uri": "resource_uri 1",
+            "respondent": "respondent 1",
+            "ticket_classes": "ticket_classes 1",
+            "type": "standard",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/categories/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "categories": [
+          {
+            "id": "Category-1",
+            "name": "Alex Rivera",
+            "name_localized": "name_localized 1",
+            "resource_uri": "resource_uri 1",
+            "short_name": "short_name 1",
+            "short_name_localized": "short_name_localized 1",
+            "subcategories": "subcategories 1",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "id": "Category-2",
+            "name": "Jordan Chen",
+            "name_localized": "name_localized 2",
+            "resource_uri": "resource_uri 2",
+            "short_name": "short_name 2",
+            "short_name_localized": "short_name_localized 2",
+            "subcategories": "subcategories 2",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "id": "Category-3",
+            "name": "Taylor Patel",
+            "name_localized": "name_localized 3",
+            "resource_uri": "resource_uri 3",
+            "short_name": "short_name 3",
+            "short_name_localized": "short_name_localized 3",
+            "subcategories": "subcategories 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 3,
+          "page_number": 1,
+          "page_size": 3,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-1/discounts/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "discounts": [
+          {
+            "amount_off": "amount_off 1",
+            "code": "code-1",
+            "end_date": "end_date 1",
+            "end_date_relative": 2,
+            "event_id": "event_id-1",
+            "hold_ids": "hold_ids 1",
+            "id": "Discount-1",
+            "percent_off": "percent_off 1",
+            "quantity_available": 4,
+            "quantity_sold": 4,
+            "start_date": "start_date 1",
+            "start_date_relative": 2,
+            "ticket_class_ids": "ticket_class_ids 1",
+            "ticket_group_id": "ticket_group_id-1",
+            "type": "standard",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-2/discounts/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "discounts": [
+          {
+            "amount_off": "amount_off 2",
+            "code": "code-2",
+            "end_date": "end_date 2",
+            "end_date_relative": 3,
+            "event_id": "event_id-2",
+            "hold_ids": "hold_ids 2",
+            "id": "Discount-2",
+            "percent_off": "percent_off 2",
+            "quantity_available": 7,
+            "quantity_sold": 7,
+            "start_date": "start_date 2",
+            "start_date_relative": 3,
+            "ticket_class_ids": "ticket_class_ids 2",
+            "ticket_group_id": "ticket_group_id-2",
+            "type": "premium",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-3/discounts/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "discounts": [
+          {
+            "amount_off": "amount_off 3",
+            "code": "code-3",
+            "end_date": "end_date 3",
+            "end_date_relative": 4,
+            "event_id": "event_id-3",
+            "hold_ids": "hold_ids 3",
+            "id": "Discount-3",
+            "percent_off": "percent_off 3",
+            "quantity_available": 10,
+            "quantity_sold": 10,
+            "start_date": "start_date 3",
+            "start_date_relative": 4,
+            "ticket_class_ids": "ticket_class_ids 3",
+            "ticket_group_id": "ticket_group_id-3",
+            "type": "basic",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/{organization_id}/discounts/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "discounts": [
+          {
+            "amount_off": "amount_off 1",
+            "code": "code-1",
+            "end_date": "end_date 1",
+            "end_date_relative": 2,
+            "event_id": "event_id-1",
+            "hold_ids": "hold_ids 1",
+            "id": "Discount-1",
+            "percent_off": "percent_off 1",
+            "quantity_available": 4,
+            "quantity_sold": 4,
+            "start_date": "start_date 1",
+            "start_date_relative": 2,
+            "ticket_class_ids": "ticket_class_ids 1",
+            "ticket_group_id": "ticket_group_id-1",
+            "type": "standard",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-1/display_settings/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "id": "Display Settings-1",
+            "show_end_date": true,
+            "show_facebook_friends_going": true,
+            "show_map": true,
+            "show_organizer_facebook": true,
+            "show_organizer_twitter": true,
+            "show_remaining": true,
+            "show_start_date": true,
+            "show_start_end_time": true,
+            "show_timezone": true,
+            "terminology": "terminology 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-2/display_settings/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "id": "Display Settings-2",
+            "show_end_date": false,
+            "show_facebook_friends_going": false,
+            "show_map": false,
+            "show_organizer_facebook": false,
+            "show_organizer_twitter": false,
+            "show_remaining": false,
+            "show_start_date": false,
+            "show_start_end_time": false,
+            "show_timezone": false,
+            "terminology": "terminology 2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-3/display_settings/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "id": "Display Settings-3",
+            "show_end_date": true,
+            "show_facebook_friends_going": true,
+            "show_map": true,
+            "show_organizer_facebook": true,
+            "show_organizer_twitter": true,
+            "show_remaining": true,
+            "show_start_date": true,
+            "show_start_end_time": true,
+            "show_timezone": true,
+            "terminology": "terminology 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/{event_id}/display_settings/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "id": "Display Settings-1",
+            "show_end_date": true,
+            "show_facebook_friends_going": true,
+            "show_map": true,
+            "show_organizer_facebook": true,
+            "show_organizer_twitter": true,
+            "show_remaining": true,
+            "show_start_date": true,
+            "show_start_end_time": true,
+            "show_timezone": true,
+            "terminology": "terminology 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-1/events/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "events": [
+          {
+            "bookmark_info": "bookmark_info 1",
+            "capacity": 4,
+            "capacity_is_custom": true,
+            "category": "standard",
+            "category_id": "standard",
+            "changed": "2026-06-10T01:30:00Z",
+            "checkout_settings": "checkout_settings 1",
+            "created": "2026-06-10T01:30:00Z",
+            "currency": "USD",
+            "description": "Sample description 1",
+            "end": "2026-06-10T01:30:00Z",
+            "event_sales_status": "active",
+            "external_ticketing": "external_ticketing 1",
+            "format": "format 1",
+            "format_id": "format_id-1",
+            "hide_end_date": true,
+            "hide_start_date": true,
+            "id": "Event-1",
+            "invite_only": true,
+            "is_externally_ticketed": true,
+            "is_free": true,
+            "is_locked": true,
+            "is_reserved_seating": true,
+            "is_series": true,
+            "is_series_parent": true,
+            "listed": true,
+            "locale": "en-US",
+            "logo": "logo 1",
+            "logo_id": "logo_id-1",
+            "music_properties": "music_properties 1",
+            "name": "Alex Rivera",
+            "online_event": true,
+            "organization_id": "Acme Corp",
+            "organizer": "organizer 1",
+            "organizer_id": "organizer_id-1",
+            "password": "password 1",
+            "privacy_setting": "privacy_setting 1",
+            "published": "2026-06-10T01:30:00Z",
+            "refund_policy": "refund_policy 1",
+            "resource_uri": "resource_uri 1",
+            "series_id": "series_id-1",
+            "shareable": true,
+            "show_colors_in_seatmap_thumbnail": true,
+            "show_pick_a_seat": true,
+            "show_remaining": true,
+            "show_seatmap_thumbnail": true,
+            "source": "source 1",
+            "start": "2026-06-10T01:30:00Z",
+            "status": "active",
+            "subcategory": "standard",
+            "subcategory_id": "standard",
+            "summary": "Sample summary 1",
+            "ticket_availability": "ticket_availability 1",
+            "tx_time_limit": "tx_time_limit 1",
+            "url": "https://example.com/url/1",
+            "vanity_url": "https://example.com/vanity_url/1",
+            "venue": "venue 1",
+            "venue_id": "venue_id-1",
+            "version": "version 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-2/events/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "events": [
+          {
+            "bookmark_info": "bookmark_info 2",
+            "capacity": 7,
+            "capacity_is_custom": false,
+            "category": "premium",
+            "category_id": "premium",
+            "changed": "2026-06-11T02:30:00Z",
+            "checkout_settings": "checkout_settings 2",
+            "created": "2026-06-11T02:30:00Z",
+            "currency": "USD",
+            "description": "Sample description 2",
+            "end": "2026-06-11T02:30:00Z",
+            "event_sales_status": "pending",
+            "external_ticketing": "external_ticketing 2",
+            "format": "format 2",
+            "format_id": "format_id-2",
+            "hide_end_date": false,
+            "hide_start_date": false,
+            "id": "Event-2",
+            "invite_only": false,
+            "is_externally_ticketed": false,
+            "is_free": false,
+            "is_locked": false,
+            "is_reserved_seating": false,
+            "is_series": false,
+            "is_series_parent": false,
+            "listed": false,
+            "locale": "en-US",
+            "logo": "logo 2",
+            "logo_id": "logo_id-2",
+            "music_properties": "music_properties 2",
+            "name": "Jordan Chen",
+            "online_event": false,
+            "organization_id": "Globex LLC",
+            "organizer": "organizer 2",
+            "organizer_id": "organizer_id-2",
+            "password": "password 2",
+            "privacy_setting": "privacy_setting 2",
+            "published": "2026-06-11T02:30:00Z",
+            "refund_policy": "refund_policy 2",
+            "resource_uri": "resource_uri 2",
+            "series_id": "series_id-2",
+            "shareable": false,
+            "show_colors_in_seatmap_thumbnail": false,
+            "show_pick_a_seat": false,
+            "show_remaining": false,
+            "show_seatmap_thumbnail": false,
+            "source": "source 2",
+            "start": "2026-06-11T02:30:00Z",
+            "status": "pending",
+            "subcategory": "premium",
+            "subcategory_id": "premium",
+            "summary": "Sample summary 2",
+            "ticket_availability": "ticket_availability 2",
+            "tx_time_limit": "tx_time_limit 2",
+            "url": "https://example.com/url/2",
+            "vanity_url": "https://example.com/vanity_url/2",
+            "venue": "venue 2",
+            "venue_id": "venue_id-2",
+            "version": "version 2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-3/events/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "events": [
+          {
+            "bookmark_info": "bookmark_info 3",
+            "capacity": 10,
+            "capacity_is_custom": true,
+            "category": "basic",
+            "category_id": "basic",
+            "changed": "2026-06-12T03:30:00Z",
+            "checkout_settings": "checkout_settings 3",
+            "created": "2026-06-12T03:30:00Z",
+            "currency": "USD",
+            "description": "Sample description 3",
+            "end": "2026-06-12T03:30:00Z",
+            "event_sales_status": "completed",
+            "external_ticketing": "external_ticketing 3",
+            "format": "format 3",
+            "format_id": "format_id-3",
+            "hide_end_date": true,
+            "hide_start_date": true,
+            "id": "Event-3",
+            "invite_only": true,
+            "is_externally_ticketed": true,
+            "is_free": true,
+            "is_locked": true,
+            "is_reserved_seating": true,
+            "is_series": true,
+            "is_series_parent": true,
+            "listed": true,
+            "locale": "en-US",
+            "logo": "logo 3",
+            "logo_id": "logo_id-3",
+            "music_properties": "music_properties 3",
+            "name": "Taylor Patel",
+            "online_event": true,
+            "organization_id": "Initech",
+            "organizer": "organizer 3",
+            "organizer_id": "organizer_id-3",
+            "password": "password 3",
+            "privacy_setting": "privacy_setting 3",
+            "published": "2026-06-12T03:30:00Z",
+            "refund_policy": "refund_policy 3",
+            "resource_uri": "resource_uri 3",
+            "series_id": "series_id-3",
+            "shareable": true,
+            "show_colors_in_seatmap_thumbnail": true,
+            "show_pick_a_seat": true,
+            "show_remaining": true,
+            "show_seatmap_thumbnail": true,
+            "source": "source 3",
+            "start": "2026-06-12T03:30:00Z",
+            "status": "completed",
+            "subcategory": "basic",
+            "subcategory_id": "basic",
+            "summary": "Sample summary 3",
+            "ticket_availability": "ticket_availability 3",
+            "tx_time_limit": "tx_time_limit 3",
+            "url": "https://example.com/url/3",
+            "vanity_url": "https://example.com/vanity_url/3",
+            "venue": "venue 3",
+            "venue_id": "venue_id-3",
+            "version": "version 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/{organization_id}/events/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "events": [
+          {
+            "bookmark_info": "bookmark_info 1",
+            "capacity": 4,
+            "capacity_is_custom": true,
+            "category": "standard",
+            "category_id": "standard",
+            "changed": "2026-06-10T01:30:00Z",
+            "checkout_settings": "checkout_settings 1",
+            "created": "2026-06-10T01:30:00Z",
+            "currency": "USD",
+            "description": "Sample description 1",
+            "end": "2026-06-10T01:30:00Z",
+            "event_sales_status": "active",
+            "external_ticketing": "external_ticketing 1",
+            "format": "format 1",
+            "format_id": "format_id-1",
+            "hide_end_date": true,
+            "hide_start_date": true,
+            "id": "Event-1",
+            "invite_only": true,
+            "is_externally_ticketed": true,
+            "is_free": true,
+            "is_locked": true,
+            "is_reserved_seating": true,
+            "is_series": true,
+            "is_series_parent": true,
+            "listed": true,
+            "locale": "en-US",
+            "logo": "logo 1",
+            "logo_id": "logo_id-1",
+            "music_properties": "music_properties 1",
+            "name": "Alex Rivera",
+            "online_event": true,
+            "organization_id": "Acme Corp",
+            "organizer": "organizer 1",
+            "organizer_id": "organizer_id-1",
+            "password": "password 1",
+            "privacy_setting": "privacy_setting 1",
+            "published": "2026-06-10T01:30:00Z",
+            "refund_policy": "refund_policy 1",
+            "resource_uri": "resource_uri 1",
+            "series_id": "series_id-1",
+            "shareable": true,
+            "show_colors_in_seatmap_thumbnail": true,
+            "show_pick_a_seat": true,
+            "show_remaining": true,
+            "show_seatmap_thumbnail": true,
+            "source": "source 1",
+            "start": "2026-06-10T01:30:00Z",
+            "status": "active",
+            "subcategory": "standard",
+            "subcategory_id": "standard",
+            "summary": "Sample summary 1",
+            "ticket_availability": "ticket_availability 1",
+            "tx_time_limit": "tx_time_limit 1",
+            "url": "https://example.com/url/1",
+            "vanity_url": "https://example.com/vanity_url/1",
+            "venue": "venue 1",
+            "venue_id": "venue_id-1",
+            "version": "version 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-1/capacity_tier/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "capacity_is_custom": true,
+            "capacity_pending": 4,
+            "capacity_sold": 4,
+            "capacity_total": 19.99,
+            "event_id": "event_id-1",
+            "holds": "holds 1",
+            "id": "Event Capacity Tier-1",
+            "quantity_pending": 4,
+            "quantity_sold": 4,
+            "quantity_total": 19.99,
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-2/capacity_tier/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "capacity_is_custom": false,
+            "capacity_pending": 7,
+            "capacity_sold": 7,
+            "capacity_total": 29.99,
+            "event_id": "event_id-2",
+            "holds": "holds 2",
+            "id": "Event Capacity Tier-2",
+            "quantity_pending": 7,
+            "quantity_sold": 7,
+            "quantity_total": 29.99,
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-3/capacity_tier/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "capacity_is_custom": true,
+            "capacity_pending": 10,
+            "capacity_sold": 10,
+            "capacity_total": 39.99,
+            "event_id": "event_id-3",
+            "holds": "holds 3",
+            "id": "Event Capacity Tier-3",
+            "quantity_pending": 10,
+            "quantity_sold": 10,
+            "quantity_total": 39.99,
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/{event_id}/capacity_tier/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "capacity_is_custom": true,
+            "capacity_pending": 4,
+            "capacity_sold": 4,
+            "capacity_total": 19.99,
+            "event_id": "event_id-1",
+            "holds": "holds 1",
+            "id": "Event Capacity Tier-1",
+            "quantity_pending": 4,
+            "quantity_sold": 4,
+            "quantity_total": 19.99,
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-1/description/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "description": "Sample description 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-2/description/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "description": "Sample description 2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-3/description/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "description": "Sample description 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/{event_id}/description/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "description": "Sample description 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-1/schedules/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "created_event_ids": "created_event_ids 1",
+            "id": "Event Schedule-1",
+            "occurrence_duration": 0.1,
+            "recurrence_rule": "recurrence_rule 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-2/schedules/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "created_event_ids": "created_event_ids 2",
+            "id": "Event Schedule-2",
+            "occurrence_duration": 0.2,
+            "recurrence_rule": "recurrence_rule 2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-3/schedules/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "created_event_ids": "created_event_ids 3",
+            "id": "Event Schedule-3",
+            "occurrence_duration": 0.3,
+            "recurrence_rule": "recurrence_rule 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/{event_id}/schedules/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "created_event_ids": "created_event_ids 1",
+            "id": "Event Schedule-1",
+            "occurrence_duration": 0.1,
+            "recurrence_rule": "recurrence_rule 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-1/teams/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "teams": [
+          {
+            "attendee_count": 4,
+            "changed": "2026-06-10T01:30:00Z",
+            "created": "2026-06-10T01:30:00Z",
+            "creator": "creator 1",
+            "date_joined": "2026-06-10T01:30:00Z",
+            "event_id": "event_id-1",
+            "id": "Event Team-1",
+            "name": "Alex Rivera",
+            "token": "token-1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-2/teams/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "teams": [
+          {
+            "attendee_count": 7,
+            "changed": "2026-06-11T02:30:00Z",
+            "created": "2026-06-11T02:30:00Z",
+            "creator": "creator 2",
+            "date_joined": "2026-06-11T02:30:00Z",
+            "event_id": "event_id-2",
+            "id": "Event Team-2",
+            "name": "Jordan Chen",
+            "token": "token-2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-3/teams/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "teams": [
+          {
+            "attendee_count": 10,
+            "changed": "2026-06-12T03:30:00Z",
+            "created": "2026-06-12T03:30:00Z",
+            "creator": "creator 3",
+            "date_joined": "2026-06-12T03:30:00Z",
+            "event_id": "event_id-3",
+            "id": "Event Team-3",
+            "name": "Taylor Patel",
+            "token": "token-3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/{event_id}/teams/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "teams": [
+          {
+            "attendee_count": 4,
+            "changed": "2026-06-10T01:30:00Z",
+            "created": "2026-06-10T01:30:00Z",
+            "creator": "creator 1",
+            "date_joined": "2026-06-10T01:30:00Z",
+            "event_id": "event_id-1",
+            "id": "Event Team-1",
+            "name": "Alex Rivera",
+            "token": "token-1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/pricing/fee_rates",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "fee_rates": [
+          {
+            "channel": "channel 1",
+            "country": "US",
+            "currency": "USD",
+            "fee_name": "fee_name 1",
+            "fixed": "fixed 1",
+            "item_type": "item_type 1",
+            "maximum": "maximum 1",
+            "minimum": "minimum 1",
+            "payment_type": "payment_type 1",
+            "percent": "percent 1",
+            "plan": "plan 1",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "channel": "channel 2",
+            "country": "US",
+            "currency": "USD",
+            "fee_name": "fee_name 2",
+            "fixed": "fixed 2",
+            "item_type": "item_type 2",
+            "maximum": "maximum 2",
+            "minimum": "minimum 2",
+            "payment_type": "payment_type 2",
+            "percent": "percent 2",
+            "plan": "plan 2",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "channel": "channel 3",
+            "country": "US",
+            "currency": "USD",
+            "fee_name": "fee_name 3",
+            "fixed": "fixed 3",
+            "item_type": "item_type 3",
+            "maximum": "maximum 3",
+            "minimum": "minimum 3",
+            "payment_type": "payment_type 3",
+            "percent": "percent 3",
+            "plan": "plan 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 3,
+          "page_number": 1,
+          "page_size": 3,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/formats/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "formats": [
+          {
+            "id": "Format-1",
+            "name": "Alex Rivera",
+            "name_localized": "name_localized 1",
+            "resource_uri": "resource_uri 1",
+            "short_name": "short_name 1",
+            "short_name_localized": "short_name_localized 1",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "id": "Format-2",
+            "name": "Jordan Chen",
+            "name_localized": "name_localized 2",
+            "resource_uri": "resource_uri 2",
+            "short_name": "short_name 2",
+            "short_name_localized": "short_name_localized 2",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "id": "Format-3",
+            "name": "Taylor Patel",
+            "name_localized": "name_localized 3",
+            "resource_uri": "resource_uri 3",
+            "short_name": "short_name 3",
+            "short_name_localized": "short_name_localized 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 3,
+          "page_number": 1,
+          "page_size": 3,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-1/inventory_tiers/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "inventory_tiers": [
+          {
+            "capacity_total": 19.99,
+            "color": "#1A73E8",
+            "count_against_event_capacity": true,
+            "event_id": "event_id-1",
+            "holds": "holds 1",
+            "id": "Inventory Tier-1",
+            "image_id": "image_id-1",
+            "name": "Alex Rivera",
+            "quantity_held": 4,
+            "quantity_pending": 4,
+            "quantity_sold": 4,
+            "quantity_total": 19.99,
+            "seatmap_number": "seatmap_number 1",
+            "sort_order": 2,
+            "ticket_class_ids": "ticket_class_ids 1",
+            "tier": 2,
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-2/inventory_tiers/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "inventory_tiers": [
+          {
+            "capacity_total": 29.99,
+            "color": "#34A853",
+            "count_against_event_capacity": false,
+            "event_id": "event_id-2",
+            "holds": "holds 2",
+            "id": "Inventory Tier-2",
+            "image_id": "image_id-2",
+            "name": "Jordan Chen",
+            "quantity_held": 7,
+            "quantity_pending": 7,
+            "quantity_sold": 7,
+            "quantity_total": 29.99,
+            "seatmap_number": "seatmap_number 2",
+            "sort_order": 3,
+            "ticket_class_ids": "ticket_class_ids 2",
+            "tier": 3,
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-3/inventory_tiers/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "inventory_tiers": [
+          {
+            "capacity_total": 39.99,
+            "color": "#FBBC05",
+            "count_against_event_capacity": true,
+            "event_id": "event_id-3",
+            "holds": "holds 3",
+            "id": "Inventory Tier-3",
+            "image_id": "image_id-3",
+            "name": "Taylor Patel",
+            "quantity_held": 10,
+            "quantity_pending": 10,
+            "quantity_sold": 10,
+            "quantity_total": 39.99,
+            "seatmap_number": "seatmap_number 3",
+            "sort_order": 4,
+            "ticket_class_ids": "ticket_class_ids 3",
+            "tier": 4,
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/{event_id}/inventory_tiers/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "inventory_tiers": [
+          {
+            "capacity_total": 19.99,
+            "color": "#1A73E8",
+            "count_against_event_capacity": true,
+            "event_id": "event_id-1",
+            "holds": "holds 1",
+            "id": "Inventory Tier-1",
+            "image_id": "image_id-1",
+            "name": "Alex Rivera",
+            "quantity_held": 4,
+            "quantity_pending": 4,
+            "quantity_sold": 4,
+            "quantity_total": 19.99,
+            "seatmap_number": "seatmap_number 1",
+            "sort_order": 2,
+            "ticket_class_ids": "ticket_class_ids 1",
+            "tier": 2,
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/media/{media_id}/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "id": "Media-1",
+            "url": "https://example.com/url/1",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "id": "Media-2",
+            "url": "https://example.com/url/2",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "id": "Media-3",
+            "url": "https://example.com/url/3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 3,
+          "page_number": 1,
+          "page_size": 3,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/media/upload/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "crop_mask": "crop_mask 1",
+            "type": "standard",
+            "upload_token": "upload_token-1",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "crop_mask": "crop_mask 2",
+            "type": "premium",
+            "upload_token": "upload_token-2",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "crop_mask": "crop_mask 3",
+            "type": "basic",
+            "upload_token": "upload_token-3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 3,
+          "page_number": 1,
+          "page_size": 3,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-1/orders/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "orders": [
+          {
+            "attendees": "attendees 1",
+            "changed": "2026-06-10T01:30:00Z",
+            "contact_list_preferences": "contact_list_preferences 1",
+            "costs": "costs 1",
+            "created": "2026-06-10T01:30:00Z",
+            "email": "user1@example.com",
+            "event": "event 1",
+            "event_id": "event_id-1",
+            "first_name": "Alex",
+            "id": "Order-1",
+            "last_name": "Rivera",
+            "name": "Alex Rivera",
+            "resource_uri": "resource_uri 1",
+            "status": "active",
+            "survey_responses": "survey_responses 1",
+            "ticket_buyer_settings": "ticket_buyer_settings 1",
+            "time_remaining": 2,
+            "changed_since": "2026-06-11T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-2/orders/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "orders": [
+          {
+            "attendees": "attendees 2",
+            "changed": "2026-06-11T02:30:00Z",
+            "contact_list_preferences": "contact_list_preferences 2",
+            "costs": "costs 2",
+            "created": "2026-06-11T02:30:00Z",
+            "email": "user2@example.com",
+            "event": "event 2",
+            "event_id": "event_id-2",
+            "first_name": "Jordan",
+            "id": "Order-2",
+            "last_name": "Chen",
+            "name": "Jordan Chen",
+            "resource_uri": "resource_uri 2",
+            "status": "pending",
+            "survey_responses": "survey_responses 2",
+            "ticket_buyer_settings": "ticket_buyer_settings 2",
+            "time_remaining": 3,
+            "changed_since": "2026-06-12T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-3/orders/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "orders": [
+          {
+            "attendees": "attendees 3",
+            "changed": "2026-06-12T03:30:00Z",
+            "contact_list_preferences": "contact_list_preferences 3",
+            "costs": "costs 3",
+            "created": "2026-06-12T03:30:00Z",
+            "email": "user3@example.com",
+            "event": "event 3",
+            "event_id": "event_id-3",
+            "first_name": "Taylor",
+            "id": "Order-3",
+            "last_name": "Patel",
+            "name": "Taylor Patel",
+            "resource_uri": "resource_uri 3",
+            "status": "completed",
+            "survey_responses": "survey_responses 3",
+            "ticket_buyer_settings": "ticket_buyer_settings 3",
+            "time_remaining": 4,
+            "changed_since": "2026-06-13T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/{organization_id}/orders/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "orders": [
+          {
+            "attendees": "attendees 1",
+            "changed": "2026-06-10T01:30:00Z",
+            "contact_list_preferences": "contact_list_preferences 1",
+            "costs": "costs 1",
+            "created": "2026-06-10T01:30:00Z",
+            "email": "user1@example.com",
+            "event": "event 1",
+            "event_id": "event_id-1",
+            "first_name": "Alex",
+            "id": "Order-1",
+            "last_name": "Rivera",
+            "name": "Alex Rivera",
+            "resource_uri": "resource_uri 1",
+            "status": "active",
+            "survey_responses": "survey_responses 1",
+            "ticket_buyer_settings": "ticket_buyer_settings 1",
+            "time_remaining": 2,
+            "changed_since": "2026-06-11T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/users/me/organizations/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "organizations": [
+          {
+            "id": "Organization-1",
+            "image_id": "image_id-1",
+            "name": "Alex Rivera",
+            "vertical": "vertical 1",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "id": "Organization-2",
+            "image_id": "image_id-2",
+            "name": "Jordan Chen",
+            "vertical": "vertical 2",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "id": "Organization-3",
+            "image_id": "image_id-3",
+            "name": "Taylor Patel",
+            "vertical": "vertical 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 3,
+          "page_number": 1,
+          "page_size": 3,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-1/members/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "members": [
+          {
+            "id": "Organization Member-1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-2/members/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "members": [
+          {
+            "id": "Organization Member-2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-3/members/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "members": [
+          {
+            "id": "Organization Member-3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/{organization_id}/members/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "members": [
+          {
+            "id": "Organization Member-1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-1/roles/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "roles": [
+          {
+            "deletable": true,
+            "description": "Sample description 1",
+            "grantable": true,
+            "id": "Organization Role-1",
+            "immutable": true,
+            "name": "Alex Rivera",
+            "organization_id": "Acme Corp",
+            "permission_type": "permission_type 1",
+            "permissions": "permissions 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-2/roles/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "roles": [
+          {
+            "deletable": false,
+            "description": "Sample description 2",
+            "grantable": false,
+            "id": "Organization Role-2",
+            "immutable": false,
+            "name": "Jordan Chen",
+            "organization_id": "Globex LLC",
+            "permission_type": "permission_type 2",
+            "permissions": "permissions 2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-3/roles/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "roles": [
+          {
+            "deletable": true,
+            "description": "Sample description 3",
+            "grantable": true,
+            "id": "Organization Role-3",
+            "immutable": true,
+            "name": "Taylor Patel",
+            "organization_id": "Initech",
+            "permission_type": "permission_type 3",
+            "permissions": "permissions 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/{organization_id}/roles/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "roles": [
+          {
+            "deletable": true,
+            "description": "Sample description 1",
+            "grantable": true,
+            "id": "Organization Role-1",
+            "immutable": true,
+            "name": "Alex Rivera",
+            "organization_id": "Acme Corp",
+            "permission_type": "permission_type 1",
+            "permissions": "permissions 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-1/questions/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "choices": "choices 1",
+            "display_answer_on_order": true,
+            "id": "Question-1",
+            "parent_choice_id": "parent_choice_id-1",
+            "parent_id": "parent_id-1",
+            "question": "question 1",
+            "required": true,
+            "resource_uri": "resource_uri 1",
+            "respondent": "respondent 1",
+            "sorting": 2,
+            "ticket_classes": "ticket_classes 1",
+            "type": "standard",
+            "waiver": "waiver 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-2/questions/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "choices": "choices 2",
+            "display_answer_on_order": false,
+            "id": "Question-2",
+            "parent_choice_id": "parent_choice_id-2",
+            "parent_id": "parent_id-2",
+            "question": "question 2",
+            "required": false,
+            "resource_uri": "resource_uri 2",
+            "respondent": "respondent 2",
+            "sorting": 3,
+            "ticket_classes": "ticket_classes 2",
+            "type": "premium",
+            "waiver": "waiver 2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-3/questions/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "choices": "choices 3",
+            "display_answer_on_order": true,
+            "id": "Question-3",
+            "parent_choice_id": "parent_choice_id-3",
+            "parent_id": "parent_id-3",
+            "question": "question 3",
+            "required": true,
+            "resource_uri": "resource_uri 3",
+            "respondent": "respondent 3",
+            "sorting": 4,
+            "ticket_classes": "ticket_classes 3",
+            "type": "basic",
+            "waiver": "waiver 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/{event_id}/questions/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "choices": "choices 1",
+            "display_answer_on_order": true,
+            "id": "Question-1",
+            "parent_choice_id": "parent_choice_id-1",
+            "parent_id": "parent_id-1",
+            "question": "question 1",
+            "required": true,
+            "resource_uri": "resource_uri 1",
+            "respondent": "respondent 1",
+            "sorting": 2,
+            "ticket_classes": "ticket_classes 1",
+            "type": "standard",
+            "waiver": "waiver 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/reports/sales/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "data": "data 1",
+            "event_ids": "event_ids 1",
+            "timezone": "America/New_York",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "data": "data 2",
+            "event_ids": "event_ids 2",
+            "timezone": "America/New_York",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "data": "data 3",
+            "event_ids": "event_ids 3",
+            "timezone": "America/New_York",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 3,
+          "page_number": 1,
+          "page_size": 3,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-1/seatmaps/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "seatmaps": [
+          {
+            "capacity": 4,
+            "event_id": "event_id-1",
+            "id": "Seat Map-1",
+            "name": "Alex Rivera",
+            "thumbnail_url": "https://example.com/thumbnail_url/1",
+            "venue_id": "venue_id-1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-2/seatmaps/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "seatmaps": [
+          {
+            "capacity": 7,
+            "event_id": "event_id-2",
+            "id": "Seat Map-2",
+            "name": "Jordan Chen",
+            "thumbnail_url": "https://example.com/thumbnail_url/2",
+            "venue_id": "venue_id-2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-3/seatmaps/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "seatmaps": [
+          {
+            "capacity": 10,
+            "event_id": "event_id-3",
+            "id": "Seat Map-3",
+            "name": "Taylor Patel",
+            "thumbnail_url": "https://example.com/thumbnail_url/3",
+            "venue_id": "venue_id-3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/{organization_id}/seatmaps/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "seatmaps": [
+          {
+            "capacity": 4,
+            "event_id": "event_id-1",
+            "id": "Seat Map-1",
+            "name": "Alex Rivera",
+            "thumbnail_url": "https://example.com/thumbnail_url/1",
+            "venue_id": "venue_id-1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-1/structured_content/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "access_type": "access_type 1",
+            "id": "Structured Content Page-1",
+            "modules": "modules 1",
+            "page_version_number": "page_version_number 1",
+            "pagination": "pagination 1",
+            "purpose": "purpose 1",
+            "resource_uris": "resource_uris 1",
+            "widgets": "widgets 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-2/structured_content/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "access_type": "access_type 2",
+            "id": "Structured Content Page-2",
+            "modules": "modules 2",
+            "page_version_number": "page_version_number 2",
+            "pagination": "pagination 2",
+            "purpose": "purpose 2",
+            "resource_uris": "resource_uris 2",
+            "widgets": "widgets 2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-3/structured_content/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "access_type": "access_type 3",
+            "id": "Structured Content Page-3",
+            "modules": "modules 3",
+            "page_version_number": "page_version_number 3",
+            "pagination": "pagination 3",
+            "purpose": "purpose 3",
+            "resource_uris": "resource_uris 3",
+            "widgets": "widgets 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/{event_id}/structured_content/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "access_type": "access_type 1",
+            "id": "Structured Content Page-1",
+            "modules": "modules 1",
+            "page_version_number": "page_version_number 1",
+            "pagination": "pagination 1",
+            "purpose": "purpose 1",
+            "resource_uris": "resource_uris 1",
+            "widgets": "widgets 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/subcategories/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "subcategories": [
+          {
+            "id": "Subcategory-1",
+            "name": "Alex Rivera",
+            "parent_category": "standard",
+            "resource_uri": "resource_uri 1",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "id": "Subcategory-2",
+            "name": "Jordan Chen",
+            "parent_category": "premium",
+            "resource_uri": "resource_uri 2",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "id": "Subcategory-3",
+            "name": "Taylor Patel",
+            "parent_category": "basic",
+            "resource_uri": "resource_uri 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 3,
+          "page_number": 1,
+          "page_size": 3,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-1/text_overrides/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "default_message": "Sample default_message 1",
+            "id": "Text Overrides-1",
+            "message": "Sample message 1",
+            "message_code": "Sample message_code 1",
+            "message_type": "Sample message_type 1",
+            "text_code": "text_code-1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-2/text_overrides/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "default_message": "Sample default_message 2",
+            "id": "Text Overrides-2",
+            "message": "Sample message 2",
+            "message_code": "Sample message_code 2",
+            "message_type": "Sample message_type 2",
+            "text_code": "text_code-2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-3/text_overrides/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "default_message": "Sample default_message 3",
+            "id": "Text Overrides-3",
+            "message": "Sample message 3",
+            "message_code": "Sample message_code 3",
+            "message_type": "Sample message_type 3",
+            "text_code": "text_code-3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/{organization_id}/text_overrides/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "default_message": "Sample default_message 1",
+            "id": "Text Overrides-1",
+            "message": "Sample message 1",
+            "message_code": "Sample message_code 1",
+            "message_type": "Sample message_type 1",
+            "text_code": "text_code-1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-1/ticket_buyer_settings/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "allow_attendee_update": true,
+            "confirmation_message": "Sample confirmation_message 1",
+            "event_id": "event_id-1",
+            "id": "Ticket Buyer Settings-1",
+            "instructions": "instructions 1",
+            "redirect_url": "https://example.com/redirect_url/1",
+            "refund_request_enabled": true,
+            "sales_ended_message": "Sample sales_ended_message 1",
+            "survey_info": "survey_info 1",
+            "survey_name": "survey_name 1",
+            "survey_respondent": "survey_respondent 1",
+            "survey_ticket_classes": "survey_ticket_classes 1",
+            "survey_time_limit": 2,
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-2/ticket_buyer_settings/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "allow_attendee_update": false,
+            "confirmation_message": "Sample confirmation_message 2",
+            "event_id": "event_id-2",
+            "id": "Ticket Buyer Settings-2",
+            "instructions": "instructions 2",
+            "redirect_url": "https://example.com/redirect_url/2",
+            "refund_request_enabled": false,
+            "sales_ended_message": "Sample sales_ended_message 2",
+            "survey_info": "survey_info 2",
+            "survey_name": "survey_name 2",
+            "survey_respondent": "survey_respondent 2",
+            "survey_ticket_classes": "survey_ticket_classes 2",
+            "survey_time_limit": 3,
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-3/ticket_buyer_settings/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "allow_attendee_update": true,
+            "confirmation_message": "Sample confirmation_message 3",
+            "event_id": "event_id-3",
+            "id": "Ticket Buyer Settings-3",
+            "instructions": "instructions 3",
+            "redirect_url": "https://example.com/redirect_url/3",
+            "refund_request_enabled": true,
+            "sales_ended_message": "Sample sales_ended_message 3",
+            "survey_info": "survey_info 3",
+            "survey_name": "survey_name 3",
+            "survey_respondent": "survey_respondent 3",
+            "survey_ticket_classes": "survey_ticket_classes 3",
+            "survey_time_limit": 4,
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/{event_id}/ticket_buyer_settings/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "allow_attendee_update": true,
+            "confirmation_message": "Sample confirmation_message 1",
+            "event_id": "event_id-1",
+            "id": "Ticket Buyer Settings-1",
+            "instructions": "instructions 1",
+            "redirect_url": "https://example.com/redirect_url/1",
+            "refund_request_enabled": true,
+            "sales_ended_message": "Sample sales_ended_message 1",
+            "survey_info": "survey_info 1",
+            "survey_name": "survey_name 1",
+            "survey_respondent": "survey_respondent 1",
+            "survey_ticket_classes": "survey_ticket_classes 1",
+            "survey_time_limit": 2,
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-1/ticket_classes/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "ticket_classes": [
+          {
+            "auto_hide": true,
+            "auto_hide_after": "2026-06-10T01:30:00Z",
+            "auto_hide_before": "2026-06-10T01:30:00Z",
+            "capacity": 4,
+            "cost": "cost 1",
+            "delivery_methods": "delivery_methods 1",
+            "description": "Sample description 1",
+            "display_name": "Alex Rivera",
+            "donation": true,
+            "free": true,
+            "hidden": true,
+            "hide_description": true,
+            "hide_sale_dates": true,
+            "id": "Ticket Class-1",
+            "image_id": "image_id-1",
+            "include_fee": true,
+            "inventory_tier_id": "standard",
+            "maximum_quantity": 4,
+            "minimum_quantity": 4,
+            "name": "Alex Rivera",
+            "order_confirmation_message": "Sample order_confirmation_message 1",
+            "quantity_sold": 4,
+            "quantity_total": 19.99,
+            "resource_uri": "resource_uri 1",
+            "sales_channels": "sales_channels 1",
+            "sales_end": "2026-06-10T01:30:00Z",
+            "sales_start": "2026-06-10T01:30:00Z",
+            "sales_start_after": "sales_start_after 1",
+            "secondary_assignment_enabled": true,
+            "sorting": 2,
+            "split_fee": true,
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-2/ticket_classes/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "ticket_classes": [
+          {
+            "auto_hide": false,
+            "auto_hide_after": "2026-06-11T02:30:00Z",
+            "auto_hide_before": "2026-06-11T02:30:00Z",
+            "capacity": 7,
+            "cost": "cost 2",
+            "delivery_methods": "delivery_methods 2",
+            "description": "Sample description 2",
+            "display_name": "Jordan Chen",
+            "donation": false,
+            "free": false,
+            "hidden": false,
+            "hide_description": false,
+            "hide_sale_dates": false,
+            "id": "Ticket Class-2",
+            "image_id": "image_id-2",
+            "include_fee": false,
+            "inventory_tier_id": "premium",
+            "maximum_quantity": 7,
+            "minimum_quantity": 7,
+            "name": "Jordan Chen",
+            "order_confirmation_message": "Sample order_confirmation_message 2",
+            "quantity_sold": 7,
+            "quantity_total": 29.99,
+            "resource_uri": "resource_uri 2",
+            "sales_channels": "sales_channels 2",
+            "sales_end": "2026-06-11T02:30:00Z",
+            "sales_start": "2026-06-11T02:30:00Z",
+            "sales_start_after": "sales_start_after 2",
+            "secondary_assignment_enabled": false,
+            "sorting": 3,
+            "split_fee": false,
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/Event-3/ticket_classes/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "ticket_classes": [
+          {
+            "auto_hide": true,
+            "auto_hide_after": "2026-06-12T03:30:00Z",
+            "auto_hide_before": "2026-06-12T03:30:00Z",
+            "capacity": 10,
+            "cost": "cost 3",
+            "delivery_methods": "delivery_methods 3",
+            "description": "Sample description 3",
+            "display_name": "Taylor Patel",
+            "donation": true,
+            "free": true,
+            "hidden": true,
+            "hide_description": true,
+            "hide_sale_dates": true,
+            "id": "Ticket Class-3",
+            "image_id": "image_id-3",
+            "include_fee": true,
+            "inventory_tier_id": "basic",
+            "maximum_quantity": 10,
+            "minimum_quantity": 10,
+            "name": "Taylor Patel",
+            "order_confirmation_message": "Sample order_confirmation_message 3",
+            "quantity_sold": 10,
+            "quantity_total": 39.99,
+            "resource_uri": "resource_uri 3",
+            "sales_channels": "sales_channels 3",
+            "sales_end": "2026-06-12T03:30:00Z",
+            "sales_start": "2026-06-12T03:30:00Z",
+            "sales_start_after": "sales_start_after 3",
+            "secondary_assignment_enabled": true,
+            "sorting": 4,
+            "split_fee": true,
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/events/{event_id}/ticket_classes/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "ticket_classes": [
+          {
+            "auto_hide": true,
+            "auto_hide_after": "2026-06-10T01:30:00Z",
+            "auto_hide_before": "2026-06-10T01:30:00Z",
+            "capacity": 4,
+            "cost": "cost 1",
+            "delivery_methods": "delivery_methods 1",
+            "description": "Sample description 1",
+            "display_name": "Alex Rivera",
+            "donation": true,
+            "free": true,
+            "hidden": true,
+            "hide_description": true,
+            "hide_sale_dates": true,
+            "id": "Ticket Class-1",
+            "image_id": "image_id-1",
+            "include_fee": true,
+            "inventory_tier_id": "standard",
+            "maximum_quantity": 4,
+            "minimum_quantity": 4,
+            "name": "Alex Rivera",
+            "order_confirmation_message": "Sample order_confirmation_message 1",
+            "quantity_sold": 4,
+            "quantity_total": 19.99,
+            "resource_uri": "resource_uri 1",
+            "sales_channels": "sales_channels 1",
+            "sales_end": "2026-06-10T01:30:00Z",
+            "sales_start": "2026-06-10T01:30:00Z",
+            "sales_start_after": "sales_start_after 1",
+            "secondary_assignment_enabled": true,
+            "sorting": 2,
+            "split_fee": true,
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-1/ticket_groups/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "ticket_groups": [
+          {
+            "event_ticket_ids": "event_ticket_ids 1",
+            "id": "Ticket Group-1",
+            "name": "Alex Rivera",
+            "status": "active",
+            "tickets": "tickets 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-2/ticket_groups/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "ticket_groups": [
+          {
+            "event_ticket_ids": "event_ticket_ids 2",
+            "id": "Ticket Group-2",
+            "name": "Jordan Chen",
+            "status": "pending",
+            "tickets": "tickets 2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-3/ticket_groups/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "ticket_groups": [
+          {
+            "event_ticket_ids": "event_ticket_ids 3",
+            "id": "Ticket Group-3",
+            "name": "Taylor Patel",
+            "status": "completed",
+            "tickets": "tickets 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/{organization_id}/ticket_groups/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "ticket_groups": [
+          {
+            "event_ticket_ids": "event_ticket_ids 1",
+            "id": "Ticket Group-1",
+            "name": "Alex Rivera",
+            "status": "active",
+            "tickets": "tickets 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/users/me/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "questions": [
+          {
+            "emails": "user1@example.com",
+            "first_name": "Alex",
+            "id": "User-1",
+            "image_id": "image_id-1",
+            "is_public": true,
+            "last_name": "Rivera",
+            "name": "Alex Rivera",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "emails": "user2@example.com",
+            "first_name": "Jordan",
+            "id": "User-2",
+            "image_id": "image_id-2",
+            "is_public": false,
+            "last_name": "Chen",
+            "name": "Jordan Chen",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "emails": "user3@example.com",
+            "first_name": "Taylor",
+            "id": "User-3",
+            "image_id": "image_id-3",
+            "is_public": true,
+            "last_name": "Patel",
+            "name": "Taylor Patel",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 3,
+          "page_number": 1,
+          "page_size": 3,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-1/venues/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "venues": [
+          {
+            "address": "101 Test St",
+            "age_restriction": "age_restriction 1",
+            "capacity": 4,
+            "id": "Venue-1",
+            "latitude": "latitude 1",
+            "longitude": "longitude 1",
+            "name": "Alex Rivera",
+            "resource_uri": "resource_uri 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-2/venues/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "venues": [
+          {
+            "address": "102 Test St",
+            "age_restriction": "age_restriction 2",
+            "capacity": 7,
+            "id": "Venue-2",
+            "latitude": "latitude 2",
+            "longitude": "longitude 2",
+            "name": "Jordan Chen",
+            "resource_uri": "resource_uri 2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-3/venues/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "venues": [
+          {
+            "address": "103 Test St",
+            "age_restriction": "age_restriction 3",
+            "capacity": 10,
+            "id": "Venue-3",
+            "latitude": "latitude 3",
+            "longitude": "longitude 3",
+            "name": "Taylor Patel",
+            "resource_uri": "resource_uri 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/{organization_id}/venues/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "venues": [
+          {
+            "address": "101 Test St",
+            "age_restriction": "age_restriction 1",
+            "capacity": 4,
+            "id": "Venue-1",
+            "latitude": "latitude 1",
+            "longitude": "longitude 1",
+            "name": "Alex Rivera",
+            "resource_uri": "resource_uri 1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-1/webhooks/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "webhooks": [
+          {
+            "actions": "actions 1",
+            "created": "2026-06-10T01:30:00Z",
+            "endpoint_url": "https://example.com/endpoint_url/1",
+            "event_id": "event_id-1",
+            "id": "Webhook-1",
+            "resource_uri": "resource_uri 1",
+            "user_id": "user_id-1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-2/webhooks/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "webhooks": [
+          {
+            "actions": "actions 2",
+            "created": "2026-06-11T02:30:00Z",
+            "endpoint_url": "https://example.com/endpoint_url/2",
+            "event_id": "event_id-2",
+            "id": "Webhook-2",
+            "resource_uri": "resource_uri 2",
+            "user_id": "user_id-2",
+            "mj_e2e_custom_attr": "custom-2"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/Organization-3/webhooks/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "webhooks": [
+          {
+            "actions": "actions 3",
+            "created": "2026-06-12T03:30:00Z",
+            "endpoint_url": "https://example.com/endpoint_url/3",
+            "event_id": "event_id-3",
+            "id": "Webhook-3",
+            "resource_uri": "resource_uri 3",
+            "user_id": "user_id-3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    },
+    {
+      "Path": "/organizations/{organization_id}/webhooks/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "webhooks": [
+          {
+            "actions": "actions 1",
+            "created": "2026-06-10T01:30:00Z",
+            "endpoint_url": "https://example.com/endpoint_url/1",
+            "event_id": "event_id-1",
+            "id": "Webhook-1",
+            "resource_uri": "resource_uri 1",
+            "user_id": "user_id-1",
+            "mj_e2e_custom_attr": "custom-1"
+          }
+        ],
+        "pagination": {
+          "object_count": 1,
+          "page_number": 1,
+          "page_size": 1,
+          "page_count": 1,
+          "has_more_items": false,
+          "continuation": null
+        }
+      }
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "Attendee",
+      "OrderingField": "changed_since"
+    },
+    {
+      "Name": "Attendee Report",
+      "OrderingField": null
+    },
+    {
+      "Name": "Balance",
+      "OrderingField": null
+    },
+    {
+      "Name": "Canned Question",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Category",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Discount",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Display Settings",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Event",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Event Capacity Tier",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Event Description",
+      "OrderingField": null
+    },
+    {
+      "Name": "Event Schedule",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Event Team",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Fee Rate",
+      "OrderingField": null
+    },
+    {
+      "Name": "Format",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Inventory Tier",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Media",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Media Upload",
+      "OrderingField": null
+    },
+    {
+      "Name": "Order",
+      "OrderingField": "changed_since"
+    },
+    {
+      "Name": "Organization",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Organization Member",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Organization Role",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Question",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Sales Report",
+      "OrderingField": null
+    },
+    {
+      "Name": "Seat Map",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Structured Content Page",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Subcategory",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Text Overrides",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Ticket Buyer Settings",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Ticket Class",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Ticket Group",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "User",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Venue",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Webhook",
+      "OrderingField": "id"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "Category",
+      "Routes": [
+        {
+          "Path": "/categories/",
+          "Method": "GET",
+          "Status": 200,
+          "Body": {
+            "categories": [
+              {
+                "id": "Category-1",
+                "name": "updated-delta",
+                "name_localized": "name_localized 1",
+                "resource_uri": "resource_uri 1",
+                "short_name": "short_name 1",
+                "short_name_localized": "short_name_localized 1",
+                "subcategories": "subcategories 1",
+                "mj_e2e_custom_attr": "custom-1"
+              },
+              {
+                "id": "Category-2",
+                "name": "Jordan Chen",
+                "name_localized": "name_localized 2",
+                "resource_uri": "resource_uri 2",
+                "short_name": "short_name 2",
+                "short_name_localized": "short_name_localized 2",
+                "subcategories": "subcategories 2",
+                "mj_e2e_custom_attr": "custom-2"
+              }
+            ],
+            "pagination": {
+              "object_count": 2,
+              "page_number": 1,
+              "page_size": 2,
+              "page_count": 1,
+              "has_more_items": false,
+              "continuation": null
+            }
+          }
+        }
+      ],
+      "ExpectedPresent": [
+        "Category-1",
+        "Category-2"
+      ],
+      "ExpectedDeletes": [
+        "Category-3"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "Category-1",
+          "Field": "name",
+          "Value": "updated-delta"
+        }
+      ]
+    }
+  ],
+  "Lifecycle": {
+    "supportsDiscovery": false,
+    "supportsFieldDiscovery": false,
+    "authoritativeDiscovery": false,
+    "supportsCustomColumns": true,
+    "incrementalStrategy": "watermark",
+    "supportsWrite": true,
+    "writeRoundTrip": {
+      "Object": "Media Upload",
+      "Routes": [
+        {
+          "Path": "/media/upload/",
+          "Method": "POST",
+          "Status": 200,
+          "Body": {
+            "id": "mock-wr-id-1",
+            "ID": "mock-wr-id-1",
+            "Id": "mock-wr-id-1",
+            "externalID": "mock-wr-id-1",
+            "ExternalID": "mock-wr-id-1",
+            "crop_mask": "mock-created"
+          },
+          "Headers": {
+            "content-type": "application/json"
+          }
+        },
+        {
+          "Path": "/media/upload//{id}",
+          "Method": "PATCH",
+          "Status": 200,
+          "Body": {
+            "id": "mock-wr-id-1",
+            "ID": "mock-wr-id-1",
+            "Id": "mock-wr-id-1",
+            "externalID": "mock-wr-id-1",
+            "ExternalID": "mock-wr-id-1",
+            "crop_mask": "mock-updated"
+          }
+        },
+        {
+          "Path": "/media/upload//{id}",
+          "Method": "DELETE",
+          "Status": 200,
+          "Body": {
+            "id": "mock-wr-id-1",
+            "deleted": true
+          }
+        }
+      ],
+      "CreateAttributes": {
+        "crop_mask": "mock-created"
+      },
+      "CreatePathMatch": "media",
+      "DeleteMethodMatch": "DELETE",
+      "UpdateAttributes": {
+        "crop_mask": "mock-updated"
+      }
+    },
+    "writeRoundTrips": [
+      {
+        "Object": "Media Upload",
+        "Routes": [
+          {
+            "Path": "/media/upload/",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "crop_mask": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/media/upload//{id}",
+            "Method": "PATCH",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "crop_mask": "mock-updated"
+            }
+          },
+          {
+            "Path": "/media/upload//{id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "crop_mask": "mock-created"
+        },
+        "CreatePathMatch": "media",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "crop_mask": "mock-updated"
+        }
+      }
+    ],
+    "supportsScheduling": true,
+    "connectionTestable": true,
+    "derivedFromMetadata": true,
+    "sourceClass": "EventbriteConnector"
+  }
+}

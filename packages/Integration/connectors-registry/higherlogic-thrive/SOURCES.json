@@ -1,0 +1,82 @@
+{
+  "Vendor": "Higher Logic Thrive Community",
+  "GeneratedAt": "2026-07-08T18:00:00.000Z",
+  "TopSource": "https://api.connectedcommunity.org/v2.0/Help (Community API v2.0 HelpPage -- full operation catalog + per-operation sample JSON, saved raw + enumerated in code)",
+  "SourceCount": 9,
+  "ProceedDecision": "PROCEED",
+  "ProceedReason": "The public, credential-free Community API v2.0 HelpPage is a Tier-2 semi-structured contract: 25 controllers, 236 documented operations, each with a per-operation sub-page carrying URI/body parameters, a full Resource Description field table, and sample request/response JSON. All 236 operation pages were fetched raw and parsed in code (enumerate-helppage.mjs + extract-op-details.mjs), surfacing 116 distinct ResourceModel types (the enumerated universe E). A classification ledger (classify-catalog.mjs) mechanically closes E against 33 COVERABLE models / 34 TaxonomyLeaves + 54 INFORMATIONAL + 7 EXCLUDED_SCAFFOLDING (vendor doc-generation noise) + 4 OUT_OF_SCOPE_FAMILY + 18 CONTAINER_FOLDED, with zero unclassified. Real APIPaths, real GUID-typed PKs, real scalar FK fields, and real pagination param names (three distinct Cursor sub-families + Offset + None) were recovered directly from the HelpPage -- none deferred or guessed. Field-level coverage per object varies (some ops, e.g. EventTypes/RegistrantClasses, hit a vendor doc-generation bug returning a raw HttpResponseMessage placeholder instead of the typed field list) -- this is called out explicitly in Gaps so the extraction loop budgets K=3 amendment rounds for those objects.",
+  "Sources": [
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["ALL_COVERABLE", "ALL_INFORMATIONAL"],
+      "AccessNotes": "Live, unauthenticated GET returns HTTP 200 (curled directly, not summarized via WebFetch -- a 106KB HTML index enumerating all 25 controller sections in <h2 id=\"Controller\"> + <table class=\"help-page-table\"> blocks). Saved raw to sources/helppage.index.html. Parsed in code by scripts/enumerate-helppage.mjs into sources/helppage.catalog.json (25 controllers, 236 operations) -- this IS the machine-readable operation catalog; see helppage.catalog.summary.json for the per-controller operation counts. This is the semi-structured Tier-2 contract the task designated as highest-value: not OpenAPI, but a consistent, parseable HTML table structure the vendor's own ASP.NET Web API HelpPage framework generates."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/<236 per-operation slugs>",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["ALL_COVERABLE", "ALL_INFORMATIONAL"],
+      "AccessNotes": "235 of 236 per-operation sub-pages fetched raw via a concurrency-8 Node fetch pool (scripts/fetch-ops.mjs) and saved individually under sources/ops/<METHOD-api-v2.0-Controller-Operation_params>.html (7.9MB total). One page (GET Discussions/GetLatestTopics) returns a persistent vendor-side HTTP 500 on repeated retry (confirmed at 2 attempts, ~2s apart) -- a vendor doc-page bug, not an access restriction; the same discussion-topic data is otherwise reachable via GetRecentThreads/GetSubscribedDiscussions. Each saved page carries: URI Parameters table, Body Parameters table (+ request sample), Resource Description field table (name/type/description per field), and a Response Formats sample JSON block. Parsed in code by scripts/extract-op-details.mjs into sources/op-details.json (per-op structured detail, 883KB) + sources/op-details.summary.json (116 distinct ResourceModel types: 75 top-level response models + 41 nested-only models). This per-operation detail is what supplies real APIPaths, PK/FK field names, pagination param names, and incremental watermark fields -- see SOURCE_STUDY.md for the full per-leaf breakdown."
+    },
+    {
+      "URL": "https://api.higherlogic.com/v2.0/Help",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["ALL_COVERABLE", "ALL_INFORMATIONAL"],
+      "AccessNotes": "Mirror of the same HelpPage content under the api.higherlogic.com host (HTTP 200, curl-verified). Not separately fetched/parsed since content is identical to api.connectedcommunity.org; recorded so downstream agents know both hosts serve the same catalog and either is an acceptable base URL depending on tenant configuration."
+    },
+    {
+      "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/contextHLT.md",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["INFORMATIONAL: Product-Route Disambiguation", "INFORMATIONAL: Auth Mechanics", "INFORMATIONAL: Push API Boundary", "INFORMATIONAL: SSO Boundary"],
+      "AccessNotes": "Operator-supplied context document (78KB, 3155 lines). TRUSTED-WHERE-IT-SPEAKS and VALIDATED against the live HelpPage: its enumerated 'Mock API v2.0 server' capability list (Authentication, Contacts, Communities, Discussions, Blogs, Comments, Question, Answer, Events, ResourceLibrary, ExternalActivity, ExternalSearch, AutomationRules, DataFeed, Demographics, System, Volunteer) matches the live HelpPage's 25 controllers closely -- CROSS-CHECKED and CONFIRMED, not merely assumed. Its product-boundary claims (Thrive Community vs Vanilla vs Thrive Marketing are three separate products/APIs; Push API v2 is a separate host+auth+direction; SSO is a separate identity route) are independently corroborated by the live support.higherlogic.com articles below. Its bespoke mock-lab/Docker-compose/adapter-interface architecture (Sections 'Mock-real integration lab' onward) is EXPLICITLY IGNORED per task instruction -- that is a testing-harness proposal, not source-of-truth API documentation, and this audit does not adopt it. One claim NOT independently verifiable from the HelpPage and therefore NOT propagated as fact: the exact per-endpoint auth-mode split (IAM key/password vs OIDC vs legacy) -- the HelpPage's Authentication controller only documents Login/GetTenantDetail/Widget at the operation-catalog level, not the underlying auth-mode selection logic, so this remains sourced from the support articles below, not this file."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/360032691332-Higher-Logic-API",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["INFORMATIONAL: Base URL & Rate-Limit Mechanics"],
+      "AccessNotes": "WebFetch succeeded (HTTP 200). Confirms base URLs: https://api.connectedcommunity.org/ (US) and https://api.onlinecommunity.ca (Canadian-tier customers) -- both point at the SAME v2.0/Help catalog structure, differing only by tenant region. States acceptable-use guidance of 180-240 calls/minute (3-4/sec); no hard server-side rate-limit enforcement documented, but excessive usage risks IP blocking. Feeds Integration.BatchMaxRequestCount / BatchRequestWaitTime."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/360052976791-Higher-Logic-Push-API-v2",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["INFORMATIONAL: Push API Boundary (out-of-scope family evidence)"],
+      "AccessNotes": "WebFetch succeeded (HTTP 200). Confirms Push API v2 is a DISTINCT host (https://datapushapi.higherlogic.com/v2 US / https://datapushapi.onlinecommunity.ca/v2 Canada), DISTINCT auth (a 'Key' header carrying an ApiKey value, not the Community API v2.0's Login/token flow), and a DISTINCT direction (AMS/CRM pushes full-record-replacement contact data INTO Thrive Community via /contactinfo and /list, the inverse of the pull-based Community API v2.0 this audit targets). This is the primary evidence backing the Push API v2 out-of-scope-family exclusion."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/4402952237844-OAuth-2-0-Code-Flow",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["INFORMATIONAL: SSO Boundary (out-of-scope family evidence)"],
+      "AccessNotes": "WebFetch succeeded (HTTP 200). Confirms OAuth 2.0 Code Flow at Higher Logic is an SSO/end-user-login mechanism (authorize/token/userinfo endpoints against an external Identity Provider, resolving a 'legacy identifier' claim to log a user into the Community) -- NOT a route for server-to-server API data sync. Backs the SSO out-of-scope-family exclusion."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/360033049191-API-General-Information",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [],
+      "AccessNotes": "MISLEADING TITLE -- WARNING FOR DOWNSTREAM AGENTS. WebFetch succeeded (HTTP 200) but the page content describes ActionRequest/GridRequest XML documents authenticated by username+password+BrandID -- this is Thrive MARKETING's legacy XML web service (Informz/Real Magnet lineage), NOT the Thrive Community API v2.0 this audit targets, despite the generic-sounding 'API General Information' title. Recorded here ONLY as a documented vendor-doc-organization pitfall (do not cite this URL for any Community API v2.0 claim); no TargetField evidence is drawn from it. This corroborates the context doc's explicit warning to not mix Thrive Marketing docs into Thrive Community assumptions."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/6535087910548-Higher-Logic-Push-API-v1",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["INFORMATIONAL: Push API Boundary (out-of-scope family evidence)"],
+      "AccessNotes": "HTTP 200 (curl-verified only, not deep-fetched -- legacy/hybrid claims-based Push API v1 predecessor to Push API v2). Recorded as corroborating evidence that Push is a distinct, versioned, separate route family from the Community API v2.0; not used for any TaxonomyLeaves evidence."
+    }
+  ]
+}

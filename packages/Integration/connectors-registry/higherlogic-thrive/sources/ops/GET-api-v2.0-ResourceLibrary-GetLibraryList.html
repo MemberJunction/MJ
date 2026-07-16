@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/ResourceLibrary/GetLibraryList</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/ResourceLibrary/GetLibraryList</h1>
+<div>
+    <p>Returns a list of Libraries that the Current User is Allowed to View/Join.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>List of Libraries.</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=DocumentLibrary">DocumentLibrary</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">Community</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=Community">Community</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EntryCount</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsCommunityRelated</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CanPost</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CanView</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LastApprovedDocumentCreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LastApprovedDocumentOrFileCreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LastApprovedFileCreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryDescription</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryUrl</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ModerationType</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=ModerationTypeRef">ModerationTypeRef</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">NumApprovedEntries</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">NumApprovedFiles</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">NumApprovedImages</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">NumApprovedVideos</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SecurityRolesRequiredView</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of string
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SecurityRolesRequiredViewInfo</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of string
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SecurityRolesRequiredViewInfoList</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SecurityRolesRequiredViewList</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;Community&quot;: null,
+    &quot;EntryCount&quot;: 1,
+    &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.0217807Z&quot;,
+    &quot;IsCommunityRelated&quot;: true,
+    &quot;CanPost&quot;: true,
+    &quot;CanView&quot;: true,
+    &quot;LastApprovedDocumentCreatedOn&quot;: &quot;2026-07-08T17:53:38.0217807Z&quot;,
+    &quot;LastApprovedDocumentOrFileCreatedOn&quot;: &quot;2026-07-08T17:53:38.0217807Z&quot;,
+    &quot;LastApprovedFileCreatedOn&quot;: &quot;2026-07-08T17:53:38.0217807Z&quot;,
+    &quot;LibraryDescription&quot;: &quot;sample string 6&quot;,
+    &quot;LibraryKey&quot;: &quot;77149ffe-2f32-4eb9-a7a5-f1091d92f2e0&quot;,
+    &quot;LibraryName&quot;: &quot;sample string 8&quot;,
+    &quot;LibraryUrl&quot;: &quot;sample string 9&quot;,
+    &quot;ModerationType&quot;: null,
+    &quot;NumApprovedEntries&quot;: 1,
+    &quot;NumApprovedFiles&quot;: 1,
+    &quot;NumApprovedImages&quot;: 1,
+    &quot;NumApprovedVideos&quot;: 1,
+    &quot;SecurityRolesRequiredView&quot;: [
+      &quot;sample string 1&quot;,
+      &quot;sample string 2&quot;
+    ],
+    &quot;SecurityRolesRequiredViewInfo&quot;: [
+      &quot;sample string 1&quot;,
+      &quot;sample string 2&quot;
+    ],
+    &quot;SecurityRolesRequiredViewInfoList&quot;: &quot;sample string 10&quot;,
+    &quot;SecurityRolesRequiredViewList&quot;: &quot;sample string 11&quot;
+  },
+  {
+    &quot;Community&quot;: null,
+    &quot;EntryCount&quot;: 1,
+    &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.0217807Z&quot;,
+    &quot;IsCommunityRelated&quot;: true,
+    &quot;CanPost&quot;: true,
+    &quot;CanView&quot;: true,
+    &quot;LastApprovedDocumentCreatedOn&quot;: &quot;2026-07-08T17:53:38.0217807Z&quot;,
+    &quot;LastApprovedDocumentOrFileCreatedOn&quot;: &quot;2026-07-08T17:53:38.0217807Z&quot;,
+    &quot;LastApprovedFileCreatedOn&quot;: &quot;2026-07-08T17:53:38.0217807Z&quot;,
+    &quot;LibraryDescription&quot;: &quot;sample string 6&quot;,
+    &quot;LibraryKey&quot;: &quot;77149ffe-2f32-4eb9-a7a5-f1091d92f2e0&quot;,
+    &quot;LibraryName&quot;: &quot;sample string 8&quot;,
+    &quot;LibraryUrl&quot;: &quot;sample string 9&quot;,
+    &quot;ModerationType&quot;: null,
+    &quot;NumApprovedEntries&quot;: 1,
+    &quot;NumApprovedFiles&quot;: 1,
+    &quot;NumApprovedImages&quot;: 1,
+    &quot;NumApprovedVideos&quot;: 1,
+    &quot;SecurityRolesRequiredView&quot;: [
+      &quot;sample string 1&quot;,
+      &quot;sample string 2&quot;
+    ],
+    &quot;SecurityRolesRequiredViewInfo&quot;: [
+      &quot;sample string 1&quot;,
+      &quot;sample string 2&quot;
+    ],
+    &quot;SecurityRolesRequiredViewInfoList&quot;: &quot;sample string 10&quot;,
+    &quot;SecurityRolesRequiredViewList&quot;: &quot;sample string 11&quot;
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfDocumentLibrary xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.ResourceLibrary&quot;&gt;
+  &lt;DocumentLibrary&gt;
+    &lt;CanPost&gt;true&lt;/CanPost&gt;
+    &lt;CanView&gt;true&lt;/CanView&gt;
+    &lt;Community xmlns:d3p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot; i:nil=&quot;true&quot; /&gt;
+    &lt;CreatedOn&gt;2026-07-08T13:53:38.0217807-04:00&lt;/CreatedOn&gt;
+    &lt;EntryCount&gt;1&lt;/EntryCount&gt;
+    &lt;IsCommunityRelated&gt;true&lt;/IsCommunityRelated&gt;
+    &lt;LastApprovedDocumentCreatedOn&gt;2026-07-08T13:53:38.0217807-04:00&lt;/LastApprovedDocumentCreatedOn&gt;
+    &lt;LastApprovedDocumentOrFileCreatedOn&gt;2026-07-08T13:53:38.0217807-04:00&lt;/LastApprovedDocumentOrFileCreatedOn&gt;
+    &lt;LastApprovedFileCreatedOn&gt;2026-07-08T13:53:38.0217807-04:00&lt;/LastApprovedFileCreatedOn&gt;
+    &lt;LibraryDescription&gt;sample string 6&lt;/LibraryDescription&gt;
+    &lt;LibraryKey&gt;77149ffe-2f32-4eb9-a7a5-f1091d92f2e0&lt;/LibraryKey&gt;
+    &lt;LibraryName&gt;sample string 8&lt;/LibraryName&gt;
+    &lt;LibraryUrl&gt;sample string 9&lt;/LibraryUrl&gt;
+    &lt;ModerationType xmlns:d3p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Common&quot; i:nil=&quot;true&quot; /&gt;
+    &lt;NumApprovedEntries&gt;1&lt;/NumApprovedEntries&gt;
+    &lt;NumApprovedFiles&gt;1&lt;/NumApprovedFiles&gt;
+    &lt;NumApprovedImages&gt;1&lt;/NumApprovedImages&gt;
+    &lt;NumApprovedVideos&gt;1&lt;/NumApprovedVideos&gt;
+    &lt;SecurityRolesRequiredView xmlns:d3p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+      &lt;d3p1:string&gt;sample string 1&lt;/d3p1:string&gt;
+      &lt;d3p1:string&gt;sample string 2&lt;/d3p1:string&gt;
+    &lt;/SecurityRolesRequiredView&gt;
+    &lt;SecurityRolesRequiredViewInfo xmlns:d3p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+      &lt;d3p1:string&gt;sample string 1&lt;/d3p1:string&gt;
+      &lt;d3p1:string&gt;sample string 2&lt;/d3p1:string&gt;
+    &lt;/SecurityRolesRequiredViewInfo&gt;
+    &lt;SecurityRolesRequiredViewInfoList&gt;sample string 10&lt;/SecurityRolesRequiredViewInfoList&gt;
+    &lt;SecurityRolesRequiredViewList&gt;sample string 11&lt;/SecurityRolesRequiredViewList&gt;
+  &lt;/DocumentLibrary&gt;
+  &lt;DocumentLibrary&gt;
+    &lt;CanPost&gt;true&lt;/CanPost&gt;
+    &lt;CanView&gt;true&lt;/CanView&gt;
+    &lt;Community xmlns:d3p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot; i:nil=&quot;true&quot; /&gt;
+    &lt;CreatedOn&gt;2026-07-08T13:53:38.0217807-04:00&lt;/CreatedOn&gt;
+    &lt;EntryCount&gt;1&lt;/EntryCount&gt;
+    &lt;IsCommunityRelated&gt;true&lt;/IsCommunityRelated&gt;
+    &lt;LastApprovedDocumentCreatedOn&gt;2026-07-08T13:53:38.0217807-04:00&lt;/LastApprovedDocumentCreatedOn&gt;
+    &lt;LastApprovedDocumentOrFileCreatedOn&gt;2026-07-08T13:53:38.0217807-04:00&lt;/LastApprovedDocumentOrFileCreatedOn&gt;
+    &lt;LastApprovedFileCreatedOn&gt;2026-07-08T13:53:38.0217807-04:00&lt;/LastApprovedFileCreatedOn&gt;
+    &lt;LibraryDescription&gt;sample string 6&lt;/LibraryDescription&gt;
+    &lt;LibraryKey&gt;77149ffe-2f32-4eb9-a7a5-f1091d92f2e0&lt;/LibraryKey&gt;
+    &lt;LibraryName&gt;sample string 8&lt;/LibraryName&gt;
+    &lt;LibraryUrl&gt;sample string 9&lt;/LibraryUrl&gt;
+    &lt;ModerationType xmlns:d3p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Common&quot; i:nil=&quot;true&quot; /&gt;
+    &lt;NumApprovedEntries&gt;1&lt;/NumApprovedEntries&gt;
+    &lt;NumApprovedFiles&gt;1&lt;/NumApprovedFiles&gt;
+    &lt;NumApprovedImages&gt;1&lt;/NumApprovedImages&gt;
+    &lt;NumApprovedVideos&gt;1&lt;/NumApprovedVideos&gt;
+    &lt;SecurityRolesRequiredView xmlns:d3p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+      &lt;d3p1:string&gt;sample string 1&lt;/d3p1:string&gt;
+      &lt;d3p1:string&gt;sample string 2&lt;/d3p1:string&gt;
+    &lt;/SecurityRolesRequiredView&gt;
+    &lt;SecurityRolesRequiredViewInfo xmlns:d3p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+      &lt;d3p1:string&gt;sample string 1&lt;/d3p1:string&gt;
+      &lt;d3p1:string&gt;sample string 2&lt;/d3p1:string&gt;
+    &lt;/SecurityRolesRequiredViewInfo&gt;
+    &lt;SecurityRolesRequiredViewInfoList&gt;sample string 10&lt;/SecurityRolesRequiredViewInfoList&gt;
+    &lt;SecurityRolesRequiredViewList&gt;sample string 11&lt;/SecurityRolesRequiredViewList&gt;
+  &lt;/DocumentLibrary&gt;
+&lt;/ArrayOfDocumentLibrary&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

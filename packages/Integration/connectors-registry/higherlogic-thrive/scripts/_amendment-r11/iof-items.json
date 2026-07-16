@@ -1,0 +1,176 @@
+[
+  {
+    "ioName": "Blogs",
+    "iof": {
+      "Name": "CreatedByContactKey",
+      "DisplayName": "Created By Contact Key",
+      "Description": "The primary key of the contact who authored the blog (flattened from the Author ContactConcise reference).",
+      "Type": "String",
+      "IsRequired": false,
+      "IsReadOnly": true,
+      "IsPrimaryKey": false,
+      "IsUniqueKey": false,
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "ContactKey",
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 16,
+      "Configuration": {
+        "ReferencedType": "Contacts",
+        "flattenedFrom": "Author (ContactConcise)"
+      },
+      "IntegrationObjectID": "@parent:ID"
+    }
+  },
+  {
+    "ioName": "Blogs",
+    "iof": {
+      "Name": "CommunityKey",
+      "DisplayName": "Community Key",
+      "Description": "If the blog is associated to a community, the primary key of that community (flattened from the Community reference).",
+      "Type": "String",
+      "IsRequired": false,
+      "IsReadOnly": true,
+      "IsPrimaryKey": false,
+      "IsUniqueKey": false,
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Communities&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "CommunityKey",
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 17,
+      "Configuration": {
+        "ReferencedType": "Communities",
+        "flattenedFrom": "Community (Community)"
+      },
+      "IntegrationObjectID": "@parent:ID"
+    }
+  },
+  {
+    "ioName": "ResourceLibraryDocuments",
+    "iof": {
+      "Name": "CreatedByContactKey",
+      "DisplayName": "Created By Contact Key",
+      "Description": "The primary key of the contact who created the document (flattened from the CreatedByContact ContactConcise reference).",
+      "Type": "String",
+      "IsRequired": false,
+      "IsReadOnly": true,
+      "IsPrimaryKey": false,
+      "IsUniqueKey": false,
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "ContactKey",
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 22,
+      "Configuration": {
+        "ReferencedType": "Contacts",
+        "flattenedFrom": "CreatedByContact (ContactConcise)"
+      },
+      "IntegrationObjectID": "@parent:ID"
+    }
+  },
+  {
+    "ioName": "Ideas",
+    "iof": {
+      "Name": "CommunityKey",
+      "DisplayName": "Community Key",
+      "Description": "If the idea is associated to a community, the primary key of that community (flattened from the Community reference).",
+      "Type": "String",
+      "IsRequired": false,
+      "IsReadOnly": true,
+      "IsPrimaryKey": false,
+      "IsUniqueKey": false,
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Communities&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "CommunityKey",
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 11,
+      "Configuration": {
+        "ReferencedType": "Communities",
+        "flattenedFrom": "Community (Community)"
+      },
+      "IntegrationObjectID": "@parent:ID"
+    }
+  },
+  {
+    "ioName": "Ideas",
+    "iof": {
+      "Name": "IdeaStatusKey",
+      "DisplayName": "Idea Status Key",
+      "Description": "The primary key of the idea status (flattened from the Status IdeaStatus reference).",
+      "Type": "String",
+      "IsRequired": false,
+      "IsReadOnly": true,
+      "IsPrimaryKey": false,
+      "IsUniqueKey": false,
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=IdeaStatuses&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "StatusKey",
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 12,
+      "Configuration": {
+        "ReferencedType": "IdeaStatuses",
+        "flattenedFrom": "Status (IdeaStatus)"
+      },
+      "IntegrationObjectID": "@parent:ID"
+    }
+  },
+  {
+    "ioName": "Ideas",
+    "iof": {
+      "Name": "AuthorContactKey",
+      "DisplayName": "Author Contact Key",
+      "Description": "The primary key of the contact who authored the idea (flattened from the Author ContactConcise reference).",
+      "Type": "String",
+      "IsRequired": false,
+      "IsReadOnly": true,
+      "IsPrimaryKey": false,
+      "IsUniqueKey": false,
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "ContactKey",
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 13,
+      "Configuration": {
+        "ReferencedType": "Contacts",
+        "flattenedFrom": "Author (ContactConcise)"
+      },
+      "IntegrationObjectID": "@parent:ID"
+    }
+  },
+  {
+    "ioName": "VolunteerOpportunities",
+    "iof": {
+      "Name": "CommunityKey",
+      "DisplayName": "Community Key",
+      "Description": "If the volunteer opportunity is linked to a specific community, the primary key of that community (flattened from the Community reference).",
+      "Type": "String",
+      "IsRequired": false,
+      "IsReadOnly": true,
+      "IsPrimaryKey": false,
+      "IsUniqueKey": false,
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Communities&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "CommunityKey",
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 28,
+      "Configuration": {
+        "ReferencedType": "Communities",
+        "flattenedFrom": "Community (Community)"
+      },
+      "IntegrationObjectID": "@parent:ID"
+    }
+  },
+  {
+    "ioName": "Events",
+    "iof": {
+      "Name": "CommunityKey",
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Communities&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "CommunityKey",
+      "IsReadOnly": true,
+      "Configuration": {
+        "ReferencedType": "Communities",
+        "flattenedFrom": "Community (Community)"
+      }
+    }
+  }
+]

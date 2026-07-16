@@ -1,0 +1,220 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/magnetmail/scripts/extract-wsdl-facts.mjs",
+      "ScriptRunAt": "2026-07-04T03:38:35.784Z",
+      "StructuredOutput": {
+        "soapAddr": [
+          "https://hlma-apie1.magnetmail.net/mmapi.asmx"
+        ],
+        "targetNamespace": "http://www.magnetmail.net/",
+        "operationCount": 55,
+        "authenticateShape": [
+          "<s:element minOccurs=\"0\" maxOccurs=\"1\" name=\"username\" type=\"s:string\" />",
+          "<s:element minOccurs=\"0\" maxOccurs=\"1\" name=\"password\" type=\"s:string\" />"
+        ],
+        "authenticateRespShape": [
+          "<s:element minOccurs=\"0\" maxOccurs=\"1\" name=\"AuthenticateResult\" type=\"tns:AuthenticationResult\" />"
+        ],
+        "mutationLike": [
+          "addGroup",
+          "addRecipient",
+          "createMagnetMailMessage",
+          "unsubscribeRecipients",
+          "CreateEventSignUp"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.NavigationBaseURL"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/magnetmail/scripts/extract-wsdl-facts.mjs",
+      "ScriptRunAt": "2026-07-04T03:38:35.784Z",
+      "StructuredOutput": {
+        "paginationOps": {
+          "getGroupRecipients": [
+            "groupId",
+            "pageNumber",
+            "pageCount"
+          ]
+        },
+        "watermarkOps": {
+          "getUnsubscribes": [
+            "user_id",
+            "fromDate",
+            "toDate"
+          ],
+          "getSpamComplaints": [
+            "user_id",
+            "fromDate",
+            "toDate"
+          ],
+          "getMessages": [
+            "user_id",
+            "createStartDate",
+            "createEndDate",
+            "sentStartDate",
+            "sentEndDate",
+            "archived",
+            "hidden",
+            "hasFax",
+            "hasEmail"
+          ],
+          "getMessagesUTC": [
+            "user_id",
+            "createStartDate",
+            "createEndDate",
+            "sentStartDate",
+            "sentEndDate",
+            "archived",
+            "hidden",
+            "hasFax",
+            "hasEmail"
+          ],
+          "getSubscribedRecipients": [
+            "user_id",
+            "startDate",
+            "endDate",
+            "group_ids",
+            "report_type"
+          ],
+          "getSuppressedRecipientList": [
+            "group_id",
+            "start_date",
+            "end_date"
+          ],
+          "getMessageList": [
+            "user_id",
+            "createStartDate",
+            "createEndDate",
+            "sentStartDate",
+            "sentEndDate",
+            "archived",
+            "hidden",
+            "hasFax",
+            "hasEmail"
+          ],
+          "getMessageListUtc": [
+            "user_id",
+            "createStartDate",
+            "createEndDate",
+            "sentStartDate",
+            "sentEndDate",
+            "archived",
+            "hidden",
+            "hasFax",
+            "hasEmail"
+          ]
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PaginationDefaults"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/magnetmail/scripts/extract-criteria-types.mjs",
+      "ScriptRunAt": "2026-07-04T03:38:35.784Z",
+      "StructuredOutput": {
+        "criteriaTypes": {
+          "SearchCriteria": {
+            "base": null,
+            "ownFields": [
+              {
+                "name": "pageNo",
+                "type": "s:int"
+              },
+              {
+                "name": "pageSize",
+                "type": "s:int"
+              }
+            ]
+          },
+          "PagedSearchCriteria": {
+            "base": "DomainBase",
+            "ownFields": [
+              {
+                "name": "PageNo",
+                "type": "s:int"
+              },
+              {
+                "name": "PageSize",
+                "type": "s:int"
+              }
+            ]
+          },
+          "DateRangeSearchCriteria": {
+            "base": "PagedSearchCriteria",
+            "ownFields": [
+              {
+                "name": "SearchStartDate",
+                "type": "s:dateTime"
+              },
+              {
+                "name": "SearchEndDate",
+                "type": "s:dateTime"
+              }
+            ]
+          },
+          "MessageLinkTrackingSearchCriteria": {
+            "base": "DateRangeSearchCriteria",
+            "ownFields": [
+              {
+                "name": "MessageId",
+                "type": "s:long"
+              },
+              {
+                "name": "LinkUrl",
+                "type": "s:string"
+              }
+            ]
+          },
+          "MessageTrackingSearchCriteria": {
+            "base": "DateRangeSearchCriteria",
+            "ownFields": [
+              {
+                "name": "ReportType",
+                "type": "tns:MessageTrackingReportType"
+              }
+            ]
+          },
+          "PersonifySubscriptionMappingSearchCriteria": {
+            "base": "DomainBase",
+            "ownFields": [
+              {
+                "name": "ObjectInPersonify",
+                "type": "tns:PersonifyObject"
+              }
+            ]
+          },
+          "UnsubscribeSearchCriteria": {
+            "base": "DateRangeSearchCriteria",
+            "ownFields": [
+              {
+                "name": "MessageId",
+                "type": "s:long"
+              },
+              {
+                "name": "GroupId",
+                "type": "s:long"
+              },
+              {
+                "name": "GroupCategoryId",
+                "type": "s:long"
+              }
+            ]
+          },
+          "RecipientSearchCriteria": null
+        },
+        "wrapperOps": {
+          "GetMessageLinkTracking": "MessageLinkTrackingSearchCriteria",
+          "GetMessageSentTracking": "MessageTrackingSearchCriteria",
+          "GetMessageOpenTracking": "MessageTrackingSearchCriteria",
+          "SearchPersonifySubscriptionMappings": "PersonifySubscriptionMappingSearchCriteria",
+          "GetUnsubscribeTracking": "UnsubscribeSearchCriteria",
+          "searchForRecipients": "RecipientSearchCriteria"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.COMPLEX_WRAPPERS"
+    }
+  ]
+}

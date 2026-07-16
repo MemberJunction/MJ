@@ -1,0 +1,224 @@
+{
+  "Entries": [
+    {
+      "URL": "https://whova.com",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Confirming Whova's public navigation/marketing base URL (NavigationBaseURL). This is the product's public site, not a documented API base URL -- no API base URL exists credential-free (see SOURCE_STUDY.md §0).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "https://whova.com -- Whova's own primary domain, reachable directly (not bot-blocked, unlike whova.zendesk.com)."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Establishing Configuration.WriteCapability -- confirming the ONLY documented write surface is the 'Create or Update Attendee' action, and that 'Get Orders'/'Get Registrants' are read-only triggers with no corresponding write action.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WriteCapability",
+      "Excerpt": "Triggers: Get Attendees (\"Triggers when there is a change in the attendee list\"), Get Orders (\"Triggers when there is a change in the order list\"), Get Registrants (\"Triggers when a registrant submits their registration question form responses\"). Actions: Create or Update Attendee -- required: Event, First Name, Last Name, Email; optional: Title, Affiliation/Company, Location, Ticket Types, Audience Type, Categories."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Establishing the Event-scoping idiosyncrasy that informs Configuration.CustomFieldMarkerPattern.eventScoping -- every trigger and the one action requires an Event parameter, confirming Whova's multi-tenant-per-organizer/single-tenant-per-event object model.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.CustomFieldMarkerPattern.eventScoping",
+      "Excerpt": "Each trigger and the write action requires 'Event' as a scoping/required input field."
+    },
+    {
+      "URL": "https://whova.zendesk.com/hc/en-us/articles/28473285536795-How-do-I-integrate-CRM-via-Zapier",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Confirming Whova has no direct/native REST API for third-party self-integration -- CRM/system integration is routed exclusively through Whova's own Zapier app. Used as negative evidence supporting Configuration.AuthFlow=null (auth scheme is abstracted behind Zapier's connected-account flow and is not independently documented).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "Article title: \"How do I integrate CRM via Zapier?\" -- content recovered via WebSearch snippet extraction after a 403 Zendesk bot-block on direct WebFetch/curl (see SOURCES.json AccessNotes). Confirms CRM integration is Zapier-only; no native/direct integration path documented."
+    },
+    {
+      "URL": "https://apitracker.io/a/whova",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Negative evidence supporting Configuration.PaginationDefaults=null and Configuration.APIVersioningStrategy=null -- confirms no OpenAPI/Swagger spec or Postman/Insomnia collection exists for Whova, so no machine-readable pagination or versioning scheme can be extracted.",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "Embedded Next.js JSON state: \"apiSpecs\":[],\"apis\":[],\"postmanCollections\":[]. Raw HTML saved to sources/apitracker.whova.overview.html (89,918 bytes, HTTP 200 via curl)."
+    },
+    {
+      "URL": "https://apitracker.io/a/whova/specifications",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Corroborating negative evidence for Configuration.APIVersioningStrategy=null and Configuration.ErrorResponseShape=null -- dedicated specifications sub-page explicitly states no API specifications exist for Whova.",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ErrorResponseShape",
+      "Excerpt": "\"We don't have API specifications for Whova yet.\""
+    },
+    {
+      "URL": "https://whova.com/blog/attendee-profile-custom-fields/",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Establishing Configuration.CustomFieldMarkerPattern -- documents the vendor-provided menu of organizer-configurable optional attendee-profile custom fields, used to inform field-mapping/customs-capture logic since no naming-prefix convention is documented.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.CustomFieldMarkerPattern",
+      "Excerpt": "Documents a catalog of organizer-configurable custom attendee-profile fields (pronouns, role, credentials, chapter, department, major, program, school, affiliation, industry, expertise, education level, certifications, awards, graduating class, portfolio, project examples, skills, teaching level, mentor/investor flags, interests, hobbies, networking goals). Organizers 'select fields most relevant to their specific event type.'"
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations/salesforce",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Confirming ConcurrencyControl=none and DeleteSemantics=none -- the only documented write action's field list (Event, First Name, Last Name, Email required; Title, Affiliation/Company, Location, Ticket Types, Audience Type, Categories optional) contains no ETag/version/timestamp concurrency field and no delete/archive operation exists anywhere in this or any other reachable source.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ConcurrencyControl",
+      "Excerpt": "Create or Update Attendee action fields: Event, First Name, Last Name, Email (required); Title, Affiliation/Company, Location, Ticket Types, Audience Type, Categories (optional). No version/ETag/timestamp field present."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T16:00:52.692Z",
+      "UsedFor": "Confirming 'Attendees' is a COVERABLE Whova record type (Zapier Get Attendees trigger + Create or Update Attendee action).",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Attendees.Name",
+      "Excerpt": "Trigger: Get Attendees (\"Triggers when there is a change in the attendee list\"). Action: Create or Update Attendee."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations/salesforce",
+      "AccessedAt": "2026-07-02T16:00:52.692Z",
+      "UsedFor": "Documenting Attendees.FirstName (required) from the Create or Update Attendee action field list.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Attendees.FirstName.IsRequired",
+      "Excerpt": "Create or Update Attendee action — required field: First Name."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations/salesforce",
+      "AccessedAt": "2026-07-02T16:00:52.692Z",
+      "UsedFor": "Documenting Attendees.LastName (required) from the Create or Update Attendee action field list.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Attendees.LastName.IsRequired",
+      "Excerpt": "Create or Update Attendee action — required field: Last Name."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations/salesforce",
+      "AccessedAt": "2026-07-02T16:00:52.692Z",
+      "UsedFor": "Documenting Attendees.Email (required, upsert-match/unique key) from the Create or Update Attendee action field list.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Attendees.Email.IsRequired",
+      "Excerpt": "Create or Update Attendee action — required field: Email. Whova matches on Email within the Event (upsert key)."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T16:00:52.692Z",
+      "UsedFor": "Documenting Attendees.Title (optional) from the Create or Update Attendee action field list.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Attendees.Title.IsRequired",
+      "Excerpt": "Create or Update Attendee action — optional field: Title."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T16:00:52.692Z",
+      "UsedFor": "Documenting Attendees.AffiliationCompany (optional) from the Create or Update Attendee action field list.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Attendees.AffiliationCompany.IsRequired",
+      "Excerpt": "Create or Update Attendee action — optional field: Affiliation/Company."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T16:00:52.692Z",
+      "UsedFor": "Documenting Attendees.Location (optional) from the Create or Update Attendee action field list.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Attendees.Location.IsRequired",
+      "Excerpt": "Create or Update Attendee action — optional field: Location."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T16:00:52.692Z",
+      "UsedFor": "Documenting Attendees.TicketTypes (optional) from the Create or Update Attendee action field list.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Attendees.TicketTypes.IsRequired",
+      "Excerpt": "Create or Update Attendee action — optional field: Ticket Types."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T16:00:52.692Z",
+      "UsedFor": "Documenting Attendees.AudienceType (optional) from the Create or Update Attendee action field list.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Attendees.AudienceType.IsRequired",
+      "Excerpt": "Create or Update Attendee action — optional field: Audience Type. Value set: in_person,remote."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T16:00:52.692Z",
+      "UsedFor": "Documenting Attendees.Categories (optional) from the Create or Update Attendee action field list.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Attendees.Categories.IsRequired",
+      "Excerpt": "Create or Update Attendee action — optional field: Categories."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T16:00:52.692Z",
+      "UsedFor": "Confirming 'Orders' is a COVERABLE Whova record type (Zapier Get Orders trigger).",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Orders.Name",
+      "Excerpt": "Trigger: Get Orders (\"Triggers when there is a change in the order list\"). Read-only — no corresponding write action."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T16:00:52.692Z",
+      "UsedFor": "Confirming 'Registrants' is a COVERABLE Whova record type (Zapier Get Registrants trigger).",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Registrants.Name",
+      "Excerpt": "Trigger: Get Registrants (\"Triggers when a registrant submits their registration question form responses\"). Read-only."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T16:15:55.816Z",
+      "UsedFor": "Amendment R1: Orders.Event field (documented required trigger input).",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Orders.Event.IsRequired",
+      "Excerpt": "Get Orders trigger — fields: [{\"name\":\"Event\",\"required\":true}]"
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T16:15:55.816Z",
+      "UsedFor": "Amendment R1: Registrants.Event field (documented required trigger input).",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Registrants.Event.IsRequired",
+      "Excerpt": "Get Registrants trigger — fields: [{\"name\":\"Event\",\"required\":true}]"
+    }
+  ]
+}

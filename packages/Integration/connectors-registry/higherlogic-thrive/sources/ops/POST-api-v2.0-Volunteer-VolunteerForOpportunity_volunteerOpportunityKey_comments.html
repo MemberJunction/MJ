@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&amp;comments={comments}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&amp;comments={comments}</h1>
+<div>
+    <p>Volunteer for a specific Volunteer Opportunity.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">volunteerOpportunityKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Key for the Volunteer Opportunity to Volunteer for.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">comments</td>
+                    <td class="parameter-documentation">
+                        <p>Any comments to add to the Volunteer</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Default value is </p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p></p>
+
+<a href="/Help/ResourceModel?modelName=VolunteerOpportunity">VolunteerOpportunity</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">VolunteerOpportunityKey</td>
+                    <td class="parameter-documentation">
+                        <p>The Unique Identifier for the Volunteer Opportunity.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Title</td>
+                    <td class="parameter-documentation">
+                        <p>The Title of the Volunteer Opportunity.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Description</td>
+                    <td class="parameter-documentation">
+                        <p>Descriptions for the Volunteer Opportunity.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Deadline</td>
+                    <td class="parameter-documentation">
+                        <p>Sign-up deadline for the Volunteer Opportunity.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AdditionalRequirements</td>
+                    <td class="parameter-documentation">
+                        <p>Additional Volunteer Requirements for this Volunteer Opportunity.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Location</td>
+                    <td class="parameter-documentation">
+                        <p>Location for the Volunteer Opportunity.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">VolunteersNeeded</td>
+                    <td class="parameter-documentation">
+                        <p>Number of Volunteers needed for this Volunteer Opportunity.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>Date the Volunteer Opportunity was created.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CloseDate</td>
+                    <td class="parameter-documentation">
+                        <p>Date that registration as a Volunteer Closes.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UpdatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>Date this Volunteer Opportunity was last updated.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EstimatedHours</td>
+                    <td class="parameter-documentation">
+                        <p>Estimated Hours required for the Volunteer Opportunity.</p>
+                    </td>
+                    <td class="parameter-type">
+                        decimal number
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SkillMultiplier</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        decimal number
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">StartDateTime</td>
+                    <td class="parameter-documentation">
+                        <p>Date and Time the Volunteer Opportunity begins.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EndDateTime</td>
+                    <td class="parameter-documentation">
+                        <p>Date and Time the Volunteer Opportunity ends.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Community</td>
+                    <td class="parameter-documentation">
+                        <p>If the Volunteer Opportunity is linked to a specific Community,
+            this will contain the Community data for that Community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=Community">Community</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RequiresApproval</td>
+                    <td class="parameter-documentation">
+                        <p>Indicates whether the Volunteer Opportunity requires approval by an administrator.  **Note that at this time,
+            only Volunteer Opportunities where this value is FALSE can be Volunteered for via the API.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Status</td>
+                    <td class="parameter-documentation">
+                        <p>Enumeration for the Volunteer Opportunity&#39;s Status.  May be null. See the Status Object documentation for additional information about possible values.</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=Status">Status</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">StatusText</td>
+                    <td class="parameter-documentation">
+                        <p>The Volunteer Opportunity&#39;s Status.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CanSignUpViaApi</td>
+                    <td class="parameter-documentation">
+                        <p>Tells whether a user can Volunteer for this Opportunity via the API.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ApplicationStatus</td>
+                    <td class="parameter-documentation">
+                        <p>The status of the Volunteer Opportunity Application/Sign-up for the current user.</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=VolunteerApplicationStatuses">VolunteerApplicationStatuses</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ApplicationStatusText</td>
+                    <td class="parameter-documentation">
+                        <p>The Application Status text.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">VolunteerOpportunityTypeKey</td>
+                    <td class="parameter-documentation">
+                        <p>Indicates the opportunity type that the Volunteer Opportunity is associated with</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToListOfOpportunities</td>
+                    <td class="parameter-documentation">
+                        <p>Link to reach the volunteer opportunities page</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PictureUrl</td>
+                    <td class="parameter-documentation">
+                        <p>Thumbnail image src associated to Volunteer Opportunity</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToOpportunity</td>
+                    <td class="parameter-documentation">
+                        <p>Link to reach the specific Volunteer Opportunity</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">OpportunityName</td>
+                    <td class="parameter-documentation">
+                        <p>Name of the Volunteer Opportunity</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">OpportunityAddress</td>
+                    <td class="parameter-documentation">
+                        <p>Exact Address for the Volunteer Opportunity</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">VolunteerSpotsAvailable</td>
+                    <td class="parameter-documentation">
+                        <p>The number of volunteer spots that are left for the Volunteer Opportunity</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Points</td>
+                    <td class="parameter-documentation">
+                        <p>The total points that will be awarded to the Volunteer for the Volunteer Opportunity</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">VolunteerOpportunityIntegrationCode</td>
+                    <td class="parameter-documentation">
+                        <p>The unique AMS code for this Volunteer Opportunity</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;VolunteerOpportunityKey&quot;: &quot;25aa97fb-60e4-49e5-8ec5-580553a91b6d&quot;,
+  &quot;Title&quot;: &quot;sample string 2&quot;,
+  &quot;Description&quot;: &quot;sample string 3&quot;,
+  &quot;Deadline&quot;: &quot;sample string 4&quot;,
+  &quot;AdditionalRequirements&quot;: &quot;sample string 5&quot;,
+  &quot;Location&quot;: &quot;sample string 6&quot;,
+  &quot;VolunteersNeeded&quot;: 7,
+  &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.4499704Z&quot;,
+  &quot;CloseDate&quot;: &quot;2026-07-08T17:53:38.4499704Z&quot;,
+  &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.4499704Z&quot;,
+  &quot;EstimatedHours&quot;: 11.0,
+  &quot;SkillMultiplier&quot;: 12.0,
+  &quot;StartDateTime&quot;: &quot;2026-07-08T17:53:38.4499704Z&quot;,
+  &quot;EndDateTime&quot;: &quot;2026-07-08T17:53:38.4499704Z&quot;,
+  &quot;Community&quot;: null,
+  &quot;RequiresApproval&quot;: true,
+  &quot;Status&quot;: 0,
+  &quot;StatusText&quot;: &quot;sample string 16&quot;,
+  &quot;CanSignUpViaApi&quot;: true,
+  &quot;ApplicationStatus&quot;: 0,
+  &quot;ApplicationStatusText&quot;: &quot;sample string 18&quot;,
+  &quot;VolunteerOpportunityTypeKey&quot;: &quot;97b57f7c-876e-4c61-8266-333450e15493&quot;,
+  &quot;LinkToListOfOpportunities&quot;: &quot;sample string 20&quot;,
+  &quot;PictureUrl&quot;: &quot;sample string 21&quot;,
+  &quot;LinkToOpportunity&quot;: &quot;sample string 22&quot;,
+  &quot;OpportunityName&quot;: &quot;sample string 23&quot;,
+  &quot;OpportunityAddress&quot;: &quot;sample string 24&quot;,
+  &quot;VolunteerSpotsAvailable&quot;: 25,
+  &quot;Points&quot;: 26,
+  &quot;VolunteerOpportunityIntegrationCode&quot;: &quot;sample string 27&quot;
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;VolunteerOpportunity xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Volunteer&quot;&gt;
+  &lt;AdditionalRequirements&gt;sample string 5&lt;/AdditionalRequirements&gt;
+  &lt;ApplicationStatusText&gt;sample string 18&lt;/ApplicationStatusText&gt;
+  &lt;CloseDate&gt;2026-07-08T13:53:38.4499704-04:00&lt;/CloseDate&gt;
+  &lt;CreatedOn&gt;2026-07-08T13:53:38.4499704-04:00&lt;/CreatedOn&gt;
+  &lt;Deadline&gt;sample string 4&lt;/Deadline&gt;
+  &lt;Description&gt;sample string 3&lt;/Description&gt;
+  &lt;EndDateTime&gt;2026-07-08T13:53:38.4499704-04:00&lt;/EndDateTime&gt;
+  &lt;EstimatedHours&gt;11&lt;/EstimatedHours&gt;
+  &lt;LinkToListOfOpportunities&gt;sample string 20&lt;/LinkToListOfOpportunities&gt;
+  &lt;LinkToOpportunity&gt;sample string 22&lt;/LinkToOpportunity&gt;
+  &lt;Location&gt;sample string 6&lt;/Location&gt;
+  &lt;OpportunityAddress&gt;sample string 24&lt;/OpportunityAddress&gt;
+  &lt;OpportunityName&gt;sample string 23&lt;/OpportunityName&gt;
+  &lt;PictureUrl&gt;sample string 21&lt;/PictureUrl&gt;
+  &lt;Points&gt;26&lt;/Points&gt;
+  &lt;RequiresApproval&gt;true&lt;/RequiresApproval&gt;
+  &lt;SkillMultiplier&gt;12&lt;/SkillMultiplier&gt;
+  &lt;StartDateTime&gt;2026-07-08T13:53:38.4499704-04:00&lt;/StartDateTime&gt;
+  &lt;StatusText&gt;sample string 16&lt;/StatusText&gt;
+  &lt;Title&gt;sample string 2&lt;/Title&gt;
+  &lt;UpdatedOn&gt;2026-07-08T13:53:38.4499704-04:00&lt;/UpdatedOn&gt;
+  &lt;VolunteerOpportunityKey&gt;25aa97fb-60e4-49e5-8ec5-580553a91b6d&lt;/VolunteerOpportunityKey&gt;
+  &lt;VolunteerOpportunityTypeKey&gt;97b57f7c-876e-4c61-8266-333450e15493&lt;/VolunteerOpportunityTypeKey&gt;
+  &lt;VolunteerSpotsAvailable&gt;25&lt;/VolunteerSpotsAvailable&gt;
+  &lt;VolunteersNeeded&gt;7&lt;/VolunteersNeeded&gt;
+&lt;/VolunteerOpportunity&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

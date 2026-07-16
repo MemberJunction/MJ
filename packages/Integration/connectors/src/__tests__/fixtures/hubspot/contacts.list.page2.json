@@ -1,0 +1,20 @@
+{
+  "results": [
+    {
+      "id": "703",
+      "properties": {
+        "hs_object_id": "703",
+        "email": "example+3@example.com",
+        "firstname": "<scrubbed-name-5>",
+        "lastname": "<scrubbed-name-6>",
+        "createdate": "2026-03-05T14:00:00.000Z",
+        "lastmodifieddate": "2026-03-06T16:45:00.000Z",
+        "hs_lastmodifieddate": "1772887500000"
+      },
+      "createdAt": "2026-03-05T14:00:00.000Z",
+      "updatedAt": "2026-03-06T16:45:00.000Z",
+      "archived": false
+    }
+  ],
+  "paging": null
+}

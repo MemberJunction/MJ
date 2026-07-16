@@ -1,0 +1,23 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/stripe/sources/full-accounting-ledger-FINAL.json",
+      "ScriptRunAt": "2026-07-02T19:57:32.000Z",
+      "StructuredOutput": {
+        "enumeratedUniverse": 1703,
+        "coverable": 33,
+        "deletedVariantFolded": 11,
+        "outOfScopeFamilyCount": 450,
+        "outOfScopeFamilyNamedBuckets": 18,
+        "informational": 2,
+        "webhookEventNames": 151,
+        "subShapeOfCoverable": 839,
+        "otherCoreObjectsOutsideRequested34": 232,
+        "sum": 1703,
+        "match": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies"
+    }
+  ]
+}

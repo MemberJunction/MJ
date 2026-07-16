@@ -1,0 +1,72 @@
+[
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html",
+    "AccessedAt": "2026-07-09T20:18:15.961Z",
+    "UsedFor": "Volunteers.SupportsUpdate downgrade — ApproveVolunteerApplication is an approval RPC, not a field editor",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsUpdate",
+    "Excerpt": "ApproveVolunteerApplication body: VolunteerOpportunityKey/ContactKey/LegacyContactKey only — narrow approval side-effect, no general field editor exists for Volunteers."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Ideation-UpdateIdeaStatus.html",
+    "AccessedAt": "2026-07-09T20:18:15.961Z",
+    "UsedFor": "Ideas.SupportsUpdate downgrade — UpdateIdeaStatus is a status-transition RPC, not a field editor",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Ideas.SupportsUpdate",
+    "Excerpt": "UpdateIdeaStatus body: {IdeationKey, IdeationStatusKey} — narrow status transition; no endpoint edits Title/Description."
+  },
+  {
+    "URL": "file://sources/ops/GET-api-v2.0-Volunteer-GetVolunteerList_volunteerOpportunityKey.html",
+    "AccessedAt": "2026-07-09T20:18:15.961Z",
+    "UsedFor": "Volunteers.ApprovedByContactKey FK -> Contacts (Tier-1 explicit)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Volunteers.ApprovedByContactKey.RelatedIntegrationObjectID",
+    "Excerpt": "ApprovedByContactKey: ContactKey of the User who approved the application."
+  },
+  {
+    "URL": "file://sources/ops/GET-api-v2.0-Volunteer-GetVolunteerList_volunteerOpportunityKey.html",
+    "AccessedAt": "2026-07-09T20:18:15.961Z",
+    "UsedFor": "Volunteers.RejectedByContactKey FK -> Contacts (Tier-1 explicit)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Volunteers.RejectedByContactKey.RelatedIntegrationObjectID",
+    "Excerpt": "RejectedByContactKey: UniqueIdentifier for the User who rejected the application."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Events-SaveEventType.html",
+    "AccessedAt": "2026-07-09T20:18:15.961Z",
+    "UsedFor": "EventTypes write surface — SaveEventType upsert (Create+Update) + 27-field body",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.EventTypes.SupportsWrite",
+    "Excerpt": "POST /api/v2.0/Events/SaveEventType — saves an event type; body carries EventTypeKey + EventTypeName + 25 config flags/fields."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Events-DeleteEventType_eventTypeKey.html",
+    "AccessedAt": "2026-07-09T20:18:15.961Z",
+    "UsedFor": "EventTypes delete surface — DeleteEventType?eventTypeKey={id}",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.EventTypes.DeleteAPIPath",
+    "Excerpt": "POST /api/v2.0/Events/DeleteEventType?eventTypeKey={eventTypeKey} — path-templated delete by event type key."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Events-RSVPToEvent_eventKey.html",
+    "AccessedAt": "2026-07-09T20:18:15.961Z",
+    "UsedFor": "EventRegistrants kept read-only — RSVP is action-shaped, out-of-scope for generic CRUD",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.EventRegistrants.SupportsWrite",
+    "Excerpt": "RSVPToEvent / RSVP-delete take the parent eventKey, not a registrant key — action-shaped, recorded as OutOfScopeActions."
+  }
+]

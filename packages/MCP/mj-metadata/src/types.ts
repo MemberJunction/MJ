@@ -51,7 +51,14 @@ export const IntegrationObjectSchema = z.object({
     SupportsIncrementalSync: z.boolean().optional(),
     Source: z.enum(['Declared', 'Discovered', 'Custom']).optional(),
     IncludeInActionGeneration: z.boolean().optional(),
-});
+    // passthrough(): the extractor emits many more IO columns than are typed here
+    // (Status, PaginationType, SupportsPagination, Configuration, Category,
+    // ResponseDataKey, the per-operation Create/Update/Delete columns,
+    // IncrementalWatermarkField, Sequence, ...). The store persists arbitrary keys
+    // (IntegrationObjectPayload & Record<string, unknown>) and mj-sync validates the
+    // real column set at push time, so preserve unknown keys rather than stripping
+    // floor-required slots like Status.
+}).passthrough();
 
 export type IntegrationObjectPayload = z.infer<typeof IntegrationObjectSchema>;
 
@@ -67,7 +74,10 @@ export const IntegrationObjectFieldSchema = z.object({
     RelatedIntegrationObjectID: z.string().optional(),
     RelatedIntegrationObjectFieldName: z.string().optional(),
     Source: z.enum(['Declared', 'Discovered', 'Custom']).optional(),
-});
+    // passthrough(): the extractor emits IOF columns beyond those typed here
+    // (Status, Sequence, Category, AllowsNull, Length, Precision, Scale, DefaultValue).
+    // Persisted verbatim; validated at mj-sync push time.
+}).passthrough();
 
 export type IntegrationObjectFieldPayload = z.infer<typeof IntegrationObjectFieldSchema>;
 

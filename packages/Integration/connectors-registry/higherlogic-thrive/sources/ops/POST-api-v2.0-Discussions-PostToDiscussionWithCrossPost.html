@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/Discussions/PostToDiscussionWithCrossPost</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/Discussions/PostToDiscussionWithCrossPost</h1>
+<div>
+    <p></p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+<a href="/Help/ResourceModel?modelName=NewDiscussionPostWithCrossPostRequest">NewDiscussionPostWithCrossPostRequest</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">Subject</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                                <p>Max length: 255</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Body</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DiscussionKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CrossPostKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Request Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;Subject&quot;: &quot;sample string 1&quot;,
+  &quot;Body&quot;: &quot;sample string 2&quot;,
+  &quot;DiscussionKey&quot;: &quot;ce7f94a3-3457-4926-bd5a-f6b64b958b75&quot;,
+  &quot;CrossPostKey&quot;: &quot;6f592ccf-856b-4276-9064-501032f76083&quot;
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;NewDiscussionPostWithCrossPostRequest xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Request&quot;&gt;
+  &lt;Body&gt;sample string 2&lt;/Body&gt;
+  &lt;CrossPostKey&gt;6f592ccf-856b-4276-9064-501032f76083&lt;/CrossPostKey&gt;
+  &lt;DiscussionKey&gt;ce7f94a3-3457-4926-bd5a-f6b64b958b75&lt;/DiscussionKey&gt;
+  &lt;Subject&gt;sample string 1&lt;/Subject&gt;
+&lt;/NewDiscussionPostWithCrossPostRequest&gt;
+</pre>
+        </div>
+</div>
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:59:22.342Z",
+      "StructuredOutput": {
+        "io": "Attendees",
+        "supportsWrite": true,
+        "fieldsExtracted": 9,
+        "gaps": 3
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Attendees"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:59:22.342Z",
+      "StructuredOutput": {
+        "io": "Orders",
+        "supportsWrite": false,
+        "fieldsExtracted": 0,
+        "gaps": 1
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Orders"
+    }
+  ]
+}

@@ -133,6 +133,68 @@ export class MetadataFileStore {
         return true;
     }
 
+    /**
+     * Remove a single stray key from an existing Integration Object Field row's
+     * `fields` object. Match key: `ioName` + `iofName` (case-insensitive). Used
+     * for deploy-preflight reconciliation: a field the extractor emitted that
+     * turns out NOT to be a deployed IntegrationObjectField column (e.g. a
+     * transient discovery-signal key like `IsForeignKey`, which the framework
+     * intentionally never persisted — the durable equivalent is
+     * `RelatedIntegrationObjectID` / `RelatedIntegrationObjectFieldName`) must be
+     * physically removed, not merely nulled: `mj sync push`'s validation phase
+     * (`ValidationService.validateFields`) errors on ANY key present in the
+     * `fields` object that isn't a real entity field — a `null` value does not
+     * suppress that check, only removing the key does. Existing single-field
+     * upserts (`UpsertIOF`) can only add/overwrite keys (shallow merge), never
+     * delete one, which is why this dedicated primitive exists.
+     * Returns `true` if the key was present and removed, `false` if the IO/IOF/key
+     * did not exist (no-op).
+     */
+    public DeleteIOFField(connectorName: string, ioName: string, iofName: string, fieldKey: string): boolean {
+        const file = this.ReadIntegration(connectorName);
+        if (!file) return false;
+        const ios = file.relatedEntities?.['MJ: Integration Objects'] ?? [];
+        const io = ios.find((i) => i.fields.Name.toLowerCase() === ioName.toLowerCase());
+        if (!io) return false;
+        const iofs = io.relatedEntities?.['MJ: Integration Object Fields'] ?? [];
+        const iof = iofs.find((f) => f.fields.Name.toLowerCase() === iofName.toLowerCase());
+        if (!iof) return false;
+        if (!(fieldKey in iof.fields)) return false;
+        delete (iof.fields as Record<string, unknown>)[fieldKey];
+        this.WriteIntegration(connectorName, file);
+        return true;
+    }
+
+    /**
+     * Remove a single stray key from an existing Integration Object row's
+     * `fields` object. Match key: `ioName` (case-insensitive). The IO-level
+     * counterpart to {@link DeleteIOFField} — used for deploy-preflight
+     * reconciliation when an extractor emitted an IO-level field that turns out
+     * NOT to be a deployed IntegrationObject column (e.g. the aspirational
+     * hierarchy-tracking triple `ParentObjectName` / `ParentObjectIDFieldName` /
+     * `HierarchyPath` described in extractor-script-conventions.md, which was
+     * never migrated onto the IntegrationObject table — the durable equivalent
+     * lives in `Configuration.parentObjectName` / `Configuration.accessPath`).
+     * `mj sync push`'s validation phase errors on ANY key present in the
+     * `fields` object that isn't a real entity field — a `null` value does not
+     * suppress that check, only removing the key does. `UpsertIO` can only
+     * add/overwrite keys (shallow merge), never delete one, which is why this
+     * dedicated primitive exists.
+     * Returns `true` if the key was present and removed, `false` if the IO/key
+     * did not exist (no-op).
+     */
+    public DeleteIOField(connectorName: string, ioName: string, fieldKey: string): boolean {
+        const file = this.ReadIntegration(connectorName);
+        if (!file) return false;
+        const ios = file.relatedEntities?.['MJ: Integration Objects'] ?? [];
+        const io = ios.find((i) => i.fields.Name.toLowerCase() === ioName.toLowerCase());
+        if (!io) return false;
+        if (!(fieldKey in io.fields)) return false;
+        delete (io.fields as Record<string, unknown>)[fieldKey];
+        this.WriteIntegration(connectorName, file);
+        return true;
+    }
+
     /** Append a provenance entry to `<connector>/PROVENANCE.json`. */
     public AppendProvenance(connectorName: string, entry: ProvenanceEntry): void {
         const path = resolve(this.registryRoot, connectorName, 'PROVENANCE.json');

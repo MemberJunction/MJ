@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/ResourceLibrary/AddRelatedLink?documentKey={documentKey}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/ResourceLibrary/AddRelatedLink?documentKey={documentKey}</h1>
+<div>
+    <p>Adds the specified URL as a RelatedLink to the specified Document.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">documentKey</td>
+                    <td class="parameter-documentation">
+                        <p>DocumentKey of the Document to which the Related Link should be added.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p>URL to add as the Related Link.</p>
+
+<a href="/Help/ResourceModel?modelName=RelatedLinkRequest">RelatedLinkRequest</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">Url</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Request Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;Url&quot;: &quot;sample string 1&quot;
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;RelatedLinkRequest xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Request&quot;&gt;
+  &lt;Url&gt;sample string 1&lt;/Url&gt;
+&lt;/RelatedLinkRequest&gt;
+</pre>
+        </div>
+</div>
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>RelatedLinkKey (Guid) of the newly created RelatedLink.</p>
+
+<a href="/Help/ResourceModel?modelName=RelatedLink">RelatedLink</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">RelatedLinkKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ItemKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Url</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Contributor</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=ContactConcise">ContactConcise</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;RelatedLinkKey&quot;: &quot;d60eb74b-23f1-4610-b2e9-965cce1c21df&quot;,
+  &quot;ItemKey&quot;: &quot;40544ef4-c4f7-43a4-a6db-c75d5df090b4&quot;,
+  &quot;Url&quot;: &quot;sample string 3&quot;,
+  &quot;Contributor&quot;: {
+    &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+    &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+    &quot;ContactKey&quot;: &quot;fa37608d-d953-405f-8180-b340fc18b87d&quot;,
+    &quot;FirstName&quot;: &quot;sample string 4&quot;,
+    &quot;LastName&quot;: &quot;sample string 5&quot;,
+    &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+    &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+    &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+    &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+    &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.1501689Z&quot;,
+    &quot;UpdatedByContactKey&quot;: &quot;e49f69b5-0ae5-429a-a8d4-c28d2057f3b5&quot;,
+    &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+    &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+    &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+    &quot;Designation&quot;: &quot;sample string 15&quot;,
+    &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+    &quot;InformalName&quot;: &quot;sample string 17&quot;,
+    &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+    &quot;IsCompany&quot;: true,
+    &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+    &quot;AMSDirectoryOptOut&quot;: true,
+    &quot;HLDirectoryOptOut&quot;: true,
+    &quot;HLContactMeOptOut&quot;: true,
+    &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+    &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:38.1501689Z&quot;
+  },
+  &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.1501689Z&quot;
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;RelatedLink xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+  &lt;Contributor&gt;
+    &lt;AMSDirectoryOptOut&gt;true&lt;/AMSDirectoryOptOut&gt;
+    &lt;AgreedToTermsDateTime&gt;2026-07-08T13:53:38.1501689-04:00&lt;/AgreedToTermsDateTime&gt;
+    &lt;CompanyLegacyContactKey&gt;sample string 20&lt;/CompanyLegacyContactKey&gt;
+    &lt;CompanyName&gt;sample string 12&lt;/CompanyName&gt;
+    &lt;CompanyTitle&gt;sample string 13&lt;/CompanyTitle&gt;
+    &lt;ContactKey&gt;fa37608d-d953-405f-8180-b340fc18b87d&lt;/ContactKey&gt;
+    &lt;ContactStatusCode&gt;sample string 8&lt;/ContactStatusCode&gt;
+    &lt;Designation&gt;sample string 15&lt;/Designation&gt;
+    &lt;DisplayName&gt;sample string 6&lt;/DisplayName&gt;
+    &lt;EmailAddress&gt;sample string 7&lt;/EmailAddress&gt;
+    &lt;FirstName&gt;sample string 4&lt;/FirstName&gt;
+    &lt;HLContactMeOptOut&gt;true&lt;/HLContactMeOptOut&gt;
+    &lt;HLDirectoryOptOut&gt;true&lt;/HLDirectoryOptOut&gt;
+    &lt;InformalName&gt;sample string 17&lt;/InformalName&gt;
+    &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+    &lt;LargePictureUrl&gt;sample string 24&lt;/LargePictureUrl&gt;
+    &lt;LastName&gt;sample string 5&lt;/LastName&gt;
+    &lt;LegacyContactKey&gt;sample string 16&lt;/LegacyContactKey&gt;
+    &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+    &lt;MiddleName&gt;sample string 18&lt;/MiddleName&gt;
+    &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+    &lt;PrefixCode&gt;sample string 9&lt;/PrefixCode&gt;
+    &lt;SuffixCode&gt;sample string 14&lt;/SuffixCode&gt;
+    &lt;UpdatedByContactKey&gt;e49f69b5-0ae5-429a-a8d4-c28d2057f3b5&lt;/UpdatedByContactKey&gt;
+    &lt;UpdatedOn&gt;2026-07-08T13:53:38.1501689-04:00&lt;/UpdatedOn&gt;
+  &lt;/Contributor&gt;
+  &lt;CreatedOn&gt;2026-07-08T13:53:38.1501689-04:00&lt;/CreatedOn&gt;
+  &lt;ItemKey&gt;40544ef4-c4f7-43a4-a6db-c75d5df090b4&lt;/ItemKey&gt;
+  &lt;RelatedLinkKey&gt;d60eb74b-23f1-4610-b2e9-965cce1c21df&lt;/RelatedLinkKey&gt;
+  &lt;Url&gt;sample string 3&lt;/Url&gt;
+&lt;/RelatedLink&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

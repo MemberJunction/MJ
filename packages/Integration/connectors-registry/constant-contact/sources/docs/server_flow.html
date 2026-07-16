@@ -1,0 +1,2282 @@
+<!DOCTYPE html>
+<head>
+    <!-- THIS FILE EXISTS IN TWO PLACES. THE STORY FOR THE WORK TO CONSOLIDATE THEM IS IN WSPI-7305 -->
+<!-- IF THERE IS A CHANGE BEING MADE TO THIS FILE, IT ALSO NEEDS TO BE MADE TO api_guide/_includes/head.html -->
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Describes the Authorization Code Flow.">
+<meta name="keywords" content="OAuth2AuthorizationAuthenticationPKCE_FlowImplicit_FlowAuthorization_Code_Flowscopes,  OAuth2.0, authentication, api key, access_token, server flow">
+<title>OAuth2 Authorization Code Flow | Constant Contact Developer Portal</title>
+<link rel="stylesheet" href="/api_guide/css/syntax.css">
+
+<link href="https://static.ctctcdn.com/lp/fonts/whitney/whitney-current.css" rel="stylesheet" />
+<link href="https://static.ctctcdn.com/h/fed-framework/1.2.0/fed.min.css" rel="stylesheet" />
+<link href='/api_guide/css/main.css' rel='stylesheet'/>
+
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js"></script>
+<script src="../api_guide/js/jquery.navgoco.min.js"></script>
+
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/anchor-js/2.0.0/anchor.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.5/purify.min.js" referrerpolicy="no-referrer"></script>
+<script src="../api_guide/js/toc.js"></script>
+<script src="../api_guide/js/customscripts.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/svg4everybody/2.1.7/svg4everybody.js"></script>
+
+<!-- Bring in Web Component Definitions -->
+<script src="https://cdn.jsdelivr.net/riot/3.2/riot+compiler.min.js"></script>
+<script src="/shared_components/dev-portal-header.tag.html" type="riot/tag"></script>
+<script src="/shared_components/dev-portal-footer.tag.html" type="riot/tag"></script>
+<!-- Init all Web Component Definitions -->
+<script>riot.mount("*")</script>
+
+<link rel="shortcut icon" type="image/x-icon" href="https://static.ctctcdn.com/ui/images1/favicon/REBRAND_favicon.png" />
+
+<!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+<!--[if lt IE 9]>
+<script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+<script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+<![endif]-->
+
+<link rel="alternate" type="application/rss+xml" title="" href="https://constant:contact.comfeed.xml">
+
+
+    <script>
+        $(document).ready(function() {
+            // Initialize navgoco with default options
+            $(".Sidebar-nav").navgoco({
+                caretHtml: '',
+                accordion: true,
+                openClass: 'active', // open
+                save: false, // leave false or nav highlighting doesn't work right
+                cookie: {
+                    name: 'navgoco',
+                    expires: false,
+                    path: '/'
+                },
+                slide: {
+                    duration: 0,
+                    easing: 'ease'
+                }
+            });
+
+            // $("#collapseAll").click(function(e) {
+            //     e.preventDefault();
+            //     $("#mysidebar").navgoco('toggle', false);
+            // });
+
+            // $("#expandAll").click(function(e) {
+            //     e.preventDefault();
+            //     $("#mysidebar").navgoco('toggle', true);
+            // });
+
+            $('.sidebar').addClass('sticky');
+
+        });
+
+    </script>
+
+
+    
+
+</head>
+<body>
+    <!-- Use custom header web component defined in sharedComponents/dev-portal-header.tag.html-->
+<dev-portal-header active-id="apiGuide"></dev-portal-header>
+
+
+    <!-- Tracking -->
+<script src="/shared_components/googleAnalytics.js" type="text/javascript"></script>
+
+    <div class="fed-wrapper">
+
+        <!-- Page Content -->
+        <section class="container container--sidebar">
+
+            <!-- Sidebar Column -->
+            <div class="sidebar u-borderRight">
+                
+
+
+
+
+
+
+
+
+
+
+
+<nav>
+    <ul class="Sidebar-nav List--unstyled">
+        <li class="Nav-header">Constant Contact V3 API 1.0</li>
+        
+        
+        
+            
+        
+        <li>
+            
+            
+            <a href="#">What's New in the V3 API</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="index.html">Release Notes</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="v3_features.html">Features Exclusive to the V3 API</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#" data-qe-id="docs-intro">Getting Started</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="v3_technical_overview.html">Introduction to the V3 API</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="developer_portal.html">Using the Developer Portal</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="getting_started.html">Quick Start Guide</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="rate_limits.html">Rate Limits</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Migrate Integrations to V3</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="migration_overview.html">Data Migration Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="v3_v2_contact_deltas.html">Contacts V3 Changes and Migration</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="v3_v2_list_deltas.html">Lists V3 Changes and Migration</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="v3_v2_email_campaign_deltas.html">Email Campaign V3 Changes and Migration</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">OAuth2 Authorization</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="auth_overview.html">OAuth2 Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li class="active"><a href="server_flow.html">OAuth2 Authorization Code Flow</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="pkce_flow.html">OAuth2 PKCE Flow</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="device_flow.html">OAuth2 Device Flow</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="client_flow.html">OAuth2 Implicit Flow</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="auth_update_apps.html">Update Your Applications to use the New Authorization Service</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">User Authorization and API Access</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="scopes.html">Authorization Scopes Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="user_privileges.html">User Roles and Privileges Overview</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Account Services</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="account_services_overview.html">Account Services Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="account_details_get.html">Get Account Summary Details</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="account_details_put.html">Put Account Summary Details</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="account_address_get.html">Get the Account Physical Address</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="account_address_put.html">Put the Account Physical Address</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="account_address_post.html">Add the Account Physical Address</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="account_post_emails.html">Add an Account Email Address</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="account_get_emails.html">Get a Collection of Account Emails</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="account_get_privileges.html">Get User Privileges</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Bulk Activity Endpoints</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="bulk_activities.html">Bulk Activity Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="activity_status.html">Get the Status of a Bulk Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="import_contacts.html">Import Contacts</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="export_contacts.html">Export Contacts to a CSV File</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="deleting_contacts.html">Delete Contacts Bulk Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="add_list_membership.html">Add Contacts to Lists Bulk Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="remove_list_membership.html">Remove Contacts from Lists Bulk Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="delete_lists.html">Delete Lists Bulk Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="delete_custom_fields_activity.html">Delete Custom Fields Bulk Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="add_tagging_activity.html">Add Tags to Contacts Bulk Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="remove_tagging_activity.html">Remove Tags from Contacts Bulk Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="delete_tagging_activity.html">Delete Tags Bulk Activity</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Contacts</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="contacts_get_started.html">Contacts Get Started</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_subresources.html">Contact Subresources</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_get_one.html">Get a Contact's Details</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_get_collection.html">Get a Contact's Collection</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_create.html">Creating New Contacts</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_post_one.html">Create a Single Contact</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_put.html">Update a Single Contact</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_create_or_update.html">Create or Update a Contact Using a Single Method</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_counts.html">Get Contact Consent Counts</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_autoresponder.html">Autoresponder and Confirmed Opt-in Emails</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_delete.html">Delete a Contact</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_sync.html">Sync Contacts and Lists</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_re-subscribe.html">Unsubscribe and Resubscribe Contacts</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="contacts_sms_engagement.html">Get Contact SMS Engagement History</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Contact Custom Fields</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="custom_fields.html">Custom Fields Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="create_custom_fields.html">Create and Update Custom Fields</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="get_custom_fields.html">Get Custom Fields</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="delete_custom_fields.html">Delete a Custom Field</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="add_custom_field_data.html">Add Custom Fields to Contacts</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Contact Lists</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="lists_overview.html">Contact Lists Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="lists_get_single.html">Get a Contact List</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="lists_get_all.html">Get All Contact Lists</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="lists_post.html">Create a Contact List</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="lists_put.html">Update a Contact List</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="lists_delete.html">Delete a Contact List</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Contact Tags</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="tags_overview.html">Tags Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="tags_get_single.html">Get a Tag's Details</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="tags_get.html">Get Details about all Tags</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="tags_create.html">Create a Tag</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="tags_update.html">Rename a Tag</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="tags_delete.html">Delete a Tag</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Contact Reporting</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="contact_reporting_overview.html">Contact Reporting Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="activities_summary.html">Get Activity Summary</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="activity_details.html">Get Activity Details</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="open_and_click_rates.html">Get Open and Click Rates</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Email Campaigns</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="email_campaigns_overview.html">Email Campaigns Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_get_started.html">Email Campaign Quick Start Guide</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaign_create.html">Create an Email Campaign</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="design_code_emails.html">Designing HTML for Custom Code Emails</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_collection.html">Get a Collection of Email Campaigns</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaign_id.html">Get Email Campaign Details for a Single Email Campaign</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_activity_id.html">Get an Email Campaign Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaign_activity_update.html">Update an Email Campaign Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaign_create_schedule.html">Schedule an Email Campaign Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_activity_get_schedules.html">Get the Schedule of an Email Campaign Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaign_activity_delete_schedule.html">Unschedule an Email Campaign Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaign_activity_preview.html">Get an HTML Preview of an Email Campaign Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaign_activity_test_send.html">Test Send an Email Campaign Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_rename.html">Rename an Existing Email Campaign</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_sends_history.html">Get Send History Details for Email Campaign Activities</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_delete.html">Delete an Email Campaign</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_resend_non_openers_post.html">Post (Schedule) a Resend to Non-openers Email Campaign Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_resend_non_openers_get.html">Get Details for a Resend to Non-openers Email Campaign Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_resend_non_openers_delete.html">Delete (Unschedule) a Resend to Non-openers Email Campaign Activity</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Email Campaigns A/B Tests</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="email_campaigns_ab_test_overview.html">Email Campaign Activities A/B Tests Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_ab_test_get.html">Get A/B Test Details for a Email Campaign Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_ab_test_post.html">Create an A/B Test for a Email Campaign Activity</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaigns_ab_test_delete.html">Delete an A/B Test for a Email Campaign Activity</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Email Reporting</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="email_reporting_overview.html">Email Reporting Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_summary_sends_report.html">Get an Email Sends Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_summary_opens_report.html">Get an Email Opens Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_summary_unique_opens_report.html">Get an Email Unique Opens Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_summary_clicks_report.html">Get an Email Clicks Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_summary_non_opens_report.html">Get an Email Did Not Opens Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_summary_forwards_report.html">Get an Email Forwards Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_summary_optouts_report.html">Get an Email Opt-outs Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_links_report.html">Get an Email Link Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_summary_bounces_report.html">Get an Email Bounces Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaign_stats_report.html">Get an Email Campaign Stats Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_campaign_activities_stats_report.html">Get an Email Campaign Activities Stats Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="email_bulk_campaign_summary_report.html">Get an Email Campaigns Summary Report</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Events</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="events_overview.html">Events Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="events_schema.html">Events Schema</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="registration_schema.html">Registrations Schema</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="events_get_event_id.html">Get Details for One Event</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="events_get_all.html">Get Details for all Events</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="events_get_registration_one_track_key.html">Get Details for One Event Registration</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="events_get_registrations_all_event_id.html">Get All Registration Details for an Event</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="events_create.html">Create a New Event</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="events_update.html">Update an Event</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="events_copy.html">Copy an Existing Event</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="events_checkin.html">Check In Event Tickets</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="events_undo_checkin.html">Undo Event Ticket Check-In</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="events_update_registration_status.html">Update Registration Status</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="events_update_payment_status.html">Update Registration Payment Status</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Social</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="social_get_profiles.html">Get a Collection of Social Profiles</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="social_get_connections.html">Get a Collection of Social Network Connections</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="social_get_hashtags_groups.html">Get a Collection of Hashtag Groups</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="social_create_post.html">Create a Social Media Post</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Segments</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="segments_overview.html">Segments Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="segment_create.html">Create a Segment</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="segment_get_all.html">Get all Segments</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="segment_get.html">Get a Segment's Details</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="segment_delete.html">Delete a Segment</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="segment_update.html">Update a Segment</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="segment_rename.html">Rename a Segment</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Landing Page Reports</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="lp_reports_overview.html">Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="lp_reports_unique_contact_clicks.html">Get a Unique Contacts Clicks Landing Page Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="lp_reports_contact_opens.html">Get all Contact Opens Landing Page Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="lp_reports_unique_contact_opens.html">Get a Unique Contacts Opens Landing Page Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="lp_reports_unique_contact_adds.html">Get a Unique Contact Adds Landing Page Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="lp_reports_unique_contact_sms_optins.html">Get a Unique Contact SMS Opt-in Opens Landing Page Report</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="lp_reports_unique_contact_updates.html">Get a Unique Contact Updates Landing Page Report</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">SMS Reports</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="reports_sms_camp_summary.html">Get an SMS Campaigns Summary Report</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Technology Partners</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="partners_overview.html">Technology Partner Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="partners_dev_accts.html">Signup for a Technology Partner Developer Account</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="partners_reg_creds.html">Technology Partner Registration</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="partners_auth.html">Technology Partner Authentication</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="partner_sso_config.html">Configuring Single Sign On</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="partners_accts_create.html">Create a Partner Client Account</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="partners_accts_get.html">Get all Partner Client Accounts</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="partners_unsubscribe.html">Unsubscribe Contacts Under Partner Client Accounts</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="partners_plans_get.html">Get Billing Plan Details for a Client Account</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="partners_plans_update.html">Update the Billing Plan for a Client Account</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="partners_plans_cancel.html">Cancel the Billing Plan for a Client Account</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="partners_master_token.html">Send API Requests on Behalf of Managed Client Accounts</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">Technology Partner Webhooks</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="partner_webhook_overview.html">Partner Webhooks Overview</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="webhook_single.html">Get a Partner Webhook</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="webhook_collection.html">Get all Partner Webhooks</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="webhook_put.html">Subscribe (PUT) to a Partner Webhook</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="webhook_delete.html">Unsubscribe (Delete) a Partner Webhook</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="webhooks_post.html">Test (POST) Webhook Subscriptions</a></li>
+                
+                
+                
+                
+                
+                
+                <li><a href="webhook_authenticity.html">Webhook Authenticity</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">HTTP Status Response Codes</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="glossary_responses.html">Response Codes</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+        
+        <li>
+            
+            
+            <a href="#">V3 API Schema</a>
+            
+            
+            <ul class="List--unstyled">
+                
+                
+                
+                <li><a href="v3api_schema.html">V3 API Schema Download</a></li>
+                
+                
+                
+                
+            </ul>
+            
+            
+            
+            <!-- if you aren't using the accordion, uncomment this block:
+               <p class="external">
+                   <a href="#" id="collapseAll">Collapse All</a> | <a href="#" id="expandAll">Expand All</a>
+               </p>
+               -->
+        </li>
+    </ul>
+</nav>
+
+<!-- this highlights the active parent class in the navgoco sidebar. this is critical so that the parent expands when you're viewing a page. This must appear below the sidebar code above. Otherwise, if placed inside customscripts.js, the script runs before the sidebar code runs and the class never gets inserted.-->
+<script>$("li.active").parents('li').toggleClass("active");</script>
+
+            </div>
+
+            <!-- Content Column -->
+            <div class="content">
+                <div class="inner">
+                    <div class="post-header">
+   <h1 class="post-title-main">OAuth2 Authorization Code Flow</h1>
+</div>
+
+
+
+<div class="post-content">
+
+   
+    <div class="summary">Describes the Authorization Code Flow.</div>
+   
+
+    
+    
+<!-- this handles the automatic toc. use ## for subheads to auto-generate the on-page minitoc. if you use html tags, you must supply an ID for the heading element in order for it to appear in the minitoc. -->
+<script>
+$( document ).ready(function() {
+  // Handler for .ready() called.
+$('#toc').toc({ minimumHeaders: 0, listType: 'ul', showSpeed: 0, headers: 'h1,h2,h3,h4' });
+
+/* this offset helps account for the space taken up by the floating toolbar. */
+$('#toc').on('click', 'a', function() {
+  var target = DOMPurify.sanitize(this.getAttribute('href')),
+      scroll_target = document.getElementById(target).offset().top
+
+  $('html, body').scrollTop(scroll_target - 41);
+  return false
+})
+  
+});
+</script>
+
+<div id="toc" class="Well toc"></div>
+
+    
+
+  <p>Use the OAuth2 Authorization Code Flow for traditional web applications (your application runs on a web server and executes on a server) and is able to safely store the client secret. Being a redirect-based flow, the client must be able to interact with the resource owner’s user-agent (typically a web browser) and receive incoming requests (via redirect) from the Constant Contact Authorization Server.</p>
+
+<p>Because the Authorization Code Flow passes the access token directly to the web server that hosts the client application rather than to the user’s web browser, it is considered the most secure OAuth2 flow.</p>
+
+<p>Using the Authorization Code Flow, you create an authorization request to allow users to authorize your application to use their Constant Contact data. After users grant your application access to their data, Constant Contact sends you an access token that you use to make V3 API requests, and a refresh token. The refresh token is used to extend the life of the access token without requiring users to re-authenticate their Constant Contact account and reauthorize your application to use their data. When you get a new access token, you should always decode it to validate the access token claims and expiration.</p>
+
+<p>In order to use the Authorization Code Flow, you must first create and configure a V3 API application. For more information, see the <a href="/api_guide/getting_started.html">Quick Start Guide</a>.</p>
+
+<p>To use the Authorization Code Flow for authorization, complete the steps that follow.</p>
+
+<h1 id="step-1-create-an-authorization-request">Step 1: Create an Authorization Request</h1>
+
+<p>Create the authorization request used to direct users to Constant Contact to authenticate their user account and authorize your application to access their Constant Contact data.</p>
+
+<p>To create an authorization request, make a GET call to the authorization endpoint <strong><code class="highlighter-rouge">https://authz.constantcontact.com/oauth2/default/v1/authorize</code></strong> and include all required request query parameters.</p>
+
+<p>For example, the following shows an encoded URL authorization request:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://authz.constantcontact.com/oauth2/default/v1/authorize?client_id={your_client_id}&amp;redirect_uri=https%3A%2F%2Flocalhost%3A8888&amp;response_type=code&amp;scope=contact_data%20campaign_data%20offline_access&amp;state=235o250eddsdff
+
+</code></pre></div></div>
+
+<p><strong>Request Parameters</strong></p>
+
+<p>URL encode all request parameters.</p>
+
+<ul>
+  <li>
+    <p><strong><code class="highlighter-rouge">client_id</code></strong> — <em>Required</em>. The API key for your application. You can view the API keys for all of your applications or create a new application on the <a href="https://app.constantcontact.com/pages/dma/portal/" target="_blank">My Applications</a> page.</p>
+  </li>
+  <li>
+    <p><strong><code class="highlighter-rouge">redirect_uri</code></strong> — <em>Required</em>. Specify the absolute URI that you want Constant Contact to use when redirecting a user to your application. After a user authorizes your application, Constant Contact redirects the user to your application and  appends the authorization <code class="highlighter-rouge">code</code> and <code class="highlighter-rouge">state</code> (and optionally the <code class="highlighter-rouge">scope</code>) values to the URI as query parameters. Wildcards are not supported except at the domain root level. For more information, see the <a href="https://v3.developer.constantcontact.com/api_guide/auth_overview.html" target="_blank">Authentication Overview</a> page.</p>
+  </li>
+  <li>
+    <p><strong><code class="highlighter-rouge">response_type</code></strong> — <em>Required</em>. This flow uses <code class="highlighter-rouge">code</code> as the value to request an authorization code from Constant Contact.</p>
+  </li>
+  <li>
+    <p><strong><code class="highlighter-rouge">state</code></strong> - <em>Required</em>. To prevent cross-site request forgery, specify the arbitrary <code class="highlighter-rouge">state</code> string value you want to use to uniquely identify a user’s session.</p>
+  </li>
+  <li>
+    <p><strong><code class="highlighter-rouge">scope</code></strong> — <em>Optional</em>. A list of the scopes that your application requires. The V3 API currently supports the <code class="highlighter-rouge">account_read</code>, <code class="highlighter-rouge">account_update</code>, <code class="highlighter-rouge">contact_data</code>, <code class="highlighter-rouge">offline_access</code>, and <code class="highlighter-rouge">campaign_data</code> scopes. Scope names must be space-delimited. For example: {contact_data%20campaign_data%20offline_access}.</p>
+
+    <p>The <code class="highlighter-rouge">offline_access</code> scope is required for returning refresh tokens. For more information on scopes and the specific scopes required by each V3 API endpoint, see the <a href="/api_guide/scopes.html">Scopes Overview</a> page.</p>
+  </li>
+  <li>
+    <p><strong><code class="highlighter-rouge">nonce</code></strong> — <em>Optional</em>. For the purpose of mitigating replay attacks, specify the string value to use to associate a client session with an <code class="highlighter-rouge">id_token</code>. The <code class="highlighter-rouge">id_token</code> includes information (claims) about the user and, if specified, the nonce value. The <code class="highlighter-rouge">id_token</code> is encoded as a JWT and returned in the response when you request an access token. To verify the nonce string value, decode the <code class="highlighter-rouge">id_token</code>.</p>
+  </li>
+  <li>
+    <p><strong><code class="highlighter-rouge">prompt</code></strong> — <em>Optional</em>. Set the value as <code class="highlighter-rouge">login</code> to always display a login page to the user even if they have logged in to Constant Contact recently.</p>
+  </li>
+</ul>
+
+<h1 id="example-authorization-request">Example Authorization Request</h1>
+
+<div class="Tab js-tab" data-qe-id="Tab-ID">
+   <a href="#PHP" data-qe-id="Tab-ID-OPTION1">PHP</a>
+   <a href="#JAVA" data-qe-id="Tab-ID-OPTION2">JAVA</a>
+ </div>
+<div class="TabContent">
+<div id="PHP">
+
+    <div class="language-php highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cm">/*
+ * This function can be used to generate the URL an account owner would use to allow your app to access their account.
+ * After visiting the URL, the account owner is prompted to log in and allow your app to access their account.
+ * The account owner is then redirected to your redirect URL with the authorization code and state appended as query parameters. e.g.:
+ * http://localhost:8888/?code={authorization_code}&amp;state={encoded_string_value(s)}
+ */</span>
+
+<span class="cd">/**
+ * @param $redirectURI - URL Encoded Redirect URI
+ * @param $clientId - API Key
+ * @param $scope - URL encoded, plus sign delimited list of scopes that your application requires. The 'offline_access' scope needed to request a refresh token is added by default.
+ * @param $state - Arbitrary string value(s) to verify response and preserve application state
+ * @return string - Full Authorization URL
+ */</span>
+
+<span class="k">function</span> <span class="n">getAuthorizationURL</span><span class="p">(</span><span class="nv">$clientId</span><span class="p">,</span> <span class="nv">$redirectURI</span><span class="p">,</span> <span class="nv">$scope</span><span class="p">,</span> <span class="nv">$state</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// Create authorization URL</span>
+    <span class="nv">$baseURL</span> <span class="o">=</span> <span class="s2">"https://authz.constantcontact.com/oauth2/default/v1/authorize"</span><span class="p">;</span>
+    <span class="nv">$authURL</span> <span class="o">=</span> <span class="nv">$baseURL</span> <span class="mf">.</span> <span class="s2">"?client_id="</span> <span class="mf">.</span> <span class="nv">$clientId</span> <span class="mf">.</span> <span class="s2">"&amp;scope="</span> <span class="mf">.</span> <span class="nv">$scope</span> <span class="mf">.</span> <span class="s2">"+offline_access&amp;response_type=code&amp;state="</span> <span class="mf">.</span> <span class="nv">$state</span> <span class="mf">.</span> <span class="s2">"&amp;redirect_uri="</span> <span class="mf">.</span> <span class="nv">$redirectURI</span><span class="p">;</span>
+
+    <span class="k">return</span> <span class="nv">$authURL</span><span class="p">;</span>
+
+<span class="p">}</span>
+</code></pre></div>    </div>
+  </div>
+<div id="JAVA">
+
+    <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cm">/*
+ * This function can be used to generate the URL an account owner would use to
+ * allow your app to access their account.
+ * After visiting the URL, the account owner is prompted to log in and allow
+ * your app to access their account.
+ * The account owner is then redirected to your redirect URL with the
+ * authorization code and state appended as query parameters. e.g.:
+ * http://localhost:8888/?code={authorization_code}&amp;state={encoded_string_value(s)}
+ */</span>
+
+<span class="cm">/**
+ * @param redirectUri - URL Encoded Redirect URI
+ * @param clientId    - API Key
+ * @param scope       - URL encoded, plus sign delimited list of scopes that
+ *                    your application requires. The 'offline_access' scope
+ *                    needed to request a refresh token is added by default.
+ * @param state       - Arbitrary string value(s) to verify response and
+ *                    preserve application state
+ * @return            - Full Authentication URL
+ */</span>
+
+<span class="kd">public</span> <span class="nc">String</span> <span class="nf">getAuthorizationURL</span><span class="o">(</span><span class="nc">String</span> <span class="n">redirectUri</span><span class="o">,</span> <span class="nc">String</span> <span class="n">clientId</span><span class="o">,</span> <span class="nc">String</span> <span class="n">scope</span><span class="o">,</span> <span class="nc">String</span> <span class="n">state</span><span class="o">)</span> <span class="o">{</span>
+
+    <span class="c1">// Create authorization URL</span>
+    <span class="nc">StringBuilder</span> <span class="n">authUrl</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">StringBuilder</span><span class="o">()</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"https://authz.constantcontact.com/oauth2/default/v1/authorize"</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"?client_id="</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="n">clientId</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"&amp;scope="</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="n">scope</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"+offline_access"</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"&amp;response_type=code"</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"&amp;redirect_uri="</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="n">redirectUri</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"&amp;state="</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="n">state</span><span class="o">);</span>
+
+    <span class="k">return</span> <span class="n">authUrl</span><span class="o">.</span><span class="na">toString</span><span class="o">();</span>
+<span class="o">}</span>
+
+</code></pre></div>    </div>
+  </div>
+</div>
+
+<h1 id="step-2-get-authorization">Step 2: Get Authorization</h1>
+
+<p>Add the authorization request to your application to direct users to Constant Constant where they are prompted to sign in to authenticate their user account. Next, Constant Contact displays the <strong>Permission Request</strong> screen allowing the user to authorize your application to access the Constant Contact data that your application requests.</p>
+
+<figure><img class="docimage" src="images/scoperequest2.png" alt="User Permission Request Screen" /></figure>
+
+<h1 id="step-3-get-the-authorization-code">Step 3: Get the Authorization Code</h1>
+
+<p>After a user successfully grants your application access to their data, Constant Contact redirects the user to your chosen redirect URI and appends the authorization <code class="highlighter-rouge">code</code> and <code class="highlighter-rouge">state</code> values (and optional <code class="highlighter-rouge">scope</code> values), as query parameters. For example:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code> `http://localhost:8888/?code=lN1WhAHX9ooSIfuhy0LzWJhv713O&amp;state=235o250eddsdff&amp;scope=contact_data`
+</code></pre></div></div>
+
+<h1 id="step-4-get-the-access-token-and-refresh-token">Step 4: Get the Access Token and Refresh Token</h1>
+
+<p>Make a <code class="highlighter-rouge">POST</code> request to the <code class="highlighter-rouge">https://authz.constantcontact.com/oauth2/default/v1/token</code> token endpoint to exchange the authorization <code class="highlighter-rouge">code</code> for an access and refresh token.</p>
+
+<p><strong>Request Parameters</strong></p>
+
+<ul>
+  <li>
+    <p><strong><code class="highlighter-rouge">code</code></strong> — <em>Required</em>. Enter the authorization code that Constant Contact returns to your redirect URI in the authorization request response. Authorization codes expire after 5 minutes (300 seconds).</p>
+  </li>
+  <li>
+    <p><strong><code class="highlighter-rouge">redirect_uri</code></strong> — <em>Required</em>. The absolute URI that Constant Contact redirects the user to after they grant access to your application. Wildcards are not supported except at the domain root level. For more information, see the <a href="https://v3.developer.constantcontact.com/api_guide/getting_started.html" target="_blank">Quick Start Guide</a> page.</p>
+  </li>
+  <li>
+    <p><strong><code class="highlighter-rouge">grant_type</code></strong> — <em>Required</em>. The value is always <code class="highlighter-rouge">authorization_code</code>. This value specifies that the request is part of the Authorization Code Flow.</p>
+  </li>
+</ul>
+
+<p><strong>Header Formats</strong></p>
+
+<p>In the header, specify the preferred response formats to return as follows:</p>
+<ul>
+  <li><code class="highlighter-rouge">"Accept", "application/json"</code></li>
+  <li><code class="highlighter-rouge">"Content-Type", "application/x-www-form-urlencoded"</code></li>
+</ul>
+
+<p><strong>Authentication</strong></p>
+
+<p>This request requires basic authentication. Base64 encode the string <code class="highlighter-rouge">client_id:client_secret</code> and provide it in the <code class="highlighter-rouge">Authorization</code> header of the request. The <code class="highlighter-rouge">client_id</code> is the API Key for your application. You can obtain the <code class="highlighter-rouge">client_id</code> and <code class="highlighter-rouge">client_secret</code> values for your application on the <a href="https://app.constantcontact.com/pages/dma/portal/">My Applications</a> page.</p>
+
+<p>For example:</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>`Authorization: Basic MjdlOPBkNjktUmQ4MY00MGUwLWVmZmYtODRjZjM2`
+</code></pre></div></div>
+
+<p><strong>Example Request</strong></p>
+
+<div class="Tab js-tab" data-qe-id="Tab-ID">
+   <a href="#PHP2" data-qe-id="Tab-ID-OPTION2">PHP</a>
+   <a href="#JAVA2" data-qe-id="Tab-ID-OPTION3">JAVA</a>
+   <a href="#cURL2" data-qe-id="Tab-ID-OPTION1">cURL</a>
+
+ </div>
+<div class="TabContent">
+<div id="cURL2">
+
+    <div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl <span class="nt">-X</span> POST <span class="nt">-i</span> <span class="nt">-H</span> <span class="s2">"Content-Type: application/x-www-form-urlencoded"</span> <span class="nt">-H</span> <span class="s2">"Authorization: Basic {base64 client_id:client_secret}"</span> <span class="s2">"https://authz.constantcontact.com/oauth2/default/v1/token?code={authorization_code}&amp;redirect_uri={redirect_uri}&amp;grant_type=authorization_code"</span>
+
+</code></pre></div>    </div>
+  </div>
+<div id="PHP2">
+
+    <div class="language-php highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cm">/*
+ * This function can be used to exchange an authorization code for an access token.
+ * Make this call by passing in the code present when the account owner is redirected back to you.
+ * The response will contain an 'access_token' and 'refresh_token'
+ */</span>
+
+<span class="cd">/**
+ * @param $redirectURI - URL Encoded Redirect URI
+ * @param $clientId - API Key
+ * @param $clientSecret - API Secret
+ * @param $code - Authorization Code
+ * @return string - JSON String of results
+ */</span>
+
+<span class="k">function</span> <span class="n">getAccessToken</span><span class="p">(</span><span class="nv">$redirectURI</span><span class="p">,</span> <span class="nv">$clientId</span><span class="p">,</span> <span class="nv">$clientSecret</span><span class="p">,</span> <span class="nv">$code</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// Use cURL to get access token and refresh token</span>
+    <span class="nv">$ch</span> <span class="o">=</span> <span class="nb">curl_init</span><span class="p">();</span>
+
+    <span class="c1">// Define base URL</span>
+    <span class="nv">$base</span> <span class="o">=</span> <span class="s1">'https://authz.constantcontact.com/oauth2/default/v1/token'</span><span class="p">;</span>
+
+    <span class="c1">// Create full request URL</span>
+    <span class="nv">$url</span> <span class="o">=</span> <span class="nv">$base</span> <span class="mf">.</span> <span class="s1">'?code='</span> <span class="mf">.</span> <span class="nv">$code</span> <span class="mf">.</span> <span class="s1">'&amp;redirect_uri='</span> <span class="mf">.</span> <span class="nv">$redirectURI</span> <span class="mf">.</span> <span class="s1">'&amp;grant_type=authorization_code'</span><span class="p">;</span>
+    <span class="nb">curl_setopt</span><span class="p">(</span><span class="nv">$ch</span><span class="p">,</span> <span class="no">CURLOPT_URL</span><span class="p">,</span> <span class="nv">$url</span><span class="p">);</span>
+
+    <span class="c1">// Set authorization header</span>
+    <span class="c1">// Make string of "API_KEY:SECRET"</span>
+    <span class="nv">$auth</span> <span class="o">=</span> <span class="nv">$clientId</span> <span class="mf">.</span> <span class="s1">':'</span> <span class="mf">.</span> <span class="nv">$clientSecret</span><span class="p">;</span>
+    <span class="c1">// Base64 encode it</span>
+    <span class="nv">$credentials</span> <span class="o">=</span> <span class="nb">base64_encode</span><span class="p">(</span><span class="nv">$auth</span><span class="p">);</span>
+    <span class="c1">// Create and set the Authorization header to use the encoded credentials, and set the Content-Type header</span>
+    <span class="nv">$authorization</span> <span class="o">=</span> <span class="s1">'Authorization: Basic '</span> <span class="mf">.</span> <span class="nv">$credentials</span><span class="p">;</span>
+    <span class="nb">curl_setopt</span><span class="p">(</span><span class="nv">$ch</span><span class="p">,</span> <span class="no">CURLOPT_HTTPHEADER</span><span class="p">,</span> <span class="k">array</span><span class="p">(</span><span class="nv">$authorization</span><span class="p">,</span> <span class="s1">'Content-Type: application/x-www-form-urlencoded'</span><span class="p">));</span>
+
+    <span class="c1">// Set method and to expect response</span>
+    <span class="nb">curl_setopt</span><span class="p">(</span><span class="nv">$ch</span><span class="p">,</span> <span class="no">CURLOPT_POST</span><span class="p">,</span> <span class="kc">true</span><span class="p">);</span>
+    <span class="nb">curl_setopt</span><span class="p">(</span><span class="nv">$ch</span><span class="p">,</span> <span class="no">CURLOPT_RETURNTRANSFER</span><span class="p">,</span> <span class="kc">true</span><span class="p">);</span>
+
+    <span class="c1">// Make the call</span>
+    <span class="nv">$result</span> <span class="o">=</span> <span class="nb">curl_exec</span><span class="p">(</span><span class="nv">$ch</span><span class="p">);</span>
+    <span class="nb">curl_close</span><span class="p">(</span><span class="nv">$ch</span><span class="p">);</span>
+    <span class="k">return</span> <span class="nv">$result</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>    </div>
+  </div>
+<div id="JAVA2">
+
+    <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cm">/*
+ * This method can be used to exchange an authorization code for an access token.
+ * Make this call by passing in the code present when the account owner is
+ * redirected back to you after authenticating.
+ * The response will contain an 'access_token' and 'refresh_token'
+ */</span>
+
+<span class="cm">/**
+ * @param redirectUri  - URL Encoded Redirect URI
+ * @param clientId     - API Key
+ * @param clientSecret - API Secret
+ * @param authCode     - Authorization Code
+ * @return             - JSON string containing an access_token and a refresh_token
+ * @throws InterruptedException
+ * @throws IOException
+ * @throws URISyntaxException
+ */</span>
+
+<span class="kd">public</span> <span class="kd">static</span> <span class="nc">String</span> <span class="nf">getAccessToken</span><span class="o">(</span><span class="nc">String</span> <span class="n">redirectUri</span><span class="o">,</span> <span class="nc">String</span> <span class="n">clientId</span><span class="o">,</span> <span class="nc">String</span> <span class="n">clientSecret</span><span class="o">,</span> <span class="nc">String</span> <span class="n">authCode</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">IOException</span><span class="o">,</span> <span class="nc">InterruptedException</span><span class="o">,</span> <span class="nc">URISyntaxException</span>
+<span class="o">{</span>
+
+    <span class="c1">// Make authorization header with API Key:API Secret and Base64 encode</span>
+    <span class="nc">String</span> <span class="n">credentials</span> <span class="o">=</span> <span class="n">clientId</span> <span class="o">+</span> <span class="s">":"</span> <span class="o">+</span> <span class="n">clientSecret</span><span class="o">;</span>
+    <span class="nc">String</span> <span class="n">authHeader</span> <span class="o">=</span> <span class="s">"Basic "</span> <span class="o">+</span> <span class="nc">Base64</span><span class="o">.</span><span class="na">getEncoder</span><span class="o">().</span><span class="na">encodeToString</span><span class="o">(</span><span class="n">credentials</span><span class="o">.</span><span class="na">getBytes</span><span class="o">());</span>
+
+    <span class="c1">// Create request URL</span>
+    <span class="nc">StringBuilder</span> <span class="n">requestBuilder</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">StringBuilder</span><span class="o">()</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"https://authz.constantcontact.com/oauth2/default/v1/token"</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"?code="</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="n">authCode</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"&amp;redirect_uri="</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="n">redirectUri</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"&amp;grant_type=authorization_code"</span><span class="o">);</span>
+    <span class="no">URI</span> <span class="n">requestUri</span> <span class="o">=</span> <span class="k">new</span> <span class="no">URI</span><span class="o">(</span><span class="n">requestBuilder</span><span class="o">.</span><span class="na">toString</span><span class="o">());</span>
+           
+
+    <span class="nc">HttpClient</span> <span class="n">httpClient</span> <span class="o">=</span> <span class="nc">HttpClient</span><span class="o">.</span><span class="na">newHttpClient</span><span class="o">();</span>
+    <span class="nc">HttpRequest</span> <span class="n">request</span> <span class="o">=</span> <span class="nc">HttpRequest</span><span class="o">.</span><span class="na">newBuilder</span><span class="o">(</span><span class="n">requestUri</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">POST</span><span class="o">(</span><span class="nc">HttpRequest</span><span class="o">.</span><span class="na">BodyPublishers</span><span class="o">.</span><span class="na">ofString</span><span class="o">(</span><span class="s">""</span><span class="o">))</span>
+            <span class="o">.</span><span class="na">header</span><span class="o">(</span><span class="s">"Accept"</span><span class="o">,</span><span class="s">"application/json"</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">header</span><span class="o">(</span><span class="s">"Content-Type"</span><span class="o">,</span> <span class="s">"application/x-www-form-urlencoded"</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">header</span><span class="o">(</span><span class="s">"Authorization"</span><span class="o">,</span> <span class="n">authHeader</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+    <span class="nc">HttpResponse</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">httpResponse</span> <span class="o">=</span> <span class="n">httpClient</span><span class="o">.</span><span class="na">send</span><span class="o">(</span><span class="n">request</span><span class="o">,</span> <span class="nc">HttpResponse</span><span class="o">.</span><span class="na">BodyHandlers</span><span class="o">.</span><span class="na">ofString</span><span class="o">());</span>
+        
+    <span class="k">return</span> <span class="n">httpResponse</span><span class="o">.</span><span class="na">body</span><span class="o">();</span>
+<span class="o">}</span>
+</code></pre></div>    </div>
+
+  </div>
+</div>
+
+<p><strong>Example Response</strong></p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+    </span><span class="nl">"token_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Bearer"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"expires_in"</span><span class="p">:</span><span class="w"> </span><span class="mi">28800</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"access_token"</span><span class="p">:</span><span class="w"> </span><span class="s2">"eyJraWQiOiIzSDdLVVpkSDlyNTh6RVVDSzNYMlR1b2o0SjV0eldWUF9FRUxQTDd6X3hjIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkZ6YUUtTVFFb2dKQ1VzZlhSUGtBZldobDllckJndVlYRWphOGFXd1RyRzgiLCJpc3MiOiJodHRwczovL2lkZW50aXR5LmNvbnN0YW50Y29udGFjdC5jb20vb2F1dGgyL2F1czFsbTNyeTltRjd4MkphMGg4IiwiYXVkIjoiaHR0cHM6Ly9hcGkuY2MuZW1haWwvdjMiLCJpYXQiOjE2NDQ0Mjc3NzMsImV4cCI6MTY0NDQ1NjU3MywiY2lkIjoiY2M5NGMyZDYtNmU3MC00MjZjLWFmZDEtNzFjOGZhNWY0ODkwIiwidWlkIjoiMDB1MWlieDhsaGIzYW12SFIwaDgiLCJzY3AiOlsiYWNjb3VudF9yZWFkIiwiZW1haWwiLCJjYW1wYWlnbl9kYXRhIiwicHJvZmlsZSIsImFkZHJlc3MiLCJjb250YWN0X2RhdGEiLCJvcGVuaWQiXSwic3ViIjoiZ2Vla3NxdWFkIiwicGxhdGZvcm1fdXNlcl9pZCI6ImQzYTA2ZTYyLTJmMTQtNGQ5Ni05NDUzLTI2NTkxYWI1M2YwZCJ9.saJxgUYx1_OKUteH01KV71vzjaxqTKnZ3XfD4QKtsIkjrmcf4tUWEFSzjuF1kdxLvlMoCyr_MwO81ApwYX2UU0YRhkVsfw2VLR4KpO89ILul7ZJZyzzsVKak8BrgLhqR1AB7X116VRjsH74vD4D-1e4uKKUlK4yefsZE14kFgDZNi74_WPn5FBGeicwMsStdG3qms8X-6LqIxuZ5fXgSxK9wDEBe-xJfJSqAqo1vJKMqw2JT_NvBBLDXqoSg0_q_0IqbxXEMHdX2J_DHGKrY7w1QQGmeBU_BIlewQPUxUGX-dbRavxncBpItt1tsRLBIiPbPkQ_zDN8_J9lPIxJksA"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"scope"</span><span class="p">:</span><span class="w"> </span><span class="s2">"account_read offline_access"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"refresh_token"</span><span class="p">:</span><span class="w"> </span><span class="s2">"HFsqfgtZuGyffnD2qb-AQKWDURWAXM8hlgYIFEwaq4E"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"id_token"</span><span class="p">:</span><span class="w"> </span><span class="s2">"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIwMDEyMzQ1ejRXMzhHS3BPMGg3IiwibmFtZSI6IkpvaG4gRG9lIiwiZW1haWwiOiJqZG9lQGFiYy5jb20iLCJ2ZXIiOjEsImlzcyI6Imh0dHBzOi8vaWRlbnRpdHkuY29uc3RhbnRjb250YWN0LmNvbS9vYXV0aDIvYXVzengwNm81alJlZlE4RjQwaDciLCJhdWQiOiJmYThhMDZkYy1iMDAwLTQ3NWMtYWNlZC01NWNlYzVhZWUzMjUiLCJpYXQiOjE2NDQ4NTc4NDcsImV4cCI6MTY0NDg2MTQ0NywianRpIjoiSUQuRFhRQ2pxQmd3M28xMnVHdlN5R2ZpQTJ2QjVFcGNvSktsajBqbFhSc2lqayIsImFtciI6WyJwd2QiXSwiaWRwIjoiMDBvbnBtc2prYmdPc0wydlcwaDciLCJub25jZSI6Ijg2MDgyNTYwMyIsInByZWZlcnJlZF91c2VybmFtZSI6Impkb2UiLCJhdXRoX3RpbWUiOjE2NDQ4NTc4NDQsImF0X2hhc2giOiJuWk5sRjduWGo2bV9UNEFKcXl0c1RRIn0.ToO_Ye1YHRx4hWCMBnrT6yksWvkrpHfGmXcHTh7B75A"</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+<ul>
+  <li>
+    <p><code class="highlighter-rouge">token_type</code> — This value is always set to <code class="highlighter-rouge">Bearer</code>.</p>
+  </li>
+  <li>
+    <p><code class="highlighter-rouge">expires_in</code> — The number of seconds remaining until the <code class="highlighter-rouge">access_token</code> expires.</p>
+  </li>
+  <li>
+    <p><code class="highlighter-rouge">access_token</code> — The new <code class="highlighter-rouge">access_token</code> value used to send requests with the V3 API. Access tokens automatically expire 1440 minutes (86,400 seconds). Making an API call with an expired access token returns a 401 unauthorized status code.</p>
+  </li>
+  <li>
+    <p><code class="highlighter-rouge">scope</code> — The type of data in Constant Contact that the user is granting your application permission to use. The <code class="highlighter-rouge">offline_access</code> scope is required to get a refresh token.</p>
+  </li>
+  <li>
+    <p><code class="highlighter-rouge">refresh_token</code> — Each refresh token corresponds to an access token. Use the refresh token to obtain a new <code class="highlighter-rouge">access_token</code> when the corresponding <code class="highlighter-rouge">access_token</code> expires.</p>
+  </li>
+  <li>
+    <p><code class="highlighter-rouge">id_token</code> — The JWT that includes information about the user such as their name and email address, and if specified, the <code class="highlighter-rouge">nonce</code> value you passed in the authorization request. Decode the <code class="highlighter-rouge">id_token</code> to verify the nonce value and view user information.</p>
+  </li>
+</ul>
+
+<h1 id="step-5-validate-the-access-token">Step 5: Validate the Access Token</h1>
+
+<p>For each new access token that you receive, follow best security practices by validating the signature and claims for the access token by completing the procedures that follow.</p>
+
+<h2 id="load-the-json-web-key-set">Load the JSON web-key Set</h2>
+
+<p>Use the method that follows to load the Constant Contact public JSON web-key set used to get the access token.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/**
+    * This method uses the java11 http client to load Constant Contact's public json web key set.
+    * In real use cases, this value should be cached.
+    * @return Constant Contact's public json web key set for the v3 API.
+    */
+   public String getPublicJsonWebKeySet() throws IOException {
+       HttpClient httpClient = HttpClient.newHttpClient();
+       HttpRequest request = HttpRequest.newBuilder(URI.create("https://identity.constantcontact.com/oauth2/aus1lm3ry9mF7x2Ja0h8/v1/keys"))
+               .GET()
+               .header("Accept","application/json")
+               .header("Content-Type", "application/x-www-form-urlencoded")
+               .build();
+       HttpResponse&lt;String&gt; httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+       return httpResponse.body();
+   }
+</code></pre></div></div>
+
+<h2 id="verify-the-access-token-claims">Verify the Access Token Claims</h2>
+
+<p>Use the method that follows to parse the access token, and then validate the signature and claims of the access token. The code examples in this step use the org.jose4j library.</p>
+
+<ol>
+  <li>Use the <code class="highlighter-rouge">jwt</code> parameter to pass in the access token.</li>
+  <li>Use the <code class="highlighter-rouge">jsonWebKeySetJson</code> parameter to pass the JSON Web Key Set (JWKS) value (this is the value that was returned in the previous <em>Load the JSON web-key set</em> step).</li>
+</ol>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>   /**
+    * This method uses the jose4j library to verify the claims on the JWT.
+    * It throws an exception if it fails to parse the JWT, or the JWT does not include the expected claim.
+    * @param jwt String containing a JSON web token.
+    * @param jsonWebKeySetJson the set of keys available at https://identity.constantcontact.com/oauth2/aus1lm3ry9mF7x2Ja0h8/v1/keys
+    * @throws JoseException
+    * @throws InvalidJwtException
+    */
+   public void verifyJwtToken(String jwt, String jsonWebKeySetJson) throws JoseException, InvalidJwtException {
+
+       JsonWebKeySet jsonWebKeySet = new JsonWebKeySet(jsonWebKeySetJson);
+       VerificationJwkSelector jwkSelector = new VerificationJwkSelector();
+       JsonWebSignature jws = new JsonWebSignature();
+       jws.setCompactSerialization(jwt);
+
+       JsonWebKey jwk = jwkSelector.select(jws, jsonWebKeySet.getJsonWebKeys());
+
+       JwtConsumer jwtConsumer = new JwtConsumerBuilder()
+               .setRequireExpirationTime()
+               .setRequireSubject()
+               .setExpectedIssuer("https://identity.constantcontact.com/oauth2/aus1lm3ry9mF7x2Ja0h8")
+               .setExpectedAudience("https://api.cc.email/v3")
+               .setVerificationKey(jwk.getKey())
+               .setJwsAlgorithmConstraints(AlgorithmConstraints.ConstraintType.PERMIT, AlgorithmIdentifiers.RSA_USING_SHA256)
+               .build();
+
+       jwtConsumer.processToClaims(jwt);
+   }
+</code></pre></div></div>
+
+<p>If the access token is not valid or if a required claim is missing or incorrect, an exception occurs.</p>
+
+<p>Check the following claims:</p>
+<ul>
+  <li>Compare the <code class="highlighter-rouge">cid</code> (client identifier) value to ensure that it matches your application API key</li>
+  <li>The <code class="highlighter-rouge">platform_user_id</code> claim in the access token uniquely identifies a Constant Contact user.</li>
+</ul>
+
+<p>To check the claims, use the previous code example, except replace <code class="highlighter-rouge">jwtConsumer.processToClaims(jwt);</code> with the following:</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>JwtClaims claims = consumer.processToClaims(token);
+
+String cid = claims.get("cid")
+  if (! apiKey.equals(cid)) {
+  throw new InvalidJwtException("Api key in token incorrect");
+}
+String userId = claims.get("platform_user_id")
+  if (userId == null) {
+  throw new InvalidJwtException("Token is missing platform_user_id");
+}  
+</code></pre></div></div>
+
+<h1 id="step-6-add-the-access-token-to-the-authorization-request">Step 6: Add the Access Token to the Authorization Request</h1>
+
+<p>After verifying the access token claims and signature, use the access token to send requests in the V3 API by adding it to the <code class="highlighter-rouge">Authorization</code> request header in the format <code class="highlighter-rouge">Authorization: Bearer {your_access_token}</code>.</p>
+
+<p>If the access token expires, users must reauthenticate and reauthorize your application through Constant Contact. Making an API call with an expired access token returns a 401 unauthorized status code.</p>
+
+<p>See the <strong>Errors</strong> table in the <a href="/api_guide/auth_overview.html">Authorization Overview</a> for information on how to handle authorization request errors.</p>
+
+<h1 id="step-7-optional-check-the-access-token-expiration-timestamp">Step 7 (Optional): Check the Access Token Expiration Timestamp</h1>
+
+<p>You can quickly check to see if the access token is expired using the method that follows.</p>
+
+<p>Use the <code class="highlighter-rouge">jwt</code> parameter to pass in the access token. This method returns <code class="highlighter-rouge">True</code> for an expired token if the expiration time is within 5 minutes (300 seconds) of the current time, or <code class="highlighter-rouge">False</code> if the token has not expired. If the access token expires, you can exchange it for a new access and refresh token using the <em>Refresh the Access Token</em> procedure.</p>
+
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  /**
+     * This method checks if the current time is greater than or equal to the JWT expiration claim.
+     * @param jwt A String JSON web token.
+     * @return True if the jwt token is expired. False if the token is not expired.
+     */
+    public boolean checkIfTokenIsExpired(String jwt) throws InvalidJwtException, MalformedClaimException {
+
+        JwtConsumer jwtConsumer = new JwtConsumerBuilder()
+                .setRequireExpirationTime()
+                .setSkipDefaultAudienceValidation()
+                .setDisableRequireSignature()
+                .setSkipSignatureVerification()
+                .build();
+         JwtClaims jwtClaims = jwtConsumer.processToClaims(jwt);
+         return NumericDate.now().getValue() &gt;= jwtClaims.getExpirationTime().getValue();
+    }
+</code></pre></div></div>
+
+<h1 id="step-8-refresh-the-access-token">Step 8: Refresh the Access Token</h1>
+
+<p>To avoid having to prompt a user to re-authenticate with Constant Contact due to an expired access token, use the refresh token to get a new access token and a new refresh token. To refresh the access token, send a POST request to the <code class="highlighter-rouge">https://authz.constantcontact.com/oauth2/default/v1/token</code> authorization endpoint.</p>
+
+<p>Constant Contact rate limits the Token endpoint. A 429 response will likely be returned if you attempt to refresh an access token before every V3 API request. Constant Contact recommends that you only send a refresh token request to get a new access token if your existing access token is expired or about to expire.</p>
+
+<p><strong>Request parameters</strong></p>
+
+<ul>
+  <li>
+    <p><code class="highlighter-rouge">refresh_token</code> — <em>Required</em>. The refresh token corresponds to the access token you are trying to refresh.</p>
+  </li>
+  <li>
+    <p><code class="highlighter-rouge">grant_type</code> — <em>Required</em>. The value is <code class="highlighter-rouge">refresh_token</code>. This specifies that the purpose of this request is to refresh an access token.</p>
+  </li>
+</ul>
+
+<p><strong>Header Formats</strong></p>
+
+<p>In the header, specify the preferred response formats to return as follows:</p>
+<ul>
+  <li>
+    <p><code class="highlighter-rouge">"Accept", "application/json"</code></p>
+  </li>
+  <li>
+    <p><code class="highlighter-rouge">"Content-Type", "application/x-www-form-urlencoded"</code></p>
+  </li>
+</ul>
+
+<p><strong>Authentication</strong></p>
+
+<p>This request requires basic authentication. Base64 encode the string <code class="highlighter-rouge">client_id:client_secret</code> and provide it in the <code class="highlighter-rouge">Authorization</code> header of the request.</p>
+
+<p><strong>Example Request</strong></p>
+
+<div class="Tab js-tab" data-qe-id="Tab-ID">
+   <a href="#PHP3" data-qe-id="Tab-ID-OPTION2">PHP</a>
+   <a href="#JAVA3" data-qe-id="Tab-ID-OPTION3">JAVA</a>
+   <a href="#cURL3" data-qe-id="Tab-ID-OPTION1">cURL</a>
+ </div>
+<div class="TabContent">
+<div id="cURL3">
+
+    <div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl <span class="nt">-X</span> POST <span class="nt">-i</span> <span class="nt">-H</span> <span class="s2">"Content-Type: application/x-www-form-urlencoded"</span> <span class="nt">-H</span> <span class="s2">"Authorization: Basic {base64 client_id:client_secret}"</span> <span class="s2">"https://authz.constantcontact.com/oauth2/default/v1/token?refresh_token={refresh_token}&amp;grant_type=refresh_token"</span>
+</code></pre></div>    </div>
+  </div>
+<div id="PHP3">
+
+    <div class="language-php highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cm">/*
+ * This function can be used to exchange a refresh token for a new access token and refresh token.
+ * Make this call by passing in the refresh token returned with the access token.
+ * The response will contain a new 'access_token' and 'refresh_token'
+ */</span>
+
+<span class="cd">/**
+ * @param $refreshToken - The refresh token provided with the previous access token
+ * @param $clientId - API Key
+ * @param $clientSecret - API Secret
+ * @return string - JSON String of results
+ */</span>
+<span class="k">function</span> <span class="n">refreshToken</span><span class="p">(</span><span class="nv">$refreshToken</span><span class="p">,</span> <span class="nv">$clientId</span><span class="p">,</span> <span class="nv">$clientSecret</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// Use cURL to get a new access token and refresh token</span>
+    <span class="nv">$ch</span> <span class="o">=</span> <span class="nb">curl_init</span><span class="p">();</span>
+
+    <span class="c1">// Define base URL</span>
+    <span class="nv">$base</span> <span class="o">=</span> <span class="s1">'https://authz.constantcontact.com/oauth2/default/v1/token'</span><span class="p">;</span>
+
+    <span class="c1">// Create full request URL</span>
+    <span class="nv">$url</span> <span class="o">=</span> <span class="nv">$base</span> <span class="mf">.</span> <span class="s1">'?refresh_token='</span> <span class="mf">.</span> <span class="nv">$refreshToken</span> <span class="mf">.</span> <span class="s1">'&amp;grant_type=refresh_token'</span><span class="p">;</span>
+    <span class="nb">curl_setopt</span><span class="p">(</span><span class="nv">$ch</span><span class="p">,</span> <span class="no">CURLOPT_URL</span><span class="p">,</span> <span class="nv">$url</span><span class="p">);</span>
+
+    <span class="c1">// Set authorization header</span>
+    <span class="c1">// Make string of "API_KEY:SECRET"</span>
+    <span class="nv">$auth</span> <span class="o">=</span> <span class="nv">$clientId</span> <span class="mf">.</span> <span class="s1">':'</span> <span class="mf">.</span> <span class="nv">$clientSecret</span><span class="p">;</span>
+    <span class="c1">// Base64 encode it</span>
+    <span class="nv">$credentials</span> <span class="o">=</span> <span class="nb">base64_encode</span><span class="p">(</span><span class="nv">$auth</span><span class="p">);</span>
+    <span class="c1">// Create and set the Authorization header to use the encoded credentials, and set the Content-Type header</span>
+    <span class="nv">$authorization</span> <span class="o">=</span> <span class="s1">'Authorization: Basic '</span> <span class="mf">.</span> <span class="nv">$credentials</span><span class="p">;</span>
+    <span class="nb">curl_setopt</span><span class="p">(</span><span class="nv">$ch</span><span class="p">,</span> <span class="no">CURLOPT_HTTPHEADER</span><span class="p">,</span> <span class="k">array</span><span class="p">(</span><span class="nv">$authorization</span><span class="p">,</span> <span class="s1">'Content-Type: application/x-www-form-urlencoded'</span><span class="p">));</span>
+
+    <span class="c1">// Set method and to expect response</span>
+    <span class="nb">curl_setopt</span><span class="p">(</span><span class="nv">$ch</span><span class="p">,</span> <span class="no">CURLOPT_POST</span><span class="p">,</span> <span class="kc">true</span><span class="p">);</span>
+    <span class="nb">curl_setopt</span><span class="p">(</span><span class="nv">$ch</span><span class="p">,</span> <span class="no">CURLOPT_RETURNTRANSFER</span><span class="p">,</span> <span class="kc">true</span><span class="p">);</span>
+
+    <span class="c1">// Make the call</span>
+    <span class="nv">$result</span> <span class="o">=</span> <span class="nb">curl_exec</span><span class="p">(</span><span class="nv">$ch</span><span class="p">);</span>
+    <span class="nb">curl_close</span><span class="p">(</span><span class="nv">$ch</span><span class="p">);</span>
+    <span class="k">return</span> <span class="nv">$result</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>    </div>
+  </div>
+<div id="JAVA3">
+
+    <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cm">/*
+ * This method is used to exchange a refresh token for a new access token and refresh token.
+ * Make this call by passing in the refresh token returned with the access token.
+ * The response will contain a new 'access_token' and 'refresh_token'.
+ */</span>
+
+<span class="cm">/**
+ * @param clientId      - API Key
+ * @param clientSecret  - API Secret
+ * @param refresh_token - Refresh Token
+ * @return              - JSON string containing a new access_token and refresh_token
+ * @throws InterruptedException
+ * @throws IOException
+ * @throws URISyntaxException
+ */</span>
+
+<span class="kd">public</span> <span class="kd">static</span> <span class="nc">String</span> <span class="nf">refreshToken</span><span class="o">(</span><span class="nc">String</span> <span class="n">clientId</span><span class="o">,</span> <span class="nc">String</span> <span class="n">clientSecret</span><span class="o">,</span> <span class="nc">String</span> <span class="n">refresh_token</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">IOException</span><span class="o">,</span> <span class="nc">InterruptedException</span><span class="o">,</span> <span class="nc">URISyntaxException</span>
+    <span class="o">{</span>
+
+    <span class="c1">// Make authorization header with API Key:API Secret and Base64 encode</span>
+    <span class="nc">String</span> <span class="n">credentials</span> <span class="o">=</span> <span class="n">clientId</span> <span class="o">+</span> <span class="s">":"</span> <span class="o">+</span> <span class="n">clientSecret</span><span class="o">;</span>
+    <span class="nc">String</span> <span class="n">authHeader</span> <span class="o">=</span> <span class="s">"Basic "</span> <span class="o">+</span> <span class="nc">Base64</span><span class="o">.</span><span class="na">getEncoder</span><span class="o">().</span><span class="na">encodeToString</span><span class="o">(</span><span class="n">credentials</span><span class="o">.</span><span class="na">getBytes</span><span class="o">());</span>
+
+    <span class="c1">// Create request URL</span>
+    <span class="nc">StringBuilder</span> <span class="n">requestBuilder</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">StringBuilder</span><span class="o">()</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"https://authz.constantcontact.com/oauth2/default/v1/token"</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"?refresh_token="</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="n">refresh_token</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">append</span><span class="o">(</span><span class="s">"&amp;grant_type=refresh_token"</span><span class="o">);</span>
+    <span class="no">URI</span> <span class="n">requestUri</span> <span class="o">=</span> <span class="k">new</span> <span class="no">URI</span><span class="o">(</span><span class="n">requestBuilder</span><span class="o">.</span><span class="na">toString</span><span class="o">());</span>
+           
+
+    <span class="nc">HttpClient</span> <span class="n">httpClient</span> <span class="o">=</span> <span class="nc">HttpClient</span><span class="o">.</span><span class="na">newHttpClient</span><span class="o">();</span>
+    <span class="nc">HttpRequest</span> <span class="n">request</span> <span class="o">=</span> <span class="nc">HttpRequest</span><span class="o">.</span><span class="na">newBuilder</span><span class="o">(</span><span class="n">requestUri</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">POST</span><span class="o">(</span><span class="nc">HttpRequest</span><span class="o">.</span><span class="na">BodyPublishers</span><span class="o">.</span><span class="na">ofString</span><span class="o">(</span><span class="s">""</span><span class="o">))</span>
+            <span class="o">.</span><span class="na">header</span><span class="o">(</span><span class="s">"Accept"</span><span class="o">,</span><span class="s">"application/json"</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">header</span><span class="o">(</span><span class="s">"Content-Type"</span><span class="o">,</span> <span class="s">"application/x-www-form-urlencoded"</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">header</span><span class="o">(</span><span class="s">"Authorization"</span><span class="o">,</span> <span class="n">authHeader</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+    <span class="nc">HttpResponse</span><span class="o">&lt;</span><span class="nc">String</span><span class="o">&gt;</span> <span class="n">httpResponse</span> <span class="o">=</span> <span class="n">httpClient</span><span class="o">.</span><span class="na">send</span><span class="o">(</span><span class="n">request</span><span class="o">,</span> <span class="nc">HttpResponse</span><span class="o">.</span><span class="na">BodyHandlers</span><span class="o">.</span><span class="na">ofString</span><span class="o">());</span>
+        
+    <span class="k">return</span> <span class="n">httpResponse</span><span class="o">.</span><span class="na">body</span><span class="o">();</span>
+<span class="o">}</span>
+</code></pre></div>    </div>
+  </div>
+</div>
+
+<p><strong>Example Response</strong></p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"token_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Bearer"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"expires_in"</span><span class="p">:</span><span class="w"> </span><span class="s2">"28800"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"access_token"</span><span class="p">:</span><span class="w"> </span><span class="s2">"eyJraWQiOiIzSDdLVVpkSDlyNTh6RVVDSzNYMlR1b2o0SjV0eldWUF9FRUxQTDd6X3hjIiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkZ6YUUtTVFFb2dKQ1VzZlhSUGtBZldobDllckJndVlYRWphOGFXd1RyRzgiLCJpc3MiOiJodHRwczovL2lkZW50aXR5LmNvbnN0YW50Y29udGFjdC5jb20vb2F1dGgyL2F1czFsbTNyeTltRjd4MkphMGg4IiwiYXVkIjoiaHR0cHM6Ly9hcGkuY2MuZW1haWwvdjMiLCJpYXQiOjE2NDQ0Mjc3NzMsImV4cCI6MTY0NDQ1NjU3MywiY2lkIjoiY2M5NGMyZDYtNmU3MC00MjZjLWFmZDEtNzFjOGZhNWY0ODkwIiwidWlkIjoiMDB1MWlieDhsaGIzYW12SFIwaDgiLCJzY3AiOlsiYWNjb3VudF9yZWFkIiwiZW1haWwiLCJjYW1wYWlnbl9kYXRhIiwicHJvZmlsZSIsImFkZHJlc3MiLCJjb250YWN0X2RhdGEiLCJvcGVuaWQiXSwic3ViIjoiZ2Vla3NxdWFkIiwicGxhdGZvcm1fdXNlcl9pZCI6ImQzYTA2ZTYyLTJmMTQtNGQ5Ni05NDUzLTI2NTkxYWI1M2YwZCJ9.saJxgUYx1_OKUteH01KV71vzjaxqTKnZ3XfD4QKtsIkjrmcf4tUWEFSzjuF1kdxLvlMoCyr_MwO81ApwYX2UU0YRhkVsfw2VLR4KpO89ILul7ZJZyzzsVKak8BrgLhqR1AB7X116VRjsH74vD4D-1e4uKKUlK4yefsZE14kFgDZNi74_WPn5FBGeicwMsStdG3qms8X-6LqIxuZ5fXgSxK9wDEBe-xJfJSqAqo1vJKMqw2JT_NvBBLDXqoSg0_q_0IqbxXEMHdX2J_DHGKrY7w1QQGmeBU_BIlewQPUxUGX-dbRavxncBpItt1tsRLBIiPbPkQ_zDN8_J9lPIxJksA"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"scope"</span><span class="p">:</span><span class="w"> </span><span class="s2">"account_read offline_access"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"refresh_token"</span><span class="p">:</span><span class="w"> </span><span class="s2">"s8Mu4hfiwmug7ru4Rcoo4hjkawiw4OUTH2ixvsy3b8"</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+<ul>
+  <li>
+    <p><strong><code class="highlighter-rouge">token_type</code></strong> — The value is always set to <code class="highlighter-rouge">Bearer</code>.</p>
+  </li>
+  <li>
+    <p><strong><code class="highlighter-rouge">expires_in</code></strong> - The <code class="highlighter-rouge">access_token</code> expiration timestamp, in seconds.</p>
+  </li>
+  <li>
+    <p><strong><code class="highlighter-rouge">access_token</code></strong> — The response body returns a new <code class="highlighter-rouge">access_token</code> value.</p>
+  </li>
+  <li>
+    <p><strong><code class="highlighter-rouge">refresh_token</code></strong> — The response body returns a new <code class="highlighter-rouge">refresh_token</code> value.</p>
+  </li>
+</ul>
+
+
+    <script src="https://static.ctctcdn.com/h/fed-framework/1.3.0/fed.min.js"></script>
+
+    <script type="text/javascript">
+    $(".js-tab").fedTab();
+    </script>
+
+
+    <div class="tags">
+        
+        <b>Tags: </b>
+        
+        
+        
+        <a href="tag_OAuth2.html"  style="text-transform: none;"class="Badge Badge--teal" role="button" data-qe-id="tag-OAuth2-link">OAuth2</a>
+        
+        
+        
+        <a href="tag_Authorization.html"  style="text-transform: none;"class="Badge Badge--teal" role="button" data-qe-id="tag-Authorization-link">Authorization</a>
+        
+        
+        
+        <a href="tag_Authentication.html"  style="text-transform: none;"class="Badge Badge--teal" role="button" data-qe-id="tag-Authentication-link">Authentication</a>
+        
+        
+        
+        <a href="tag_PKCE_Flow.html"  style="text-transform: none;"class="Badge Badge--teal" role="button" data-qe-id="tag-PKCE-Flow-link">PKCE_Flow</a>
+        
+        
+        
+        <a href="tag_Implicit_Flow.html"  style="text-transform: none;"class="Badge Badge--teal" role="button" data-qe-id="tag-Implicit-Flow-link">Implicit_Flow</a>
+        
+        
+        
+        <a href="tag_Authorization_Code_Flow.html"  style="text-transform: none;"class="Badge Badge--teal" role="button" data-qe-id="tag-Authorization-Code-Flow-link">Authorization_Code_Flow</a>
+        
+        
+        
+        <a href="tag_scopes.html"  style="text-transform: none;"class="Badge Badge--teal" role="button" data-qe-id="tag-scopes-link">scopes</a>
+        
+        
+        
+    </div>
+
+</div>
+
+<div class="shaded"/>
+
+                </div>
+            </div>
+
+        </section>
+
+        <dev-portal-footer></dev-portal-footer>
+
+
+    </div>
+
+</body>
+
+</html>

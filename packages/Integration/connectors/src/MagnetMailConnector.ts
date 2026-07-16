@@ -1,984 +1,922 @@
 /**
- * ⚠️ NEEDS T10 LIVE VERIFICATION BEFORE PRODUCTION ⚠️
+ * MagnetMailConnector — Higher Logic Marketing Enterprise (formerly Real Magnet / MagnetMail).
  *
- * 2026-05-20 vendor-truth audit (vs public WSDL at hlma-apie1.magnetmail.net/mmapi.asmx?WSDL)
- * found 8 wire-level mismatches between this connector and the vendor's actual API
- * surface. **All 8 are now fixed** based on WSDL evidence. T10 sandbox verification
- * is still needed before customer rollout.
+ * Legacy SOAP/XML email-marketing platform (`mmapi.asmx`, WSDL document/literal, 55 operations).
+ * SOAP rides over HTTP here: this connector extends BaseRESTIntegrationConnector (the ONLY protocol
+ * bases the engine exports are BaseIntegrationConnector + BaseRESTIntegrationConnector — there is no
+ * BaseSOAPIntegrationConnector) and implements the SOAP 1.1 protocol over the REST base's HTTP seam.
  *
- * Fixed in this round:
- *   ✓ SOAP namespace: changed 'http://api.magnetmail.net/' → 'http://www.magnetmail.net/'
- *   ✓ Auth placement: moved from operation body to <mmAuthHeader> SOAP HEADER
- *   ✓ Authenticate field: 'user_id' → 'username'
- *   ✓ Authenticate response: now reads <sessionId> (with capital S/I) as primary
- *   ✓ Pagination: 'start_row'/'row_count' → 'pageNumber'/'pageCount' with
- *     SupportsPagination=false on operations that take no pagination
- *     (searchForRecipients, getMessagesUTC)
- *   ✓ getMessagesUTC watermark params in metadata: 'send_date_*' →
- *     'sentStartDate'/'sentEndDate'
- *   ✓ addRecipient Groups[] complex array: declared via Recipients DQP hint
- *   ✓ searchForRecipients <criteria> wrapper: envelope-builder branches via the
- *     COMPLEX_WRAPPERS map so the filter args nest inside <criteria> for this
- *     specific operation. Add entries to that map for any future operation the
- *     WSDL wraps similarly.
+ * WHY the read/write paths are overridden (genuinely idiosyncratic, per the CRUD-routing rule):
+ *   - Every operation is a POST to the SAME endpoint (`/mmapi.asmx`); the operation is selected by the
+ *     `SOAPAction` header + the body element, NOT by the URL. The base's generic GET-based read loop and
+ *     REST-body CRUD cannot express that, so FetchChanges / CreateRecord / UpdateRecord are overridden to
+ *     build SOAP envelopes. `CreateBodyShape/UpdateBodyShape = 'literal'` in the frozen metadata is the
+ *     explicit "the connector builds the envelope" signal.
  *
- * Until T10 (live tenant) confirms this connector now exchanges successful calls,
- * keep customer-facing rollout gated.
+ * Auth (two-step SESSION token — no crypto, so auth-helpers do not apply: this is a plaintext
+ * credential-for-session-token exchange over TLS, with no signing/hashing/JWT primitive to delegate):
+ *   1. POST `Authenticate(username, password)` to the shared endpoint (NO <mmAuthHeader> on this one call).
+ *   2. Read `AuthenticationResult.sessionId` + `.user_id`.
+ *   3. Attach BOTH verbatim in the <mmAuthHeader> SOAP HEADER (ns http://www.magnetmail.net/) of every
+ *      subsequent operation. The session is cached for a TTL and re-obtained on expiry.
+ *
+ * The per-object SOAP OPERATION name (list/create/update) is read from the IntegrationObject's
+ * `Configuration` JSON (`ListOperation` / `CreateOperation` / `UpdateOperation`) — the catalog is NEVER
+ * baked into this code (connector-code-conventions § "NEVER bake a catalog"). See CODE_REPORT.md for the
+ * frozen-metadata gap where those Configuration keys are not yet emitted.
+ *
+ * NOTE: the WSDL is a FIXED, versionless surface fetched once at build time — NOT a live per-credential
+ * describe endpoint — so DiscoveryIsAuthoritative stays false (never disable Declared rows on absence).
  */
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJCompanyIntegrationEntity, MJCredentialEntity, MJIntegrationObjectEntity } from '@memberjunction/core-entities';
-import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
+import { Metadata, type UserInfo } from '@memberjunction/core';
+import type {
+    MJCompanyIntegrationEntity,
+    MJCredentialEntity,
+    MJIntegrationObjectEntity,
+    MJIntegrationObjectFieldEntity,
+} from '@memberjunction/core-entities';
+import { z } from 'zod';
 import {
     BaseIntegrationConnector,
+    BaseRESTIntegrationConnector,
+    computeContentHash,
+    serializeKeyValue,
+    type RESTAuthContext,
+    type RESTResponse,
+    type PaginationState,
+    type PaginationType,
     type ConnectionTestResult,
-    type ExternalObjectSchema,
-    type ExternalFieldSchema,
     type FetchContext,
     type FetchBatchResult,
     type ExternalRecord,
-    type DefaultFieldMapping,
-    type DefaultIntegrationConfig,
-    type IntegrationObjectInfo,
-    type ActionGeneratorConfig,
-    type CRUDResult,
     type CreateRecordContext,
     type UpdateRecordContext,
-    type DeleteRecordContext,
-    type GetRecordContext,
+    type CRUDResult,
+    type SourceSchemaInfo,
 } from '@memberjunction/integration-engine';
-
-// ─── Types ───────────────────────────────────────────────────────────
-
-/**
- * Connection configuration parsed from CompanyIntegration credentials.
- * MagnetMail uses two-step authentication: user_id + password -> session
- * token; the token is attached to every subsequent SOAP operation.
- */
-export interface MagnetMailConnectionConfig {
-    /** MagnetMail numeric user/account identifier */
-    UserId: string;
-    /** MagnetMail account password (used by Authenticate). */
-    Password: string;
-    /** Optional endpoint override. Default: https://hlma-apie1.magnetmail.net/mmapi.asmx */
-    Endpoint?: string;
-    /** Default SOAP XML namespace used by mmapi.asmx. */
-    Namespace?: string;
-
-    // ── Performance overrides ───────────────────────────────────
-    /** Maximum retries for rate-limited or failed requests. Default: 4 */
-    MaxRetries?: number;
-    /** HTTP request timeout in milliseconds. Default: 60000 */
-    RequestTimeoutMs?: number;
-    /** Minimum milliseconds between API requests. Default: 500 */
-    MinRequestIntervalMs?: number;
-    /** Session TTL in ms — re-authenticate after this. Default: 30 minutes */
-    SessionTTLMs?: number;
-}
-
-/** Internal session state. */
-interface MagnetMailSession {
-    SessionToken: string;
-    CreatedAt: number;
-    Config: MagnetMailConnectionConfig;
-}
-
-/** Per-object metadata used when building SOAP envelopes from IntegrationObject rows. */
-interface MagnetMailObjectMeta {
-    /** SOAP action for list/read (= APIPath) */
-    ListAction: string;
-    /** Path under SOAP response body where the result array lives (= ResponseDataKey) */
-    ResultPath: string;
-    /** Optional create action (from DefaultQueryParams.create_action) */
-    CreateAction?: string;
-    /** Optional update action */
-    UpdateAction?: string;
-    /** Optional delete/soft-delete action */
-    DeleteAction?: string;
-    /** Optional detail (get-by-id) action */
-    DetailAction?: string;
-    /** Optional incremental-sync watermark field + from/to param names */
-    WatermarkField?: string;
-    WatermarkFromParam?: string;
-    WatermarkToParam?: string;
-    /** Extra default SOAP args merged into every request (excluding reserved keys) */
-    ExtraArgs: Record<string, string>;
-    /**
-     * Whether the operation accepts vendor pagination params (pageNumber/pageCount).
-     * MagnetMail WSDL: searchForRecipients + getMessagesUTC take NO pagination;
-     * everything else does. Default true. Drives BuildFetchArgs.
-     */
-    SupportsPagination?: boolean;
-}
+import { mergeDeclaredWithSampledFields } from '@memberjunction/connector-schema-merge';
 
 // ─── Constants ───────────────────────────────────────────────────────
 
-/** Default MagnetMail SOAP endpoint (shared hostname, not per-customer). */
 const DEFAULT_ENDPOINT = 'https://hlma-apie1.magnetmail.net/mmapi.asmx';
-
-/** Default MagnetMail SOAP namespace (derived from the public WSDL's tns). */
 const DEFAULT_NAMESPACE = 'http://www.magnetmail.net/';
+const DEFAULT_SESSION_TTL_MS = 25 * 60 * 1000;
 
-/** Default request timeout for MagnetMail (slower than typical REST). */
-const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
+// ─── Types ───────────────────────────────────────────────────────────
 
-/** Default minimum milliseconds between API calls. */
-const DEFAULT_MIN_REQUEST_INTERVAL_MS = 500;
+/** Non-secret + secret connection settings, resolved from the credential store and Configuration JSON. */
+interface MagnetMailConfig {
+    Username: string;
+    Password: string;
+    Endpoint: string;
+    Namespace: string;
+    SessionTTLMs: number;
+}
 
-/** Default retry count. */
-const DEFAULT_MAX_RETRIES = 4;
-
-/** Default session TTL — re-authenticate after 30 minutes of use. */
-const DEFAULT_SESSION_TTL_MS = 30 * 60 * 1000;
-
-/** Keys in DefaultQueryParams JSON that are reserved for connector behavior, not SOAP args. */
-const RESERVED_META_KEYS = new Set<string>([
-    'create_action', 'update_action', 'delete_action', 'detail_action',
-    'count_action', 'run_action', 'enhanced_action',
-    'beta_create_action', 'beta_status_action',
-    'watermark_field', 'watermark_from_param', 'watermark_to_param',
-]);
-
-// ─── MagnetMail Static Object Metadata for Action Generation ─────────
-
-const MAGNETMAIL_OBJECTS: IntegrationObjectInfo[] = [
-    {
-        Name: 'Recipients',
-        DisplayName: 'Recipient',
-        Description: 'An email recipient / contact record in MagnetMail.',
-        SupportsWrite: true,
-        Fields: [
-            { Name: 'recipient_id', DisplayName: 'Recipient ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'MagnetMail recipient identifier (integer).' },
-            { Name: 'email', DisplayName: 'Email', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Primary email address (de-facto natural key).' },
-            { Name: 'first_name', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'First name.' },
-            { Name: 'last_name', DisplayName: 'Last Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Last name.' },
-            { Name: 'company', DisplayName: 'Company', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Company name.' },
-            { Name: 'phone', DisplayName: 'Phone', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Phone number.' },
-            { Name: 'unsubscribed', DisplayName: 'Unsubscribed', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'True when the recipient has unsubscribed.' },
-        ],
-    },
-    {
-        Name: 'Groups',
-        DisplayName: 'Group',
-        Description: 'A distribution group in MagnetMail.',
-        SupportsWrite: true,
-        Fields: [
-            { Name: 'group_id', DisplayName: 'Group ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Group identifier.' },
-            { Name: 'group_name', DisplayName: 'Group Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Group name.' },
-            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Group description.' },
-            { Name: 'category_id', DisplayName: 'Category ID', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Associated category.' },
-        ],
-    },
-    {
-        Name: 'Messages',
-        DisplayName: 'Message',
-        Description: 'An email message / template in MagnetMail.',
-        SupportsWrite: true,
-        Fields: [
-            { Name: 'message_id', DisplayName: 'Message ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Message identifier.' },
-            { Name: 'message_name', DisplayName: 'Message Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Message name.' },
-            { Name: 'subject', DisplayName: 'Subject', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Email subject.' },
-            { Name: 'from_email', DisplayName: 'From Email', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Sender email address.' },
-            { Name: 'createDate', DisplayName: 'Create Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Message creation timestamp.' },
-            { Name: 'lastSent', DisplayName: 'Last Sent', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Most recent send timestamp.' },
-        ],
-    },
-    {
-        Name: 'UploadJobs',
-        DisplayName: 'Upload Job',
-        Description: 'An async bulk CSV upload job in MagnetMail.',
-        SupportsWrite: true,
-        Fields: [
-            { Name: 'jobid', DisplayName: 'Job ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Upload job identifier.' },
-            { Name: 'status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Job status.' },
-            { Name: 'total_rows', DisplayName: 'Total Rows', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total rows in CSV.' },
-            { Name: 'processed_rows', DisplayName: 'Processed Rows', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Number of rows processed.' },
-        ],
-    },
-];
-
-// ─── Connector Implementation ────────────────────────────────────────
+/** Auth context carried through every request. SessionID + UserId feed the <mmAuthHeader> SOAP header. */
+export interface MagnetMailAuthContext extends RESTAuthContext {
+    /** AuthenticationResult.sessionId — the mmAuthHeader session token. */
+    SessionID: string;
+    /** AuthenticationResult.user_id — the mmAuthHeader account-scope id (NOT the login username). */
+    UserId: string;
+    /** Resolved SOAP endpoint URL. */
+    Endpoint: string;
+    /** Resolved SOAP target namespace. */
+    Namespace: string;
+}
 
 /**
- * Connector for Higher Logic MagnetMail (mmapi.asmx SOAP API).
- *
- * Extends BaseIntegrationConnector directly because MagnetMail is SOAP/XML.
- * The generic BaseRESTIntegrationConnector pagination helpers don't apply;
- * MagnetMail has per-operation offset/row_count pagination, UTC-variant names,
- * and envelope-wrapped responses that need XML parsing.
- *
- * Operations are driven by `IntegrationObject` metadata:
- *   - `APIPath` holds the SOAP action name for list/read (e.g., `getMessagesUTC`)
- *   - `ResponseDataKey` holds the response element wrapping the result (e.g., `getMessagesUTCResult`)
- *   - `DefaultQueryParams` carries additional metadata:
- *       - `create_action` / `update_action` / `delete_action` / `detail_action` — SOAP action names
- *       - `watermark_field` / `watermark_from_param` / `watermark_to_param` — incremental sync settings
- *
- * Auth flow:
- *   1. POST `Authenticate` with userId + password -> session token
- *   2. Attach (user_id, session) to every subsequent SOAP call
- *   3. Cache session for SESSION_TTL_MS; refresh on expiry or auth failure
+ * The structured SOAP request the connector hands to {@link MagnetMailConnector.MakeHTTPRequest} as its
+ * `body`. MakeHTTPRequest is where the SOAP 1.1 envelope is actually built (per the task contract), from
+ * this descriptor + the auth context — so tests that mock MakeHTTPRequest capture the meaningful wire
+ * intent (action + args) and the envelope XML itself is unit-tested via {@link buildSoapEnvelope}.
  */
+export interface SoapRequest {
+    /** SOAP operation name (== body element name == SOAPAction suffix). */
+    Action: string;
+    /** Operation body arguments (may nest objects / arrays; rendered recursively). */
+    Args: Record<string, unknown>;
+    /** Whether to emit the <mmAuthHeader> SOAP header (false only for the Authenticate call). */
+    IncludeAuthHeader: boolean;
+    /** Optional wrapper element the args nest inside (e.g. `criteria` for search operations). */
+    WrapperElement?: string | null;
+}
+
+/** Cached session state. */
+interface CachedSession {
+    Auth: MagnetMailAuthContext;
+    CreatedAt: number;
+    TTLMs: number;
+}
+
+/** Zod schema for the resolved config (post key-normalization). */
+const ConfigSchema = z.object({
+    Username: z.string().min(1, 'MagnetMail username is required'),
+    Password: z.string().min(1, 'MagnetMail password is required'),
+    Endpoint: z.string().min(1),
+    Namespace: z.string().min(1),
+    SessionTTLMs: z.number().positive(),
+});
+
+// ─── Connector ───────────────────────────────────────────────────────
+
 @RegisterClass(BaseIntegrationConnector, 'MagnetMailConnector')
-export class MagnetMailConnector extends BaseIntegrationConnector {
+export class MagnetMailConnector extends BaseRESTIntegrationConnector {
 
-    // ── State ────────────────────────────────────────────────────────
+    /** Cached session token (protected so the mocked test subclass can seed it without a live auth call). */
+    protected cachedSession: CachedSession | null = null;
 
-    private cachedSession: MagnetMailSession | null = null;
-    private lastRequestTime = 0;
+    // ── Identity + capabilities ──────────────────────────────────────
 
-    // ── Capability Getters ───────────────────────────────────────────
+    /** Verbatim MJ: Integrations.Name (three-way identity invariant). */
+    public override get IntegrationName(): string { return 'magnetmail'; }
 
+    /** Vendor supports create (addRecipient / addGroup / createMagnetMailMessage / …) — wired via SOAP override. */
     public override get SupportsCreate(): boolean { return true; }
+    /** Vendor supports update (editRecipient / editMagnetMailMessage) — wired via SOAP override. */
     public override get SupportsUpdate(): boolean { return true; }
-    public override get SupportsDelete(): boolean { return true; }
-    public override get SupportsSearch(): boolean { return false; }
-    public override get SupportsListing(): boolean { return false; }
-
-    public override get IntegrationName(): string { return 'MagnetMail'; }
-
-    // ── Action Generation ────────────────────────────────────────────
-
-    public override GetIntegrationObjects(): IntegrationObjectInfo[] {
-        return MAGNETMAIL_OBJECTS;
-    }
-
-    public override GetActionGeneratorConfig(): ActionGeneratorConfig | null {
-        const objects = this.GetIntegrationObjects();
-        if (objects.length === 0) return null;
-        return {
-            IntegrationName: 'MagnetMail',
-            CategoryName: 'MagnetMail',
-            IconClass: 'fa-solid fa-envelope-circle-check',
-            Objects: objects,
-            IncludeSearch: false,
-            IncludeList: false,
-            CategoryDescription: 'Higher Logic MagnetMail email marketing integration actions',
-            ParentCategoryName: 'Business Apps',
-        };
-    }
-
-    // ── Default Configuration ────────────────────────────────────────
-
-    public override GetDefaultConfiguration(): DefaultIntegrationConfig | null {
-        return {
-            DefaultSchemaName: 'MagnetMail',
-            DefaultObjects: [
-                {
-                    SourceObjectName: 'Recipients',
-                    TargetTableName: 'MagnetMail_Recipient',
-                    TargetEntityName: 'MagnetMail Recipients',
-                    SyncEnabled: true,
-                    FieldMappings: this.GetDefaultFieldMappings('Recipients', 'Contacts'),
-                },
-                {
-                    SourceObjectName: 'Groups',
-                    TargetTableName: 'MagnetMail_Group',
-                    TargetEntityName: 'MagnetMail Groups',
-                    SyncEnabled: true,
-                    FieldMappings: [],
-                },
-                {
-                    SourceObjectName: 'Messages',
-                    TargetTableName: 'MagnetMail_Message',
-                    TargetEntityName: 'MagnetMail Messages',
-                    SyncEnabled: true,
-                    FieldMappings: [],
-                },
-            ],
-        };
-    }
-
-    public override GetDefaultFieldMappings(objectName: string, _entityName: string): DefaultFieldMapping[] {
-        if (objectName === 'Recipients') {
-            return [
-                { SourceFieldName: 'recipient_id', DestinationFieldName: 'ExternalID', IsKeyField: true },
-                { SourceFieldName: 'email', DestinationFieldName: 'Email' },
-                { SourceFieldName: 'first_name', DestinationFieldName: 'FirstName' },
-                { SourceFieldName: 'last_name', DestinationFieldName: 'LastName' },
-                { SourceFieldName: 'phone', DestinationFieldName: 'Phone' },
-                { SourceFieldName: 'company', DestinationFieldName: 'Company' },
-            ];
-        }
-        return [];
-    }
-
-    // ── TestConnection ───────────────────────────────────────────────
+    /** NO delete/remove operation exists anywhere in the 55-operation WSDL surface — honestly false. */
+    public override get SupportsDelete(): boolean { return false; }
 
     /**
-     * Exercises the Authenticate operation and then calls getUserDetails to
-     * validate the session token is accepted by a regular endpoint.
+     * The WSDL is a fixed, versionless surface fetched once at build — NOT a live per-credential describe
+     * endpoint. Keep the base default so the comprehensive-refresh deactivation path never disables
+     * Declared IO/IOF rows on absence.
      */
+    public override get DiscoveryIsAuthoritative(): boolean { return false; }
+
+    // ── TestConnection (abstract on BaseIntegrationConnector) ─────────
+
     public async TestConnection(
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
     ): Promise<ConnectionTestResult> {
         try {
-            const session = await this.GetSession(companyIntegration, contextUser, true);
-            const response = await this.InvokeSoapOperation(session, 'getUserDetails', {});
-            const account = this.ExtractNodeText(response, 'account_name') ?? 'authenticated';
+            const auth = await this.Authenticate(companyIntegration, contextUser);
             return {
                 Success: true,
-                Message: `Successfully authenticated to MagnetMail (user_id=${session.Config.UserId}, account=${account})`,
-                ServerVersion: 'MagnetMail mmapi.asmx (SOAP 1.1/1.2)',
+                Message: `Authenticated to MagnetMail (user_id=${auth.UserId})`,
+                ServerVersion: 'MagnetMail mmapi.asmx (SOAP 1.1)',
             };
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            return { Success: false, Message: `Connection failed: ${message}` };
-        }
-    }
-
-    // ── Discovery ────────────────────────────────────────────────────
-
-    /**
-     * Returns static metadata — MagnetMail's WSDL is fixed and no runtime
-     * discovery is possible for SOAP operations. Engine's cached IntegrationObjects
-     * are returned when available; otherwise the connector's static list.
-     */
-    public async DiscoverObjects(
-        companyIntegration: MJCompanyIntegrationEntity,
-        _contextUser: UserInfo
-    ): Promise<ExternalObjectSchema[]> {
-        const cached = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(companyIntegration.IntegrationID);
-        if (cached && cached.length > 0) {
-            return cached.map(obj => ({
-                ID: obj.ID,
-                Name: obj.Name,
-                Label: obj.DisplayName ?? obj.Name,
-                Description: obj.Description ?? undefined,
-                SupportsIncrementalSync: obj.SupportsIncrementalSync,
-                SupportsWrite: obj.SupportsWrite,
-            }));
-        }
-
-        return MAGNETMAIL_OBJECTS.map(o => ({
-            Name: o.Name,
-            Label: o.DisplayName,
-            Description: o.Description,
-            SupportsIncrementalSync: o.Name === 'Messages' || o.Name === 'Unsubscribes' || o.Name === 'MessageTrackingDetailed',
-            SupportsWrite: o.SupportsWrite,
-        }));
-    }
-
-    public async DiscoverFields(
-        companyIntegration: MJCompanyIntegrationEntity,
-        objectName: string,
-        _contextUser: UserInfo
-    ): Promise<ExternalFieldSchema[]> {
-        const cached = IntegrationEngineBase.Instance.GetIntegrationObject(companyIntegration.IntegrationID, objectName);
-        if (cached) {
-            const fields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(cached.ID);
-            return fields.map(f => ({
-                Name: f.Name,
-                Label: f.DisplayName ?? f.Name,
-                Description: f.Description ?? undefined,
-                DataType: f.Type,
-                IsRequired: f.IsRequired,
-                IsUniqueKey: f.IsUniqueKey || f.IsPrimaryKey,
-                IsReadOnly: f.IsReadOnly,
-                IsForeignKey: f.RelatedIntegrationObjectID != null,
-                ForeignKeyTarget: f.RelatedIntegrationObject ?? null,
-            }));
-        }
-
-        const obj = MAGNETMAIL_OBJECTS.find(o => o.Name === objectName);
-        if (!obj) return [];
-        return obj.Fields.map(f => ({
-            Name: f.Name,
-            Label: f.DisplayName,
-            Description: f.Description,
-            DataType: f.Type,
-            IsRequired: f.IsRequired,
-            IsUniqueKey: f.IsPrimaryKey,
-            IsReadOnly: f.IsReadOnly,
-        }));
-    }
-
-    // ── FetchChanges ─────────────────────────────────────────────────
-
-    /**
-     * Drives a list/read SOAP operation using the object's metadata. Pagination
-     * uses MagnetMail's `start_row` / `row_count` convention; incremental sync
-     * passes watermark_from/to parameters when configured on the IntegrationObject.
-     */
-    public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        const obj = this.ResolveObject(ctx.CompanyIntegration.IntegrationID, ctx.ObjectName);
-        const meta = this.BuildObjectMeta(obj);
-        const session = await this.GetSession(ctx.CompanyIntegration, ctx.ContextUser);
-
-        const offset = ctx.CurrentOffset ?? 0;
-        const pageSize = ctx.BatchSize || obj.DefaultPageSize || 500;
-        const args = this.BuildFetchArgs(meta, ctx, offset, pageSize);
-
-        const responseXml = await this.InvokeSoapOperation(session, meta.ListAction, args);
-        const records = this.ParseRecordArray(responseXml, meta.ResultPath);
-
-        const pkField = this.GetPrimaryKeyField(obj.ID);
-        const externalRecords: ExternalRecord[] = records.map(r => this.RawToExternalRecord(r, ctx.ObjectName, pkField));
-        const watermarkAfter = meta.WatermarkField ? this.ComputeWatermark(records, meta.WatermarkField) : undefined;
-
-        return {
-            Records: externalRecords,
-            HasMore: obj.SupportsPagination && records.length >= pageSize,
-            NewWatermarkValue: watermarkAfter,
-            NextOffset: records.length >= pageSize ? offset + records.length : undefined,
-        };
-    }
-
-    // ── CRUD operations ──────────────────────────────────────────────
-
-    public override async CreateRecord(ctx: CreateRecordContext): Promise<CRUDResult> {
-        return this.ExecuteMutation(ctx, 'CreateAction', ctx.Attributes, null);
-    }
-
-    public override async UpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> {
-        return this.ExecuteMutation(ctx, 'UpdateAction', ctx.Attributes, ctx.ExternalID);
-    }
-
-    public override async DeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> {
-        return this.ExecuteMutation(ctx, 'DeleteAction', {}, ctx.ExternalID);
-    }
-
-    public override async GetRecord(ctx: GetRecordContext): Promise<ExternalRecord | null> {
-        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
-        const contextUser = ctx.ContextUser as UserInfo;
-        const obj = this.ResolveObject(companyIntegration.IntegrationID, ctx.ObjectName);
-        const meta = this.BuildObjectMeta(obj);
-        const action = meta.DetailAction;
-        if (!action) return null;
-
-        const session = await this.GetSession(companyIntegration, contextUser);
-        const pkField = this.GetPrimaryKeyField(obj.ID);
-        const args: Record<string, string> = { ...meta.ExtraArgs, [pkField]: ctx.ExternalID };
-        const responseXml = await this.InvokeSoapOperation(session, action, args);
-        const records = this.ParseRecordArray(responseXml, `${action}Result`);
-        if (records.length === 0) return null;
-
-        return this.RawToExternalRecord(records[0], ctx.ObjectName, pkField);
-    }
-
-    // ── Mutation helper ──────────────────────────────────────────────
-
-    /**
-     * Shared create/update/delete implementation. Reads the mutation SOAP action
-     * name from the IntegrationObject's DefaultQueryParams metadata and POSTs
-     * the given attributes.
-     */
-    private async ExecuteMutation(
-        ctx: CreateRecordContext | UpdateRecordContext | DeleteRecordContext,
-        metaKey: 'CreateAction' | 'UpdateAction' | 'DeleteAction',
-        attributes: Record<string, unknown>,
-        externalID: string | null
-    ): Promise<CRUDResult> {
-        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
-        const contextUser = ctx.ContextUser as UserInfo;
-        const obj = this.ResolveObject(companyIntegration.IntegrationID, ctx.ObjectName);
-        const meta = this.BuildObjectMeta(obj);
-        const actionName = this.GetMutationActionName(meta, metaKey);
-        if (!actionName) {
+            const authFailure = /fault|authenticat|unauthor|session|invalid/i.test(message);
             return {
                 Success: false,
-                ErrorMessage: `${metaKey} is not supported for MagnetMail object ${ctx.ObjectName}`,
-                StatusCode: 400,
+                Message: authFailure
+                    ? `MagnetMail authentication failed: ${message}`
+                    : `MagnetMail connection error: ${message}`,
             };
         }
-
-        try {
-            const session = await this.GetSession(companyIntegration, contextUser);
-            const args = this.BuildMutationArgs(meta, attributes, externalID, obj);
-            const responseXml = await this.InvokeSoapOperation(session, actionName, args);
-            const extractedId = this.ExtractMutationResultId(responseXml, actionName, obj);
-            // CREATE-ONLY: a successful SOAP create that yields no record ID is a silent
-            // record-loss bug (duplicate creates on the next sync). Fail loudly via the base
-            // helper. Update/Delete keep their existing semantics (they echo the passed-in ID).
-            if (metaKey === 'CreateAction') {
-                return this.BuildCreatedResult(extractedId, 200, ctx.ObjectName);
-            }
-            const returnedId = extractedId ?? externalID ?? '';
-            return { Success: true, ExternalID: returnedId, StatusCode: 200 };
-        } catch (err: unknown) {
-            return this.BuildCRUDError(err, metaKey, ctx.ObjectName);
-        }
     }
 
-    private GetMutationActionName(meta: MagnetMailObjectMeta, key: 'CreateAction' | 'UpdateAction' | 'DeleteAction'): string | undefined {
-        if (key === 'CreateAction') return meta.CreateAction;
-        if (key === 'UpdateAction') return meta.UpdateAction;
-        return meta.DeleteAction;
-    }
+    // ── Auth (abstract on BaseRESTIntegrationConnector) ───────────────
 
-    private BuildMutationArgs(
-        meta: MagnetMailObjectMeta,
-        attributes: Record<string, unknown>,
-        externalID: string | null,
-        obj: MJIntegrationObjectEntity
-    ): Record<string, string> {
-        const args: Record<string, string> = { ...meta.ExtraArgs };
-        for (const [key, value] of Object.entries(attributes)) {
-            if (value == null) continue;
-            args[key] = String(value);
-        }
-        if (externalID != null) {
-            const pkField = this.GetPrimaryKeyField(obj.ID);
-            args[pkField] = externalID;
-        }
-        return args;
-    }
-
-    /**
-     * Attempts to extract an ID from a create/update response. MagnetMail
-     * conventions vary per operation; this falls back to returning the
-     * external ID already passed in.
-     */
-    private ExtractMutationResultId(responseXml: string, action: string, obj: MJIntegrationObjectEntity): string | null {
-        const pkField = this.GetPrimaryKeyField(obj.ID);
-        const direct = this.ExtractNodeText(responseXml, pkField);
-        if (direct) return direct;
-        const resultPath = `${action}Result`;
-        const wrapped = this.ExtractWrappedNodeText(responseXml, resultPath, pkField);
-        if (wrapped) return wrapped;
-        return null;
-    }
-
-    // ── Session Management ───────────────────────────────────────────
-
-    private async GetSession(
-        companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo,
-        forceRefresh = false
-    ): Promise<MagnetMailSession> {
-        if (!forceRefresh && this.cachedSession && this.IsSessionValid()) {
-            return this.cachedSession;
-        }
-
-        const config = await this.ParseConfig(companyIntegration, contextUser);
-        const token = await this.Authenticate(config);
-        const session: MagnetMailSession = {
-            SessionToken: token,
-            CreatedAt: Date.now(),
-            Config: config,
-        };
-        this.cachedSession = session;
-        return session;
-    }
-
-    private IsSessionValid(): boolean {
-        if (!this.cachedSession) return false;
-        const ttl = this.cachedSession.Config.SessionTTLMs ?? DEFAULT_SESSION_TTL_MS;
-        return Date.now() - this.cachedSession.CreatedAt < ttl;
-    }
-
-    private async Authenticate(config: MagnetMailConnectionConfig): Promise<string> {
-        // Vendor WSDL: Authenticate accepts {username, password} (NOT user_id).
-        const envelope = this.BuildEnvelope(config, 'Authenticate', {
-            username: config.UserId,
-            password: config.Password,
-        }, /* includeSession */ false);
-        const responseXml = await this.PostSOAP(config, 'Authenticate', envelope);
-        // Vendor returns <sessionId> (capital S, capital I). Try AuthenticateResult
-        // first (some operations wrap in an *Result envelope), then sessionId, and
-        // fall back to lowercase variants for older/forked deployments.
-        const token = this.ExtractNodeText(responseXml, 'AuthenticateResult')
-            ?? this.ExtractNodeText(responseXml, 'sessionId')
-            ?? this.ExtractNodeText(responseXml, 'session')
-            ?? this.ExtractNodeText(responseXml, 'sessionid');
-        if (!token) {
-            throw new Error('MagnetMailConnector: Authenticate did not return a session token');
-        }
-        return token;
-    }
-
-    // ── Configuration Parsing ────────────────────────────────────────
-
-    private async ParseConfig(
+    /** Two-step SOAP session auth with TTL caching. Returns the mmAuthHeader session context. */
+    protected async Authenticate(
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
-    ): Promise<MagnetMailConnectionConfig> {
-        const credentialID = companyIntegration.CredentialID;
-        if (credentialID) {
-            const config = await this.LoadFromCredentialEntity(credentialID, contextUser);
-            if (config) return config;
-        }
+    ): Promise<MagnetMailAuthContext> {
+        if (this.isSessionValid()) return this.cachedSession!.Auth;
 
-        const configJson = companyIntegration.Configuration;
-        if (configJson) {
-            const parsed = JSON.parse(configJson) as Partial<MagnetMailConnectionConfig>;
-            return this.ValidateConfig(parsed);
-        }
+        const config = await this.ParseConfig(companyIntegration, contextUser);
+        const preAuth = this.preAuthContext(config);
+        const request: SoapRequest = {
+            Action: 'Authenticate',
+            Args: { username: config.Username, password: config.Password },
+            IncludeAuthHeader: false,
+        };
+        const response = await this.MakeHTTPRequest(preAuth, config.Endpoint, 'POST', this.BuildHeaders(preAuth), request);
+        this.throwOnSoapFault(response, 'Authenticate');
 
-        throw new Error('MagnetMailConnector: No credentials or configuration found on CompanyIntegration');
+        const result = this.unwrapSoapResult(response.Body);
+        const sessionId = this.readNestedString(result, 'sessionId') ?? this.readNestedString(result, 'AuthenticateResult');
+        const userId = this.readNestedString(result, 'user_id') ?? '';
+        if (!sessionId) {
+            throw new Error('MagnetMail Authenticate returned no sessionId');
+        }
+        const auth: MagnetMailAuthContext = {
+            SessionID: sessionId,
+            UserId: userId,
+            Endpoint: config.Endpoint,
+            Namespace: config.Namespace,
+        };
+        this.cachedSession = { Auth: auth, CreatedAt: Date.now(), TTLMs: config.SessionTTLMs };
+        return auth;
     }
 
-    private async LoadFromCredentialEntity(
-        credentialID: string,
+    /** Content-type headers for a SOAP 1.1 POST. The per-operation SOAPAction is added in MakeHTTPRequest. */
+    protected BuildHeaders(_auth: RESTAuthContext): Record<string, string> {
+        return {
+            'Content-Type': 'text/xml; charset=utf-8',
+            'Accept': 'text/xml',
+        };
+    }
+
+    /** The SOAP endpoint URL. For SOAP the operation is in the SOAPAction + body, not the path. */
+    protected GetBaseURL(_companyIntegration: MJCompanyIntegrationEntity, auth: RESTAuthContext): string {
+        return (auth as MagnetMailAuthContext).Endpoint ?? DEFAULT_ENDPOINT;
+    }
+
+    // ── HTTP transport — builds + POSTs the SOAP envelope ─────────────
+
+    /**
+     * The SOAP transport boundary. `body` MUST be a {@link SoapRequest}; MakeHTTPRequest builds the SOAP
+     * 1.1 envelope from it (+ the auth context's <mmAuthHeader>), POSTs with `Content-Type: text/xml` and
+     * `SOAPAction: "<namespace><action>"`, and parses the XML response into a JS object (faults surfaced
+     * as `Body._soapFault`). Test subclasses override this to capture the request and return canned bodies.
+     */
+    protected async MakeHTTPRequest(
+        auth: RESTAuthContext,
+        url: string,
+        method: string,
+        headers: Record<string, string>,
+        body?: unknown
+    ): Promise<RESTResponse> {
+        const soapAuth = auth as MagnetMailAuthContext;
+        const request = body as SoapRequest | undefined;
+        if (!request || typeof request.Action !== 'string') {
+            throw new Error('MagnetMailConnector.MakeHTTPRequest requires a SoapRequest body (Action + Args)');
+        }
+        const envelope = this.buildSoapEnvelope(soapAuth, request);
+        const soapAction = `${soapAuth.Namespace ?? DEFAULT_NAMESPACE}${request.Action}`;
+        const reqHeaders: Record<string, string> = { ...headers, 'SOAPAction': `"${soapAction}"` };
+
+        const httpResponse = await fetch(url, { method, headers: reqHeaders, body: envelope });
+        const text = await httpResponse.text();
+        return this.parseSoapResponse(text, httpResponse.status, this.headersToObject(httpResponse.headers));
+    }
+
+    // ── NormalizeResponse (abstract) — strip <action>Result wrapper ───
+
+    /**
+     * Strips the SOAP `<{action}Response>` / `<{action}Result>` envelope, then locates the record set.
+     * When `responseDataKey` (the XSD record-type name, e.g. `Recipient`) is given it is deep-found —
+     * which also transparently descends any `AccessPath` nesting (`RecipientSuppressionList` →
+     * `ArrayOfRecipient` → `Recipient`) without the connector needing to hard-code the path. A single
+     * record object is returned as a one-element array; a missing/nil set as `[]`.
+     */
+    protected NormalizeResponse(rawBody: unknown, responseDataKey: string | null): Record<string, unknown>[] {
+        if (rawBody == null) return [];
+        const unwrapped = this.unwrapSoapResult(rawBody);
+        if (unwrapped == null) return [];
+
+        let target: unknown = unwrapped;
+        if (responseDataKey) {
+            const found = this.deepFindKey(unwrapped, responseDataKey);
+            if (found === undefined) return []; // declared record type absent → no records
+            target = found;
+        } else if (unwrapped && typeof unwrapped === 'object' && !Array.isArray(unwrapped)) {
+            const arr = this.firstArrayValue(unwrapped as Record<string, unknown>);
+            if (arr) target = arr;
+        }
+
+        return this.toRecordArray(target);
+    }
+
+    // ── ExtractPaginationInfo (abstract) — pageNumber/pageCount ───────
+
+    /**
+     * SOAP has no envelope-level pagination metadata; HasMore is inferred from whether a FULL page came
+     * back (record count == pageSize). Operations declared `PaginationType: None` never take page args and
+     * always report a single page.
+     */
+    protected ExtractPaginationInfo(
+        rawBody: unknown,
+        paginationType: PaginationType,
+        currentPage: number,
+        currentOffset: number,
+        pageSize: number
+    ): PaginationState {
+        if (paginationType === 'None') return { HasMore: false };
+        const count = this.recordCount(rawBody);
+        const hasMore = pageSize > 0 && count >= pageSize;
+        if (paginationType === 'Offset') {
+            return { HasMore: hasMore, NextOffset: currentOffset + count };
+        }
+        // PageNumber (MagnetMail's pageNumber/pageCount) and any other page-style: advance the page number.
+        return { HasMore: hasMore, NextPage: currentPage + 1 };
+    }
+
+    // ── IntrospectSchema (declared + sampled field union) ─────────────
+
+    /**
+     * Never-shrink SAMPLE-UNION: enrich each object's DECLARED (WSDL/metadata) field set with fields
+     * observed by live SAMPLING (`DiscoverFieldsViaFetch`), so a tenant's custom/undeclared columns are
+     * captured at connection time without ever losing or narrowing a declared field. Declared attributes
+     * stay authoritative; sampling only fills gaps, widens capacities, and appends undeclared columns
+     * (`mergeDeclaredWithSampledFields` — max(declared, sampled)). Per object, parallel + best-effort: a
+     * sampling failure for one object never fails introspection (its declared fields stand). Connector-
+     * agnostic wiring — no MagnetMail-specific logic here.
+     */
+    public override async IntrospectSchema(
+        companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo,
-        provider?: IMetadataProvider
-    ): Promise<MagnetMailConnectionConfig | null> {
-        const md = provider ?? new Metadata();
-        const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-        const loaded = await credential.Load(credentialID);
-        if (!loaded || !credential.Values) return null;
-
-        try {
-            const raw = JSON.parse(credential.Values) as Record<string, unknown>;
-            const parsed: Partial<MagnetMailConnectionConfig> = {
-                UserId: (raw.userId as string | undefined) ?? (raw.UserId as string | undefined),
-                Password: (raw.password as string | undefined) ?? (raw.Password as string | undefined),
-                Endpoint: (raw.endpoint as string | undefined) ?? (raw.Endpoint as string | undefined),
-                Namespace: (raw.namespace as string | undefined) ?? (raw.Namespace as string | undefined),
-            };
-            return this.ValidateConfig(parsed);
-        } catch {
-            return null;
-        }
+    ): Promise<SourceSchemaInfo> {
+        const schema = await super.IntrospectSchema(companyIntegration, contextUser);
+        await Promise.all(schema.Objects.map(async (obj) => {
+            try {
+                const sampled = await this.DiscoverFieldsViaFetch(companyIntegration, obj.ExternalName, contextUser);
+                obj.Fields = mergeDeclaredWithSampledFields(obj.Fields, sampled);
+            } catch { /* best-effort — declared fields remain authoritative on a sampling failure */ }
+        }));
+        return schema;
     }
 
-    private ValidateConfig(raw: Partial<MagnetMailConnectionConfig>): MagnetMailConnectionConfig {
-        if (!raw.UserId) throw new Error('MagnetMailConnector: UserId is required');
-        if (!raw.Password) throw new Error('MagnetMailConnector: Password is required');
+    // ── FetchChanges (SOAP read) ──────────────────────────────────────
+
+    /**
+     * SOAP read for one object. Reads the list SOAP operation from the IO's Configuration (`ListOperation`
+     * / `SoapListAction`), applies pageNumber/pageCount when the object supports pagination, and the
+     * incremental date-range param when SupportsIncrementalSync. Fetches ONE page per call; the engine
+     * loops on HasMore + NextPage. Full-record pass-through: every source key reaches Fields.
+     */
+    public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
+        const obj = this.GetCachedObject(ctx.CompanyIntegration.IntegrationID, ctx.ObjectName);
+        const fields = this.GetCachedFields(obj.ID);
+        const cfg = this.readIOConfig(obj);
+
+        const listOp = this.readConfigString(cfg, 'ListOperation') ?? this.readConfigString(cfg, 'SoapListAction');
+        if (!listOp) {
+            // The list SOAP operation isn't wired in this IO's Configuration. Surface it loudly instead of
+            // silently returning nothing (see CODE_REPORT.md — frozen-metadata operation-mapping gap).
+            return {
+                Records: [],
+                HasMore: false,
+                Warnings: [{
+                    Code: 'NO_LIST_OPERATION',
+                    Message: `"${obj.Name}": no SOAP list operation in Configuration (expected Configuration.ListOperation). ` +
+                        `Cannot fetch until the operation is wired.`,
+                    Data: { object: obj.Name },
+                }],
+            };
+        }
+
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
+        const page = ctx.CurrentPage ?? 1;
+        const offset = ctx.CurrentOffset ?? 0;
+        const pageSize = obj.DefaultPageSize && obj.DefaultPageSize > 0 ? obj.DefaultPageSize : Math.max(1, ctx.BatchSize);
+
+        const args = this.buildFetchArgs(obj, cfg, ctx, page, pageSize);
+        const wrapper = this.readConfigString(cfg, 'CriteriaWrapper');
+        const request: SoapRequest = { Action: listOp, Args: args, IncludeAuthHeader: true, WrapperElement: wrapper };
+
+        const response = await this.MakeHTTPRequest(auth, auth.Endpoint, 'POST', this.BuildHeaders(auth), request);
+        this.throwOnSoapFault(response, listOp);
+
+        const rawRecords = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
+        const pkFieldNames = this.primaryKeyFieldNames(fields);
+        const records = rawRecords.map(r => this.buildExternalRecord(
+            this.applyTransformPreservingKeys(r, obj, fields),
+            ctx.ObjectName,
+            pkFieldNames
+        ));
+
+        const pagination = this.ExtractPaginationInfo(response.Body, obj.PaginationType as PaginationType, page, offset, pageSize);
+        const newWatermark = this.computeWatermark(obj, cfg, rawRecords);
 
         return {
-            UserId: raw.UserId,
-            Password: raw.Password,
-            Endpoint: raw.Endpoint ?? DEFAULT_ENDPOINT,
-            Namespace: raw.Namespace ?? DEFAULT_NAMESPACE,
-            MaxRetries: raw.MaxRetries ?? DEFAULT_MAX_RETRIES,
-            RequestTimeoutMs: raw.RequestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
-            MinRequestIntervalMs: raw.MinRequestIntervalMs ?? DEFAULT_MIN_REQUEST_INTERVAL_MS,
-            SessionTTLMs: raw.SessionTTLMs ?? DEFAULT_SESSION_TTL_MS,
+            Records: records,
+            HasMore: pagination.HasMore,
+            NextPage: pagination.NextPage,
+            NextOffset: pagination.NextOffset,
+            NewWatermarkValue: newWatermark,
         };
     }
 
-    // ── SOAP helpers ─────────────────────────────────────────────────
+    // ── CRUD (SOAP mutation envelopes) ────────────────────────────────
 
     /**
-     * Invokes a SOAP operation with session authentication. The `args` map is
-     * serialised as child elements of the operation element; complex types
-     * should be pre-serialised to string by callers.
+     * SOAP create. Reads the mutation SOAP action from Configuration.CreateOperation, builds a `literal`
+     * SOAP envelope, POSTs it, and routes the result through BuildCreatedResult so a 2xx with no record ID
+     * fails LOUDLY (never a silent record-loss / duplicate-on-next-sync).
      */
-    private async InvokeSoapOperation(
-        session: MagnetMailSession,
-        action: string,
-        args: Record<string, string>
-    ): Promise<string> {
-        const envelope = this.BuildEnvelope(session.Config, action, args, /* includeSession */ true, session.SessionToken);
-        return this.PostSOAP(session.Config, action, envelope);
+    public override async CreateRecord(ctx: CreateRecordContext): Promise<CRUDResult> {
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        if (!obj.CreateAPIPath || !obj.CreateMethod) {
+            throw new Error(
+                `CreateRecord not supported for "${ctx.ObjectName}": CreateAPIPath / CreateMethod not configured on IntegrationObject.`
+            );
+        }
+        const cfg = this.readIOConfig(obj);
+        const action = this.readConfigString(cfg, 'CreateOperation');
+        if (!action) {
+            return {
+                Success: false,
+                StatusCode: 400,
+                ErrorMessage: `CreateRecord for "${ctx.ObjectName}": Configuration.CreateOperation (SOAP action) not configured.`,
+            };
+        }
+
+        try {
+            const auth = await this.Authenticate(ci, contextUser);
+            const request: SoapRequest = { Action: action, Args: ctx.Attributes, IncludeAuthHeader: true };
+            const response = await this.MakeHTTPRequest(auth, auth.Endpoint, 'POST', this.BuildHeaders(auth), request);
+            this.throwOnSoapFault(response, action);
+            // A 200/literal SOAP body can STILL signal failure in-band (SaveResult.error/errorObj/msg) — a SOAP
+            // Fault is not the only failure signal this API uses (frozen contract ErrorResponseShape). Detect it
+            // BEFORE trusting the id, so a create is never counted as success on a vendor-signalled error.
+            const inBandError = this.extractInBandError(response.Body);
+            if (inBandError) {
+                return { Success: false, StatusCode: response.Status, ErrorMessage: `CreateRecord failed for ${ctx.ObjectName}: ${inBandError}` };
+            }
+            const externalID = this.extractMutationId(response.Body, obj);
+            return this.BuildCreatedResult(externalID, response.Status, ctx.ObjectName);
+        } catch (err: unknown) {
+            return this.buildCRUDError(err, 'CreateRecord', ctx.ObjectName);
+        }
     }
 
     /**
-     * Builds a SOAP 1.1 envelope. Vendor WSDL places authentication in a SOAP
-     * HEADER element <mmAuthHeader> containing <sessionId> + <user_id> — NOT in
-     * the operation body. The operation body carries only operation-specific args.
+     * SOAP update. Reads the mutation SOAP action from Configuration.UpdateOperation, injects the target
+     * ExternalID into the body under the object's primary-key field name, and POSTs the `literal` envelope.
      */
-    private BuildEnvelope(
-        config: MagnetMailConnectionConfig,
-        operation: string,
-        args: Record<string, string>,
-        includeSession: boolean,
-        sessionToken?: string
-    ): string {
-        const namespace = config.Namespace ?? DEFAULT_NAMESPACE;
-        const headerBlock = includeSession
-            ? `  <soap:Header>\n    <mmAuthHeader xmlns="${namespace}">\n      <sessionId>${this.EscapeXmlValue(sessionToken ?? '')}</sessionId>\n      <user_id>${this.EscapeXmlValue(config.UserId)}</user_id>\n    </mmAuthHeader>\n  </soap:Header>\n`
+    public override async UpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> {
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        if (!obj.UpdateAPIPath || !obj.UpdateMethod) {
+            throw new Error(
+                `UpdateRecord not supported for "${ctx.ObjectName}": UpdateAPIPath / UpdateMethod not configured on IntegrationObject.`
+            );
+        }
+        const cfg = this.readIOConfig(obj);
+        const action = this.readConfigString(cfg, 'UpdateOperation');
+        if (!action) {
+            return {
+                Success: false,
+                StatusCode: 400,
+                ErrorMessage: `UpdateRecord for "${ctx.ObjectName}": Configuration.UpdateOperation (SOAP action) not configured.`,
+            };
+        }
+
+        try {
+            const auth = await this.Authenticate(ci, contextUser);
+            const fields = this.GetCachedFields(obj.ID);
+            const pkName = this.primaryKeyFieldNames(fields)[0];
+            const args: Record<string, unknown> = { ...ctx.Attributes };
+            if (pkName && args[pkName] === undefined) args[pkName] = ctx.ExternalID;
+            const request: SoapRequest = { Action: action, Args: args, IncludeAuthHeader: true };
+            const response = await this.MakeHTTPRequest(auth, auth.Endpoint, 'POST', this.BuildHeaders(auth), request);
+            this.throwOnSoapFault(response, action);
+            // In-band error check (same rationale as CreateRecord): an edit* response can carry error/errorObj/msg
+            // inside a structurally-successful 200 body.
+            const inBandError = this.extractInBandError(response.Body);
+            if (inBandError) {
+                return { Success: false, StatusCode: response.Status, ErrorMessage: `UpdateRecord failed for ${ctx.ObjectName}: ${inBandError}` };
+            }
+            return { Success: true, StatusCode: response.Status, ExternalID: ctx.ExternalID };
+        } catch (err: unknown) {
+            return this.buildCRUDError(err, 'UpdateRecord', ctx.ObjectName);
+        }
+    }
+
+    // ── SOAP envelope building ────────────────────────────────────────
+
+    /** Builds a SOAP 1.1 envelope with the optional <mmAuthHeader> header and the operation body. */
+    protected buildSoapEnvelope(auth: MagnetMailAuthContext, request: SoapRequest): string {
+        const ns = auth.Namespace ?? DEFAULT_NAMESPACE;
+        const header = request.IncludeAuthHeader
+            ? `  <soap:Header>\n    <mmAuthHeader xmlns="${ns}">\n` +
+              `      <sessionId>${this.escapeXml(auth.SessionID ?? '')}</sessionId>\n` +
+              `      <user_id>${this.escapeXml(auth.UserId ?? '')}</user_id>\n` +
+              `    </mmAuthHeader>\n  </soap:Header>\n`
             : '';
 
-        // Operations whose WSDL wraps all arguments in a single complex element.
-        // searchForRecipients is the canonical one: all filter fields go INSIDE
-        // a <criteria> element rather than as flat children of the operation.
-        const COMPLEX_WRAPPERS: Record<string, string> = {
-            'searchForRecipients': 'criteria',
-        };
-        const wrapper = COMPLEX_WRAPPERS[operation];
+        const argsXml = this.renderArgs(request.Args);
+        const inner = request.WrapperElement
+            ? `      <${request.WrapperElement}>\n${argsXml}\n      </${request.WrapperElement}>`
+            : argsXml;
 
-        const renderArgs = (entries: [string, string][]): string =>
-            entries.map(([k, v]) => `<${k}>${this.EscapeXmlValue(v)}</${k}>`).join('\n        ');
-
-        let body: string;
-        if (wrapper) {
-            const inner = renderArgs(Object.entries(args));
-            body = `      <${wrapper}>\n        ${inner}\n      </${wrapper}>`;
-        } else {
-            body = `      ${renderArgs(Object.entries(args))}`;
-        }
-
-        return `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-${headerBlock}  <soap:Body>
-    <${operation} xmlns="${namespace}">
-${body}
-    </${operation}>
-  </soap:Body>
-</soap:Envelope>`;
+        return `<?xml version="1.0" encoding="utf-8"?>\n` +
+            `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n` +
+            `${header}  <soap:Body>\n` +
+            `    <${request.Action} xmlns="${ns}">\n` +
+            `${inner}\n` +
+            `    </${request.Action}>\n` +
+            `  </soap:Body>\n` +
+            `</soap:Envelope>`;
     }
 
-    /**
-     * POSTs a SOAP envelope with throttling, retry, and timeout.
-     */
-    private async PostSOAP(
-        config: MagnetMailConnectionConfig,
-        action: string,
-        envelope: string
-    ): Promise<string> {
-        const endpoint = config.Endpoint ?? DEFAULT_ENDPOINT;
-        const namespace = config.Namespace ?? DEFAULT_NAMESPACE;
-        const soapAction = `${namespace}${action}`;
-        const maxRetries = config.MaxRetries ?? DEFAULT_MAX_RETRIES;
-        const timeoutMs = config.RequestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-        const minInterval = config.MinRequestIntervalMs ?? DEFAULT_MIN_REQUEST_INTERVAL_MS;
-
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            await this.Throttle(minInterval);
-            const outcome = await this.ExecuteSoapAttempt(endpoint, envelope, soapAction, timeoutMs);
-            if (outcome.retryable && attempt < maxRetries) {
-                const delay = Math.min(Math.pow(2, attempt) * 1000, 15000);
-                await this.Sleep(delay);
-                continue;
-            }
-            if (outcome.error) throw outcome.error;
-            return outcome.xml as string;
+    /** Renders args as XML child elements, recursing into nested objects/arrays; nulls are skipped. */
+    protected renderArgs(args: Record<string, unknown>, indent = '      '): string {
+        const parts: string[] = [];
+        for (const [key, value] of Object.entries(args)) {
+            const rendered = this.renderXmlValue(key, value, indent);
+            if (rendered) parts.push(rendered);
         }
-        throw new Error(`MagnetMailConnector: exhausted ${maxRetries + 1} attempts for SOAP action "${action}"`);
+        return parts.join('\n');
     }
 
-    private async ExecuteSoapAttempt(
-        endpoint: string,
-        envelope: string,
-        soapAction: string,
-        timeoutMs: number
-    ): Promise<{ xml?: string; error?: Error; retryable: boolean }> {
-        const controller = new AbortController();
-        const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
-        try {
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'text/xml; charset=utf-8',
-                    'SOAPAction': `"${soapAction}"`,
-                    'Accept': 'text/xml',
+    private renderXmlValue(key: string, value: unknown, indent: string): string {
+        if (value == null) return '';
+        if (Array.isArray(value)) {
+            return value
+                .map(item => this.renderXmlValue(key, item, indent))
+                .filter(s => s.length > 0)
+                .join('\n');
+        }
+        if (typeof value === 'object') {
+            const children = this.renderArgs(value as Record<string, unknown>, indent + '  ');
+            return `${indent}<${key}>\n${children}\n${indent}</${key}>`;
+        }
+        return `${indent}<${key}>${this.escapeXml(String(value))}</${key}>`;
+    }
+
+    // ── SOAP response parsing (XML → JS) ──────────────────────────────
+
+    /** Parses a SOAP response envelope into a normalized RESTResponse (Body = parsed <soap:Body> content). */
+    protected parseSoapResponse(xml: string, status: number, headers: Record<string, string>): RESTResponse {
+        const bodyInner = this.extractElementInner(xml, 'Body') ?? xml;
+        const fault = this.extractElementInner(bodyInner, 'Fault');
+        if (fault) {
+            return {
+                Status: status && status >= 400 ? status : 500,
+                Body: {
+                    _soapFault: {
+                        faultcode: this.extractElementInner(fault, 'faultcode')?.trim() ?? 'UNKNOWN',
+                        faultstring: this.extractElementInner(fault, 'faultstring')?.trim() ?? 'unknown SOAP fault',
+                    },
                 },
-                body: envelope,
-                signal: controller.signal,
-            });
-            this.lastRequestTime = Date.now();
-            const xml = await response.text();
-            if (response.status === 429 || response.status >= 500) {
-                return { error: new Error(`MagnetMail HTTP ${response.status}: ${xml.slice(0, 500)}`), retryable: true };
-            }
-            if (!response.ok) {
-                return { error: new Error(`MagnetMail HTTP ${response.status}: ${xml.slice(0, 500)}`), retryable: false };
-            }
-            this.CheckSoapFault(xml);
-            return { xml, retryable: false };
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            const retryable = message.includes('abort') || message.includes('timeout') || message.includes('ECONNRESET');
-            return { error: new Error(`MagnetMail SOAP request failed: ${message}`), retryable };
-        } finally {
-            clearTimeout(timeoutHandle);
+                Headers: headers,
+            };
         }
+        return { Status: status, Body: this.xmlToObject(bodyInner), Headers: headers };
     }
 
-    // ── XML parsing (regex-based, consistent with SageIntacct approach) ──
-
-    /**
-     * Throws a descriptive error if the SOAP response contains a fault element.
-     */
-    private CheckSoapFault(xml: string): void {
-        const faultMatch = xml.match(/<soap:Fault>([\s\S]*?)<\/soap:Fault>/i);
-        if (!faultMatch) return;
-        const fault = faultMatch[1];
-        const code = this.ExtractNodeText(fault, 'faultcode') ?? 'UNKNOWN';
-        const reason = this.ExtractNodeText(fault, 'faultstring') ?? this.ExtractNodeText(fault, 'Reason') ?? 'unknown';
-        throw new Error(`MagnetMail SOAP Fault ${code}: ${reason}`);
-    }
-
-    /**
-     * Extracts the text content of the first element with the given tag name.
-     * Namespace-agnostic — matches by local name.
-     */
-    private ExtractNodeText(xml: string, tag: string): string | null {
-        const regex = new RegExp(`<(?:\\w+:)?${this.EscapeRegex(tag)}[^>]*>([\\s\\S]*?)<\\/(?:\\w+:)?${this.EscapeRegex(tag)}>`, 'i');
-        const match = xml.match(regex);
-        return match ? this.DecodeXmlEntities(match[1].trim()) : null;
-    }
-
-    /**
-     * Extracts a node nested inside another wrapper node (e.g., `<FooResult><id>42</id></FooResult>`).
-     */
-    private ExtractWrappedNodeText(xml: string, wrapperTag: string, innerTag: string): string | null {
-        const wrapperRegex = new RegExp(`<(?:\\w+:)?${this.EscapeRegex(wrapperTag)}[^>]*>([\\s\\S]*?)<\\/(?:\\w+:)?${this.EscapeRegex(wrapperTag)}>`, 'i');
-        const wrapperMatch = xml.match(wrapperRegex);
-        if (!wrapperMatch) return null;
-        return this.ExtractNodeText(wrapperMatch[1], innerTag);
-    }
-
-    /**
-     * Parses an array of records inside a result wrapper. Returns one plain
-     * object per record element. Works for both singular wrapper responses
-     * (e.g., GetMessageDetails) and array-style (e.g., getMessagesUTC).
-     */
-    private ParseRecordArray(xml: string, resultPath: string | null): Record<string, unknown>[] {
-        const containerXml = resultPath ? this.FindElementContent(xml, resultPath) : xml;
-        if (!containerXml) return [];
-
-        const childElements = this.ExtractDirectChildElements(containerXml);
-        if (childElements.length === 0) return [];
-
-        // Group consecutive same-tag elements as a record array
-        const records: Record<string, unknown>[] = [];
-        for (const child of childElements) {
-            records.push(this.ParseElementFields(child.content));
+    /** Recursively converts an XML fragment's inner content into a JS value (object / array / scalar). */
+    protected xmlToObject(xml: string): unknown {
+        const normalized = xml.replace(/<(\w+(?::\w+)?)((?:\s[^>]*?)?)\/>/g, '<$1></$1>');
+        const children = this.extractChildren(normalized);
+        if (children.length === 0) {
+            return this.coerceScalar(normalized.trim());
         }
-        return records;
+        const obj: Record<string, unknown> = {};
+        for (const child of children) {
+            const value = this.xmlToObject(child.inner);
+            const existing = obj[child.tag];
+            if (existing === undefined) {
+                obj[child.tag] = value;
+            } else if (Array.isArray(existing)) {
+                existing.push(value);
+            } else {
+                obj[child.tag] = [existing, value];
+            }
+        }
+        return obj;
     }
 
-    private FindElementContent(xml: string, tag: string): string | null {
-        const regex = new RegExp(`<(?:\\w+:)?${this.EscapeRegex(tag)}[^>]*>([\\s\\S]*?)<\\/(?:\\w+:)?${this.EscapeRegex(tag)}>`, 'i');
-        const match = xml.match(regex);
-        return match ? match[1] : null;
-    }
-
-    private ExtractDirectChildElements(xml: string): Array<{ tag: string; content: string }> {
-        const results: Array<{ tag: string; content: string }> = [];
+    private extractChildren(xml: string): Array<{ tag: string; inner: string }> {
+        const results: Array<{ tag: string; inner: string }> = [];
         const regex = /<(?:\w+:)?(\w+)(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?\1>/g;
         let match: RegExpExecArray | null;
         while ((match = regex.exec(xml)) !== null) {
-            results.push({ tag: match[1], content: match[2] });
+            results.push({ tag: match[1], inner: match[2] });
         }
         return results;
     }
 
-    /**
-     * Parses a record element's children into a flat key-value map. Nested
-     * objects and arrays are returned as raw inner XML strings (caller can
-     * re-parse if needed — simple enough for most MagnetMail fields).
-     */
-    private ParseElementFields(xml: string): Record<string, unknown> {
-        const record: Record<string, unknown> = {};
-        const children = this.ExtractDirectChildElements(xml);
-        for (const child of children) {
-            const value = this.CoerceFieldValue(child.content.trim());
-            // Last-write-wins for repeated child elements; MagnetMail rarely emits them in these shapes
-            record[child.tag] = value;
-        }
-        return record;
+    /** Returns the inner content of the first element with the given LOCAL name (namespace-agnostic). */
+    private extractElementInner(xml: string, localName: string): string | null {
+        const re = new RegExp(`<(?:\\w+:)?${this.escapeRegex(localName)}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:\\w+:)?${this.escapeRegex(localName)}>`, 'i');
+        const m = xml.match(re);
+        return m ? m[1] : null;
     }
 
-    private CoerceFieldValue(raw: string): unknown {
+    private coerceScalar(raw: string): unknown {
         if (raw === '') return null;
         if (raw === 'true') return true;
         if (raw === 'false') return false;
         if (/^-?\d+$/.test(raw)) return parseInt(raw, 10);
         if (/^-?\d+\.\d+$/.test(raw)) return parseFloat(raw);
-        return this.DecodeXmlEntities(raw);
+        return this.decodeXml(raw);
     }
 
-    // ── Metadata helpers ─────────────────────────────────────────────
+    // ── Fault handling ────────────────────────────────────────────────
 
-    private ResolveObject(integrationID: string, objectName: string): MJIntegrationObjectEntity {
-        const obj = IntegrationEngineBase.Instance.GetIntegrationObject(integrationID, objectName);
-        if (!obj) throw new Error(`MagnetMailConnector: unknown IntegrationObject "${objectName}"`);
-        return obj;
+    /** Returns the parsed SOAP fault ({faultcode, faultstring}) if present, else null. */
+    protected extractSoapFault(body: unknown): { faultcode: string; faultstring: string } | null {
+        if (body && typeof body === 'object') {
+            const f = (body as Record<string, unknown>)._soapFault;
+            if (f && typeof f === 'object') {
+                const rec = f as Record<string, unknown>;
+                return {
+                    faultcode: String(rec.faultcode ?? 'UNKNOWN'),
+                    faultstring: String(rec.faultstring ?? 'unknown SOAP fault'),
+                };
+            }
+        }
+        return null;
     }
 
-    private BuildObjectMeta(obj: MJIntegrationObjectEntity): MagnetMailObjectMeta {
-        const listAction = obj.APIPath || '';
-        if (!listAction) throw new Error(`MagnetMailConnector: IntegrationObject "${obj.Name}" is missing APIPath (SOAP action)`);
-        const resultPath = obj.ResponseDataKey || `${listAction}Result`;
-        const raw = this.ParseDefaultQueryParams(obj);
+    /**
+     * Reads the vendor's IN-BAND error signal from a mutation response body (SaveResult / *Result wrapper).
+     * Per the frozen contract's ErrorResponseShape: a 200/literal SOAP body can signal failure via `error`
+     * (s:double, 0 = success by convention), an `errorObj` (tns:Error: errorCode/errorMessage/errorDetails/…),
+     * and/or a human `msg` — a SOAP Fault is NOT the only failure signal this API uses. Returns a
+     * human-readable message when the body signals an error, else null.
+     */
+    protected extractInBandError(body: unknown): string | null {
+        const result = this.unwrapSoapResult(body);
+        if (!result || typeof result !== 'object' || Array.isArray(result)) return null;
+        const rec = result as Record<string, unknown>;
 
-        const extraArgs: Record<string, string> = {};
-        for (const [k, v] of Object.entries(raw)) {
-            if (RESERVED_META_KEYS.has(k)) continue;
-            extraArgs[k] = String(v);
+        // errorObj (tns:Error) present with substance → failure.
+        const errObj = rec.errorObj;
+        if (errObj && typeof errObj === 'object' && !Array.isArray(errObj)) {
+            const eo = errObj as Record<string, unknown>;
+            const substantive = (v: unknown): boolean =>
+                v != null && String(v).trim().length > 0 && String(v).trim() !== '0';
+            if ([eo.errorNumber, eo.errorCode, eo.errorMessage, eo.errorDetails, eo.errorType].some(substantive)) {
+                const msg = [eo.errorMessage, eo.errorDetails].find(v => v != null && String(v).trim().length > 0);
+                return String(msg ?? `errorCode=${eo.errorCode ?? eo.errorNumber ?? 'unknown'}`);
+            }
         }
 
-        return {
-            ListAction: listAction,
-            ResultPath: resultPath,
-            CreateAction: raw['create_action'] as string | undefined,
-            UpdateAction: raw['update_action'] as string | undefined,
-            DeleteAction: raw['delete_action'] as string | undefined,
-            DetailAction: raw['detail_action'] as string | undefined,
-            WatermarkField: raw['watermark_field'] as string | undefined,
-            WatermarkFromParam: raw['watermark_from_param'] as string | undefined,
-            WatermarkToParam: raw['watermark_to_param'] as string | undefined,
-            ExtraArgs: extraArgs,
-        };
+        // Numeric `error` flag: null/absent/0 = success; anything else = failure.
+        const errFlag = rec.error;
+        if (errFlag != null) {
+            const n = typeof errFlag === 'number' ? errFlag : Number(String(errFlag));
+            if (Number.isFinite(n) && n !== 0) {
+                const humanMsg = typeof rec.msg === 'string' && rec.msg.trim().length > 0 ? rec.msg.trim() : undefined;
+                return humanMsg ?? `vendor error flag=${n}`;
+            }
+        }
+        return null;
     }
 
-    private ParseDefaultQueryParams(obj: MJIntegrationObjectEntity): Record<string, unknown> {
-        if (!obj.DefaultQueryParams) return {};
+    /** Throws a descriptive error when a response carries a SOAP fault, and invalidates the session. */
+    protected throwOnSoapFault(response: RESTResponse, action: string): void {
+        const fault = this.extractSoapFault(response.Body);
+        if (fault) {
+            this.cachedSession = null; // a fault may be an expired session — force re-auth next call
+            throw new Error(`MagnetMail SOAP Fault on ${action} [${fault.faultcode}]: ${fault.faultstring}`);
+        }
+    }
+
+    // ── Config / session helpers ──────────────────────────────────────
+
+    private isSessionValid(): boolean {
+        if (!this.cachedSession) return false;
+        return Date.now() - this.cachedSession.CreatedAt < this.cachedSession.TTLMs;
+    }
+
+    private preAuthContext(config: MagnetMailConfig): MagnetMailAuthContext {
+        return { SessionID: '', UserId: '', Endpoint: config.Endpoint, Namespace: config.Namespace };
+    }
+
+    /** Resolves connection config from the credential store (secrets) + Configuration JSON (overrides). */
+    protected async ParseConfig(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<MagnetMailConfig> {
+        const raw: Record<string, unknown> = {};
+        if (companyIntegration.CredentialID) {
+            Object.assign(raw, await this.loadCredentialValues(companyIntegration.CredentialID, contextUser));
+        }
+        if (companyIntegration.Configuration) {
+            try {
+                Object.assign(raw, JSON.parse(companyIntegration.Configuration) as Record<string, unknown>);
+            } catch {
+                // non-fatal: fall through to whatever the credential store provided
+            }
+        }
+        return this.normalizeConfig(raw);
+    }
+
+    private async loadCredentialValues(credentialID: string, contextUser: UserInfo): Promise<Record<string, unknown>> {
+        const md = new Metadata();
+        const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
+        const loaded = await credential.Load(credentialID);
+        if (!loaded || !credential.Values) return {};
         try {
-            return JSON.parse(obj.DefaultQueryParams) as Record<string, unknown>;
+            return JSON.parse(credential.Values) as Record<string, unknown>;
         } catch {
-            console.warn(`[MagnetMailConnector] Invalid DefaultQueryParams JSON for "${obj.Name}"`);
             return {};
         }
     }
 
-    private GetPrimaryKeyField(objectID: string): string {
-        const fields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(objectID);
-        const pk = fields.find(f => f.IsPrimaryKey);
-        return pk ? pk.Name : 'id';
+    private normalizeConfig(raw: Record<string, unknown>): MagnetMailConfig {
+        const pick = (...keys: string[]): string | undefined => {
+            for (const key of keys) {
+                for (const [k, v] of Object.entries(raw)) {
+                    if (k.toLowerCase() === key.toLowerCase() && typeof v === 'string' && v.length > 0) return v;
+                }
+            }
+            return undefined;
+        };
+        const candidate = {
+            Username: pick('username', 'user', 'userId', 'user_id', 'login') ?? '',
+            Password: pick('password', 'pass', 'pwd') ?? '',
+            Endpoint: pick('endpoint', 'url') ?? DEFAULT_ENDPOINT,
+            Namespace: pick('namespace', 'ns') ?? DEFAULT_NAMESPACE,
+            SessionTTLMs: typeof raw.SessionTTLMs === 'number' ? raw.SessionTTLMs : DEFAULT_SESSION_TTL_MS,
+        };
+        const parsed = ConfigSchema.safeParse(candidate);
+        if (!parsed.success) {
+            throw new Error(`MagnetMail configuration invalid: ${parsed.error.issues.map(i => i.message).join('; ')}`);
+        }
+        return candidate;
     }
 
-    private BuildFetchArgs(
-        meta: MagnetMailObjectMeta,
-        ctx: FetchContext,
-        offset: number,
-        pageSize: number
-    ): Record<string, string> {
-        const args: Record<string, string> = { ...meta.ExtraArgs };
-        // Vendor WSDL: pagination uses 1-based pageNumber + pageCount on the
-        // operations that accept pagination. Some operations (searchForRecipients,
-        // getMessagesUTC) accept NO pagination — meta.SupportsPagination guards.
-        if (meta.SupportsPagination !== false) {
-            const pageNumber = Math.floor(offset / Math.max(1, pageSize)) + 1;
-            args['pageNumber'] = String(pageNumber);
-            args['pageCount'] = String(pageSize);
-        }
+    // ── Fetch-arg + watermark helpers ─────────────────────────────────
 
-        if (ctx.WatermarkValue && meta.WatermarkFromParam) {
-            args[meta.WatermarkFromParam] = ctx.WatermarkValue;
+    private buildFetchArgs(
+        obj: MJIntegrationObjectEntity,
+        cfg: Record<string, unknown>,
+        ctx: FetchContext,
+        page: number,
+        pageSize: number
+    ): Record<string, unknown> {
+        const args: Record<string, unknown> = {};
+        const extraArgs = cfg.ExtraArgs;
+        if (extraArgs && typeof extraArgs === 'object' && !Array.isArray(extraArgs)) {
+            Object.assign(args, extraArgs as Record<string, unknown>);
+        }
+        if (obj.SupportsPagination && obj.PaginationType !== 'None') {
+            const pageParam = this.readConfigString(cfg, 'PageNumberParam') ?? 'pageNumber';
+            const sizeParam = this.readConfigString(cfg, 'PageCountParam') ?? 'pageCount';
+            args[pageParam] = page;
+            args[sizeParam] = pageSize;
+        }
+        if (obj.SupportsIncrementalSync && ctx.WatermarkValue && obj.IncrementalWatermarkField) {
+            args[obj.IncrementalWatermarkField] = this.formatWatermark(ctx.WatermarkValue);
+            const toParam = this.readConfigString(cfg, 'WatermarkToParam');
+            if (toParam) args[toParam] = this.formatWatermark(new Date().toISOString());
         }
         return args;
     }
 
-    private RawToExternalRecord(raw: Record<string, unknown>, objectType: string, pkField: string): ExternalRecord {
-        const id = raw[pkField];
-        return {
-            ExternalID: id != null ? String(id) : '',
-            ObjectType: objectType,
-            Fields: raw,
-        };
-    }
-
-    private ComputeWatermark(records: Record<string, unknown>[], field: string): string | undefined {
-        let latest: string | undefined;
+    /** Max record-side watermark value in the batch, or undefined when not incremental / no field present. */
+    private computeWatermark(
+        obj: MJIntegrationObjectEntity,
+        cfg: Record<string, unknown>,
+        records: Record<string, unknown>[]
+    ): string | undefined {
+        if (!obj.SupportsIncrementalSync) return undefined;
+        const valueField = this.readConfigString(cfg, 'WatermarkValueField') ?? obj.IncrementalWatermarkField;
+        if (!valueField) return undefined;
+        let max: string | undefined;
         for (const record of records) {
-            const value = record[field];
-            if (value && typeof value === 'string' && (!latest || value > latest)) {
-                latest = value;
+            const v = record[valueField];
+            if (v != null) {
+                const s = String(v);
+                if (!max || s > max) max = s;
             }
         }
-        return latest;
+        return max;
     }
 
-    // ── Utility helpers ──────────────────────────────────────────────
+    private formatWatermark(watermark: string): string {
+        if (/^\d+$/.test(watermark)) {
+            const asNum = Number(watermark);
+            if (Number.isFinite(asNum) && asNum > 100000000000) return new Date(asNum).toISOString();
+        }
+        return watermark;
+    }
 
-    private async Throttle(minIntervalMs: number): Promise<void> {
-        const elapsed = Date.now() - this.lastRequestTime;
-        if (elapsed < minIntervalMs) {
-            await this.Sleep(minIntervalMs - elapsed);
+    // ── Record + response shaping helpers ─────────────────────────────
+
+    private toRecordArray(target: unknown): Record<string, unknown>[] {
+        if (target == null) return [];
+        if (Array.isArray(target)) {
+            return target.filter(x => x != null && typeof x === 'object') as Record<string, unknown>[];
+        }
+        if (typeof target === 'object') return [target as Record<string, unknown>];
+        return [];
+    }
+
+    /** Descends `Response`/`Result` wrapper elements to expose the inner payload. */
+    protected unwrapSoapResult(body: unknown): unknown {
+        let current = body;
+        for (let depth = 0; depth < 6; depth++) {
+            if (!current || typeof current !== 'object' || Array.isArray(current)) return current;
+            const keys = Object.keys(current as Record<string, unknown>);
+            const wrapperKey = keys.find(k => /(?:Response|Result)$/i.test(k));
+            if (!wrapperKey || keys.length === 0) return current;
+            current = (current as Record<string, unknown>)[wrapperKey];
+        }
+        return current;
+    }
+
+    /** Depth-first search for the first value under `key` anywhere in the object tree. */
+    private deepFindKey(body: unknown, key: string): unknown {
+        if (!body || typeof body !== 'object') return undefined;
+        if (Array.isArray(body)) {
+            for (const item of body) {
+                const found = this.deepFindKey(item, key);
+                if (found !== undefined) return found;
+            }
+            return undefined;
+        }
+        const rec = body as Record<string, unknown>;
+        if (key in rec) return rec[key];
+        for (const value of Object.values(rec)) {
+            const found = this.deepFindKey(value, key);
+            if (found !== undefined) return found;
+        }
+        return undefined;
+    }
+
+    private firstArrayValue(body: Record<string, unknown>): unknown[] | null {
+        for (const value of Object.values(body)) {
+            if (Array.isArray(value)) return value;
+            if (value && typeof value === 'object') {
+                const nested = this.firstArrayValue(value as Record<string, unknown>);
+                if (nested) return nested;
+            }
+        }
+        return null;
+    }
+
+    private recordCount(rawBody: unknown): number {
+        const unwrapped = this.unwrapSoapResult(rawBody);
+        if (Array.isArray(unwrapped)) return unwrapped.length;
+        if (unwrapped && typeof unwrapped === 'object') {
+            const arr = this.firstArrayValue(unwrapped as Record<string, unknown>);
+            if (arr) return arr.length;
+            return Object.keys(unwrapped as Record<string, unknown>).length > 0 ? 1 : 0;
+        }
+        return 0;
+    }
+
+    private readNestedString(body: unknown, key: string): string | undefined {
+        const v = this.deepFindKey(body, key);
+        return v == null ? undefined : String(v);
+    }
+
+    /**
+     * §4 identity: uses the declared PK when every component is present + non-empty, else a deterministic
+     * content hash (so PK-less / partial-key records stay syncable + dedupable). Full-record pass-through:
+     * Fields carries the complete source record (with the synthetic id stamped into a single empty PK).
+     */
+    private buildExternalRecord(
+        raw: Record<string, unknown>,
+        objectType: string,
+        pkFieldNames: string[]
+    ): ExternalRecord {
+        const allPkPresent = pkFieldNames.length > 0
+            && pkFieldNames.every(name => raw[name] != null && serializeKeyValue(raw[name]).length > 0);
+        const resolvedID = allPkPresent
+            ? pkFieldNames.map(name => serializeKeyValue(raw[name])).join('|')
+            : computeContentHash(raw);
+        let fields = raw;
+        if (!allPkPresent && pkFieldNames.length === 1
+            && (raw[pkFieldNames[0]] == null || serializeKeyValue(raw[pkFieldNames[0]]).length === 0)) {
+            fields = { ...raw, [pkFieldNames[0]]: resolvedID };
+        }
+        return { ExternalID: resolvedID, ObjectType: objectType, Fields: fields };
+    }
+
+    private primaryKeyFieldNames(fields: MJIntegrationObjectFieldEntity[]): string[] {
+        const pk = fields.filter(f => f.IsPrimaryKey).sort((a, b) => a.Sequence - b.Sequence).map(f => f.Name);
+        return pk.length > 0 ? pk : ['id'];
+    }
+
+    private extractMutationId(body: unknown, obj: MJIntegrationObjectEntity): string | undefined {
+        const result = this.unwrapSoapResult(body);
+        // SaveResult.id is the documented create-id location; also try the object's PK field name.
+        const fromId = this.readNestedString(result, 'id') ?? this.readNestedString(result, 'ID');
+        if (fromId) return fromId;
+        const fields = this.GetCachedFields(obj.ID);
+        const pkName = this.primaryKeyFieldNames(fields)[0];
+        return pkName ? this.readNestedString(result, pkName) : undefined;
+    }
+
+    private buildCRUDError(err: unknown, operation: string, objectName: string): CRUDResult {
+        const message = err instanceof Error ? err.message : String(err);
+        return { Success: false, ErrorMessage: `${operation} failed for ${objectName}: ${message}`, StatusCode: 500 };
+    }
+
+    // ── IO Configuration JSON readers ─────────────────────────────────
+
+    private readIOConfig(obj: MJIntegrationObjectEntity): Record<string, unknown> {
+        if (!obj.Configuration) return {};
+        try {
+            const parsed = JSON.parse(obj.Configuration) as unknown;
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+        } catch {
+            return {};
         }
     }
 
-    private Sleep(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
+    private readConfigString(cfg: Record<string, unknown>, key: string): string | null {
+        const v = cfg[key];
+        return typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
     }
 
-    private EscapeXmlValue(value: string): string {
+    // ── XML utils ─────────────────────────────────────────────────────
+
+    private headersToObject(headers: Headers): Record<string, string> {
+        const out: Record<string, string> = {};
+        headers.forEach((value, key) => { out[key.toLowerCase()] = value; });
+        return out;
+    }
+
+    private escapeXml(value: string): string {
         return value
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
@@ -987,11 +925,7 @@ ${body}
             .replace(/'/g, '&apos;');
     }
 
-    private EscapeRegex(value: string): string {
-        return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
-
-    private DecodeXmlEntities(value: string): string {
+    private decodeXml(value: string): string {
         return value
             .replace(/&lt;/g, '<')
             .replace(/&gt;/g, '>')
@@ -1000,15 +934,10 @@ ${body}
             .replace(/&amp;/g, '&');
     }
 
-    private BuildCRUDError(err: unknown, operation: string, objectName: string): CRUDResult {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-            Success: false,
-            ErrorMessage: `${operation} failed for ${objectName}: ${message}`,
-            StatusCode: 500,
-        };
+    private escapeRegex(value: string): string {
+        return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 }
 
-/** Tree-shaking prevention function — import and call from module entry point. */
+/** Tree-shaking prevention — import and call from the package entry point. */
 export function LoadMagnetMailConnector(): void { /* no-op */ }

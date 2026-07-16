@@ -1,0 +1,2018 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/EventSessions/GetSession?sessionKey={sessionKey}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/EventSessions/GetSession?sessionKey={sessionKey}</h1>
+<div>
+    <p></p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">sessionKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p></p>
+
+<a href="/Help/ResourceModel?modelName=EventSession">EventSession</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">EventSessionCategoryKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EventSessionKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Presenters</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=EventPresenter">EventPresenter</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CategoryKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CategoryName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CategorySortOrder</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CECredits</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        decimal number
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedByContactKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Description</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EarlyRegistrationPrice</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        decimal number
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EndDateTime</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EndDateTimeUTC</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ICalendarData</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsActive</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsDefault</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsDisplayed</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsLoggingEnabled</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsRequired</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsSession</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LateRegistrationPrice</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        decimal number
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LegacyOptionKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Location</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">MaximumRegistrants</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PriceTypeCode</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RegistrantCount</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RegularRegistrationPrice</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        decimal number
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SortOrder</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">StartDateTime</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">StartDateTimeUTC</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Title</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UpdatedByContactKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UpdatedOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;EventSessionCategoryKey&quot;: &quot;f61a3774-9327-4862-bc81-66966bb3adb9&quot;,
+  &quot;EventSessionKey&quot;: &quot;28194a5e-7b65-434f-b5ac-00601594e830&quot;,
+  &quot;Presenters&quot;: [
+    {
+      &quot;Contact&quot;: {
+        &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+        &quot;LargePictureUrl&quot;: &quot;sample string 3&quot;,
+        &quot;ContactKey&quot;: &quot;2ad0e734-f16e-4904-a9d1-7f3d54cbab48&quot;,
+        &quot;FirstName&quot;: &quot;sample string 5&quot;,
+        &quot;LastName&quot;: &quot;sample string 6&quot;,
+        &quot;DisplayName&quot;: &quot;sample string 7&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 8&quot;,
+        &quot;ContactStatusCode&quot;: &quot;sample string 9&quot;,
+        &quot;PrefixCode&quot;: &quot;sample string 10&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;0ec7d404-4ea3-4d74-bdb0-945086a192cc&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 13&quot;,
+        &quot;CompanyTitle&quot;: &quot;sample string 14&quot;,
+        &quot;SuffixCode&quot;: &quot;sample string 15&quot;,
+        &quot;Designation&quot;: &quot;sample string 16&quot;,
+        &quot;LegacyContactKey&quot;: &quot;sample string 17&quot;,
+        &quot;InformalName&quot;: &quot;sample string 18&quot;,
+        &quot;Phone1&quot;: &quot;sample string 19&quot;,
+        &quot;Phone1Type&quot;: &quot;sample string 20&quot;,
+        &quot;Phone2&quot;: &quot;sample string 21&quot;,
+        &quot;Phone2Type&quot;: &quot;sample string 22&quot;,
+        &quot;Phone3&quot;: &quot;sample string 23&quot;,
+        &quot;Phone3Type&quot;: &quot;sample string 24&quot;,
+        &quot;Phone4&quot;: &quot;sample string 25&quot;,
+        &quot;Phone4Type&quot;: &quot;sample string 26&quot;,
+        &quot;WebsiteUrl&quot;: &quot;sample string 27&quot;,
+        &quot;MemberAwardKey&quot;: &quot;9bf1a580-59b1-44eb-a43e-36b4f525e3af&quot;,
+        &quot;IsMember&quot;: true,
+        &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+        &quot;MemberId&quot;: &quot;sample string 30&quot;,
+        &quot;MaidenName&quot;: &quot;sample string 31&quot;,
+        &quot;PrimarySecurityGroupKey&quot;: &quot;89eaa049-64b2-4cc5-bf6b-95b3f8c65463&quot;,
+        &quot;MiddleName&quot;: &quot;sample string 33&quot;,
+        &quot;IsCompany&quot;: true,
+        &quot;CompanyLegacyContactKey&quot;: &quot;sample string 35&quot;,
+        &quot;AMSDirectoryOptOut&quot;: true,
+        &quot;HLDirectoryOptOut&quot;: true,
+        &quot;HLContactMeOptOut&quot;: true,
+        &quot;IsBlogger&quot;: true,
+        &quot;EducationEntries&quot;: [
+          {
+            &quot;ActivitiesSocieties&quot;: &quot;sample string 1&quot;,
+            &quot;Advisor&quot;: &quot;sample string 2&quot;,
+            &quot;City&quot;: &quot;sample string 3&quot;,
+            &quot;CountryCode&quot;: &quot;sample string 4&quot;,
+            &quot;CountryName&quot;: &quot;sample string 5&quot;,
+            &quot;Degree&quot;: &quot;sample string 6&quot;,
+            &quot;DegreeYear&quot;: 7,
+            &quot;Dissertation&quot;: &quot;sample string 8&quot;,
+            &quot;EducationKey&quot;: &quot;f6afdd60-970a-40f6-9a1e-498ed22da1b1&quot;,
+            &quot;FieldOfStudy&quot;: &quot;sample string 10&quot;,
+            &quot;FromYear&quot;: 11,
+            &quot;IsHighestDegreeAttained&quot;: true,
+            &quot;Notes&quot;: &quot;sample string 13&quot;,
+            &quot;SchoolName&quot;: &quot;sample string 14&quot;,
+            &quot;StateCode&quot;: &quot;sample string 15&quot;,
+            &quot;StateName&quot;: &quot;sample string 16&quot;,
+            &quot;ToYear&quot;: 17,
+            &quot;UpdatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;
+          },
+          {
+            &quot;ActivitiesSocieties&quot;: &quot;sample string 1&quot;,
+            &quot;Advisor&quot;: &quot;sample string 2&quot;,
+            &quot;City&quot;: &quot;sample string 3&quot;,
+            &quot;CountryCode&quot;: &quot;sample string 4&quot;,
+            &quot;CountryName&quot;: &quot;sample string 5&quot;,
+            &quot;Degree&quot;: &quot;sample string 6&quot;,
+            &quot;DegreeYear&quot;: 7,
+            &quot;Dissertation&quot;: &quot;sample string 8&quot;,
+            &quot;EducationKey&quot;: &quot;f6afdd60-970a-40f6-9a1e-498ed22da1b1&quot;,
+            &quot;FieldOfStudy&quot;: &quot;sample string 10&quot;,
+            &quot;FromYear&quot;: 11,
+            &quot;IsHighestDegreeAttained&quot;: true,
+            &quot;Notes&quot;: &quot;sample string 13&quot;,
+            &quot;SchoolName&quot;: &quot;sample string 14&quot;,
+            &quot;StateCode&quot;: &quot;sample string 15&quot;,
+            &quot;StateName&quot;: &quot;sample string 16&quot;,
+            &quot;ToYear&quot;: 17,
+            &quot;UpdatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;
+          }
+        ],
+        &quot;WorkHistory&quot;: [
+          {
+            &quot;Country&quot;: &quot;sample string 1&quot;,
+            &quot;Description&quot;: &quot;sample string 2&quot;,
+            &quot;FromDate&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+            &quot;IsPresent&quot;: true,
+            &quot;IsPrimary&quot;: true,
+            &quot;JobExperienceKey&quot;: &quot;c9f92d0e-7cb4-43eb-b595-efb4bbc375f4&quot;,
+            &quot;OrganizationName&quot;: &quot;sample string 7&quot;,
+            &quot;OrganizationSize&quot;: 8,
+            &quot;OrganizationUrl&quot;: &quot;sample string 9&quot;,
+            &quot;Place&quot;: &quot;sample string 10&quot;,
+            &quot;State&quot;: &quot;sample string 11&quot;,
+            &quot;Title&quot;: &quot;sample string 12&quot;,
+            &quot;ToDate&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+            &quot;UpdatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;
+          },
+          {
+            &quot;Country&quot;: &quot;sample string 1&quot;,
+            &quot;Description&quot;: &quot;sample string 2&quot;,
+            &quot;FromDate&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+            &quot;IsPresent&quot;: true,
+            &quot;IsPrimary&quot;: true,
+            &quot;JobExperienceKey&quot;: &quot;c9f92d0e-7cb4-43eb-b595-efb4bbc375f4&quot;,
+            &quot;OrganizationName&quot;: &quot;sample string 7&quot;,
+            &quot;OrganizationSize&quot;: 8,
+            &quot;OrganizationUrl&quot;: &quot;sample string 9&quot;,
+            &quot;Place&quot;: &quot;sample string 10&quot;,
+            &quot;State&quot;: &quot;sample string 11&quot;,
+            &quot;Title&quot;: &quot;sample string 12&quot;,
+            &quot;ToDate&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+            &quot;UpdatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;
+          }
+        ],
+        &quot;Profile&quot;: {
+          &quot;Certifications&quot;: &quot;sample string 1&quot;,
+          &quot;Description&quot;: &quot;sample string 2&quot;,
+          &quot;Expertise&quot;: &quot;sample string 3&quot;,
+          &quot;ForwardComments&quot;: true,
+          &quot;ForwardCommunityInvitations&quot;: true,
+          &quot;ForwardContactRequests&quot;: true,
+          &quot;ForwardMessages&quot;: true,
+          &quot;Groups&quot;: &quot;sample string 8&quot;,
+          &quot;ImageHeight&quot;: 9,
+          &quot;ImageWidth&quot;: 10,
+          &quot;Interests&quot;: &quot;sample string 11&quot;,
+          &quot;IsSpeaker&quot;: true,
+          &quot;NotificationEmailAddress&quot;: &quot;sample string 13&quot;
+        },
+        &quot;Addresses&quot;: [
+          {
+            &quot;Address1&quot;: &quot;sample string 1&quot;,
+            &quot;Address2&quot;: &quot;sample string 2&quot;,
+            &quot;Address3&quot;: &quot;sample string 3&quot;,
+            &quot;AddressKey&quot;: &quot;4c447fa1-43fa-4779-be47-a926ae6dddc9&quot;,
+            &quot;AddressType&quot;: &quot;sample string 5&quot;,
+            &quot;City&quot;: &quot;sample string 6&quot;,
+            &quot;CityStateCounty&quot;: &quot;sample string 7&quot;,
+            &quot;CityStateCountyCountry&quot;: &quot;sample string 8&quot;,
+            &quot;ContactKey&quot;: &quot;36b5736e-9304-41cc-b231-c19350961bee&quot;,
+            &quot;CountryCode&quot;: &quot;sample string 10&quot;,
+            &quot;CountryName&quot;: &quot;sample string 11&quot;,
+            &quot;County&quot;: &quot;sample string 12&quot;,
+            &quot;EmailAddress&quot;: &quot;sample string 13&quot;,
+            &quot;FormattedAddress&quot;: &quot;sample string 14&quot;,
+            &quot;FormattedAddressOneLine&quot;: &quot;sample string 15&quot;,
+            &quot;FormattedAddressText&quot;: &quot;sample string 16&quot;,
+            &quot;IsListCityState&quot;: true,
+            &quot;IsLoggingEnabled&quot;: true,
+            &quot;IsNew&quot;: true,
+            &quot;IsPreferredBill&quot;: true,
+            &quot;IsPreferredList&quot;: true,
+            &quot;IsPreferredMail&quot;: true,
+            &quot;ItemCreatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+            &quot;ItemEntityName&quot;: &quot;sample string 24&quot;,
+            &quot;ItemName&quot;: &quot;sample string 25&quot;,
+            &quot;ItemOwnerContactKey&quot;: &quot;e7751732-8713-4854-a5a4-062f0a732693&quot;,
+            &quot;Latitude&quot;: 27.0,
+            &quot;LegacyAddressKey&quot;: &quot;sample string 28&quot;,
+            &quot;Longitude&quot;: 29.0,
+            &quot;NearText&quot;: &quot;sample string 30&quot;,
+            &quot;Phone1&quot;: &quot;sample string 31&quot;,
+            &quot;Phone1Type&quot;: &quot;sample string 32&quot;,
+            &quot;Phone2&quot;: &quot;sample string 33&quot;,
+            &quot;Phone2Type&quot;: &quot;sample string 34&quot;,
+            &quot;Phone3&quot;: &quot;sample string 35&quot;,
+            &quot;Phone3Type&quot;: &quot;sample string 36&quot;,
+            &quot;Phone4&quot;: &quot;sample string 37&quot;,
+            &quot;Phone4Type&quot;: &quot;sample string 38&quot;,
+            &quot;PostalCode&quot;: &quot;sample string 39&quot;,
+            &quot;Region&quot;: &quot;sample string 40&quot;,
+            &quot;StateProvinceCode&quot;: &quot;sample string 41&quot;,
+            &quot;TimeZoneKey&quot;: &quot;f5d4fd70-9abe-4f3f-9d5c-9b359ab2d807&quot;,
+            &quot;Town&quot;: &quot;sample string 43&quot;,
+            &quot;TownOrCity&quot;: &quot;sample string 44&quot;
+          },
+          {
+            &quot;Address1&quot;: &quot;sample string 1&quot;,
+            &quot;Address2&quot;: &quot;sample string 2&quot;,
+            &quot;Address3&quot;: &quot;sample string 3&quot;,
+            &quot;AddressKey&quot;: &quot;4c447fa1-43fa-4779-be47-a926ae6dddc9&quot;,
+            &quot;AddressType&quot;: &quot;sample string 5&quot;,
+            &quot;City&quot;: &quot;sample string 6&quot;,
+            &quot;CityStateCounty&quot;: &quot;sample string 7&quot;,
+            &quot;CityStateCountyCountry&quot;: &quot;sample string 8&quot;,
+            &quot;ContactKey&quot;: &quot;36b5736e-9304-41cc-b231-c19350961bee&quot;,
+            &quot;CountryCode&quot;: &quot;sample string 10&quot;,
+            &quot;CountryName&quot;: &quot;sample string 11&quot;,
+            &quot;County&quot;: &quot;sample string 12&quot;,
+            &quot;EmailAddress&quot;: &quot;sample string 13&quot;,
+            &quot;FormattedAddress&quot;: &quot;sample string 14&quot;,
+            &quot;FormattedAddressOneLine&quot;: &quot;sample string 15&quot;,
+            &quot;FormattedAddressText&quot;: &quot;sample string 16&quot;,
+            &quot;IsListCityState&quot;: true,
+            &quot;IsLoggingEnabled&quot;: true,
+            &quot;IsNew&quot;: true,
+            &quot;IsPreferredBill&quot;: true,
+            &quot;IsPreferredList&quot;: true,
+            &quot;IsPreferredMail&quot;: true,
+            &quot;ItemCreatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+            &quot;ItemEntityName&quot;: &quot;sample string 24&quot;,
+            &quot;ItemName&quot;: &quot;sample string 25&quot;,
+            &quot;ItemOwnerContactKey&quot;: &quot;e7751732-8713-4854-a5a4-062f0a732693&quot;,
+            &quot;Latitude&quot;: 27.0,
+            &quot;LegacyAddressKey&quot;: &quot;sample string 28&quot;,
+            &quot;Longitude&quot;: 29.0,
+            &quot;NearText&quot;: &quot;sample string 30&quot;,
+            &quot;Phone1&quot;: &quot;sample string 31&quot;,
+            &quot;Phone1Type&quot;: &quot;sample string 32&quot;,
+            &quot;Phone2&quot;: &quot;sample string 33&quot;,
+            &quot;Phone2Type&quot;: &quot;sample string 34&quot;,
+            &quot;Phone3&quot;: &quot;sample string 35&quot;,
+            &quot;Phone3Type&quot;: &quot;sample string 36&quot;,
+            &quot;Phone4&quot;: &quot;sample string 37&quot;,
+            &quot;Phone4Type&quot;: &quot;sample string 38&quot;,
+            &quot;PostalCode&quot;: &quot;sample string 39&quot;,
+            &quot;Region&quot;: &quot;sample string 40&quot;,
+            &quot;StateProvinceCode&quot;: &quot;sample string 41&quot;,
+            &quot;TimeZoneKey&quot;: &quot;f5d4fd70-9abe-4f3f-9d5c-9b359ab2d807&quot;,
+            &quot;Town&quot;: &quot;sample string 43&quot;,
+            &quot;TownOrCity&quot;: &quot;sample string 44&quot;
+          }
+        ],
+        &quot;UnreadMessageCount&quot;: 40,
+        &quot;LinkToVolunteerProfile&quot;: &quot;sample string 41&quot;,
+        &quot;Demographics&quot;: [
+          {
+            &quot;DemographicType&quot;: &quot;sample string 1&quot;,
+            &quot;Values&quot;: [
+              &quot;sample string 1&quot;,
+              &quot;sample string 2&quot;
+            ]
+          },
+          {
+            &quot;DemographicType&quot;: &quot;sample string 1&quot;,
+            &quot;Values&quot;: [
+              &quot;sample string 1&quot;,
+              &quot;sample string 2&quot;
+            ]
+          }
+        ],
+        &quot;SecurityGroups&quot;: [
+          {
+            &quot;SecurityGroupKey&quot;: &quot;5ddbb8ea-44a5-4790-8638-b49b42a36214&quot;,
+            &quot;SecurityGroupName&quot;: &quot;sample string 2&quot;,
+            &quot;ProvidesMemberBenefits&quot;: true
+          },
+          {
+            &quot;SecurityGroupKey&quot;: &quot;5ddbb8ea-44a5-4790-8638-b49b42a36214&quot;,
+            &quot;SecurityGroupName&quot;: &quot;sample string 2&quot;,
+            &quot;ProvidesMemberBenefits&quot;: true
+          }
+        ]
+      },
+      &quot;PresenterRole&quot;: {
+        &quot;PresentersAttached&quot;: 0,
+        &quot;PresenterRoleKey&quot;: &quot;35daf3b3-49d4-40a0-8d24-2ce5fd5f4ce2&quot;,
+        &quot;PresenterRoleName&quot;: &quot;sample string 2&quot;,
+        &quot;PresenterRoleDescription&quot;: &quot;sample string 3&quot;,
+        &quot;SortOrder&quot;: 4,
+        &quot;IsActive&quot;: true,
+        &quot;CreatedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;ItemCreatedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;UpdatedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;DeletedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;CreatedByContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;ItemOwnerContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;DeletedByContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;IsSoftDeleted&quot;: false,
+        &quot;ClassBOEntityKey&quot;: &quot;40826319-fdb9-416e-8881-000f047d1d34&quot;,
+        &quot;ClassItemKey&quot;: &quot;35daf3b3-49d4-40a0-8d24-2ce5fd5f4ce2&quot;,
+        &quot;IsLoggingEnabled&quot;: true,
+        &quot;IsNew&quot;: true,
+        &quot;IsModified&quot;: true,
+        &quot;ItemBOEntityName&quot;: &quot;PresenterRoleRef&quot;,
+        &quot;ItemName&quot;: &quot;sample string 10&quot;
+      },
+      &quot;ExternalPresenterRef&quot;: {
+        &quot;FirstLast&quot;: &quot;sample string 3 sample string 4&quot;,
+        &quot;ExternalPresenterRefKey&quot;: &quot;6b58f621-ddb1-4e57-b045-a1770f56425f&quot;,
+        &quot;Prefix&quot;: &quot;sample string 2&quot;,
+        &quot;FirstName&quot;: &quot;sample string 3&quot;,
+        &quot;LastName&quot;: &quot;sample string 4&quot;,
+        &quot;JobTitle&quot;: &quot;sample string 5&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 6&quot;,
+        &quot;Bio&quot;: &quot;sample string 7&quot;,
+        &quot;CreatedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;ItemCreatedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;UpdatedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;DeletedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;CreatedByContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;ItemOwnerContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;DeletedByContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 8&quot;,
+        &quot;IsSoftDeleted&quot;: false,
+        &quot;ClassBOEntityKey&quot;: &quot;df00260c-c318-4bb5-a5ae-91ee15013704&quot;,
+        &quot;ClassItemKey&quot;: &quot;6b58f621-ddb1-4e57-b045-a1770f56425f&quot;,
+        &quot;IsLoggingEnabled&quot;: true,
+        &quot;IsNew&quot;: true,
+        &quot;IsModified&quot;: true,
+        &quot;ItemBOEntityName&quot;: &quot;ExternalPresenterRef&quot;,
+        &quot;ItemName&quot;: &quot;sample string 13&quot;
+      },
+      &quot;Bio&quot;: &quot;sample string 1&quot;,
+      &quot;PresenterProfileUrl&quot;: &quot;sample string 2&quot;,
+      &quot;PresenterInfoUrl&quot;: &quot;sample string 3&quot;,
+      &quot;PresenterInfoLabel&quot;: &quot;sample string 4&quot;,
+      &quot;PresenterInfoTitle&quot;: &quot;sample string 5&quot;
+    },
+    {
+      &quot;Contact&quot;: {
+        &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+        &quot;LargePictureUrl&quot;: &quot;sample string 3&quot;,
+        &quot;ContactKey&quot;: &quot;2ad0e734-f16e-4904-a9d1-7f3d54cbab48&quot;,
+        &quot;FirstName&quot;: &quot;sample string 5&quot;,
+        &quot;LastName&quot;: &quot;sample string 6&quot;,
+        &quot;DisplayName&quot;: &quot;sample string 7&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 8&quot;,
+        &quot;ContactStatusCode&quot;: &quot;sample string 9&quot;,
+        &quot;PrefixCode&quot;: &quot;sample string 10&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;0ec7d404-4ea3-4d74-bdb0-945086a192cc&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 13&quot;,
+        &quot;CompanyTitle&quot;: &quot;sample string 14&quot;,
+        &quot;SuffixCode&quot;: &quot;sample string 15&quot;,
+        &quot;Designation&quot;: &quot;sample string 16&quot;,
+        &quot;LegacyContactKey&quot;: &quot;sample string 17&quot;,
+        &quot;InformalName&quot;: &quot;sample string 18&quot;,
+        &quot;Phone1&quot;: &quot;sample string 19&quot;,
+        &quot;Phone1Type&quot;: &quot;sample string 20&quot;,
+        &quot;Phone2&quot;: &quot;sample string 21&quot;,
+        &quot;Phone2Type&quot;: &quot;sample string 22&quot;,
+        &quot;Phone3&quot;: &quot;sample string 23&quot;,
+        &quot;Phone3Type&quot;: &quot;sample string 24&quot;,
+        &quot;Phone4&quot;: &quot;sample string 25&quot;,
+        &quot;Phone4Type&quot;: &quot;sample string 26&quot;,
+        &quot;WebsiteUrl&quot;: &quot;sample string 27&quot;,
+        &quot;MemberAwardKey&quot;: &quot;9bf1a580-59b1-44eb-a43e-36b4f525e3af&quot;,
+        &quot;IsMember&quot;: true,
+        &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+        &quot;MemberId&quot;: &quot;sample string 30&quot;,
+        &quot;MaidenName&quot;: &quot;sample string 31&quot;,
+        &quot;PrimarySecurityGroupKey&quot;: &quot;89eaa049-64b2-4cc5-bf6b-95b3f8c65463&quot;,
+        &quot;MiddleName&quot;: &quot;sample string 33&quot;,
+        &quot;IsCompany&quot;: true,
+        &quot;CompanyLegacyContactKey&quot;: &quot;sample string 35&quot;,
+        &quot;AMSDirectoryOptOut&quot;: true,
+        &quot;HLDirectoryOptOut&quot;: true,
+        &quot;HLContactMeOptOut&quot;: true,
+        &quot;IsBlogger&quot;: true,
+        &quot;EducationEntries&quot;: [
+          {
+            &quot;ActivitiesSocieties&quot;: &quot;sample string 1&quot;,
+            &quot;Advisor&quot;: &quot;sample string 2&quot;,
+            &quot;City&quot;: &quot;sample string 3&quot;,
+            &quot;CountryCode&quot;: &quot;sample string 4&quot;,
+            &quot;CountryName&quot;: &quot;sample string 5&quot;,
+            &quot;Degree&quot;: &quot;sample string 6&quot;,
+            &quot;DegreeYear&quot;: 7,
+            &quot;Dissertation&quot;: &quot;sample string 8&quot;,
+            &quot;EducationKey&quot;: &quot;f6afdd60-970a-40f6-9a1e-498ed22da1b1&quot;,
+            &quot;FieldOfStudy&quot;: &quot;sample string 10&quot;,
+            &quot;FromYear&quot;: 11,
+            &quot;IsHighestDegreeAttained&quot;: true,
+            &quot;Notes&quot;: &quot;sample string 13&quot;,
+            &quot;SchoolName&quot;: &quot;sample string 14&quot;,
+            &quot;StateCode&quot;: &quot;sample string 15&quot;,
+            &quot;StateName&quot;: &quot;sample string 16&quot;,
+            &quot;ToYear&quot;: 17,
+            &quot;UpdatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;
+          },
+          {
+            &quot;ActivitiesSocieties&quot;: &quot;sample string 1&quot;,
+            &quot;Advisor&quot;: &quot;sample string 2&quot;,
+            &quot;City&quot;: &quot;sample string 3&quot;,
+            &quot;CountryCode&quot;: &quot;sample string 4&quot;,
+            &quot;CountryName&quot;: &quot;sample string 5&quot;,
+            &quot;Degree&quot;: &quot;sample string 6&quot;,
+            &quot;DegreeYear&quot;: 7,
+            &quot;Dissertation&quot;: &quot;sample string 8&quot;,
+            &quot;EducationKey&quot;: &quot;f6afdd60-970a-40f6-9a1e-498ed22da1b1&quot;,
+            &quot;FieldOfStudy&quot;: &quot;sample string 10&quot;,
+            &quot;FromYear&quot;: 11,
+            &quot;IsHighestDegreeAttained&quot;: true,
+            &quot;Notes&quot;: &quot;sample string 13&quot;,
+            &quot;SchoolName&quot;: &quot;sample string 14&quot;,
+            &quot;StateCode&quot;: &quot;sample string 15&quot;,
+            &quot;StateName&quot;: &quot;sample string 16&quot;,
+            &quot;ToYear&quot;: 17,
+            &quot;UpdatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;
+          }
+        ],
+        &quot;WorkHistory&quot;: [
+          {
+            &quot;Country&quot;: &quot;sample string 1&quot;,
+            &quot;Description&quot;: &quot;sample string 2&quot;,
+            &quot;FromDate&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+            &quot;IsPresent&quot;: true,
+            &quot;IsPrimary&quot;: true,
+            &quot;JobExperienceKey&quot;: &quot;c9f92d0e-7cb4-43eb-b595-efb4bbc375f4&quot;,
+            &quot;OrganizationName&quot;: &quot;sample string 7&quot;,
+            &quot;OrganizationSize&quot;: 8,
+            &quot;OrganizationUrl&quot;: &quot;sample string 9&quot;,
+            &quot;Place&quot;: &quot;sample string 10&quot;,
+            &quot;State&quot;: &quot;sample string 11&quot;,
+            &quot;Title&quot;: &quot;sample string 12&quot;,
+            &quot;ToDate&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+            &quot;UpdatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;
+          },
+          {
+            &quot;Country&quot;: &quot;sample string 1&quot;,
+            &quot;Description&quot;: &quot;sample string 2&quot;,
+            &quot;FromDate&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+            &quot;IsPresent&quot;: true,
+            &quot;IsPrimary&quot;: true,
+            &quot;JobExperienceKey&quot;: &quot;c9f92d0e-7cb4-43eb-b595-efb4bbc375f4&quot;,
+            &quot;OrganizationName&quot;: &quot;sample string 7&quot;,
+            &quot;OrganizationSize&quot;: 8,
+            &quot;OrganizationUrl&quot;: &quot;sample string 9&quot;,
+            &quot;Place&quot;: &quot;sample string 10&quot;,
+            &quot;State&quot;: &quot;sample string 11&quot;,
+            &quot;Title&quot;: &quot;sample string 12&quot;,
+            &quot;ToDate&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+            &quot;UpdatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;
+          }
+        ],
+        &quot;Profile&quot;: {
+          &quot;Certifications&quot;: &quot;sample string 1&quot;,
+          &quot;Description&quot;: &quot;sample string 2&quot;,
+          &quot;Expertise&quot;: &quot;sample string 3&quot;,
+          &quot;ForwardComments&quot;: true,
+          &quot;ForwardCommunityInvitations&quot;: true,
+          &quot;ForwardContactRequests&quot;: true,
+          &quot;ForwardMessages&quot;: true,
+          &quot;Groups&quot;: &quot;sample string 8&quot;,
+          &quot;ImageHeight&quot;: 9,
+          &quot;ImageWidth&quot;: 10,
+          &quot;Interests&quot;: &quot;sample string 11&quot;,
+          &quot;IsSpeaker&quot;: true,
+          &quot;NotificationEmailAddress&quot;: &quot;sample string 13&quot;
+        },
+        &quot;Addresses&quot;: [
+          {
+            &quot;Address1&quot;: &quot;sample string 1&quot;,
+            &quot;Address2&quot;: &quot;sample string 2&quot;,
+            &quot;Address3&quot;: &quot;sample string 3&quot;,
+            &quot;AddressKey&quot;: &quot;4c447fa1-43fa-4779-be47-a926ae6dddc9&quot;,
+            &quot;AddressType&quot;: &quot;sample string 5&quot;,
+            &quot;City&quot;: &quot;sample string 6&quot;,
+            &quot;CityStateCounty&quot;: &quot;sample string 7&quot;,
+            &quot;CityStateCountyCountry&quot;: &quot;sample string 8&quot;,
+            &quot;ContactKey&quot;: &quot;36b5736e-9304-41cc-b231-c19350961bee&quot;,
+            &quot;CountryCode&quot;: &quot;sample string 10&quot;,
+            &quot;CountryName&quot;: &quot;sample string 11&quot;,
+            &quot;County&quot;: &quot;sample string 12&quot;,
+            &quot;EmailAddress&quot;: &quot;sample string 13&quot;,
+            &quot;FormattedAddress&quot;: &quot;sample string 14&quot;,
+            &quot;FormattedAddressOneLine&quot;: &quot;sample string 15&quot;,
+            &quot;FormattedAddressText&quot;: &quot;sample string 16&quot;,
+            &quot;IsListCityState&quot;: true,
+            &quot;IsLoggingEnabled&quot;: true,
+            &quot;IsNew&quot;: true,
+            &quot;IsPreferredBill&quot;: true,
+            &quot;IsPreferredList&quot;: true,
+            &quot;IsPreferredMail&quot;: true,
+            &quot;ItemCreatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+            &quot;ItemEntityName&quot;: &quot;sample string 24&quot;,
+            &quot;ItemName&quot;: &quot;sample string 25&quot;,
+            &quot;ItemOwnerContactKey&quot;: &quot;e7751732-8713-4854-a5a4-062f0a732693&quot;,
+            &quot;Latitude&quot;: 27.0,
+            &quot;LegacyAddressKey&quot;: &quot;sample string 28&quot;,
+            &quot;Longitude&quot;: 29.0,
+            &quot;NearText&quot;: &quot;sample string 30&quot;,
+            &quot;Phone1&quot;: &quot;sample string 31&quot;,
+            &quot;Phone1Type&quot;: &quot;sample string 32&quot;,
+            &quot;Phone2&quot;: &quot;sample string 33&quot;,
+            &quot;Phone2Type&quot;: &quot;sample string 34&quot;,
+            &quot;Phone3&quot;: &quot;sample string 35&quot;,
+            &quot;Phone3Type&quot;: &quot;sample string 36&quot;,
+            &quot;Phone4&quot;: &quot;sample string 37&quot;,
+            &quot;Phone4Type&quot;: &quot;sample string 38&quot;,
+            &quot;PostalCode&quot;: &quot;sample string 39&quot;,
+            &quot;Region&quot;: &quot;sample string 40&quot;,
+            &quot;StateProvinceCode&quot;: &quot;sample string 41&quot;,
+            &quot;TimeZoneKey&quot;: &quot;f5d4fd70-9abe-4f3f-9d5c-9b359ab2d807&quot;,
+            &quot;Town&quot;: &quot;sample string 43&quot;,
+            &quot;TownOrCity&quot;: &quot;sample string 44&quot;
+          },
+          {
+            &quot;Address1&quot;: &quot;sample string 1&quot;,
+            &quot;Address2&quot;: &quot;sample string 2&quot;,
+            &quot;Address3&quot;: &quot;sample string 3&quot;,
+            &quot;AddressKey&quot;: &quot;4c447fa1-43fa-4779-be47-a926ae6dddc9&quot;,
+            &quot;AddressType&quot;: &quot;sample string 5&quot;,
+            &quot;City&quot;: &quot;sample string 6&quot;,
+            &quot;CityStateCounty&quot;: &quot;sample string 7&quot;,
+            &quot;CityStateCountyCountry&quot;: &quot;sample string 8&quot;,
+            &quot;ContactKey&quot;: &quot;36b5736e-9304-41cc-b231-c19350961bee&quot;,
+            &quot;CountryCode&quot;: &quot;sample string 10&quot;,
+            &quot;CountryName&quot;: &quot;sample string 11&quot;,
+            &quot;County&quot;: &quot;sample string 12&quot;,
+            &quot;EmailAddress&quot;: &quot;sample string 13&quot;,
+            &quot;FormattedAddress&quot;: &quot;sample string 14&quot;,
+            &quot;FormattedAddressOneLine&quot;: &quot;sample string 15&quot;,
+            &quot;FormattedAddressText&quot;: &quot;sample string 16&quot;,
+            &quot;IsListCityState&quot;: true,
+            &quot;IsLoggingEnabled&quot;: true,
+            &quot;IsNew&quot;: true,
+            &quot;IsPreferredBill&quot;: true,
+            &quot;IsPreferredList&quot;: true,
+            &quot;IsPreferredMail&quot;: true,
+            &quot;ItemCreatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+            &quot;ItemEntityName&quot;: &quot;sample string 24&quot;,
+            &quot;ItemName&quot;: &quot;sample string 25&quot;,
+            &quot;ItemOwnerContactKey&quot;: &quot;e7751732-8713-4854-a5a4-062f0a732693&quot;,
+            &quot;Latitude&quot;: 27.0,
+            &quot;LegacyAddressKey&quot;: &quot;sample string 28&quot;,
+            &quot;Longitude&quot;: 29.0,
+            &quot;NearText&quot;: &quot;sample string 30&quot;,
+            &quot;Phone1&quot;: &quot;sample string 31&quot;,
+            &quot;Phone1Type&quot;: &quot;sample string 32&quot;,
+            &quot;Phone2&quot;: &quot;sample string 33&quot;,
+            &quot;Phone2Type&quot;: &quot;sample string 34&quot;,
+            &quot;Phone3&quot;: &quot;sample string 35&quot;,
+            &quot;Phone3Type&quot;: &quot;sample string 36&quot;,
+            &quot;Phone4&quot;: &quot;sample string 37&quot;,
+            &quot;Phone4Type&quot;: &quot;sample string 38&quot;,
+            &quot;PostalCode&quot;: &quot;sample string 39&quot;,
+            &quot;Region&quot;: &quot;sample string 40&quot;,
+            &quot;StateProvinceCode&quot;: &quot;sample string 41&quot;,
+            &quot;TimeZoneKey&quot;: &quot;f5d4fd70-9abe-4f3f-9d5c-9b359ab2d807&quot;,
+            &quot;Town&quot;: &quot;sample string 43&quot;,
+            &quot;TownOrCity&quot;: &quot;sample string 44&quot;
+          }
+        ],
+        &quot;UnreadMessageCount&quot;: 40,
+        &quot;LinkToVolunteerProfile&quot;: &quot;sample string 41&quot;,
+        &quot;Demographics&quot;: [
+          {
+            &quot;DemographicType&quot;: &quot;sample string 1&quot;,
+            &quot;Values&quot;: [
+              &quot;sample string 1&quot;,
+              &quot;sample string 2&quot;
+            ]
+          },
+          {
+            &quot;DemographicType&quot;: &quot;sample string 1&quot;,
+            &quot;Values&quot;: [
+              &quot;sample string 1&quot;,
+              &quot;sample string 2&quot;
+            ]
+          }
+        ],
+        &quot;SecurityGroups&quot;: [
+          {
+            &quot;SecurityGroupKey&quot;: &quot;5ddbb8ea-44a5-4790-8638-b49b42a36214&quot;,
+            &quot;SecurityGroupName&quot;: &quot;sample string 2&quot;,
+            &quot;ProvidesMemberBenefits&quot;: true
+          },
+          {
+            &quot;SecurityGroupKey&quot;: &quot;5ddbb8ea-44a5-4790-8638-b49b42a36214&quot;,
+            &quot;SecurityGroupName&quot;: &quot;sample string 2&quot;,
+            &quot;ProvidesMemberBenefits&quot;: true
+          }
+        ]
+      },
+      &quot;PresenterRole&quot;: {
+        &quot;PresentersAttached&quot;: 0,
+        &quot;PresenterRoleKey&quot;: &quot;35daf3b3-49d4-40a0-8d24-2ce5fd5f4ce2&quot;,
+        &quot;PresenterRoleName&quot;: &quot;sample string 2&quot;,
+        &quot;PresenterRoleDescription&quot;: &quot;sample string 3&quot;,
+        &quot;SortOrder&quot;: 4,
+        &quot;IsActive&quot;: true,
+        &quot;CreatedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;ItemCreatedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;UpdatedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;DeletedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;CreatedByContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;ItemOwnerContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;DeletedByContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;IsSoftDeleted&quot;: false,
+        &quot;ClassBOEntityKey&quot;: &quot;40826319-fdb9-416e-8881-000f047d1d34&quot;,
+        &quot;ClassItemKey&quot;: &quot;35daf3b3-49d4-40a0-8d24-2ce5fd5f4ce2&quot;,
+        &quot;IsLoggingEnabled&quot;: true,
+        &quot;IsNew&quot;: true,
+        &quot;IsModified&quot;: true,
+        &quot;ItemBOEntityName&quot;: &quot;PresenterRoleRef&quot;,
+        &quot;ItemName&quot;: &quot;sample string 10&quot;
+      },
+      &quot;ExternalPresenterRef&quot;: {
+        &quot;FirstLast&quot;: &quot;sample string 3 sample string 4&quot;,
+        &quot;ExternalPresenterRefKey&quot;: &quot;6b58f621-ddb1-4e57-b045-a1770f56425f&quot;,
+        &quot;Prefix&quot;: &quot;sample string 2&quot;,
+        &quot;FirstName&quot;: &quot;sample string 3&quot;,
+        &quot;LastName&quot;: &quot;sample string 4&quot;,
+        &quot;JobTitle&quot;: &quot;sample string 5&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 6&quot;,
+        &quot;Bio&quot;: &quot;sample string 7&quot;,
+        &quot;CreatedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;ItemCreatedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;UpdatedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;DeletedOn&quot;: &quot;0001-01-01T00:00:00Z&quot;,
+        &quot;CreatedByContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;ItemOwnerContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;DeletedByContactKey&quot;: &quot;00000000-0000-0000-0000-000000000000&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 8&quot;,
+        &quot;IsSoftDeleted&quot;: false,
+        &quot;ClassBOEntityKey&quot;: &quot;df00260c-c318-4bb5-a5ae-91ee15013704&quot;,
+        &quot;ClassItemKey&quot;: &quot;6b58f621-ddb1-4e57-b045-a1770f56425f&quot;,
+        &quot;IsLoggingEnabled&quot;: true,
+        &quot;IsNew&quot;: true,
+        &quot;IsModified&quot;: true,
+        &quot;ItemBOEntityName&quot;: &quot;ExternalPresenterRef&quot;,
+        &quot;ItemName&quot;: &quot;sample string 13&quot;
+      },
+      &quot;Bio&quot;: &quot;sample string 1&quot;,
+      &quot;PresenterProfileUrl&quot;: &quot;sample string 2&quot;,
+      &quot;PresenterInfoUrl&quot;: &quot;sample string 3&quot;,
+      &quot;PresenterInfoLabel&quot;: &quot;sample string 4&quot;,
+      &quot;PresenterInfoTitle&quot;: &quot;sample string 5&quot;
+    }
+  ],
+  &quot;CategoryKey&quot;: &quot;fdd45213-cbd9-4542-90ed-6f89b06331e1&quot;,
+  &quot;CategoryName&quot;: &quot;sample string 4&quot;,
+  &quot;CategorySortOrder&quot;: 5,
+  &quot;CECredits&quot;: 6.0,
+  &quot;CreatedByContactKey&quot;: &quot;c9177b15-490e-4571-943c-7e0aaa5a93cb&quot;,
+  &quot;CreatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+  &quot;Description&quot;: &quot;sample string 9&quot;,
+  &quot;EarlyRegistrationPrice&quot;: 10.0,
+  &quot;EndDateTime&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+  &quot;EndDateTimeUTC&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+  &quot;ICalendarData&quot;: &quot;sample string 13&quot;,
+  &quot;IsActive&quot;: true,
+  &quot;IsDefault&quot;: true,
+  &quot;IsDisplayed&quot;: true,
+  &quot;IsLoggingEnabled&quot;: true,
+  &quot;IsRequired&quot;: true,
+  &quot;IsSession&quot;: true,
+  &quot;LateRegistrationPrice&quot;: 20.0,
+  &quot;LegacyOptionKey&quot;: &quot;sample string 21&quot;,
+  &quot;Location&quot;: &quot;sample string 22&quot;,
+  &quot;MaximumRegistrants&quot;: 23,
+  &quot;PriceTypeCode&quot;: 24,
+  &quot;RegistrantCount&quot;: 25,
+  &quot;RegularRegistrationPrice&quot;: 26.0,
+  &quot;SortOrder&quot;: 27,
+  &quot;StartDateTime&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+  &quot;StartDateTimeUTC&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;,
+  &quot;Title&quot;: &quot;sample string 30&quot;,
+  &quot;UpdatedByContactKey&quot;: &quot;da0ca2ec-7815-4b75-9133-8cf6959f6d61&quot;,
+  &quot;UpdatedOn&quot;: &quot;2026-07-08T09:38:34.9065767Z&quot;
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;EventSession xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Events&quot;&gt;
+  &lt;CECredits&gt;6&lt;/CECredits&gt;
+  &lt;CategoryKey&gt;fdd45213-cbd9-4542-90ed-6f89b06331e1&lt;/CategoryKey&gt;
+  &lt;CategoryName&gt;sample string 4&lt;/CategoryName&gt;
+  &lt;CategorySortOrder&gt;5&lt;/CategorySortOrder&gt;
+  &lt;CreatedByContactKey&gt;c9177b15-490e-4571-943c-7e0aaa5a93cb&lt;/CreatedByContactKey&gt;
+  &lt;CreatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/CreatedOn&gt;
+  &lt;Description&gt;sample string 9&lt;/Description&gt;
+  &lt;EarlyRegistrationPrice&gt;10&lt;/EarlyRegistrationPrice&gt;
+  &lt;EndDateTime&gt;2026-07-08T05:38:34.9065767-04:00&lt;/EndDateTime&gt;
+  &lt;EndDateTimeUTC&gt;2026-07-08T05:38:34.9065767-04:00&lt;/EndDateTimeUTC&gt;
+  &lt;ICalendarData&gt;sample string 13&lt;/ICalendarData&gt;
+  &lt;IsActive&gt;true&lt;/IsActive&gt;
+  &lt;IsDefault&gt;true&lt;/IsDefault&gt;
+  &lt;IsDisplayed&gt;true&lt;/IsDisplayed&gt;
+  &lt;IsLoggingEnabled&gt;true&lt;/IsLoggingEnabled&gt;
+  &lt;IsRequired&gt;true&lt;/IsRequired&gt;
+  &lt;IsSession&gt;true&lt;/IsSession&gt;
+  &lt;LateRegistrationPrice&gt;20&lt;/LateRegistrationPrice&gt;
+  &lt;LegacyOptionKey&gt;sample string 21&lt;/LegacyOptionKey&gt;
+  &lt;Location&gt;sample string 22&lt;/Location&gt;
+  &lt;MaximumRegistrants&gt;23&lt;/MaximumRegistrants&gt;
+  &lt;PriceTypeCode&gt;24&lt;/PriceTypeCode&gt;
+  &lt;RegistrantCount&gt;25&lt;/RegistrantCount&gt;
+  &lt;RegularRegistrationPrice&gt;26&lt;/RegularRegistrationPrice&gt;
+  &lt;SortOrder&gt;27&lt;/SortOrder&gt;
+  &lt;StartDateTime&gt;2026-07-08T05:38:34.9065767-04:00&lt;/StartDateTime&gt;
+  &lt;StartDateTimeUTC&gt;2026-07-08T05:38:34.9065767-04:00&lt;/StartDateTimeUTC&gt;
+  &lt;Title&gt;sample string 30&lt;/Title&gt;
+  &lt;UpdatedByContactKey&gt;da0ca2ec-7815-4b75-9133-8cf6959f6d61&lt;/UpdatedByContactKey&gt;
+  &lt;UpdatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/UpdatedOn&gt;
+  &lt;EventSessionCategoryKey&gt;f61a3774-9327-4862-bc81-66966bb3adb9&lt;/EventSessionCategoryKey&gt;
+  &lt;EventSessionKey&gt;28194a5e-7b65-434f-b5ac-00601594e830&lt;/EventSessionKey&gt;
+  &lt;Presenters&gt;
+    &lt;EventPresenter&gt;
+      &lt;Bio&gt;sample string 1&lt;/Bio&gt;
+      &lt;Contact xmlns:d4p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+        &lt;d4p1:AMSDirectoryOptOut&gt;true&lt;/d4p1:AMSDirectoryOptOut&gt;
+        &lt;d4p1:Addresses&gt;
+          &lt;d4p1:Address&gt;
+            &lt;d4p1:Address1&gt;sample string 1&lt;/d4p1:Address1&gt;
+            &lt;d4p1:Address2&gt;sample string 2&lt;/d4p1:Address2&gt;
+            &lt;d4p1:Address3&gt;sample string 3&lt;/d4p1:Address3&gt;
+            &lt;d4p1:AddressKey&gt;4c447fa1-43fa-4779-be47-a926ae6dddc9&lt;/d4p1:AddressKey&gt;
+            &lt;d4p1:AddressType&gt;sample string 5&lt;/d4p1:AddressType&gt;
+            &lt;d4p1:City&gt;sample string 6&lt;/d4p1:City&gt;
+            &lt;d4p1:CityStateCounty&gt;sample string 7&lt;/d4p1:CityStateCounty&gt;
+            &lt;d4p1:CityStateCountyCountry&gt;sample string 8&lt;/d4p1:CityStateCountyCountry&gt;
+            &lt;d4p1:ContactKey&gt;36b5736e-9304-41cc-b231-c19350961bee&lt;/d4p1:ContactKey&gt;
+            &lt;d4p1:CountryCode&gt;sample string 10&lt;/d4p1:CountryCode&gt;
+            &lt;d4p1:CountryName&gt;sample string 11&lt;/d4p1:CountryName&gt;
+            &lt;d4p1:County&gt;sample string 12&lt;/d4p1:County&gt;
+            &lt;d4p1:EmailAddress&gt;sample string 13&lt;/d4p1:EmailAddress&gt;
+            &lt;d4p1:FormattedAddress&gt;sample string 14&lt;/d4p1:FormattedAddress&gt;
+            &lt;d4p1:FormattedAddressOneLine&gt;sample string 15&lt;/d4p1:FormattedAddressOneLine&gt;
+            &lt;d4p1:FormattedAddressText&gt;sample string 16&lt;/d4p1:FormattedAddressText&gt;
+            &lt;d4p1:IsListCityState&gt;true&lt;/d4p1:IsListCityState&gt;
+            &lt;d4p1:IsLoggingEnabled&gt;true&lt;/d4p1:IsLoggingEnabled&gt;
+            &lt;d4p1:IsNew&gt;true&lt;/d4p1:IsNew&gt;
+            &lt;d4p1:IsPreferredBill&gt;true&lt;/d4p1:IsPreferredBill&gt;
+            &lt;d4p1:IsPreferredList&gt;true&lt;/d4p1:IsPreferredList&gt;
+            &lt;d4p1:IsPreferredMail&gt;true&lt;/d4p1:IsPreferredMail&gt;
+            &lt;d4p1:ItemCreatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:ItemCreatedOn&gt;
+            &lt;d4p1:ItemEntityName&gt;sample string 24&lt;/d4p1:ItemEntityName&gt;
+            &lt;d4p1:ItemName&gt;sample string 25&lt;/d4p1:ItemName&gt;
+            &lt;d4p1:ItemOwnerContactKey&gt;e7751732-8713-4854-a5a4-062f0a732693&lt;/d4p1:ItemOwnerContactKey&gt;
+            &lt;d4p1:Latitude&gt;27&lt;/d4p1:Latitude&gt;
+            &lt;d4p1:LegacyAddressKey&gt;sample string 28&lt;/d4p1:LegacyAddressKey&gt;
+            &lt;d4p1:Longitude&gt;29&lt;/d4p1:Longitude&gt;
+            &lt;d4p1:NearText&gt;sample string 30&lt;/d4p1:NearText&gt;
+            &lt;d4p1:Phone1&gt;sample string 31&lt;/d4p1:Phone1&gt;
+            &lt;d4p1:Phone1Type&gt;sample string 32&lt;/d4p1:Phone1Type&gt;
+            &lt;d4p1:Phone2&gt;sample string 33&lt;/d4p1:Phone2&gt;
+            &lt;d4p1:Phone2Type&gt;sample string 34&lt;/d4p1:Phone2Type&gt;
+            &lt;d4p1:Phone3&gt;sample string 35&lt;/d4p1:Phone3&gt;
+            &lt;d4p1:Phone3Type&gt;sample string 36&lt;/d4p1:Phone3Type&gt;
+            &lt;d4p1:Phone4&gt;sample string 37&lt;/d4p1:Phone4&gt;
+            &lt;d4p1:Phone4Type&gt;sample string 38&lt;/d4p1:Phone4Type&gt;
+            &lt;d4p1:PostalCode&gt;sample string 39&lt;/d4p1:PostalCode&gt;
+            &lt;d4p1:Region&gt;sample string 40&lt;/d4p1:Region&gt;
+            &lt;d4p1:StateProvinceCode&gt;sample string 41&lt;/d4p1:StateProvinceCode&gt;
+            &lt;d4p1:TimeZoneKey&gt;f5d4fd70-9abe-4f3f-9d5c-9b359ab2d807&lt;/d4p1:TimeZoneKey&gt;
+            &lt;d4p1:Town&gt;sample string 43&lt;/d4p1:Town&gt;
+            &lt;d4p1:TownOrCity&gt;sample string 44&lt;/d4p1:TownOrCity&gt;
+          &lt;/d4p1:Address&gt;
+          &lt;d4p1:Address&gt;
+            &lt;d4p1:Address1&gt;sample string 1&lt;/d4p1:Address1&gt;
+            &lt;d4p1:Address2&gt;sample string 2&lt;/d4p1:Address2&gt;
+            &lt;d4p1:Address3&gt;sample string 3&lt;/d4p1:Address3&gt;
+            &lt;d4p1:AddressKey&gt;4c447fa1-43fa-4779-be47-a926ae6dddc9&lt;/d4p1:AddressKey&gt;
+            &lt;d4p1:AddressType&gt;sample string 5&lt;/d4p1:AddressType&gt;
+            &lt;d4p1:City&gt;sample string 6&lt;/d4p1:City&gt;
+            &lt;d4p1:CityStateCounty&gt;sample string 7&lt;/d4p1:CityStateCounty&gt;
+            &lt;d4p1:CityStateCountyCountry&gt;sample string 8&lt;/d4p1:CityStateCountyCountry&gt;
+            &lt;d4p1:ContactKey&gt;36b5736e-9304-41cc-b231-c19350961bee&lt;/d4p1:ContactKey&gt;
+            &lt;d4p1:CountryCode&gt;sample string 10&lt;/d4p1:CountryCode&gt;
+            &lt;d4p1:CountryName&gt;sample string 11&lt;/d4p1:CountryName&gt;
+            &lt;d4p1:County&gt;sample string 12&lt;/d4p1:County&gt;
+            &lt;d4p1:EmailAddress&gt;sample string 13&lt;/d4p1:EmailAddress&gt;
+            &lt;d4p1:FormattedAddress&gt;sample string 14&lt;/d4p1:FormattedAddress&gt;
+            &lt;d4p1:FormattedAddressOneLine&gt;sample string 15&lt;/d4p1:FormattedAddressOneLine&gt;
+            &lt;d4p1:FormattedAddressText&gt;sample string 16&lt;/d4p1:FormattedAddressText&gt;
+            &lt;d4p1:IsListCityState&gt;true&lt;/d4p1:IsListCityState&gt;
+            &lt;d4p1:IsLoggingEnabled&gt;true&lt;/d4p1:IsLoggingEnabled&gt;
+            &lt;d4p1:IsNew&gt;true&lt;/d4p1:IsNew&gt;
+            &lt;d4p1:IsPreferredBill&gt;true&lt;/d4p1:IsPreferredBill&gt;
+            &lt;d4p1:IsPreferredList&gt;true&lt;/d4p1:IsPreferredList&gt;
+            &lt;d4p1:IsPreferredMail&gt;true&lt;/d4p1:IsPreferredMail&gt;
+            &lt;d4p1:ItemCreatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:ItemCreatedOn&gt;
+            &lt;d4p1:ItemEntityName&gt;sample string 24&lt;/d4p1:ItemEntityName&gt;
+            &lt;d4p1:ItemName&gt;sample string 25&lt;/d4p1:ItemName&gt;
+            &lt;d4p1:ItemOwnerContactKey&gt;e7751732-8713-4854-a5a4-062f0a732693&lt;/d4p1:ItemOwnerContactKey&gt;
+            &lt;d4p1:Latitude&gt;27&lt;/d4p1:Latitude&gt;
+            &lt;d4p1:LegacyAddressKey&gt;sample string 28&lt;/d4p1:LegacyAddressKey&gt;
+            &lt;d4p1:Longitude&gt;29&lt;/d4p1:Longitude&gt;
+            &lt;d4p1:NearText&gt;sample string 30&lt;/d4p1:NearText&gt;
+            &lt;d4p1:Phone1&gt;sample string 31&lt;/d4p1:Phone1&gt;
+            &lt;d4p1:Phone1Type&gt;sample string 32&lt;/d4p1:Phone1Type&gt;
+            &lt;d4p1:Phone2&gt;sample string 33&lt;/d4p1:Phone2&gt;
+            &lt;d4p1:Phone2Type&gt;sample string 34&lt;/d4p1:Phone2Type&gt;
+            &lt;d4p1:Phone3&gt;sample string 35&lt;/d4p1:Phone3&gt;
+            &lt;d4p1:Phone3Type&gt;sample string 36&lt;/d4p1:Phone3Type&gt;
+            &lt;d4p1:Phone4&gt;sample string 37&lt;/d4p1:Phone4&gt;
+            &lt;d4p1:Phone4Type&gt;sample string 38&lt;/d4p1:Phone4Type&gt;
+            &lt;d4p1:PostalCode&gt;sample string 39&lt;/d4p1:PostalCode&gt;
+            &lt;d4p1:Region&gt;sample string 40&lt;/d4p1:Region&gt;
+            &lt;d4p1:StateProvinceCode&gt;sample string 41&lt;/d4p1:StateProvinceCode&gt;
+            &lt;d4p1:TimeZoneKey&gt;f5d4fd70-9abe-4f3f-9d5c-9b359ab2d807&lt;/d4p1:TimeZoneKey&gt;
+            &lt;d4p1:Town&gt;sample string 43&lt;/d4p1:Town&gt;
+            &lt;d4p1:TownOrCity&gt;sample string 44&lt;/d4p1:TownOrCity&gt;
+          &lt;/d4p1:Address&gt;
+        &lt;/d4p1:Addresses&gt;
+        &lt;d4p1:AgreedToTermsDateTime&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:AgreedToTermsDateTime&gt;
+        &lt;d4p1:CompanyLegacyContactKey&gt;sample string 35&lt;/d4p1:CompanyLegacyContactKey&gt;
+        &lt;d4p1:CompanyName&gt;sample string 13&lt;/d4p1:CompanyName&gt;
+        &lt;d4p1:CompanyTitle&gt;sample string 14&lt;/d4p1:CompanyTitle&gt;
+        &lt;d4p1:ContactKey&gt;2ad0e734-f16e-4904-a9d1-7f3d54cbab48&lt;/d4p1:ContactKey&gt;
+        &lt;d4p1:ContactStatusCode&gt;sample string 9&lt;/d4p1:ContactStatusCode&gt;
+        &lt;d4p1:Demographics&gt;
+          &lt;d4p1:Demographic&gt;
+            &lt;d4p1:DemographicType&gt;sample string 1&lt;/d4p1:DemographicType&gt;
+            &lt;d4p1:Values xmlns:d7p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+              &lt;d7p1:string&gt;sample string 1&lt;/d7p1:string&gt;
+              &lt;d7p1:string&gt;sample string 2&lt;/d7p1:string&gt;
+            &lt;/d4p1:Values&gt;
+          &lt;/d4p1:Demographic&gt;
+          &lt;d4p1:Demographic&gt;
+            &lt;d4p1:DemographicType&gt;sample string 1&lt;/d4p1:DemographicType&gt;
+            &lt;d4p1:Values xmlns:d7p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+              &lt;d7p1:string&gt;sample string 1&lt;/d7p1:string&gt;
+              &lt;d7p1:string&gt;sample string 2&lt;/d7p1:string&gt;
+            &lt;/d4p1:Values&gt;
+          &lt;/d4p1:Demographic&gt;
+        &lt;/d4p1:Demographics&gt;
+        &lt;d4p1:Designation&gt;sample string 16&lt;/d4p1:Designation&gt;
+        &lt;d4p1:DisplayName&gt;sample string 7&lt;/d4p1:DisplayName&gt;
+        &lt;d4p1:EducationEntries&gt;
+          &lt;d4p1:Education&gt;
+            &lt;d4p1:ActivitiesSocieties&gt;sample string 1&lt;/d4p1:ActivitiesSocieties&gt;
+            &lt;d4p1:Advisor&gt;sample string 2&lt;/d4p1:Advisor&gt;
+            &lt;d4p1:City&gt;sample string 3&lt;/d4p1:City&gt;
+            &lt;d4p1:CountryCode&gt;sample string 4&lt;/d4p1:CountryCode&gt;
+            &lt;d4p1:CountryName&gt;sample string 5&lt;/d4p1:CountryName&gt;
+            &lt;d4p1:Degree&gt;sample string 6&lt;/d4p1:Degree&gt;
+            &lt;d4p1:DegreeYear&gt;7&lt;/d4p1:DegreeYear&gt;
+            &lt;d4p1:Dissertation&gt;sample string 8&lt;/d4p1:Dissertation&gt;
+            &lt;d4p1:EducationKey&gt;f6afdd60-970a-40f6-9a1e-498ed22da1b1&lt;/d4p1:EducationKey&gt;
+            &lt;d4p1:FieldOfStudy&gt;sample string 10&lt;/d4p1:FieldOfStudy&gt;
+            &lt;d4p1:FromYear&gt;11&lt;/d4p1:FromYear&gt;
+            &lt;d4p1:IsHighestDegreeAttained&gt;true&lt;/d4p1:IsHighestDegreeAttained&gt;
+            &lt;d4p1:Notes&gt;sample string 13&lt;/d4p1:Notes&gt;
+            &lt;d4p1:SchoolName&gt;sample string 14&lt;/d4p1:SchoolName&gt;
+            &lt;d4p1:StateCode&gt;sample string 15&lt;/d4p1:StateCode&gt;
+            &lt;d4p1:StateName&gt;sample string 16&lt;/d4p1:StateName&gt;
+            &lt;d4p1:ToYear&gt;17&lt;/d4p1:ToYear&gt;
+            &lt;d4p1:UpdatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:UpdatedOn&gt;
+          &lt;/d4p1:Education&gt;
+          &lt;d4p1:Education&gt;
+            &lt;d4p1:ActivitiesSocieties&gt;sample string 1&lt;/d4p1:ActivitiesSocieties&gt;
+            &lt;d4p1:Advisor&gt;sample string 2&lt;/d4p1:Advisor&gt;
+            &lt;d4p1:City&gt;sample string 3&lt;/d4p1:City&gt;
+            &lt;d4p1:CountryCode&gt;sample string 4&lt;/d4p1:CountryCode&gt;
+            &lt;d4p1:CountryName&gt;sample string 5&lt;/d4p1:CountryName&gt;
+            &lt;d4p1:Degree&gt;sample string 6&lt;/d4p1:Degree&gt;
+            &lt;d4p1:DegreeYear&gt;7&lt;/d4p1:DegreeYear&gt;
+            &lt;d4p1:Dissertation&gt;sample string 8&lt;/d4p1:Dissertation&gt;
+            &lt;d4p1:EducationKey&gt;f6afdd60-970a-40f6-9a1e-498ed22da1b1&lt;/d4p1:EducationKey&gt;
+            &lt;d4p1:FieldOfStudy&gt;sample string 10&lt;/d4p1:FieldOfStudy&gt;
+            &lt;d4p1:FromYear&gt;11&lt;/d4p1:FromYear&gt;
+            &lt;d4p1:IsHighestDegreeAttained&gt;true&lt;/d4p1:IsHighestDegreeAttained&gt;
+            &lt;d4p1:Notes&gt;sample string 13&lt;/d4p1:Notes&gt;
+            &lt;d4p1:SchoolName&gt;sample string 14&lt;/d4p1:SchoolName&gt;
+            &lt;d4p1:StateCode&gt;sample string 15&lt;/d4p1:StateCode&gt;
+            &lt;d4p1:StateName&gt;sample string 16&lt;/d4p1:StateName&gt;
+            &lt;d4p1:ToYear&gt;17&lt;/d4p1:ToYear&gt;
+            &lt;d4p1:UpdatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:UpdatedOn&gt;
+          &lt;/d4p1:Education&gt;
+        &lt;/d4p1:EducationEntries&gt;
+        &lt;d4p1:EmailAddress&gt;sample string 8&lt;/d4p1:EmailAddress&gt;
+        &lt;d4p1:FirstName&gt;sample string 5&lt;/d4p1:FirstName&gt;
+        &lt;d4p1:HLContactMeOptOut&gt;true&lt;/d4p1:HLContactMeOptOut&gt;
+        &lt;d4p1:HLDirectoryOptOut&gt;true&lt;/d4p1:HLDirectoryOptOut&gt;
+        &lt;d4p1:InformalName&gt;sample string 18&lt;/d4p1:InformalName&gt;
+        &lt;d4p1:IsBlogger&gt;true&lt;/d4p1:IsBlogger&gt;
+        &lt;d4p1:IsCompany&gt;true&lt;/d4p1:IsCompany&gt;
+        &lt;d4p1:IsMember&gt;true&lt;/d4p1:IsMember&gt;
+        &lt;d4p1:LargePictureUrl&gt;sample string 3&lt;/d4p1:LargePictureUrl&gt;
+        &lt;d4p1:LastName&gt;sample string 6&lt;/d4p1:LastName&gt;
+        &lt;d4p1:LegacyContactKey&gt;sample string 17&lt;/d4p1:LegacyContactKey&gt;
+        &lt;d4p1:LinkToProfile&gt;sample string 1&lt;/d4p1:LinkToProfile&gt;
+        &lt;d4p1:LinkToVolunteerProfile&gt;sample string 41&lt;/d4p1:LinkToVolunteerProfile&gt;
+        &lt;d4p1:MaidenName&gt;sample string 31&lt;/d4p1:MaidenName&gt;
+        &lt;d4p1:MemberAwardKey&gt;9bf1a580-59b1-44eb-a43e-36b4f525e3af&lt;/d4p1:MemberAwardKey&gt;
+        &lt;d4p1:MemberId&gt;sample string 30&lt;/d4p1:MemberId&gt;
+        &lt;d4p1:MiddleName&gt;sample string 33&lt;/d4p1:MiddleName&gt;
+        &lt;d4p1:Phone1&gt;sample string 19&lt;/d4p1:Phone1&gt;
+        &lt;d4p1:Phone1Type&gt;sample string 20&lt;/d4p1:Phone1Type&gt;
+        &lt;d4p1:Phone2&gt;sample string 21&lt;/d4p1:Phone2&gt;
+        &lt;d4p1:Phone2Type&gt;sample string 22&lt;/d4p1:Phone2Type&gt;
+        &lt;d4p1:Phone3&gt;sample string 23&lt;/d4p1:Phone3&gt;
+        &lt;d4p1:Phone3Type&gt;sample string 24&lt;/d4p1:Phone3Type&gt;
+        &lt;d4p1:Phone4&gt;sample string 25&lt;/d4p1:Phone4&gt;
+        &lt;d4p1:Phone4Type&gt;sample string 26&lt;/d4p1:Phone4Type&gt;
+        &lt;d4p1:PictureUrl&gt;sample string 2&lt;/d4p1:PictureUrl&gt;
+        &lt;d4p1:PrefixCode&gt;sample string 10&lt;/d4p1:PrefixCode&gt;
+        &lt;d4p1:PrimarySecurityGroupKey&gt;89eaa049-64b2-4cc5-bf6b-95b3f8c65463&lt;/d4p1:PrimarySecurityGroupKey&gt;
+        &lt;d4p1:Profile&gt;
+          &lt;d4p1:Certifications&gt;sample string 1&lt;/d4p1:Certifications&gt;
+          &lt;d4p1:Description&gt;sample string 2&lt;/d4p1:Description&gt;
+          &lt;d4p1:Expertise&gt;sample string 3&lt;/d4p1:Expertise&gt;
+          &lt;d4p1:ForwardComments&gt;true&lt;/d4p1:ForwardComments&gt;
+          &lt;d4p1:ForwardCommunityInvitations&gt;true&lt;/d4p1:ForwardCommunityInvitations&gt;
+          &lt;d4p1:ForwardContactRequests&gt;true&lt;/d4p1:ForwardContactRequests&gt;
+          &lt;d4p1:ForwardMessages&gt;true&lt;/d4p1:ForwardMessages&gt;
+          &lt;d4p1:Groups&gt;sample string 8&lt;/d4p1:Groups&gt;
+          &lt;d4p1:ImageHeight&gt;9&lt;/d4p1:ImageHeight&gt;
+          &lt;d4p1:ImageWidth&gt;10&lt;/d4p1:ImageWidth&gt;
+          &lt;d4p1:Interests&gt;sample string 11&lt;/d4p1:Interests&gt;
+          &lt;d4p1:IsSpeaker&gt;true&lt;/d4p1:IsSpeaker&gt;
+          &lt;d4p1:NotificationEmailAddress&gt;sample string 13&lt;/d4p1:NotificationEmailAddress&gt;
+        &lt;/d4p1:Profile&gt;
+        &lt;d4p1:SecurityGroups xmlns:d5p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.SecurityGroup&quot;&gt;
+          &lt;d5p1:SecurityGroupConcise&gt;
+            &lt;d5p1:ProvidesMemberBenefits&gt;true&lt;/d5p1:ProvidesMemberBenefits&gt;
+            &lt;d5p1:SecurityGroupKey&gt;5ddbb8ea-44a5-4790-8638-b49b42a36214&lt;/d5p1:SecurityGroupKey&gt;
+            &lt;d5p1:SecurityGroupName&gt;sample string 2&lt;/d5p1:SecurityGroupName&gt;
+          &lt;/d5p1:SecurityGroupConcise&gt;
+          &lt;d5p1:SecurityGroupConcise&gt;
+            &lt;d5p1:ProvidesMemberBenefits&gt;true&lt;/d5p1:ProvidesMemberBenefits&gt;
+            &lt;d5p1:SecurityGroupKey&gt;5ddbb8ea-44a5-4790-8638-b49b42a36214&lt;/d5p1:SecurityGroupKey&gt;
+            &lt;d5p1:SecurityGroupName&gt;sample string 2&lt;/d5p1:SecurityGroupName&gt;
+          &lt;/d5p1:SecurityGroupConcise&gt;
+        &lt;/d4p1:SecurityGroups&gt;
+        &lt;d4p1:SuffixCode&gt;sample string 15&lt;/d4p1:SuffixCode&gt;
+        &lt;d4p1:UnreadMessageCount&gt;40&lt;/d4p1:UnreadMessageCount&gt;
+        &lt;d4p1:UpdatedByContactKey&gt;0ec7d404-4ea3-4d74-bdb0-945086a192cc&lt;/d4p1:UpdatedByContactKey&gt;
+        &lt;d4p1:UpdatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:UpdatedOn&gt;
+        &lt;d4p1:WebsiteUrl&gt;sample string 27&lt;/d4p1:WebsiteUrl&gt;
+        &lt;d4p1:WorkHistory&gt;
+          &lt;d4p1:WorkExperience&gt;
+            &lt;d4p1:Country&gt;sample string 1&lt;/d4p1:Country&gt;
+            &lt;d4p1:Description&gt;sample string 2&lt;/d4p1:Description&gt;
+            &lt;d4p1:FromDate&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:FromDate&gt;
+            &lt;d4p1:IsPresent&gt;true&lt;/d4p1:IsPresent&gt;
+            &lt;d4p1:IsPrimary&gt;true&lt;/d4p1:IsPrimary&gt;
+            &lt;d4p1:JobExperienceKey&gt;c9f92d0e-7cb4-43eb-b595-efb4bbc375f4&lt;/d4p1:JobExperienceKey&gt;
+            &lt;d4p1:OrganizationName&gt;sample string 7&lt;/d4p1:OrganizationName&gt;
+            &lt;d4p1:OrganizationSize&gt;8&lt;/d4p1:OrganizationSize&gt;
+            &lt;d4p1:OrganizationUrl&gt;sample string 9&lt;/d4p1:OrganizationUrl&gt;
+            &lt;d4p1:Place&gt;sample string 10&lt;/d4p1:Place&gt;
+            &lt;d4p1:State&gt;sample string 11&lt;/d4p1:State&gt;
+            &lt;d4p1:Title&gt;sample string 12&lt;/d4p1:Title&gt;
+            &lt;d4p1:ToDate&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:ToDate&gt;
+            &lt;d4p1:UpdatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:UpdatedOn&gt;
+          &lt;/d4p1:WorkExperience&gt;
+          &lt;d4p1:WorkExperience&gt;
+            &lt;d4p1:Country&gt;sample string 1&lt;/d4p1:Country&gt;
+            &lt;d4p1:Description&gt;sample string 2&lt;/d4p1:Description&gt;
+            &lt;d4p1:FromDate&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:FromDate&gt;
+            &lt;d4p1:IsPresent&gt;true&lt;/d4p1:IsPresent&gt;
+            &lt;d4p1:IsPrimary&gt;true&lt;/d4p1:IsPrimary&gt;
+            &lt;d4p1:JobExperienceKey&gt;c9f92d0e-7cb4-43eb-b595-efb4bbc375f4&lt;/d4p1:JobExperienceKey&gt;
+            &lt;d4p1:OrganizationName&gt;sample string 7&lt;/d4p1:OrganizationName&gt;
+            &lt;d4p1:OrganizationSize&gt;8&lt;/d4p1:OrganizationSize&gt;
+            &lt;d4p1:OrganizationUrl&gt;sample string 9&lt;/d4p1:OrganizationUrl&gt;
+            &lt;d4p1:Place&gt;sample string 10&lt;/d4p1:Place&gt;
+            &lt;d4p1:State&gt;sample string 11&lt;/d4p1:State&gt;
+            &lt;d4p1:Title&gt;sample string 12&lt;/d4p1:Title&gt;
+            &lt;d4p1:ToDate&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:ToDate&gt;
+            &lt;d4p1:UpdatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:UpdatedOn&gt;
+          &lt;/d4p1:WorkExperience&gt;
+        &lt;/d4p1:WorkHistory&gt;
+      &lt;/Contact&gt;
+      &lt;ExternalPresenterRef xmlns:d4p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Events&quot;&gt;
+        &lt;_IsLoggingEnabled xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;true&lt;/_IsLoggingEnabled&gt;
+        &lt;_x003C_ClassBOEntityKey_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassBOEntityKey_x003E_k__BackingField&gt;
+        &lt;_x003C_ClassItemKey_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassItemKey_x003E_k__BackingField&gt;
+        &lt;_x003C_ItemBOEntityName_x003E_k__BackingField i:nil=&quot;true&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot; /&gt;
+        &lt;_x003C_ItemCreatedOn_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;0001-01-01T00:00:00&lt;/_x003C_ItemCreatedOn_x003E_k__BackingField&gt;
+        &lt;_x003C_ItemName_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;sample string 13&lt;/_x003C_ItemName_x003E_k__BackingField&gt;
+        &lt;_x003C_ItemOwnerContactKey_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ItemOwnerContactKey_x003E_k__BackingField&gt;
+        &lt;_dataObject xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;
+          &lt;_IsLoggingEnabled&gt;true&lt;/_IsLoggingEnabled&gt;
+          &lt;_x003C_ClassBOEntityKey_x003E_k__BackingField&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassBOEntityKey_x003E_k__BackingField&gt;
+          &lt;_x003C_ClassItemKey_x003E_k__BackingField&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassItemKey_x003E_k__BackingField&gt;
+          &lt;_x003C_ItemBOEntityName_x003E_k__BackingField i:nil=&quot;true&quot; /&gt;
+          &lt;_x003C_ItemCreatedOn_x003E_k__BackingField&gt;0001-01-01T00:00:00&lt;/_x003C_ItemCreatedOn_x003E_k__BackingField&gt;
+          &lt;_x003C_ItemName_x003E_k__BackingField i:nil=&quot;true&quot; /&gt;
+          &lt;_x003C_ItemOwnerContactKey_x003E_k__BackingField&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ItemOwnerContactKey_x003E_k__BackingField&gt;
+          &lt;_cacheSanitized xmlns:d6p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot; /&gt;
+          &lt;_createdByContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_createdByContactKey&gt;
+          &lt;_createdOn&gt;0001-01-01T00:00:00&lt;/_createdOn&gt;
+          &lt;_deletedByContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_deletedByContactKey&gt;
+          &lt;_deletedOn&gt;0001-01-01T00:00:00&lt;/_deletedOn&gt;
+          &lt;_dirtyFields xmlns:d6p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;ExternalPresenterRefKey&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/&quot; i:type=&quot;d8p1:guid&quot;&gt;9f6e2a69-1550-4837-8225-019f4117ed1a&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;Prefix&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;FirstName&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;LastName&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;JobTitle&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;CompanyName&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;Bio&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;PictureUrl&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+          &lt;/_dirtyFields&gt;
+          &lt;_effectiveContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_effectiveContactKey&gt;
+          &lt;_isNew&gt;true&lt;/_isNew&gt;
+          &lt;_itemCommunityKey&gt;00000000-0000-0000-0000-000000000000&lt;/_itemCommunityKey&gt;
+          &lt;_updatedByContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_updatedByContactKey&gt;
+          &lt;_updatedOn&gt;0001-01-01T00:00:00&lt;/_updatedOn&gt;
+          &lt;d4p1:_Bio&gt;sample string 7&lt;/d4p1:_Bio&gt;
+          &lt;d4p1:_CompanyName&gt;sample string 6&lt;/d4p1:_CompanyName&gt;
+          &lt;d4p1:_ExternalPresenterRefKey&gt;6b58f621-ddb1-4e57-b045-a1770f56425f&lt;/d4p1:_ExternalPresenterRefKey&gt;
+          &lt;d4p1:_FirstName&gt;sample string 3&lt;/d4p1:_FirstName&gt;
+          &lt;d4p1:_JobTitle&gt;sample string 5&lt;/d4p1:_JobTitle&gt;
+          &lt;d4p1:_LastName&gt;sample string 4&lt;/d4p1:_LastName&gt;
+          &lt;d4p1:_PictureUrl&gt;sample string 8&lt;/d4p1:_PictureUrl&gt;
+          &lt;d4p1:_Prefix&gt;sample string 2&lt;/d4p1:_Prefix&gt;
+        &lt;/_dataObject&gt;
+      &lt;/ExternalPresenterRef&gt;
+      &lt;PresenterInfoLabel&gt;sample string 4&lt;/PresenterInfoLabel&gt;
+      &lt;PresenterInfoTitle&gt;sample string 5&lt;/PresenterInfoTitle&gt;
+      &lt;PresenterInfoUrl&gt;sample string 3&lt;/PresenterInfoUrl&gt;
+      &lt;PresenterProfileUrl&gt;sample string 2&lt;/PresenterProfileUrl&gt;
+      &lt;PresenterRole xmlns:d4p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Events&quot;&gt;
+        &lt;_IsLoggingEnabled xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;true&lt;/_IsLoggingEnabled&gt;
+        &lt;_x003C_ClassBOEntityKey_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassBOEntityKey_x003E_k__BackingField&gt;
+        &lt;_x003C_ClassItemKey_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassItemKey_x003E_k__BackingField&gt;
+        &lt;_x003C_ItemBOEntityName_x003E_k__BackingField i:nil=&quot;true&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot; /&gt;
+        &lt;_x003C_ItemCreatedOn_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;0001-01-01T00:00:00&lt;/_x003C_ItemCreatedOn_x003E_k__BackingField&gt;
+        &lt;_x003C_ItemName_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;sample string 10&lt;/_x003C_ItemName_x003E_k__BackingField&gt;
+        &lt;_x003C_ItemOwnerContactKey_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ItemOwnerContactKey_x003E_k__BackingField&gt;
+        &lt;_dataObject xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;
+          &lt;_IsLoggingEnabled&gt;true&lt;/_IsLoggingEnabled&gt;
+          &lt;_x003C_ClassBOEntityKey_x003E_k__BackingField&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassBOEntityKey_x003E_k__BackingField&gt;
+          &lt;_x003C_ClassItemKey_x003E_k__BackingField&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassItemKey_x003E_k__BackingField&gt;
+          &lt;_x003C_ItemBOEntityName_x003E_k__BackingField i:nil=&quot;true&quot; /&gt;
+          &lt;_x003C_ItemCreatedOn_x003E_k__BackingField&gt;0001-01-01T00:00:00&lt;/_x003C_ItemCreatedOn_x003E_k__BackingField&gt;
+          &lt;_x003C_ItemName_x003E_k__BackingField i:nil=&quot;true&quot; /&gt;
+          &lt;_x003C_ItemOwnerContactKey_x003E_k__BackingField&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ItemOwnerContactKey_x003E_k__BackingField&gt;
+          &lt;_cacheSanitized xmlns:d6p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot; /&gt;
+          &lt;_createdByContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_createdByContactKey&gt;
+          &lt;_createdOn&gt;0001-01-01T00:00:00&lt;/_createdOn&gt;
+          &lt;_deletedByContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_deletedByContactKey&gt;
+          &lt;_deletedOn&gt;0001-01-01T00:00:00&lt;/_deletedOn&gt;
+          &lt;_dirtyFields xmlns:d6p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;PresenterRoleKey&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/&quot; i:type=&quot;d8p1:guid&quot;&gt;aae1c717-45ad-4716-a10b-019f4117ed1a&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;PresenterRoleName&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;PresenterRoleDescription&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;SortOrder&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:int&quot;&gt;0&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;IsActive&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:boolean&quot;&gt;false&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+          &lt;/_dirtyFields&gt;
+          &lt;_effectiveContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_effectiveContactKey&gt;
+          &lt;_isNew&gt;true&lt;/_isNew&gt;
+          &lt;_itemCommunityKey&gt;00000000-0000-0000-0000-000000000000&lt;/_itemCommunityKey&gt;
+          &lt;_updatedByContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_updatedByContactKey&gt;
+          &lt;_updatedOn&gt;0001-01-01T00:00:00&lt;/_updatedOn&gt;
+          &lt;d4p1:_IsActive&gt;true&lt;/d4p1:_IsActive&gt;
+          &lt;d4p1:_PresenterRoleDescription&gt;sample string 3&lt;/d4p1:_PresenterRoleDescription&gt;
+          &lt;d4p1:_PresenterRoleKey&gt;35daf3b3-49d4-40a0-8d24-2ce5fd5f4ce2&lt;/d4p1:_PresenterRoleKey&gt;
+          &lt;d4p1:_PresenterRoleName&gt;sample string 2&lt;/d4p1:_PresenterRoleName&gt;
+          &lt;d4p1:_SortOrder&gt;4&lt;/d4p1:_SortOrder&gt;
+        &lt;/_dataObject&gt;
+      &lt;/PresenterRole&gt;
+    &lt;/EventPresenter&gt;
+    &lt;EventPresenter&gt;
+      &lt;Bio&gt;sample string 1&lt;/Bio&gt;
+      &lt;Contact xmlns:d4p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+        &lt;d4p1:AMSDirectoryOptOut&gt;true&lt;/d4p1:AMSDirectoryOptOut&gt;
+        &lt;d4p1:Addresses&gt;
+          &lt;d4p1:Address&gt;
+            &lt;d4p1:Address1&gt;sample string 1&lt;/d4p1:Address1&gt;
+            &lt;d4p1:Address2&gt;sample string 2&lt;/d4p1:Address2&gt;
+            &lt;d4p1:Address3&gt;sample string 3&lt;/d4p1:Address3&gt;
+            &lt;d4p1:AddressKey&gt;4c447fa1-43fa-4779-be47-a926ae6dddc9&lt;/d4p1:AddressKey&gt;
+            &lt;d4p1:AddressType&gt;sample string 5&lt;/d4p1:AddressType&gt;
+            &lt;d4p1:City&gt;sample string 6&lt;/d4p1:City&gt;
+            &lt;d4p1:CityStateCounty&gt;sample string 7&lt;/d4p1:CityStateCounty&gt;
+            &lt;d4p1:CityStateCountyCountry&gt;sample string 8&lt;/d4p1:CityStateCountyCountry&gt;
+            &lt;d4p1:ContactKey&gt;36b5736e-9304-41cc-b231-c19350961bee&lt;/d4p1:ContactKey&gt;
+            &lt;d4p1:CountryCode&gt;sample string 10&lt;/d4p1:CountryCode&gt;
+            &lt;d4p1:CountryName&gt;sample string 11&lt;/d4p1:CountryName&gt;
+            &lt;d4p1:County&gt;sample string 12&lt;/d4p1:County&gt;
+            &lt;d4p1:EmailAddress&gt;sample string 13&lt;/d4p1:EmailAddress&gt;
+            &lt;d4p1:FormattedAddress&gt;sample string 14&lt;/d4p1:FormattedAddress&gt;
+            &lt;d4p1:FormattedAddressOneLine&gt;sample string 15&lt;/d4p1:FormattedAddressOneLine&gt;
+            &lt;d4p1:FormattedAddressText&gt;sample string 16&lt;/d4p1:FormattedAddressText&gt;
+            &lt;d4p1:IsListCityState&gt;true&lt;/d4p1:IsListCityState&gt;
+            &lt;d4p1:IsLoggingEnabled&gt;true&lt;/d4p1:IsLoggingEnabled&gt;
+            &lt;d4p1:IsNew&gt;true&lt;/d4p1:IsNew&gt;
+            &lt;d4p1:IsPreferredBill&gt;true&lt;/d4p1:IsPreferredBill&gt;
+            &lt;d4p1:IsPreferredList&gt;true&lt;/d4p1:IsPreferredList&gt;
+            &lt;d4p1:IsPreferredMail&gt;true&lt;/d4p1:IsPreferredMail&gt;
+            &lt;d4p1:ItemCreatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:ItemCreatedOn&gt;
+            &lt;d4p1:ItemEntityName&gt;sample string 24&lt;/d4p1:ItemEntityName&gt;
+            &lt;d4p1:ItemName&gt;sample string 25&lt;/d4p1:ItemName&gt;
+            &lt;d4p1:ItemOwnerContactKey&gt;e7751732-8713-4854-a5a4-062f0a732693&lt;/d4p1:ItemOwnerContactKey&gt;
+            &lt;d4p1:Latitude&gt;27&lt;/d4p1:Latitude&gt;
+            &lt;d4p1:LegacyAddressKey&gt;sample string 28&lt;/d4p1:LegacyAddressKey&gt;
+            &lt;d4p1:Longitude&gt;29&lt;/d4p1:Longitude&gt;
+            &lt;d4p1:NearText&gt;sample string 30&lt;/d4p1:NearText&gt;
+            &lt;d4p1:Phone1&gt;sample string 31&lt;/d4p1:Phone1&gt;
+            &lt;d4p1:Phone1Type&gt;sample string 32&lt;/d4p1:Phone1Type&gt;
+            &lt;d4p1:Phone2&gt;sample string 33&lt;/d4p1:Phone2&gt;
+            &lt;d4p1:Phone2Type&gt;sample string 34&lt;/d4p1:Phone2Type&gt;
+            &lt;d4p1:Phone3&gt;sample string 35&lt;/d4p1:Phone3&gt;
+            &lt;d4p1:Phone3Type&gt;sample string 36&lt;/d4p1:Phone3Type&gt;
+            &lt;d4p1:Phone4&gt;sample string 37&lt;/d4p1:Phone4&gt;
+            &lt;d4p1:Phone4Type&gt;sample string 38&lt;/d4p1:Phone4Type&gt;
+            &lt;d4p1:PostalCode&gt;sample string 39&lt;/d4p1:PostalCode&gt;
+            &lt;d4p1:Region&gt;sample string 40&lt;/d4p1:Region&gt;
+            &lt;d4p1:StateProvinceCode&gt;sample string 41&lt;/d4p1:StateProvinceCode&gt;
+            &lt;d4p1:TimeZoneKey&gt;f5d4fd70-9abe-4f3f-9d5c-9b359ab2d807&lt;/d4p1:TimeZoneKey&gt;
+            &lt;d4p1:Town&gt;sample string 43&lt;/d4p1:Town&gt;
+            &lt;d4p1:TownOrCity&gt;sample string 44&lt;/d4p1:TownOrCity&gt;
+          &lt;/d4p1:Address&gt;
+          &lt;d4p1:Address&gt;
+            &lt;d4p1:Address1&gt;sample string 1&lt;/d4p1:Address1&gt;
+            &lt;d4p1:Address2&gt;sample string 2&lt;/d4p1:Address2&gt;
+            &lt;d4p1:Address3&gt;sample string 3&lt;/d4p1:Address3&gt;
+            &lt;d4p1:AddressKey&gt;4c447fa1-43fa-4779-be47-a926ae6dddc9&lt;/d4p1:AddressKey&gt;
+            &lt;d4p1:AddressType&gt;sample string 5&lt;/d4p1:AddressType&gt;
+            &lt;d4p1:City&gt;sample string 6&lt;/d4p1:City&gt;
+            &lt;d4p1:CityStateCounty&gt;sample string 7&lt;/d4p1:CityStateCounty&gt;
+            &lt;d4p1:CityStateCountyCountry&gt;sample string 8&lt;/d4p1:CityStateCountyCountry&gt;
+            &lt;d4p1:ContactKey&gt;36b5736e-9304-41cc-b231-c19350961bee&lt;/d4p1:ContactKey&gt;
+            &lt;d4p1:CountryCode&gt;sample string 10&lt;/d4p1:CountryCode&gt;
+            &lt;d4p1:CountryName&gt;sample string 11&lt;/d4p1:CountryName&gt;
+            &lt;d4p1:County&gt;sample string 12&lt;/d4p1:County&gt;
+            &lt;d4p1:EmailAddress&gt;sample string 13&lt;/d4p1:EmailAddress&gt;
+            &lt;d4p1:FormattedAddress&gt;sample string 14&lt;/d4p1:FormattedAddress&gt;
+            &lt;d4p1:FormattedAddressOneLine&gt;sample string 15&lt;/d4p1:FormattedAddressOneLine&gt;
+            &lt;d4p1:FormattedAddressText&gt;sample string 16&lt;/d4p1:FormattedAddressText&gt;
+            &lt;d4p1:IsListCityState&gt;true&lt;/d4p1:IsListCityState&gt;
+            &lt;d4p1:IsLoggingEnabled&gt;true&lt;/d4p1:IsLoggingEnabled&gt;
+            &lt;d4p1:IsNew&gt;true&lt;/d4p1:IsNew&gt;
+            &lt;d4p1:IsPreferredBill&gt;true&lt;/d4p1:IsPreferredBill&gt;
+            &lt;d4p1:IsPreferredList&gt;true&lt;/d4p1:IsPreferredList&gt;
+            &lt;d4p1:IsPreferredMail&gt;true&lt;/d4p1:IsPreferredMail&gt;
+            &lt;d4p1:ItemCreatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:ItemCreatedOn&gt;
+            &lt;d4p1:ItemEntityName&gt;sample string 24&lt;/d4p1:ItemEntityName&gt;
+            &lt;d4p1:ItemName&gt;sample string 25&lt;/d4p1:ItemName&gt;
+            &lt;d4p1:ItemOwnerContactKey&gt;e7751732-8713-4854-a5a4-062f0a732693&lt;/d4p1:ItemOwnerContactKey&gt;
+            &lt;d4p1:Latitude&gt;27&lt;/d4p1:Latitude&gt;
+            &lt;d4p1:LegacyAddressKey&gt;sample string 28&lt;/d4p1:LegacyAddressKey&gt;
+            &lt;d4p1:Longitude&gt;29&lt;/d4p1:Longitude&gt;
+            &lt;d4p1:NearText&gt;sample string 30&lt;/d4p1:NearText&gt;
+            &lt;d4p1:Phone1&gt;sample string 31&lt;/d4p1:Phone1&gt;
+            &lt;d4p1:Phone1Type&gt;sample string 32&lt;/d4p1:Phone1Type&gt;
+            &lt;d4p1:Phone2&gt;sample string 33&lt;/d4p1:Phone2&gt;
+            &lt;d4p1:Phone2Type&gt;sample string 34&lt;/d4p1:Phone2Type&gt;
+            &lt;d4p1:Phone3&gt;sample string 35&lt;/d4p1:Phone3&gt;
+            &lt;d4p1:Phone3Type&gt;sample string 36&lt;/d4p1:Phone3Type&gt;
+            &lt;d4p1:Phone4&gt;sample string 37&lt;/d4p1:Phone4&gt;
+            &lt;d4p1:Phone4Type&gt;sample string 38&lt;/d4p1:Phone4Type&gt;
+            &lt;d4p1:PostalCode&gt;sample string 39&lt;/d4p1:PostalCode&gt;
+            &lt;d4p1:Region&gt;sample string 40&lt;/d4p1:Region&gt;
+            &lt;d4p1:StateProvinceCode&gt;sample string 41&lt;/d4p1:StateProvinceCode&gt;
+            &lt;d4p1:TimeZoneKey&gt;f5d4fd70-9abe-4f3f-9d5c-9b359ab2d807&lt;/d4p1:TimeZoneKey&gt;
+            &lt;d4p1:Town&gt;sample string 43&lt;/d4p1:Town&gt;
+            &lt;d4p1:TownOrCity&gt;sample string 44&lt;/d4p1:TownOrCity&gt;
+          &lt;/d4p1:Address&gt;
+        &lt;/d4p1:Addresses&gt;
+        &lt;d4p1:AgreedToTermsDateTime&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:AgreedToTermsDateTime&gt;
+        &lt;d4p1:CompanyLegacyContactKey&gt;sample string 35&lt;/d4p1:CompanyLegacyContactKey&gt;
+        &lt;d4p1:CompanyName&gt;sample string 13&lt;/d4p1:CompanyName&gt;
+        &lt;d4p1:CompanyTitle&gt;sample string 14&lt;/d4p1:CompanyTitle&gt;
+        &lt;d4p1:ContactKey&gt;2ad0e734-f16e-4904-a9d1-7f3d54cbab48&lt;/d4p1:ContactKey&gt;
+        &lt;d4p1:ContactStatusCode&gt;sample string 9&lt;/d4p1:ContactStatusCode&gt;
+        &lt;d4p1:Demographics&gt;
+          &lt;d4p1:Demographic&gt;
+            &lt;d4p1:DemographicType&gt;sample string 1&lt;/d4p1:DemographicType&gt;
+            &lt;d4p1:Values xmlns:d7p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+              &lt;d7p1:string&gt;sample string 1&lt;/d7p1:string&gt;
+              &lt;d7p1:string&gt;sample string 2&lt;/d7p1:string&gt;
+            &lt;/d4p1:Values&gt;
+          &lt;/d4p1:Demographic&gt;
+          &lt;d4p1:Demographic&gt;
+            &lt;d4p1:DemographicType&gt;sample string 1&lt;/d4p1:DemographicType&gt;
+            &lt;d4p1:Values xmlns:d7p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+              &lt;d7p1:string&gt;sample string 1&lt;/d7p1:string&gt;
+              &lt;d7p1:string&gt;sample string 2&lt;/d7p1:string&gt;
+            &lt;/d4p1:Values&gt;
+          &lt;/d4p1:Demographic&gt;
+        &lt;/d4p1:Demographics&gt;
+        &lt;d4p1:Designation&gt;sample string 16&lt;/d4p1:Designation&gt;
+        &lt;d4p1:DisplayName&gt;sample string 7&lt;/d4p1:DisplayName&gt;
+        &lt;d4p1:EducationEntries&gt;
+          &lt;d4p1:Education&gt;
+            &lt;d4p1:ActivitiesSocieties&gt;sample string 1&lt;/d4p1:ActivitiesSocieties&gt;
+            &lt;d4p1:Advisor&gt;sample string 2&lt;/d4p1:Advisor&gt;
+            &lt;d4p1:City&gt;sample string 3&lt;/d4p1:City&gt;
+            &lt;d4p1:CountryCode&gt;sample string 4&lt;/d4p1:CountryCode&gt;
+            &lt;d4p1:CountryName&gt;sample string 5&lt;/d4p1:CountryName&gt;
+            &lt;d4p1:Degree&gt;sample string 6&lt;/d4p1:Degree&gt;
+            &lt;d4p1:DegreeYear&gt;7&lt;/d4p1:DegreeYear&gt;
+            &lt;d4p1:Dissertation&gt;sample string 8&lt;/d4p1:Dissertation&gt;
+            &lt;d4p1:EducationKey&gt;f6afdd60-970a-40f6-9a1e-498ed22da1b1&lt;/d4p1:EducationKey&gt;
+            &lt;d4p1:FieldOfStudy&gt;sample string 10&lt;/d4p1:FieldOfStudy&gt;
+            &lt;d4p1:FromYear&gt;11&lt;/d4p1:FromYear&gt;
+            &lt;d4p1:IsHighestDegreeAttained&gt;true&lt;/d4p1:IsHighestDegreeAttained&gt;
+            &lt;d4p1:Notes&gt;sample string 13&lt;/d4p1:Notes&gt;
+            &lt;d4p1:SchoolName&gt;sample string 14&lt;/d4p1:SchoolName&gt;
+            &lt;d4p1:StateCode&gt;sample string 15&lt;/d4p1:StateCode&gt;
+            &lt;d4p1:StateName&gt;sample string 16&lt;/d4p1:StateName&gt;
+            &lt;d4p1:ToYear&gt;17&lt;/d4p1:ToYear&gt;
+            &lt;d4p1:UpdatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:UpdatedOn&gt;
+          &lt;/d4p1:Education&gt;
+          &lt;d4p1:Education&gt;
+            &lt;d4p1:ActivitiesSocieties&gt;sample string 1&lt;/d4p1:ActivitiesSocieties&gt;
+            &lt;d4p1:Advisor&gt;sample string 2&lt;/d4p1:Advisor&gt;
+            &lt;d4p1:City&gt;sample string 3&lt;/d4p1:City&gt;
+            &lt;d4p1:CountryCode&gt;sample string 4&lt;/d4p1:CountryCode&gt;
+            &lt;d4p1:CountryName&gt;sample string 5&lt;/d4p1:CountryName&gt;
+            &lt;d4p1:Degree&gt;sample string 6&lt;/d4p1:Degree&gt;
+            &lt;d4p1:DegreeYear&gt;7&lt;/d4p1:DegreeYear&gt;
+            &lt;d4p1:Dissertation&gt;sample string 8&lt;/d4p1:Dissertation&gt;
+            &lt;d4p1:EducationKey&gt;f6afdd60-970a-40f6-9a1e-498ed22da1b1&lt;/d4p1:EducationKey&gt;
+            &lt;d4p1:FieldOfStudy&gt;sample string 10&lt;/d4p1:FieldOfStudy&gt;
+            &lt;d4p1:FromYear&gt;11&lt;/d4p1:FromYear&gt;
+            &lt;d4p1:IsHighestDegreeAttained&gt;true&lt;/d4p1:IsHighestDegreeAttained&gt;
+            &lt;d4p1:Notes&gt;sample string 13&lt;/d4p1:Notes&gt;
+            &lt;d4p1:SchoolName&gt;sample string 14&lt;/d4p1:SchoolName&gt;
+            &lt;d4p1:StateCode&gt;sample string 15&lt;/d4p1:StateCode&gt;
+            &lt;d4p1:StateName&gt;sample string 16&lt;/d4p1:StateName&gt;
+            &lt;d4p1:ToYear&gt;17&lt;/d4p1:ToYear&gt;
+            &lt;d4p1:UpdatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:UpdatedOn&gt;
+          &lt;/d4p1:Education&gt;
+        &lt;/d4p1:EducationEntries&gt;
+        &lt;d4p1:EmailAddress&gt;sample string 8&lt;/d4p1:EmailAddress&gt;
+        &lt;d4p1:FirstName&gt;sample string 5&lt;/d4p1:FirstName&gt;
+        &lt;d4p1:HLContactMeOptOut&gt;true&lt;/d4p1:HLContactMeOptOut&gt;
+        &lt;d4p1:HLDirectoryOptOut&gt;true&lt;/d4p1:HLDirectoryOptOut&gt;
+        &lt;d4p1:InformalName&gt;sample string 18&lt;/d4p1:InformalName&gt;
+        &lt;d4p1:IsBlogger&gt;true&lt;/d4p1:IsBlogger&gt;
+        &lt;d4p1:IsCompany&gt;true&lt;/d4p1:IsCompany&gt;
+        &lt;d4p1:IsMember&gt;true&lt;/d4p1:IsMember&gt;
+        &lt;d4p1:LargePictureUrl&gt;sample string 3&lt;/d4p1:LargePictureUrl&gt;
+        &lt;d4p1:LastName&gt;sample string 6&lt;/d4p1:LastName&gt;
+        &lt;d4p1:LegacyContactKey&gt;sample string 17&lt;/d4p1:LegacyContactKey&gt;
+        &lt;d4p1:LinkToProfile&gt;sample string 1&lt;/d4p1:LinkToProfile&gt;
+        &lt;d4p1:LinkToVolunteerProfile&gt;sample string 41&lt;/d4p1:LinkToVolunteerProfile&gt;
+        &lt;d4p1:MaidenName&gt;sample string 31&lt;/d4p1:MaidenName&gt;
+        &lt;d4p1:MemberAwardKey&gt;9bf1a580-59b1-44eb-a43e-36b4f525e3af&lt;/d4p1:MemberAwardKey&gt;
+        &lt;d4p1:MemberId&gt;sample string 30&lt;/d4p1:MemberId&gt;
+        &lt;d4p1:MiddleName&gt;sample string 33&lt;/d4p1:MiddleName&gt;
+        &lt;d4p1:Phone1&gt;sample string 19&lt;/d4p1:Phone1&gt;
+        &lt;d4p1:Phone1Type&gt;sample string 20&lt;/d4p1:Phone1Type&gt;
+        &lt;d4p1:Phone2&gt;sample string 21&lt;/d4p1:Phone2&gt;
+        &lt;d4p1:Phone2Type&gt;sample string 22&lt;/d4p1:Phone2Type&gt;
+        &lt;d4p1:Phone3&gt;sample string 23&lt;/d4p1:Phone3&gt;
+        &lt;d4p1:Phone3Type&gt;sample string 24&lt;/d4p1:Phone3Type&gt;
+        &lt;d4p1:Phone4&gt;sample string 25&lt;/d4p1:Phone4&gt;
+        &lt;d4p1:Phone4Type&gt;sample string 26&lt;/d4p1:Phone4Type&gt;
+        &lt;d4p1:PictureUrl&gt;sample string 2&lt;/d4p1:PictureUrl&gt;
+        &lt;d4p1:PrefixCode&gt;sample string 10&lt;/d4p1:PrefixCode&gt;
+        &lt;d4p1:PrimarySecurityGroupKey&gt;89eaa049-64b2-4cc5-bf6b-95b3f8c65463&lt;/d4p1:PrimarySecurityGroupKey&gt;
+        &lt;d4p1:Profile&gt;
+          &lt;d4p1:Certifications&gt;sample string 1&lt;/d4p1:Certifications&gt;
+          &lt;d4p1:Description&gt;sample string 2&lt;/d4p1:Description&gt;
+          &lt;d4p1:Expertise&gt;sample string 3&lt;/d4p1:Expertise&gt;
+          &lt;d4p1:ForwardComments&gt;true&lt;/d4p1:ForwardComments&gt;
+          &lt;d4p1:ForwardCommunityInvitations&gt;true&lt;/d4p1:ForwardCommunityInvitations&gt;
+          &lt;d4p1:ForwardContactRequests&gt;true&lt;/d4p1:ForwardContactRequests&gt;
+          &lt;d4p1:ForwardMessages&gt;true&lt;/d4p1:ForwardMessages&gt;
+          &lt;d4p1:Groups&gt;sample string 8&lt;/d4p1:Groups&gt;
+          &lt;d4p1:ImageHeight&gt;9&lt;/d4p1:ImageHeight&gt;
+          &lt;d4p1:ImageWidth&gt;10&lt;/d4p1:ImageWidth&gt;
+          &lt;d4p1:Interests&gt;sample string 11&lt;/d4p1:Interests&gt;
+          &lt;d4p1:IsSpeaker&gt;true&lt;/d4p1:IsSpeaker&gt;
+          &lt;d4p1:NotificationEmailAddress&gt;sample string 13&lt;/d4p1:NotificationEmailAddress&gt;
+        &lt;/d4p1:Profile&gt;
+        &lt;d4p1:SecurityGroups xmlns:d5p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.SecurityGroup&quot;&gt;
+          &lt;d5p1:SecurityGroupConcise&gt;
+            &lt;d5p1:ProvidesMemberBenefits&gt;true&lt;/d5p1:ProvidesMemberBenefits&gt;
+            &lt;d5p1:SecurityGroupKey&gt;5ddbb8ea-44a5-4790-8638-b49b42a36214&lt;/d5p1:SecurityGroupKey&gt;
+            &lt;d5p1:SecurityGroupName&gt;sample string 2&lt;/d5p1:SecurityGroupName&gt;
+          &lt;/d5p1:SecurityGroupConcise&gt;
+          &lt;d5p1:SecurityGroupConcise&gt;
+            &lt;d5p1:ProvidesMemberBenefits&gt;true&lt;/d5p1:ProvidesMemberBenefits&gt;
+            &lt;d5p1:SecurityGroupKey&gt;5ddbb8ea-44a5-4790-8638-b49b42a36214&lt;/d5p1:SecurityGroupKey&gt;
+            &lt;d5p1:SecurityGroupName&gt;sample string 2&lt;/d5p1:SecurityGroupName&gt;
+          &lt;/d5p1:SecurityGroupConcise&gt;
+        &lt;/d4p1:SecurityGroups&gt;
+        &lt;d4p1:SuffixCode&gt;sample string 15&lt;/d4p1:SuffixCode&gt;
+        &lt;d4p1:UnreadMessageCount&gt;40&lt;/d4p1:UnreadMessageCount&gt;
+        &lt;d4p1:UpdatedByContactKey&gt;0ec7d404-4ea3-4d74-bdb0-945086a192cc&lt;/d4p1:UpdatedByContactKey&gt;
+        &lt;d4p1:UpdatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:UpdatedOn&gt;
+        &lt;d4p1:WebsiteUrl&gt;sample string 27&lt;/d4p1:WebsiteUrl&gt;
+        &lt;d4p1:WorkHistory&gt;
+          &lt;d4p1:WorkExperience&gt;
+            &lt;d4p1:Country&gt;sample string 1&lt;/d4p1:Country&gt;
+            &lt;d4p1:Description&gt;sample string 2&lt;/d4p1:Description&gt;
+            &lt;d4p1:FromDate&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:FromDate&gt;
+            &lt;d4p1:IsPresent&gt;true&lt;/d4p1:IsPresent&gt;
+            &lt;d4p1:IsPrimary&gt;true&lt;/d4p1:IsPrimary&gt;
+            &lt;d4p1:JobExperienceKey&gt;c9f92d0e-7cb4-43eb-b595-efb4bbc375f4&lt;/d4p1:JobExperienceKey&gt;
+            &lt;d4p1:OrganizationName&gt;sample string 7&lt;/d4p1:OrganizationName&gt;
+            &lt;d4p1:OrganizationSize&gt;8&lt;/d4p1:OrganizationSize&gt;
+            &lt;d4p1:OrganizationUrl&gt;sample string 9&lt;/d4p1:OrganizationUrl&gt;
+            &lt;d4p1:Place&gt;sample string 10&lt;/d4p1:Place&gt;
+            &lt;d4p1:State&gt;sample string 11&lt;/d4p1:State&gt;
+            &lt;d4p1:Title&gt;sample string 12&lt;/d4p1:Title&gt;
+            &lt;d4p1:ToDate&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:ToDate&gt;
+            &lt;d4p1:UpdatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:UpdatedOn&gt;
+          &lt;/d4p1:WorkExperience&gt;
+          &lt;d4p1:WorkExperience&gt;
+            &lt;d4p1:Country&gt;sample string 1&lt;/d4p1:Country&gt;
+            &lt;d4p1:Description&gt;sample string 2&lt;/d4p1:Description&gt;
+            &lt;d4p1:FromDate&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:FromDate&gt;
+            &lt;d4p1:IsPresent&gt;true&lt;/d4p1:IsPresent&gt;
+            &lt;d4p1:IsPrimary&gt;true&lt;/d4p1:IsPrimary&gt;
+            &lt;d4p1:JobExperienceKey&gt;c9f92d0e-7cb4-43eb-b595-efb4bbc375f4&lt;/d4p1:JobExperienceKey&gt;
+            &lt;d4p1:OrganizationName&gt;sample string 7&lt;/d4p1:OrganizationName&gt;
+            &lt;d4p1:OrganizationSize&gt;8&lt;/d4p1:OrganizationSize&gt;
+            &lt;d4p1:OrganizationUrl&gt;sample string 9&lt;/d4p1:OrganizationUrl&gt;
+            &lt;d4p1:Place&gt;sample string 10&lt;/d4p1:Place&gt;
+            &lt;d4p1:State&gt;sample string 11&lt;/d4p1:State&gt;
+            &lt;d4p1:Title&gt;sample string 12&lt;/d4p1:Title&gt;
+            &lt;d4p1:ToDate&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:ToDate&gt;
+            &lt;d4p1:UpdatedOn&gt;2026-07-08T05:38:34.9065767-04:00&lt;/d4p1:UpdatedOn&gt;
+          &lt;/d4p1:WorkExperience&gt;
+        &lt;/d4p1:WorkHistory&gt;
+      &lt;/Contact&gt;
+      &lt;ExternalPresenterRef xmlns:d4p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Events&quot;&gt;
+        &lt;_IsLoggingEnabled xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;true&lt;/_IsLoggingEnabled&gt;
+        &lt;_x003C_ClassBOEntityKey_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassBOEntityKey_x003E_k__BackingField&gt;
+        &lt;_x003C_ClassItemKey_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassItemKey_x003E_k__BackingField&gt;
+        &lt;_x003C_ItemBOEntityName_x003E_k__BackingField i:nil=&quot;true&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot; /&gt;
+        &lt;_x003C_ItemCreatedOn_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;0001-01-01T00:00:00&lt;/_x003C_ItemCreatedOn_x003E_k__BackingField&gt;
+        &lt;_x003C_ItemName_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;sample string 13&lt;/_x003C_ItemName_x003E_k__BackingField&gt;
+        &lt;_x003C_ItemOwnerContactKey_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ItemOwnerContactKey_x003E_k__BackingField&gt;
+        &lt;_dataObject xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;
+          &lt;_IsLoggingEnabled&gt;true&lt;/_IsLoggingEnabled&gt;
+          &lt;_x003C_ClassBOEntityKey_x003E_k__BackingField&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassBOEntityKey_x003E_k__BackingField&gt;
+          &lt;_x003C_ClassItemKey_x003E_k__BackingField&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassItemKey_x003E_k__BackingField&gt;
+          &lt;_x003C_ItemBOEntityName_x003E_k__BackingField i:nil=&quot;true&quot; /&gt;
+          &lt;_x003C_ItemCreatedOn_x003E_k__BackingField&gt;0001-01-01T00:00:00&lt;/_x003C_ItemCreatedOn_x003E_k__BackingField&gt;
+          &lt;_x003C_ItemName_x003E_k__BackingField i:nil=&quot;true&quot; /&gt;
+          &lt;_x003C_ItemOwnerContactKey_x003E_k__BackingField&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ItemOwnerContactKey_x003E_k__BackingField&gt;
+          &lt;_cacheSanitized xmlns:d6p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot; /&gt;
+          &lt;_createdByContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_createdByContactKey&gt;
+          &lt;_createdOn&gt;0001-01-01T00:00:00&lt;/_createdOn&gt;
+          &lt;_deletedByContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_deletedByContactKey&gt;
+          &lt;_deletedOn&gt;0001-01-01T00:00:00&lt;/_deletedOn&gt;
+          &lt;_dirtyFields xmlns:d6p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;ExternalPresenterRefKey&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/&quot; i:type=&quot;d8p1:guid&quot;&gt;9f6e2a69-1550-4837-8225-019f4117ed1a&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;Prefix&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;FirstName&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;LastName&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;JobTitle&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;CompanyName&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;Bio&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;PictureUrl&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+          &lt;/_dirtyFields&gt;
+          &lt;_effectiveContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_effectiveContactKey&gt;
+          &lt;_isNew&gt;true&lt;/_isNew&gt;
+          &lt;_itemCommunityKey&gt;00000000-0000-0000-0000-000000000000&lt;/_itemCommunityKey&gt;
+          &lt;_updatedByContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_updatedByContactKey&gt;
+          &lt;_updatedOn&gt;0001-01-01T00:00:00&lt;/_updatedOn&gt;
+          &lt;d4p1:_Bio&gt;sample string 7&lt;/d4p1:_Bio&gt;
+          &lt;d4p1:_CompanyName&gt;sample string 6&lt;/d4p1:_CompanyName&gt;
+          &lt;d4p1:_ExternalPresenterRefKey&gt;6b58f621-ddb1-4e57-b045-a1770f56425f&lt;/d4p1:_ExternalPresenterRefKey&gt;
+          &lt;d4p1:_FirstName&gt;sample string 3&lt;/d4p1:_FirstName&gt;
+          &lt;d4p1:_JobTitle&gt;sample string 5&lt;/d4p1:_JobTitle&gt;
+          &lt;d4p1:_LastName&gt;sample string 4&lt;/d4p1:_LastName&gt;
+          &lt;d4p1:_PictureUrl&gt;sample string 8&lt;/d4p1:_PictureUrl&gt;
+          &lt;d4p1:_Prefix&gt;sample string 2&lt;/d4p1:_Prefix&gt;
+        &lt;/_dataObject&gt;
+      &lt;/ExternalPresenterRef&gt;
+      &lt;PresenterInfoLabel&gt;sample string 4&lt;/PresenterInfoLabel&gt;
+      &lt;PresenterInfoTitle&gt;sample string 5&lt;/PresenterInfoTitle&gt;
+      &lt;PresenterInfoUrl&gt;sample string 3&lt;/PresenterInfoUrl&gt;
+      &lt;PresenterProfileUrl&gt;sample string 2&lt;/PresenterProfileUrl&gt;
+      &lt;PresenterRole xmlns:d4p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Events&quot;&gt;
+        &lt;_IsLoggingEnabled xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;true&lt;/_IsLoggingEnabled&gt;
+        &lt;_x003C_ClassBOEntityKey_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassBOEntityKey_x003E_k__BackingField&gt;
+        &lt;_x003C_ClassItemKey_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassItemKey_x003E_k__BackingField&gt;
+        &lt;_x003C_ItemBOEntityName_x003E_k__BackingField i:nil=&quot;true&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot; /&gt;
+        &lt;_x003C_ItemCreatedOn_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;0001-01-01T00:00:00&lt;/_x003C_ItemCreatedOn_x003E_k__BackingField&gt;
+        &lt;_x003C_ItemName_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;sample string 10&lt;/_x003C_ItemName_x003E_k__BackingField&gt;
+        &lt;_x003C_ItemOwnerContactKey_x003E_k__BackingField xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ItemOwnerContactKey_x003E_k__BackingField&gt;
+        &lt;_dataObject xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;
+          &lt;_IsLoggingEnabled&gt;true&lt;/_IsLoggingEnabled&gt;
+          &lt;_x003C_ClassBOEntityKey_x003E_k__BackingField&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassBOEntityKey_x003E_k__BackingField&gt;
+          &lt;_x003C_ClassItemKey_x003E_k__BackingField&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ClassItemKey_x003E_k__BackingField&gt;
+          &lt;_x003C_ItemBOEntityName_x003E_k__BackingField i:nil=&quot;true&quot; /&gt;
+          &lt;_x003C_ItemCreatedOn_x003E_k__BackingField&gt;0001-01-01T00:00:00&lt;/_x003C_ItemCreatedOn_x003E_k__BackingField&gt;
+          &lt;_x003C_ItemName_x003E_k__BackingField i:nil=&quot;true&quot; /&gt;
+          &lt;_x003C_ItemOwnerContactKey_x003E_k__BackingField&gt;00000000-0000-0000-0000-000000000000&lt;/_x003C_ItemOwnerContactKey_x003E_k__BackingField&gt;
+          &lt;_cacheSanitized xmlns:d6p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot; /&gt;
+          &lt;_createdByContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_createdByContactKey&gt;
+          &lt;_createdOn&gt;0001-01-01T00:00:00&lt;/_createdOn&gt;
+          &lt;_deletedByContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_deletedByContactKey&gt;
+          &lt;_deletedOn&gt;0001-01-01T00:00:00&lt;/_deletedOn&gt;
+          &lt;_dirtyFields xmlns:d6p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;PresenterRoleKey&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/&quot; i:type=&quot;d8p1:guid&quot;&gt;aae1c717-45ad-4716-a10b-019f4117ed1a&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;PresenterRoleName&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;PresenterRoleDescription&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:string&quot;&gt;&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;SortOrder&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:int&quot;&gt;0&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+            &lt;d6p1:KeyValueOfstringanyType&gt;
+              &lt;d6p1:Key&gt;IsActive&lt;/d6p1:Key&gt;
+              &lt;d6p1:Value xmlns:d8p1=&quot;http://www.w3.org/2001/XMLSchema&quot; i:type=&quot;d8p1:boolean&quot;&gt;false&lt;/d6p1:Value&gt;
+            &lt;/d6p1:KeyValueOfstringanyType&gt;
+          &lt;/_dirtyFields&gt;
+          &lt;_effectiveContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_effectiveContactKey&gt;
+          &lt;_isNew&gt;true&lt;/_isNew&gt;
+          &lt;_itemCommunityKey&gt;00000000-0000-0000-0000-000000000000&lt;/_itemCommunityKey&gt;
+          &lt;_updatedByContactKey&gt;00000000-0000-0000-0000-000000000000&lt;/_updatedByContactKey&gt;
+          &lt;_updatedOn&gt;0001-01-01T00:00:00&lt;/_updatedOn&gt;
+          &lt;d4p1:_IsActive&gt;true&lt;/d4p1:_IsActive&gt;
+          &lt;d4p1:_PresenterRoleDescription&gt;sample string 3&lt;/d4p1:_PresenterRoleDescription&gt;
+          &lt;d4p1:_PresenterRoleKey&gt;35daf3b3-49d4-40a0-8d24-2ce5fd5f4ce2&lt;/d4p1:_PresenterRoleKey&gt;
+          &lt;d4p1:_PresenterRoleName&gt;sample string 2&lt;/d4p1:_PresenterRoleName&gt;
+          &lt;d4p1:_SortOrder&gt;4&lt;/d4p1:_SortOrder&gt;
+        &lt;/_dataObject&gt;
+      &lt;/PresenterRole&gt;
+    &lt;/EventPresenter&gt;
+  &lt;/Presenters&gt;
+&lt;/EventSession&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

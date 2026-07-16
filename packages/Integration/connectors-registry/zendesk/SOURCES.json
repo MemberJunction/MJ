@@ -1,0 +1,152 @@
+{
+  "Vendor": "Zendesk",
+  "AuditedAt": "2026-07-03T00:00:00.000Z",
+  "Sources": [
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "LocalArtifact": "sources/ticketing-oas.yaml",
+      "LocalArtifactJSON": "sources/ticketing-oas.json",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "Title": "Zendesk Support (Ticketing) API — OpenAPI 3.0.3 spec",
+      "CoversTaxonomies": [
+        "Tickets & Ticket Lifecycle", "Ticket Comments & Conversation Log", "Ticket Audits",
+        "Ticket Metrics", "Ticket Fields & Forms", "Ticket Statuses", "Ticket Skips",
+        "Ticket Content Pins", "Requests (End-User Facing Tickets)", "Suspended Tickets",
+        "Deleted / Soft-Deleted Records", "Users", "User Identities", "User Fields",
+        "User Passwords & Sessions", "Organizations", "Organization Fields",
+        "Organization Memberships", "Organization Subscriptions", "Groups & Group Memberships",
+        "Skill-Based Routing", "Omnichannel Routing Queues", "Business Rules (Macros)",
+        "Business Rules (Triggers)", "Business Rules (Automations)", "Views",
+        "SLA Policies", "Custom Roles & Permissions", "Custom Ticket Statuses",
+        "Custom Objects", "Tags", "Brands", "Dynamic Content", "Targets & Notifications",
+        "Satisfaction Ratings", "Satisfaction Reasons", "Sharing Agreements",
+        "Support Addresses & Email Notifications", "Audit Logs & Compliance",
+        "Deletion Schedules & GDPR Compliance", "Bookmarks & Saved Searches",
+        "Resource Collections", "OAuth Clients & Tokens", "Remote Authentications",
+        "Task Lists & Approval Requests", "IT Asset Management (ITAM)",
+        "Activity Stream", "Locales & Account Settings", "Job Statuses",
+        "Channel Integrations (X/Twitter)", "Workspaces", "Search",
+        "Incremental Export & Pagination Mechanics", "Authentication & Rate Limiting"
+      ],
+      "AccessNotes": "Downloaded in full via curl (1,645,734 bytes, 47,152 lines YAML; converted to JSON: 427 paths, 556 component schemas). This is the vendor's own generator source for the hosted API reference — highest-value credential-free contract. Discovered via the 'Download OpenAPI file' link on https://developer.zendesk.com/api-reference/ticketing/introduction/."
+    },
+    {
+      "URL": "https://developer.zendesk.com/help_center/oas.yaml",
+      "LocalArtifact": "sources/helpcenter-oas.yaml",
+      "LocalArtifactJSON": "sources/helpcenter-oas.json",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "Title": "Zendesk Help Center (Guide) API — OpenAPI 3.0.2 spec",
+      "CoversTaxonomies": [
+        "Help Center Articles & Attachments", "Help Center Categories & Sections",
+        "Help Center Translations & Labels", "Help Center Community (Posts/Topics)",
+        "Help Center Votes & Comments", "Help Center User Segments & Permission Groups",
+        "Help Center Subscriptions", "Help Center Search & Deflection",
+        "Help Center Service Catalog", "Help Center Sessions"
+      ],
+      "AccessNotes": "Downloaded in full via curl (278,280 bytes, 8,456 lines YAML; converted to JSON: 116 paths, 69 component schemas). Discovered via the 'Download OpenAPI file' link on https://developer.zendesk.com/api-reference/help_center/help-center-api/introduction/."
+    },
+    {
+      "URL": "https://god.gw.postman.com/run-collection/19931619-491840ed-8cea-4d36-9e4e-3cc4fc97be68",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "PostmanCollection",
+      "Title": "Zendesk Support API — official Postman collection ('Run in Postman' link, zendesk-public-api workspace)",
+      "CoversTaxonomies": ["Tickets & Ticket Lifecycle", "Users", "Organizations", "Groups & Group Memberships"],
+      "AccessNotes": "Web view (Collection Web View HTML) returns 200; the raw collection JSON export requires a Postman API key (api.getpostman.com/collections/{id} returned 401 AuthenticationError) which is out of scope for credential-free acquisition. Confirmed EXISTS and is vendor-maintained (part of the public 'zendesk-public-api' Postman workspace at postman.com/zendesk-redback/zendesk-public-api, which explicitly covers Support API + Help Center API, excluding Sell + Sunshine Conversations). Superseded in authority by the OpenAPI spec above, which is the same generator's source-of-truth and was fully retrievable. Retained as a secondary corroborating source for request/response shape spot-checks."
+    },
+    {
+      "URL": "https://www.postman.com/zendesk-redback/zendesk-public-api/overview",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "PostmanCollection",
+      "Title": "Zendesk Public API — Postman public workspace overview",
+      "CoversTaxonomies": ["Tickets & Ticket Lifecycle", "Users", "Organizations", "Help Center Articles & Attachments"],
+      "AccessNotes": "200 OK. Same access constraint as above (workspace browsing works; raw JSON collection export needs Postman auth)."
+    },
+    {
+      "URL": "https://developer.zendesk.com/api-reference/ticketing/introduction/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Ticketing API — Introduction (auth scheme, versioning, download links)",
+      "CoversTaxonomies": ["Authentication & Rate Limiting"],
+      "AccessNotes": "200 OK. Used to locate the OpenAPI download link + confirm auth scheme (Basic w/ API token, OAuth 2.0)."
+    },
+    {
+      "URL": "https://developer.zendesk.com/api-reference/introduction/rate-limits/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "API Introduction — Rate Limits",
+      "CoversTaxonomies": ["Authentication & Rate Limiting"],
+      "AccessNotes": "200 OK. Documents per-account, per-endpoint, and job-queue rate limit tiers; cross-referenced against in-spec per-endpoint 'Rate Limit' prose blocks (e.g. Audit Log CSV export = 1 req/min; Search = 5 req/min beyond page 100)."
+    },
+    {
+      "URL": "https://developer.zendesk.com/documentation/api-basics/pagination/paginating-through-lists-using-cursor-pagination/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Pagination — Cursor-based pagination (CBP) guide",
+      "CoversTaxonomies": ["Incremental Export & Pagination Mechanics"],
+      "AccessNotes": "200 OK. Confirms the page[after]/page[before]/page[size] query-param + meta.after_cursor/before_cursor + links.next/previous response shape referenced throughout the OAS parameter descriptions."
+    },
+    {
+      "URL": "https://developer.zendesk.com/documentation/ticketing/managing-tickets/using-the-incremental-export-api/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Using the Incremental Export API (start_time / cursor watermark mechanics)",
+      "CoversTaxonomies": ["Incremental Export & Pagination Mechanics"],
+      "AccessNotes": "200 OK. Confirms unix-epoch start_time seed + opaque cursor continuation for /api/v2/incremental/{tickets,users,organizations,ticket_events,ticket_metric_events,custom_objects/{key}}/cursor endpoints."
+    },
+    {
+      "URL": "https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Schedules API (Business Hours + Holidays) — prose reference, NOT present in the downloaded OAS",
+      "CoversTaxonomies": ["Business Hours Schedules & Holidays"],
+      "AccessNotes": "200 OK. IMPORTANT GAP IN THE OAS: this endpoint family (/api/v2/business_hours/schedules, .../holidays, .../intervals) is real, documented, and versioned (full CRUD) but is NOT included in the downloaded ticketing-oas.yaml (confirmed via grep — zero 'business_hours' matches outside 'deletion_schedule'). Zendesk's OAS generator has not yet migrated this endpoint family. Captured via prose docs as a Tier-1 OfficialDocs source; flagged in SOURCE_STUDY.md as an OAS-coverage gap, not a scope gap."
+    },
+    {
+      "URL": "https://developer.zendesk.com/api-reference/help_center/help-center-api/introduction/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Help Center API — Introduction",
+      "CoversTaxonomies": ["Help Center Articles & Attachments"],
+      "AccessNotes": "200 OK. Used to locate the Help Center OAS download link + Postman collection link."
+    },
+    {
+      "URL": "https://developer.zendesk.com/api-reference/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "API Reference Home — product index",
+      "CoversTaxonomies": [],
+      "AccessNotes": "200 OK. Used to enumerate ALL Zendesk API product families (in-scope: Ticketing, Help Center; out-of-scope: Voice/Talk, Sales CRM/Sell, Live Chat, Conversations/Sunshine, AI Agents, Custom Data [duplicate of Ticketing Custom Objects], Agent Availability/Omnichannel [omnichannel routing queues already covered in Ticketing OAS], Status API)."
+    },
+    {
+      "URL": "https://developer.zendesk.com/documentation/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Documentation Home — guides index (auth, quick starts, per-product guides)",
+      "CoversTaxonomies": ["Authentication & Rate Limiting"],
+      "AccessNotes": "200 OK. General guides/quick-start index; used only for navigation, not cited for hard-constraint fields (the OAS is Tier 1 primary for those)."
+    },
+    {
+      "URL": "https://github.com/zendesk/sunshine-conversations-api-spec",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "Title": "Sunshine Conversations API — separate OpenAPI spec repo (OUT OF SCOPE product)",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Confirmed to exist (Zendesk-owned GitHub repo, openapi.yaml present) but Sunshine Conversations / Zendesk Messaging is a DISTINCT product surface (real-time conversational messaging, not the ticketing/Guide data model in this taxonomy). Recorded for completeness / future connector scoping, not fetched in full — see outOfScopeFamilies."
+    }
+  ]
+}

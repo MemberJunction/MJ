@@ -1,0 +1,266 @@
+[
+  {
+    "io": {
+      "Name": "DiscussionPosts",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/Discussions/PostToDiscussion",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "flat",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": true,
+      "UpdateAPIPath": "/v2.0/Discussions/Edit",
+      "UpdateMethod": "PUT",
+      "UpdateBodyShape": "flat",
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": "body",
+      "SupportsDelete": true,
+      "DeleteAPIPath": "/v2.0/Discussions/RemovePost?discussionPostKey={id}",
+      "DeleteMethod": "DELETE",
+      "DeleteIDLocation": "path",
+      "APIPath": "/v2.0/Discussions/GetPagedDiscussionPosts",
+      "Description": "DiscussionPost — paged list of discussion posts (continuation-token cursor via GetPagedDiscussionPosts).",
+      "PaginationType": "Cursor",
+      "SupportsPagination": true,
+      "Configuration": "{\"accessPath\":{\"door\":\"Discussions/GetPagedDiscussionPosts\",\"path\":\"/v2.0/Discussions/GetPagedDiscussionPosts\",\"nesting\":[],\"door_args\":[\"communityKey\",\"maxRecords\",\"continuationToken\",\"fieldList\"],\"fieldOp\":\"api/v2.0/Discussions/GetPagedDiscussionPosts\"},\"sourceModel\":\"DiscussionPost\",\"paginationDetail\":{\"type\":\"Cursor\",\"params\":[\"communityKey\",\"maxRecords\",\"continuationToken\"]}}"
+    }
+  },
+  {
+    "io": {
+      "Name": "Questions",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/Question/Post",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "flat",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": true,
+      "UpdateAPIPath": "/v2.0/Question/Edit",
+      "UpdateMethod": "POST",
+      "UpdateBodyShape": "flat",
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": "body",
+      "SupportsDelete": true,
+      "DeleteAPIPath": "/v2.0/Question/Delete?questionKey={id}",
+      "DeleteMethod": "DELETE",
+      "DeleteIDLocation": "path"
+    }
+  },
+  {
+    "io": {
+      "Name": "Answers",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/Question/Answer",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "flat",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": true,
+      "UpdateAPIPath": "/v2.0/Answer/Edit",
+      "UpdateMethod": "POST",
+      "UpdateBodyShape": "flat",
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": "body",
+      "SupportsDelete": true,
+      "DeleteAPIPath": "/v2.0/Answer/Delete?answerKey={id}",
+      "DeleteMethod": "DELETE",
+      "DeleteIDLocation": "path"
+    }
+  },
+  {
+    "io": {
+      "Name": "Comments",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/Blogs/AddComment?blogKey={parent}",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "flat",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": true,
+      "UpdateAPIPath": "/v2.0/Blogs/UpdateComment?blogCommentKey={id}",
+      "UpdateMethod": "POST",
+      "UpdateBodyShape": "flat",
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": "body",
+      "SupportsDelete": true,
+      "DeleteAPIPath": "/v2.0/Blogs/DeleteComment?blogCommentKey={id}",
+      "DeleteMethod": "DELETE",
+      "DeleteIDLocation": "path"
+    }
+  },
+  {
+    "io": {
+      "Name": "BlogComments",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/Blogs/AddComment?blogKey={parent}",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "flat",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": true,
+      "UpdateAPIPath": "/v2.0/Blogs/UpdateComment?blogCommentKey={id}",
+      "UpdateMethod": "POST",
+      "UpdateBodyShape": "flat",
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": "body",
+      "SupportsDelete": true,
+      "DeleteAPIPath": "/v2.0/Blogs/DeleteComment?blogCommentKey={id}",
+      "DeleteMethod": "DELETE",
+      "DeleteIDLocation": "path"
+    }
+  },
+  {
+    "io": {
+      "Name": "ResourceLibraryDocuments",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/ResourceLibrary/PostDocument?libraryKey={parent}",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "literal",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": true,
+      "UpdateAPIPath": "/v2.0/ResourceLibrary/Edit",
+      "UpdateMethod": "POST",
+      "UpdateBodyShape": "flat",
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": "body",
+      "SupportsDelete": true,
+      "DeleteAPIPath": "/v2.0/ResourceLibrary/DeleteLibraryDocument?documentKey={id}",
+      "DeleteMethod": "DELETE",
+      "DeleteIDLocation": "path"
+    }
+  },
+  {
+    "io": {
+      "Name": "DocumentAttachments",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/ResourceLibrary/PostDocumentAttachments?documentKey={parent}",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "literal",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": false,
+      "SupportsDelete": true,
+      "DeleteAPIPath": "/v2.0/ResourceLibrary/DeleteDocumentAttachment?documentAttachmentKey={id}",
+      "DeleteMethod": "DELETE",
+      "DeleteIDLocation": "path"
+    }
+  },
+  {
+    "io": {
+      "Name": "DemographicTypes",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/Demographics/AddDemographicCategory",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "flat",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": false,
+      "SupportsDelete": false
+    }
+  },
+  {
+    "io": {
+      "Name": "DemographicChoices",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/Demographics/AddDemographicChoice",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "flat",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": false,
+      "SupportsDelete": false
+    }
+  },
+  {
+    "io": {
+      "Name": "Ideas",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/Ideation/Post",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "flat",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": true,
+      "UpdateAPIPath": "/v2.0/Ideation/UpdateIdeaStatus",
+      "UpdateMethod": "POST",
+      "UpdateBodyShape": "flat",
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": "body",
+      "SupportsDelete": false
+    }
+  },
+  {
+    "io": {
+      "Name": "IdeaCategories",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/Ideation/AddIdeaCategories",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "flat",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": false,
+      "SupportsDelete": false
+    }
+  },
+  {
+    "io": {
+      "Name": "Volunteers",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={parent}&comments={comments}",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "flat",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": true,
+      "UpdateAPIPath": "/v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={flag}",
+      "UpdateMethod": "POST",
+      "UpdateBodyShape": "flat",
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": "body",
+      "SupportsDelete": true,
+      "DeleteAPIPath": "/v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={id}&comments={comments}",
+      "DeleteMethod": "DELETE",
+      "DeleteIDLocation": "path"
+    }
+  },
+  {
+    "io": {
+      "Name": "Blogs",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/Blogs/CreateBlog",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "flat",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "SupportsUpdate": false,
+      "SupportsDelete": true,
+      "DeleteAPIPath": "/v2.0/Blogs/DeleteBlog?blogKey={id}",
+      "DeleteMethod": "DELETE",
+      "DeleteIDLocation": "path"
+    }
+  },
+  {
+    "io": {
+      "Name": "DataFeed",
+      "APIPath": "/v2.0/DataFeed/GetData",
+      "Description": "DataFeedItem — tenant-wide activity feed via POST DataFeed/GetData (Marker/Direction bidirectional cursor).",
+      "PaginationType": "Cursor",
+      "SupportsPagination": true,
+      "Configuration": "{\"accessPath\":{\"door\":\"DataFeed/GetData\",\"path\":\"/v2.0/DataFeed/GetData\",\"nesting\":[],\"door_args\":[\"Marker\",\"Direction\",\"NumberToReturn\",\"Filter\"],\"fieldOp\":\"api/v2.0/DataFeed/GetData\",\"readMethod\":\"POST\"},\"sourceModel\":\"DataFeedItem\",\"paginationDetail\":{\"type\":\"Cursor\",\"params\":[\"Marker\",\"Direction\",\"NumberToReturn\"]}}"
+    }
+  }
+]

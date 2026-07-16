@@ -1,11 +1,5 @@
 {
-  "version": "1.0",
-  "directoryOrder": ["wildapricot", "hubspot"],
-  "integrations": [
-    {
-      "entity": "MJ: Integrations",
-      "filePattern": "**/.*.integration.json",
-      "defaults": {}
-    }
-  ]
+  "entity": "MJ: Integrations",
+  "filePattern": "**/.*.integration.json",
+  "defaults": {}
 }

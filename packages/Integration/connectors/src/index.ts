@@ -39,3 +39,5 @@ export { EventbriteConnector } from './EventbriteConnector.js';
 export { StripeConnector } from './StripeConnector.js';
 export { ZendeskConnector } from './ZendeskConnector.js';
 export { HigherLogicVanillaConnector } from './HigherLogicVanillaConnector.js';
+export { HigherLogicThriveCommunityConnector } from './HigherLogicThriveCommunityConnector.js';
+export { ImpexiumConnector, LoadImpexiumConnector } from './ImpexiumConnector.js';

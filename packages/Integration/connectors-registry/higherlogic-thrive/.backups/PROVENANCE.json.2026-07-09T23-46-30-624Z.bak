@@ -1,0 +1,1924 @@
+{
+  "Entries": [
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T18:18:18.000Z",
+      "UsedFor": "Setting Integration.NavigationBaseURL to the vendor's own public Community API v2.0 operation-catalog HelpPage. Independently re-verified HTTP 200 via a fresh fetch (see CODE_EVIDENCE) immediately before writing, per the build instruction.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "Higher Logic API Home / Help Page Home -- index page enumerating 25 controller sections (<h2 id=\"Controller\">) each followed by a <table class=\"help-page-table\"> of operations; HTTP 200 confirmed on this date."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T18:18:18.000Z",
+      "UsedFor": "Setting Configuration.RoutingConvention -- confirming the RPC-verb-in-path routing style (no bare '{Controller}/{id}' REST-collection route exists anywhere in the enumerated catalog).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.RoutingConvention",
+      "Excerpt": "Every operation link is of the form '<a href=\"/Help/Api/{METHOD}-api-v2.0-{Controller}-{Operation}_{params}\">{METHOD} api/v2.0/{Controller}/{Operation}?{querystring}</a>' -- confirmed across all 236 enumerated operations (scripts/enumerate-helppage.mjs, this agent's fresh re-run, see CODE_EVIDENCE)."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetMyContactsPage_afterContactKey_beforeContactKey_limit",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.PaginationConventions.cursorSeekKey + Configuration.PaginationByObject.Contacts -- confirming the after<X>Key/before<X>Key+limit seek-key Cursor param shape.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationByObject",
+      "Excerpt": "URI Parameters: afterContactKey, beforeContactKey, limit (default 100) -- documented on the per-operation sub-page's URI Parameters table (saved raw to sources/ops/GET-api-v2.0-Contacts-GetMyContactsPage_afterContactKey_beforeContactKey_limit.html)."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-GetCommunityMembers",
+      "AccessedAt": "2026-07-08T18:30:00.000Z",
+      "UsedFor": "Setting Configuration.PaginationConventions.offset + Configuration.PaginationByObject.CommunityMembers -- confirming the actual body param names (StartRecord/EndRecord, defaults 1/50), correcting the build brief's 'firstRecord+maxRecords' paraphrase.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationConventions",
+      "Excerpt": "StartRecord Index of the first record to retrieve. Defaults to 1 if not supplied. integer / EndRecord Index of the last record to retrieve. Defaults to 50 if not supplied. integer -- directly re-fetched from the locally saved raw op page and re-parsed by this agent (see sources/ops/POST-api-v2.0-Communities-GetCommunityMembers.html)."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-GetInboxMessages_firstRecord_maxRecords",
+      "AccessedAt": "2026-07-08T18:30:00.000Z",
+      "UsedFor": "Confirming that the 'firstRecord+maxRecords' Offset param pair belongs to the OUT-OF-SCOPE Messaging family, not to CommunityMembers -- a correction recorded in Configuration.PaginationConventions.offset.correctionNote.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationConventions",
+      "Excerpt": "GET api/v2.0/Messaging/GetInboxMessages?firstRecord={firstRecord}&maxRecords={maxRecords} -- 'firstRecord ... Default value is 0' / 'maxRecords ... Default value is 50' (Messaging controller, out-of-scope family)."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventRegistrants_calendarEventKey_modifiedDateTime_maxRecords_continuationToken",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.IncrementalSyncCapability.perObject.EventRegistrants -- confirming the real modifiedDateTime watermark query parameter.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "URI Parameters include modifiedDateTime (filters registrants updated since a given datetime), continuationToken, maxRecords -- per SOURCE_STUDY.md TaxonomyLeaves table, sourced from scripts/extract-op-details.mjs parsing of this op page."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-GetLibraryDocuments",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.IncrementalSyncCapability.perObject.ResourceLibraryDocuments -- confirming DaysBack is a rolling window (default 30), not a strict watermark.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "Body parameter DaysBack (default 30) + MaxRecords (default 10) -- per SOURCE_STUDY.md TaxonomyLeaves table."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Discussions-RemovePost_discussionPostKey",
+      "AccessedAt": "2026-07-08T18:40:00.000Z",
+      "UsedFor": "Setting Configuration.DeleteSemantics + DeleteSemanticsDetail -- confirming the conditional soft-tombstone-vs-hard-delete behavior on DiscussionPosts specifically.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DeleteSemantics",
+      "Excerpt": "Deletes the specified discussion post. If a message has replies, the body will be updated to: \"This post was removed\" and the message will be anonymized to preserve the thread structure. All documents attached to the message will be deleted. Only administrators can remove/delete messages. -- directly re-fetched from the locally saved raw op page and re-parsed by this agent."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Blogs-DeleteBlog_blogKey",
+      "AccessedAt": "2026-07-08T18:40:00.000Z",
+      "UsedFor": "Confirming the GENERAL (non-DiscussionPosts) delete pattern: plain success response, no soft-delete/archive field documented -- supports the DeleteSemantics='hard' vendor-wide default.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DeleteSemantics",
+      "Excerpt": "DELETE api/v2.0/Blogs/DeleteBlog?blogKey={blogKey} ... Response Information Resource Description: None. -- directly re-fetched from the locally saved raw op page and re-parsed by this agent."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.WriteCapability -- the vendor-wide summary of documented Create/Update/Delete operations across the in-scope leaves.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WriteCapability",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed for objects that have them' table (derived from scripts/extract-op-details.mjs parsing of all 235 fetched HelpPage op pages)."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T18:18:18.000Z",
+      "UsedFor": "Setting Configuration.WebhooksAvailable=false and Configuration.BulkOperationsAvailable=false -- exhaustive enumeration of all 236 operations across 25 controllers found no Webhook controller and no batch/bulk write endpoint.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WebhooksAvailable",
+      "Excerpt": "Fresh re-run of scripts/enumerate-helppage.mjs (see CODE_EVIDENCE) confirms 25 controllers / 236 operations with no 'Webhook' controller among them: Announcements, Answer, Authentication, AutomationRules, Blogs, Comments, Communities, Contacts, DataFeed, Demographics, Discussions, Events, EventSessions, ExternalActivity, ExternalSearch, Federation, Friends, Ideation, Messaging, Question, RegistrantClass, ResourceLibrary, System, Tagging, Volunteer."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.APIVersioningStrategy='url-path' -- every one of the 236 operation paths is prefixed api/v2.0/....",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.APIVersioningStrategy",
+      "Excerpt": "All enumerated operation hrefs follow /Help/Api/{METHOD}-api-v2.0-{Controller}-{Operation}..., confirming the 'v2.0' version segment is embedded in every path."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/360032691332-Higher-Logic-API",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.RegionalBaseURLs (US/Canada fixed regional hosts) and Configuration.RateLimitGuidance.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.RegionalBaseURLs",
+      "Excerpt": "Confirms base URLs: https://api.connectedcommunity.org/ (US) and https://api.onlinecommunity.ca (Canadian-tier customers) -- both point at the same v2.0/Help catalog structure, differing only by tenant region. States acceptable-use guidance of 180-240 calls/minute (3-4/sec); no hard server-side rate-limit enforcement documented, but excessive usage risks IP blocking."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/360032691332-Higher-Logic-API",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.RateLimitGuidance and the decision to leave Integration.BatchMaxRequestCount/BatchRequestWaitTime NULL (guidance is not a precise stated hard limit).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.RateLimitGuidance",
+      "Excerpt": "180-240 calls/minute (3-4/sec) acceptable-use guidance; no hard server-enforced rate limit documented, but excessive use risks IP blocking (no numeric hard limit + window stated)."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/360052976791-Higher-Logic-Push-API-v2",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.OutOfScopeObjectFamilies entry for Push API v2.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies",
+      "Excerpt": "Push API v2 is a DISTINCT host (https://datapushapi.higherlogic.com/v2 US / https://datapushapi.onlinecommunity.ca/v2 Canada), DISTINCT auth (a 'Key' header carrying an ApiKey value), and a DISTINCT direction (AMS/CRM pushes full-record-replacement contact data INTO Thrive Community via /contactinfo and /list)."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/4402952237844-OAuth-2-0-Code-Flow",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.OutOfScopeObjectFamilies entry for SSO, and Configuration.EndUserSSOMechanisms distinguishing SSO from the connector's server-to-server auth.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.EndUserSSOMechanisms",
+      "Excerpt": "OAuth 2.0 Code Flow at Higher Logic is an SSO/end-user-login mechanism (authorize/token/userinfo endpoints against an external Identity Provider, resolving a 'legacy identifier' claim to log a user into the Community) -- not a route for server-to-server API data sync."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.OutOfScopeObjectFamilies entry for ExternalSearch (self-corroborated add-on/separate-IAMKey requirement).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies",
+      "Excerpt": "ExternalSearch controller description: 'POST Endpoints for adding external items to the Higher Logic Search Index results. Note that External Search Endpoints are available as an add-on and they require a separate IAMKey for access.'"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Recording the judgment-call OutOfScopeObjectFamilies entries for Messaging, Friends, and Federation -- each a HelpPage-proven controller excluded by scope decision, not by missing evidence.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies",
+      "Excerpt": "Messaging (13 ops, private inbox/sent messages), Friends (8 ops, friend-request social graph), Federation (2 ops, tenantKey-scoped cross-tenant identity) -- all confirmed real controllers in the 25-controller/236-operation catalog (helppage.catalog.summary.json)."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.universalPK -- the vendor-wide <ObjectSingularName>Key GUID-typed PK naming convention.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.universalPK",
+      "Excerpt": "SOURCE_STUDY.md 'Patterns and motifs' #3: cross-object field-table observation -- ContactKey, CommunityKey, EventKey, DiscussionKey, DiscussionPostKey, CommentKey, AnswerKey, DemographicKey, AnnouncementKey, IdeationKey, VolunteerOpportunityKey, DocumentKey, LibraryKey, TenantKey are all 'globally unique identifier'-typed fields named '<Object>Key', each with an optional string-typed 'Legacy<Object>Key' sibling."
+    },
+    {
+      "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/contextHLT.md",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Recording (Tier 3, unconfirmed-by-primary-source) the OIDC-API-auth alternative and the legacy-v2.0 auth-route naming in Configuration.AlternativeAuthMechanisms, and the IAM Key/IAM Password vendor terminology in Configuration.AuthFlowNote.",
+      "SourceTier": 3,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AlternativeAuthMechanisms",
+      "Excerpt": "Possible routes: ... Higher Logic OIDC API-auth route / Higher Logic legacy-auth route / Higher Logic IAM key/password route ... auth: { type: 'iam_key_password', iamKeyEnv: 'HIGHERLOGIC_IAM_KEY', iamPasswordEnv: 'HIGHERLOGIC_IAM_PASSWORD', oidcClientIdEnv: 'HIGHERLOGIC_OIDC_CLIENT_ID', oidcClientSecretEnv: 'HIGHERLOGIC_OIDC_CLIENT_SECRET' } -- operator-supplied, cross-checked elsewhere as accurate against the live HelpPage (SOURCE_STUDY.md 'Cross-check verdict' table) but NOT independently confirmed for this specific auth-mode-selection claim, which the HelpPage itself does not document."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Announcements-GetAnnouncements_announcementTypeFilter_communityKey_micrositeGroupTypeRouteDesignKey_sortOrder_maxResults_includeAnnouncementsWithNoType",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO Announcements (model Announcement) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Announcements",
+      "Excerpt": "GET api/v2.0/Announcements/GetAnnouncements -> Announcement (20 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Answer-Get_answerKey",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO Answers (model Answer) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Answers",
+      "Excerpt": "GET api/v2.0/Answer/Get -> Answer (12 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactData_ruleScheduleKey_maxRecords_continuationToken_fieldList",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO AutomationRuleContactData (model ContactDataPage) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.AutomationRuleContactData",
+      "Excerpt": "GET api/v2.0/AutomationRules/GetContactData -> ContactDataPage (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetActiveRulesByType",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO AutomationRuleSchedules (model RuleSchedule) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.AutomationRuleSchedules",
+      "Excerpt": "GET api/v2.0/AutomationRules/GetActiveRulesByType -> RuleSchedule (5 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-Get_commentKey",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO BlogComments (model Comment) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.BlogComments",
+      "Excerpt": "GET api/v2.0/Comments/Get -> Comment (6 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Blogs-GetBlogEntriesByGrouping_groupingType_maxRecords",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO Blogs (model Blog) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Blogs",
+      "Excerpt": "GET api/v2.0/Blogs/GetBlogEntriesByGrouping -> Blog (15 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-Get_commentKey",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO Comments (model Comment) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Comments",
+      "Excerpt": "GET api/v2.0/Comments/Get -> Comment (6 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-Get_communityKey",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO Communities (model Community) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Communities",
+      "Excerpt": "GET api/v2.0/Communities/Get -> Community (37 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetMyCommunityInvitations",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO CommunityInvitations (model CommunityInvitation) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CommunityInvitations",
+      "Excerpt": "GET api/v2.0/Communities/GetMyCommunityInvitations -> CommunityInvitation (17 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-GetCommunityMembers",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO CommunityMembers (model CommunityMember) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CommunityMembers",
+      "Excerpt": "POST api/v2.0/Communities/GetCommunityMembers -> CommunityMember (34 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactsByRuleScheduleKey_ruleScheduleKey_integrationId",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO Contacts (model Contact) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Contacts",
+      "Excerpt": "GET api/v2.0/AutomationRules/GetContactsByRuleScheduleKey -> Contact (42 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-GetContactContributions",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO DataFeed (model DataFeedItem) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DataFeed",
+      "Excerpt": "POST api/v2.0/Contacts/GetContactContributions -> DataFeedItem (24 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicChoices",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO DemographicChoices (model DemographicChoice) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DemographicChoices",
+      "Excerpt": "GET api/v2.0/Demographics/GetDemographicChoices -> DemographicChoice (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicTypes",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO DemographicTypes (model DemographicType) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DemographicTypes",
+      "Excerpt": "GET api/v2.0/Demographics/GetDemographicTypes -> DemographicType (8 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPost_discussionPostKey",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO DiscussionPosts (model DiscussionPost) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DiscussionPosts",
+      "Excerpt": "GET api/v2.0/Discussions/GetDiscussionPost -> DiscussionPost (24 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetRecentThreads_discussionKey_maxToRetrieve",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO DiscussionThreads (model DiscussionThread) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DiscussionThreads",
+      "Excerpt": "GET api/v2.0/Discussions/GetRecentThreads -> DiscussionThread (10 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussion_discussionKey",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO Discussions (model Discussion) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Discussions",
+      "Excerpt": "GET api/v2.0/Discussions/GetDiscussion -> Discussion (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetDocumentAttachments_documentKey",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO DocumentAttachments (model DocumentAttachment) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DocumentAttachments",
+      "Excerpt": "GET api/v2.0/ResourceLibrary/GetDocumentAttachments -> DocumentAttachment (12 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventRegistrants_calendarEventKey_modifiedDateTime_maxRecords_continuationToken",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO EventRegistrants (model EventRegistrantConcise) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventRegistrants",
+      "Excerpt": "GET api/v2.0/Events/GetEventRegistrants -> EventRegistrantConcise (16 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-EventSessions-GetSession_sessionKey",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO EventSessions (model EventSession) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventSessions",
+      "Excerpt": "GET api/v2.0/EventSessions/GetSession -> EventSession (32 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO EventTypes (model EventType) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "io.EventTypes",
+      "Excerpt": "vendor doc-generation placeholder — field-list gap"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetUpcoming_maxRecords",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO Events (model Event) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Events",
+      "Excerpt": "GET api/v2.0/Events/GetUpcoming -> Event (69 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalActivity-Create",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO ExternalActivity (model ExternalActivity) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ExternalActivity",
+      "Excerpt": "POST api/v2.0/ExternalActivity/Create -> ExternalActivity (19 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeaCategories",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO IdeaCategories (model IdeaCategory) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaCategories",
+      "Excerpt": "GET api/v2.0/Ideation/GetIdeaCategories -> IdeaCategory (2 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeaStatuses",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO IdeaStatuses (model IdeaStatus) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaStatuses",
+      "Excerpt": "GET api/v2.0/Ideation/GetIdeaStatuses -> IdeaStatus (2 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetVoters_ideationKey",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO IdeaVoters (model IdeationVoterModel) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaVoters",
+      "Excerpt": "GET api/v2.0/Ideation/GetVoters -> IdeationVoterModel (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-IdeaDetails_ideationKey",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO Ideas (model IdeaDetails) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Ideas",
+      "Excerpt": "GET api/v2.0/Ideation/IdeaDetails -> IdeaDetails (10 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Question-GetThread_questionKey_numberOfAnswers",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO Questions (model QuestionThread) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Questions",
+      "Excerpt": "GET api/v2.0/Question/GetThread -> QuestionThread (17 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryDocument_documentKey_paginateComments_commentLimit",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO ResourceLibraryDocuments (model Document) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ResourceLibraryDocuments",
+      "Excerpt": "GET api/v2.0/ResourceLibrary/GetLibraryDocument -> Document (21 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryList",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO ResourceLibraryLibraries (model DocumentLibrary) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ResourceLibraryLibraries",
+      "Excerpt": "GET api/v2.0/ResourceLibrary/GetLibraryList -> DocumentLibrary (20 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Tagging-GetTags_searchText_communityKey",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO Tags (model TagGroupModel) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Tags",
+      "Excerpt": "GET api/v2.0/Tagging/GetTags -> TagGroupModel (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityList",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO VolunteerOpportunities (model VolunteerOpportunity) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.VolunteerOpportunities",
+      "Excerpt": "GET api/v2.0/Volunteer/GetVolunteerOpportunityList -> VolunteerOpportunity (27 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityTypeList",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO VolunteerOpportunityTypes (model VolunteerOpportunityType) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.VolunteerOpportunityTypes",
+      "Excerpt": "GET api/v2.0/Volunteer/GetVolunteerOpportunityTypeList -> VolunteerOpportunityType (6 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerList_volunteerOpportunityKey",
+      "AccessedAt": "2026-07-09T18:24:43.796Z",
+      "UsedFor": "IO Volunteers (model VolunteerOpportunityVolunteer) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Volunteers",
+      "Excerpt": "GET api/v2.0/Volunteer/GetVolunteerList -> VolunteerOpportunityVolunteer (16 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Announcements-GetAnnouncements_announcementTypeFilter_communityKey_micrositeGroupTypeRouteDesignKey_sortOrder_maxResults_includeAnnouncementsWithNoType",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO Announcements (model Announcement) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Announcements",
+      "Excerpt": "GET api/v2.0/Announcements/GetAnnouncements -> Announcement (20 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Answer-Get_answerKey",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO Answers (model Answer) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Answers",
+      "Excerpt": "GET api/v2.0/Answer/Get -> Answer (12 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactData_ruleScheduleKey_maxRecords_continuationToken_fieldList",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO AutomationRuleContactData (model ContactDataPage) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.AutomationRuleContactData",
+      "Excerpt": "GET api/v2.0/AutomationRules/GetContactData -> ContactDataPage (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetActiveRulesByType",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO AutomationRuleSchedules (model RuleSchedule) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.AutomationRuleSchedules",
+      "Excerpt": "GET api/v2.0/AutomationRules/GetActiveRulesByType -> RuleSchedule (5 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-Get_commentKey",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO BlogComments (model Comment) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.BlogComments",
+      "Excerpt": "GET api/v2.0/Comments/Get -> Comment (6 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Blogs-GetBlogEntriesByGrouping_groupingType_maxRecords",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO Blogs (model Blog) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Blogs",
+      "Excerpt": "GET api/v2.0/Blogs/GetBlogEntriesByGrouping -> Blog (15 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-Get_commentKey",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO Comments (model Comment) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Comments",
+      "Excerpt": "GET api/v2.0/Comments/Get -> Comment (6 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-Get_communityKey",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO Communities (model Community) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Communities",
+      "Excerpt": "GET api/v2.0/Communities/Get -> Community (37 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetMyCommunityInvitations",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO CommunityInvitations (model CommunityInvitation) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CommunityInvitations",
+      "Excerpt": "GET api/v2.0/Communities/GetMyCommunityInvitations -> CommunityInvitation (17 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-GetCommunityMembers",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO CommunityMembers (model CommunityMember) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CommunityMembers",
+      "Excerpt": "POST api/v2.0/Communities/GetCommunityMembers -> CommunityMember (34 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactsByRuleScheduleKey_ruleScheduleKey_integrationId",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO Contacts (model Contact) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Contacts",
+      "Excerpt": "GET api/v2.0/AutomationRules/GetContactsByRuleScheduleKey -> Contact (42 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-GetContactContributions",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO DataFeed (model DataFeedItem) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DataFeed",
+      "Excerpt": "POST api/v2.0/Contacts/GetContactContributions -> DataFeedItem (24 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicChoices",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO DemographicChoices (model DemographicChoice) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DemographicChoices",
+      "Excerpt": "GET api/v2.0/Demographics/GetDemographicChoices -> DemographicChoice (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicTypes",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO DemographicTypes (model DemographicType) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DemographicTypes",
+      "Excerpt": "GET api/v2.0/Demographics/GetDemographicTypes -> DemographicType (8 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPost_discussionPostKey",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO DiscussionPosts (model DiscussionPost) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DiscussionPosts",
+      "Excerpt": "GET api/v2.0/Discussions/GetDiscussionPost -> DiscussionPost (24 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetRecentThreads_discussionKey_maxToRetrieve",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO DiscussionThreads (model DiscussionThread) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DiscussionThreads",
+      "Excerpt": "GET api/v2.0/Discussions/GetRecentThreads -> DiscussionThread (10 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussion_discussionKey",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO Discussions (model Discussion) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Discussions",
+      "Excerpt": "GET api/v2.0/Discussions/GetDiscussion -> Discussion (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetDocumentAttachments_documentKey",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO DocumentAttachments (model DocumentAttachment) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DocumentAttachments",
+      "Excerpt": "GET api/v2.0/ResourceLibrary/GetDocumentAttachments -> DocumentAttachment (12 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventRegistrants_calendarEventKey_modifiedDateTime_maxRecords_continuationToken",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO EventRegistrants (model EventRegistrantConcise) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventRegistrants",
+      "Excerpt": "GET api/v2.0/Events/GetEventRegistrants -> EventRegistrantConcise (16 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-EventSessions-GetSession_sessionKey",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO EventSessions (model EventSession) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventSessions",
+      "Excerpt": "GET api/v2.0/EventSessions/GetSession -> EventSession (32 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO EventTypes (model EventType) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "io.EventTypes",
+      "Excerpt": "vendor doc-generation placeholder — field-list gap"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetUpcoming_maxRecords",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO Events (model Event) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Events",
+      "Excerpt": "GET api/v2.0/Events/GetUpcoming -> Event (69 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalActivity-Create",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO ExternalActivity (model ExternalActivity) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ExternalActivity",
+      "Excerpt": "POST api/v2.0/ExternalActivity/Create -> ExternalActivity (19 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeaCategories",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO IdeaCategories (model IdeaCategory) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaCategories",
+      "Excerpt": "GET api/v2.0/Ideation/GetIdeaCategories -> IdeaCategory (2 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeaStatuses",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO IdeaStatuses (model IdeaStatus) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaStatuses",
+      "Excerpt": "GET api/v2.0/Ideation/GetIdeaStatuses -> IdeaStatus (2 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetVoters_ideationKey",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO IdeaVoters (model IdeationVoterModel) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaVoters",
+      "Excerpt": "GET api/v2.0/Ideation/GetVoters -> IdeationVoterModel (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-IdeaDetails_ideationKey",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO Ideas (model IdeaDetails) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Ideas",
+      "Excerpt": "GET api/v2.0/Ideation/IdeaDetails -> IdeaDetails (10 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Question-GetThread_questionKey_numberOfAnswers",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO Questions (model QuestionThread) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Questions",
+      "Excerpt": "GET api/v2.0/Question/GetThread -> QuestionThread (17 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryDocument_documentKey_paginateComments_commentLimit",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO ResourceLibraryDocuments (model Document) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ResourceLibraryDocuments",
+      "Excerpt": "GET api/v2.0/ResourceLibrary/GetLibraryDocument -> Document (21 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryList",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO ResourceLibraryLibraries (model DocumentLibrary) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ResourceLibraryLibraries",
+      "Excerpt": "GET api/v2.0/ResourceLibrary/GetLibraryList -> DocumentLibrary (20 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Tagging-GetTags_searchText_communityKey",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO Tags (model TagGroupModel) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Tags",
+      "Excerpt": "GET api/v2.0/Tagging/GetTags -> TagGroupModel (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityList",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO VolunteerOpportunities (model VolunteerOpportunity) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.VolunteerOpportunities",
+      "Excerpt": "GET api/v2.0/Volunteer/GetVolunteerOpportunityList -> VolunteerOpportunity (27 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityTypeList",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO VolunteerOpportunityTypes (model VolunteerOpportunityType) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.VolunteerOpportunityTypes",
+      "Excerpt": "GET api/v2.0/Volunteer/GetVolunteerOpportunityTypeList -> VolunteerOpportunityType (6 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerList_volunteerOpportunityKey",
+      "AccessedAt": "2026-07-09T18:26:16.421Z",
+      "UsedFor": "IO Volunteers (model VolunteerOpportunityVolunteer) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Volunteers",
+      "Excerpt": "GET api/v2.0/Volunteer/GetVolunteerList -> VolunteerOpportunityVolunteer (16 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Announcements-GetAnnouncements_announcementTypeFilter_communityKey_micrositeGroupTypeRouteDesignKey_sortOrder_maxResults_includeAnnouncementsWithNoType",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO Announcements (model Announcement) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Announcements",
+      "Excerpt": "GET api/v2.0/Announcements/GetAnnouncements -> Announcement (20 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Answer-Get_answerKey",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO Answers (model Answer) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Answers",
+      "Excerpt": "GET api/v2.0/Answer/Get -> Answer (12 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactData_ruleScheduleKey_maxRecords_continuationToken_fieldList",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO AutomationRuleContactData (model ContactDataPage) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.AutomationRuleContactData",
+      "Excerpt": "GET api/v2.0/AutomationRules/GetContactData -> ContactDataPage (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetActiveRulesByType",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO AutomationRuleSchedules (model RuleSchedule) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.AutomationRuleSchedules",
+      "Excerpt": "GET api/v2.0/AutomationRules/GetActiveRulesByType -> RuleSchedule (5 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-Get_commentKey",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO BlogComments (model Comment) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.BlogComments",
+      "Excerpt": "GET api/v2.0/Comments/Get -> Comment (6 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Blogs-GetBlogEntriesByGrouping_groupingType_maxRecords",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO Blogs (model Blog) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Blogs",
+      "Excerpt": "GET api/v2.0/Blogs/GetBlogEntriesByGrouping -> Blog (15 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-Get_commentKey",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO Comments (model Comment) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Comments",
+      "Excerpt": "GET api/v2.0/Comments/Get -> Comment (6 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-Get_communityKey",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO Communities (model Community) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Communities",
+      "Excerpt": "GET api/v2.0/Communities/Get -> Community (37 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetMyCommunityInvitations",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO CommunityInvitations (model CommunityInvitation) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CommunityInvitations",
+      "Excerpt": "GET api/v2.0/Communities/GetMyCommunityInvitations -> CommunityInvitation (17 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-GetCommunityMembers",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO CommunityMembers (model CommunityMember) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CommunityMembers",
+      "Excerpt": "POST api/v2.0/Communities/GetCommunityMembers -> CommunityMember (34 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactsByRuleScheduleKey_ruleScheduleKey_integrationId",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO Contacts (model Contact) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Contacts",
+      "Excerpt": "GET api/v2.0/AutomationRules/GetContactsByRuleScheduleKey -> Contact (42 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-GetContactContributions",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO DataFeed (model DataFeedItem) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DataFeed",
+      "Excerpt": "POST api/v2.0/Contacts/GetContactContributions -> DataFeedItem (24 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicChoices",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO DemographicChoices (model DemographicChoice) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DemographicChoices",
+      "Excerpt": "GET api/v2.0/Demographics/GetDemographicChoices -> DemographicChoice (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicTypes",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO DemographicTypes (model DemographicType) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DemographicTypes",
+      "Excerpt": "GET api/v2.0/Demographics/GetDemographicTypes -> DemographicType (8 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPost_discussionPostKey",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO DiscussionPosts (model DiscussionPost) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DiscussionPosts",
+      "Excerpt": "GET api/v2.0/Discussions/GetDiscussionPost -> DiscussionPost (24 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetRecentThreads_discussionKey_maxToRetrieve",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO DiscussionThreads (model DiscussionThread) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DiscussionThreads",
+      "Excerpt": "GET api/v2.0/Discussions/GetRecentThreads -> DiscussionThread (10 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussion_discussionKey",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO Discussions (model Discussion) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Discussions",
+      "Excerpt": "GET api/v2.0/Discussions/GetDiscussion -> Discussion (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetDocumentAttachments_documentKey",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO DocumentAttachments (model DocumentAttachment) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DocumentAttachments",
+      "Excerpt": "GET api/v2.0/ResourceLibrary/GetDocumentAttachments -> DocumentAttachment (12 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventRegistrants_calendarEventKey_modifiedDateTime_maxRecords_continuationToken",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO EventRegistrants (model EventRegistrantConcise) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventRegistrants",
+      "Excerpt": "GET api/v2.0/Events/GetEventRegistrants -> EventRegistrantConcise (16 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-EventSessions-GetSession_sessionKey",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO EventSessions (model EventSession) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventSessions",
+      "Excerpt": "GET api/v2.0/EventSessions/GetSession -> EventSession (32 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO EventTypes (model EventType) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "io.EventTypes",
+      "Excerpt": "vendor doc-generation placeholder — field-list gap"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetUpcoming_maxRecords",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO Events (model Event) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Events",
+      "Excerpt": "GET api/v2.0/Events/GetUpcoming -> Event (69 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalActivity-Create",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO ExternalActivity (model ExternalActivity) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ExternalActivity",
+      "Excerpt": "POST api/v2.0/ExternalActivity/Create -> ExternalActivity (19 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeaCategories",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO IdeaCategories (model IdeaCategory) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaCategories",
+      "Excerpt": "GET api/v2.0/Ideation/GetIdeaCategories -> IdeaCategory (2 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeaStatuses",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO IdeaStatuses (model IdeaStatus) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaStatuses",
+      "Excerpt": "GET api/v2.0/Ideation/GetIdeaStatuses -> IdeaStatus (2 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetVoters_ideationKey",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO IdeaVoters (model IdeationVoterModel) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaVoters",
+      "Excerpt": "GET api/v2.0/Ideation/GetVoters -> IdeationVoterModel (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-IdeaDetails_ideationKey",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO Ideas (model IdeaDetails) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Ideas",
+      "Excerpt": "GET api/v2.0/Ideation/IdeaDetails -> IdeaDetails (10 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Question-GetThread_questionKey_numberOfAnswers",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO Questions (model QuestionThread) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Questions",
+      "Excerpt": "GET api/v2.0/Question/GetThread -> QuestionThread (17 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryDocument_documentKey_paginateComments_commentLimit",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO ResourceLibraryDocuments (model Document) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ResourceLibraryDocuments",
+      "Excerpt": "GET api/v2.0/ResourceLibrary/GetLibraryDocument -> Document (21 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryList",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO ResourceLibraryLibraries (model DocumentLibrary) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ResourceLibraryLibraries",
+      "Excerpt": "GET api/v2.0/ResourceLibrary/GetLibraryList -> DocumentLibrary (20 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Tagging-GetTags_searchText_communityKey",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO Tags (model TagGroupModel) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Tags",
+      "Excerpt": "GET api/v2.0/Tagging/GetTags -> TagGroupModel (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityList",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO VolunteerOpportunities (model VolunteerOpportunity) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.VolunteerOpportunities",
+      "Excerpt": "GET api/v2.0/Volunteer/GetVolunteerOpportunityList -> VolunteerOpportunity (27 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityTypeList",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO VolunteerOpportunityTypes (model VolunteerOpportunityType) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.VolunteerOpportunityTypes",
+      "Excerpt": "GET api/v2.0/Volunteer/GetVolunteerOpportunityTypeList -> VolunteerOpportunityType (6 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerList_volunteerOpportunityKey",
+      "AccessedAt": "2026-07-09T18:27:24.822Z",
+      "UsedFor": "IO Volunteers (model VolunteerOpportunityVolunteer) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Volunteers",
+      "Excerpt": "GET api/v2.0/Volunteer/GetVolunteerList -> VolunteerOpportunityVolunteer (16 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Announcements-GetAnnouncements_announcementTypeFilter_communityKey_micrositeGroupTypeRouteDesignKey_sortOrder_maxResults_includeAnnouncementsWithNoType",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO Announcements (model Announcement) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Announcements",
+      "Excerpt": "GET api/v2.0/Announcements/GetAnnouncements -> Announcement (20 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Answer-Get_answerKey",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO Answers (model Answer) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Answers",
+      "Excerpt": "GET api/v2.0/Answer/Get -> Answer (12 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactData_ruleScheduleKey_maxRecords_continuationToken_fieldList",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO AutomationRuleContactData (model ContactDataPage) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.AutomationRuleContactData",
+      "Excerpt": "GET api/v2.0/AutomationRules/GetContactData -> ContactDataPage (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetActiveRulesByType",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO AutomationRuleSchedules (model RuleSchedule) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.AutomationRuleSchedules",
+      "Excerpt": "GET api/v2.0/AutomationRules/GetActiveRulesByType -> RuleSchedule (5 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-Get_commentKey",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO BlogComments (model Comment) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.BlogComments",
+      "Excerpt": "GET api/v2.0/Comments/Get -> Comment (6 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Blogs-GetBlogEntriesByGrouping_groupingType_maxRecords",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO Blogs (model Blog) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Blogs",
+      "Excerpt": "GET api/v2.0/Blogs/GetBlogEntriesByGrouping -> Blog (15 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-Get_commentKey",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO Comments (model Comment) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Comments",
+      "Excerpt": "GET api/v2.0/Comments/Get -> Comment (6 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-Get_communityKey",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO Communities (model Community) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Communities",
+      "Excerpt": "GET api/v2.0/Communities/Get -> Community (37 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetMyCommunityInvitations",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO CommunityInvitations (model CommunityInvitation) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CommunityInvitations",
+      "Excerpt": "GET api/v2.0/Communities/GetMyCommunityInvitations -> CommunityInvitation (17 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-GetCommunityMembers",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO CommunityMembers (model CommunityMember) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CommunityMembers",
+      "Excerpt": "POST api/v2.0/Communities/GetCommunityMembers -> CommunityMember (34 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactsByRuleScheduleKey_ruleScheduleKey_integrationId",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO Contacts (model Contact) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Contacts",
+      "Excerpt": "GET api/v2.0/AutomationRules/GetContactsByRuleScheduleKey -> Contact (42 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-GetContactContributions",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO DataFeed (model DataFeedItem) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DataFeed",
+      "Excerpt": "POST api/v2.0/Contacts/GetContactContributions -> DataFeedItem (24 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicChoices",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO DemographicChoices (model DemographicChoice) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DemographicChoices",
+      "Excerpt": "GET api/v2.0/Demographics/GetDemographicChoices -> DemographicChoice (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicTypes",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO DemographicTypes (model DemographicType) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DemographicTypes",
+      "Excerpt": "GET api/v2.0/Demographics/GetDemographicTypes -> DemographicType (8 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPost_discussionPostKey",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO DiscussionPosts (model DiscussionPost) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DiscussionPosts",
+      "Excerpt": "GET api/v2.0/Discussions/GetDiscussionPost -> DiscussionPost (24 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetRecentThreads_discussionKey_maxToRetrieve",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO DiscussionThreads (model DiscussionThread) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DiscussionThreads",
+      "Excerpt": "GET api/v2.0/Discussions/GetRecentThreads -> DiscussionThread (10 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussion_discussionKey",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO Discussions (model Discussion) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Discussions",
+      "Excerpt": "GET api/v2.0/Discussions/GetDiscussion -> Discussion (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetDocumentAttachments_documentKey",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO DocumentAttachments (model DocumentAttachment) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DocumentAttachments",
+      "Excerpt": "GET api/v2.0/ResourceLibrary/GetDocumentAttachments -> DocumentAttachment (12 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventRegistrants_calendarEventKey_modifiedDateTime_maxRecords_continuationToken",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO EventRegistrants (model EventRegistrantConcise) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventRegistrants",
+      "Excerpt": "GET api/v2.0/Events/GetEventRegistrants -> EventRegistrantConcise (16 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-EventSessions-GetSession_sessionKey",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO EventSessions (model EventSession) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventSessions",
+      "Excerpt": "GET api/v2.0/EventSessions/GetSession -> EventSession (32 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO EventTypes (model EventType) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "io.EventTypes",
+      "Excerpt": "vendor doc-generation placeholder — field-list gap"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetUpcoming_maxRecords",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO Events (model Event) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Events",
+      "Excerpt": "GET api/v2.0/Events/GetUpcoming -> Event (69 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalActivity-Create",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO ExternalActivity (model ExternalActivity) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ExternalActivity",
+      "Excerpt": "POST api/v2.0/ExternalActivity/Create -> ExternalActivity (19 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeaCategories",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO IdeaCategories (model IdeaCategory) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaCategories",
+      "Excerpt": "GET api/v2.0/Ideation/GetIdeaCategories -> IdeaCategory (2 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeaStatuses",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO IdeaStatuses (model IdeaStatus) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaStatuses",
+      "Excerpt": "GET api/v2.0/Ideation/GetIdeaStatuses -> IdeaStatus (2 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetVoters_ideationKey",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO IdeaVoters (model IdeationVoterModel) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaVoters",
+      "Excerpt": "GET api/v2.0/Ideation/GetVoters -> IdeationVoterModel (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-IdeaDetails_ideationKey",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO Ideas (model IdeaDetails) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Ideas",
+      "Excerpt": "GET api/v2.0/Ideation/IdeaDetails -> IdeaDetails (10 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Question-GetThread_questionKey_numberOfAnswers",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO Questions (model QuestionThread) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Questions",
+      "Excerpt": "GET api/v2.0/Question/GetThread -> QuestionThread (17 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryDocument_documentKey_paginateComments_commentLimit",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO ResourceLibraryDocuments (model Document) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ResourceLibraryDocuments",
+      "Excerpt": "GET api/v2.0/ResourceLibrary/GetLibraryDocument -> Document (21 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryList",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO ResourceLibraryLibraries (model DocumentLibrary) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ResourceLibraryLibraries",
+      "Excerpt": "GET api/v2.0/ResourceLibrary/GetLibraryList -> DocumentLibrary (20 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Tagging-GetTags_searchText_communityKey",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO Tags (model TagGroupModel) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Tags",
+      "Excerpt": "GET api/v2.0/Tagging/GetTags -> TagGroupModel (3 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityList",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO VolunteerOpportunities (model VolunteerOpportunity) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.VolunteerOpportunities",
+      "Excerpt": "GET api/v2.0/Volunteer/GetVolunteerOpportunityList -> VolunteerOpportunity (27 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityTypeList",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO VolunteerOpportunityTypes (model VolunteerOpportunityType) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.VolunteerOpportunityTypes",
+      "Excerpt": "GET api/v2.0/Volunteer/GetVolunteerOpportunityTypeList -> VolunteerOpportunityType (6 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerList_volunteerOpportunityKey",
+      "AccessedAt": "2026-07-09T18:28:15.457Z",
+      "UsedFor": "IO Volunteers (model VolunteerOpportunityVolunteer) APIPath/pagination/PK from HelpPage operation catalog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Volunteers",
+      "Excerpt": "GET api/v2.0/Volunteer/GetVolunteerList -> VolunteerOpportunityVolunteer (16 fields)"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for DiscussionPosts",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DiscussionPosts.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row DiscussionPosts: create=/v2.0/Discussions/PostToDiscussion (POST); update=/v2.0/Discussions/Edit (PUT); delete=/v2.0/Discussions/RemovePost?discussionPostKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for Questions",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Questions.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row Questions: create=/v2.0/Question/Post (POST); update=/v2.0/Question/Edit (POST); delete=/v2.0/Question/Delete?questionKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for Answers",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Answers.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row Answers: create=/v2.0/Question/Answer (POST); update=/v2.0/Answer/Edit (POST); delete=/v2.0/Answer/Delete?answerKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for Comments",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Comments.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row Comments: create=/v2.0/Blogs/AddComment?blogKey={parent} (POST); update=/v2.0/Blogs/UpdateComment?blogCommentKey={id} (POST); delete=/v2.0/Blogs/DeleteComment?blogCommentKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for BlogComments",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.BlogComments.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row BlogComments: create=/v2.0/Blogs/AddComment?blogKey={parent} (POST); update=/v2.0/Blogs/UpdateComment?blogCommentKey={id} (POST); delete=/v2.0/Blogs/DeleteComment?blogCommentKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for ResourceLibraryDocuments",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.ResourceLibraryDocuments.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row ResourceLibraryDocuments: create=/v2.0/ResourceLibrary/PostDocument?libraryKey={parent} (POST); update=/v2.0/ResourceLibrary/Edit (POST); delete=/v2.0/ResourceLibrary/DeleteLibraryDocument?documentKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for DocumentAttachments",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DocumentAttachments.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row DocumentAttachments: create=/v2.0/ResourceLibrary/PostDocumentAttachments?documentKey={parent} (POST); delete=/v2.0/ResourceLibrary/DeleteDocumentAttachment?documentAttachmentKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for DemographicTypes",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DemographicTypes.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row DemographicTypes: create=/v2.0/Demographics/AddDemographicCategory (POST). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for DemographicChoices",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DemographicChoices.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row DemographicChoices: create=/v2.0/Demographics/AddDemographicChoice (POST). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for Ideas",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Ideas.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row Ideas: create=/v2.0/Ideation/Post (POST); update=/v2.0/Ideation/UpdateIdeaStatus (POST). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for IdeaCategories",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaCategories.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row IdeaCategories: create=/v2.0/Ideation/AddIdeaCategories (POST). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for Volunteers",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Volunteers.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row Volunteers: create=/v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={parent}&comments={comments} (POST); update=/v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={flag} (POST); delete=/v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={id}&comments={comments} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Confirming write capability + per-operation CRUD paths for Blogs",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Blogs.SupportsWrite",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row Blogs: create=/v2.0/Blogs/CreateBlog (POST); delete=/v2.0/Blogs/DeleteBlog?blogKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Correcting DataFeed backing endpoint to the tenant-wide DataFeed/GetData cursor feed",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DataFeed.APIPath",
+      "Excerpt": "SOURCE_STUDY.md leaf table: DataFeed | POST DataFeed/GetData | Cursor (Marker+Direction[up/down]+NumberToReturn, 0-25, def 10)."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Correcting DiscussionPosts pagination endpoint to GetPagedDiscussionPosts (continuation-token cursor)",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DiscussionPosts.APIPath",
+      "Excerpt": "sources/ops/GET-api-v2.0-Discussions-GetPagedDiscussionPosts_communityKey_maxRecords_continuationToken_fieldList.html declares a continuationToken cursor param; GetLatestDiscussionPosts has none."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-09T19:06:04.477Z",
+      "UsedFor": "Retargeting BlogComments.ItemKey foreign key from DataFeed to Blogs",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "iof.BlogComments.ItemKey.RelatedIntegrationObjectID",
+      "Excerpt": "SOURCE_STUDY.md leaf table row 'BlogComments': the Comments surface scoped to itemKey={blogKey} -> parent is Blogs."
+    },
+    {
+      "URL": "file://sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html",
+      "AccessedAt": "2026-07-09T20:18:15.961Z",
+      "UsedFor": "Volunteers.SupportsUpdate downgrade — ApproveVolunteerApplication is an approval RPC, not a field editor",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Volunteers.SupportsUpdate",
+      "Excerpt": "ApproveVolunteerApplication body: VolunteerOpportunityKey/ContactKey/LegacyContactKey only — narrow approval side-effect, no general field editor exists for Volunteers."
+    },
+    {
+      "URL": "file://sources/ops/POST-api-v2.0-Ideation-UpdateIdeaStatus.html",
+      "AccessedAt": "2026-07-09T20:18:15.961Z",
+      "UsedFor": "Ideas.SupportsUpdate downgrade — UpdateIdeaStatus is a status-transition RPC, not a field editor",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Ideas.SupportsUpdate",
+      "Excerpt": "UpdateIdeaStatus body: {IdeationKey, IdeationStatusKey} — narrow status transition; no endpoint edits Title/Description."
+    },
+    {
+      "URL": "file://sources/ops/GET-api-v2.0-Volunteer-GetVolunteerList_volunteerOpportunityKey.html",
+      "AccessedAt": "2026-07-09T20:18:15.961Z",
+      "UsedFor": "Volunteers.ApprovedByContactKey FK -> Contacts (Tier-1 explicit)",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Volunteers.ApprovedByContactKey.RelatedIntegrationObjectID",
+      "Excerpt": "ApprovedByContactKey: ContactKey of the User who approved the application."
+    },
+    {
+      "URL": "file://sources/ops/GET-api-v2.0-Volunteer-GetVolunteerList_volunteerOpportunityKey.html",
+      "AccessedAt": "2026-07-09T20:18:15.961Z",
+      "UsedFor": "Volunteers.RejectedByContactKey FK -> Contacts (Tier-1 explicit)",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Volunteers.RejectedByContactKey.RelatedIntegrationObjectID",
+      "Excerpt": "RejectedByContactKey: UniqueIdentifier for the User who rejected the application."
+    },
+    {
+      "URL": "file://sources/ops/POST-api-v2.0-Events-SaveEventType.html",
+      "AccessedAt": "2026-07-09T20:18:15.961Z",
+      "UsedFor": "EventTypes write surface — SaveEventType upsert (Create+Update) + 27-field body",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventTypes.SupportsWrite",
+      "Excerpt": "POST /api/v2.0/Events/SaveEventType — saves an event type; body carries EventTypeKey + EventTypeName + 25 config flags/fields."
+    },
+    {
+      "URL": "file://sources/ops/POST-api-v2.0-Events-DeleteEventType_eventTypeKey.html",
+      "AccessedAt": "2026-07-09T20:18:15.961Z",
+      "UsedFor": "EventTypes delete surface — DeleteEventType?eventTypeKey={id}",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventTypes.DeleteAPIPath",
+      "Excerpt": "POST /api/v2.0/Events/DeleteEventType?eventTypeKey={eventTypeKey} — path-templated delete by event type key."
+    },
+    {
+      "URL": "file://sources/ops/POST-api-v2.0-Events-RSVPToEvent_eventKey.html",
+      "AccessedAt": "2026-07-09T20:18:15.961Z",
+      "UsedFor": "EventRegistrants kept read-only — RSVP is action-shaped, out-of-scope for generic CRUD",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventRegistrants.SupportsWrite",
+      "Excerpt": "RSVPToEvent / RSVP-delete take the parent eventKey, not a registrant key — action-shaped, recorded as OutOfScopeActions."
+    },
+    {
+      "URL": "local://sources/ops/POST-api-v2.0-Ideation-AddIdeaCategories.html",
+      "AccessedAt": "2026-07-09T20:46:53.000Z",
+      "UsedFor": "Amendment R4: downgrade IdeaCategories.SupportsCreate to false",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.IdeaCategories.SupportsCreate",
+      "Excerpt": "AddIdeaCategories request body is SetIdeaCategoriesRequest {IdeationKey, IdeationCategoryKeys[]} -- an idea-to-category association action sharing zero fields with the IdeaCategories record (CategoryName, CategoryKey). No endpoint creates an IdeaCategory record; capability downgraded to false."
+    },
+    {
+      "URL": "local://sources/ops/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments.html",
+      "AccessedAt": "2026-07-09T20:46:53.000Z",
+      "UsedFor": "Amendment R4: downgrade Volunteers.SupportsCreate to false",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Volunteers.SupportsCreate",
+      "Excerpt": "VolunteerForOpportunity is an identity-implicit body-less RPC; response resource is the parent VolunteerOpportunity, not a new keyed record. Generic CreateRecord cannot extract a PK. Downgraded to non-write."
+    },
+    {
+      "URL": "local://sources/ops/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunity_volunteerOpportunityKey_comments.html",
+      "AccessedAt": "2026-07-09T20:46:53.000Z",
+      "UsedFor": "Amendment R4: downgrade Volunteers.SupportsDelete to false",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Volunteers.SupportsDelete",
+      "Excerpt": "WithdrawFromOpportunity's only URI param is the parent Opportunity key, not the record's own key; identity-implicit (current user's application). Generic DeleteRecord(id) would use the wrong key namespace. Downgraded to non-write."
+    },
+    {
+      "URL": "file://sources/ops/POST-api-v2.0-Blogs-UpdateBlog_blogKey.html",
+      "AccessedAt": "2026-07-09T23:45:43.316Z",
+      "UsedFor": "Blogs.SupportsUpdate — real field editor UpdateBlog (EditBlogRequest), not RPC",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Blogs.SupportsUpdate",
+      "Excerpt": "POST api/v2.0/Blogs/UpdateBlog?blogKey={blogKey} — EditBlogRequest flat field set."
+    },
+    {
+      "URL": "file://sources/ops/POST-api-v2.0-Blogs-UpdateBlog_blogKey.html",
+      "AccessedAt": "2026-07-09T23:45:43.316Z",
+      "UsedFor": "Blogs.UpdateAPIPath — path template for UpdateBlog",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Blogs.UpdateAPIPath",
+      "Excerpt": "POST api/v2.0/Blogs/UpdateBlog?blogKey={blogKey}."
+    },
+    {
+      "URL": "file://sources/ops/POST-api-v2.0-Blogs-UpdateBlog_blogKey.html",
+      "AccessedAt": "2026-07-09T23:45:43.316Z",
+      "UsedFor": "Blogs.UpdateMethod — POST per HelpPage title",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Blogs.UpdateMethod",
+      "Excerpt": "POST api/v2.0/Blogs/UpdateBlog?blogKey={blogKey}."
+    },
+    {
+      "URL": "file://sources/ops/POST-api-v2.0-Blogs-UpdateBlog_blogKey.html",
+      "AccessedAt": "2026-07-09T23:45:43.316Z",
+      "UsedFor": "Blogs.UpdateBodyShape — EditBlogRequest is a flat field set",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Blogs.UpdateBodyShape",
+      "Excerpt": "EditBlogRequest body is a flat set of blog fields."
+    },
+    {
+      "URL": "file://sources/ops/POST-api-v2.0-Blogs-UpdateBlog_blogKey.html",
+      "AccessedAt": "2026-07-09T23:45:43.316Z",
+      "UsedFor": "Blogs.UpdateIDLocation — blogKey is a path/query template segment",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Blogs.UpdateIDLocation",
+      "Excerpt": "blogKey={blogKey} is a URL template segment, not in the request body."
+    },
+    {
+      "URL": "file://SOURCE_STUDY.md",
+      "AccessedAt": "2026-07-09T23:45:43.316Z",
+      "UsedFor": "ResourceLibraryDocuments.LibraryKey FK -> ResourceLibraryLibraries (documented, sibling IO emitted)",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.ResourceLibraryDocuments.LibraryKey.RelatedIntegrationObjectID",
+      "Excerpt": "SOURCE_STUDY.md line 170 — LibraryKey references the library."
+    },
+    {
+      "URL": "file://SOURCE_STUDY.md",
+      "AccessedAt": "2026-07-09T23:45:43.316Z",
+      "UsedFor": "DocumentAttachments.DocumentKey FK -> ResourceLibraryDocuments (documented, sibling IO emitted)",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.DocumentAttachments.DocumentKey.RelatedIntegrationObjectID",
+      "Excerpt": "SOURCE_STUDY.md line 171 — DocumentKey references the parent document."
+    },
+    {
+      "URL": "file://SOURCE_STUDY.md",
+      "AccessedAt": "2026-07-09T23:45:43.316Z",
+      "UsedFor": "EventSessions.EventSessionCategoryKey self-ref FK -> EventSessions (documented)",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.EventSessions.EventSessionCategoryKey.RelatedIntegrationObjectID",
+      "Excerpt": "SOURCE_STUDY.md line 167 — session category self-reference."
+    },
+    {
+      "URL": "file://SOURCE_STUDY.md",
+      "AccessedAt": "2026-07-09T23:45:43.316Z",
+      "UsedFor": "EventSessions.CreatedByContactKey FK -> Contacts (documented)",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.EventSessions.CreatedByContactKey.RelatedIntegrationObjectID",
+      "Excerpt": "SOURCE_STUDY.md line 167 — created-by contact."
+    },
+    {
+      "URL": "file://SOURCE_STUDY.md",
+      "AccessedAt": "2026-07-09T23:45:43.316Z",
+      "UsedFor": "EventSessions.UpdatedByContactKey FK -> Contacts (documented)",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.EventSessions.UpdatedByContactKey.RelatedIntegrationObjectID",
+      "Excerpt": "SOURCE_STUDY.md line 167 — updated-by contact."
+    }
+  ]
+}

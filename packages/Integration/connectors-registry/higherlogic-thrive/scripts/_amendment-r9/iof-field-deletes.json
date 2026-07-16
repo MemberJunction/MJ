@@ -1,0 +1,17 @@
+[
+  {
+    "ioName": "EventSessions",
+    "iofName": "EventSessionCategoryKey",
+    "fieldKey": "RelatedIntegrationObjectID"
+  },
+  {
+    "ioName": "EventSessions",
+    "iofName": "EventSessionCategoryKey",
+    "fieldKey": "RelatedIntegrationObjectFieldName"
+  },
+  {
+    "ioName": "EventSessions",
+    "iofName": "EventSessionCategoryKey",
+    "fieldKey": "Configuration"
+  }
+]

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/Comments/Get?commentKey={commentKey}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/Comments/Get?commentKey={commentKey}</h1>
+<div>
+    <p>Returns the details of the specified Comment.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">commentKey</td>
+                    <td class="parameter-documentation">
+                        <p>unique identifier of a specific Comment</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>The details of the specified Comment</p>
+
+<a href="/Help/ResourceModel?modelName=Comment">Comment</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">CommentKey</td>
+                    <td class="parameter-documentation">
+                        <p>The unique identifier for the comment</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommentBody</td>
+                    <td class="parameter-documentation">
+                        <p>The text body of the comment</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommentAuthor</td>
+                    <td class="parameter-documentation">
+                        <p>Metadata pertaining to the user who created the comment</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=ContactConcise">ContactConcise</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsOfficial</td>
+                    <td class="parameter-documentation">
+                        <p>A single comment for an item can be marked as the official comment,
+            and is generally displayed as the top comment/pinned.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ItemKey</td>
+                    <td class="parameter-documentation">
+                        <p>The unique identifier for the comment&#39;s parent content item</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>The date that the comment was created</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UpdatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>The date that the comment was last updated</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;CommentKey&quot;: &quot;4a95f3a8-9b65-4e61-96c4-89c8a4ec7c2b&quot;,
+  &quot;CommentBody&quot;: &quot;sample string 2&quot;,
+  &quot;CommentAuthor&quot;: {
+    &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+    &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+    &quot;ContactKey&quot;: &quot;20e65378-867e-4005-a3cb-87193224614b&quot;,
+    &quot;FirstName&quot;: &quot;sample string 4&quot;,
+    &quot;LastName&quot;: &quot;sample string 5&quot;,
+    &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+    &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+    &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+    &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+    &quot;UpdatedOn&quot;: &quot;2026-07-08T10:15:44.5246577Z&quot;,
+    &quot;UpdatedByContactKey&quot;: &quot;33ab30c3-fac4-4b4e-b035-d907e6620c13&quot;,
+    &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+    &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+    &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+    &quot;Designation&quot;: &quot;sample string 15&quot;,
+    &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+    &quot;InformalName&quot;: &quot;sample string 17&quot;,
+    &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+    &quot;IsCompany&quot;: true,
+    &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+    &quot;AMSDirectoryOptOut&quot;: true,
+    &quot;HLDirectoryOptOut&quot;: true,
+    &quot;HLContactMeOptOut&quot;: true,
+    &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+    &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T10:15:44.5246577Z&quot;
+  },
+  &quot;IsOfficial&quot;: true,
+  &quot;ItemKey&quot;: &quot;56cf6a1e-878b-42d5-ad9a-0fc073378248&quot;,
+  &quot;CreatedOn&quot;: &quot;2026-07-08T10:15:44.5246577Z&quot;,
+  &quot;UpdatedOn&quot;: &quot;2026-07-08T10:15:44.5246577Z&quot;
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;Comment xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+  &lt;CommentAuthor&gt;
+    &lt;AMSDirectoryOptOut&gt;true&lt;/AMSDirectoryOptOut&gt;
+    &lt;AgreedToTermsDateTime&gt;2026-07-08T06:15:44.5246577-04:00&lt;/AgreedToTermsDateTime&gt;
+    &lt;CompanyLegacyContactKey&gt;sample string 20&lt;/CompanyLegacyContactKey&gt;
+    &lt;CompanyName&gt;sample string 12&lt;/CompanyName&gt;
+    &lt;CompanyTitle&gt;sample string 13&lt;/CompanyTitle&gt;
+    &lt;ContactKey&gt;20e65378-867e-4005-a3cb-87193224614b&lt;/ContactKey&gt;
+    &lt;ContactStatusCode&gt;sample string 8&lt;/ContactStatusCode&gt;
+    &lt;Designation&gt;sample string 15&lt;/Designation&gt;
+    &lt;DisplayName&gt;sample string 6&lt;/DisplayName&gt;
+    &lt;EmailAddress&gt;sample string 7&lt;/EmailAddress&gt;
+    &lt;FirstName&gt;sample string 4&lt;/FirstName&gt;
+    &lt;HLContactMeOptOut&gt;true&lt;/HLContactMeOptOut&gt;
+    &lt;HLDirectoryOptOut&gt;true&lt;/HLDirectoryOptOut&gt;
+    &lt;InformalName&gt;sample string 17&lt;/InformalName&gt;
+    &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+    &lt;LargePictureUrl&gt;sample string 24&lt;/LargePictureUrl&gt;
+    &lt;LastName&gt;sample string 5&lt;/LastName&gt;
+    &lt;LegacyContactKey&gt;sample string 16&lt;/LegacyContactKey&gt;
+    &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+    &lt;MiddleName&gt;sample string 18&lt;/MiddleName&gt;
+    &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+    &lt;PrefixCode&gt;sample string 9&lt;/PrefixCode&gt;
+    &lt;SuffixCode&gt;sample string 14&lt;/SuffixCode&gt;
+    &lt;UpdatedByContactKey&gt;33ab30c3-fac4-4b4e-b035-d907e6620c13&lt;/UpdatedByContactKey&gt;
+    &lt;UpdatedOn&gt;2026-07-08T06:15:44.5246577-04:00&lt;/UpdatedOn&gt;
+  &lt;/CommentAuthor&gt;
+  &lt;CommentBody&gt;sample string 2&lt;/CommentBody&gt;
+  &lt;CommentKey&gt;4a95f3a8-9b65-4e61-96c4-89c8a4ec7c2b&lt;/CommentKey&gt;
+  &lt;CreatedOn&gt;2026-07-08T06:15:44.5246577-04:00&lt;/CreatedOn&gt;
+  &lt;IsOfficial&gt;true&lt;/IsOfficial&gt;
+  &lt;ItemKey&gt;56cf6a1e-878b-42d5-ad9a-0fc073378248&lt;/ItemKey&gt;
+  &lt;UpdatedOn&gt;2026-07-08T06:15:44.5246577-04:00&lt;/UpdatedOn&gt;
+&lt;/Comment&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

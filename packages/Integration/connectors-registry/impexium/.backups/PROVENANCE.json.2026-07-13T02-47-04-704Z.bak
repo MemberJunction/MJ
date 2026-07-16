@@ -1,0 +1,94 @@
+{
+  "Entries": [
+    {
+      "URL": "https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/certified-connectors/Impexium/apiProperties.json",
+      "AccessedAt": "2026-07-11T23:19:48.080Z",
+      "UsedFor": "Confirming the per-tenant host connection-parameter name and URL shape for Configuration.APIBaseURLTemplate / Configuration.TenantHostConfigKey / NavigationBaseURL.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "\"hostUrl\": {\"type\": \"string\", \"uiDefinition\": {\"constraints\": {\"required\": \"true\"}, \"description\": \"Specify your API Url e.g. https://abc.mpxapi.com\", \"displayName\": \"API URL\", \"tooltip\": \"Specify your API Url e.g. https://abc.mpxapi.com\"}}"
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/certified-connectors/Impexium/apiProperties.json",
+      "AccessedAt": "2026-07-11T23:19:48.080Z",
+      "UsedFor": "Confirming Configuration.TenantHostConfigKey and Configuration.APIBaseURLTemplate (the dynamichosturl APIM policy rewrite).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.APIBaseURLTemplate",
+      "Excerpt": "\"policyTemplateInstances\": [{\"templateId\": \"dynamichosturl\", \"title\": \"Host Url\", \"parameters\": {\"x-ms-apimTemplateParameter.urlTemplate\": \"@connectionParameters('HostUrl')/\"}}]"
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/certified-connectors/Impexium/apiDefinition.swagger.json",
+      "AccessedAt": "2026-07-11T23:19:48.080Z",
+      "UsedFor": "Confirming Configuration.AuthModel.candidateB_altSurface (single x-api-key header) as the MS-certified connector's own auth contract -- NOT adopted as raw-host evidence.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthModel",
+      "Excerpt": "\"securityDefinitions\": {\"API Key\": {\"type\": \"apiKey\", \"in\": \"header\", \"name\": \"x-api-key\"}}, \"security\": [{\"API Key\": []}] applied uniformly across all 116 operations."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/connectors/impexium/",
+      "AccessedAt": "2026-07-11T23:19:48.080Z",
+      "UsedFor": "Confirming the MS-connector-layer (Azure APIM proxy) rate-limit figure recorded in Configuration.RateLimitAwareness -- explicitly NOT applied to Integration.BatchMaxRequestCount/BatchRequestWaitTime.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.RateLimitAwareness",
+      "Excerpt": "\"Throttling Limits\" table: <tr><td>API calls per connection</td><td>100</td><td>60 seconds</td></tr> (rendered <table>, not prose; independently re-fetched and confirmed present at the cited URL)."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/certified-connectors/Impexium/apiDefinition.swagger.json",
+      "AccessedAt": "2026-07-11T23:19:48.080Z",
+      "UsedFor": "Documenting the out-of-scope-family list in Configuration.OutOfScopeObjectFamilies (no Invoice/Payment/Refund endpoint exists anywhere in the 116-path surface).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies",
+      "Excerpt": "Full-text scan of all 116 paths / 137 operations in apiDefinition.swagger.json contains no path segment matching Invoice, Payment, or Refund (see SOURCE_STUDY.md §9 Gaps and §7)."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/certified-connectors/Impexium/apiDefinition.swagger.json",
+      "AccessedAt": "2026-07-13T02:34:32.223Z",
+      "UsedFor": "Confirming the canonical vendor/product name for Integration.Name (root-row recovery write -- the identity-establisher's run-1 computed value was never persisted due to a pipeline bug).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Name",
+      "Excerpt": "\"title\": \"re:Members AMS (Formerly Impexium)\", \"description\": \"re:Members AMS (formerly Impexium) is the premier association management software solution for nonprofits and member-based organizations.\""
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/certified-connectors/Impexium/apiDefinition.swagger.json",
+      "AccessedAt": "2026-07-13T02:34:32.223Z",
+      "UsedFor": "Sourcing the connector Description text and confirming the object families covered (members/orgs/memberships/groups/committees/chapters/events/products/orders/invoices).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Description",
+      "Excerpt": "\"description\": \"re:Members AMS (formerly Impexium) is the premier association management software solution for nonprofits and member-based organizations.\" -- object-family coverage independently confirmed by this build’s own 116-path/121-operation catalog scan (see SOURCE_STUDY.md §2–§9 and CODE_EVIDENCE.json)."
+    },
+    {
+      "URL": "file://packages/Integration/connectors-registry/impexium/PROVENANCE.json",
+      "AccessedAt": "2026-07-13T02:34:32.223Z",
+      "UsedFor": "ImportPath follows the four-way invariant convention documented in .claude/rules/connector-code-conventions.md (ClassName == package name == ImportPath == the shipped Open App ClassName) already applied identically for the hubspot, stripe, wildapricot, and zendesk connectors in this same registry (ClassName=ImpexiumConnector -> package/import path @memberjunction/connector-impexium).",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.ImportPath",
+      "Excerpt": "Sibling connectors in this registry: hubspot -> @memberjunction/connector-hubspot, stripe -> @memberjunction/connector-stripe, wildapricot -> @memberjunction/connector-wildapricot, zendesk -> @memberjunction/connector-zendesk (see metadata/integrations/*/.*.integration.json). ClassName ImpexiumConnector -> @memberjunction/connector-impexium follows the identical, established pattern."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/certified-connectors/Impexium/apiProperties.json",
+      "AccessedAt": "2026-07-13T02:34:32.223Z",
+      "UsedFor": "Provisioning a vendor-specific CredentialTypeID (\"Impexium AMS API\", added to metadata/credential-types/.credential-types.json following the established per-vendor pattern -- GrowthZone API, Wild Apricot API, HubSpot API). Shape provisioned for the strongest-evidence auth hypothesis (candidate A, app+user handshake); the confirmed-but-different-surface single-key model (candidate B, MS Power-Platform-proxy x-api-key) is retained as a fallback field on the same credential type. The auth FLOW itself remains UNVERIFIED -- see Configuration.AuthModel on this Integration record for the full evidence trail; this entry only supports the CredentialTypeID pointer + its field-shape provisioning, not a settled handshake.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CredentialTypeID",
+      "Excerpt": "\"connectionParameters\": {\"hostUrl\": {...,\"description\": \"Specify your API Url e.g. https://abc.mpxapi.com\"}, \"api_key\": {\"type\": \"securestring\", ...}}, \"publisher\": \"re:Members AMS Corporation\" -- confirms the per-tenant HostUrl connection parameter shape; api_key is the CONFIRMED shape for the MS-proxy surface only, not the raw host (see Configuration.AuthModel.candidateB_altSurface)."
+    }
+  ]
+}

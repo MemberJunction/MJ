@@ -1,0 +1,13 @@
+{
+  "id": "9001",
+  "properties": {
+    "hs_object_id": "9001",
+    "email": "example+new@example.com",
+    "firstname": "<scrubbed-name-new>",
+    "createdate": "2026-06-01T00:00:00.000Z",
+    "lastmodifieddate": "2026-06-01T00:00:00.000Z"
+  },
+  "createdAt": "2026-06-01T00:00:00.000Z",
+  "updatedAt": "2026-06-01T00:00:00.000Z",
+  "archived": false
+}

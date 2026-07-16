@@ -292,13 +292,26 @@ function splitPath(path: string): string[] {
     return noQuery.split('/').filter((s) => s.length > 0);
 }
 
+/** True for a spec-template path-parameter segment in EITHER OpenAPI style: `{param}` (brace) or `:param`
+ * (colon). Some specs (e.g. Higher Logic Vanilla's API v2) template single-record routes as
+ * `/escalations/:escalationID` rather than `/escalations/{escalationID}`. Treating a colon segment as a
+ * literal made those routes fail the full-length templated match and fall through to the greedy suffix
+ * fallback, which mis-bound them to an unrelated all-param-tail route (e.g.
+ * `/media/upload-session-part/{uploadSessionID}/{partNumber}`) — a false "method not supported" failure on
+ * correct connector metadata. Applied to the TEMPLATE side only: a template param matches any request
+ * segment (including a connector `{id}` placeholder); a template LITERAL still requires an equal request
+ * segment, so a `{id}` request never wrongly matches a concrete route like `/escalations/lookup-assignee`. */
+function isTemplateParamSegment(seg: string): boolean {
+    return (seg.startsWith('{') && seg.endsWith('}')) || seg.startsWith(':');
+}
+
 /** Compare template segments to concrete segments. Returns the match kind or null. */
 function segmentsMatch(tplSegs: string[], reqSegs: string[]): 'exact' | 'templated' | null {
     let templated = false;
     for (let i = 0; i < tplSegs.length; i++) {
         const t = tplSegs[i];
         const r = reqSegs[i];
-        if (t.startsWith('{') && t.endsWith('}')) { templated = true; continue; }
+        if (isTemplateParamSegment(t)) { templated = true; continue; }
         if (t.toLowerCase() !== r.toLowerCase()) return null;
     }
     return templated ? 'templated' : 'exact';
@@ -338,7 +351,13 @@ function loadDeclaredRequests(connector: string): DeclaredRequest[] {
     for (const io of ios) {
         const f = io.fields ?? {};
         const name = f.Name ?? '<unnamed>';
-        if (f.APIPath) out.push({ Object: name, Path: f.APIPath, Method: 'GET' });
+        // A WRITE-ONLY IO uses the established framework pattern APIPath == its write path (Create/Update/Delete):
+        // the deployed IntegrationObject schema requires APIPath NOT NULL, but a pure write-only sub-resource
+        // (e.g. POST /Individuals/{id}/Notes — no independent GET/list endpoint) has nowhere else to put it. Do
+        // NOT GET-validate such an APIPath — the connector never GETs it, and its real write method IS validated
+        // below. Only emit the GET check for a GENUINE read path (APIPath distinct from every write path).
+        const writePaths = new Set([f.CreateAPIPath, f.UpdateAPIPath, f.DeleteAPIPath].filter(Boolean));
+        if (f.APIPath && !writePaths.has(f.APIPath)) out.push({ Object: name, Path: f.APIPath, Method: 'GET' });
         if (f.CreateAPIPath) out.push({ Object: name, Path: f.CreateAPIPath, Method: f.CreateMethod || 'POST' });
         if (f.UpdateAPIPath) out.push({ Object: name, Path: f.UpdateAPIPath, Method: f.UpdateMethod || 'PATCH' });
         if (f.DeleteAPIPath) out.push({ Object: name, Path: f.DeleteAPIPath, Method: f.DeleteMethod || 'DELETE' });

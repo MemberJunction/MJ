@@ -1,0 +1,82 @@
+[
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/ops/GET-api-v2.0-Blogs-GetBlog_blogKey.html",
+    "AccessedAt": "2026-07-10T03:00:11.200Z",
+    "UsedFor": "Blogs.CreatedByContactKey — flattened from documented Author (ContactConcise) reference",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Blogs.CreatedByContactKey.RelatedIntegrationObjectID",
+    "Excerpt": "Blog Resource Description documents \"Author: ContactConcise\"; flattened to a scalar FK → Contacts.ContactKey per the connector convention (Announcements/DiscussionPosts)."
+  },
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/ops/GET-api-v2.0-Blogs-GetBlog_blogKey.html",
+    "AccessedAt": "2026-07-10T03:00:11.200Z",
+    "UsedFor": "Blogs.CommunityKey — flattened from documented Community reference",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Blogs.CommunityKey.RelatedIntegrationObjectID",
+    "Excerpt": "Blog Resource Description documents \"Community: Community\"; flattened to a scalar FK → Communities.CommunityKey."
+  },
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/ops/GET-api-v2.0-ResourceLibrary-GetLibraryDocument_documentKey_paginateComments_commentLimit.html",
+    "AccessedAt": "2026-07-10T03:00:11.200Z",
+    "UsedFor": "ResourceLibraryDocuments.CreatedByContactKey — flattened from documented CreatedByContact (ContactConcise) reference",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.ResourceLibraryDocuments.CreatedByContactKey.RelatedIntegrationObjectID",
+    "Excerpt": "Document Resource Description documents \"CreatedByContact: ContactConcise\"; flattened to a scalar FK → Contacts.ContactKey."
+  },
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/ops/GET-api-v2.0-Ideation-IdeaDetails_ideationKey.html",
+    "AccessedAt": "2026-07-10T03:00:11.200Z",
+    "UsedFor": "Ideas.CommunityKey — flattened from documented Community reference",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Ideas.CommunityKey.RelatedIntegrationObjectID",
+    "Excerpt": "Idea Resource Description documents \"Community: the community the idea has been associated\"; flattened to a scalar FK → Communities.CommunityKey."
+  },
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/ops/GET-api-v2.0-Ideation-IdeaDetails_ideationKey.html",
+    "AccessedAt": "2026-07-10T03:00:11.200Z",
+    "UsedFor": "Ideas.IdeaStatusKey — flattened from documented Status (IdeaStatus) reference",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Ideas.IdeaStatusKey.RelatedIntegrationObjectID",
+    "Excerpt": "Idea Resource Description documents \"Status: IdeaStatus\"; flattened to a scalar FK → IdeaStatuses.StatusKey."
+  },
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/ops/GET-api-v2.0-Ideation-IdeaDetails_ideationKey.html",
+    "AccessedAt": "2026-07-10T03:00:11.200Z",
+    "UsedFor": "Ideas.AuthorContactKey — flattened from documented Author (ContactConcise) reference",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Ideas.AuthorContactKey.RelatedIntegrationObjectID",
+    "Excerpt": "Idea Resource Description documents \"Author: the author of the idea (ContactConcise)\"; flattened to a scalar FK → Contacts.ContactKey."
+  },
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/ops/GET-api-v2.0-Volunteer-GetVolunteerOpportunityList.html",
+    "AccessedAt": "2026-07-10T03:00:11.200Z",
+    "UsedFor": "VolunteerOpportunities.CommunityKey — flattened from documented Community reference",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.VolunteerOpportunities.CommunityKey.RelatedIntegrationObjectID",
+    "Excerpt": "VolunteerOpportunity Resource Description documents \"Community: If the Volunteer Opportunity is linked to a specific Community... Community data for that Community\"; flattened to a scalar FK → Communities.CommunityKey."
+  },
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/ops/GET-api-v2.0-Events-GetEvent_eventKey.html",
+    "AccessedAt": "2026-07-10T03:00:11.200Z",
+    "UsedFor": "Events.CommunityKey — wire existing field to documented Community reference",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Events.CommunityKey.RelatedIntegrationObjectID",
+    "Excerpt": "Event model documents a Community association; the CommunityKey field was flattened but its FK linkage (RelatedIntegrationObjectID/Configuration.ReferencedType) was unset — wired here to Communities.CommunityKey (bijection with Announcements.CommunityKey / DiscussionPosts.CommunityKey)."
+  }
+]

@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/ResourceLibrary/PostDocument?libraryKey={libraryKey}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/ResourceLibrary/PostDocument?libraryKey={libraryKey}</h1>
+<div>
+    <p>Creates a document and its attachments in the specified library. Accepts Multipart MIME files via a POST Request. Files must be smaller than 2 GB.
+            In the form data you must include a DocumentName. If posting to a library associated with a topic community, TopicTagKeys must included at least one valid key.
+            You may also include a Description for the document. The name field of each file will override the file name.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">libraryKey</td>
+                    <td class="parameter-documentation">
+                        <p>LibraryKey for the library that you would like to</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+        <h3>Request Formats</h3>
+
+<div>
+        <h4 class="sample-header">multipart/form-data</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<img src="https://higherlogiccloudfront.s3.amazonaws.com/App_Themes/Common/images/multipartMIME.png" />
+        </div>
+</div>
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>The created document and its containing document attachments.</p>
+
+<a href="/Help/ResourceModel?modelName=Document">Document</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">DocumentKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DocumentTitle</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Description</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedByContact</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=ContactConcise">ContactConcise</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LegacyDocumentKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SerializedData</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryFolderName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommentCount</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ViewCount</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DownloadCount</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RatingCount</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Comments</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=Comment">Comment</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PaginatedComments</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=PaginatedComments">PaginatedComments</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Attachments</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=DocumentAttachment">DocumentAttachment</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RelatedLinks</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=RelatedLink">RelatedLink</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AttachmentCount</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToLibraryDocument</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactsWhoRecommend</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=ContactConcise">ContactConcise</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AuthenticatedUserRecommends</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AuthenticatedUserFavorite</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UserPermissions</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of string
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsFollowing</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Tags</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=ItemTagResponse">ItemTagResponse</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;DocumentKey&quot;: &quot;84777796-c34b-4cb4-8bdb-97ce143165f1&quot;,
+  &quot;DocumentTitle&quot;: &quot;sample string 2&quot;,
+  &quot;Description&quot;: &quot;sample string 3&quot;,
+  &quot;CreatedByContact&quot;: {
+    &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+    &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+    &quot;ContactKey&quot;: &quot;e49564e9-ae1d-46b0-b226-9b7d20718e4a&quot;,
+    &quot;FirstName&quot;: &quot;sample string 4&quot;,
+    &quot;LastName&quot;: &quot;sample string 5&quot;,
+    &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+    &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+    &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+    &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+    &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+    &quot;UpdatedByContactKey&quot;: &quot;23363acd-83d4-4f8d-89ab-4050c6e44fd5&quot;,
+    &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+    &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+    &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+    &quot;Designation&quot;: &quot;sample string 15&quot;,
+    &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+    &quot;InformalName&quot;: &quot;sample string 17&quot;,
+    &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+    &quot;IsCompany&quot;: true,
+    &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+    &quot;AMSDirectoryOptOut&quot;: true,
+    &quot;HLDirectoryOptOut&quot;: true,
+    &quot;HLContactMeOptOut&quot;: true,
+    &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+    &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+  },
+  &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+  &quot;LibraryKey&quot;: &quot;930283af-0419-457e-a05a-34335ee713bc&quot;,
+  &quot;LegacyDocumentKey&quot;: &quot;sample string 6&quot;,
+  &quot;SerializedData&quot;: &quot;sample string 7&quot;,
+  &quot;LibraryName&quot;: &quot;sample string 8&quot;,
+  &quot;LibraryFolderName&quot;: &quot;sample string 9&quot;,
+  &quot;CommunityName&quot;: &quot;sample string 10&quot;,
+  &quot;CommunityKey&quot;: &quot;cb00114e-a88c-4590-bf50-85612aa67c25&quot;,
+  &quot;CommentCount&quot;: 12,
+  &quot;ViewCount&quot;: 13,
+  &quot;DownloadCount&quot;: 14,
+  &quot;RatingCount&quot;: 15,
+  &quot;Comments&quot;: [
+    {
+      &quot;CommentKey&quot;: &quot;09b8ea7c-ab3f-40a6-ad7c-848a38b8c79c&quot;,
+      &quot;CommentBody&quot;: &quot;sample string 2&quot;,
+      &quot;CommentAuthor&quot;: {
+        &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+        &quot;ContactKey&quot;: &quot;e49564e9-ae1d-46b0-b226-9b7d20718e4a&quot;,
+        &quot;FirstName&quot;: &quot;sample string 4&quot;,
+        &quot;LastName&quot;: &quot;sample string 5&quot;,
+        &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+        &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+        &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;23363acd-83d4-4f8d-89ab-4050c6e44fd5&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+        &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+        &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+        &quot;Designation&quot;: &quot;sample string 15&quot;,
+        &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+        &quot;InformalName&quot;: &quot;sample string 17&quot;,
+        &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+        &quot;IsCompany&quot;: true,
+        &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+        &quot;AMSDirectoryOptOut&quot;: true,
+        &quot;HLDirectoryOptOut&quot;: true,
+        &quot;HLContactMeOptOut&quot;: true,
+        &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+        &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+      },
+      &quot;IsOfficial&quot;: true,
+      &quot;ItemKey&quot;: &quot;ca81fa69-79a5-463d-98f8-23d0b1aeaacb&quot;,
+      &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+      &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+    },
+    {
+      &quot;CommentKey&quot;: &quot;09b8ea7c-ab3f-40a6-ad7c-848a38b8c79c&quot;,
+      &quot;CommentBody&quot;: &quot;sample string 2&quot;,
+      &quot;CommentAuthor&quot;: {
+        &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+        &quot;ContactKey&quot;: &quot;e49564e9-ae1d-46b0-b226-9b7d20718e4a&quot;,
+        &quot;FirstName&quot;: &quot;sample string 4&quot;,
+        &quot;LastName&quot;: &quot;sample string 5&quot;,
+        &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+        &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+        &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;23363acd-83d4-4f8d-89ab-4050c6e44fd5&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+        &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+        &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+        &quot;Designation&quot;: &quot;sample string 15&quot;,
+        &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+        &quot;InformalName&quot;: &quot;sample string 17&quot;,
+        &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+        &quot;IsCompany&quot;: true,
+        &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+        &quot;AMSDirectoryOptOut&quot;: true,
+        &quot;HLDirectoryOptOut&quot;: true,
+        &quot;HLContactMeOptOut&quot;: true,
+        &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+        &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+      },
+      &quot;IsOfficial&quot;: true,
+      &quot;ItemKey&quot;: &quot;ca81fa69-79a5-463d-98f8-23d0b1aeaacb&quot;,
+      &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+      &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+    }
+  ],
+  &quot;PaginatedComments&quot;: {
+    &quot;Comments&quot;: [
+      {
+        &quot;CommentKey&quot;: &quot;09b8ea7c-ab3f-40a6-ad7c-848a38b8c79c&quot;,
+        &quot;CommentBody&quot;: &quot;sample string 2&quot;,
+        &quot;CommentAuthor&quot;: {
+          &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+          &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+          &quot;ContactKey&quot;: &quot;e49564e9-ae1d-46b0-b226-9b7d20718e4a&quot;,
+          &quot;FirstName&quot;: &quot;sample string 4&quot;,
+          &quot;LastName&quot;: &quot;sample string 5&quot;,
+          &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+          &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+          &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+          &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+          &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+          &quot;UpdatedByContactKey&quot;: &quot;23363acd-83d4-4f8d-89ab-4050c6e44fd5&quot;,
+          &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+          &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+          &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+          &quot;Designation&quot;: &quot;sample string 15&quot;,
+          &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+          &quot;InformalName&quot;: &quot;sample string 17&quot;,
+          &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+          &quot;IsCompany&quot;: true,
+          &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+          &quot;AMSDirectoryOptOut&quot;: true,
+          &quot;HLDirectoryOptOut&quot;: true,
+          &quot;HLContactMeOptOut&quot;: true,
+          &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+          &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+        },
+        &quot;IsOfficial&quot;: true,
+        &quot;ItemKey&quot;: &quot;ca81fa69-79a5-463d-98f8-23d0b1aeaacb&quot;,
+        &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+      },
+      {
+        &quot;CommentKey&quot;: &quot;09b8ea7c-ab3f-40a6-ad7c-848a38b8c79c&quot;,
+        &quot;CommentBody&quot;: &quot;sample string 2&quot;,
+        &quot;CommentAuthor&quot;: {
+          &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+          &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+          &quot;ContactKey&quot;: &quot;e49564e9-ae1d-46b0-b226-9b7d20718e4a&quot;,
+          &quot;FirstName&quot;: &quot;sample string 4&quot;,
+          &quot;LastName&quot;: &quot;sample string 5&quot;,
+          &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+          &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+          &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+          &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+          &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+          &quot;UpdatedByContactKey&quot;: &quot;23363acd-83d4-4f8d-89ab-4050c6e44fd5&quot;,
+          &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+          &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+          &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+          &quot;Designation&quot;: &quot;sample string 15&quot;,
+          &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+          &quot;InformalName&quot;: &quot;sample string 17&quot;,
+          &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+          &quot;IsCompany&quot;: true,
+          &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+          &quot;AMSDirectoryOptOut&quot;: true,
+          &quot;HLDirectoryOptOut&quot;: true,
+          &quot;HLContactMeOptOut&quot;: true,
+          &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+          &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+        },
+        &quot;IsOfficial&quot;: true,
+        &quot;ItemKey&quot;: &quot;ca81fa69-79a5-463d-98f8-23d0b1aeaacb&quot;,
+        &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+      }
+    ],
+    &quot;HasMoreComments&quot;: true,
+    &quot;Next&quot;: &quot;sample string 2&quot;,
+    &quot;Previous&quot;: &quot;sample string 3&quot;
+  },
+  &quot;Attachments&quot;: [
+    {
+      &quot;DocumentAttachmentKey&quot;: &quot;4154924c-bc40-4e36-88f1-6b03d8c7f5fa&quot;,
+      &quot;DocumentKey&quot;: &quot;d56a944a-938d-442e-bf49-c568f7fdedf6&quot;,
+      &quot;FileName&quot;: &quot;sample string 3&quot;,
+      &quot;UploadedByContact&quot;: {
+        &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+        &quot;ContactKey&quot;: &quot;e49564e9-ae1d-46b0-b226-9b7d20718e4a&quot;,
+        &quot;FirstName&quot;: &quot;sample string 4&quot;,
+        &quot;LastName&quot;: &quot;sample string 5&quot;,
+        &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+        &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+        &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;23363acd-83d4-4f8d-89ab-4050c6e44fd5&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+        &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+        &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+        &quot;Designation&quot;: &quot;sample string 15&quot;,
+        &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+        &quot;InformalName&quot;: &quot;sample string 17&quot;,
+        &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+        &quot;IsCompany&quot;: true,
+        &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+        &quot;AMSDirectoryOptOut&quot;: true,
+        &quot;HLDirectoryOptOut&quot;: true,
+        &quot;HLContactMeOptOut&quot;: true,
+        &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+        &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+      },
+      &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+      &quot;FileExtension&quot;: &quot;sample string 5&quot;,
+      &quot;FileSizeInBytes&quot;: 1,
+      &quot;Width&quot;: 1,
+      &quot;Height&quot;: 1,
+      &quot;DurationSeconds&quot;: 1,
+      &quot;DownloadUrl&quot;: &quot;sample string 6&quot;,
+      &quot;IconUrl&quot;: &quot;sample string 7&quot;,
+      &quot;Status&quot;: &quot;sample string 8&quot;
+    },
+    {
+      &quot;DocumentAttachmentKey&quot;: &quot;4154924c-bc40-4e36-88f1-6b03d8c7f5fa&quot;,
+      &quot;DocumentKey&quot;: &quot;d56a944a-938d-442e-bf49-c568f7fdedf6&quot;,
+      &quot;FileName&quot;: &quot;sample string 3&quot;,
+      &quot;UploadedByContact&quot;: {
+        &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+        &quot;ContactKey&quot;: &quot;e49564e9-ae1d-46b0-b226-9b7d20718e4a&quot;,
+        &quot;FirstName&quot;: &quot;sample string 4&quot;,
+        &quot;LastName&quot;: &quot;sample string 5&quot;,
+        &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+        &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+        &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;23363acd-83d4-4f8d-89ab-4050c6e44fd5&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+        &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+        &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+        &quot;Designation&quot;: &quot;sample string 15&quot;,
+        &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+        &quot;InformalName&quot;: &quot;sample string 17&quot;,
+        &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+        &quot;IsCompany&quot;: true,
+        &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+        &quot;AMSDirectoryOptOut&quot;: true,
+        &quot;HLDirectoryOptOut&quot;: true,
+        &quot;HLContactMeOptOut&quot;: true,
+        &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+        &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+      },
+      &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+      &quot;FileExtension&quot;: &quot;sample string 5&quot;,
+      &quot;FileSizeInBytes&quot;: 1,
+      &quot;Width&quot;: 1,
+      &quot;Height&quot;: 1,
+      &quot;DurationSeconds&quot;: 1,
+      &quot;DownloadUrl&quot;: &quot;sample string 6&quot;,
+      &quot;IconUrl&quot;: &quot;sample string 7&quot;,
+      &quot;Status&quot;: &quot;sample string 8&quot;
+    }
+  ],
+  &quot;RelatedLinks&quot;: [
+    {
+      &quot;RelatedLinkKey&quot;: &quot;ec6d5649-7340-4388-ac69-98557d1e0848&quot;,
+      &quot;ItemKey&quot;: &quot;ffa11081-1448-41a5-8815-32ae57040122&quot;,
+      &quot;Url&quot;: &quot;sample string 3&quot;,
+      &quot;Contributor&quot;: {
+        &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+        &quot;ContactKey&quot;: &quot;e49564e9-ae1d-46b0-b226-9b7d20718e4a&quot;,
+        &quot;FirstName&quot;: &quot;sample string 4&quot;,
+        &quot;LastName&quot;: &quot;sample string 5&quot;,
+        &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+        &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+        &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;23363acd-83d4-4f8d-89ab-4050c6e44fd5&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+        &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+        &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+        &quot;Designation&quot;: &quot;sample string 15&quot;,
+        &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+        &quot;InformalName&quot;: &quot;sample string 17&quot;,
+        &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+        &quot;IsCompany&quot;: true,
+        &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+        &quot;AMSDirectoryOptOut&quot;: true,
+        &quot;HLDirectoryOptOut&quot;: true,
+        &quot;HLContactMeOptOut&quot;: true,
+        &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+        &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+      },
+      &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+    },
+    {
+      &quot;RelatedLinkKey&quot;: &quot;ec6d5649-7340-4388-ac69-98557d1e0848&quot;,
+      &quot;ItemKey&quot;: &quot;ffa11081-1448-41a5-8815-32ae57040122&quot;,
+      &quot;Url&quot;: &quot;sample string 3&quot;,
+      &quot;Contributor&quot;: {
+        &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+        &quot;ContactKey&quot;: &quot;e49564e9-ae1d-46b0-b226-9b7d20718e4a&quot;,
+        &quot;FirstName&quot;: &quot;sample string 4&quot;,
+        &quot;LastName&quot;: &quot;sample string 5&quot;,
+        &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+        &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+        &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;23363acd-83d4-4f8d-89ab-4050c6e44fd5&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+        &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+        &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+        &quot;Designation&quot;: &quot;sample string 15&quot;,
+        &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+        &quot;InformalName&quot;: &quot;sample string 17&quot;,
+        &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+        &quot;IsCompany&quot;: true,
+        &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+        &quot;AMSDirectoryOptOut&quot;: true,
+        &quot;HLDirectoryOptOut&quot;: true,
+        &quot;HLContactMeOptOut&quot;: true,
+        &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+        &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+      },
+      &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+    }
+  ],
+  &quot;AttachmentCount&quot;: 16,
+  &quot;LinkToLibraryDocument&quot;: &quot;sample string 17&quot;,
+  &quot;ContactsWhoRecommend&quot;: [
+    {
+      &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+      &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+      &quot;ContactKey&quot;: &quot;e49564e9-ae1d-46b0-b226-9b7d20718e4a&quot;,
+      &quot;FirstName&quot;: &quot;sample string 4&quot;,
+      &quot;LastName&quot;: &quot;sample string 5&quot;,
+      &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+      &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+      &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+      &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+      &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+      &quot;UpdatedByContactKey&quot;: &quot;23363acd-83d4-4f8d-89ab-4050c6e44fd5&quot;,
+      &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+      &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+      &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+      &quot;Designation&quot;: &quot;sample string 15&quot;,
+      &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+      &quot;InformalName&quot;: &quot;sample string 17&quot;,
+      &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+      &quot;IsCompany&quot;: true,
+      &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+      &quot;AMSDirectoryOptOut&quot;: true,
+      &quot;HLDirectoryOptOut&quot;: true,
+      &quot;HLContactMeOptOut&quot;: true,
+      &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+      &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+    },
+    {
+      &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+      &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+      &quot;ContactKey&quot;: &quot;e49564e9-ae1d-46b0-b226-9b7d20718e4a&quot;,
+      &quot;FirstName&quot;: &quot;sample string 4&quot;,
+      &quot;LastName&quot;: &quot;sample string 5&quot;,
+      &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+      &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+      &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+      &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+      &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;,
+      &quot;UpdatedByContactKey&quot;: &quot;23363acd-83d4-4f8d-89ab-4050c6e44fd5&quot;,
+      &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+      &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+      &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+      &quot;Designation&quot;: &quot;sample string 15&quot;,
+      &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+      &quot;InformalName&quot;: &quot;sample string 17&quot;,
+      &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+      &quot;IsCompany&quot;: true,
+      &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+      &quot;AMSDirectoryOptOut&quot;: true,
+      &quot;HLDirectoryOptOut&quot;: true,
+      &quot;HLContactMeOptOut&quot;: true,
+      &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+      &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:38.2613146Z&quot;
+    }
+  ],
+  &quot;AuthenticatedUserRecommends&quot;: true,
+  &quot;AuthenticatedUserFavorite&quot;: true,
+  &quot;UserPermissions&quot;: [
+    &quot;sample string 1&quot;,
+    &quot;sample string 2&quot;
+  ],
+  &quot;IsFollowing&quot;: true,
+  &quot;Tags&quot;: [
+    {
+      &quot;Tag&quot;: &quot;sample string 1&quot;,
+      &quot;TagType&quot;: &quot;sample string 2&quot;
+    },
+    {
+      &quot;Tag&quot;: &quot;sample string 1&quot;,
+      &quot;TagType&quot;: &quot;sample string 2&quot;
+    }
+  ]
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;Document xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.ResourceLibrary&quot;&gt;
+  &lt;AttachmentCount&gt;16&lt;/AttachmentCount&gt;
+  &lt;Attachments&gt;
+    &lt;DocumentAttachment&gt;
+      &lt;CreatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/CreatedOn&gt;
+      &lt;DocumentAttachmentKey&gt;4154924c-bc40-4e36-88f1-6b03d8c7f5fa&lt;/DocumentAttachmentKey&gt;
+      &lt;DocumentKey&gt;d56a944a-938d-442e-bf49-c568f7fdedf6&lt;/DocumentKey&gt;
+      &lt;DownloadUrl&gt;sample string 6&lt;/DownloadUrl&gt;
+      &lt;DurationSeconds&gt;1&lt;/DurationSeconds&gt;
+      &lt;FileExtension&gt;sample string 5&lt;/FileExtension&gt;
+      &lt;FileName&gt;sample string 3&lt;/FileName&gt;
+      &lt;FileSizeInBytes&gt;1&lt;/FileSizeInBytes&gt;
+      &lt;Height&gt;1&lt;/Height&gt;
+      &lt;IconUrl&gt;sample string 7&lt;/IconUrl&gt;
+      &lt;Status&gt;sample string 8&lt;/Status&gt;
+      &lt;UploadedByContact xmlns:d4p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+        &lt;d4p1:AMSDirectoryOptOut&gt;true&lt;/d4p1:AMSDirectoryOptOut&gt;
+        &lt;d4p1:AgreedToTermsDateTime&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d4p1:AgreedToTermsDateTime&gt;
+        &lt;d4p1:CompanyLegacyContactKey&gt;sample string 20&lt;/d4p1:CompanyLegacyContactKey&gt;
+        &lt;d4p1:CompanyName&gt;sample string 12&lt;/d4p1:CompanyName&gt;
+        &lt;d4p1:CompanyTitle&gt;sample string 13&lt;/d4p1:CompanyTitle&gt;
+        &lt;d4p1:ContactKey&gt;e49564e9-ae1d-46b0-b226-9b7d20718e4a&lt;/d4p1:ContactKey&gt;
+        &lt;d4p1:ContactStatusCode&gt;sample string 8&lt;/d4p1:ContactStatusCode&gt;
+        &lt;d4p1:Designation&gt;sample string 15&lt;/d4p1:Designation&gt;
+        &lt;d4p1:DisplayName&gt;sample string 6&lt;/d4p1:DisplayName&gt;
+        &lt;d4p1:EmailAddress&gt;sample string 7&lt;/d4p1:EmailAddress&gt;
+        &lt;d4p1:FirstName&gt;sample string 4&lt;/d4p1:FirstName&gt;
+        &lt;d4p1:HLContactMeOptOut&gt;true&lt;/d4p1:HLContactMeOptOut&gt;
+        &lt;d4p1:HLDirectoryOptOut&gt;true&lt;/d4p1:HLDirectoryOptOut&gt;
+        &lt;d4p1:InformalName&gt;sample string 17&lt;/d4p1:InformalName&gt;
+        &lt;d4p1:IsCompany&gt;true&lt;/d4p1:IsCompany&gt;
+        &lt;d4p1:LargePictureUrl&gt;sample string 24&lt;/d4p1:LargePictureUrl&gt;
+        &lt;d4p1:LastName&gt;sample string 5&lt;/d4p1:LastName&gt;
+        &lt;d4p1:LegacyContactKey&gt;sample string 16&lt;/d4p1:LegacyContactKey&gt;
+        &lt;d4p1:LinkToProfile&gt;sample string 1&lt;/d4p1:LinkToProfile&gt;
+        &lt;d4p1:MiddleName&gt;sample string 18&lt;/d4p1:MiddleName&gt;
+        &lt;d4p1:PictureUrl&gt;sample string 2&lt;/d4p1:PictureUrl&gt;
+        &lt;d4p1:PrefixCode&gt;sample string 9&lt;/d4p1:PrefixCode&gt;
+        &lt;d4p1:SuffixCode&gt;sample string 14&lt;/d4p1:SuffixCode&gt;
+        &lt;d4p1:UpdatedByContactKey&gt;23363acd-83d4-4f8d-89ab-4050c6e44fd5&lt;/d4p1:UpdatedByContactKey&gt;
+        &lt;d4p1:UpdatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d4p1:UpdatedOn&gt;
+      &lt;/UploadedByContact&gt;
+      &lt;Width&gt;1&lt;/Width&gt;
+    &lt;/DocumentAttachment&gt;
+    &lt;DocumentAttachment&gt;
+      &lt;CreatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/CreatedOn&gt;
+      &lt;DocumentAttachmentKey&gt;4154924c-bc40-4e36-88f1-6b03d8c7f5fa&lt;/DocumentAttachmentKey&gt;
+      &lt;DocumentKey&gt;d56a944a-938d-442e-bf49-c568f7fdedf6&lt;/DocumentKey&gt;
+      &lt;DownloadUrl&gt;sample string 6&lt;/DownloadUrl&gt;
+      &lt;DurationSeconds&gt;1&lt;/DurationSeconds&gt;
+      &lt;FileExtension&gt;sample string 5&lt;/FileExtension&gt;
+      &lt;FileName&gt;sample string 3&lt;/FileName&gt;
+      &lt;FileSizeInBytes&gt;1&lt;/FileSizeInBytes&gt;
+      &lt;Height&gt;1&lt;/Height&gt;
+      &lt;IconUrl&gt;sample string 7&lt;/IconUrl&gt;
+      &lt;Status&gt;sample string 8&lt;/Status&gt;
+      &lt;UploadedByContact xmlns:d4p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+        &lt;d4p1:AMSDirectoryOptOut&gt;true&lt;/d4p1:AMSDirectoryOptOut&gt;
+        &lt;d4p1:AgreedToTermsDateTime&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d4p1:AgreedToTermsDateTime&gt;
+        &lt;d4p1:CompanyLegacyContactKey&gt;sample string 20&lt;/d4p1:CompanyLegacyContactKey&gt;
+        &lt;d4p1:CompanyName&gt;sample string 12&lt;/d4p1:CompanyName&gt;
+        &lt;d4p1:CompanyTitle&gt;sample string 13&lt;/d4p1:CompanyTitle&gt;
+        &lt;d4p1:ContactKey&gt;e49564e9-ae1d-46b0-b226-9b7d20718e4a&lt;/d4p1:ContactKey&gt;
+        &lt;d4p1:ContactStatusCode&gt;sample string 8&lt;/d4p1:ContactStatusCode&gt;
+        &lt;d4p1:Designation&gt;sample string 15&lt;/d4p1:Designation&gt;
+        &lt;d4p1:DisplayName&gt;sample string 6&lt;/d4p1:DisplayName&gt;
+        &lt;d4p1:EmailAddress&gt;sample string 7&lt;/d4p1:EmailAddress&gt;
+        &lt;d4p1:FirstName&gt;sample string 4&lt;/d4p1:FirstName&gt;
+        &lt;d4p1:HLContactMeOptOut&gt;true&lt;/d4p1:HLContactMeOptOut&gt;
+        &lt;d4p1:HLDirectoryOptOut&gt;true&lt;/d4p1:HLDirectoryOptOut&gt;
+        &lt;d4p1:InformalName&gt;sample string 17&lt;/d4p1:InformalName&gt;
+        &lt;d4p1:IsCompany&gt;true&lt;/d4p1:IsCompany&gt;
+        &lt;d4p1:LargePictureUrl&gt;sample string 24&lt;/d4p1:LargePictureUrl&gt;
+        &lt;d4p1:LastName&gt;sample string 5&lt;/d4p1:LastName&gt;
+        &lt;d4p1:LegacyContactKey&gt;sample string 16&lt;/d4p1:LegacyContactKey&gt;
+        &lt;d4p1:LinkToProfile&gt;sample string 1&lt;/d4p1:LinkToProfile&gt;
+        &lt;d4p1:MiddleName&gt;sample string 18&lt;/d4p1:MiddleName&gt;
+        &lt;d4p1:PictureUrl&gt;sample string 2&lt;/d4p1:PictureUrl&gt;
+        &lt;d4p1:PrefixCode&gt;sample string 9&lt;/d4p1:PrefixCode&gt;
+        &lt;d4p1:SuffixCode&gt;sample string 14&lt;/d4p1:SuffixCode&gt;
+        &lt;d4p1:UpdatedByContactKey&gt;23363acd-83d4-4f8d-89ab-4050c6e44fd5&lt;/d4p1:UpdatedByContactKey&gt;
+        &lt;d4p1:UpdatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d4p1:UpdatedOn&gt;
+      &lt;/UploadedByContact&gt;
+      &lt;Width&gt;1&lt;/Width&gt;
+    &lt;/DocumentAttachment&gt;
+  &lt;/Attachments&gt;
+  &lt;AuthenticatedUserFavorite&gt;true&lt;/AuthenticatedUserFavorite&gt;
+  &lt;AuthenticatedUserRecommends&gt;true&lt;/AuthenticatedUserRecommends&gt;
+  &lt;CommentCount&gt;12&lt;/CommentCount&gt;
+  &lt;Comments xmlns:d2p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+    &lt;d2p1:Comment&gt;
+      &lt;d2p1:CommentAuthor&gt;
+        &lt;d2p1:AMSDirectoryOptOut&gt;true&lt;/d2p1:AMSDirectoryOptOut&gt;
+        &lt;d2p1:AgreedToTermsDateTime&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:AgreedToTermsDateTime&gt;
+        &lt;d2p1:CompanyLegacyContactKey&gt;sample string 20&lt;/d2p1:CompanyLegacyContactKey&gt;
+        &lt;d2p1:CompanyName&gt;sample string 12&lt;/d2p1:CompanyName&gt;
+        &lt;d2p1:CompanyTitle&gt;sample string 13&lt;/d2p1:CompanyTitle&gt;
+        &lt;d2p1:ContactKey&gt;e49564e9-ae1d-46b0-b226-9b7d20718e4a&lt;/d2p1:ContactKey&gt;
+        &lt;d2p1:ContactStatusCode&gt;sample string 8&lt;/d2p1:ContactStatusCode&gt;
+        &lt;d2p1:Designation&gt;sample string 15&lt;/d2p1:Designation&gt;
+        &lt;d2p1:DisplayName&gt;sample string 6&lt;/d2p1:DisplayName&gt;
+        &lt;d2p1:EmailAddress&gt;sample string 7&lt;/d2p1:EmailAddress&gt;
+        &lt;d2p1:FirstName&gt;sample string 4&lt;/d2p1:FirstName&gt;
+        &lt;d2p1:HLContactMeOptOut&gt;true&lt;/d2p1:HLContactMeOptOut&gt;
+        &lt;d2p1:HLDirectoryOptOut&gt;true&lt;/d2p1:HLDirectoryOptOut&gt;
+        &lt;d2p1:InformalName&gt;sample string 17&lt;/d2p1:InformalName&gt;
+        &lt;d2p1:IsCompany&gt;true&lt;/d2p1:IsCompany&gt;
+        &lt;d2p1:LargePictureUrl&gt;sample string 24&lt;/d2p1:LargePictureUrl&gt;
+        &lt;d2p1:LastName&gt;sample string 5&lt;/d2p1:LastName&gt;
+        &lt;d2p1:LegacyContactKey&gt;sample string 16&lt;/d2p1:LegacyContactKey&gt;
+        &lt;d2p1:LinkToProfile&gt;sample string 1&lt;/d2p1:LinkToProfile&gt;
+        &lt;d2p1:MiddleName&gt;sample string 18&lt;/d2p1:MiddleName&gt;
+        &lt;d2p1:PictureUrl&gt;sample string 2&lt;/d2p1:PictureUrl&gt;
+        &lt;d2p1:PrefixCode&gt;sample string 9&lt;/d2p1:PrefixCode&gt;
+        &lt;d2p1:SuffixCode&gt;sample string 14&lt;/d2p1:SuffixCode&gt;
+        &lt;d2p1:UpdatedByContactKey&gt;23363acd-83d4-4f8d-89ab-4050c6e44fd5&lt;/d2p1:UpdatedByContactKey&gt;
+        &lt;d2p1:UpdatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:UpdatedOn&gt;
+      &lt;/d2p1:CommentAuthor&gt;
+      &lt;d2p1:CommentBody&gt;sample string 2&lt;/d2p1:CommentBody&gt;
+      &lt;d2p1:CommentKey&gt;09b8ea7c-ab3f-40a6-ad7c-848a38b8c79c&lt;/d2p1:CommentKey&gt;
+      &lt;d2p1:CreatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:CreatedOn&gt;
+      &lt;d2p1:IsOfficial&gt;true&lt;/d2p1:IsOfficial&gt;
+      &lt;d2p1:ItemKey&gt;ca81fa69-79a5-463d-98f8-23d0b1aeaacb&lt;/d2p1:ItemKey&gt;
+      &lt;d2p1:UpdatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:UpdatedOn&gt;
+    &lt;/d2p1:Comment&gt;
+    &lt;d2p1:Comment&gt;
+      &lt;d2p1:CommentAuthor&gt;
+        &lt;d2p1:AMSDirectoryOptOut&gt;true&lt;/d2p1:AMSDirectoryOptOut&gt;
+        &lt;d2p1:AgreedToTermsDateTime&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:AgreedToTermsDateTime&gt;
+        &lt;d2p1:CompanyLegacyContactKey&gt;sample string 20&lt;/d2p1:CompanyLegacyContactKey&gt;
+        &lt;d2p1:CompanyName&gt;sample string 12&lt;/d2p1:CompanyName&gt;
+        &lt;d2p1:CompanyTitle&gt;sample string 13&lt;/d2p1:CompanyTitle&gt;
+        &lt;d2p1:ContactKey&gt;e49564e9-ae1d-46b0-b226-9b7d20718e4a&lt;/d2p1:ContactKey&gt;
+        &lt;d2p1:ContactStatusCode&gt;sample string 8&lt;/d2p1:ContactStatusCode&gt;
+        &lt;d2p1:Designation&gt;sample string 15&lt;/d2p1:Designation&gt;
+        &lt;d2p1:DisplayName&gt;sample string 6&lt;/d2p1:DisplayName&gt;
+        &lt;d2p1:EmailAddress&gt;sample string 7&lt;/d2p1:EmailAddress&gt;
+        &lt;d2p1:FirstName&gt;sample string 4&lt;/d2p1:FirstName&gt;
+        &lt;d2p1:HLContactMeOptOut&gt;true&lt;/d2p1:HLContactMeOptOut&gt;
+        &lt;d2p1:HLDirectoryOptOut&gt;true&lt;/d2p1:HLDirectoryOptOut&gt;
+        &lt;d2p1:InformalName&gt;sample string 17&lt;/d2p1:InformalName&gt;
+        &lt;d2p1:IsCompany&gt;true&lt;/d2p1:IsCompany&gt;
+        &lt;d2p1:LargePictureUrl&gt;sample string 24&lt;/d2p1:LargePictureUrl&gt;
+        &lt;d2p1:LastName&gt;sample string 5&lt;/d2p1:LastName&gt;
+        &lt;d2p1:LegacyContactKey&gt;sample string 16&lt;/d2p1:LegacyContactKey&gt;
+        &lt;d2p1:LinkToProfile&gt;sample string 1&lt;/d2p1:LinkToProfile&gt;
+        &lt;d2p1:MiddleName&gt;sample string 18&lt;/d2p1:MiddleName&gt;
+        &lt;d2p1:PictureUrl&gt;sample string 2&lt;/d2p1:PictureUrl&gt;
+        &lt;d2p1:PrefixCode&gt;sample string 9&lt;/d2p1:PrefixCode&gt;
+        &lt;d2p1:SuffixCode&gt;sample string 14&lt;/d2p1:SuffixCode&gt;
+        &lt;d2p1:UpdatedByContactKey&gt;23363acd-83d4-4f8d-89ab-4050c6e44fd5&lt;/d2p1:UpdatedByContactKey&gt;
+        &lt;d2p1:UpdatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:UpdatedOn&gt;
+      &lt;/d2p1:CommentAuthor&gt;
+      &lt;d2p1:CommentBody&gt;sample string 2&lt;/d2p1:CommentBody&gt;
+      &lt;d2p1:CommentKey&gt;09b8ea7c-ab3f-40a6-ad7c-848a38b8c79c&lt;/d2p1:CommentKey&gt;
+      &lt;d2p1:CreatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:CreatedOn&gt;
+      &lt;d2p1:IsOfficial&gt;true&lt;/d2p1:IsOfficial&gt;
+      &lt;d2p1:ItemKey&gt;ca81fa69-79a5-463d-98f8-23d0b1aeaacb&lt;/d2p1:ItemKey&gt;
+      &lt;d2p1:UpdatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:UpdatedOn&gt;
+    &lt;/d2p1:Comment&gt;
+  &lt;/Comments&gt;
+  &lt;CommunityKey&gt;cb00114e-a88c-4590-bf50-85612aa67c25&lt;/CommunityKey&gt;
+  &lt;CommunityName&gt;sample string 10&lt;/CommunityName&gt;
+  &lt;ContactsWhoRecommend xmlns:d2p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+    &lt;d2p1:ContactConcise&gt;
+      &lt;d2p1:AMSDirectoryOptOut&gt;true&lt;/d2p1:AMSDirectoryOptOut&gt;
+      &lt;d2p1:AgreedToTermsDateTime&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:AgreedToTermsDateTime&gt;
+      &lt;d2p1:CompanyLegacyContactKey&gt;sample string 20&lt;/d2p1:CompanyLegacyContactKey&gt;
+      &lt;d2p1:CompanyName&gt;sample string 12&lt;/d2p1:CompanyName&gt;
+      &lt;d2p1:CompanyTitle&gt;sample string 13&lt;/d2p1:CompanyTitle&gt;
+      &lt;d2p1:ContactKey&gt;e49564e9-ae1d-46b0-b226-9b7d20718e4a&lt;/d2p1:ContactKey&gt;
+      &lt;d2p1:ContactStatusCode&gt;sample string 8&lt;/d2p1:ContactStatusCode&gt;
+      &lt;d2p1:Designation&gt;sample string 15&lt;/d2p1:Designation&gt;
+      &lt;d2p1:DisplayName&gt;sample string 6&lt;/d2p1:DisplayName&gt;
+      &lt;d2p1:EmailAddress&gt;sample string 7&lt;/d2p1:EmailAddress&gt;
+      &lt;d2p1:FirstName&gt;sample string 4&lt;/d2p1:FirstName&gt;
+      &lt;d2p1:HLContactMeOptOut&gt;true&lt;/d2p1:HLContactMeOptOut&gt;
+      &lt;d2p1:HLDirectoryOptOut&gt;true&lt;/d2p1:HLDirectoryOptOut&gt;
+      &lt;d2p1:InformalName&gt;sample string 17&lt;/d2p1:InformalName&gt;
+      &lt;d2p1:IsCompany&gt;true&lt;/d2p1:IsCompany&gt;
+      &lt;d2p1:LargePictureUrl&gt;sample string 24&lt;/d2p1:LargePictureUrl&gt;
+      &lt;d2p1:LastName&gt;sample string 5&lt;/d2p1:LastName&gt;
+      &lt;d2p1:LegacyContactKey&gt;sample string 16&lt;/d2p1:LegacyContactKey&gt;
+      &lt;d2p1:LinkToProfile&gt;sample string 1&lt;/d2p1:LinkToProfile&gt;
+      &lt;d2p1:MiddleName&gt;sample string 18&lt;/d2p1:MiddleName&gt;
+      &lt;d2p1:PictureUrl&gt;sample string 2&lt;/d2p1:PictureUrl&gt;
+      &lt;d2p1:PrefixCode&gt;sample string 9&lt;/d2p1:PrefixCode&gt;
+      &lt;d2p1:SuffixCode&gt;sample string 14&lt;/d2p1:SuffixCode&gt;
+      &lt;d2p1:UpdatedByContactKey&gt;23363acd-83d4-4f8d-89ab-4050c6e44fd5&lt;/d2p1:UpdatedByContactKey&gt;
+      &lt;d2p1:UpdatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:UpdatedOn&gt;
+    &lt;/d2p1:ContactConcise&gt;
+    &lt;d2p1:ContactConcise&gt;
+      &lt;d2p1:AMSDirectoryOptOut&gt;true&lt;/d2p1:AMSDirectoryOptOut&gt;
+      &lt;d2p1:AgreedToTermsDateTime&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:AgreedToTermsDateTime&gt;
+      &lt;d2p1:CompanyLegacyContactKey&gt;sample string 20&lt;/d2p1:CompanyLegacyContactKey&gt;
+      &lt;d2p1:CompanyName&gt;sample string 12&lt;/d2p1:CompanyName&gt;
+      &lt;d2p1:CompanyTitle&gt;sample string 13&lt;/d2p1:CompanyTitle&gt;
+      &lt;d2p1:ContactKey&gt;e49564e9-ae1d-46b0-b226-9b7d20718e4a&lt;/d2p1:ContactKey&gt;
+      &lt;d2p1:ContactStatusCode&gt;sample string 8&lt;/d2p1:ContactStatusCode&gt;
+      &lt;d2p1:Designation&gt;sample string 15&lt;/d2p1:Designation&gt;
+      &lt;d2p1:DisplayName&gt;sample string 6&lt;/d2p1:DisplayName&gt;
+      &lt;d2p1:EmailAddress&gt;sample string 7&lt;/d2p1:EmailAddress&gt;
+      &lt;d2p1:FirstName&gt;sample string 4&lt;/d2p1:FirstName&gt;
+      &lt;d2p1:HLContactMeOptOut&gt;true&lt;/d2p1:HLContactMeOptOut&gt;
+      &lt;d2p1:HLDirectoryOptOut&gt;true&lt;/d2p1:HLDirectoryOptOut&gt;
+      &lt;d2p1:InformalName&gt;sample string 17&lt;/d2p1:InformalName&gt;
+      &lt;d2p1:IsCompany&gt;true&lt;/d2p1:IsCompany&gt;
+      &lt;d2p1:LargePictureUrl&gt;sample string 24&lt;/d2p1:LargePictureUrl&gt;
+      &lt;d2p1:LastName&gt;sample string 5&lt;/d2p1:LastName&gt;
+      &lt;d2p1:LegacyContactKey&gt;sample string 16&lt;/d2p1:LegacyContactKey&gt;
+      &lt;d2p1:LinkToProfile&gt;sample string 1&lt;/d2p1:LinkToProfile&gt;
+      &lt;d2p1:MiddleName&gt;sample string 18&lt;/d2p1:MiddleName&gt;
+      &lt;d2p1:PictureUrl&gt;sample string 2&lt;/d2p1:PictureUrl&gt;
+      &lt;d2p1:PrefixCode&gt;sample string 9&lt;/d2p1:PrefixCode&gt;
+      &lt;d2p1:SuffixCode&gt;sample string 14&lt;/d2p1:SuffixCode&gt;
+      &lt;d2p1:UpdatedByContactKey&gt;23363acd-83d4-4f8d-89ab-4050c6e44fd5&lt;/d2p1:UpdatedByContactKey&gt;
+      &lt;d2p1:UpdatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:UpdatedOn&gt;
+    &lt;/d2p1:ContactConcise&gt;
+  &lt;/ContactsWhoRecommend&gt;
+  &lt;CreatedByContact xmlns:d2p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+    &lt;d2p1:AMSDirectoryOptOut&gt;true&lt;/d2p1:AMSDirectoryOptOut&gt;
+    &lt;d2p1:AgreedToTermsDateTime&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:AgreedToTermsDateTime&gt;
+    &lt;d2p1:CompanyLegacyContactKey&gt;sample string 20&lt;/d2p1:CompanyLegacyContactKey&gt;
+    &lt;d2p1:CompanyName&gt;sample string 12&lt;/d2p1:CompanyName&gt;
+    &lt;d2p1:CompanyTitle&gt;sample string 13&lt;/d2p1:CompanyTitle&gt;
+    &lt;d2p1:ContactKey&gt;e49564e9-ae1d-46b0-b226-9b7d20718e4a&lt;/d2p1:ContactKey&gt;
+    &lt;d2p1:ContactStatusCode&gt;sample string 8&lt;/d2p1:ContactStatusCode&gt;
+    &lt;d2p1:Designation&gt;sample string 15&lt;/d2p1:Designation&gt;
+    &lt;d2p1:DisplayName&gt;sample string 6&lt;/d2p1:DisplayName&gt;
+    &lt;d2p1:EmailAddress&gt;sample string 7&lt;/d2p1:EmailAddress&gt;
+    &lt;d2p1:FirstName&gt;sample string 4&lt;/d2p1:FirstName&gt;
+    &lt;d2p1:HLContactMeOptOut&gt;true&lt;/d2p1:HLContactMeOptOut&gt;
+    &lt;d2p1:HLDirectoryOptOut&gt;true&lt;/d2p1:HLDirectoryOptOut&gt;
+    &lt;d2p1:InformalName&gt;sample string 17&lt;/d2p1:InformalName&gt;
+    &lt;d2p1:IsCompany&gt;true&lt;/d2p1:IsCompany&gt;
+    &lt;d2p1:LargePictureUrl&gt;sample string 24&lt;/d2p1:LargePictureUrl&gt;
+    &lt;d2p1:LastName&gt;sample string 5&lt;/d2p1:LastName&gt;
+    &lt;d2p1:LegacyContactKey&gt;sample string 16&lt;/d2p1:LegacyContactKey&gt;
+    &lt;d2p1:LinkToProfile&gt;sample string 1&lt;/d2p1:LinkToProfile&gt;
+    &lt;d2p1:MiddleName&gt;sample string 18&lt;/d2p1:MiddleName&gt;
+    &lt;d2p1:PictureUrl&gt;sample string 2&lt;/d2p1:PictureUrl&gt;
+    &lt;d2p1:PrefixCode&gt;sample string 9&lt;/d2p1:PrefixCode&gt;
+    &lt;d2p1:SuffixCode&gt;sample string 14&lt;/d2p1:SuffixCode&gt;
+    &lt;d2p1:UpdatedByContactKey&gt;23363acd-83d4-4f8d-89ab-4050c6e44fd5&lt;/d2p1:UpdatedByContactKey&gt;
+    &lt;d2p1:UpdatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:UpdatedOn&gt;
+  &lt;/CreatedByContact&gt;
+  &lt;CreatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/CreatedOn&gt;
+  &lt;Description&gt;sample string 3&lt;/Description&gt;
+  &lt;DocumentKey&gt;84777796-c34b-4cb4-8bdb-97ce143165f1&lt;/DocumentKey&gt;
+  &lt;DocumentTitle&gt;sample string 2&lt;/DocumentTitle&gt;
+  &lt;DownloadCount&gt;14&lt;/DownloadCount&gt;
+  &lt;IsFollowing&gt;true&lt;/IsFollowing&gt;
+  &lt;LegacyDocumentKey&gt;sample string 6&lt;/LegacyDocumentKey&gt;
+  &lt;LibraryFolderName&gt;sample string 9&lt;/LibraryFolderName&gt;
+  &lt;LibraryKey&gt;930283af-0419-457e-a05a-34335ee713bc&lt;/LibraryKey&gt;
+  &lt;LibraryName&gt;sample string 8&lt;/LibraryName&gt;
+  &lt;LinkToLibraryDocument&gt;sample string 17&lt;/LinkToLibraryDocument&gt;
+  &lt;PaginatedComments xmlns:d2p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Comments&quot; /&gt;
+  &lt;RatingCount&gt;15&lt;/RatingCount&gt;
+  &lt;RelatedLinks xmlns:d2p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+    &lt;d2p1:RelatedLink&gt;
+      &lt;d2p1:Contributor&gt;
+        &lt;d2p1:AMSDirectoryOptOut&gt;true&lt;/d2p1:AMSDirectoryOptOut&gt;
+        &lt;d2p1:AgreedToTermsDateTime&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:AgreedToTermsDateTime&gt;
+        &lt;d2p1:CompanyLegacyContactKey&gt;sample string 20&lt;/d2p1:CompanyLegacyContactKey&gt;
+        &lt;d2p1:CompanyName&gt;sample string 12&lt;/d2p1:CompanyName&gt;
+        &lt;d2p1:CompanyTitle&gt;sample string 13&lt;/d2p1:CompanyTitle&gt;
+        &lt;d2p1:ContactKey&gt;e49564e9-ae1d-46b0-b226-9b7d20718e4a&lt;/d2p1:ContactKey&gt;
+        &lt;d2p1:ContactStatusCode&gt;sample string 8&lt;/d2p1:ContactStatusCode&gt;
+        &lt;d2p1:Designation&gt;sample string 15&lt;/d2p1:Designation&gt;
+        &lt;d2p1:DisplayName&gt;sample string 6&lt;/d2p1:DisplayName&gt;
+        &lt;d2p1:EmailAddress&gt;sample string 7&lt;/d2p1:EmailAddress&gt;
+        &lt;d2p1:FirstName&gt;sample string 4&lt;/d2p1:FirstName&gt;
+        &lt;d2p1:HLContactMeOptOut&gt;true&lt;/d2p1:HLContactMeOptOut&gt;
+        &lt;d2p1:HLDirectoryOptOut&gt;true&lt;/d2p1:HLDirectoryOptOut&gt;
+        &lt;d2p1:InformalName&gt;sample string 17&lt;/d2p1:InformalName&gt;
+        &lt;d2p1:IsCompany&gt;true&lt;/d2p1:IsCompany&gt;
+        &lt;d2p1:LargePictureUrl&gt;sample string 24&lt;/d2p1:LargePictureUrl&gt;
+        &lt;d2p1:LastName&gt;sample string 5&lt;/d2p1:LastName&gt;
+        &lt;d2p1:LegacyContactKey&gt;sample string 16&lt;/d2p1:LegacyContactKey&gt;
+        &lt;d2p1:LinkToProfile&gt;sample string 1&lt;/d2p1:LinkToProfile&gt;
+        &lt;d2p1:MiddleName&gt;sample string 18&lt;/d2p1:MiddleName&gt;
+        &lt;d2p1:PictureUrl&gt;sample string 2&lt;/d2p1:PictureUrl&gt;
+        &lt;d2p1:PrefixCode&gt;sample string 9&lt;/d2p1:PrefixCode&gt;
+        &lt;d2p1:SuffixCode&gt;sample string 14&lt;/d2p1:SuffixCode&gt;
+        &lt;d2p1:UpdatedByContactKey&gt;23363acd-83d4-4f8d-89ab-4050c6e44fd5&lt;/d2p1:UpdatedByContactKey&gt;
+        &lt;d2p1:UpdatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:UpdatedOn&gt;
+      &lt;/d2p1:Contributor&gt;
+      &lt;d2p1:CreatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:CreatedOn&gt;
+      &lt;d2p1:ItemKey&gt;ffa11081-1448-41a5-8815-32ae57040122&lt;/d2p1:ItemKey&gt;
+      &lt;d2p1:RelatedLinkKey&gt;ec6d5649-7340-4388-ac69-98557d1e0848&lt;/d2p1:RelatedLinkKey&gt;
+      &lt;d2p1:Url&gt;sample string 3&lt;/d2p1:Url&gt;
+    &lt;/d2p1:RelatedLink&gt;
+    &lt;d2p1:RelatedLink&gt;
+      &lt;d2p1:Contributor&gt;
+        &lt;d2p1:AMSDirectoryOptOut&gt;true&lt;/d2p1:AMSDirectoryOptOut&gt;
+        &lt;d2p1:AgreedToTermsDateTime&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:AgreedToTermsDateTime&gt;
+        &lt;d2p1:CompanyLegacyContactKey&gt;sample string 20&lt;/d2p1:CompanyLegacyContactKey&gt;
+        &lt;d2p1:CompanyName&gt;sample string 12&lt;/d2p1:CompanyName&gt;
+        &lt;d2p1:CompanyTitle&gt;sample string 13&lt;/d2p1:CompanyTitle&gt;
+        &lt;d2p1:ContactKey&gt;e49564e9-ae1d-46b0-b226-9b7d20718e4a&lt;/d2p1:ContactKey&gt;
+        &lt;d2p1:ContactStatusCode&gt;sample string 8&lt;/d2p1:ContactStatusCode&gt;
+        &lt;d2p1:Designation&gt;sample string 15&lt;/d2p1:Designation&gt;
+        &lt;d2p1:DisplayName&gt;sample string 6&lt;/d2p1:DisplayName&gt;
+        &lt;d2p1:EmailAddress&gt;sample string 7&lt;/d2p1:EmailAddress&gt;
+        &lt;d2p1:FirstName&gt;sample string 4&lt;/d2p1:FirstName&gt;
+        &lt;d2p1:HLContactMeOptOut&gt;true&lt;/d2p1:HLContactMeOptOut&gt;
+        &lt;d2p1:HLDirectoryOptOut&gt;true&lt;/d2p1:HLDirectoryOptOut&gt;
+        &lt;d2p1:InformalName&gt;sample string 17&lt;/d2p1:InformalName&gt;
+        &lt;d2p1:IsCompany&gt;true&lt;/d2p1:IsCompany&gt;
+        &lt;d2p1:LargePictureUrl&gt;sample string 24&lt;/d2p1:LargePictureUrl&gt;
+        &lt;d2p1:LastName&gt;sample string 5&lt;/d2p1:LastName&gt;
+        &lt;d2p1:LegacyContactKey&gt;sample string 16&lt;/d2p1:LegacyContactKey&gt;
+        &lt;d2p1:LinkToProfile&gt;sample string 1&lt;/d2p1:LinkToProfile&gt;
+        &lt;d2p1:MiddleName&gt;sample string 18&lt;/d2p1:MiddleName&gt;
+        &lt;d2p1:PictureUrl&gt;sample string 2&lt;/d2p1:PictureUrl&gt;
+        &lt;d2p1:PrefixCode&gt;sample string 9&lt;/d2p1:PrefixCode&gt;
+        &lt;d2p1:SuffixCode&gt;sample string 14&lt;/d2p1:SuffixCode&gt;
+        &lt;d2p1:UpdatedByContactKey&gt;23363acd-83d4-4f8d-89ab-4050c6e44fd5&lt;/d2p1:UpdatedByContactKey&gt;
+        &lt;d2p1:UpdatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:UpdatedOn&gt;
+      &lt;/d2p1:Contributor&gt;
+      &lt;d2p1:CreatedOn&gt;2026-07-08T13:53:38.2613146-04:00&lt;/d2p1:CreatedOn&gt;
+      &lt;d2p1:ItemKey&gt;ffa11081-1448-41a5-8815-32ae57040122&lt;/d2p1:ItemKey&gt;
+      &lt;d2p1:RelatedLinkKey&gt;ec6d5649-7340-4388-ac69-98557d1e0848&lt;/d2p1:RelatedLinkKey&gt;
+      &lt;d2p1:Url&gt;sample string 3&lt;/d2p1:Url&gt;
+    &lt;/d2p1:RelatedLink&gt;
+  &lt;/RelatedLinks&gt;
+  &lt;SerializedData&gt;sample string 7&lt;/SerializedData&gt;
+  &lt;Tags xmlns:d2p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Tagging&quot;&gt;
+    &lt;d2p1:ItemTagResponse&gt;
+      &lt;d2p1:Tag&gt;sample string 1&lt;/d2p1:Tag&gt;
+      &lt;d2p1:TagType&gt;sample string 2&lt;/d2p1:TagType&gt;
+    &lt;/d2p1:ItemTagResponse&gt;
+    &lt;d2p1:ItemTagResponse&gt;
+      &lt;d2p1:Tag&gt;sample string 1&lt;/d2p1:Tag&gt;
+      &lt;d2p1:TagType&gt;sample string 2&lt;/d2p1:TagType&gt;
+    &lt;/d2p1:ItemTagResponse&gt;
+  &lt;/Tags&gt;
+  &lt;UserPermissions xmlns:d2p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+    &lt;d2p1:string&gt;sample string 1&lt;/d2p1:string&gt;
+    &lt;d2p1:string&gt;sample string 2&lt;/d2p1:string&gt;
+  &lt;/UserPermissions&gt;
+  &lt;ViewCount&gt;13&lt;/ViewCount&gt;
+&lt;/Document&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

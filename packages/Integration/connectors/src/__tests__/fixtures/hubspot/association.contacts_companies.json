@@ -1,0 +1,17 @@
+{
+  "results": [
+    {
+      "toObjectId": 5001,
+      "associationTypes": [
+        { "category": "HUBSPOT_DEFINED", "typeId": 1, "label": null }
+      ]
+    },
+    {
+      "toObjectId": 5002,
+      "associationTypes": [
+        { "category": "USER_DEFINED", "typeId": 42, "label": "Primary" }
+      ]
+    }
+  ],
+  "paging": null
+}

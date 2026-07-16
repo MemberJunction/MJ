@@ -1,0 +1,69 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "samples": [
+          {
+            "schema": "TicketObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": true
+          },
+          {
+            "schema": "UserObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": true
+          },
+          {
+            "schema": "OrganizationObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": null
+          },
+          {
+            "schema": "GroupObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": true
+          }
+        ],
+        "consistent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.universalPK"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "cursorParamName": "page",
+        "cursorParamStyle": "deepObject",
+        "cursorProperties": [
+          "after",
+          "before",
+          "size"
+        ],
+        "dualParamOneOfCount": 2,
+        "cursorMetaLinksProps": [
+          "next",
+          "prev"
+        ],
+        "cursorMetaMetaProps": [
+          "after_cursor",
+          "before_cursor",
+          "has_more"
+        ],
+        "offsetObjectProps": [
+          "count",
+          "next_page",
+          "previous_page"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PaginationDefaults"
+    }
+  ]
+}

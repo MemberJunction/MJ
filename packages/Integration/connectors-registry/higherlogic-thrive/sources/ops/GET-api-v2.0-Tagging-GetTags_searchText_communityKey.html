@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/Tagging/GetTags?searchText={searchText}&amp;communityKey={communityKey}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/Tagging/GetTags?searchText={searchText}&amp;communityKey={communityKey}</h1>
+<div>
+    <p>Returns a set of currently existing tags that have been used throughout the tenant in the past based
+            on the search term provided. This endpoint will provide the tags within their tag groups, as well as metadata
+            about each tag. This will also include the markup necessary to include in the body of content created via the api to properly associate the tags to the content.
+            Important Note: Some tags are reserved for admin use only, and there is a property on each tag that specifies if the current user can use the tag or not in content.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">searchText</td>
+                    <td class="parameter-documentation">
+                        <p>The search term provided to search for previously used hashtags of similar text. Minimum of 2 characters required.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">communityKey</td>
+                    <td class="parameter-documentation">
+                        <p>Certain tags are reserved for members of a particular community. If you are looking for tags within a particular community
+            context, then you should provide that community&#39;s unique identifier along with the search term to get the correct set of tags. If the user isn&#39;t a member, this will be ignored.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>Based on the communityKey and SearchText provided, this returns a list of topic tag groups, their respective tags and metadata.</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=TagGroupModel">TagGroupModel</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">TagGroupKey</td>
+                    <td class="parameter-documentation">
+                        <p>The unique identifier of the tag group.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsTopicTagGroup</td>
+                    <td class="parameter-documentation">
+                        <p>Whether or not the tags within the tag group can be used as a topic tag during the creation of a post specific to a topic community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Tags</td>
+                    <td class="parameter-documentation">
+                        <p>The set of tags currently contained within the tag group. Each tag contains the meatadata for the tag as well as the necessary markup to include in a post.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=TagDataModel">TagDataModel</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Name</td>
+                    <td class="parameter-documentation">
+                        <p>The name of the Tag Group</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;TagGroupKey&quot;: &quot;12bf0358-cbf7-4867-9f69-a4ba7bb703f7&quot;,
+    &quot;IsTopicTagGroup&quot;: true,
+    &quot;Tags&quot;: [
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagGroupName&quot;: &quot;sample string 2&quot;,
+        &quot;TagKey&quot;: &quot;03214afe-98bd-43f9-80f5-885b2b2284f4&quot;,
+        &quot;CanUseTag&quot;: true,
+        &quot;IsTopicTag&quot;: true,
+        &quot;TagMarkup&quot;: &quot;sample string 6&quot;
+      },
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagGroupName&quot;: &quot;sample string 2&quot;,
+        &quot;TagKey&quot;: &quot;03214afe-98bd-43f9-80f5-885b2b2284f4&quot;,
+        &quot;CanUseTag&quot;: true,
+        &quot;IsTopicTag&quot;: true,
+        &quot;TagMarkup&quot;: &quot;sample string 6&quot;
+      }
+    ],
+    &quot;Name&quot;: &quot;sample string 3&quot;
+  },
+  {
+    &quot;TagGroupKey&quot;: &quot;12bf0358-cbf7-4867-9f69-a4ba7bb703f7&quot;,
+    &quot;IsTopicTagGroup&quot;: true,
+    &quot;Tags&quot;: [
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagGroupName&quot;: &quot;sample string 2&quot;,
+        &quot;TagKey&quot;: &quot;03214afe-98bd-43f9-80f5-885b2b2284f4&quot;,
+        &quot;CanUseTag&quot;: true,
+        &quot;IsTopicTag&quot;: true,
+        &quot;TagMarkup&quot;: &quot;sample string 6&quot;
+      },
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagGroupName&quot;: &quot;sample string 2&quot;,
+        &quot;TagKey&quot;: &quot;03214afe-98bd-43f9-80f5-885b2b2284f4&quot;,
+        &quot;CanUseTag&quot;: true,
+        &quot;IsTopicTag&quot;: true,
+        &quot;TagMarkup&quot;: &quot;sample string 6&quot;
+      }
+    ],
+    &quot;Name&quot;: &quot;sample string 3&quot;
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfTagGroupModel xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Tagging&quot;&gt;
+  &lt;TagGroupModel&gt;
+    &lt;IsTopicTagGroup&gt;true&lt;/IsTopicTagGroup&gt;
+    &lt;Name&gt;sample string 3&lt;/Name&gt;
+    &lt;TagGroupKey&gt;12bf0358-cbf7-4867-9f69-a4ba7bb703f7&lt;/TagGroupKey&gt;
+    &lt;Tags&gt;
+      &lt;TagDataModel&gt;
+        &lt;CanUseTag&gt;true&lt;/CanUseTag&gt;
+        &lt;IsTopicTag&gt;true&lt;/IsTopicTag&gt;
+        &lt;Tag&gt;sample string 1&lt;/Tag&gt;
+        &lt;TagGroupName&gt;sample string 2&lt;/TagGroupName&gt;
+        &lt;TagKey&gt;03214afe-98bd-43f9-80f5-885b2b2284f4&lt;/TagKey&gt;
+        &lt;TagMarkup&gt;sample string 6&lt;/TagMarkup&gt;
+      &lt;/TagDataModel&gt;
+      &lt;TagDataModel&gt;
+        &lt;CanUseTag&gt;true&lt;/CanUseTag&gt;
+        &lt;IsTopicTag&gt;true&lt;/IsTopicTag&gt;
+        &lt;Tag&gt;sample string 1&lt;/Tag&gt;
+        &lt;TagGroupName&gt;sample string 2&lt;/TagGroupName&gt;
+        &lt;TagKey&gt;03214afe-98bd-43f9-80f5-885b2b2284f4&lt;/TagKey&gt;
+        &lt;TagMarkup&gt;sample string 6&lt;/TagMarkup&gt;
+      &lt;/TagDataModel&gt;
+    &lt;/Tags&gt;
+  &lt;/TagGroupModel&gt;
+  &lt;TagGroupModel&gt;
+    &lt;IsTopicTagGroup&gt;true&lt;/IsTopicTagGroup&gt;
+    &lt;Name&gt;sample string 3&lt;/Name&gt;
+    &lt;TagGroupKey&gt;12bf0358-cbf7-4867-9f69-a4ba7bb703f7&lt;/TagGroupKey&gt;
+    &lt;Tags&gt;
+      &lt;TagDataModel&gt;
+        &lt;CanUseTag&gt;true&lt;/CanUseTag&gt;
+        &lt;IsTopicTag&gt;true&lt;/IsTopicTag&gt;
+        &lt;Tag&gt;sample string 1&lt;/Tag&gt;
+        &lt;TagGroupName&gt;sample string 2&lt;/TagGroupName&gt;
+        &lt;TagKey&gt;03214afe-98bd-43f9-80f5-885b2b2284f4&lt;/TagKey&gt;
+        &lt;TagMarkup&gt;sample string 6&lt;/TagMarkup&gt;
+      &lt;/TagDataModel&gt;
+      &lt;TagDataModel&gt;
+        &lt;CanUseTag&gt;true&lt;/CanUseTag&gt;
+        &lt;IsTopicTag&gt;true&lt;/IsTopicTag&gt;
+        &lt;Tag&gt;sample string 1&lt;/Tag&gt;
+        &lt;TagGroupName&gt;sample string 2&lt;/TagGroupName&gt;
+        &lt;TagKey&gt;03214afe-98bd-43f9-80f5-885b2b2284f4&lt;/TagKey&gt;
+        &lt;TagMarkup&gt;sample string 6&lt;/TagMarkup&gt;
+      &lt;/TagDataModel&gt;
+    &lt;/Tags&gt;
+  &lt;/TagGroupModel&gt;
+&lt;/ArrayOfTagGroupModel&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

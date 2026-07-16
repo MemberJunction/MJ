@@ -1,0 +1,48 @@
+{
+  "authHeaderPattern": {
+    "fromServerFlowGuide": "Authorization: Bearer {your_access_token}",
+    "fromTechnicalOverviewTable": "Bearer {access_token}",
+    "note": "Both docs pages independently state the same Authorization header format for authenticated V3 API calls."
+  },
+  "apiVersioningStrategy": {
+    "host": "api.cc.email",
+    "basePath": "/v3",
+    "specDocumentVersion": "3.0.161",
+    "derivedStrategy": "url-path",
+    "note": "basePath is a fixed literal segment (\"/v3\") on every path in the spec -- confirms url-path versioning. info.version (3.0.161) is the SPEC document's own version, not a URL-visible API version."
+  },
+  "errorResponseShape": {
+    "statusCodeCountsAcrossAllOperations": {
+      "200": 85,
+      "201": 27,
+      "202": 3,
+      "204": 12,
+      "207": 3,
+      "400": 120,
+      "401": 123,
+      "403": 122,
+      "404": 102,
+      "405": 2,
+      "406": 2,
+      "409": 22,
+      "415": 41,
+      "429": 33,
+      "500": 124,
+      "503": 47
+    },
+    "errorCodesObserved": [
+      "400",
+      "401",
+      "403",
+      "404",
+      "405",
+      "406",
+      "409",
+      "415",
+      "429",
+      "500",
+      "503"
+    ],
+    "note": "Full scan of every operation's declared \"responses\" keys in the saved OpenAPI spec (98 paths). errorCodesObserved lists every distinct >=400 status code documented anywhere in the spec."
+  }
+}

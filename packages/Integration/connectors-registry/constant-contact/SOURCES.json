@@ -1,0 +1,206 @@
+{
+  "Vendor": "constant-contact",
+  "GeneratedAt": "2026-07-11T22:30:00.000Z",
+  "EnumerationStdoutCount": 67,
+  "EnumerationScript": "packages/Integration/connector-builder-workshop/plans/../connectors-registry/constant-contact/scripts/enumerate-taxonomy.mjs",
+  "EnumerationStdoutFile": "packages/Integration/connectors-registry/constant-contact/output/enumerate-taxonomy.stdout.json",
+  "CrossCheckSignal": {
+    "sharedEnumeratorScript": "packages/Integration/connector-builder-workshop/floor/enumerate-catalog.mjs",
+    "sharedEnumeratorFormat": "openapi-json",
+    "sharedEnumeratorCount": 240,
+    "sharedEnumeratorConfidence": "high",
+    "note": "The shared generic enumerator walks Swagger `definitions` 1:1 (240) — Constant Contact's Swagger 2.0 spec declares separate DTO variants per resource (e.g. ContactDto/ContactResource/ContactPostRequest/ContactPutRequest/ContactCreateOrUpdateInput/ContactCreateOrUpdateResponse/ContactDelete are all shape-variants of ONE resource: Contact). This vendor's bespoke path-by-tag walker (enumerate-taxonomy.mjs) instead enumerates ADDRESSABLE RESOURCES (paths grouped by OpenAPI tag, collapsing multi-verb/multi-shape operations on the same path down to one leaf) — the correct unit for a REST API's syncable-table universe. 240 DTO-variants / 67 resources ≈ 3.6 variants-per-resource, a plausible ratio (Create/Update/Response/Delete/List variants), not a red flag. Both counts are reported; 240 is retained purely as an independent upper-bound sanity signal, not as TaxonomyLeaves."
+  },
+  "FullUniverseAccounting": {
+    "totalPathsInSpec": 98,
+    "totalTaggedOperationsInSpec": 124,
+    "totalTagsInSpec": 17,
+    "unmappedOperations": 0,
+    "coverableLeafCount": 67,
+    "outOfScopeLeafCount": 9,
+    "fullUniverseLeafCount": 76,
+    "ledgerClosesExactly": true,
+    "ledger": "|E|=76 == |COVERABLE (TaxonomyLeaves)|=67 + |out-of-scope-route (Gaps, named+evidenced)|=9 + |INFORMATIONAL|=0 (informational taxonomies — OAuth2/rate-limits/pagination/error-codes — are NOT path/resource nodes so were never part of E) + |container-folded|=0 (OpenAPI tags are not L1 containers over a deeper leaf layer for a REST API; a path IS a leaf) + |excluded-scaffolding|=0 (no test fixtures/dead folders found in this vendor's public OpenAPI)."
+  },
+  "TaxonomyLeaves": [
+    "account_emails","account_physical_address","account_summary","account_user_privileges",
+    "activities","activities_contacts_delete","activities_contacts_export","activities_contacts_file_import",
+    "activities_contacts_json_import","activities_contacts_taggings_add","activities_contacts_taggings_remove",
+    "activities_contacts_tags_delete","activities_custom_fields_delete","activities_list_delete",
+    "activities_list_memberships_add","activities_list_memberships_remove",
+    "contact_custom_fields","contact_lists","contact_lists_xrefs",
+    "contact_reports_activity_details","contact_reports_activity_summary","contact_reports_open_and_click_rates",
+    "contact_tags","contacts","contacts_counts","contacts_resubscribe","contacts_sign_up_form",
+    "contacts_sms_engagement_history","contacts_xrefs",
+    "email_campaign_activities","email_campaign_activity_abtest","email_campaign_activity_non_opener_resends",
+    "email_campaign_activity_previews","email_campaign_activity_schedules","email_campaign_activity_send_history",
+    "email_campaign_activity_tests",
+    "email_reports_links","email_reports_stats_campaign_activities","email_reports_stats_campaigns",
+    "email_reports_summary","email_reports_tracking_bounces","email_reports_tracking_clicks",
+    "email_reports_tracking_didnotopens","email_reports_tracking_forwards","email_reports_tracking_opens",
+    "email_reports_tracking_optouts","email_reports_tracking_sends","email_reports_tracking_unique_opens",
+    "emails","emails_xrefs",
+    "events","events_check_in","events_copy","events_registrations","events_registrations_payment_status","events_undo_check_in",
+    "landing_pages_contact_opens","landing_pages_unique_contact_adds","landing_pages_unique_contact_clicks",
+    "landing_pages_unique_contact_opens","landing_pages_unique_contact_sms_optins","landing_pages_unique_contact_updates",
+    "segments",
+    "social_connections","social_hashtag_groups","social_posts","social_profiles"
+  ],
+  "Sources": [
+    {
+      "URL": "https://api.cc.email/v3/swagger.yaml",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "Format": "Swagger 2.0 (YAML)",
+      "SavedRawPath": "packages/Integration/connectors-registry/constant-contact/sources/openapi.yaml",
+      "SavedJSONPath": "packages/Integration/connectors-registry/constant-contact/sources/openapi.json",
+      "CoversTaxonomies": [
+        "account_services", "bulk_activities", "contacts", "contact_lists", "contact_tags",
+        "contacts_reporting", "contacts_custom_fields", "email_campaigns", "email_campaigns_ab_tests",
+        "email_reporting", "email_scheduling", "events", "segments", "landing_pages_reporting", "social"
+      ],
+      "AccessNotes": "Fetched raw via curl (HTTP 200, 668,634 bytes). Linked from the v3api_schema.html doc page's `href`. Converted to JSON via js-yaml for machine parsing (openapi.json, 548,795 bytes). THE authoritative machine-readable contract — ranked above every prose page. 98 paths / 124 tagged operations / 252 definitions / 17 tags."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/v3api_schema.html",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["oauth2_and_auth_mechanics"],
+      "AccessNotes": "HTTP 200. This is the landing page that links the raw swagger.yaml above (`href=\"https://api.cc.email/v3/swagger.yaml\"`); used to locate + verify the OpenAPI spec's canonical download URL."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_reference/index.html",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [
+        "account_services", "bulk_activities", "contacts", "contact_lists", "contact_tags",
+        "contacts_reporting", "contacts_custom_fields", "email_campaigns", "email_campaigns_ab_tests",
+        "email_reporting", "email_scheduling", "events", "segments", "landing_pages_reporting", "social"
+      ],
+      "AccessNotes": "HTTP 200. Rendered Swagger-UI-style API Reference generated from the same v3 OpenAPI spec — human-readable mirror of Source #1, useful for confirming per-operation descriptions/examples that are terse in the raw YAML."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/v3_technical_overview.html",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["pagination_and_conventions"],
+      "AccessNotes": "HTTP 200. Confirms base URL (https://api.cc.email/v3), cursor pagination shape (_links.next.href with base64 `cursor` param), ISO-8601 date convention, required headers."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/rate_limits.html",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["rate_limit_and_error_taxonomy"],
+      "AccessNotes": "HTTP 200. States 10,000 req/day + 4 req/sec; 429 on breach; error_key `quota_exceeded` vs `throttled`; daily reset at UTC 00:00."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/glossary_responses.html",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["rate_limit_and_error_taxonomy"],
+      "AccessNotes": "HTTP 200. Enumerates HTTP response codes + error_key vocabulary the connector must map."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/server_flow.html",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["oauth2_and_auth_mechanics"],
+      "AccessNotes": "HTTP 200. OAuth2 Authorization Code flow: token endpoint https://authz.constantcontact.com/oauth2/default/v1/token; access token 1440 min; ROTATING refresh tokens (single-use, newest must be persisted) vs. optional Long-Lived Refresh Tokens; scopes: account_read, account_update, contact_data, campaign_data, offline_access (required for refresh tokens)."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/segments_overview.html",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["segments"],
+      "AccessNotes": "HTTP 200. Confirms segments are server-evaluated dynamic-criteria contact subsets (not static membership lists), distinct from contact_lists/contact_tags."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/partners_overview.html",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["scope_decision_evidence"],
+      "AccessNotes": "HTTP 200. Confirms Technology Partner status requires submitting a partner-request signup form + Partner Management Team review ('may take several weeks') — a human-gated program, not self-serve. Used as the evidentiary basis for excluding `technology_partners` + `partner_webhooks` (Technology Partners Webhooks tag) from TaxonomyLeaves."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/v3_features.html",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["pagination_and_conventions"],
+      "AccessNotes": "HTTP 200. Enumerates V3-exclusive features vs. legacy V2 (informational; confirms V2/EventSpot is a separate, older surface)."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/index.html",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["pagination_and_conventions"],
+      "AccessNotes": "HTTP 200. V3 API release-notes/changelog index — informational provenance for schema version drift over time (spec reports version 3.0.161 at capture time)."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/docs/contacts-api/contacts-index.html",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["contacts"],
+      "AccessNotes": "HTTP 403 on 3 retry attempts via both curl (with browser User-Agent) and WebFetch (2026-07-11T22:1x-22:2xZ, ~1s/3s backoff). The `/docs/*` path segment appears bot-gated (Cloudflare or similar) while `/api_guide/*` and `/api_reference/*` on the same host return 200 consistently. No coverage gap results: the raw OpenAPI spec (Source #1) fully documents the Contacts resource (schema, params, sub-resources) with higher fidelity than this prose page would provide, so this source is retained as a citation-only entry, tagged for downstream cross-check if bot-gating later lifts."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/docs/developer-guides/api-documentation-index.html",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["pagination_and_conventions"],
+      "AccessNotes": "HTTP 403 on 3 retry attempts via both curl and WebFetch (same bot-gated `/docs/*` path pattern as above). No coverage gap: equivalent index content is reachable via /api_guide/index.html (Source #10) and /api_reference/index.html (Source #3)."
+    },
+    {
+      "URL": "https://github.com/constantcontact/constant-contact-v3api-client-typescript",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialSDK",
+      "CoversTaxonomies": [
+        "account_services", "bulk_activities", "contacts", "contact_lists", "contact_tags",
+        "contacts_reporting", "contacts_custom_fields", "email_campaigns", "email_campaigns_ab_tests",
+        "email_reporting", "email_scheduling", "events", "segments", "landing_pages_reporting", "social"
+      ],
+      "AccessNotes": "HTTP 200. Official vendor-published TypeScript SDK (npm: ctct-api-client) under the `constantcontact` GitHub org, generated from/tracking the same V3 OpenAPI spec — corroborating (Tier 2, not primary) evidence for field types on generic-typed connector code, not a source of hard-constraint truth beyond the spec itself."
+    },
+    {
+      "URL": "https://github.com/constantcontact/constant-contact-v3api-client-python",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialSDK",
+      "CoversTaxonomies": [
+        "account_services", "bulk_activities", "contacts", "contact_lists", "contact_tags",
+        "contacts_reporting", "contacts_custom_fields", "email_campaigns", "email_campaigns_ab_tests",
+        "email_reporting", "email_scheduling", "events", "segments", "landing_pages_reporting", "social"
+      ],
+      "AccessNotes": "HTTP 200. Official vendor-published Python SDK under the `constantcontact` GitHub org, same corroborating role as the TypeScript SDK above."
+    },
+    {
+      "URL": "https://v3.developer.constantcontact.com/api_guide/sdks.html",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["pagination_and_conventions"],
+      "AccessNotes": "HTTP 200. Developer-portal SDK index page listing the official TS/Python/PHP/Java client libraries (mirrors the blocked /libraries/libraries.html path, which 403'd 3/3 retry attempts — same bot-gated pattern as the /docs/* pages)."
+    },
+    {
+      "URL": "https://www.postman.com/api-evangelist/constant-contact/documentation/wrfnhv4/constant-contact",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "CoversTaxonomies": [],
+      "AccessNotes": "HTTP 200, but this is a THIRD-PARTY-curated Postman collection (published by 'api-evangelist' / Kin Lane on the Postman API Network), NOT a Constant-Contact-published collection. Recorded for completeness/informational cross-reference only; NOT used for any hard-constraint field (per Tier-3 discipline) and NOT counted in PostmanPaths."
+    }
+  ]
+}

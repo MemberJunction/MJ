@@ -1,0 +1,1497 @@
+{
+  "leaves": [
+    "activities",
+    "approval_requests",
+    "article_attachments",
+    "article_comments",
+    "article_labels",
+    "articles",
+    "asset_types",
+    "assets",
+    "audit_logs",
+    "audits",
+    "automations",
+    "bookmarks",
+    "brand_agents",
+    "brands",
+    "community_posts",
+    "community_topics",
+    "compliance_deletion_statuses",
+    "custom_field_options",
+    "custom_object_access_rules",
+    "custom_object_fields",
+    "custom_object_permission_policies",
+    "custom_object_record_attachments",
+    "custom_object_records",
+    "custom_objects",
+    "custom_roles",
+    "custom_statuses",
+    "deleted_tickets",
+    "deleted_users",
+    "deletion_schedules",
+    "dynamic_content_items",
+    "dynamic_content_variants",
+    "email_notifications",
+    "events",
+    "group_memberships",
+    "group_sla_policies",
+    "groups",
+    "help_center_categories",
+    "help_center_votes",
+    "itam_asset_fields",
+    "itam_asset_statuses",
+    "locations",
+    "macro_attachments",
+    "macro_categories",
+    "macros",
+    "monitored_twitter_handles",
+    "omnichannel_routing_queues",
+    "organization_fields",
+    "organization_memberships",
+    "organization_merges",
+    "organization_subscriptions",
+    "organizations",
+    "post_comments",
+    "post_subscriptions",
+    "recipient_addresses",
+    "remote_authentications",
+    "requests",
+    "resource_collections",
+    "routing_attribute_values",
+    "routing_attributes",
+    "routing_instance_values",
+    "satisfaction_ratings",
+    "satisfaction_reasons",
+    "saved_searches",
+    "schedule_holidays",
+    "schedules",
+    "sections",
+    "service_catalog_items",
+    "sessions",
+    "sharing_agreements",
+    "skips",
+    "sla_policies",
+    "suspended_tickets",
+    "tags",
+    "target_failures",
+    "targets",
+    "task_list_templates",
+    "task_lists",
+    "tasks",
+    "ticket_comments",
+    "ticket_content_pins",
+    "ticket_events",
+    "ticket_fields",
+    "ticket_form_statuses",
+    "ticket_forms",
+    "ticket_metric_events",
+    "ticket_metrics",
+    "tickets",
+    "translations",
+    "trigger_categories",
+    "trigger_revisions",
+    "triggers",
+    "user_fields",
+    "user_identities",
+    "user_segments",
+    "user_subscriptions",
+    "users",
+    "view_counts",
+    "views",
+    "workspaces"
+  ],
+  "count": 99,
+  "full": [
+    {
+      "object": "activities",
+      "listPath": "/api/v2/activities",
+      "responseDataKey": "activities",
+      "pagination": "Cursor+Offset(dual)",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/activities/{activity_id}",
+      "parent": null,
+      "tags": [
+        "Activity Stream"
+      ]
+    },
+    {
+      "object": "approval_requests",
+      "listPath": "/api/v2/approval_requests",
+      "responseDataKey": "approval_requests",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": null,
+      "tags": [
+        "Approval Requests"
+      ]
+    },
+    {
+      "object": "article_attachments",
+      "listPath": "/api/v2/help_center/articles/{article_id}/attachments",
+      "responseDataKey": "article_attachments",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/help_center/articles/{article_id}/attachments/{article_attachment_id}",
+      "parent": "articles",
+      "tags": [
+        "Article Attachments"
+      ]
+    },
+    {
+      "object": "article_comments",
+      "listPath": "/api/v2/help_center/articles/{article_id}/comments",
+      "responseDataKey": "comments",
+      "pagination": "Unknown(not yet probed)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/help_center/articles/{article_id}/comments/{comment_id}",
+      "parent": "articles",
+      "tags": [
+        "Article Comments"
+      ],
+      "note": "Recovered: silently merged with ticket_comments by cross-file objectName collision (both return {comments:[...]})."
+    },
+    {
+      "object": "article_labels",
+      "listPath": "/api/v2/help_center/articles/labels",
+      "responseDataKey": "labels",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/help_center/articles/labels/{label_id}",
+      "parent": null,
+      "tags": [
+        "Article Labels"
+      ]
+    },
+    {
+      "object": "articles",
+      "listPath": "/api/v2/help_center/articles",
+      "responseDataKey": "articles",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/help_center/articles/{article_id}",
+      "parent": null,
+      "tags": [
+        "Articles"
+      ]
+    },
+    {
+      "object": "asset_types",
+      "listPath": "/api/v2/it_asset_management/asset_types",
+      "responseDataKey": "asset_types",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/it_asset_management/asset_types/{asset_type_id}",
+      "parent": null,
+      "tags": [
+        "ITAM Asset Types"
+      ]
+    },
+    {
+      "object": "assets",
+      "listPath": "/api/v2/it_asset_management/assets",
+      "responseDataKey": "assets",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/it_asset_management/assets/{asset_id}",
+      "parent": null,
+      "tags": [
+        "ITAM Assets"
+      ]
+    },
+    {
+      "object": "audit_logs",
+      "listPath": "/api/v2/audit_logs",
+      "responseDataKey": "audit_logs",
+      "pagination": "Cursor",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/audit_logs/{audit_log_id}",
+      "parent": null,
+      "tags": [
+        "Audit Logs"
+      ]
+    },
+    {
+      "object": "audits",
+      "listPath": "/api/v2/ticket_audits",
+      "responseDataKey": "audits",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": null,
+      "tags": [
+        "Ticket Audits"
+      ]
+    },
+    {
+      "object": "automations",
+      "listPath": "/api/v2/automations",
+      "responseDataKey": "automations",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/automations/{automation_id}",
+      "parent": null,
+      "tags": [
+        "Automations"
+      ]
+    },
+    {
+      "object": "bookmarks",
+      "listPath": "/api/v2/bookmarks",
+      "responseDataKey": "bookmarks",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/bookmarks/{bookmark_id}",
+      "parent": null,
+      "tags": [
+        "Bookmarks"
+      ]
+    },
+    {
+      "object": "brand_agents",
+      "listPath": "/api/v2/brand_agents",
+      "responseDataKey": "brand_agents",
+      "pagination": "Cursor+Offset(dual)",
+      "create": false,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/brand_agents/{brand_agent_id}",
+      "parent": null,
+      "tags": [
+        "Brand Agents"
+      ]
+    },
+    {
+      "object": "brands",
+      "listPath": "/api/v2/brands",
+      "responseDataKey": "brands",
+      "pagination": "Offset",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/brands/{brand_id}",
+      "parent": null,
+      "tags": [
+        "Brands"
+      ]
+    },
+    {
+      "object": "community_posts",
+      "listPath": "/api/v2/community/posts",
+      "responseDataKey": "posts",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/community/posts/{post_id}",
+      "parent": null,
+      "tags": [
+        "Posts"
+      ]
+    },
+    {
+      "object": "community_topics",
+      "listPath": "/api/v2/community/topics",
+      "responseDataKey": "topics",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/community/topics/{topic_id}",
+      "parent": null,
+      "tags": [
+        "Topics"
+      ]
+    },
+    {
+      "object": "compliance_deletion_statuses",
+      "listPath": "/api/v2/users/{user_id}/compliance_deletion_statuses",
+      "responseDataKey": "compliance_deletion_statuses",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": "users",
+      "tags": [
+        "Users"
+      ]
+    },
+    {
+      "object": "custom_field_options",
+      "listPath": "/api/v2/ticket_fields/{ticket_field_id}/options",
+      "responseDataKey": "custom_field_options",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/ticket_fields/{ticket_field_id}/options/{ticket_field_option_id}",
+      "parent": "ticket_fields",
+      "tags": [
+        "Ticket Fields"
+      ]
+    },
+    {
+      "object": "custom_object_access_rules",
+      "listPath": "/api/v2/custom_objects/{custom_object_key}/access_rules",
+      "responseDataKey": "access_rules",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/custom_objects/{custom_object_key}/access_rules/{id}",
+      "parent": "custom_objects",
+      "tags": [
+        "Custom Object Permissions"
+      ]
+    },
+    {
+      "object": "custom_object_fields",
+      "listPath": "/api/v2/custom_objects/{custom_object_key}/fields",
+      "responseDataKey": "custom_object_fields",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/custom_objects/{custom_object_key}/fields/{custom_object_field_key_or_id}",
+      "parent": "custom_objects",
+      "tags": [
+        "Custom Object Fields"
+      ]
+    },
+    {
+      "object": "custom_object_permission_policies",
+      "listPath": "/api/v2/custom_objects/{custom_object_key}/permission_policies",
+      "responseDataKey": "policies",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": true,
+      "delete": false,
+      "singlePath": "/api/v2/custom_objects/{custom_object_key}/permission_policies/{id}",
+      "parent": "custom_objects",
+      "tags": [
+        "Custom Object Permissions"
+      ]
+    },
+    {
+      "object": "custom_object_record_attachments",
+      "listPath": "/api/v2/custom_objects/{custom_object_key}/records/{record_id}/attachments",
+      "responseDataKey": "custom_object_record_attachments",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/custom_objects/{custom_object_key}/records/{record_id}/attachments/{id}",
+      "parent": "custom_objects",
+      "tags": [
+        "Custom Object Record Attachments"
+      ]
+    },
+    {
+      "object": "custom_object_records",
+      "listPath": "/api/v2/custom_objects/{custom_object_key}/records",
+      "responseDataKey": "custom_object_records",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/custom_objects/{custom_object_key}/records/{custom_object_record_id}",
+      "parent": "custom_objects",
+      "tags": [
+        "Custom Object Records"
+      ]
+    },
+    {
+      "object": "custom_objects",
+      "listPath": "/api/v2/custom_objects",
+      "responseDataKey": "custom_objects",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/custom_objects/{custom_object_key}",
+      "parent": null,
+      "tags": [
+        "Custom Objects"
+      ]
+    },
+    {
+      "object": "custom_roles",
+      "listPath": "/api/v2/custom_roles",
+      "responseDataKey": "custom_roles",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/custom_roles/{custom_role_id}",
+      "parent": null,
+      "tags": [
+        "Custom Roles"
+      ]
+    },
+    {
+      "object": "custom_statuses",
+      "listPath": "/api/v2/custom_statuses",
+      "responseDataKey": "custom_statuses",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/custom_statuses/{custom_status_id}",
+      "parent": null,
+      "tags": [
+        "Custom Ticket Statuses"
+      ]
+    },
+    {
+      "object": "deleted_tickets",
+      "listPath": "/api/v2/deleted_tickets",
+      "responseDataKey": "deleted_tickets",
+      "pagination": "Cursor+Offset(dual)",
+      "create": false,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/deleted_tickets/{ticket_id}",
+      "parent": null,
+      "tags": [
+        "Tickets"
+      ]
+    },
+    {
+      "object": "deleted_users",
+      "listPath": "/api/v2/deleted_users",
+      "responseDataKey": "deleted_users",
+      "pagination": "Cursor+Offset(dual)",
+      "create": false,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/deleted_users/{deleted_user_id}",
+      "parent": null,
+      "tags": [
+        "Users"
+      ]
+    },
+    {
+      "object": "deletion_schedules",
+      "listPath": "/api/v2/deletion_schedules",
+      "responseDataKey": "deletion_schedules",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/deletion_schedules/{deletion_schedule_id}",
+      "parent": null,
+      "tags": [
+        "Deletion Schedules"
+      ]
+    },
+    {
+      "object": "dynamic_content_items",
+      "listPath": "/api/v2/dynamic_content/items",
+      "responseDataKey": "items",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/dynamic_content/items/{dynamic_content_item_id}",
+      "parent": null,
+      "tags": [
+        "Dynamic Content"
+      ]
+    },
+    {
+      "object": "dynamic_content_variants",
+      "listPath": "/api/v2/dynamic_content/items/{dynamic_content_item_id}/variants",
+      "responseDataKey": "variants",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/dynamic_content/items/{dynamic_content_item_id}/variants/{dynamic_content_variant_id}",
+      "parent": "items",
+      "tags": [
+        "Dynamic Content Item Variants"
+      ]
+    },
+    {
+      "object": "email_notifications",
+      "listPath": "/api/v2/email_notifications",
+      "responseDataKey": "email_notifications",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/email_notifications/{notification_id}",
+      "parent": null,
+      "tags": [
+        "Email Notifications"
+      ]
+    },
+    {
+      "object": "events",
+      "listPath": "/api/v2/tickets/{ticket_id}/conversation_log",
+      "responseDataKey": "events",
+      "pagination": "Cursor",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": "tickets",
+      "tags": [
+        "Conversation Log"
+      ]
+    },
+    {
+      "object": "group_memberships",
+      "listPath": "/api/v2/group_memberships",
+      "responseDataKey": "group_memberships",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/group_memberships/{group_membership_id}",
+      "parent": null,
+      "tags": [
+        "Group Memberships"
+      ]
+    },
+    {
+      "object": "group_sla_policies",
+      "listPath": "/api/v2/group_slas/policies",
+      "responseDataKey": "group_sla_policies",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/group_slas/policies/{group_sla_policy_id}",
+      "parent": null,
+      "tags": [
+        "Group SLA Policies"
+      ]
+    },
+    {
+      "object": "groups",
+      "listPath": "/api/v2/groups",
+      "responseDataKey": "groups",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/groups/{group_id}",
+      "parent": null,
+      "tags": [
+        "Groups"
+      ]
+    },
+    {
+      "object": "help_center_categories",
+      "listPath": "/api/v2/help_center/categories",
+      "responseDataKey": "categories",
+      "pagination": "Unknown(not yet probed)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/help_center/categories/{category_id}",
+      "parent": null,
+      "tags": [
+        "Categories"
+      ],
+      "note": "Recovered: silently merged with macro_categories by cross-file objectName collision in the naive enumerator (both list endpoints return {categories:[...]})."
+    },
+    {
+      "object": "help_center_votes",
+      "listPath": "/api/v2/help_center/votes",
+      "responseDataKey": "votes",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/help_center/votes/{vote_id}",
+      "parent": null,
+      "tags": [
+        "Votes"
+      ]
+    },
+    {
+      "object": "itam_asset_fields",
+      "listPath": "/api/v2/it_asset_management/asset_types/{asset_type_id}/fields",
+      "responseDataKey": "fields",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/it_asset_management/asset_types/{asset_type_id}/fields/{asset_type_field_id}",
+      "parent": "asset_types",
+      "tags": [
+        "ITAM Asset Fields"
+      ]
+    },
+    {
+      "object": "itam_asset_statuses",
+      "listPath": "/api/v2/it_asset_management/statuses",
+      "responseDataKey": "statuses",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/it_asset_management/statuses/{status_id}",
+      "parent": null,
+      "tags": [
+        "ITAM Asset Statuses"
+      ]
+    },
+    {
+      "object": "locations",
+      "listPath": "/api/v2/it_asset_management/locations",
+      "responseDataKey": "locations",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/it_asset_management/locations/{location_id}",
+      "parent": null,
+      "tags": [
+        "ITAM Asset Locations"
+      ]
+    },
+    {
+      "object": "macro_attachments",
+      "listPath": "/api/v2/macros/{macro_id}/attachments",
+      "responseDataKey": "macro_attachments",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": "macros",
+      "tags": [
+        "Macros"
+      ]
+    },
+    {
+      "object": "macro_categories",
+      "listPath": "/api/v2/macros/categories",
+      "responseDataKey": "categories",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": null,
+      "tags": [
+        "Macros"
+      ]
+    },
+    {
+      "object": "macros",
+      "listPath": "/api/v2/macros",
+      "responseDataKey": "macros",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/macros/{macro_id}",
+      "parent": null,
+      "tags": [
+        "Macros"
+      ]
+    },
+    {
+      "object": "monitored_twitter_handles",
+      "listPath": "/api/v2/channels/twitter/monitored_twitter_handles",
+      "responseDataKey": "monitored_twitter_handles",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/channels/twitter/monitored_twitter_handles/{monitored_twitter_handle_id}",
+      "parent": null,
+      "tags": [
+        "X Channel"
+      ]
+    },
+    {
+      "object": "omnichannel_routing_queues",
+      "listPath": "/api/v2/queues",
+      "responseDataKey": "queues",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/queues/{queue_id}",
+      "parent": null,
+      "tags": [
+        "Omnichannel Routing Queues"
+      ]
+    },
+    {
+      "object": "organization_fields",
+      "listPath": "/api/v2/organization_fields",
+      "responseDataKey": "organization_fields",
+      "pagination": "Cursor",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/organization_fields/{organization_field_id}",
+      "parent": null,
+      "tags": [
+        "Organization Fields"
+      ]
+    },
+    {
+      "object": "organization_memberships",
+      "listPath": "/api/v2/organization_memberships",
+      "responseDataKey": "organization_memberships",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/organization_memberships/{organization_membership_id}",
+      "parent": null,
+      "tags": [
+        "Organization Memberships"
+      ]
+    },
+    {
+      "object": "organization_merges",
+      "listPath": "/api/v2/organizations/{organization_id}/merges",
+      "responseDataKey": "organization_merges",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": "organizations",
+      "tags": [
+        "Organizations"
+      ]
+    },
+    {
+      "object": "organization_subscriptions",
+      "listPath": "/api/v2/organization_subscriptions",
+      "responseDataKey": "organization_subscriptions",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/organization_subscriptions/{organization_subscription_id}",
+      "parent": null,
+      "tags": [
+        "Organization Subscriptions"
+      ]
+    },
+    {
+      "object": "organizations",
+      "listPath": "/api/v2/organizations",
+      "responseDataKey": "organizations",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/organizations/{organization_id}",
+      "parent": null,
+      "tags": [
+        "Organizations"
+      ]
+    },
+    {
+      "object": "post_comments",
+      "listPath": "/api/v2/community/posts/{post_id}/comments",
+      "responseDataKey": "comments",
+      "pagination": "Unknown(not yet probed)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/community/posts/{post_id}/comments/{post_comment_id}",
+      "parent": "community_posts",
+      "tags": [
+        "Post Comments"
+      ],
+      "note": "Recovered: silently merged with ticket_comments/article_comments by cross-file objectName collision."
+    },
+    {
+      "object": "post_subscriptions",
+      "listPath": "/api/v2/community/posts/{post_id}/subscriptions",
+      "responseDataKey": "subscriptions",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/community/posts/{post_id}/subscriptions/{subscription_id}",
+      "parent": "posts",
+      "tags": [
+        "Content Subscriptions"
+      ]
+    },
+    {
+      "object": "recipient_addresses",
+      "listPath": "/api/v2/recipient_addresses",
+      "responseDataKey": "recipient_addresses",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/recipient_addresses/{support_address_id}",
+      "parent": null,
+      "tags": [
+        "Support Addresses"
+      ]
+    },
+    {
+      "object": "remote_authentications",
+      "listPath": "/api/v2/remote_authentications",
+      "responseDataKey": "remote_authentications",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": null,
+      "tags": [
+        "Remote Authentications"
+      ]
+    },
+    {
+      "object": "requests",
+      "listPath": "/api/v2/requests",
+      "responseDataKey": "requests",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": false,
+      "singlePath": "/api/v2/requests/{request_id}",
+      "parent": null,
+      "tags": [
+        "Requests"
+      ]
+    },
+    {
+      "object": "resource_collections",
+      "listPath": "/api/v2/resource_collections",
+      "responseDataKey": "resource_collections",
+      "pagination": "Offset",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/resource_collections/{resource_collection_id}",
+      "parent": null,
+      "tags": [
+        "Resource Collections"
+      ]
+    },
+    {
+      "object": "routing_attribute_values",
+      "listPath": "/api/v2/routing/agents/{user_id}/instance_values",
+      "responseDataKey": "attribute_values",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": "agents",
+      "tags": [
+        "Skill Based Routing"
+      ]
+    },
+    {
+      "object": "routing_attributes",
+      "listPath": "/api/v2/routing/attributes",
+      "responseDataKey": "attributes",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/routing/attributes/{attribute_id}",
+      "parent": null,
+      "tags": [
+        "Skill Based Routing"
+      ]
+    },
+    {
+      "object": "routing_instance_values",
+      "listPath": "/api/v2/routing/agents/instance_values",
+      "responseDataKey": "instance_values",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": null,
+      "tags": [
+        "Skill Based Routing"
+      ]
+    },
+    {
+      "object": "satisfaction_ratings",
+      "listPath": "/api/v2/satisfaction_ratings",
+      "responseDataKey": "satisfaction_ratings",
+      "pagination": "Cursor+Offset(dual)",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/satisfaction_ratings/{satisfaction_rating_id}",
+      "parent": null,
+      "tags": [
+        "Satisfaction Ratings"
+      ]
+    },
+    {
+      "object": "satisfaction_reasons",
+      "listPath": "/api/v2/satisfaction_reasons",
+      "responseDataKey": "reasons",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/satisfaction_reasons/{satisfaction_reason_id}",
+      "parent": null,
+      "tags": [
+        "Satisfaction Reasons"
+      ]
+    },
+    {
+      "object": "saved_searches",
+      "listPath": "/api/v2/saved_searches",
+      "responseDataKey": "saved_searches",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/saved_searches/{id}",
+      "parent": null,
+      "tags": [
+        "Saved Searches"
+      ]
+    },
+    {
+      "object": "schedule_holidays",
+      "listPath": "/api/v2/business_hours/schedules/{schedule_id}/holidays",
+      "responseDataKey": "holidays",
+      "pagination": "Offset(prose-documented)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/business_hours/schedules/{schedule_id}/holidays/{holiday_id}",
+      "parent": "schedules",
+      "tags": [
+        "Schedules"
+      ],
+      "note": "NOT in the downloaded OAS. Sourced from prose docs (same page as schedules)."
+    },
+    {
+      "object": "schedules",
+      "listPath": "/api/v2/business_hours/schedules",
+      "responseDataKey": "schedules",
+      "pagination": "Offset(page/per_page, prose-documented)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/business_hours/schedules/{schedule_id}",
+      "parent": null,
+      "tags": [
+        "Schedules"
+      ],
+      "note": "NOT in the downloaded OAS (OAS-generator coverage gap) \u2014 sourced from prose docs: https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/"
+    },
+    {
+      "object": "sections",
+      "listPath": "/api/v2/help_center/sections",
+      "responseDataKey": "sections",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/help_center/sections/{section_id}",
+      "parent": null,
+      "tags": [
+        "Sections"
+      ]
+    },
+    {
+      "object": "service_catalog_items",
+      "listPath": "/api/v2/help_center/service_catalog/items",
+      "responseDataKey": "service_catalog_items",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/help_center/service_catalog/items/{item_id}",
+      "parent": null,
+      "tags": [
+        "Service Catalog Items"
+      ]
+    },
+    {
+      "object": "sessions",
+      "listPath": "/api/v2/sessions",
+      "responseDataKey": "sessions",
+      "pagination": "Cursor",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": null,
+      "tags": [
+        "Sessions"
+      ]
+    },
+    {
+      "object": "sharing_agreements",
+      "listPath": "/api/v2/sharing_agreements",
+      "responseDataKey": "sharing_agreements",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/sharing_agreements/{sharing_agreement_id}",
+      "parent": null,
+      "tags": [
+        "Sharing Agreements"
+      ]
+    },
+    {
+      "object": "skips",
+      "listPath": "/api/v2/skips",
+      "responseDataKey": "skips",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": null,
+      "tags": [
+        "Ticket Skips"
+      ]
+    },
+    {
+      "object": "sla_policies",
+      "listPath": "/api/v2/slas/policies",
+      "responseDataKey": "sla_policies",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/slas/policies/{sla_policy_id}",
+      "parent": null,
+      "tags": [
+        "SLA Policies"
+      ]
+    },
+    {
+      "object": "suspended_tickets",
+      "listPath": "/api/v2/suspended_tickets",
+      "responseDataKey": "suspended_tickets",
+      "pagination": "Cursor+Offset(dual)",
+      "create": false,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/suspended_tickets/{id}",
+      "parent": null,
+      "tags": [
+        "Suspended Tickets"
+      ]
+    },
+    {
+      "object": "tags",
+      "listPath": "/api/v2/tags",
+      "responseDataKey": "tags",
+      "pagination": "Cursor+Offset(dual)",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": null,
+      "tags": [
+        "Tags"
+      ]
+    },
+    {
+      "object": "target_failures",
+      "listPath": "/api/v2/target_failures",
+      "responseDataKey": "target_failures",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/target_failures/{target_failure_id}",
+      "parent": null,
+      "tags": [
+        "Target Failures"
+      ]
+    },
+    {
+      "object": "targets",
+      "listPath": "/api/v2/targets",
+      "responseDataKey": "targets",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/targets/{target_id}",
+      "parent": null,
+      "tags": [
+        "Targets"
+      ]
+    },
+    {
+      "object": "task_list_templates",
+      "listPath": "/api/v2/task_list_templates",
+      "responseDataKey": "task_list_templates",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/task_list_templates/{task_list_template_id}",
+      "parent": null,
+      "tags": [
+        "Task List Templates"
+      ]
+    },
+    {
+      "object": "task_lists",
+      "listPath": "/api/v2/tickets/{ticket_id}/task_lists",
+      "responseDataKey": "task_lists",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": "tickets",
+      "tags": [
+        "Task Lists"
+      ]
+    },
+    {
+      "object": "tasks",
+      "listPath": "/api/v2/task_list_templates/{task_list_template_id}/tasks",
+      "responseDataKey": "tasks",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": "task_list_templates",
+      "tags": [
+        "Task List Templates"
+      ]
+    },
+    {
+      "object": "ticket_comments",
+      "listPath": "/api/v2/requests/{request_id}/comments",
+      "responseDataKey": "comments",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/requests/{request_id}/comments/{ticket_comment_id}",
+      "parent": "requests",
+      "tags": [
+        "Requests"
+      ]
+    },
+    {
+      "object": "ticket_content_pins",
+      "listPath": "/api/v2/ticket_content_pins",
+      "responseDataKey": "ticket_content_pins",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/ticket_content_pins/{content_pin_id}",
+      "parent": null,
+      "tags": [
+        "Ticket Content Pins"
+      ]
+    },
+    {
+      "object": "ticket_events",
+      "listPath": "/api/v2/incremental/ticket_events",
+      "responseDataKey": "ticket_events",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": null,
+      "tags": [
+        "Incremental Export"
+      ]
+    },
+    {
+      "object": "ticket_fields",
+      "listPath": "/api/v2/ticket_fields",
+      "responseDataKey": "ticket_fields",
+      "pagination": "Cursor",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/ticket_fields/{ticket_field_id}",
+      "parent": null,
+      "tags": [
+        "Ticket Fields"
+      ]
+    },
+    {
+      "object": "ticket_form_statuses",
+      "listPath": "/api/v2/ticket_form_statuses",
+      "responseDataKey": "ticket_form_statuses",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": null,
+      "tags": [
+        "Ticket Form Statuses"
+      ]
+    },
+    {
+      "object": "ticket_forms",
+      "listPath": "/api/v2/ticket_forms",
+      "responseDataKey": "ticket_forms",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/ticket_forms/{ticket_form_id}",
+      "parent": null,
+      "tags": [
+        "Ticket Forms"
+      ]
+    },
+    {
+      "object": "ticket_metric_events",
+      "listPath": "/api/v2/incremental/ticket_metric_events",
+      "responseDataKey": "ticket_metric_events",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": null,
+      "tags": [
+        "Ticket Metric Events"
+      ]
+    },
+    {
+      "object": "ticket_metrics",
+      "listPath": "/api/v2/ticket_metrics",
+      "responseDataKey": "ticket_metrics",
+      "pagination": "Cursor",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/ticket_metrics/{ticket_metric_id}",
+      "parent": null,
+      "tags": [
+        "Ticket Metrics"
+      ]
+    },
+    {
+      "object": "tickets",
+      "listPath": "/api/v2/tickets",
+      "responseDataKey": "tickets",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/tickets/{ticket_id}",
+      "parent": null,
+      "tags": [
+        "Tickets"
+      ]
+    },
+    {
+      "object": "translations",
+      "listPath": "/api/v2/help_center/articles/{article_id}/translations",
+      "responseDataKey": "translations",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": false,
+      "singlePath": "/api/v2/help_center/articles/{article_id}/translations/{locale}",
+      "parent": "articles",
+      "tags": [
+        "Translations"
+      ]
+    },
+    {
+      "object": "trigger_categories",
+      "listPath": "/api/v2/trigger_categories",
+      "responseDataKey": "trigger_categories",
+      "pagination": "Offset",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/trigger_categories/{trigger_category_id}",
+      "parent": null,
+      "tags": [
+        "Trigger Categories"
+      ]
+    },
+    {
+      "object": "trigger_revisions",
+      "listPath": "/api/v2/triggers/{trigger_id}/revisions",
+      "responseDataKey": "trigger_revisions",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": "/api/v2/triggers/{trigger_id}/revisions/{trigger_revision_id}",
+      "parent": "triggers",
+      "tags": [
+        "Triggers"
+      ]
+    },
+    {
+      "object": "triggers",
+      "listPath": "/api/v2/triggers",
+      "responseDataKey": "triggers",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/triggers/{trigger_id}",
+      "parent": null,
+      "tags": [
+        "Triggers"
+      ]
+    },
+    {
+      "object": "user_fields",
+      "listPath": "/api/v2/user_fields",
+      "responseDataKey": "user_fields",
+      "pagination": "Cursor",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/user_fields/{user_field_id}",
+      "parent": null,
+      "tags": [
+        "User Fields"
+      ]
+    },
+    {
+      "object": "user_identities",
+      "listPath": "/api/v2/end_users/{user_id}/identities",
+      "responseDataKey": "identities",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": false,
+      "delete": true,
+      "singlePath": "/api/v2/end_users/{user_id}/identities/{user_identity_id}",
+      "parent": "end_users",
+      "tags": [
+        "User Identities"
+      ]
+    },
+    {
+      "object": "user_segments",
+      "listPath": "/api/v2/help_center/user_segments",
+      "responseDataKey": "user_segments",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/help_center/user_segments/{user_segment_id}",
+      "parent": null,
+      "tags": [
+        "User Segments"
+      ]
+    },
+    {
+      "object": "user_subscriptions",
+      "listPath": "/api/v2/help_center/users/{user_id}/user_subscriptions",
+      "responseDataKey": "user_subscriptions",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": "users",
+      "tags": [
+        "User Subscriptions"
+      ]
+    },
+    {
+      "object": "users",
+      "listPath": "/api/v2/users",
+      "responseDataKey": "users",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/users/{user_id}",
+      "parent": null,
+      "tags": [
+        "Users"
+      ]
+    },
+    {
+      "object": "view_counts",
+      "listPath": "/api/v2/views/count_many",
+      "responseDataKey": "view_counts",
+      "pagination": "None/Unpaged",
+      "create": false,
+      "update": false,
+      "delete": false,
+      "singlePath": null,
+      "parent": null,
+      "tags": [
+        "Views"
+      ]
+    },
+    {
+      "object": "views",
+      "listPath": "/api/v2/views",
+      "responseDataKey": "views",
+      "pagination": "Cursor+Offset(dual)",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/views/{view_id}",
+      "parent": null,
+      "tags": [
+        "Views"
+      ]
+    },
+    {
+      "object": "workspaces",
+      "listPath": "/api/v2/workspaces",
+      "responseDataKey": "workspaces",
+      "pagination": "None/Unpaged",
+      "create": true,
+      "update": true,
+      "delete": true,
+      "singlePath": "/api/v2/workspaces/{workspace_id}",
+      "parent": null,
+      "tags": [
+        "Workspaces"
+      ]
+    }
+  ]
+}

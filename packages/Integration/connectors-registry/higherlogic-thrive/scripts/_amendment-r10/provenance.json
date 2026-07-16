@@ -1,0 +1,152 @@
+[
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Create — confirmed POST VolunteerForOpportunity (query-string params, no JSON body → literal; response is parent VolunteerOpportunity → IDLocation n/a; identity synthesized from VolunteerOpportunityKey+ContactKey composite)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsWrite",
+    "Excerpt": "POST /v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={key}&comments={comments}: enrolls a volunteer; both parameters are query-string (no request body). OPERATOR-RESOLVED (round 10, reversing 4/8/9): confirmed real, unambiguous, working endpoint across 3 independent rounds."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Create — confirmed POST VolunteerForOpportunity (query-string params, no JSON body → literal; response is parent VolunteerOpportunity → IDLocation n/a; identity synthesized from VolunteerOpportunityKey+ContactKey composite)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsCreate",
+    "Excerpt": "POST /v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={key}&comments={comments}: enrolls a volunteer; both parameters are query-string (no request body). OPERATOR-RESOLVED (round 10, reversing 4/8/9): confirmed real, unambiguous, working endpoint across 3 independent rounds."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Create — confirmed POST VolunteerForOpportunity (query-string params, no JSON body → literal; response is parent VolunteerOpportunity → IDLocation n/a; identity synthesized from VolunteerOpportunityKey+ContactKey composite)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.CreateAPIPath",
+    "Excerpt": "POST /v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={key}&comments={comments}: enrolls a volunteer; both parameters are query-string (no request body). OPERATOR-RESOLVED (round 10, reversing 4/8/9): confirmed real, unambiguous, working endpoint across 3 independent rounds."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Create — confirmed POST VolunteerForOpportunity (query-string params, no JSON body → literal; response is parent VolunteerOpportunity → IDLocation n/a; identity synthesized from VolunteerOpportunityKey+ContactKey composite)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.CreateMethod",
+    "Excerpt": "POST /v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={key}&comments={comments}: enrolls a volunteer; both parameters are query-string (no request body). OPERATOR-RESOLVED (round 10, reversing 4/8/9): confirmed real, unambiguous, working endpoint across 3 independent rounds."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Create — confirmed POST VolunteerForOpportunity (query-string params, no JSON body → literal; response is parent VolunteerOpportunity → IDLocation n/a; identity synthesized from VolunteerOpportunityKey+ContactKey composite)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.CreateBodyShape",
+    "Excerpt": "POST /v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={key}&comments={comments}: enrolls a volunteer; both parameters are query-string (no request body). OPERATOR-RESOLVED (round 10, reversing 4/8/9): confirmed real, unambiguous, working endpoint across 3 independent rounds."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Create — confirmed POST VolunteerForOpportunity (query-string params, no JSON body → literal; response is parent VolunteerOpportunity → IDLocation n/a; identity synthesized from VolunteerOpportunityKey+ContactKey composite)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.CreateIDLocation",
+    "Excerpt": "POST /v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={key}&comments={comments}: enrolls a volunteer; both parameters are query-string (no request body). OPERATOR-RESOLVED (round 10, reversing 4/8/9): confirmed real, unambiguous, working endpoint across 3 independent rounds."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Update — confirmed POST ApproveVolunteerApplication (flag in URI, target identity in body → flat/body)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsUpdate",
+    "Excerpt": "POST /v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={flag}: body model ApproveVolunteerApplicationRequest posted directly (flat); target identity (VolunteerOpportunityKey + ContactKey/LegacyContactKey) carried in the body (same idiosyncrasy as ExternalActivity.Update)."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Update — confirmed POST ApproveVolunteerApplication (flag in URI, target identity in body → flat/body)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.UpdateAPIPath",
+    "Excerpt": "POST /v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={flag}: body model ApproveVolunteerApplicationRequest posted directly (flat); target identity (VolunteerOpportunityKey + ContactKey/LegacyContactKey) carried in the body (same idiosyncrasy as ExternalActivity.Update)."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Update — confirmed POST ApproveVolunteerApplication (flag in URI, target identity in body → flat/body)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.UpdateMethod",
+    "Excerpt": "POST /v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={flag}: body model ApproveVolunteerApplicationRequest posted directly (flat); target identity (VolunteerOpportunityKey + ContactKey/LegacyContactKey) carried in the body (same idiosyncrasy as ExternalActivity.Update)."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Update — confirmed POST ApproveVolunteerApplication (flag in URI, target identity in body → flat/body)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.UpdateBodyShape",
+    "Excerpt": "POST /v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={flag}: body model ApproveVolunteerApplicationRequest posted directly (flat); target identity (VolunteerOpportunityKey + ContactKey/LegacyContactKey) carried in the body (same idiosyncrasy as ExternalActivity.Update)."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Update — confirmed POST ApproveVolunteerApplication (flag in URI, target identity in body → flat/body)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.UpdateIDLocation",
+    "Excerpt": "POST /v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={flag}: body model ApproveVolunteerApplicationRequest posted directly (flat); target identity (VolunteerOpportunityKey + ContactKey/LegacyContactKey) carried in the body (same idiosyncrasy as ExternalActivity.Update)."
+  },
+  {
+    "URL": "file://sources/ops/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Delete — confirmed DELETE WithdrawFromOpportunity (identity in query-string template → path)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsDelete",
+    "Excerpt": "DELETE /v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={key}&comments={comments}: withdraws a volunteer; identity substituted into the query-string template (path). Confirmed real, unambiguous DELETE endpoint."
+  },
+  {
+    "URL": "file://sources/ops/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Delete — confirmed DELETE WithdrawFromOpportunity (identity in query-string template → path)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.DeleteAPIPath",
+    "Excerpt": "DELETE /v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={key}&comments={comments}: withdraws a volunteer; identity substituted into the query-string template (path). Confirmed real, unambiguous DELETE endpoint."
+  },
+  {
+    "URL": "file://sources/ops/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Delete — confirmed DELETE WithdrawFromOpportunity (identity in query-string template → path)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.DeleteMethod",
+    "Excerpt": "DELETE /v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={key}&comments={comments}: withdraws a volunteer; identity substituted into the query-string template (path). Confirmed real, unambiguous DELETE endpoint."
+  },
+  {
+    "URL": "file://sources/ops/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T02:32:06.755Z",
+    "UsedFor": "Volunteers Delete — confirmed DELETE WithdrawFromOpportunity (identity in query-string template → path)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.DeleteIDLocation",
+    "Excerpt": "DELETE /v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={key}&comments={comments}: withdraws a volunteer; identity substituted into the query-string template (path). Confirmed real, unambiguous DELETE endpoint."
+  }
+]

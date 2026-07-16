@@ -1,0 +1,23 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "pageSegmentPathCount": 46,
+        "totalListPathCount": 55,
+        "pageSegmentSamples": [
+          "/api/v1/Shopping/AbandonedCheckOuts/{Page Number}",
+          "/api/v1/Exhibits/{Exhibit Code}/Exhibitors/{Page Number}",
+          "/api/v1/Products/Exams/{Page Number}",
+          "/api/v1/Events/{Event Code}/Registrations/{Page Number}",
+          "/api/v1/Courses/{Code}/Attendees/{Page Number}",
+          "/api/v1/Customers/Members/FindByName/{Name}/{Page Number}"
+        ],
+        "explicitPageSizeFound": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PaginationDefaults"
+    }
+  ]
+}

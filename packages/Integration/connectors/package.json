@@ -14,7 +14,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/connector-schema-merge": "5.43.0",
+    "@memberjunction/connector-schema-merge": "^1.0.0",
     "@memberjunction/core": "5.43.0",
     "@memberjunction/core-entities": "5.43.0",
     "@memberjunction/global": "5.43.0",

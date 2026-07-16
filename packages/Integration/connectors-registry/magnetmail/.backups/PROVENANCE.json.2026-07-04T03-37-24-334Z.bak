@@ -1,0 +1,24 @@
+{
+  "Entries": [
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "Confirming the Integration Description: single shared SOAP endpoint, namespace, operation count, no delete operations.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Description",
+      "Excerpt": "targetNamespace=\"http://www.magnetmail.net/\" ... <soap:address location=\"https://hlma-apie1.magnetmail.net/mmapi.asmx\" /> ... 55 <wsdl:operation> entries in the portType, zero named delete/remove."
+    },
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "NavigationBaseURL -- the mmapi.asmx endpoint (both SOAP 1.1 and SOAP 1.2 bindings resolve to the same address).",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "<soap:address location=\"https://hlma-apie1.magnetmail.net/mmapi.asmx\" />, <soap12:address location=\"https://hlma-apie1.magnetmail.net/mmapi.asmx\" />"
+    }
+  ]
+}

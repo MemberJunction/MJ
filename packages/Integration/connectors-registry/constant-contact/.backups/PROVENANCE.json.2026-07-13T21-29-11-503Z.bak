@@ -1,0 +1,214 @@
+{
+  "Entries": [
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/rate_limits.html",
+      "AccessedAt": "2026-07-11T23:05:00.000Z",
+      "UsedFor": "Confirming vendor rate limit (4 req/sec + 10,000 req/day) for integration.BatchMaxRequestCount / BatchRequestWaitTime / Configuration.RateLimitPolicy",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "You can use your API key to send up to 10,000 requests per day and 4 requests per second. The request limit resets each day at UTC 00:00:00."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/rate_limits.html",
+      "AccessedAt": "2026-07-11T23:05:00.000Z",
+      "UsedFor": "Confirming vendor rate limit window (1 second) for integration.BatchRequestWaitTime",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "You can use your API key to send up to 10,000 requests per day and 4 requests per second."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/rate_limits.html",
+      "AccessedAt": "2026-07-11T23:05:00.000Z",
+      "UsedFor": "Full RateLimitPolicy shape: daily cap, reset time, throttle status code, and the two distinct error_key values returned per limit type",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.RateLimitPolicy",
+      "Excerpt": "If you exceed the 10,000 request per day quota the response body is: {\"error_key\":\"quota_exceeded\",\"error_message\":\"Limit Exceeded\"} If you exceed the rate of 4 requests per second the response body is: {\"error_key\":\"throttled\",\"error_message\":\"Too Many Requests\"}"
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/server_flow.html",
+      "AccessedAt": "2026-07-11T23:06:00.000Z",
+      "UsedFor": "OAuth2 Authorization Code flow: authorization + token endpoint URLs and flow shape for Configuration.AuthFlow / Configuration.OAuthEndpoints / CredentialTypeID resolution",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "To create an authorization request, make a GET call to the authorization endpoint https://authz.constantcontact.com/oauth2/default/v1/authorize ... Make a POST request to the https://authz.constantcontact.com/oauth2/default/v1/token token endpoint to exchange the authorization code for an access and refresh token."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/server_flow.html",
+      "AccessedAt": "2026-07-11T23:06:00.000Z",
+      "UsedFor": "OAuth2 endpoint URLs for Configuration.OAuthEndpoints",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OAuthEndpoints",
+      "Excerpt": "authorization endpoint https://authz.constantcontact.com/oauth2/default/v1/authorize ... token endpoint https://authz.constantcontact.com/oauth2/default/v1/token"
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/server_flow.html",
+      "AccessedAt": "2026-07-11T23:06:00.000Z",
+      "UsedFor": "ROTATING refresh-token behavior for Configuration.TokenRefreshStrategy / TokenRefreshStrategyNote -- the connector must persist the newest refresh_token on every exchange",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.TokenRefreshStrategy",
+      "Excerpt": "This function can be used to exchange a refresh token for a new access token and refresh token... The response will contain a new 'access_token' and 'refresh_token'. / refresh_token -- The response body returns a new refresh_token value."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/server_flow.html",
+      "AccessedAt": "2026-07-11T23:06:00.000Z",
+      "UsedFor": "Access token lifetime (1440 min / 86,400 sec) for Configuration.AccessTokenLifetimeSeconds",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AccessTokenLifetimeSeconds",
+      "Excerpt": "Access tokens automatically expire 1440 minutes (86,400 seconds). Making an API call with an expired access token returns a 401 unauthorized status code."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/server_flow.html",
+      "AccessedAt": "2026-07-11T23:06:00.000Z",
+      "UsedFor": "offline_access scope required to receive a refresh_token at all, for Configuration.OAuthEndpoints.offlineAccessScopeRequiredForRefreshToken",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OAuthEndpoints",
+      "Excerpt": "The offline_access scope is required to get a refresh token."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/v3_technical_overview.html",
+      "AccessedAt": "2026-07-11T23:07:00.000Z",
+      "UsedFor": "Cursor pagination shape (_links.next.href with base64 cursor param) for Configuration.PaginationDefaults",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "Each page of the response includes the link to retrieve the next page of results, as shown here: \"_links\":{\"next\":{\"href\":\"/v3/contacts?cursor=bGltaXQ9NSZuZXh0PTImc3RhdHVzJTVCJTVEPWFsbA==\""
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/v3_technical_overview.html",
+      "AccessedAt": "2026-07-11T23:07:00.000Z",
+      "UsedFor": "Worked example of updated_after being a real, vendor-documented query parameter for GET /contacts, corroborating the openapi.json parameter list used for Configuration.IncrementalSyncCapability",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "https://api.cc.email/v3/contacts?status=unsubscribed&updated_after=2018-3-31&include=list_memberships&limit=50&include_count=false"
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/partners_overview.html",
+      "AccessedAt": "2026-07-11T22:15:00.000Z",
+      "UsedFor": "Evidentiary basis for excluding technology_partners + partner_webhooks families in Configuration.OutOfScopeObjectFamilies (needs-partner-approval)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies",
+      "Excerpt": "Technology Partner status requires submitting a partner-request signup form and Partner Management Team review, which may take several weeks."
+    },
+    {
+      "URL": "https://api.cc.email/v3/swagger.yaml",
+      "AccessedAt": "2026-07-11T21:50:00.000Z",
+      "UsedFor": "Confirming there is no single complete describe/introspection endpoint in the V3 API (only the OpenAPI spec itself is a complete schema source, fetched at build time not at connector runtime) for Configuration.DiscoveryIsAuthoritative=false",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DiscoveryIsAuthoritative",
+      "Excerpt": "98 paths / 124 tagged operations across 17 tags; no path/operation resembling a schema-describe or object-catalog introspection endpoint appears anywhere in paths."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/server_flow.html",
+      "AccessedAt": "2026-07-11T23:10:00.000Z",
+      "UsedFor": "Confirming the credential type: Constant Contact V3 uses OAuth2 Authorization Code grant (with rotating refresh tokens) as its sole in-scope auth mechanism — maps to CredentialType 'OAuth2 Authorization Code'.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CredentialTypeID",
+      "Excerpt": "OAuth2 Authorization Code flow: token endpoint https://authz.constantcontact.com/oauth2/default/v1/token; access token 1440 min; ROTATING refresh tokens; scopes: account_read, account_update, contact_data, campaign_data, offline_access (required for refresh tokens)."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/server_flow.html",
+      "AccessedAt": "2026-07-13T19:58:42.000Z",
+      "UsedFor": "Confirming the Authorization request header format used on every authenticated V3 API call, for integration.Configuration.AuthHeaderPattern",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthHeaderPattern",
+      "Excerpt": "After verifying the access token claims and signature, use the access token to send requests in the V3 API by adding it to the Authorization request header in the format Authorization: Bearer {your_access_token}."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/v3_technical_overview.html",
+      "AccessedAt": "2026-07-13T19:58:42.000Z",
+      "UsedFor": "Corroborating the Authorization header format via the required-headers table, for integration.Configuration.AuthHeaderPattern",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthHeaderPattern",
+      "Excerpt": "Header: Authorization | Accepted Values: Bearer {access_token} | Comment: The access_token generated during the grant access leg of the OAuth2 flow"
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/rate_limits.html",
+      "AccessedAt": "2026-07-13T19:58:42.000Z",
+      "UsedFor": "Same 429 body evidence already cited for RateLimitPolicy, additionally targeting integration.Configuration.ErrorResponseShape's 429-specific body shape (previously uncited under this TargetField)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ErrorResponseShape",
+      "Excerpt": "If you exceed the 10,000 request per day quota the response body is: {\"error_key\":\"quota_exceeded\",\"error_message\":\"Limit Exceeded\"} If you exceed the rate of 4 requests per second the response body is: {\"error_key\":\"throttled\",\"error_message\":\"Too Many Requests\"}"
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_reference/index.html",
+      "AccessedAt": "2026-07-13T21:29:07.562209Z",
+      "UsedFor": "Confirming account_emails.email_id is the object's primary key (extraction-quality-defect fix, PK-defer-rate reduction)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.account_emails.email_id.IsPrimaryKey",
+      "Excerpt": "Field description states: 'The unique ID for an email address in a Constant Contact account.' (OpenAPI definitions, AccountEmail schema)."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_reference/index.html",
+      "AccessedAt": "2026-07-13T21:29:07.562209Z",
+      "UsedFor": "Confirming account_summary.encoded_account_id is the object's primary key (extraction-quality-defect fix, PK-defer-rate reduction)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.account_summary.encoded_account_id.IsPrimaryKey",
+      "Excerpt": "OpenAPI `Customer`/`CustomerPut` definitions describe encoded_account_id as: 'The readOnly encoded account ID that uniquely identifies the account.'"
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_reference/index.html",
+      "AccessedAt": "2026-07-13T21:29:07.562209Z",
+      "UsedFor": "Confirming account_user_privileges.privilege_id is the object's primary key (extraction-quality-defect fix, PK-defer-rate reduction)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.account_user_privileges.privilege_id.IsPrimaryKey",
+      "Excerpt": "Field description: 'Identifies a user privilege in Constant Contact.' Matches the vendor's `{resource_singular}_id` naming convention (object=account_user_privileges, resource=privilege)."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_reference/index.html",
+      "AccessedAt": "2026-07-13T21:29:07.562209Z",
+      "UsedFor": "Confirming contact_lists_xrefs.list_id is the object's primary key (extraction-quality-defect fix, PK-defer-rate reduction)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.contact_lists_xrefs.list_id.IsPrimaryKey",
+      "Excerpt": "Field description: 'The V3 API list unique identifier.' Also matches sibling IO `contact_lists`'s own emitted PK field name (cross-IO match)."
+    },
+    {
+      "URL": "https://developer.constantcontact.com/api_reference/index.html",
+      "AccessedAt": "2026-07-13T21:29:07.562209Z",
+      "UsedFor": "Confirming contact_reports_activity_summary.campaign_activity_id is the object's primary key (extraction-quality-defect fix, PK-defer-rate reduction)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.contact_reports_activity_summary.campaign_activity_id.IsPrimaryKey",
+      "Excerpt": "Endpoint GET /reports/contact_reports/{contact_id}/activity_summary returns a `campaign_activities` array scoped per contact; each row's campaign_activity_id matches sibling IO `email_campaign_activities`'s own emitted PK field name (cross-IO match), unique within the per-contact scope."
+    }
+  ]
+}

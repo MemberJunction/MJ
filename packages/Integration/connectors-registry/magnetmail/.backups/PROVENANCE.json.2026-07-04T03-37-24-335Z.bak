@@ -1,0 +1,34 @@
+{
+  "Entries": [
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "Confirming the Integration Description: single shared SOAP endpoint, namespace, operation count, no delete operations.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Description",
+      "Excerpt": "targetNamespace=\"http://www.magnetmail.net/\" ... <soap:address location=\"https://hlma-apie1.magnetmail.net/mmapi.asmx\" /> ... 55 <wsdl:operation> entries in the portType, zero named delete/remove."
+    },
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "NavigationBaseURL -- the mmapi.asmx endpoint (both SOAP 1.1 and SOAP 1.2 bindings resolve to the same address).",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "<soap:address location=\"https://hlma-apie1.magnetmail.net/mmapi.asmx\" />, <soap12:address location=\"https://hlma-apie1.magnetmail.net/mmapi.asmx\" />"
+    },
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "Configuration.AuthFlow / AuthHeaderPattern -- two-step session auth: Authenticate(username,password) -> AuthenticationResult{sessionId,user_id,...}; mmAuthHeader{sessionId,user_id} SOAP header on all subsequent calls.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "<s:element name=\"Authenticate\"><s:complexType><s:sequence><s:element name=\"username\" type=\"s:string\"/><s:element name=\"password\" type=\"s:string\"/></s:sequence></s:complexType></s:element> ... <s:complexType name=\"AuthenticationResult\"><s:sequence>...<s:element name=\"sessionId\" type=\"s:string\"/>...<s:element name=\"user_id\" type=\"s:string\"/></s:sequence></s:complexType> ... <s:complexType name=\"mmAuthHeader\"><s:sequence><s:element name=\"sessionId\" type=\"s:string\"/><s:element name=\"user_id\" type=\"s:string\"/></s:sequence></s:complexType> ... <wsdl:operation name=\"Authenticate\">...(no soap:header)...</wsdl:operation> vs every other operation carrying <soap:header message=\"tns:{op}mmAuthHeader\" part=\"mmAuthHeader\" use=\"literal\" />."
+    }
+  ]
+}

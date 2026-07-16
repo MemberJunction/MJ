@@ -117,9 +117,114 @@
         },
         "AssociationGraphNote": "HubSpot CRM uses a first-class association graph between standard objects (contacts-companies, contacts-deals, deals-tickets, etc.). Associations are pairwise typed records (HUBSPOT_DEFINED standard types + USER_DEFINED portal-specific labels) accessed via POST /crm/associations/2026-03/{fromObjectType}/{toObjectType}/batch/read. Association type IDs must be resolved at runtime via GET /crm/associations/{from}/{to}/labels — they cannot be declared statically per-portal.",
         "DiscoveryIsAuthoritative": false,
-        "DiscoveryIsAuthoritativeRationale": "HubSpot has no single endpoint that returns the complete set of objects (types + custom objects) a portal has enabled. The object-library API (/crm/v3/object-library/object-type-enablements) lists enabled standard objects, but custom objects require a separate call to /crm-object-schemas/2026-03/schemas. Neither call alone constitutes a complete authoritative enumeration. Absence in any single discovery call proves nothing — a missing object may exist under a separate discovery path. Therefore DiscoveryIsAuthoritative=false: the deactivation path (Status=Disabled on absent objects) is gated off."
+        "DiscoveryIsAuthoritativeRationale": "HubSpot has no single endpoint that returns the complete set of objects (types + custom objects) a portal has enabled. The object-library API (/crm/v3/object-library/object-type-enablements) lists enabled standard objects, but custom objects require a separate call to /crm-object-schemas/2026-03/schemas. Neither call alone constitutes a complete authoritative enumeration. Absence in any single discovery call proves nothing — a missing object may exist under a separate discovery path. Therefore DiscoveryIsAuthoritative=false: the deactivation path (Status=Disabled on absent objects) is gated off.",
+        "skippedObjects": [
+          {
+            "objectName": "email_campaigns_legacy",
+            "reason": "Deprecated legacy Email Campaigns resource (prior connector path /email/campaigns). No spec in the current 102-API credential-free catalog. Superseded by the emitted current objects `campaigns` (/marketing/v3/campaigns) and `marketing_emails` (/marketing/v3/emails), both Active IOs.",
+            "supersededBy": [
+              "campaigns",
+              "marketing_emails"
+            ],
+            "evidence": "SOURCES.json (102-API catalog has no legacy email-campaigns spec); metadata has Active campaigns + marketing_emails IOs.",
+            "recordedRound": "delta-round-1",
+            "recordedAt": "2026-07-01T17:20:54.300Z"
+          },
+          {
+            "objectName": "url_mappings",
+            "reason": "Legacy CMS url-redirects sub-resource (prior connector path /cms/v3/url-redirects/mapping). No corresponding path in the current cms_url_redirects.json spec. Superseded by the emitted current object `url_redirects` (/cms/v3/url-redirects).",
+            "supersededBy": [
+              "url_redirects"
+            ],
+            "evidence": "sources/specs/cms__url_redirects (no /mapping path); metadata has Active url_redirects IO.",
+            "recordedRound": "delta-round-1",
+            "recordedAt": "2026-07-01T17:20:54.300Z"
+          },
+          {
+            "objectName": "site_search",
+            "reason": "Query/search endpoint, NOT a syncable record collection. cms__site_search.json exposes only /cms/site-search/2026-03/search (GET query) and /indexed-data/{contentId} (per-content lookup) — a search interface over already-synced CMS content, with no listable record set of its own.",
+            "supersededBy": [],
+            "evidence": "sources/specs/cms__site_search.json#paths (/search + /indexed-data/{contentId} only — no record list).",
+            "recordedRound": "delta-round-1",
+            "recordedAt": "2026-07-01T17:20:54.300Z"
+          },
+          {
+            "objectName": "source_code",
+            "reason": "CMS source-code FILE management (path-addressed content: GET/PUT/POST/DELETE /{environment}/content/{path}, extract/validate). Not a syncable record type — it manages developer file contents by path, not an enumerable record collection.",
+            "supersededBy": [],
+            "evidence": "sources/specs/cms__source_code.json#paths (path-addressed file CRUD + async extract; no record list).",
+            "recordedRound": "delta-round-1",
+            "recordedAt": "2026-07-01T17:20:54.300Z"
+          },
+          {
+            "objectName": "visitor_identification",
+            "reason": "Token-mint ACTION endpoint (POST-only): /visitor-identification/2026-03/tokens/create. No readable record collection — it issues an identification token, not a syncable resource.",
+            "supersededBy": [],
+            "evidence": "sources/specs/conversations__visitor_identification.json#paths (single POST tokens/create; no GET).",
+            "recordedRound": "delta-round-1",
+            "recordedAt": "2026-07-01T17:20:54.300Z"
+          },
+          {
+            "objectName": "timeline_event_templates",
+            "reason": "Runtime-discovery-only, same as timeline_event_types: no credential-free type/template-definition list endpoint in crm__timeline.json (only /events, /events/batch, /types/projects + TimelineEventIFrame). Current mechanism is a deploy-time project *-hsmeta.json config file; legacy REST surface is auth-gated. Not seedable as credential-free Declared metadata.",
+            "supersededBy": [],
+            "evidence": "sources/specs/crm__timeline.json#paths; SOURCE_STUDY.md L250-253; same classification as timeline_event_types.",
+            "recordedRound": "delta-round-1",
+            "recordedAt": "2026-07-01T17:20:54.300Z"
+          },
+          {
+            "objectName": "behavioral_events",
+            "reason": "Legacy prior-connector name for event occurrences (/events/v3/events). The current events__events.json exposes /events/event-occurrences/2026-03 (GET) which is the same occurrence surface already emitted as the Active IO `custom_event_completions` (/events/v3/events). Duplicate under a legacy name; not re-emitted to avoid a duplicate IO.",
+            "supersededBy": [
+              "custom_event_completions",
+              "custom_event_definitions"
+            ],
+            "evidence": "sources/specs/events__events.json#paths (/events/event-occurrences); metadata has Active custom_event_completions IO mapped to /events/v3/events.",
+            "recordedRound": "delta-round-1",
+            "recordedAt": "2026-07-01T17:20:54.300Z"
+          },
+          {
+            "objectName": "subscription_definitions",
+            "reason": "Legacy prior-connector name for communication-preference subscription DEFINITIONS (/communication-preferences/v4/definitions). This exact surface is already emitted as the Active IO `subscription_types` (APIPath /communication-preferences/v4/definitions). Duplicate under a legacy name; not re-emitted to avoid a duplicate IO.",
+            "supersededBy": [
+              "subscription_types"
+            ],
+            "evidence": "sources/specs/communication_preferences__subscriptions.json#/definitions; metadata has Active subscription_types IO mapped to /communication-preferences/v4/definitions.",
+            "recordedRound": "delta-round-1",
+            "recordedAt": "2026-07-01T17:20:54.300Z"
+          },
+          {
+            "objectName": "goals",
+            "reason": "objectTypeId 0-136 has zero credential-free source evidence in this REDO pass. The catalog exposes only \"Goal Targets\" (emitted as goal_targets); SOURCE_STUDY.md never mentions goals/0-136; no spec file references 0-136. Carried forward from the deprecated connector STANDARD_OBJECTS map without independent re-verification (template-guess anti-pattern per connector-code-conventions.md GOVERNING PRINCIPLE). IO retained but set Status=Disabled so it never syncs on an unprovable path.",
+            "supersededBy": [
+              "goal_targets"
+            ],
+            "evidence": "sources/api-catalog-new.json (only \"Goal Targets\" CRM API; no distinct \"Goals\" API); sources/specs/ (no crm__goals.json, no 0-136 reference); SOURCE_STUDY.md (no goals/0-136 mention).",
+            "recordedRound": "delta-round-2",
+            "recordedAt": "2026-07-02T08:16:42.684Z"
+          },
+          {
+            "objectName": "webhooks_subscriptions",
+            "reason": "App-level webhook subscription configuration (/webhooks/2026-03/{appId}/subscriptions, /settings), not a syncable customer-record collection. These CRUD an app's own webhook config keyed by {appId}, not tenant business data.",
+            "evidence": "sources/specs/webhooks__webhooks.json#paths (/webhooks/2026-03/{appId}/subscriptions|settings — app-config CRUD).",
+            "supersededBy": [],
+            "recordedRound": "delta-round-2",
+            "recordedAt": "2026-07-02T08:16:42.684Z"
+          },
+          {
+            "objectName": "webhooks_journal_subscriptions",
+            "reason": "App-level journal subscription/filter configuration (/webhooks-journal/subscriptions/2026-03/*), not a syncable record collection. The syncable event feed itself is emitted as webhooks_journal.",
+            "evidence": "sources/specs/webhooks_journal__webhooks_journal.json#paths (/webhooks-journal/subscriptions/* — subscription+filter config).",
+            "supersededBy": [
+              "webhooks_journal"
+            ],
+            "recordedRound": "delta-round-2",
+            "recordedAt": "2026-07-02T08:16:42.684Z"
+          }
+        ]
       },
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=HubSpot API"
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=HubSpot API",
+      "ImportPath": "@memberjunction/connector-hubspot"
     },
     "relatedEntities": {
       "MJ: Integration Objects": [
@@ -5032,8 +5137,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5052,8 +5156,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5131,8 +5234,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5151,8 +5253,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5230,8 +5331,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5250,8 +5350,7 @@
                   "Configuration": {
                     "ReferencedType": "tickets"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5329,8 +5428,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5349,8 +5447,7 @@
                   "Configuration": {
                     "ReferencedType": "calls"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5428,8 +5525,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5448,8 +5544,7 @@
                   "Configuration": {
                     "ReferencedType": "emails"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5527,8 +5622,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5547,8 +5641,7 @@
                   "Configuration": {
                     "ReferencedType": "meetings"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5626,8 +5719,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5646,8 +5738,7 @@
                   "Configuration": {
                     "ReferencedType": "notes"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5725,8 +5816,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5745,8 +5835,7 @@
                   "Configuration": {
                     "ReferencedType": "tasks"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5824,8 +5913,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5844,8 +5932,7 @@
                   "Configuration": {
                     "ReferencedType": "communications"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5923,8 +6010,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -5943,8 +6029,7 @@
                   "Configuration": {
                     "ReferencedType": "postal_mail"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6022,8 +6107,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6042,8 +6126,7 @@
                   "Configuration": {
                     "ReferencedType": "quotes"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6121,8 +6204,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6141,8 +6223,7 @@
                   "Configuration": {
                     "ReferencedType": "carts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6220,8 +6301,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6240,8 +6320,7 @@
                   "Configuration": {
                     "ReferencedType": "orders"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6319,8 +6398,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6339,8 +6417,7 @@
                   "Configuration": {
                     "ReferencedType": "invoices"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6418,8 +6495,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6438,8 +6514,7 @@
                   "Configuration": {
                     "ReferencedType": "commerce_payments"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6517,8 +6592,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6537,8 +6611,7 @@
                   "Configuration": {
                     "ReferencedType": "subscriptions"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6616,8 +6689,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6636,8 +6708,7 @@
                   "Configuration": {
                     "ReferencedType": "appointments"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6715,8 +6786,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6735,8 +6805,7 @@
                   "Configuration": {
                     "ReferencedType": "courses"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6814,8 +6883,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6834,8 +6902,7 @@
                   "Configuration": {
                     "ReferencedType": "listings"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6913,8 +6980,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6933,8 +6999,7 @@
                   "Configuration": {
                     "ReferencedType": "services"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7012,8 +7077,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7032,8 +7096,7 @@
                   "Configuration": {
                     "ReferencedType": "leads"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7111,8 +7174,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7131,8 +7193,7 @@
                   "Configuration": {
                     "ReferencedType": "projects"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7210,8 +7271,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7230,8 +7290,7 @@
                   "Configuration": {
                     "ReferencedType": "feedback_submissions"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7309,8 +7368,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7329,8 +7387,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7408,8 +7465,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7428,8 +7484,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7507,8 +7562,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7527,8 +7581,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7606,8 +7659,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7626,8 +7678,7 @@
                   "Configuration": {
                     "ReferencedType": "tickets"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7705,8 +7756,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7725,8 +7775,7 @@
                   "Configuration": {
                     "ReferencedType": "calls"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7804,8 +7853,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7824,8 +7872,7 @@
                   "Configuration": {
                     "ReferencedType": "emails"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7903,8 +7950,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -7923,8 +7969,7 @@
                   "Configuration": {
                     "ReferencedType": "meetings"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8002,8 +8047,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8022,8 +8066,7 @@
                   "Configuration": {
                     "ReferencedType": "notes"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8101,8 +8144,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8121,8 +8163,7 @@
                   "Configuration": {
                     "ReferencedType": "tasks"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8200,8 +8241,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8220,8 +8260,7 @@
                   "Configuration": {
                     "ReferencedType": "communications"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8299,8 +8338,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8319,8 +8357,7 @@
                   "Configuration": {
                     "ReferencedType": "quotes"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8398,8 +8435,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8418,8 +8454,7 @@
                   "Configuration": {
                     "ReferencedType": "orders"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8497,8 +8532,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8517,8 +8551,7 @@
                   "Configuration": {
                     "ReferencedType": "invoices"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8596,8 +8629,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8616,8 +8648,7 @@
                   "Configuration": {
                     "ReferencedType": "subscriptions"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8695,8 +8726,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8715,8 +8745,7 @@
                   "Configuration": {
                     "ReferencedType": "appointments"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8794,8 +8823,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8814,8 +8842,7 @@
                   "Configuration": {
                     "ReferencedType": "courses"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8893,8 +8920,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8913,8 +8939,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8992,8 +9017,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9012,8 +9036,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9091,8 +9114,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9111,8 +9133,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9190,8 +9211,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9210,8 +9230,7 @@
                   "Configuration": {
                     "ReferencedType": "tickets"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9289,8 +9308,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9309,8 +9327,7 @@
                   "Configuration": {
                     "ReferencedType": "calls"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9388,8 +9405,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9408,8 +9424,7 @@
                   "Configuration": {
                     "ReferencedType": "emails"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9487,8 +9502,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9507,8 +9521,7 @@
                   "Configuration": {
                     "ReferencedType": "meetings"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9586,8 +9599,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9606,8 +9618,7 @@
                   "Configuration": {
                     "ReferencedType": "notes"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9685,8 +9696,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9705,8 +9715,7 @@
                   "Configuration": {
                     "ReferencedType": "tasks"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9784,8 +9793,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9804,8 +9812,7 @@
                   "Configuration": {
                     "ReferencedType": "quotes"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9883,8 +9890,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9903,8 +9909,7 @@
                   "Configuration": {
                     "ReferencedType": "line_items"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -9982,8 +9987,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10002,8 +10006,7 @@
                   "Configuration": {
                     "ReferencedType": "orders"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10081,8 +10084,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10101,8 +10103,7 @@
                   "Configuration": {
                     "ReferencedType": "leads"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10180,8 +10181,7 @@
                   "Configuration": {
                     "ReferencedType": "tickets"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10200,8 +10200,7 @@
                   "Configuration": {
                     "ReferencedType": "contacts"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10279,8 +10278,7 @@
                   "Configuration": {
                     "ReferencedType": "tickets"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10299,8 +10297,7 @@
                   "Configuration": {
                     "ReferencedType": "companies"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10378,8 +10375,7 @@
                   "Configuration": {
                     "ReferencedType": "tickets"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10398,8 +10394,7 @@
                   "Configuration": {
                     "ReferencedType": "deals"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10477,8 +10472,7 @@
                   "Configuration": {
                     "ReferencedType": "tickets"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10497,8 +10491,7 @@
                   "Configuration": {
                     "ReferencedType": "calls"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10576,8 +10569,7 @@
                   "Configuration": {
                     "ReferencedType": "tickets"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10596,8 +10588,7 @@
                   "Configuration": {
                     "ReferencedType": "emails"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10675,8 +10666,7 @@
                   "Configuration": {
                     "ReferencedType": "tickets"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10695,8 +10685,7 @@
                   "Configuration": {
                     "ReferencedType": "meetings"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10774,8 +10763,7 @@
                   "Configuration": {
                     "ReferencedType": "tickets"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10794,8 +10782,7 @@
                   "Configuration": {
                     "ReferencedType": "notes"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10873,8 +10860,7 @@
                   "Configuration": {
                     "ReferencedType": "tickets"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -10893,8 +10879,7 @@
                   "Configuration": {
                     "ReferencedType": "tasks"
                   },
-                  "IntegrationObjectID": "@parent:ID",
-                  "IsForeignKey": true
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -16725,21 +16710,21 @@
           "fields": {
             "Name": "timeline_event_types",
             "DisplayName": "Timeline Event Types",
-            "Description": "HubSpot Timeline — timeline_event_types records (from TimelineEventIFrame).",
+            "Description": "HubSpot Timeline event-type DEFINITIONS. RUNTIME-DISCOVERY-ONLY: crm__timeline.json exposes no credential-free type-definition list/get endpoint (only /events, /events/batch, /types/projects + the TimelineEventIFrame display sub-object). Current mechanism is a deploy-time project *-hsmeta.json config file (hs project upload), not a queryable REST resource; the legacy /integrations/v1/{appId}/timeline/event-types surface exists (curl 401) but is deprecated and auth-gated for any read. Cannot be seeded as credential-free Declared metadata — discovered at runtime via the legacy authenticated endpoint at connection time.",
             "Category": "Timeline",
-            "APIPath": "/integrators/timeline/2026-03/types/projects",
+            "APIPath": null,
             "ResponseDataKey": "results",
             "PaginationType": "Cursor",
             "DefaultPageSize": 100,
-            "SupportsPagination": true,
+            "SupportsPagination": false,
             "SupportsIncrementalSync": false,
             "IncrementalWatermarkField": null,
-            "SupportsWrite": true,
-            "SupportsCreate": true,
-            "CreateAPIPath": "/integrators/timeline/2026-03/types/projects",
-            "CreateMethod": "POST",
-            "CreateBodyShape": "flat",
-            "CreateIDLocation": "body",
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "CreateAPIPath": null,
+            "CreateMethod": null,
+            "CreateBodyShape": null,
+            "CreateIDLocation": null,
             "SupportsUpdate": false,
             "UpdateAPIPath": null,
             "UpdateMethod": null,
@@ -16749,95 +16734,24 @@
             "DeleteAPIPath": null,
             "DeleteMethod": null,
             "DeleteIDLocation": null,
-            "SyncStrategy": "FullPullHashDiff",
-            "ContentHashApplicable": true,
+            "SyncStrategy": null,
+            "ContentHashApplicable": null,
             "StableOrderingKey": null,
             "Sequence": 120,
-            "Status": "Active",
+            "Status": "Disabled",
             "Configuration": {
-              "primaryRecordSchema": "TimelineEventIFrame",
-              "spec": "sources/specs/crm__timeline.json"
+              "runtimeDiscoveryOnly": true,
+              "skipReason": "no credential-free type-definition list endpoint; current mechanism is a deploy-time project config file (hs project upload), not a queryable REST resource; legacy REST surface (/integrations/v1/{appId}/timeline/event-types) exists but is auth-gated for any read. TimelineEventIFrame is a display sub-object of an event occurrence, NOT the type-definition record.",
+              "legacyAuthGatedEndpoint": "/integrations/v1/{appId}/timeline/event-types",
+              "spec": "sources/specs/crm__timeline.json",
+              "reclassifiedRound": "delta-round-1"
             },
-            "IntegrationID": "@parent:ID"
+            "IntegrationID": "@parent:ID",
+            "CreateBodyKey": null,
+            "UpdateBodyKey": null
           },
           "relatedEntities": {
-            "MJ: Integration Object Fields": [
-              {
-                "fields": {
-                  "Name": "headerLabel",
-                  "Type": "string",
-                  "Length": null,
-                  "Description": "The label of the modal window that displays the iframe contents.",
-                  "IsPrimaryKey": false,
-                  "IsRequired": true,
-                  "IsReadOnly": false,
-                  "IsUniqueKey": false,
-                  "AllowsNull": true,
-                  "Status": "Active",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              },
-              {
-                "fields": {
-                  "Name": "height",
-                  "Type": "int",
-                  "Length": null,
-                  "Description": "The height of the modal window in pixels.",
-                  "IsPrimaryKey": false,
-                  "IsRequired": true,
-                  "IsReadOnly": false,
-                  "IsUniqueKey": false,
-                  "AllowsNull": true,
-                  "Status": "Active",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              },
-              {
-                "fields": {
-                  "Name": "linkLabel",
-                  "Type": "string",
-                  "Length": null,
-                  "Description": "The text displaying the link that will display the iframe.",
-                  "IsPrimaryKey": false,
-                  "IsRequired": true,
-                  "IsReadOnly": false,
-                  "IsUniqueKey": false,
-                  "AllowsNull": true,
-                  "Status": "Active",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              },
-              {
-                "fields": {
-                  "Name": "url",
-                  "Type": "string",
-                  "Length": null,
-                  "Description": "The URI of the iframe contents.",
-                  "IsPrimaryKey": false,
-                  "IsRequired": true,
-                  "IsReadOnly": false,
-                  "IsUniqueKey": false,
-                  "AllowsNull": true,
-                  "Status": "Active",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              },
-              {
-                "fields": {
-                  "Name": "width",
-                  "Type": "int",
-                  "Length": null,
-                  "Description": "The width of the modal window in pixels.",
-                  "IsPrimaryKey": false,
-                  "IsRequired": true,
-                  "IsReadOnly": false,
-                  "IsUniqueKey": false,
-                  "AllowsNull": true,
-                  "Status": "Active",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              }
-            ]
+            "MJ: Integration Object Fields": []
           }
         },
         {
@@ -22947,14 +22861,15 @@
             "SyncStrategy": "WatermarkIncremental",
             "StableOrderingKey": "id",
             "Sequence": 139,
-            "Status": "Active",
+            "Status": "Disabled",
             "Configuration": {
               "objectSlug": "0-136",
               "pkConvention": "id (universal SimplePublicObject PK; also hs_object_id in properties)",
               "incrementalMechanism": "search-api-filter",
               "watermarkFilterOperator": "GTE",
               "propertiesDiscoveryEndpoint": "/crm/properties/2026-03/0-136",
-              "note": "Business fields are per-portal custom/built-in properties — discovered at runtime via the Properties API; captured here as the json `properties` column."
+              "note": "Business fields are per-portal custom/built-in properties — discovered at runtime via the Properties API; captured here as the json `properties` column.",
+              "disabledReason": "No credential-free source evidence for objectTypeId 0-136 as a distinct \"Goals\" object. The 102-API catalog exposes only \"Goal Targets\" (already emitted as goal_targets); SOURCE_STUDY.md never enumerates goals/0-136; no spec file references 0-136. Carried forward from the deprecated connector STANDARD_OBJECTS map without re-verification (template-guess anti-pattern). Left as Disabled pending Tier-1/2 evidence."
             },
             "IntegrationID": "@parent:ID"
           },
@@ -23077,7 +22992,6 @@
             "DeleteIDLocation": "path",
             "SyncStrategy": "WatermarkIncremental",
             "ContentHashApplicable": false,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 165,
             "Status": "Active",
@@ -23103,7 +23017,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23118,7 +23032,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23133,7 +23047,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23148,7 +23062,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23163,7 +23077,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23178,7 +23092,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23193,7 +23107,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23268,7 +23182,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23313,7 +23227,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23343,7 +23257,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23358,7 +23272,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23373,7 +23287,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23403,7 +23317,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23418,7 +23332,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23433,7 +23347,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23463,7 +23377,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23516,7 +23430,6 @@
             "DeleteIDLocation": "path",
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 166,
             "Status": "Active",
@@ -23542,7 +23455,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23587,7 +23500,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23632,7 +23545,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23647,7 +23560,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23677,7 +23590,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23707,7 +23620,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23722,7 +23635,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23760,7 +23673,6 @@
             "DeleteIDLocation": "path",
             "SyncStrategy": "WatermarkIncremental",
             "ContentHashApplicable": false,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 167,
             "Status": "Active",
@@ -23786,7 +23698,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23816,7 +23728,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23831,7 +23743,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23846,7 +23758,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23861,7 +23773,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23876,7 +23788,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23906,7 +23818,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23921,7 +23833,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23936,7 +23848,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -23974,7 +23886,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "statusId",
             "Sequence": 168,
             "Status": "Active",
@@ -24090,7 +24001,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24143,7 +24054,6 @@
             "DeleteIDLocation": "path",
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 169,
             "Status": "Active",
@@ -24169,7 +24079,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24184,7 +24094,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24199,7 +24109,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24214,7 +24124,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24229,7 +24139,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24297,7 +24207,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "WatermarkIncremental",
             "ContentHashApplicable": false,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 170,
             "Status": "Active",
@@ -24323,7 +24232,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24338,7 +24247,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24353,7 +24262,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24413,7 +24322,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24443,7 +24352,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24458,7 +24367,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24473,7 +24382,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24503,7 +24412,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24518,7 +24427,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24533,7 +24442,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24548,7 +24457,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24616,7 +24525,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "WatermarkIncremental",
             "ContentHashApplicable": false,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 171,
             "Status": "Active",
@@ -24642,7 +24550,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24657,7 +24565,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24672,7 +24580,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24687,7 +24595,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24702,7 +24610,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24717,7 +24625,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24747,7 +24655,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24762,7 +24670,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24777,7 +24685,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24792,7 +24700,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24807,7 +24715,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24822,7 +24730,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24837,7 +24745,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24852,7 +24760,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24867,7 +24775,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24905,7 +24813,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "name",
             "Sequence": 172,
             "Status": "Active",
@@ -24931,7 +24838,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24946,7 +24853,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -24961,7 +24868,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25006,7 +24913,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25044,7 +24951,6 @@
             "DeleteIDLocation": "path",
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 173,
             "Status": "Active",
@@ -25070,7 +24976,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25170,7 +25076,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25215,7 +25121,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25253,7 +25159,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 174,
             "Status": "Active",
@@ -25294,7 +25199,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25309,7 +25214,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25323,7 +25228,7 @@
             "DisplayName": "Business Units",
             "Description": "HubSpot Account & Settings — business_units records (from PublicBusinessUnit).",
             "Category": "Account & Settings",
-            "APIPath": "/business-units/public/2026-03/business-units",
+            "APIPath": "/business-units/public/2026-03/business-units/user/{userId}",
             "ResponseDataKey": "results",
             "PaginationType": "Cursor",
             "DefaultPageSize": 100,
@@ -25347,7 +25252,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 175,
             "Status": "Active",
@@ -25356,7 +25260,9 @@
               "spec": "sources/specs/business_units__business_units.json",
               "accessPath": {
                 "door": "business_units",
-                "nesting": ""
+                "nesting": "",
+                "requiresPathParam": "userId",
+                "note": "Only documented read path is user-scoped (/user/{userId}); no unscoped list endpoint in this spec. The connecting user's ID must be supplied at runtime — likely augmented at connection time."
               }
             },
             "IntegrationID": "@parent:ID"
@@ -25403,7 +25309,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25441,7 +25347,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "WatermarkIncremental",
             "ContentHashApplicable": false,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 176,
             "Status": "Active",
@@ -25467,7 +25372,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25482,7 +25387,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25497,7 +25402,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25512,7 +25417,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25542,7 +25447,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25557,7 +25462,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25572,7 +25477,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25610,7 +25515,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "WatermarkIncremental",
             "ContentHashApplicable": false,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 177,
             "Status": "Active",
@@ -25636,7 +25540,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25651,7 +25555,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25681,7 +25585,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25696,7 +25600,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25711,7 +25615,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25726,7 +25630,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25764,7 +25668,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "WatermarkIncremental",
             "ContentHashApplicable": false,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 178,
             "Status": "Active",
@@ -25790,7 +25693,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25820,7 +25723,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25850,7 +25753,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25865,7 +25768,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25880,7 +25783,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25918,7 +25821,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 179,
             "Status": "Active",
@@ -25959,7 +25861,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -25997,7 +25899,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 180,
             "Status": "Active",
@@ -26023,7 +25924,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26038,7 +25939,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26068,7 +25969,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26083,7 +25984,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=conversation_channels&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "id",
@@ -26103,7 +26004,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26148,7 +26049,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=conversation_inboxes&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "id",
@@ -26168,7 +26069,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26206,7 +26107,6 @@
             "DeleteIDLocation": "path",
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 181,
             "Status": "Active",
@@ -26232,7 +26132,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26292,7 +26192,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26322,7 +26222,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26375,7 +26275,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "WatermarkIncremental",
             "ContentHashApplicable": false,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 182,
             "Status": "Active",
@@ -26401,7 +26300,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26416,7 +26315,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26446,7 +26345,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26476,7 +26375,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=owners&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "id",
@@ -26496,7 +26395,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26511,7 +26410,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26541,7 +26440,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26579,7 +26478,6 @@
             "DeleteIDLocation": "path",
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "datasourceId",
             "Sequence": 183,
             "Status": "Active",
@@ -26605,7 +26503,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26620,7 +26518,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26650,7 +26548,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26665,7 +26563,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26680,7 +26578,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26718,7 +26616,6 @@
             "DeleteIDLocation": "path",
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 184,
             "Status": "Active",
@@ -26767,7 +26664,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -26889,7 +26786,6 @@
             "DeleteIDLocation": "path",
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "id",
             "Sequence": 185,
             "Status": "Active",
@@ -26938,7 +26834,7 @@
                   "IsRequired": true,
                   "IsReadOnly": false,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -27004,7 +26900,6 @@
             "DeleteIDLocation": null,
             "SyncStrategy": "WatermarkIncremental",
             "ContentHashApplicable": false,
-            "IsMutable": true,
             "StableOrderingKey": "submittedAt",
             "Sequence": 186,
             "Status": "Active",
@@ -27017,8 +26912,6 @@
               },
               "parentObject": "forms"
             },
-            "ParentObjectName": "forms",
-            "ParentObjectIDFieldName": "formGuid",
             "IntegrationID": "@parent:ID"
           },
           "relatedEntities": {
@@ -27046,7 +26939,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }
@@ -27074,7 +26967,7 @@
                   "IsRequired": true,
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
-                  "AllowsNull": false,
+                  "AllowsNull": true,
                   "Status": "Active",
                   "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=forms&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "id",
@@ -27111,12 +27004,9 @@
             "DeleteIDLocation": "path",
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "fromObjectId",
             "Sequence": 187,
             "Status": "Active",
-            "ParentObjectName": "quotes",
-            "ParentObjectIDFieldName": "fromObjectId",
             "Configuration": {
               "associationKind": "pairwise-edge",
               "fromObjectType": "quotes",
@@ -27211,12 +27101,9 @@
             "DeleteIDLocation": "path",
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "fromObjectId",
             "Sequence": 188,
             "Status": "Active",
-            "ParentObjectName": "quotes",
-            "ParentObjectIDFieldName": "fromObjectId",
             "Configuration": {
               "associationKind": "pairwise-edge",
               "fromObjectType": "quotes",
@@ -27311,12 +27198,9 @@
             "DeleteIDLocation": "path",
             "SyncStrategy": "FullPullHashDiff",
             "ContentHashApplicable": true,
-            "IsMutable": true,
             "StableOrderingKey": "fromObjectId",
             "Sequence": 189,
             "Status": "Active",
-            "ParentObjectName": "tickets",
-            "ParentObjectIDFieldName": "fromObjectId",
             "Configuration": {
               "associationKind": "pairwise-edge",
               "fromObjectType": "tickets",
@@ -27380,6 +27264,884 @@
                   "IsReadOnly": true,
                   "IsUniqueKey": false,
                   "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "marketing_aeo_prompts",
+            "DisplayName": "Marketing AEO Prompts",
+            "Description": "HubSpot Marketing Answer Engine Optimization (AEO) prompts. GET-only listable collection (/marketing/aeo/2026-09-beta/prompts).",
+            "Category": "Marketing",
+            "APIPath": "/marketing/aeo/2026-09-beta/prompts",
+            "ResponseDataKey": "results",
+            "PaginationType": "Cursor",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "IncrementalWatermarkField": null,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "CreateAPIPath": null,
+            "CreateMethod": null,
+            "CreateBodyShape": null,
+            "CreateIDLocation": null,
+            "SupportsUpdate": false,
+            "UpdateAPIPath": null,
+            "UpdateMethod": null,
+            "UpdateBodyShape": null,
+            "UpdateIDLocation": null,
+            "SupportsDelete": false,
+            "DeleteAPIPath": null,
+            "DeleteMethod": null,
+            "DeleteIDLocation": null,
+            "SyncStrategy": "FullPullHashDiff",
+            "ContentHashApplicable": true,
+            "StableOrderingKey": "id",
+            "Sequence": 190,
+            "Status": "Active",
+            "Configuration": {
+              "primaryRecordSchema": "Prompt",
+              "spec": "sources/specs/marketing__aeo.json",
+              "versionNote": "2026-09-beta AEO surface"
+            },
+            "IntegrationID": "@parent:ID"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "Prompt identifier (PK).",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "prompt",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "The AEO prompt text.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "language",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "buyingJourneyPhase",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "businessUnitId",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "Owning business unit id.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "aiAssistants",
+                  "Type": "json",
+                  "Length": null,
+                  "Description": "AI assistants array.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "createdAt",
+                  "Type": "datetime",
+                  "Length": null,
+                  "Description": "Creation timestamp.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "marketing_aeo_prompt_runs",
+            "DisplayName": "Marketing AEO Prompt Runs",
+            "Description": "HubSpot Marketing AEO prompt runs — nested under a prompt (/marketing/aeo/2026-09-beta/prompts/{promptId}/runs); by-id at /prompt-runs/{runUuid}. GET-only.",
+            "Category": "Marketing",
+            "APIPath": "/marketing/aeo/2026-09-beta/prompts/{promptId}/runs",
+            "ResponseDataKey": "results",
+            "PaginationType": "Cursor",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "updatedAt",
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "CreateAPIPath": null,
+            "CreateMethod": null,
+            "CreateBodyShape": null,
+            "CreateIDLocation": null,
+            "SupportsUpdate": false,
+            "UpdateAPIPath": null,
+            "UpdateMethod": null,
+            "UpdateBodyShape": null,
+            "UpdateIDLocation": null,
+            "SupportsDelete": false,
+            "DeleteAPIPath": null,
+            "DeleteMethod": null,
+            "DeleteIDLocation": null,
+            "SyncStrategy": "WatermarkIncremental",
+            "StableOrderingKey": "id",
+            "Sequence": 191,
+            "Status": "Active",
+            "Configuration": {
+              "primaryRecordSchema": "PromptRun",
+              "spec": "sources/specs/marketing__aeo.json",
+              "accessPath": {
+                "door": "marketing_aeo_prompts",
+                "nesting": "prompts[] -> runs[]",
+                "doorArgs": [
+                  "promptId"
+                ]
+              },
+              "byIdPath": "/marketing/aeo/2026-09-beta/prompt-runs/{runUuid}"
+            },
+            "IntegrationID": "@parent:ID"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "Prompt-run identifier (PK).",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "promptId",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "Parent prompt id (FK to marketing_aeo_prompts).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=marketing_aeo_prompts&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "aiModel",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "AI model used for the run.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "state",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "Run state.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "totalCitations",
+                  "Type": "int",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "ownedMentions",
+                  "Type": "int",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "competitorMentions",
+                  "Type": "int",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "createdAt",
+                  "Type": "datetime",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "completedAt",
+                  "Type": "datetime",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "updatedAt",
+                  "Type": "datetime",
+                  "Length": null,
+                  "Description": "Last-modified timestamp (watermark).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "marketing_aeo_recommendations",
+            "DisplayName": "Marketing AEO Recommendations",
+            "Description": "HubSpot Marketing AEO recommendations. GET-only listable collection (/marketing/aeo/2026-09-beta/recommendations).",
+            "Category": "Marketing",
+            "APIPath": "/marketing/aeo/2026-09-beta/recommendations",
+            "ResponseDataKey": "results",
+            "PaginationType": "Cursor",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "IncrementalWatermarkField": null,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "CreateAPIPath": null,
+            "CreateMethod": null,
+            "CreateBodyShape": null,
+            "CreateIDLocation": null,
+            "SupportsUpdate": false,
+            "UpdateAPIPath": null,
+            "UpdateMethod": null,
+            "UpdateBodyShape": null,
+            "UpdateIDLocation": null,
+            "SupportsDelete": false,
+            "DeleteAPIPath": null,
+            "DeleteMethod": null,
+            "DeleteIDLocation": null,
+            "SyncStrategy": "FullPullHashDiff",
+            "ContentHashApplicable": true,
+            "StableOrderingKey": "id",
+            "Sequence": 192,
+            "Status": "Active",
+            "Configuration": {
+              "primaryRecordSchema": "Recommendation",
+              "spec": "sources/specs/marketing__aeo.json"
+            },
+            "IntegrationID": "@parent:ID"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "Recommendation identifier (PK).",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "recommendationType",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "status",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "startDate",
+                  "Type": "date",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "endDate",
+                  "Type": "date",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "createdAt",
+                  "Type": "datetime",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "recommendationSummary",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "justification",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "priority",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "answerEngine",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "actionCategory",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "actionChannel",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contentTopic",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contentType",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "domain",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "url",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "associatedContentUrl",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "influencingCitations",
+                  "Type": "json",
+                  "Length": null,
+                  "Description": "",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "promptIds",
+                  "Type": "json",
+                  "Length": null,
+                  "Description": "Array of related prompt ids.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "settings_teams",
+            "DisplayName": "Settings Teams (User Provisioning)",
+            "Description": "HubSpot Settings/User-Provisioning teams administration (/settings/users/2026-03/teams). GET-only. Distinct from the CRM Owners \"teams\" object (PublicTeam via /crm/v3/owners).",
+            "Category": "Account & Settings",
+            "APIPath": "/settings/users/2026-03/teams",
+            "ResponseDataKey": "results",
+            "PaginationType": "Cursor",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "IncrementalWatermarkField": null,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "CreateAPIPath": null,
+            "CreateMethod": null,
+            "CreateBodyShape": null,
+            "CreateIDLocation": null,
+            "SupportsUpdate": false,
+            "UpdateAPIPath": null,
+            "UpdateMethod": null,
+            "UpdateBodyShape": null,
+            "UpdateIDLocation": null,
+            "SupportsDelete": false,
+            "DeleteAPIPath": null,
+            "DeleteMethod": null,
+            "DeleteIDLocation": null,
+            "SyncStrategy": "FullPullHashDiff",
+            "ContentHashApplicable": true,
+            "StableOrderingKey": "id",
+            "Sequence": 193,
+            "Status": "Active",
+            "Configuration": {
+              "primaryRecordSchema": "PublicTeam (user-provisioning)",
+              "spec": "sources/specs/settings__user_provisioning.json",
+              "note": "Settings-scoped teams admin resource; separate surface from CRM Owners teams."
+            },
+            "IntegrationID": "@parent:ID"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "Team identifier (PK).",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "Team name.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "userIds",
+                  "Type": "json",
+                  "Length": null,
+                  "Description": "Primary member user ids.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "secondaryUserIds",
+                  "Type": "json",
+                  "Length": null,
+                  "Description": "Secondary member user ids.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "webhooks_journal",
+            "DisplayName": "Webhooks Journal",
+            "Description": "HubSpot Webhooks delivery journal — an append-only event replay feed (/webhooks-journal/journal/2026-03). Offset-cursor paged; batch/read + offset/{offset}/next return a JournalFetchResponse pointer (pre-signed download url + currentOffset + expiresAt) from which delivered-event payloads are fetched out-of-band.",
+            "Category": "Webhooks",
+            "APIPath": "/webhooks-journal/journal/2026-03/latest",
+            "ResponseDataKey": "results",
+            "PaginationType": "Offset",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "currentOffset",
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "CreateAPIPath": null,
+            "CreateMethod": null,
+            "CreateBodyShape": null,
+            "CreateIDLocation": null,
+            "SupportsUpdate": false,
+            "UpdateAPIPath": null,
+            "UpdateMethod": null,
+            "UpdateBodyShape": null,
+            "UpdateIDLocation": null,
+            "SupportsDelete": false,
+            "DeleteAPIPath": null,
+            "DeleteMethod": null,
+            "DeleteIDLocation": null,
+            "SyncStrategy": "AppendOnlyCursor",
+            "StableOrderingKey": "currentOffset",
+            "Sequence": 194,
+            "Status": "Active",
+            "Configuration": {
+              "primaryRecordSchema": "JournalFetchResponse",
+              "spec": "sources/specs/webhooks_journal__webhooks_journal.json",
+              "fetchMechanism": "two-stage: GET latest|batch/read -> {url,currentOffset,expiresAt}; download events from url; page via offset/{offset}/next",
+              "cursorParam": "offset",
+              "subscriptionsNote": "The /webhooks-journal/subscriptions/* and /webhooks/{appId}/subscriptions|settings paths are app-level configuration, not syncable records — see Integration.Configuration.skippedObjects."
+            },
+            "IntegrationID": "@parent:ID"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "currentOffset",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "Journal cursor / offset uuid identifying this fetch position (PK + append-only cursor).",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "url",
+                  "Type": "string",
+                  "Length": null,
+                  "Description": "Pre-signed download URL for the batch of delivered webhook events at this offset.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "expiresAt",
+                  "Type": "datetime",
+                  "Length": null,
+                  "Description": "Expiry of the pre-signed download URL.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID"
                 }

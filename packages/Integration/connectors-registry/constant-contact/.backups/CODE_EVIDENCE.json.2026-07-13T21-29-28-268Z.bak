@@ -1,0 +1,3213 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "incrementalWatermarkByPath": {
+          "/contacts": [
+            "updated_after",
+            "updated_before",
+            "created_after",
+            "created_before",
+            "optout_after",
+            "optout_before"
+          ],
+          "/emails": [
+            "before_date",
+            "after_date"
+          ]
+        },
+        "note": "Full scan of every GET-collection operation's query-parameter names in the saved openapi.json against a candidate incremental-filter name list. Only these 2 of 67 in-scope objects matched."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "webhookSurface": {
+          "allWebhookPathCount": 3,
+          "nonPartnerWebhookPathCount": 0,
+          "allWebhookPaths": [
+            "/partner/webhooks/subscriptions",
+            "/partner/webhooks/subscriptions/{topic_id}",
+            "/partner/webhooks/subscriptions/{topic_id}/tests"
+          ]
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WebhooksAvailable"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "tagMethods": {
+          "Bulk Activities": [
+            "get",
+            "post"
+          ]
+        },
+        "note": "12 Bulk Activities leaf endpoints confirmed present in openapi.json paths under this tag, base path /activities."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.BulkOperationsAvailable"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "tagMethods": {
+          "Account Services": [
+            "get",
+            "post",
+            "put"
+          ],
+          "Bulk Activities": [
+            "get",
+            "post"
+          ],
+          "Contact Lists": [
+            "delete",
+            "get",
+            "post",
+            "put"
+          ],
+          "Contact Tags": [
+            "delete",
+            "get",
+            "post",
+            "put"
+          ],
+          "Contacts": [
+            "delete",
+            "get",
+            "post",
+            "put"
+          ],
+          "Contacts Custom Fields": [
+            "delete",
+            "get",
+            "post",
+            "put"
+          ],
+          "Contacts Reporting": [
+            "get"
+          ],
+          "Email Campaigns": [
+            "delete",
+            "get",
+            "patch",
+            "post",
+            "put"
+          ],
+          "Email Campaigns AB Tests": [
+            "delete",
+            "get",
+            "post"
+          ],
+          "Email Reporting": [
+            "get"
+          ],
+          "Email Scheduling": [
+            "delete",
+            "get",
+            "post"
+          ],
+          "Events": [
+            "get",
+            "patch",
+            "post",
+            "put"
+          ],
+          "Landing Pages Reporting": [
+            "get"
+          ],
+          "SMS Reporting": [
+            "get"
+          ],
+          "Segments": [
+            "delete",
+            "get",
+            "patch",
+            "post",
+            "put"
+          ],
+          "Social": [
+            "get",
+            "post"
+          ]
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WriteCapability"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "concurrencyHeaderScan": {
+          "ETag": false,
+          "If-Match": false,
+          "If-Unmodified-Since": false
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ConcurrencyControl"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "deleteOps": [
+          {
+            "path": "/contacts/{contact_id}",
+            "reviveOrRestoreLanguage": true
+          },
+          {
+            "path": "/emails/{campaign_id}",
+            "reviveOrRestoreLanguage": true
+          },
+          {
+            "path": "/contact_lists/{list_id}",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/contact_tags/{tag_id}",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/contact_custom_fields/{custom_field_id}",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/segments/{segment_id}",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/emails/activities/{campaign_activity_id}/schedules",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/emails/activities/{campaign_activity_id}/non_opener_resends/{resend_request_id}",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/emails/activities/{campaign_activity_id}/abtest",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/partner/webhooks/subscriptions/{topic_id}",
+            "reviveOrRestoreLanguage": false
+          }
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.DeleteSemantics"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "securitySchemeCounts": {
+          "[\"oauth2_access_code\",\"oauth2_implicit\"]": 111,
+          "[\"api_key\",\"ctctPartnerAuthorizer\"]": 13
+        },
+        "note": "Every non-partner operation (111 of 124) requires the shared oauth2_access_code/oauth2_implicit scheme; the 13 Technology-Partner operations use a wholly separate api_key+ctctPartnerAuthorizer scheme, corroborating the OutOfScopeObjectFamilies split."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "pkNamingConvention": {
+          "totalGetByIdPathsChecked": 15,
+          "totalMatchingConvention": 11,
+          "matchRatio": 0.7333333333333333
+        },
+        "note": "73.3% match ratio does NOT clear the >=95% significance bar for a universalPK hard-constraint hint; recorded as an informational PKNamingObservation only, universalPK deliberately left unset."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PKNamingObservation"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "baseUrl": {
+          "host": "api.cc.email",
+          "basePath": "/v3",
+          "schemes": [
+            "https"
+          ],
+          "derivedNavigationBaseURL": "https://api.cc.email/v3"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.NavigationBaseURL"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "account_emails",
+        "apiPath": "/account/emails",
+        "fields": 7,
+        "supportsWrite": true,
+        "source": "GET /account/emails 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_emails.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "account_physical_address",
+        "apiPath": "/account/summary/physical_address",
+        "fields": 8,
+        "supportsWrite": true,
+        "source": "GET /account/summary/physical_address 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_physical_address.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "account_summary",
+        "apiPath": "/account/summary",
+        "fields": 14,
+        "supportsWrite": true,
+        "source": "GET /account/summary 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_summary.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "account_user_privileges",
+        "apiPath": "/account/user/privileges",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /account/user/privileges 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_user_privileges.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "GET /activities/{activity_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities",
+        "apiPath": "/activities",
+        "fields": 11,
+        "supportsWrite": false,
+        "source": "GET /activities/{activity_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/contact_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_delete.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_delete",
+        "apiPath": "/activities/contact_delete",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contact_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_delete.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "activity_id",
+        "target": "activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_export.activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_export",
+        "apiPath": "/contact_exports/{file_export_id}",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contact_exports response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_export.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/contacts_file_import response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_file_import.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_file_import",
+        "apiPath": "/activities/contacts_file_import",
+        "fields": 11,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_file_import response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_file_import.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/contacts_json_import response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_json_import.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_json_import",
+        "apiPath": "/activities/contacts_json_import",
+        "fields": 11,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_json_import response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_json_import.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/contacts_taggings_add response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_taggings_add.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_taggings_add",
+        "apiPath": "/activities/contacts_taggings_add",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_taggings_add response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_taggings_add.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/contacts_taggings_remove response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_taggings_remove.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_taggings_remove",
+        "apiPath": "/activities/contacts_taggings_remove",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_taggings_remove response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_taggings_remove.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/contacts_tags_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_tags_delete.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_tags_delete",
+        "apiPath": "/activities/contacts_tags_delete",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_tags_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_tags_delete.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/custom_fields_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_custom_fields_delete.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_custom_fields_delete",
+        "apiPath": "/activities/custom_fields_delete",
+        "fields": 9,
+        "supportsWrite": true,
+        "source": "POST /activities/custom_fields_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_custom_fields_delete.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/list_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_list_delete.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_list_delete",
+        "apiPath": "/activities/list_delete",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/list_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_list_delete.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/add_list_memberships response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_list_memberships_add.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_list_memberships_add",
+        "apiPath": "/activities/add_list_memberships",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/add_list_memberships response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_list_memberships_add.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/remove_list_memberships response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_list_memberships_remove.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_list_memberships_remove",
+        "apiPath": "/activities/remove_list_memberships",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/remove_list_memberships response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_list_memberships_remove.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "custom_field_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "GET /contact_custom_fields/{custom_field_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_custom_fields.custom_field_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contact_custom_fields",
+        "apiPath": "/contact_custom_fields",
+        "fields": 9,
+        "supportsWrite": true,
+        "source": "GET /contact_custom_fields/{custom_field_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_custom_fields.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "list_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "GET /contact_lists/{list_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_lists.list_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contact_lists",
+        "apiPath": "/contact_lists",
+        "fields": 8,
+        "supportsWrite": true,
+        "source": "GET /contact_lists/{list_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_lists.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "list_id",
+        "target": "contact_lists",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_lists_xrefs.list_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contact_lists_xrefs",
+        "apiPath": "/contact_lists/list_id_xrefs",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /contact_lists/list_id_xrefs 200 (xrefs)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_lists_xrefs.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_reports_activity_details.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_reports_activity_details.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contact_reports_activity_details",
+        "apiPath": "/reports/contact_reports/{contact_id}/activity_details",
+        "fields": 5,
+        "supportsWrite": false,
+        "source": "GET /reports/contact_reports/{contact_id}/activity_details 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_reports_activity_details.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_reports_activity_summary.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contact_reports_activity_summary",
+        "apiPath": "/reports/contact_reports/{contact_id}/activity_summary",
+        "fields": 8,
+        "supportsWrite": false,
+        "source": "GET /reports/contact_reports/{contact_id}/activity_summary 200 (campaign_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_reports_activity_summary.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_reports_open_and_click_rates.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contact_reports_open_and_click_rates",
+        "apiPath": "/reports/contact_reports/{contact_id}/open_and_click_rates",
+        "fields": 4,
+        "supportsWrite": false,
+        "source": "GET /reports/contact_reports/{contact_id}/open_and_click_rates 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_reports_open_and_click_rates.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "tag_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "GET /contact_tags/{tag_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_tags.tag_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contact_tags",
+        "apiPath": "/contact_tags",
+        "fields": 6,
+        "supportsWrite": true,
+        "source": "GET /contact_tags/{tag_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_tags.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "contact_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "GET /contacts/{contact_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contacts.contact_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contacts",
+        "apiPath": "/contacts",
+        "fields": 21,
+        "supportsWrite": true,
+        "source": "GET /contacts/{contact_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contacts_counts",
+        "apiPath": "/contacts/counts",
+        "fields": 6,
+        "supportsWrite": false,
+        "source": "GET /contacts/counts 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts_counts.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contacts_resubscribe",
+        "apiPath": "/contacts/resubscribe/{contact_id}",
+        "fields": 1,
+        "supportsWrite": true,
+        "source": "PUT /contacts/resubscribe/{contact_id} body"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts_resubscribe.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contacts_sign_up_form.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contacts_sign_up_form",
+        "apiPath": "/contacts/sign_up_form",
+        "fields": 2,
+        "supportsWrite": true,
+        "source": "POST /contacts/sign_up_form response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts_sign_up_form.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contacts_sms_engagement_history",
+        "apiPath": "/contacts/sms_engagement_history/{contact_id}",
+        "fields": 1,
+        "supportsWrite": false,
+        "source": "GET /contacts/sms_engagement_history/{contact_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts_sms_engagement_history.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contacts_xrefs.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "contacts_xrefs",
+        "apiPath": "/contacts/contact_id_xrefs",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /contacts/contact_id_xrefs 200 (xrefs)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts_xrefs.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "campaign_activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "GET /emails/activities/{campaign_activity_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_campaign_activities.campaign_activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_id",
+        "target": "emails",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_campaign_activities.campaign_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activities",
+        "apiPath": "/emails/activities/{campaign_activity_id}",
+        "fields": 17,
+        "supportsWrite": true,
+        "source": "GET /emails/activities/{campaign_activity_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activities.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_abtest",
+        "apiPath": "/emails/activities/{campaign_activity_id}/abtest",
+        "fields": 3,
+        "supportsWrite": true,
+        "source": "GET /emails/activities/{campaign_activity_id}/abtest 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activity_abtest.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_non_opener_resends",
+        "apiPath": "/emails/activities/{campaign_activity_id}/non_opener_resends",
+        "fields": 6,
+        "supportsWrite": true,
+        "source": "GET /emails/activities/{campaign_activity_id}/non_opener_resends 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activity_non_opener_resends.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_campaign_activity_previews.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_previews",
+        "apiPath": "/emails/activities/{campaign_activity_id}/previews",
+        "fields": 8,
+        "supportsWrite": false,
+        "source": "GET /emails/activities/{campaign_activity_id}/previews 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activity_previews.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_schedules",
+        "apiPath": "/emails/activities/{campaign_activity_id}/schedules",
+        "fields": 1,
+        "supportsWrite": true,
+        "source": "GET /emails/activities/{campaign_activity_id}/schedules 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activity_schedules.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_send_history",
+        "apiPath": "/emails/activities/{campaign_activity_id}/send_history",
+        "fields": 7,
+        "supportsWrite": false,
+        "source": "GET /emails/activities/{campaign_activity_id}/send_history 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activity_send_history.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_tests",
+        "apiPath": "/emails/activities/{campaign_activity_id}/tests",
+        "fields": 2,
+        "supportsWrite": true,
+        "source": "POST /emails/activities/{campaign_activity_id}/tests body"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activity_tests.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "list_id",
+        "target": "contact_lists",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_links.list_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_reports_links",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/links",
+        "fields": 6,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/links 200 (link_click_counts)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_links.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_reports_stats_campaign_activities",
+        "apiPath": "/reports/stats/email_campaign_activities/{campaign_activity_ids}",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /reports/stats/email_campaign_activities/{campaign_activity_ids} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_stats_campaign_activities.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_reports_stats_campaigns",
+        "apiPath": "/reports/stats/email_campaigns/{campaign_ids}",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /reports/stats/email_campaigns/{campaign_ids} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_stats_campaigns.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_id",
+        "target": "emails",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_summary.campaign_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_reports_summary",
+        "apiPath": "/reports/summary_reports/email_campaign_summaries",
+        "fields": 4,
+        "supportsWrite": false,
+        "source": "GET /reports/summary_reports/email_campaign_summaries 200 (bulk_email_campaign_summaries)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_summary.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_bounces.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_bounces.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_bounces",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/bounces",
+        "fields": 10,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/bounces 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_bounces.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_clicks.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_clicks.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_clicks",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/clicks",
+        "fields": 11,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/clicks 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_clicks.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_didnotopens.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_didnotopens.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_didnotopens",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/didnotopens",
+        "fields": 8,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/didnotopens 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_didnotopens.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_forwards.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_forwards.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_forwards",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/forwards",
+        "fields": 8,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/forwards 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_forwards.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_opens.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_opens.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_opens",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/opens",
+        "fields": 9,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/opens 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_opens.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_optouts.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_optouts.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_optouts",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/optouts",
+        "fields": 9,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/optouts 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_optouts.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_sends.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_sends.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_sends",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/sends",
+        "fields": 8,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/sends 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_sends.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_unique_opens.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_unique_opens.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_unique_opens",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/unique_opens",
+        "fields": 9,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/unique_opens 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_unique_opens.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "campaign_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "GET /emails/{campaign_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.emails.campaign_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "emails",
+        "apiPath": "/emails",
+        "fields": 8,
+        "supportsWrite": true,
+        "source": "GET /emails/{campaign_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.emails.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_id",
+        "target": "emails",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.emails_xrefs.campaign_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.emails_xrefs.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "emails_xrefs",
+        "apiPath": "/emails/campaign_id_xrefs",
+        "fields": 3,
+        "supportsWrite": false,
+        "source": "GET /emails/campaign_id_xrefs 200 (xrefs)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.emails_xrefs.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "event_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "GET /events/{event_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.events.event_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_id",
+        "target": "emails",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.events.campaign_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "events",
+        "apiPath": "/events",
+        "fields": 36,
+        "supportsWrite": true,
+        "source": "GET /events/{event_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.events.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "events_check_in",
+        "apiPath": "/events/{event_id}/check_in/tickets",
+        "fields": 1,
+        "supportsWrite": true,
+        "source": "POST /events/{event_id}/check_in/tickets body"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.events_check_in.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "event_id",
+        "target": "events",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.events_copy.event_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_id",
+        "target": "emails",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.events_copy.campaign_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "events_copy",
+        "apiPath": "/events/{event_id}/copy",
+        "fields": 36,
+        "supportsWrite": true,
+        "source": "POST /events/{event_id}/copy response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.events_copy.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "registration_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "GET /events/{event_id}/tracks/{track_id}/registrations/{registration_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.events_registrations.registration_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.events_registrations.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "events_registrations",
+        "apiPath": "/events/{event_id}/tracks/{track_id}/registrations",
+        "fields": 11,
+        "supportsWrite": true,
+        "source": "GET /events/{event_id}/tracks/{track_id}/registrations/{registration_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.events_registrations.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "events_registrations_payment_status",
+        "apiPath": "/events/{event_id}/tracks/{track_id}/registrations/payment_status",
+        "fields": 2,
+        "supportsWrite": true,
+        "source": "PUT /events/{event_id}/tracks/{track_id}/registrations/payment_status body"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.events_registrations_payment_status.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "events_undo_check_in",
+        "apiPath": "/events/{event_id}/undo_check_in/tickets",
+        "fields": 1,
+        "supportsWrite": true,
+        "source": "POST /events/{event_id}/undo_check_in/tickets body"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.events_undo_check_in.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.landing_pages_contact_opens.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.landing_pages_contact_opens.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "landing_pages_contact_opens",
+        "apiPath": "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_contact_opens",
+        "fields": 10,
+        "supportsWrite": false,
+        "source": "GET /reports/landing_pages/campaign_details/{campaign_activity_id}/p_contact_opens 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages_contact_opens.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.landing_pages_unique_contact_adds.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.landing_pages_unique_contact_adds.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "landing_pages_unique_contact_adds",
+        "apiPath": "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_adds",
+        "fields": 9,
+        "supportsWrite": false,
+        "source": "GET /reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_adds 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages_unique_contact_adds.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.landing_pages_unique_contact_clicks.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.landing_pages_unique_contact_clicks.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "landing_pages_unique_contact_clicks",
+        "apiPath": "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_clicks",
+        "fields": 12,
+        "supportsWrite": false,
+        "source": "GET /reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_clicks 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages_unique_contact_clicks.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.landing_pages_unique_contact_opens.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.landing_pages_unique_contact_opens.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "landing_pages_unique_contact_opens",
+        "apiPath": "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_opens",
+        "fields": 10,
+        "supportsWrite": false,
+        "source": "GET /reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_opens 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages_unique_contact_opens.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.landing_pages_unique_contact_sms_optins.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.landing_pages_unique_contact_sms_optins.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "landing_pages_unique_contact_sms_optins",
+        "apiPath": "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_sms_optins",
+        "fields": 9,
+        "supportsWrite": false,
+        "source": "GET /reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_sms_optins 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages_unique_contact_sms_optins.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "contact_id",
+        "target": "contacts",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.landing_pages_unique_contact_updates.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_activity_id",
+        "target": "email_campaign_activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.landing_pages_unique_contact_updates.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "landing_pages_unique_contact_updates",
+        "apiPath": "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_updates",
+        "fields": 9,
+        "supportsWrite": false,
+        "source": "GET /reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_updates 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages_unique_contact_updates.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "segment_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "GET /segments/{segment_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.segments.segment_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "segments",
+        "apiPath": "/segments",
+        "fields": 5,
+        "supportsWrite": true,
+        "source": "GET /segments/{segment_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.segments.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "social_connections",
+        "apiPath": "/social/connections",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /social/connections 200 (connections)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.social_connections.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "social_hashtag_groups",
+        "apiPath": "/social/hashtags/groups",
+        "fields": 3,
+        "supportsWrite": false,
+        "source": "GET /social/hashtags/groups 200 (hashtag_groups)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.social_hashtag_groups.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "campaign_id",
+        "target": "emails",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.social_posts.campaign_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "social_posts",
+        "apiPath": "/social/posts",
+        "fields": 5,
+        "supportsWrite": true,
+        "source": "POST /social/posts response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.social_posts.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "social_profiles",
+        "apiPath": "/social/profiles",
+        "fields": 12,
+        "supportsWrite": false,
+        "source": "GET /social/profiles 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.social_profiles.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/_mcp-batch.mjs (amendment round 1)",
+      "ScriptRunAt": "2026-07-11T23:47:41.000Z",
+      "StructuredOutput": {
+        "slot": "io.account_emails.PaginationType",
+        "before": "Cursor",
+        "after": "None",
+        "SupportsPagination": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_emails.PaginationType"
+    },
+    {
+      "ScriptPath": "scripts/_mcp-batch.mjs (amendment round 1)",
+      "ScriptRunAt": "2026-07-11T23:47:41.000Z",
+      "StructuredOutput": {
+        "slot": "io.social_hashtag_groups.PaginationType",
+        "before": "Cursor",
+        "after": "PageNumber",
+        "evidence": "sources/openapi.json /social/hashtags/groups params=[limit,page]; PagedHashtagGroupsDto has page key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.social_hashtag_groups.PaginationType"
+    },
+    {
+      "ScriptPath": "scripts/_mcp-batch.mjs (amendment round 1)",
+      "ScriptRunAt": "2026-07-11T23:47:41.000Z",
+      "StructuredOutput": {
+        "slot": "iof.activities_contacts_export.file_export_id",
+        "IsPrimaryKey": true,
+        "evidence": "sources/openapi.json paths./contact_exports/{file_export_id}.get.parameters[0] — explicit GetById path param documented as the unique file-export ID (Tier-1 PK signal)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_export.file_export_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/_mcp-batch.mjs (amendment round 1)",
+      "ScriptRunAt": "2026-07-11T23:47:41.000Z",
+      "StructuredOutput": {
+        "slot": "io.email_campaign_activities.Configuration.accessPathParams",
+        "after": [
+          {
+            "param": "campaign_activity_id",
+            "parentObject": "emails"
+          }
+        ],
+        "evidence": "sources/openapi.json — no bare list endpoint for /emails/activities; emails.campaign_activities is the only enumeration path"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activities.Configuration"
+    },
+    {
+      "ScriptPath": "scripts/_mcp-batch.mjs (amendment round 1)",
+      "ScriptRunAt": "2026-07-11T23:47:41.000Z",
+      "StructuredOutput": {
+        "slot": "iof.events_registrations.tickets.Type",
+        "before": "json",
+        "after": "integer",
+        "evidence": "sources/openapi.json definitions.RegistrantInformationLiteDto.properties.tickets (type: integer, format: int32)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.events_registrations.tickets.Type"
+    },
+    {
+      "ScriptPath": "scripts/_mcp-batch.mjs (amendment round 1)",
+      "ScriptRunAt": "2026-07-11T23:47:41.000Z",
+      "StructuredOutput": {
+        "slot": "io.segments.UpdateAPIPath",
+        "before": "/segments/{segment_id}/name",
+        "after": "/segments/{id}/name",
+        "evidence": "connector-code-conventions.md generic CRUD ID substitution recognizes only {ID}/{id}/{ExternalID}"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.segments.UpdateAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/_mcp-batch.mjs (amendment round 1)",
+      "ScriptRunAt": "2026-07-11T23:47:41.000Z",
+      "StructuredOutput": {
+        "slot": "iof.contact_reports_activity_details.contact_id.RelatedIntegrationObjectID",
+        "after": "@lookup:MJ: Integration Objects.Name=contacts&IntegrationID=@parent:IntegrationID",
+        "evidence": "cross-IO field-name match to contacts.contact_id (declared PK)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_reports_activity_details.contact_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/_mcp-batch.mjs (amendment round 1)",
+      "ScriptRunAt": "2026-07-11T23:47:41.000Z",
+      "StructuredOutput": {
+        "slot": "iof.email_reports_tracking_opens.campaign_activity_id.RelatedIntegrationObjectID",
+        "after": "@lookup:MJ: Integration Objects.Name=email_campaign_activities&IntegrationID=@parent:IntegrationID",
+        "evidence": "cross-IO field-name match to email_campaign_activities.campaign_activity_id (declared PK)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_opens.campaign_activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-remaining-config-facts.mjs",
+      "ScriptRunAt": "2026-07-13T19:58:42.000Z",
+      "StructuredOutput": {
+        "apiVersioningStrategy": {
+          "host": "api.cc.email",
+          "basePath": "/v3",
+          "specDocumentVersion": "3.0.161",
+          "derivedStrategy": "url-path"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.APIVersioningStrategy"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-remaining-config-facts.mjs",
+      "ScriptRunAt": "2026-07-13T19:58:42.000Z",
+      "StructuredOutput": {
+        "errorResponseShape": {
+          "statusCodeCountsAcrossAllOperations": {
+            "400": 120,
+            "401": 123,
+            "403": 122,
+            "404": 102,
+            "405": 2,
+            "406": 2,
+            "409": 22,
+            "415": 41,
+            "429": 33,
+            "500": 124,
+            "503": 47
+          },
+          "errorCodesObserved": [
+            "400",
+            "401",
+            "403",
+            "404",
+            "405",
+            "406",
+            "409",
+            "415",
+            "429",
+            "500",
+            "503"
+          ],
+          "note": "Full scan of every operation's declared responses keys across all 98 paths in the saved OpenAPI spec -- supersedes the prior partial list (400,401,403,404,415,429,500,503) which omitted 405/406/409, each of which is documented on at least 2 operations."
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ErrorResponseShape"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "concurrencyHeaderScan": {
+          "ETag": false,
+          "If-Match": false,
+          "If-Unmodified-Since": false
+        },
+        "note": "Same full-text scan already used to justify integration.Configuration.ConcurrencyControl='none' is the direct causal basis for the DefaultConflictResolution recommendation: with no ETag/If-Match/version mechanism documented anywhere in the V3 spec, a MostRecent timestamp-based conflict resolution cannot be made reliable, so DestWins is recommended instead per the ConcurrencyControl-driven policy rule."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.DefaultConflictResolution"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "account_emails",
+        "apiPath": "/account/emails",
+        "paginationType": "None",
+        "fields": 7,
+        "supportsWrite": true,
+        "source": "GET /account/emails 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_emails.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "account_physical_address",
+        "apiPath": "/account/summary/physical_address",
+        "paginationType": "None",
+        "fields": 8,
+        "supportsWrite": true,
+        "source": "GET /account/summary/physical_address 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_physical_address.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "account_summary",
+        "apiPath": "/account/summary",
+        "paginationType": "None",
+        "fields": 14,
+        "supportsWrite": true,
+        "source": "GET /account/summary 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_summary.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "account_user_privileges",
+        "apiPath": "/account/user/privileges",
+        "paginationType": "None",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /account/user/privileges 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_user_privileges.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "activities",
+        "apiPath": "/activities",
+        "paginationType": "Cursor",
+        "fields": 11,
+        "supportsWrite": false,
+        "source": "GET /activities/{activity_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_delete",
+        "apiPath": "/activities/contact_delete",
+        "paginationType": "None",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contact_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_delete.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "pk": "file_export_id",
+        "proof": "GET-by-id path-parameter addressing (synthetic — not echoed in body)",
+        "source": "POST /activities/contact_exports response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_export.file_export_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_export",
+        "apiPath": "/contact_exports/{file_export_id}",
+        "paginationType": "None",
+        "fields": 11,
+        "supportsWrite": true,
+        "source": "POST /activities/contact_exports response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_export.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_file_import",
+        "apiPath": "/activities/contacts_file_import",
+        "paginationType": "None",
+        "fields": 11,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_file_import response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_file_import.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_json_import",
+        "apiPath": "/activities/contacts_json_import",
+        "paginationType": "None",
+        "fields": 11,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_json_import response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_json_import.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_taggings_add",
+        "apiPath": "/activities/contacts_taggings_add",
+        "paginationType": "None",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_taggings_add response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_taggings_add.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_taggings_remove",
+        "apiPath": "/activities/contacts_taggings_remove",
+        "paginationType": "None",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_taggings_remove response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_taggings_remove.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_tags_delete",
+        "apiPath": "/activities/contacts_tags_delete",
+        "paginationType": "None",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_tags_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_tags_delete.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "activities_custom_fields_delete",
+        "apiPath": "/activities/custom_fields_delete",
+        "paginationType": "None",
+        "fields": 9,
+        "supportsWrite": true,
+        "source": "POST /activities/custom_fields_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_custom_fields_delete.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "activities_list_delete",
+        "apiPath": "/activities/list_delete",
+        "paginationType": "None",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/list_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_list_delete.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "activities_list_memberships_add",
+        "apiPath": "/activities/add_list_memberships",
+        "paginationType": "None",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/add_list_memberships response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_list_memberships_add.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "activities_list_memberships_remove",
+        "apiPath": "/activities/remove_list_memberships",
+        "paginationType": "None",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/remove_list_memberships response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_list_memberships_remove.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contact_custom_fields",
+        "apiPath": "/contact_custom_fields",
+        "paginationType": "Cursor",
+        "fields": 9,
+        "supportsWrite": true,
+        "source": "GET /contact_custom_fields/{custom_field_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_custom_fields.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contact_lists",
+        "apiPath": "/contact_lists",
+        "paginationType": "Cursor",
+        "fields": 8,
+        "supportsWrite": true,
+        "source": "GET /contact_lists/{list_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_lists.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contact_lists_xrefs",
+        "apiPath": "/contact_lists/list_id_xrefs",
+        "paginationType": "None",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /contact_lists/list_id_xrefs 200 (xrefs)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_lists_xrefs.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contact_reports_activity_details",
+        "apiPath": "/reports/contact_reports/{contact_id}/activity_details",
+        "paginationType": "Cursor",
+        "fields": 5,
+        "supportsWrite": false,
+        "source": "GET /reports/contact_reports/{contact_id}/activity_details 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_reports_activity_details.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contact_reports_activity_summary",
+        "apiPath": "/reports/contact_reports/{contact_id}/activity_summary",
+        "paginationType": "Cursor",
+        "fields": 8,
+        "supportsWrite": false,
+        "source": "GET /reports/contact_reports/{contact_id}/activity_summary 200 (campaign_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_reports_activity_summary.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contact_reports_open_and_click_rates",
+        "apiPath": "/reports/contact_reports/{contact_id}/open_and_click_rates",
+        "paginationType": "None",
+        "fields": 4,
+        "supportsWrite": false,
+        "source": "GET /reports/contact_reports/{contact_id}/open_and_click_rates 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_reports_open_and_click_rates.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contact_tags",
+        "apiPath": "/contact_tags",
+        "paginationType": "Cursor",
+        "fields": 6,
+        "supportsWrite": true,
+        "source": "GET /contact_tags/{tag_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contact_tags.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contacts",
+        "apiPath": "/contacts",
+        "paginationType": "Cursor",
+        "fields": 21,
+        "supportsWrite": true,
+        "source": "GET /contacts/{contact_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contacts",
+        "watermarkField": "updated_at",
+        "filterFormat": "updated_after={value}",
+        "proof": "record has updated_at; outbound filter param documented in spec"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contacts_counts",
+        "apiPath": "/contacts/counts",
+        "paginationType": "None",
+        "fields": 6,
+        "supportsWrite": false,
+        "source": "GET /contacts/counts 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts_counts.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contacts_resubscribe",
+        "apiPath": "/contacts/resubscribe/{contact_id}",
+        "paginationType": "None",
+        "fields": 1,
+        "supportsWrite": true,
+        "source": "PUT /contacts/resubscribe/{contact_id} body"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts_resubscribe.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contacts_sign_up_form",
+        "apiPath": "/contacts/sign_up_form",
+        "paginationType": "None",
+        "fields": 2,
+        "supportsWrite": true,
+        "source": "POST /contacts/sign_up_form response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts_sign_up_form.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contacts_sms_engagement_history",
+        "apiPath": "/contacts/sms_engagement_history/{contact_id}",
+        "paginationType": "None",
+        "fields": 1,
+        "supportsWrite": false,
+        "source": "GET /contacts/sms_engagement_history/{contact_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts_sms_engagement_history.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "contacts_xrefs",
+        "apiPath": "/contacts/contact_id_xrefs",
+        "paginationType": "None",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /contacts/contact_id_xrefs 200 (xrefs)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts_xrefs.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activities",
+        "apiPath": "/emails/activities/{campaign_activity_id}",
+        "paginationType": "None",
+        "fields": 17,
+        "supportsWrite": true,
+        "source": "GET /emails/activities/{campaign_activity_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activities.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_abtest",
+        "apiPath": "/emails/activities/{campaign_activity_id}/abtest",
+        "paginationType": "None",
+        "fields": 3,
+        "supportsWrite": true,
+        "source": "GET /emails/activities/{campaign_activity_id}/abtest 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activity_abtest.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_non_opener_resends",
+        "apiPath": "/emails/activities/{campaign_activity_id}/non_opener_resends",
+        "paginationType": "None",
+        "fields": 6,
+        "supportsWrite": true,
+        "source": "GET /emails/activities/{campaign_activity_id}/non_opener_resends 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activity_non_opener_resends.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_previews",
+        "apiPath": "/emails/activities/{campaign_activity_id}/previews",
+        "paginationType": "None",
+        "fields": 8,
+        "supportsWrite": false,
+        "source": "GET /emails/activities/{campaign_activity_id}/previews 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activity_previews.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_schedules",
+        "apiPath": "/emails/activities/{campaign_activity_id}/schedules",
+        "paginationType": "None",
+        "fields": 1,
+        "supportsWrite": true,
+        "source": "GET /emails/activities/{campaign_activity_id}/schedules 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activity_schedules.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_send_history",
+        "apiPath": "/emails/activities/{campaign_activity_id}/send_history",
+        "paginationType": "None",
+        "fields": 7,
+        "supportsWrite": false,
+        "source": "GET /emails/activities/{campaign_activity_id}/send_history 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activity_send_history.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_tests",
+        "apiPath": "/emails/activities/{campaign_activity_id}/tests",
+        "paginationType": "None",
+        "fields": 2,
+        "supportsWrite": true,
+        "source": "POST /emails/activities/{campaign_activity_id}/tests body"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_campaign_activity_tests.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_reports_links",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/links",
+        "paginationType": "None",
+        "fields": 6,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/links 200 (link_click_counts)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_links.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_reports_stats_campaign_activities",
+        "apiPath": "/reports/stats/email_campaign_activities/{campaign_activity_ids}",
+        "paginationType": "None",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /reports/stats/email_campaign_activities/{campaign_activity_ids} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_stats_campaign_activities.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_reports_stats_campaigns",
+        "apiPath": "/reports/stats/email_campaigns/{campaign_ids}",
+        "paginationType": "None",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /reports/stats/email_campaigns/{campaign_ids} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_stats_campaigns.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_reports_summary",
+        "apiPath": "/reports/summary_reports/email_campaign_summaries",
+        "paginationType": "Cursor",
+        "fields": 4,
+        "supportsWrite": false,
+        "source": "GET /reports/summary_reports/email_campaign_summaries 200 (bulk_email_campaign_summaries)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_summary.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_bounces",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/bounces",
+        "paginationType": "Cursor",
+        "fields": 10,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/bounces 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_bounces.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_clicks",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/clicks",
+        "paginationType": "Cursor",
+        "fields": 11,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/clicks 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_clicks.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_didnotopens",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/didnotopens",
+        "paginationType": "Cursor",
+        "fields": 8,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/didnotopens 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_didnotopens.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_forwards",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/forwards",
+        "paginationType": "Cursor",
+        "fields": 8,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/forwards 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_forwards.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_opens",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/opens",
+        "paginationType": "Cursor",
+        "fields": 9,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/opens 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_opens.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_optouts",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/optouts",
+        "paginationType": "Cursor",
+        "fields": 9,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/optouts 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_optouts.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_sends",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/sends",
+        "paginationType": "Cursor",
+        "fields": 8,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/sends 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_sends.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_unique_opens",
+        "apiPath": "/reports/email_reports/{campaign_activity_id}/tracking/unique_opens",
+        "paginationType": "Cursor",
+        "fields": 9,
+        "supportsWrite": false,
+        "source": "GET /reports/email_reports/{campaign_activity_id}/tracking/unique_opens 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_reports_tracking_unique_opens.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "emails",
+        "apiPath": "/emails",
+        "paginationType": "Cursor",
+        "fields": 8,
+        "supportsWrite": true,
+        "source": "GET /emails/{campaign_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.emails.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "emails",
+        "watermarkField": "updated_at",
+        "filterFormat": "after_date={value}",
+        "proof": "record has updated_at; outbound filter param documented in spec"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.emails.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "emails_xrefs",
+        "apiPath": "/emails/campaign_id_xrefs",
+        "paginationType": "None",
+        "fields": 3,
+        "supportsWrite": false,
+        "source": "GET /emails/campaign_id_xrefs 200 (xrefs)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.emails_xrefs.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "events",
+        "apiPath": "/events",
+        "paginationType": "Cursor",
+        "fields": 36,
+        "supportsWrite": true,
+        "source": "GET /events/{event_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.events.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "events_check_in",
+        "apiPath": "/events/{event_id}/check_in/tickets",
+        "paginationType": "None",
+        "fields": 1,
+        "supportsWrite": true,
+        "source": "POST /events/{event_id}/check_in/tickets body"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.events_check_in.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "events_copy",
+        "apiPath": "/events/{event_id}/copy",
+        "paginationType": "None",
+        "fields": 36,
+        "supportsWrite": true,
+        "source": "POST /events/{event_id}/copy response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.events_copy.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "events_registrations",
+        "apiPath": "/events/{event_id}/tracks/{track_id}/registrations",
+        "paginationType": "Cursor",
+        "fields": 11,
+        "supportsWrite": true,
+        "source": "GET /events/{event_id}/tracks/{track_id}/registrations/{registration_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.events_registrations.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "events_registrations_payment_status",
+        "apiPath": "/events/{event_id}/tracks/{track_id}/registrations/payment_status",
+        "paginationType": "None",
+        "fields": 2,
+        "supportsWrite": true,
+        "source": "PUT /events/{event_id}/tracks/{track_id}/registrations/payment_status body"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.events_registrations_payment_status.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "events_undo_check_in",
+        "apiPath": "/events/{event_id}/undo_check_in/tickets",
+        "paginationType": "None",
+        "fields": 1,
+        "supportsWrite": true,
+        "source": "POST /events/{event_id}/undo_check_in/tickets body"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.events_undo_check_in.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "landing_pages_contact_opens",
+        "apiPath": "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_contact_opens",
+        "paginationType": "Cursor",
+        "fields": 10,
+        "supportsWrite": false,
+        "source": "GET /reports/landing_pages/campaign_details/{campaign_activity_id}/p_contact_opens 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages_contact_opens.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "landing_pages_unique_contact_adds",
+        "apiPath": "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_adds",
+        "paginationType": "Cursor",
+        "fields": 9,
+        "supportsWrite": false,
+        "source": "GET /reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_adds 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages_unique_contact_adds.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "landing_pages_unique_contact_clicks",
+        "apiPath": "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_clicks",
+        "paginationType": "Cursor",
+        "fields": 12,
+        "supportsWrite": false,
+        "source": "GET /reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_clicks 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages_unique_contact_clicks.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "landing_pages_unique_contact_opens",
+        "apiPath": "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_opens",
+        "paginationType": "Cursor",
+        "fields": 10,
+        "supportsWrite": false,
+        "source": "GET /reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_opens 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages_unique_contact_opens.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "landing_pages_unique_contact_sms_optins",
+        "apiPath": "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_sms_optins",
+        "paginationType": "Cursor",
+        "fields": 9,
+        "supportsWrite": false,
+        "source": "GET /reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_sms_optins 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages_unique_contact_sms_optins.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "landing_pages_unique_contact_updates",
+        "apiPath": "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_updates",
+        "paginationType": "Cursor",
+        "fields": 9,
+        "supportsWrite": false,
+        "source": "GET /reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_updates 200 (tracking_activities)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages_unique_contact_updates.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "segments",
+        "apiPath": "/segments",
+        "paginationType": "Cursor",
+        "fields": 5,
+        "supportsWrite": true,
+        "source": "GET /segments/{segment_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.segments.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "social_connections",
+        "apiPath": "/social/connections",
+        "paginationType": "None",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /social/connections 200 (connections)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.social_connections.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "social_hashtag_groups",
+        "apiPath": "/social/hashtags/groups",
+        "paginationType": "PageNumber",
+        "fields": 3,
+        "supportsWrite": false,
+        "source": "GET /social/hashtags/groups 200 (hashtag_groups)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.social_hashtag_groups.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "social_posts",
+        "apiPath": "/social/posts",
+        "paginationType": "None",
+        "fields": 5,
+        "supportsWrite": true,
+        "source": "POST /social/posts response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.social_posts.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-13T20:09:44.869Z",
+      "StructuredOutput": {
+        "io": "social_profiles",
+        "apiPath": "/social/profiles",
+        "paginationType": "None",
+        "fields": 12,
+        "supportsWrite": false,
+        "source": "GET /social/profiles 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.social_profiles.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:07.562209Z",
+      "StructuredOutput": {
+        "universalPK": {
+          "fieldName": "id"
+        },
+        "note": "Conservative vendor-wide PK hint for runtime D4. No CC V3 object carries a field literally named 'id'; the vendor's real convention is `{resource_singular}_id` / `{resource_singular}_key` (see Configuration.PKNamingObservation, matchRatio 0.7333 across 15 GetById paths -- below the >=95% bar for a literal-match universalPK declaration). Declared here as the placeholder hint per the operator directive; the matrix's isIdConvention regex (`_id`/`Id`/`Key`/`_key` suffix) is what actually credits each per-object PK's naming-convention source, independent of this literal value."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.universalPK"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "contact_lists_xrefs",
+        "field": "list_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=contact_lists&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_lists_xrefs.list_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "contact_reports_activity_details",
+        "field": "contact_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=contacts&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_reports_activity_details.contact_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "contact_reports_activity_details",
+        "field": "campaign_activity_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=email_campaign_activities&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_reports_activity_details.campaign_activity_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "contact_reports_activity_summary",
+        "field": "campaign_activity_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=email_campaign_activities&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_reports_activity_summary.campaign_activity_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "contact_reports_open_and_click_rates",
+        "field": "contact_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=contacts&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_reports_open_and_click_rates.contact_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "contacts_sign_up_form",
+        "field": "contact_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=contacts&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contacts_sign_up_form.contact_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "contacts_xrefs",
+        "field": "contact_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=contacts&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contacts_xrefs.contact_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "email_campaign_activities",
+        "field": "campaign_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=emails&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_campaign_activities.campaign_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "email_campaign_activity_previews",
+        "field": "campaign_activity_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=email_campaign_activities&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_campaign_activity_previews.campaign_activity_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "email_reports_links",
+        "field": "list_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=contact_lists&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_links.list_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "email_reports_summary",
+        "field": "campaign_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=emails&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_summary.campaign_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_bounces",
+        "field": "contact_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=contacts&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_bounces.contact_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_bounces",
+        "field": "campaign_activity_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=email_campaign_activities&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_bounces.campaign_activity_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_clicks",
+        "field": "contact_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=contacts&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_clicks.contact_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_clicks",
+        "field": "campaign_activity_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=email_campaign_activities&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_clicks.campaign_activity_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_didnotopens",
+        "field": "contact_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=contacts&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_didnotopens.contact_id.IsForeignKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/fix-extraction-quality-defects.mjs",
+      "ScriptRunAt": "2026-07-13T21:29:23.193027+00:00",
+      "StructuredOutput": {
+        "io": "email_reports_tracking_didnotopens",
+        "field": "campaign_activity_id",
+        "relatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=email_campaign_activities&IntegrationID=@parent:IntegrationID",
+        "fix": "half-set-FK-completion: IsForeignKey flag set true to match the already-declared RelatedIntegrationObjectID (a half-set FK -- flag+target must travel together per connector-code-conventions.md; target-resolution evidence for RelatedIntegrationObjectID predates this fix in CODE_EVIDENCE.json)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_reports_tracking_didnotopens.campaign_activity_id.IsForeignKey"
+    }
+  ]
+}

@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/Discussions/GetDiscussionPosts</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/Discussions/GetDiscussionPosts</h1>
+<div>
+    <p>Returns a list of Discussion Posts for the Current User.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+<a href="/Help/ResourceModel?modelName=GetEligibleDiscussionsRequest">GetEligibleDiscussionsRequest</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">MaxContentLength</td>
+                    <td class="parameter-documentation">
+                        <p>Maximum character length of the returned Discussion Post Content.  Characters past this limit will be truncated.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IncludeStaffPosts</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DiscussionKeyFilter</td>
+                    <td class="parameter-documentation">
+                        <p>If specified, narrow down by Specified DiscussionKey</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">MaxNumberToRetrieve</td>
+                    <td class="parameter-documentation">
+                        <p>Maximum number of Discussion Posts to retrieve for this eventFilter.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">MaxSubjectLength</td>
+                    <td class="parameter-documentation">
+                        <p>Maximum character length of the returned Discussion Post Subject.  Characters past this limit will be truncated.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContinuationToken</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Request Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;MaxContentLength&quot;: 1,
+  &quot;IncludeStaffPosts&quot;: true,
+  &quot;DiscussionKeyFilter&quot;: &quot;ee107459-ea64-4cdd-a3d6-8c9b1e88029a&quot;,
+  &quot;MaxNumberToRetrieve&quot;: 3,
+  &quot;MaxSubjectLength&quot;: 4,
+  &quot;ContinuationToken&quot;: &quot;sample string 5&quot;
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;GetEligibleDiscussionsRequest xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Request&quot;&gt;
+  &lt;ContinuationToken&gt;sample string 5&lt;/ContinuationToken&gt;
+  &lt;DiscussionKeyFilter&gt;ee107459-ea64-4cdd-a3d6-8c9b1e88029a&lt;/DiscussionKeyFilter&gt;
+  &lt;IncludeStaffPosts&gt;true&lt;/IncludeStaffPosts&gt;
+  &lt;MaxContentLength&gt;1&lt;/MaxContentLength&gt;
+  &lt;MaxNumberToRetrieve&gt;3&lt;/MaxNumberToRetrieve&gt;
+  &lt;MaxSubjectLength&gt;4&lt;/MaxSubjectLength&gt;
+&lt;/GetEligibleDiscussionsRequest&gt;
+</pre>
+        </div>
+</div>
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>A list of SubscribedDiscussionPost objects.</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=SubscribedDiscussionPost">SubscribedDiscussionPost</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">IsLoggedIn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Subject</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ShortSubject</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FirstLast</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DiscussionName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Content</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DiscussionHomePageUrl</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DiscussionPageUrl</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToAuthorProfile</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsImageExist</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PictureUrl</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToReadPosts</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">BinaryImage</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of byte
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DiscussionPostKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LargePictureUrl</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RecommendationCount</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactsWhoRecommend</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=ContactConcise">ContactConcise</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DiscussionPostThreadKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;IsLoggedIn&quot;: true,
+    &quot;Subject&quot;: &quot;sample string 2&quot;,
+    &quot;ShortSubject&quot;: &quot;sample string 3&quot;,
+    &quot;FirstLast&quot;: &quot;sample string 4&quot;,
+    &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:36.8311564Z&quot;,
+    &quot;DiscussionName&quot;: &quot;sample string 5&quot;,
+    &quot;Content&quot;: &quot;sample string 6&quot;,
+    &quot;DiscussionHomePageUrl&quot;: &quot;sample string 7&quot;,
+    &quot;DiscussionPageUrl&quot;: &quot;sample string 8&quot;,
+    &quot;LinkToAuthorProfile&quot;: &quot;sample string 9&quot;,
+    &quot;IsImageExist&quot;: true,
+    &quot;PictureUrl&quot;: &quot;sample string 11&quot;,
+    &quot;LinkToReadPosts&quot;: &quot;sample string 12&quot;,
+    &quot;BinaryImage&quot;: &quot;QEA=&quot;,
+    &quot;DiscussionPostKey&quot;: &quot;783ceded-38f4-4cc2-ae9a-1a497f431923&quot;,
+    &quot;LargePictureUrl&quot;: &quot;sample string 14&quot;,
+    &quot;RecommendationCount&quot;: 15,
+    &quot;ContactsWhoRecommend&quot;: [
+      {
+        &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+        &quot;ContactKey&quot;: &quot;155a9994-200c-4aa3-9696-276796d773b7&quot;,
+        &quot;FirstName&quot;: &quot;sample string 4&quot;,
+        &quot;LastName&quot;: &quot;sample string 5&quot;,
+        &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+        &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+        &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.8311564Z&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;7c27e5a0-4012-4b5f-937c-0e965a1207f8&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+        &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+        &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+        &quot;Designation&quot;: &quot;sample string 15&quot;,
+        &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+        &quot;InformalName&quot;: &quot;sample string 17&quot;,
+        &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+        &quot;IsCompany&quot;: true,
+        &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+        &quot;AMSDirectoryOptOut&quot;: true,
+        &quot;HLDirectoryOptOut&quot;: true,
+        &quot;HLContactMeOptOut&quot;: true,
+        &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+        &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:36.8311564Z&quot;
+      },
+      {
+        &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+        &quot;ContactKey&quot;: &quot;155a9994-200c-4aa3-9696-276796d773b7&quot;,
+        &quot;FirstName&quot;: &quot;sample string 4&quot;,
+        &quot;LastName&quot;: &quot;sample string 5&quot;,
+        &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+        &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+        &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.8311564Z&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;7c27e5a0-4012-4b5f-937c-0e965a1207f8&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+        &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+        &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+        &quot;Designation&quot;: &quot;sample string 15&quot;,
+        &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+        &quot;InformalName&quot;: &quot;sample string 17&quot;,
+        &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+        &quot;IsCompany&quot;: true,
+        &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+        &quot;AMSDirectoryOptOut&quot;: true,
+        &quot;HLDirectoryOptOut&quot;: true,
+        &quot;HLContactMeOptOut&quot;: true,
+        &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+        &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:36.8311564Z&quot;
+      }
+    ],
+    &quot;DiscussionPostThreadKey&quot;: &quot;7a45d9ac-fb2e-482f-87cd-58414fe5e8e9&quot;
+  },
+  {
+    &quot;IsLoggedIn&quot;: true,
+    &quot;Subject&quot;: &quot;sample string 2&quot;,
+    &quot;ShortSubject&quot;: &quot;sample string 3&quot;,
+    &quot;FirstLast&quot;: &quot;sample string 4&quot;,
+    &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:36.8311564Z&quot;,
+    &quot;DiscussionName&quot;: &quot;sample string 5&quot;,
+    &quot;Content&quot;: &quot;sample string 6&quot;,
+    &quot;DiscussionHomePageUrl&quot;: &quot;sample string 7&quot;,
+    &quot;DiscussionPageUrl&quot;: &quot;sample string 8&quot;,
+    &quot;LinkToAuthorProfile&quot;: &quot;sample string 9&quot;,
+    &quot;IsImageExist&quot;: true,
+    &quot;PictureUrl&quot;: &quot;sample string 11&quot;,
+    &quot;LinkToReadPosts&quot;: &quot;sample string 12&quot;,
+    &quot;BinaryImage&quot;: &quot;QEA=&quot;,
+    &quot;DiscussionPostKey&quot;: &quot;783ceded-38f4-4cc2-ae9a-1a497f431923&quot;,
+    &quot;LargePictureUrl&quot;: &quot;sample string 14&quot;,
+    &quot;RecommendationCount&quot;: 15,
+    &quot;ContactsWhoRecommend&quot;: [
+      {
+        &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+        &quot;ContactKey&quot;: &quot;155a9994-200c-4aa3-9696-276796d773b7&quot;,
+        &quot;FirstName&quot;: &quot;sample string 4&quot;,
+        &quot;LastName&quot;: &quot;sample string 5&quot;,
+        &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+        &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+        &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.8311564Z&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;7c27e5a0-4012-4b5f-937c-0e965a1207f8&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+        &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+        &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+        &quot;Designation&quot;: &quot;sample string 15&quot;,
+        &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+        &quot;InformalName&quot;: &quot;sample string 17&quot;,
+        &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+        &quot;IsCompany&quot;: true,
+        &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+        &quot;AMSDirectoryOptOut&quot;: true,
+        &quot;HLDirectoryOptOut&quot;: true,
+        &quot;HLContactMeOptOut&quot;: true,
+        &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+        &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:36.8311564Z&quot;
+      },
+      {
+        &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+        &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+        &quot;ContactKey&quot;: &quot;155a9994-200c-4aa3-9696-276796d773b7&quot;,
+        &quot;FirstName&quot;: &quot;sample string 4&quot;,
+        &quot;LastName&quot;: &quot;sample string 5&quot;,
+        &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+        &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+        &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.8311564Z&quot;,
+        &quot;UpdatedByContactKey&quot;: &quot;7c27e5a0-4012-4b5f-937c-0e965a1207f8&quot;,
+        &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+        &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+        &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+        &quot;Designation&quot;: &quot;sample string 15&quot;,
+        &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+        &quot;InformalName&quot;: &quot;sample string 17&quot;,
+        &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+        &quot;IsCompany&quot;: true,
+        &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+        &quot;AMSDirectoryOptOut&quot;: true,
+        &quot;HLDirectoryOptOut&quot;: true,
+        &quot;HLContactMeOptOut&quot;: true,
+        &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+        &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:36.8311564Z&quot;
+      }
+    ],
+    &quot;DiscussionPostThreadKey&quot;: &quot;7a45d9ac-fb2e-482f-87cd-58414fe5e8e9&quot;
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfSubscribedDiscussionPost xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+  &lt;SubscribedDiscussionPost&gt;
+    &lt;BinaryImage&gt;QEA=&lt;/BinaryImage&gt;
+    &lt;ContactsWhoRecommend&gt;
+      &lt;ContactConcise&gt;
+        &lt;AMSDirectoryOptOut&gt;true&lt;/AMSDirectoryOptOut&gt;
+        &lt;AgreedToTermsDateTime&gt;2026-07-08T13:53:36.8311564-04:00&lt;/AgreedToTermsDateTime&gt;
+        &lt;CompanyLegacyContactKey&gt;sample string 20&lt;/CompanyLegacyContactKey&gt;
+        &lt;CompanyName&gt;sample string 12&lt;/CompanyName&gt;
+        &lt;CompanyTitle&gt;sample string 13&lt;/CompanyTitle&gt;
+        &lt;ContactKey&gt;155a9994-200c-4aa3-9696-276796d773b7&lt;/ContactKey&gt;
+        &lt;ContactStatusCode&gt;sample string 8&lt;/ContactStatusCode&gt;
+        &lt;Designation&gt;sample string 15&lt;/Designation&gt;
+        &lt;DisplayName&gt;sample string 6&lt;/DisplayName&gt;
+        &lt;EmailAddress&gt;sample string 7&lt;/EmailAddress&gt;
+        &lt;FirstName&gt;sample string 4&lt;/FirstName&gt;
+        &lt;HLContactMeOptOut&gt;true&lt;/HLContactMeOptOut&gt;
+        &lt;HLDirectoryOptOut&gt;true&lt;/HLDirectoryOptOut&gt;
+        &lt;InformalName&gt;sample string 17&lt;/InformalName&gt;
+        &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+        &lt;LargePictureUrl&gt;sample string 24&lt;/LargePictureUrl&gt;
+        &lt;LastName&gt;sample string 5&lt;/LastName&gt;
+        &lt;LegacyContactKey&gt;sample string 16&lt;/LegacyContactKey&gt;
+        &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+        &lt;MiddleName&gt;sample string 18&lt;/MiddleName&gt;
+        &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+        &lt;PrefixCode&gt;sample string 9&lt;/PrefixCode&gt;
+        &lt;SuffixCode&gt;sample string 14&lt;/SuffixCode&gt;
+        &lt;UpdatedByContactKey&gt;7c27e5a0-4012-4b5f-937c-0e965a1207f8&lt;/UpdatedByContactKey&gt;
+        &lt;UpdatedOn&gt;2026-07-08T13:53:36.8311564-04:00&lt;/UpdatedOn&gt;
+      &lt;/ContactConcise&gt;
+      &lt;ContactConcise&gt;
+        &lt;AMSDirectoryOptOut&gt;true&lt;/AMSDirectoryOptOut&gt;
+        &lt;AgreedToTermsDateTime&gt;2026-07-08T13:53:36.8311564-04:00&lt;/AgreedToTermsDateTime&gt;
+        &lt;CompanyLegacyContactKey&gt;sample string 20&lt;/CompanyLegacyContactKey&gt;
+        &lt;CompanyName&gt;sample string 12&lt;/CompanyName&gt;
+        &lt;CompanyTitle&gt;sample string 13&lt;/CompanyTitle&gt;
+        &lt;ContactKey&gt;155a9994-200c-4aa3-9696-276796d773b7&lt;/ContactKey&gt;
+        &lt;ContactStatusCode&gt;sample string 8&lt;/ContactStatusCode&gt;
+        &lt;Designation&gt;sample string 15&lt;/Designation&gt;
+        &lt;DisplayName&gt;sample string 6&lt;/DisplayName&gt;
+        &lt;EmailAddress&gt;sample string 7&lt;/EmailAddress&gt;
+        &lt;FirstName&gt;sample string 4&lt;/FirstName&gt;
+        &lt;HLContactMeOptOut&gt;true&lt;/HLContactMeOptOut&gt;
+        &lt;HLDirectoryOptOut&gt;true&lt;/HLDirectoryOptOut&gt;
+        &lt;InformalName&gt;sample string 17&lt;/InformalName&gt;
+        &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+        &lt;LargePictureUrl&gt;sample string 24&lt;/LargePictureUrl&gt;
+        &lt;LastName&gt;sample string 5&lt;/LastName&gt;
+        &lt;LegacyContactKey&gt;sample string 16&lt;/LegacyContactKey&gt;
+        &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+        &lt;MiddleName&gt;sample string 18&lt;/MiddleName&gt;
+        &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+        &lt;PrefixCode&gt;sample string 9&lt;/PrefixCode&gt;
+        &lt;SuffixCode&gt;sample string 14&lt;/SuffixCode&gt;
+        &lt;UpdatedByContactKey&gt;7c27e5a0-4012-4b5f-937c-0e965a1207f8&lt;/UpdatedByContactKey&gt;
+        &lt;UpdatedOn&gt;2026-07-08T13:53:36.8311564-04:00&lt;/UpdatedOn&gt;
+      &lt;/ContactConcise&gt;
+    &lt;/ContactsWhoRecommend&gt;
+    &lt;Content&gt;sample string 6&lt;/Content&gt;
+    &lt;CreatedOn&gt;2026-07-08T13:53:36.8311564-04:00&lt;/CreatedOn&gt;
+    &lt;DiscussionHomePageUrl&gt;sample string 7&lt;/DiscussionHomePageUrl&gt;
+    &lt;DiscussionName&gt;sample string 5&lt;/DiscussionName&gt;
+    &lt;DiscussionPageUrl&gt;sample string 8&lt;/DiscussionPageUrl&gt;
+    &lt;DiscussionPostKey&gt;783ceded-38f4-4cc2-ae9a-1a497f431923&lt;/DiscussionPostKey&gt;
+    &lt;FirstLast&gt;sample string 4&lt;/FirstLast&gt;
+    &lt;IsImageExist&gt;true&lt;/IsImageExist&gt;
+    &lt;IsLoggedIn&gt;true&lt;/IsLoggedIn&gt;
+    &lt;LargePictureUrl&gt;sample string 14&lt;/LargePictureUrl&gt;
+    &lt;LinkToAuthorProfile&gt;sample string 9&lt;/LinkToAuthorProfile&gt;
+    &lt;LinkToReadPosts&gt;sample string 12&lt;/LinkToReadPosts&gt;
+    &lt;PictureUrl&gt;sample string 11&lt;/PictureUrl&gt;
+    &lt;RecommendationCount&gt;15&lt;/RecommendationCount&gt;
+    &lt;ShortSubject&gt;sample string 3&lt;/ShortSubject&gt;
+    &lt;Subject&gt;sample string 2&lt;/Subject&gt;
+  &lt;/SubscribedDiscussionPost&gt;
+  &lt;SubscribedDiscussionPost&gt;
+    &lt;BinaryImage&gt;QEA=&lt;/BinaryImage&gt;
+    &lt;ContactsWhoRecommend&gt;
+      &lt;ContactConcise&gt;
+        &lt;AMSDirectoryOptOut&gt;true&lt;/AMSDirectoryOptOut&gt;
+        &lt;AgreedToTermsDateTime&gt;2026-07-08T13:53:36.8311564-04:00&lt;/AgreedToTermsDateTime&gt;
+        &lt;CompanyLegacyContactKey&gt;sample string 20&lt;/CompanyLegacyContactKey&gt;
+        &lt;CompanyName&gt;sample string 12&lt;/CompanyName&gt;
+        &lt;CompanyTitle&gt;sample string 13&lt;/CompanyTitle&gt;
+        &lt;ContactKey&gt;155a9994-200c-4aa3-9696-276796d773b7&lt;/ContactKey&gt;
+        &lt;ContactStatusCode&gt;sample string 8&lt;/ContactStatusCode&gt;
+        &lt;Designation&gt;sample string 15&lt;/Designation&gt;
+        &lt;DisplayName&gt;sample string 6&lt;/DisplayName&gt;
+        &lt;EmailAddress&gt;sample string 7&lt;/EmailAddress&gt;
+        &lt;FirstName&gt;sample string 4&lt;/FirstName&gt;
+        &lt;HLContactMeOptOut&gt;true&lt;/HLContactMeOptOut&gt;
+        &lt;HLDirectoryOptOut&gt;true&lt;/HLDirectoryOptOut&gt;
+        &lt;InformalName&gt;sample string 17&lt;/InformalName&gt;
+        &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+        &lt;LargePictureUrl&gt;sample string 24&lt;/LargePictureUrl&gt;
+        &lt;LastName&gt;sample string 5&lt;/LastName&gt;
+        &lt;LegacyContactKey&gt;sample string 16&lt;/LegacyContactKey&gt;
+        &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+        &lt;MiddleName&gt;sample string 18&lt;/MiddleName&gt;
+        &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+        &lt;PrefixCode&gt;sample string 9&lt;/PrefixCode&gt;
+        &lt;SuffixCode&gt;sample string 14&lt;/SuffixCode&gt;
+        &lt;UpdatedByContactKey&gt;7c27e5a0-4012-4b5f-937c-0e965a1207f8&lt;/UpdatedByContactKey&gt;
+        &lt;UpdatedOn&gt;2026-07-08T13:53:36.8311564-04:00&lt;/UpdatedOn&gt;
+      &lt;/ContactConcise&gt;
+      &lt;ContactConcise&gt;
+        &lt;AMSDirectoryOptOut&gt;true&lt;/AMSDirectoryOptOut&gt;
+        &lt;AgreedToTermsDateTime&gt;2026-07-08T13:53:36.8311564-04:00&lt;/AgreedToTermsDateTime&gt;
+        &lt;CompanyLegacyContactKey&gt;sample string 20&lt;/CompanyLegacyContactKey&gt;
+        &lt;CompanyName&gt;sample string 12&lt;/CompanyName&gt;
+        &lt;CompanyTitle&gt;sample string 13&lt;/CompanyTitle&gt;
+        &lt;ContactKey&gt;155a9994-200c-4aa3-9696-276796d773b7&lt;/ContactKey&gt;
+        &lt;ContactStatusCode&gt;sample string 8&lt;/ContactStatusCode&gt;
+        &lt;Designation&gt;sample string 15&lt;/Designation&gt;
+        &lt;DisplayName&gt;sample string 6&lt;/DisplayName&gt;
+        &lt;EmailAddress&gt;sample string 7&lt;/EmailAddress&gt;
+        &lt;FirstName&gt;sample string 4&lt;/FirstName&gt;
+        &lt;HLContactMeOptOut&gt;true&lt;/HLContactMeOptOut&gt;
+        &lt;HLDirectoryOptOut&gt;true&lt;/HLDirectoryOptOut&gt;
+        &lt;InformalName&gt;sample string 17&lt;/InformalName&gt;
+        &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+        &lt;LargePictureUrl&gt;sample string 24&lt;/LargePictureUrl&gt;
+        &lt;LastName&gt;sample string 5&lt;/LastName&gt;
+        &lt;LegacyContactKey&gt;sample string 16&lt;/LegacyContactKey&gt;
+        &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+        &lt;MiddleName&gt;sample string 18&lt;/MiddleName&gt;
+        &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+        &lt;PrefixCode&gt;sample string 9&lt;/PrefixCode&gt;
+        &lt;SuffixCode&gt;sample string 14&lt;/SuffixCode&gt;
+        &lt;UpdatedByContactKey&gt;7c27e5a0-4012-4b5f-937c-0e965a1207f8&lt;/UpdatedByContactKey&gt;
+        &lt;UpdatedOn&gt;2026-07-08T13:53:36.8311564-04:00&lt;/UpdatedOn&gt;
+      &lt;/ContactConcise&gt;
+    &lt;/ContactsWhoRecommend&gt;
+    &lt;Content&gt;sample string 6&lt;/Content&gt;
+    &lt;CreatedOn&gt;2026-07-08T13:53:36.8311564-04:00&lt;/CreatedOn&gt;
+    &lt;DiscussionHomePageUrl&gt;sample string 7&lt;/DiscussionHomePageUrl&gt;
+    &lt;DiscussionName&gt;sample string 5&lt;/DiscussionName&gt;
+    &lt;DiscussionPageUrl&gt;sample string 8&lt;/DiscussionPageUrl&gt;
+    &lt;DiscussionPostKey&gt;783ceded-38f4-4cc2-ae9a-1a497f431923&lt;/DiscussionPostKey&gt;
+    &lt;FirstLast&gt;sample string 4&lt;/FirstLast&gt;
+    &lt;IsImageExist&gt;true&lt;/IsImageExist&gt;
+    &lt;IsLoggedIn&gt;true&lt;/IsLoggedIn&gt;
+    &lt;LargePictureUrl&gt;sample string 14&lt;/LargePictureUrl&gt;
+    &lt;LinkToAuthorProfile&gt;sample string 9&lt;/LinkToAuthorProfile&gt;
+    &lt;LinkToReadPosts&gt;sample string 12&lt;/LinkToReadPosts&gt;
+    &lt;PictureUrl&gt;sample string 11&lt;/PictureUrl&gt;
+    &lt;RecommendationCount&gt;15&lt;/RecommendationCount&gt;
+    &lt;ShortSubject&gt;sample string 3&lt;/ShortSubject&gt;
+    &lt;Subject&gt;sample string 2&lt;/Subject&gt;
+  &lt;/SubscribedDiscussionPost&gt;
+&lt;/ArrayOfSubscribedDiscussionPost&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

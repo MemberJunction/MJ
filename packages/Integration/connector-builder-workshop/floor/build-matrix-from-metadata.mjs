@@ -69,7 +69,14 @@ for (const io of ios) {
     // ='n/a' → T1 PkSourceMatrix false-flagged every such PK as fabrication (33 IOs on a COMPILING
     // Neon connector). T1 stays strict (still requires a real `yes`); this just stops the derived
     // matrix from hiding the convention signal the metadata actually proves.
-    const isIdConvention = (n) => /^id$/i.test(n) || /Id$/.test(n) || /_id$/i.test(n);
+    // ARC FIX (improvement-log leak #6, Higher Logic Thrive 2026-07-10): the SAME false-fabrication
+    // pattern recurs for vendors whose PK naming convention is `<Entity>Key` (guid-typed) rather than
+    // `<entity>Id` — e.g. ContactKey, CommunityKey, DiscussionKey, all explicitly documented per-object
+    // in the vendor's own field tables and cited in Integration.Configuration.universalPK.pattern. This
+    // is just as legitimate and just as metadata-provable a REST ID convention as the `Id` suffix; the
+    // regex below only ADDS recognition for it, never weakens the existing `Id` check or affects any
+    // other vendor's PKs.
+    const isIdConvention = (n) => /^id$/i.test(n) || /Id$/.test(n) || /_id$/i.test(n) || /Key$/.test(n) || /_key$/i.test(n);
     const pkIsIdConvention = pkFields.some(f => isIdConvention(String((f.fields && f.fields.Name) || '')));
     const pkVerdict = hasPK ? 'emit' : 'defer';
     if (hasPK) pkEmit++;

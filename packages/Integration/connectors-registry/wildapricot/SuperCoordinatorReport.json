@@ -1,0 +1,69 @@
+{
+  "connector": "wildapricot",
+  "integrationName": "Wild Apricot",
+  "className": "WildApricotConnector",
+  "mode": "redo",
+  "priorVersion": "0.x (pre-Phase-0 baked static catalog)",
+  "newVersion": "1.0.0",
+  "bumpReason": "MAJOR: schema re-derived from credential-free docs/Postman under the Phase-0 workshop (provable-only, bijection-gated); prior connector baked a hand-authored object catalog in code.",
+  "runID": "connector-wildapricot-1782844331649-0a8d294b",
+  "credentialPosture": "credential-free [B]",
+  "verdict": "PASS",
+  "shape": {
+    "objectsAnalyzed": 62,
+    "listableIOs": 25,
+    "listlessNested": 37,
+    "integrationObjects": 25,
+    "integrationObjectFields": 332,
+    "note": "25 independently-listable objects authored as IOs; 37 listless are nested sub-objects captured inside their parents (arrays → json columns, objects → flattened to scalar/overflow)."
+  },
+  "primaryKeys": {
+    "deferRatePct": 0.0,
+    "naturalOrEvidenced": 23,
+    "synthetic": 2,
+    "syntheticObjects": ["Donation", "SentEmailRecipient"],
+    "note": "Donation + SentEmailRecipient are genuinely keyless in the WildApricot API; resolved via a single synthetic content-hash PK (IdentityKey) — the SoftPKClassifier synthetic-fallback path, now fixed framework-wide."
+  },
+  "verification": {
+    "ladder": { "T0-T7": "pass", "T10": "pass", "T12": "pass", "T9": "skip (no endpoints)", "T11": "skip (no sandbox)", "T8-live": "not run (credential-free)", "redRungs": 0 },
+    "hybridE2E_mock": {
+      "verdict": "pass",
+      "dialect": "sqlserver",
+      "objectsSynced": 25,
+      "rowsProcessed": 45,
+      "forwardCompleteness": true,
+      "incrementalNarrowed": true,
+      "idempotentZeroWork": true,
+      "deltaCRUD": "create/update/delete verified on Contact",
+      "dag": "25 objects, 5 FK edges, 2 layers, 0 cycles",
+      "customColumnCapture": "verified (CustomLoyaltyTier -> __mj_integration_CustomOverflow)",
+      "nestedObjectCapture": "verified (Event.Details flattened to Details_* overflow keys)",
+      "keylessViaContentHash": "verified (Donation/SentEmailRecipient IdentityKey = SHA-256 content hash)"
+    },
+    "floorCheck": {
+      "structuralVerdict": "pass",
+      "failures": 0,
+      "checkedVia": "deterministic manual re-run over disk artifacts (the primitive's own JS logic)",
+      "toolInvocationNote": "floor-check.workflow.js via the Workflow tool did not receive its args global (empty vendor slug -> could not read metadata file); false-failed twice. Verified structurally by running the same checks directly. FRAMEWORK FINDING: floor-check standalone-invocation args propagation."
+    },
+    "empiricalVsLint": "Structural/lint gates (slots, bijection, fk-qualifier, PK-defer) + EMPIRICAL gates (offline T5/T6, HybridE2E 25/25 real-engine push) both green. No lint-green presented as verification."
+  },
+  "ceiling": "format-verified-no-creds + offline-behavioral-proven (mock 25/25 real-engine); live T8 read-only not run (no credential).",
+  "frameworkFixesMade": [
+    "SoftPKClassifier: synthetic name __mj_integration_IdentityHash -> IdentityKey (reserved __mj_ prefix was never materialized); synthetic fallback default ON; MIN_STATISTICAL_SAMPLE=8 significance gate; nullable-awareness (exclude AllowsNull=true from PK candidates).",
+    "IntegrationConnectorCreationPipeline.StagePKClassify: creates the synthetic IOF when verdict.Strategy==='synthetic' (was skipping unknown nominees).",
+    "MJServer/orm.ts + CodeGenLib/db-connection.ts: DB_ENCRYPT env override (local/Docker self-signed TLS).",
+    "hybrid-e2e.workflow.js: STEP A2 seeds remote-operation-categories BEFORE remote-operations (AI-Skills @lookup); DB_ENCRYPT=false in launch.",
+    "HYBRID_E2E_ENV_RUNBOOK.md: DB_ENCRYPT=false + SCHEMA_ID DB-context verify-query gotcha."
+  ],
+  "frameworkFindingsToFile": [
+    "SoftPKClassifier composite tier had no significance gate (hardcoded 0.8) — FIXED.",
+    "orm.ts hardcoded encrypt:true — FIXED (env-configurable).",
+    "RSU AFTER-command npm builds fail fast in-subprocess and hard-fail ApplyAll though schema applies — worked around (commands:[]); recommend making AFTER-commands non-fatal or skippable.",
+    "floor-check standalone Workflow-tool invocation args not propagated — needs investigation."
+  ],
+  "prTracks": {
+    "frameworkPR": "MJ repo, branch off next — SoftPKClassifier + pipeline + orm/CodeGenLib DB_ENCRYPT + hybrid-e2e/runbook (+11 passing pk-classifier tests).",
+    "connectorDeliverable": "WildApricot metadata + connector + fixtures + this report — publish as Open App to MemberJunction/Integrations."
+  }
+}

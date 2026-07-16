@@ -1,0 +1,53 @@
+[
+  {
+    "io": {
+      "Name": "Volunteers",
+      "SupportsUpdate": false,
+      "UpdateAPIPath": null,
+      "UpdateMethod": null,
+      "UpdateBodyShape": null,
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": null
+    }
+  },
+  {
+    "io": {
+      "Name": "Ideas",
+      "SupportsUpdate": false,
+      "UpdateAPIPath": null,
+      "UpdateMethod": null,
+      "UpdateBodyShape": null,
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": null
+    }
+  },
+  {
+    "io": {
+      "Name": "EventTypes",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "SupportsUpdate": true,
+      "SupportsDelete": true,
+      "CreateAPIPath": "/v2.0/Events/SaveEventType",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "flat",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "body",
+      "UpdateAPIPath": "/v2.0/Events/SaveEventType",
+      "UpdateMethod": "POST",
+      "UpdateBodyShape": "flat",
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": "body",
+      "DeleteAPIPath": "/v2.0/Events/DeleteEventType?eventTypeKey={id}",
+      "DeleteMethod": "POST",
+      "DeleteIDLocation": "path"
+    }
+  },
+  {
+    "io": {
+      "Name": "EventRegistrants",
+      "SupportsWrite": false,
+      "Configuration": "{\"accessPath\":{\"door\":\"Events/GetEventRegistrants\",\"path\":\"/v2.0/Events/GetEventRegistrants\",\"nesting\":[],\"door_args\":[\"calendarEventKey\",\"modifiedDateTime\",\"maxRecords\",\"continuationToken\"],\"fieldOp\":\"api/v2.0/Events/GetEventRegistrants\"},\"sourceModel\":\"EventRegistrantConcise\",\"paginationDetail\":{\"type\":\"Cursor\",\"params\":[\"calendarEventKey\",\"maxRecords\",\"continuationToken\"]},\"OutOfScopeActions\":[{\"action\":\"RSVPToEvent\",\"op\":\"POST /v2.0/Events/RSVPToEvent?eventKey={id}\",\"reason\":\"Action-shaped \\\"RSVP to this event\\\" — not generic per-record create; id param is the parent Event key, not a registrant key.\"},{\"action\":\"RSVP-delete\",\"op\":\"DELETE /v2.0/Events/RSVP?eventKey={id}\",\"reason\":\"Action-shaped \\\"cancel my own RSVP\\\" — delete id param is the PARENT Event key, not the registrant RegistrantKey; generic DeleteRecord(registrantID) would be semantically wrong. Future MJ Action can expose it.\"}]}"
+    }
+  }
+]

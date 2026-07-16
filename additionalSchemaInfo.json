@@ -1,0 +1,2667 @@
+{
+  "hubspot": [
+    {
+      "TableName": "appointments",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_appointments",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "appointments",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_calls",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "calls",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_communications",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "communications",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_companies",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_contacts",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_courses",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "courses",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_deals",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_emails",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "emails",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_invoices",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "invoices",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_meetings",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "meetings",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_notes",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "notes",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_orders",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "orders",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_quotes",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "quotes",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_subscriptions",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "subscriptions",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_tasks",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tasks",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_companies_tickets",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tickets",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_appointments",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "appointments",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_calls",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "calls",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_carts",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "carts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_commerce_payments",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "commerce_payments",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_communications",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "communications",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_companies",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_contacts",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_courses",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "courses",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_deals",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_emails",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "emails",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_feedback_submissions",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "feedback_submissions",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_invoices",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "invoices",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_leads",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "leads",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_listings",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "listings",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_meetings",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "meetings",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_notes",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "notes",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_orders",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "orders",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_postal_mail",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "postal_mail",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_projects",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "projects",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_quotes",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "quotes",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_services",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "services",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_subscriptions",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "subscriptions",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_tasks",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tasks",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_contacts_tickets",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tickets",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_deals_calls",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "calls",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_deals_companies",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_deals_contacts",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_deals_emails",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "emails",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_deals_leads",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "leads",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_deals_line_items",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "line_items",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_deals_meetings",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "meetings",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_deals_notes",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "notes",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_deals_orders",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "orders",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_deals_quotes",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "quotes",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_deals_tasks",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tasks",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_deals_tickets",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tickets",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_quotes_contacts",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "quotes",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_quotes_line_items",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "quotes",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "line_items",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_tickets_calls",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "calls",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tickets",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_tickets_companies",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "companies",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tickets",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_tickets_contacts",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "contacts",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tickets",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_tickets_deals",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tickets",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "deals",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_tickets_emails",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "emails",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tickets",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_tickets_feedback_submissions",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tickets",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "feedback_submissions",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_tickets_meetings",
+      "PrimaryKey": [
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tickets",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "meetings",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_tickets_notes",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "notes",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tickets",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "associations_tickets_tasks",
+      "PrimaryKey": [
+        {
+          "FieldName": "toObjectId",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "toObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tasks",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fromObjectId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "tickets",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "blog_authors",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "blog_post_versions",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "blog_posts",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "blog_settings",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "blog_tags",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "business_units",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "call_transcriptions",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "calls",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "campaign_assets",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "campaigns",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "carts",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "commerce_payments",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "communications",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "companies",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "contacts",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "contracts",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "conversation_channels",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "conversation_inbox_channels",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "inboxId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "conversation_inboxes",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "channelId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "conversation_channels",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "conversation_inboxes",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "conversation_messages",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "conversation_threads",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "courses",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "currencies",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "datasource_ingestion",
+      "PrimaryKey": [
+        {
+          "FieldName": "datasourceId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "deal_splits",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "deals",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "discounts",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "domains",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "emails",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "feedback_submissions",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "fees",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "file_folders",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "files",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "forecast_categories",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "forecasts",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "forms",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "goal_targets",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "hubdb_rows",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "hubdb_tables",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "invoices",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "landing_pages",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "leads",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "line_items",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "list_folders",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "list_memberships",
+      "PrimaryKey": [
+        {
+          "FieldName": "listId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "listings",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "lists",
+      "PrimaryKey": [
+        {
+          "FieldName": "listId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "marketing_aeo_prompt_runs",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "promptId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "marketing_aeo_prompts",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "marketing_aeo_prompts",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "marketing_aeo_recommendations",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "marketing_email_versions",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "marketing_emails",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "marketing_events",
+      "PrimaryKey": [
+        {
+          "FieldName": "objectId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "media_bridge",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "meeting_scheduler",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "organizerUserId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "owners",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "meetings",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "notes",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "orders",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "owners",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "partner_clients",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "partner_services",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "pipeline_stages_deals",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "pipeline_stages_leads",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "pipeline_stages_tickets",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "pipelines_deals",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "pipelines_leads",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "pipelines_tickets",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "portal_users",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "primaryTeamId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "teams",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "roleId",
+          "SchemaName": "hubspot",
+          "RelatedTable": "user_roles",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "postal_mail",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "products",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "projects",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "quotes",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "scim_groups",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "scim_users",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "sequence_enrollments",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "sequence_steps",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "sequences",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "services",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "settings_teams",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "single_send_v4",
+      "PrimaryKey": [
+        {
+          "FieldName": "statusId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "site_pages",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "subscription_statuses",
+      "PrimaryKey": [
+        {
+          "FieldName": "subscriptionId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "subscription_types",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "subscriptions",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "tasks",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "tax_rates",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "taxes",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "teams",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "tickets",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "timeline_events",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "transactional_smtp_tokens",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "url_redirects",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "user_roles",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "users",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "workflows",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "conversation_custom_channels",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "custom_coded_actions",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "custom_event_completions",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "custom_event_definitions",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "custom_object_schemas",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "webhooks_journal",
+      "PrimaryKey": [
+        {
+          "FieldName": "currentOffset",
+          "Description": "Primary key from source system"
+        }
+      ]
+    }
+  ]
+}

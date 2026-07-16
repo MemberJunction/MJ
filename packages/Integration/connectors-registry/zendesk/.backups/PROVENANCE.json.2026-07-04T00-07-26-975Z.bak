@@ -1,0 +1,134 @@
+{
+  "Entries": [
+    {
+      "URL": "https://developer.zendesk.com/api-reference/introduction/rate-limits/",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Root-level per-app rate-limit count (Team plan, the lowest current non-legacy Support-plan tier)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "Plan Requests per minute Essential (legacy) 10 Team 200 Professional 400 Enterprise 700 High Volume API add-on 2500"
+    },
+    {
+      "URL": "https://developer.zendesk.com/api-reference/introduction/rate-limits/",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Root-level rate-limit window in seconds (Zendesk rate limits are expressed per-minute)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "requests per minute ... X-Rate-Limit: 700 X-Rate-Limit-Remaining: 699"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Per-tenant API base URL template (subdomain + fixed zendesk.com host)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "servers: - url: https://{subdomain}.{domain}.com variables: domain: default: zendesk subdomain: default: example"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Per-tenant API base URL template used to build every request URL",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.APIBaseURLTemplate",
+      "Excerpt": "servers: - url: https://{subdomain}.{domain}.com variables: domain: default: zendesk subdomain: default: example"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the base URL is parameterized per-tenant by a subdomain variable, which the connector must read from a per-connection config value",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.SubdomainConfigKey",
+      "Excerpt": "servers: - url: https://{subdomain}.{domain}.com variables: subdomain: default: example"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms Basic-auth API-token pattern is the documented default auth scheme",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "-v -u {email_address}/token:{api_token}"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the exact Basic-auth credential shape (email/token:api_token)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthHeaderPattern",
+      "Excerpt": "-v -u {email_address}/token:{api_token}"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the OAuth2 token-exchange endpoint + grant types (authorization_code, refresh_token, client_credentials) as the alternate auth flow",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OAuth2Alternate",
+      "Excerpt": "POST https://{subdomain}.zendesk.com/oauth/tokens ... grant_type | \"authorization_code\", \"refresh_token\", or \"client_credentials\""
+    },
+    {
+      "URL": "https://support.zendesk.com/hc/en-us/articles/4408845965210",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the OAuth2 authorize-redirect URL (linked directly from the OAS's own oauth/tokens operation description)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OAuth2Alternate",
+      "Excerpt": "https://{subdomain}.zendesk.com/oauth/authorizations/new where {subdomain} is your Zendesk core subdomain, not a host-mapped subdomain"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the refresh_token grant type + expiry bounds for OAuth2 token rotation",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.TokenRefreshStrategy",
+      "Excerpt": "refresh_token | A valid refresh token ... refresh_token_expires_in | ... Defaults to 2,592,000 seconds (30 days)"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the vendor-wide primary-key convention (id: integer(int64), readOnly) on top-level resources",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.universalPK",
+      "Excerpt": "TicketObject.id: integer(int64) readOnly; UserObject.id: integer(int64); OrganizationObject.id: integer(int64)"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms cursor-based pagination (CBP) request-param shape (page[size]/page[after]/page[before]) and response shape (meta.after_cursor/has_more, links.next/prev)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "page[size] - Number of records per page ... page[after] - Cursor token ... meta: after_cursor, before_cursor, has_more; links: next, prev"
+    },
+    {
+      "URL": "https://developer.zendesk.com/documentation/api-basics/pagination/paginating-through-lists-using-cursor-pagination/",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Cross-reference confirming the cursor pagination mechanics described in the OAS against Zendesk's dedicated pagination guide",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "page[after]/page[before]/page[size] query-param + meta.after_cursor/before_cursor + links.next/previous response shape"
+    }
+  ]
+}

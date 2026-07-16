@@ -1,0 +1,1046 @@
+{
+  "customer": {
+    "fieldCount": 31,
+    "foreignKeys": [
+      {
+        "field": "default_source",
+        "kind": "expandable-fk",
+        "targets": [
+          "bank_account",
+          "card",
+          "source"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "subscriptions",
+        "kind": "nested-list-envelope",
+        "targets": [
+          "subscription"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "tax_ids",
+        "kind": "nested-list-envelope",
+        "targets": [
+          "tax_id"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "test_clock",
+        "kind": "expandable-fk",
+        "targets": [
+          "test_helpers.test_clock"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "charge": {
+    "fieldCount": 45,
+    "foreignKeys": [
+      {
+        "field": "application",
+        "kind": "expandable-fk",
+        "targets": [
+          "application"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "application_fee",
+        "kind": "expandable-fk",
+        "targets": [
+          "application_fee"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "balance_transaction",
+        "kind": "expandable-fk",
+        "targets": [
+          "balance_transaction"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "customer",
+        "kind": "expandable-fk",
+        "targets": [
+          "customer",
+          "deleted_customer"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "failure_balance_transaction",
+        "kind": "expandable-fk",
+        "targets": [
+          "balance_transaction"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "on_behalf_of",
+        "kind": "expandable-fk",
+        "targets": [
+          "account"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "payment_intent",
+        "kind": "expandable-fk",
+        "targets": [
+          "payment_intent"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "refunds",
+        "kind": "nested-list-envelope",
+        "targets": [
+          "refund"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "review",
+        "kind": "expandable-fk",
+        "targets": [
+          "review"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "source_transfer",
+        "kind": "expandable-fk",
+        "targets": [
+          "transfer"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "transfer",
+        "kind": "expandable-fk",
+        "targets": [
+          "transfer"
+        ],
+        "isNullable": false
+      }
+    ]
+  },
+  "payment_intent": {
+    "fieldCount": 44,
+    "foreignKeys": [
+      {
+        "field": "application",
+        "kind": "expandable-fk",
+        "targets": [
+          "application"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "customer",
+        "kind": "expandable-fk",
+        "targets": [
+          "customer",
+          "deleted_customer"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "latest_charge",
+        "kind": "expandable-fk",
+        "targets": [
+          "charge"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "on_behalf_of",
+        "kind": "expandable-fk",
+        "targets": [
+          "account"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "payment_method",
+        "kind": "expandable-fk",
+        "targets": [
+          "payment_method"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "review",
+        "kind": "expandable-fk",
+        "targets": [
+          "review"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "setup_intent": {
+    "fieldCount": 28,
+    "foreignKeys": [
+      {
+        "field": "application",
+        "kind": "expandable-fk",
+        "targets": [
+          "application"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "customer",
+        "kind": "expandable-fk",
+        "targets": [
+          "customer",
+          "deleted_customer"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "latest_attempt",
+        "kind": "expandable-fk",
+        "targets": [
+          "setup_attempt"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "mandate",
+        "kind": "expandable-fk",
+        "targets": [
+          "mandate"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "on_behalf_of",
+        "kind": "expandable-fk",
+        "targets": [
+          "account"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "payment_method",
+        "kind": "expandable-fk",
+        "targets": [
+          "payment_method"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "single_use_mandate",
+        "kind": "expandable-fk",
+        "targets": [
+          "mandate"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "payment_method": {
+    "fieldCount": 68,
+    "foreignKeys": [
+      {
+        "field": "customer",
+        "kind": "expandable-fk",
+        "targets": [
+          "customer"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "refund": {
+    "fieldCount": 22,
+    "foreignKeys": [
+      {
+        "field": "balance_transaction",
+        "kind": "expandable-fk",
+        "targets": [
+          "balance_transaction"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "charge",
+        "kind": "expandable-fk",
+        "targets": [
+          "charge"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "failure_balance_transaction",
+        "kind": "expandable-fk",
+        "targets": [
+          "balance_transaction"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "payment_intent",
+        "kind": "expandable-fk",
+        "targets": [
+          "payment_intent"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "source_transfer_reversal",
+        "kind": "expandable-fk",
+        "targets": [
+          "transfer_reversal"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "transfer_reversal",
+        "kind": "expandable-fk",
+        "targets": [
+          "transfer_reversal"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "dispute": {
+    "fieldCount": 17,
+    "foreignKeys": [
+      {
+        "field": "charge",
+        "kind": "expandable-fk",
+        "targets": [
+          "charge"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "payment_intent",
+        "kind": "expandable-fk",
+        "targets": [
+          "payment_intent"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "balance_transaction": {
+    "fieldCount": 16,
+    "foreignKeys": [
+      {
+        "field": "source",
+        "kind": "expandable-fk",
+        "targets": [
+          "application_fee",
+          "charge",
+          "connect_collection_transfer",
+          "customer_cash_balance_transaction",
+          "dispute",
+          "fee_refund",
+          "issuing.authorization",
+          "issuing.dispute",
+          "issuing.transaction",
+          "payout",
+          "refund",
+          "reserve_transaction",
+          "tax_deducted_at_source",
+          "topup",
+          "transfer",
+          "transfer_reversal"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "payout": {
+    "fieldCount": 27,
+    "foreignKeys": [
+      {
+        "field": "application_fee",
+        "kind": "expandable-fk",
+        "targets": [
+          "application_fee"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "balance_transaction",
+        "kind": "expandable-fk",
+        "targets": [
+          "balance_transaction"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "destination",
+        "kind": "expandable-fk",
+        "targets": [
+          "bank_account",
+          "card",
+          "deleted_bank_account",
+          "deleted_card"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "failure_balance_transaction",
+        "kind": "expandable-fk",
+        "targets": [
+          "balance_transaction"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "original_payout",
+        "kind": "expandable-fk",
+        "targets": [
+          "payout"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "reversed_by",
+        "kind": "expandable-fk",
+        "targets": [
+          "payout"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "event": {
+    "fieldCount": 11,
+    "foreignKeys": []
+  },
+  "token": {
+    "fieldCount": 9,
+    "foreignKeys": []
+  },
+  "source": {
+    "fieldCount": 38,
+    "foreignKeys": []
+  },
+  "product": {
+    "fieldCount": 18,
+    "foreignKeys": [
+      {
+        "field": "default_price",
+        "kind": "expandable-fk",
+        "targets": [
+          "price"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "tax_code",
+        "kind": "expandable-fk",
+        "targets": [
+          "tax_code"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "price": {
+    "fieldCount": 21,
+    "foreignKeys": [
+      {
+        "field": "product",
+        "kind": "expandable-fk",
+        "targets": [
+          "product",
+          "deleted_product"
+        ],
+        "isNullable": false
+      }
+    ]
+  },
+  "plan": {
+    "fieldCount": 20,
+    "foreignKeys": [
+      {
+        "field": "product",
+        "kind": "expandable-fk",
+        "targets": [
+          "product",
+          "deleted_product"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "subscription": {
+    "fieldCount": 48,
+    "foreignKeys": [
+      {
+        "field": "application",
+        "kind": "expandable-fk",
+        "targets": [
+          "application",
+          "deleted_application"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "customer",
+        "kind": "expandable-fk",
+        "targets": [
+          "customer",
+          "deleted_customer"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "default_payment_method",
+        "kind": "expandable-fk",
+        "targets": [
+          "payment_method"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "default_source",
+        "kind": "expandable-fk",
+        "targets": [
+          "bank_account",
+          "card",
+          "source"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "items",
+        "kind": "nested-list-envelope",
+        "targets": [
+          "subscription_item"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "latest_invoice",
+        "kind": "expandable-fk",
+        "targets": [
+          "invoice"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "on_behalf_of",
+        "kind": "expandable-fk",
+        "targets": [
+          "account"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "pending_setup_intent",
+        "kind": "expandable-fk",
+        "targets": [
+          "setup_intent"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "schedule",
+        "kind": "expandable-fk",
+        "targets": [
+          "subscription_schedule"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "test_clock",
+        "kind": "expandable-fk",
+        "targets": [
+          "test_helpers.test_clock"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "subscription_item": {
+    "fieldCount": 13,
+    "foreignKeys": []
+  },
+  "invoice": {
+    "fieldCount": 78,
+    "foreignKeys": [
+      {
+        "field": "application",
+        "kind": "expandable-fk",
+        "targets": [
+          "application",
+          "deleted_application"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "customer",
+        "kind": "expandable-fk",
+        "targets": [
+          "customer",
+          "deleted_customer"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "default_payment_method",
+        "kind": "expandable-fk",
+        "targets": [
+          "payment_method"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "default_source",
+        "kind": "expandable-fk",
+        "targets": [
+          "bank_account",
+          "card",
+          "source"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "latest_revision",
+        "kind": "expandable-fk",
+        "targets": [
+          "invoice"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "lines",
+        "kind": "nested-list-envelope",
+        "targets": [
+          "line_item"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "on_behalf_of",
+        "kind": "expandable-fk",
+        "targets": [
+          "account"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "payments",
+        "kind": "nested-list-envelope",
+        "targets": [
+          "invoice_payment"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "test_clock",
+        "kind": "expandable-fk",
+        "targets": [
+          "test_helpers.test_clock"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "invoiceitem": {
+    "fieldCount": 23,
+    "foreignKeys": [
+      {
+        "field": "customer",
+        "kind": "expandable-fk",
+        "targets": [
+          "customer",
+          "deleted_customer"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "invoice",
+        "kind": "expandable-fk",
+        "targets": [
+          "invoice"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "test_clock",
+        "kind": "expandable-fk",
+        "targets": [
+          "test_helpers.test_clock"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "credit_note": {
+    "fieldCount": 34,
+    "foreignKeys": [
+      {
+        "field": "customer",
+        "kind": "expandable-fk",
+        "targets": [
+          "customer",
+          "deleted_customer"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "customer_balance_transaction",
+        "kind": "expandable-fk",
+        "targets": [
+          "customer_balance_transaction"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "invoice",
+        "kind": "expandable-fk",
+        "targets": [
+          "invoice"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "lines",
+        "kind": "nested-list-envelope",
+        "targets": [
+          "credit_note_line_item"
+        ],
+        "isNullable": false
+      }
+    ]
+  },
+  "coupon": {
+    "fieldCount": 17,
+    "foreignKeys": []
+  },
+  "promotion_code": {
+    "fieldCount": 14,
+    "foreignKeys": [
+      {
+        "field": "customer",
+        "kind": "expandable-fk",
+        "targets": [
+          "customer",
+          "deleted_customer"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "tax_rate": {
+    "fieldCount": 18,
+    "foreignKeys": []
+  },
+  "quote": {
+    "fieldCount": 36,
+    "foreignKeys": [
+      {
+        "field": "application",
+        "kind": "expandable-fk",
+        "targets": [
+          "application",
+          "deleted_application"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "customer",
+        "kind": "expandable-fk",
+        "targets": [
+          "customer",
+          "deleted_customer"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "invoice",
+        "kind": "expandable-fk",
+        "targets": [
+          "invoice",
+          "deleted_invoice"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "line_items",
+        "kind": "nested-list-envelope",
+        "targets": [
+          "item"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "on_behalf_of",
+        "kind": "expandable-fk",
+        "targets": [
+          "account"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "subscription",
+        "kind": "expandable-fk",
+        "targets": [
+          "subscription"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "subscription_schedule",
+        "kind": "expandable-fk",
+        "targets": [
+          "subscription_schedule"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "test_clock",
+        "kind": "expandable-fk",
+        "targets": [
+          "test_helpers.test_clock"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "account": {
+    "fieldCount": 23,
+    "foreignKeys": []
+  },
+  "person": {
+    "fieldCount": 32,
+    "foreignKeys": []
+  },
+  "external_account": {
+    "error": "schema not found"
+  },
+  "transfer": {
+    "fieldCount": 17,
+    "foreignKeys": [
+      {
+        "field": "balance_transaction",
+        "kind": "expandable-fk",
+        "targets": [
+          "balance_transaction"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "destination",
+        "kind": "expandable-fk",
+        "targets": [
+          "account"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "destination_payment",
+        "kind": "expandable-fk",
+        "targets": [
+          "charge"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "reversals",
+        "kind": "nested-list-envelope",
+        "targets": [
+          "transfer_reversal"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "source_transaction",
+        "kind": "expandable-fk",
+        "targets": [
+          "charge"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "application_fee": {
+    "fieldCount": 15,
+    "foreignKeys": [
+      {
+        "field": "account",
+        "kind": "expandable-fk",
+        "targets": [
+          "account"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "application",
+        "kind": "expandable-fk",
+        "targets": [
+          "application"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "balance_transaction",
+        "kind": "expandable-fk",
+        "targets": [
+          "balance_transaction"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "charge",
+        "kind": "expandable-fk",
+        "targets": [
+          "charge"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "originating_transaction",
+        "kind": "expandable-fk",
+        "targets": [
+          "charge"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "refunds",
+        "kind": "nested-list-envelope",
+        "targets": [
+          "fee_refund"
+        ],
+        "isNullable": false
+      }
+    ]
+  },
+  "topup": {
+    "fieldCount": 16,
+    "foreignKeys": [
+      {
+        "field": "balance_transaction",
+        "kind": "expandable-fk",
+        "targets": [
+          "balance_transaction"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "capability": {
+    "fieldCount": 8,
+    "foreignKeys": [
+      {
+        "field": "account",
+        "kind": "expandable-fk",
+        "targets": [
+          "account"
+        ],
+        "isNullable": false
+      }
+    ]
+  },
+  "checkout.session": {
+    "fieldCount": 68,
+    "foreignKeys": [
+      {
+        "field": "customer",
+        "kind": "expandable-fk",
+        "targets": [
+          "customer",
+          "deleted_customer"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "invoice",
+        "kind": "expandable-fk",
+        "targets": [
+          "invoice"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "line_items",
+        "kind": "nested-list-envelope",
+        "targets": [
+          "item"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "payment_intent",
+        "kind": "expandable-fk",
+        "targets": [
+          "payment_intent"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "payment_link",
+        "kind": "expandable-fk",
+        "targets": [
+          "payment_link"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "setup_intent",
+        "kind": "expandable-fk",
+        "targets": [
+          "setup_intent"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "subscription",
+        "kind": "expandable-fk",
+        "targets": [
+          "subscription"
+        ],
+        "isNullable": true
+      }
+    ]
+  },
+  "payment_link": {
+    "fieldCount": 37,
+    "foreignKeys": [
+      {
+        "field": "application",
+        "kind": "expandable-fk",
+        "targets": [
+          "application",
+          "deleted_application"
+        ],
+        "isNullable": true
+      },
+      {
+        "field": "line_items",
+        "kind": "nested-list-envelope",
+        "targets": [
+          "item"
+        ],
+        "isNullable": false
+      },
+      {
+        "field": "on_behalf_of",
+        "kind": "expandable-fk",
+        "targets": [
+          "account"
+        ],
+        "isNullable": true
+      }
+    ]
+  }
+}

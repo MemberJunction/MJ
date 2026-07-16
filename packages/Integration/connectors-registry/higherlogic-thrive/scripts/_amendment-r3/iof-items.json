@@ -1,0 +1,458 @@
+[
+  {
+    "ioName": "Volunteers",
+    "iof": {
+      "Name": "ApprovedByContactKey",
+      "Type": "String",
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "ContactKey",
+      "Configuration": {
+        "ReferencedType": "Contacts"
+      }
+    }
+  },
+  {
+    "ioName": "Volunteers",
+    "iof": {
+      "Name": "RejectedByContactKey",
+      "Type": "String",
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "ContactKey",
+      "Configuration": {
+        "ReferencedType": "Contacts"
+      }
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "EventTypeName",
+      "DisplayName": "Event Type Name",
+      "Description": "EventTypePostRequest write-body field (String); from POST Events/SaveEventType.",
+      "Type": "String",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 3
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "EventTypeDescription",
+      "DisplayName": "Event Type Description",
+      "Description": "EventTypePostRequest write-body field (String); from POST Events/SaveEventType.",
+      "Type": "String",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 4
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowMultipleRegistrations",
+      "DisplayName": "Allow Multiple Registrations",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 5
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowMultipleOptions",
+      "DisplayName": "Allow Multiple Options",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 6
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowMultipleSessions",
+      "DisplayName": "Allow Multiple Sessions",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 7
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AcceptPayment",
+      "DisplayName": "Accept Payment",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 8
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "IsActive",
+      "DisplayName": "Is Active",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 9
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowRegistration",
+      "DisplayName": "Allow Registration",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 10
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowSameSelections",
+      "DisplayName": "Allow Same Selections",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 11
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "ShowAddEditScreenDescription",
+      "DisplayName": "Show Add Edit Screen Description",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 12
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowNonMemberRegistration",
+      "DisplayName": "Allow Non Member Registration",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 13
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowPublicUserRegistration",
+      "DisplayName": "Allow Public User Registration",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 14
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowEarlyRegistrationRate",
+      "DisplayName": "Allow Early Registration Rate",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 15
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowLateRegistrationRate",
+      "DisplayName": "Allow Late Registration Rate",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 16
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AddEditScreenDescription",
+      "DisplayName": "Add Edit Screen Description",
+      "Description": "EventTypePostRequest write-body field (String); from POST Events/SaveEventType.",
+      "Type": "String",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 17
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "EventTypeDescriptionWaterMarkText",
+      "DisplayName": "Event Type Description Water Mark Text",
+      "Description": "EventTypePostRequest write-body field (String); from POST Events/SaveEventType.",
+      "Type": "String",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 18
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowMultiDay",
+      "DisplayName": "Allow Multi Day",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 19
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowPhysicalAddress",
+      "DisplayName": "Allow Physical Address",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 20
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowOnlinePhone",
+      "DisplayName": "Allow Online Phone",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 21
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowEventLogo",
+      "DisplayName": "Allow Event Logo",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 22
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowCommunityAdminToUse",
+      "DisplayName": "Allow Community Admin To Use",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 23
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowCommunityMemberToUse",
+      "DisplayName": "Allow Community Member To Use",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 24
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowEventVisibilityChanges",
+      "DisplayName": "Allow Event Visibility Changes",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 25
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "SuppressOptionDisplay",
+      "DisplayName": "Suppress Option Display",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 26
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "SuppressSessionDisplay",
+      "DisplayName": "Suppress Session Display",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 27
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "AllowCredits",
+      "DisplayName": "Allow Credits",
+      "Description": "EventTypePostRequest write-body field (Boolean); from POST Events/SaveEventType.",
+      "Type": "Boolean",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 28
+    }
+  },
+  {
+    "ioName": "EventTypes",
+    "iof": {
+      "Name": "RegistrationProcessOption",
+      "DisplayName": "Registration Process Option",
+      "Description": "EventTypePostRequest write-body field (Integer); from POST Events/SaveEventType.",
+      "Type": "Integer",
+      "IsPrimaryKey": false,
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 29
+    }
+  }
+]

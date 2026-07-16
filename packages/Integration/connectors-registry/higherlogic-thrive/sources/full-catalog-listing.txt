@@ -1,0 +1,261 @@
+=== Announcements (2) ===
+  GET api/v2.0/Announcements/GetAnnouncements?announcementTypeFilter={announcementTypeFilter}&communityKey={communityKey}&micrositeGroupTypeRouteDesignKey={micrositeGroupTypeRouteDesignKey}&sortOrder={sortOrder}&maxResults={maxResults}&includeAnnouncementsWithNoType={includeAnnouncementsWithNoType}
+  GET api/v2.0/Announcements/GetAnnouncement?announcementKey={announcementKey}
+=== Answer (5) ===
+  POST api/v2.0/Answer/Recommend?answerKey={answerKey}
+  DELETE api/v2.0/Answer/Recommend?answerKey={answerKey}
+  GET api/v2.0/Answer/Get?answerKey={answerKey}
+  DELETE api/v2.0/Answer/Delete?answerKey={answerKey}
+  POST api/v2.0/Answer/Edit
+=== Authentication (3) ===
+  POST api/v2.0/Authentication/Login
+  GET api/v2.0/Authentication/GetTenantDetail?communityUrl={communityUrl}
+  POST api/v2.0/Authentication/Widget
+=== AutomationRules (5) ===
+  GET api/v2.0/AutomationRules/GetActiveRulesByType
+  GET api/v2.0/AutomationRules/GetContactsByRuleScheduleKey?ruleScheduleKey={ruleScheduleKey}&integrationId={integrationId}
+  GET api/v2.0/AutomationRules/GetContactData?ruleScheduleKey={ruleScheduleKey}&maxRecords={maxRecords}&continuationToken={continuationToken}&fieldList={fieldList}
+  GET api/v2.0/AutomationRules/GetContactDataFields
+  GET api/v2.0/AutomationRules/GetContactDataSubsetByRuleScheduleKey?ruleScheduleKey={ruleScheduleKey}&integrationId={integrationId}
+=== Blogs (15) ===
+  POST api/v2.0/Blogs/GetLatestEntries
+  GET api/v2.0/Blogs/GetBlogEntriesByGrouping?groupingType={groupingType}&maxRecords={maxRecords}
+  POST api/v2.0/Blogs/CreateBlog
+  POST api/v2.0/Blogs/PublishBlog?blogKey={blogKey}
+  POST api/v2.0/Blogs/UpdateBlog?blogKey={blogKey}
+  POST api/v2.0/Blogs/AddRelatedLink?blogKey={blogKey}
+  GET api/v2.0/Blogs/GetBlogsByContactKey?contactKey={contactKey}
+  GET api/v2.0/Blogs/GetBlog?blogKey={blogKey}
+  POST api/v2.0/Blogs/RecommendBlog?blogKey={blogKey}
+  DELETE api/v2.0/Blogs/DeleteBlogRecommendation?blogKey={blogKey}
+  DELETE api/v2.0/Blogs/DeleteBlog?blogKey={blogKey}
+  POST api/v2.0/Blogs/AddComment?blogKey={blogKey}
+  POST api/v2.0/Blogs/UpdateComment?blogCommentKey={blogCommentKey}
+  DELETE api/v2.0/Blogs/DeleteRelatedLink?relatedResourceKey={relatedResourceKey}
+  DELETE api/v2.0/Blogs/DeleteComment?blogCommentKey={blogCommentKey}
+=== Comments (3) ===
+  GET api/v2.0/Comments/Get?itemKey={itemKey}&limit={limit}
+  GET api/v2.0/Comments/Get?commentKey={commentKey}
+  GET api/v2.0/Comments/GetComments?afterCommentKey={afterCommentKey}&beforeCommentKey={beforeCommentKey}&limit={limit}
+=== Communities (13) ===
+  GET api/v2.0/Communities/Get?communityKey={communityKey}
+  GET api/v2.0/Communities/GetMyCommunities?includeStatistics={includeStatistics}&includeHiddenCommunities={includeHiddenCommunities}
+  GET api/v2.0/Communities/GetContactCommunities?contactKey={contactKey}&legacyContactKey={legacyContactKey}
+  GET api/v2.0/Communities/GetViewableCommunities?includeStatistics={includeStatistics}
+  GET api/v2.0/Communities/GetCommunitiesCanContribute?includeStatistics={includeStatistics}
+  GET api/v2.0/Communities/GetCommunitiesICanJoin?includeStatistics={includeStatistics}
+  GET api/v2.0/Communities/GetMyCommunityInvitations
+  POST api/v2.0/Communities/GetCommunityMembers
+  POST api/v2.0/Communities/InviteToCommunity?contactKey={contactKey}&communityKey={communityKey}
+  POST api/v2.0/Communities/JoinCommunity?communityKey={communityKey}
+  POST api/v2.0/Communities/AcceptInvitation
+  DELETE api/v2.0/Communities/RejectInvitation?communityInvitationKey={communityInvitationKey}
+  DELETE api/v2.0/Communities/LeaveCommunity?communityKey={communityKey}
+=== Contacts (19) ===
+  POST api/v2.0/Contacts/WhoAmI?includeSecurityGroups={includeSecurityGroups}
+  GET api/v2.0/Contacts/GetWhoAmI?includeSecurityGroups={includeSecurityGroups}
+  GET api/v2.0/Contacts/GetContact?contactKey={contactKey}&includeSecurityGroups={includeSecurityGroups}
+  GET api/v2.0/Contacts/GetContact?legacyContactKey={legacyContactKey}&includeSecurityGroups={includeSecurityGroups}
+  GET api/v2.0/Contacts/GetMyContacts
+  GET api/v2.0/Contacts/GetMyContactsPage?afterContactKey={afterContactKey}&beforeContactKey={beforeContactKey}&limit={limit}
+  POST api/v2.0/Contacts/SearchContactsForMentions?searchText={searchText}&maxCount={maxCount}
+  GET api/v2.0/Contacts/GetContactKeyByPrimaryEmail?emailAddress={emailAddress}
+  GET api/v2.0/Contacts/GetMyEmailPreferences
+  POST api/v2.0/Contacts/UpdateEmailPreferences
+  POST api/v2.0/Contacts/UpdateProfilePicture?contactKey={contactKey}&legacyContactKey={legacyContactKey}
+  POST api/v2.0/Contacts/UpdateMyProfilePicture
+  POST api/v2.0/Contacts/UpdateMyEmailPreferences
+  POST api/v2.0/Contacts/AcceptCodeOfConduct
+  GET api/v2.0/Contacts/SearchContacts?searchTerms={searchTerms}&searchAllAddresses={searchAllAddresses}&memberStatus={memberStatus}&searchOnlyCompanies={searchOnlyCompanies}&overrideOptOut={overrideOptOut}&contactStatusCode={contactStatusCode}&includeMiddleName={includeMiddleName}&limitToAcceptedTerms={limitToAcceptedTerms}&includeCurrentContact={includeCurrentContact}
+  GET api/v2.0/Contacts/SearchContactsForMessaging?searchTerms={searchTerms}
+  GET api/v2.0/Contacts/GetContactsByDemographic?demographicText={demographicText}
+  POST api/v2.0/Contacts/GetContactContributions
+  POST api/v2.0/Contacts/GetMyContributions
+=== DataFeed (1) ===
+  POST api/v2.0/DataFeed/GetData
+=== Demographics (10) ===
+  POST api/v2.0/Demographics/AddDemographicCategory
+  POST api/v2.0/Demographics/AddDemographicChoice
+  POST api/v2.0/Demographics/SetContactDemographic?demographicKey={demographicKey}
+  DELETE api/v2.0/Demographics/RemoveContactDemographic?demographicKey={demographicKey}
+  DELETE api/v2.0/Demographics/RemoveFreeFormContactDemographic?demographicTypeKey={demographicTypeKey}
+  POST api/v2.0/Demographics/SetFreeFormContactDemographic?demographicTypeKey={demographicTypeKey}&freeFormText={freeFormText}
+  GET api/v2.0/Demographics/GetDemographicTypes
+  GET api/v2.0/Demographics/GetDemographicChoices
+  GET api/v2.0/Demographics/GetDemographicChoices?demographicTypeKey={demographicTypeKey}
+  GET api/v2.0/Demographics/GetDemographicsVisibleOnMainMicrositeProfile
+=== Discussions (33) ===
+  PUT api/v2.0/Discussions/Edit
+  GET api/v2.0/Discussions/GetDiscussion?discussionKey={discussionKey}
+  GET api/v2.0/Discussions/GetDiscussionPost?discussionPostKey={discussionPostKey}
+  POST api/v2.0/Discussions/GetDiscussionThreadUpdates
+  GET api/v2.0/Discussions/GetSubscribedDiscussions
+  GET api/v2.0/Discussions/GetLatestDiscussionPosts?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}&sortByScore={sortByScore}&scoreSortDirection={scoreSortDirection}
+  GET api/v2.0/Discussions/GetDiscussionPosts?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}&includeStaff={includeStaff}&sortByScore={sortByScore}&scoreSortDirection={scoreSortDirection}
+  POST api/v2.0/Discussions/GetDiscussionPosts
+  GET api/v2.0/Discussions/GetDiscussionPosts?discussionThreadKey={discussionThreadKey}
+  GET api/v2.0/Discussions/GetDiscussionPostInThread?discussionPostKey={discussionPostKey}&numberOfReplies={numberOfReplies}&maxBreadCrumbs={maxBreadCrumbs}
+  GET api/v2.0/Discussions/GetPagedDiscussionPostFields
+  GET api/v2.0/Discussions/GetPagedDiscussionPosts?communityKey={communityKey}&maxRecords={maxRecords}&continuationToken={continuationToken}&fieldList={fieldList}
+  GET api/v2.0/Discussions/GetLatestTopics?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}
+  POST api/v2.0/Discussions/SubmitDiscussionPost
+  POST api/v2.0/Discussions/PostDiscussionSimple
+  POST api/v2.0/Discussions/UpdateSubscription
+  GET api/v2.0/Discussions/GetRecentThreads?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}
+  GET api/v2.0/Discussions/GetDiscussionPostReplies?afterReplyDiscussionPostKey={afterReplyDiscussionPostKey}&beforeReplyDiscussionPostKey={beforeReplyDiscussionPostKey}&limit={limit}
+  POST api/v2.0/Discussions/Follow?discussionThreadKey={discussionThreadKey}
+  DELETE api/v2.0/Discussions/Follow?discussionThreadKey={discussionThreadKey}
+  GET api/v2.0/Discussions/GetEligibleDiscussions
+  POST api/v2.0/Discussions/PostToDiscussionWithCrossPost
+  POST api/v2.0/Discussions/PostToDiscussionAnonymously
+  POST api/v2.0/Discussions/PostToDiscussion
+  POST api/v2.0/Discussions/ReplyToDiscussion
+  POST api/v2.0/Discussions/ReplyToDiscussionAnonymously
+  POST api/v2.0/Discussions/SendMessageToDiscussionPostAuthor
+  POST api/v2.0/Discussions/SearchDiscussionPosts
+  POST api/v2.0/Discussions/RecommendDiscussionPost?discussionPostKey={discussionPostKey}
+  POST api/v2.0/Discussions/ToggleBestAnswer?discussionPostKey={discussionPostKey}
+  DELETE api/v2.0/Discussions/RemovePost?discussionPostKey={discussionPostKey}
+  DELETE api/v2.0/Discussions/DeleteDiscussionPostRecommendation?discussionPostKey={discussionPostKey}
+  GET api/v2.0/Discussions/GetThreadTags?discussionThreadKey={discussionThreadKey}
+=== Events (20) ===
+  GET api/v2.0/Events/GetRegistrantDetails?calendarEventKey={calendarEventKey}&contactKey={contactKey}&emailAddress={emailAddress}&firstName={firstName}&lastName={lastName}&useLeadingWildcardSearch={useLeadingWildcardSearch}
+  GET api/v2.0/Events/GetRegistrantsByCalendarEvent?calendarEventKey={calendarEventKey}&modifiedDateTime={modifiedDateTime}
+  GET api/v2.0/Events/GetEventRegistrants?calendarEventKey={calendarEventKey}&modifiedDateTime={modifiedDateTime}&maxRecords={maxRecords}&continuationToken={continuationToken}
+  GET api/v2.0/Events/GetEventType?EventTypeKey={EventTypeKey}
+  GET api/v2.0/Events/GetEventTypes
+  GET api/v2.0/Events/GetEventTypesList
+  POST api/v2.0/Events/SaveEventType
+  POST api/v2.0/Events/DeleteEventType?eventTypeKey={eventTypeKey}
+  POST api/v2.0/Events/RestoreEventType?eventTypeKey={eventTypeKey}
+  GET api/v2.0/Events/GetEvent?eventKey={eventKey}
+  GET api/v2.0/Events/GetUpcoming?maxRecords={maxRecords}
+  POST api/v2.0/Events/SearchCurrentAndFutureEvents?includePastEvents={includePastEvents}&maxRecords={maxRecords}
+  POST api/v2.0/Events/SearchEvents?maxRecords={maxRecords}
+  GET api/v2.0/Events/CommunityPastEvents?communityId={communityId}&maxRecords={maxRecords}
+  GET api/v2.0/Events/ContactEventList?contactId={contactId}&maxRecords={maxRecords}
+  GET api/v2.0/Events/CommunityEventAttendance?communityId={communityId}&numberOfMeetings={numberOfMeetings}
+  GET api/v2.0/Events/EventAttendance?eventId={eventId}
+  GET api/v2.0/Events/GetEventEnabledCommunityList
+  POST api/v2.0/Events/RSVPToEvent?eventKey={eventKey}
+  DELETE api/v2.0/Events/RSVP?eventKey={eventKey}
+=== EventSessions (1) ===
+  GET api/v2.0/EventSessions/GetSession?sessionKey={sessionKey}
+=== ExternalActivity (3) ===
+  POST api/v2.0/ExternalActivity/Create
+  PUT api/v2.0/ExternalActivity/Update
+  DELETE api/v2.0/ExternalActivity/Delete?externalActivityKey={externalActivityKey}&legacyActivityKey={legacyActivityKey}
+=== ExternalSearch (10) ===
+  POST api/v2.0/ExternalSearch/AddAnnouncementItems
+  POST api/v2.0/ExternalSearch/AddLibraryItems
+  POST api/v2.0/ExternalSearch/AddLibraryEntryItems
+  POST api/v2.0/ExternalSearch/AddCommunityItems
+  POST api/v2.0/ExternalSearch/AddCourseItems
+  POST api/v2.0/ExternalSearch/AddBlogItems
+  POST api/v2.0/ExternalSearch/AddEventItems
+  POST api/v2.0/ExternalSearch/AddPageContent
+  POST api/v2.0/ExternalSearch/AddVolunteerOpportunityItems
+  POST api/v2.0/ExternalSearch/AddGlossaryItems
+=== Federation (2) ===
+  GET api/v2.0/Federation/GetTenant?tenantKey={tenantKey}
+  GET api/v2.0/Federation/GetContact?tenantKey={tenantKey}&contactKey={contactKey}
+=== Friends (8) ===
+  GET api/v2.0/Friends/GetPendingReceivedFriendRequests
+  GET api/v2.0/Friends/GetPendingSentFriendRequests
+  GET api/v2.0/Friends/GetAcceptedFriendRequests?daysBack={daysBack}
+  POST api/v2.0/Friends/PostFriendRequest?contactKey={contactKey}
+  POST api/v2.0/Friends/AcceptFriendRequest?friendRequestRecordKey={friendRequestRecordKey}
+  POST api/v2.0/Friends/RejectFriendRequest?friendRequestRecordKey={friendRequestRecordKey}
+  DELETE api/v2.0/Friends/CancelFriendRequest?contactKey={contactKey}
+  POST api/v2.0/Friends/UnFriend?contactKey={contactKey}
+=== Ideation (9) ===
+  GET api/v2.0/Ideation/IdeaDetails?ideationKey={ideationKey}
+  POST api/v2.0/Ideation/Post
+  GET api/v2.0/Ideation/GetIdeasByStatus?ideationStatusKey={ideationStatusKey}&afterIdeaKey={afterIdeaKey}&beforeIdeaKey={beforeIdeaKey}&numberToReturn={numberToReturn}
+  GET api/v2.0/Ideation/GetIdeasByCategory?ideationCategoryKey={ideationCategoryKey}&afterIdeaKey={afterIdeaKey}&beforeIdeaKey={beforeIdeaKey}&numberToReturn={numberToReturn}
+  POST api/v2.0/Ideation/AddIdeaCategories
+  GET api/v2.0/Ideation/GetIdeaStatuses
+  GET api/v2.0/Ideation/GetIdeaCategories
+  POST api/v2.0/Ideation/UpdateIdeaStatus
+  GET api/v2.0/Ideation/GetVoters?ideationKey={ideationKey}
+=== Messaging (13) ===
+  GET api/v2.0/Messaging/GetInboxMessage?messageKey={messageKey}
+  GET api/v2.0/Messaging/GetInboxMessages?firstRecord={firstRecord}&maxRecords={maxRecords}
+  GET api/v2.0/Messaging/GetSentMessages?firstRecord={firstRecord}&maxRecords={maxRecords}
+  POST api/v2.0/Messaging/SendMessageToContact
+  POST api/v2.0/Messaging/ReplyToMessage
+  POST api/v2.0/Messaging/MarkMessageAsRead?messageKey={messageKey}
+  GET api/v2.0/Messaging/MarkMessageAsRead?messageKey={messageKey}
+  POST api/v2.0/Messaging/MarkMessagesAsRead
+  POST api/v2.0/Messaging/DeleteMessages
+  POST api/v2.0/Messaging/MarkMessageAsUnRead?messageKey={messageKey}
+  GET api/v2.0/Messaging/MarkMessageAsUnRead?messageKey={messageKey}
+  GET api/v2.0/Messaging/GetUnreadMessageCounts
+  POST api/v2.0/Messaging/SendMessageToDiscussionPostAuthor
+=== Question (10) ===
+  POST api/v2.0/Question/Post
+  POST api/v2.0/Question/Answer
+  GET api/v2.0/Question/GetThread?questionKey={questionKey}&numberOfAnswers={numberOfAnswers}
+  POST api/v2.0/Question/Recommend?questionKey={questionKey}
+  DELETE api/v2.0/Question/Recommend?questionKey={questionKey}
+  POST api/v2.0/Question/Follow?questionKey={questionKey}
+  DELETE api/v2.0/Question/Follow?questionKey={questionKey}
+  GET api/v2.0/Question/GetAnswers?afterAnswerKey={afterAnswerKey}&beforeAnswerKey={beforeAnswerKey}&limit={limit}
+  DELETE api/v2.0/Question/Delete?questionKey={questionKey}
+  POST api/v2.0/Question/Edit
+=== RegistrantClass (1) ===
+  GET api/v2.0/RegistrantClass/GetRegistrantClasses?Active={Active}
+=== ResourceLibrary (29) ===
+  GET api/v2.0/ResourceLibrary/GetLibraryList
+  GET api/v2.0/ResourceLibrary/GetLibraries
+  GET api/v2.0/ResourceLibrary/GetLibraryDocument?documentKey={documentKey}&paginateComments={paginateComments}&commentLimit={commentLimit}
+  POST api/v2.0/ResourceLibrary/Follow?documentKey={documentKey}
+  DELETE api/v2.0/ResourceLibrary/Follow?documentKey={documentKey}
+  GET api/v2.0/ResourceLibrary/GetMyLibraryDocuments?maxRecords={maxRecords}
+  POST api/v2.0/ResourceLibrary/GetLibraryDocuments
+  GET api/v2.0/ResourceLibrary/GetDocumentAttachments?documentKey={documentKey}
+  POST api/v2.0/ResourceLibrary/AddComment?documentKey={documentKey}
+  POST api/v2.0/ResourceLibrary/UpdateComment?documentCommentKey={documentCommentKey}
+  DELETE api/v2.0/ResourceLibrary/DeleteComment?documentCommentKey={documentCommentKey}
+  DELETE api/v2.0/ResourceLibrary/DeleteLibraryDocument?documentKey={documentKey}
+  POST api/v2.0/ResourceLibrary/AddRelatedLink?documentKey={documentKey}
+  POST api/v2.0/ResourceLibrary/GetFavorites
+  POST api/v2.0/ResourceLibrary/AddToFavorites?documentKey={documentKey}
+  DELETE api/v2.0/ResourceLibrary/RemoveFromFavorites?documentKey={documentKey}
+  DELETE api/v2.0/ResourceLibrary/DeleteRelatedLink?relatedLinkKey={relatedLinkKey}
+  POST api/v2.0/ResourceLibrary/RecommendDocument?documentKey={documentKey}
+  DELETE api/v2.0/ResourceLibrary/DeleteDocumentRecommendation?documentKey={documentKey}
+  GET api/v2.0/ResourceLibrary/GetDocumentAttachment?documentAttachmentKey={documentAttachmentKey}
+  DELETE api/v2.0/ResourceLibrary/DeleteDocumentAttachment?documentAttachmentKey={documentAttachmentKey}
+  POST api/v2.0/ResourceLibrary/PostDocument?libraryKey={libraryKey}
+  POST api/v2.0/ResourceLibrary/PostDocumentAttachments?documentKey={documentKey}
+  POST api/v2.0/ResourceLibrary/InitiateUpload
+  POST api/v2.0/ResourceLibrary/MultipartUploaded
+  POST api/v2.0/ResourceLibrary/AbortMultipartUpload
+  POST api/v2.0/ResourceLibrary/DocumentFromUpload
+  POST api/v2.0/ResourceLibrary/AppendUploadedAttachment
+  POST api/v2.0/ResourceLibrary/Edit
+=== System (5) ===
+  GET api/v2.0/System/GetApiDetails
+  GET api/v2.0/System/GetCodeOfConduct
+  GET api/v2.0/System/GetProfileUrls
+  GET api/v2.0/System/GetMobileAppSettings
+  POST api/v2.0/System/GetCommunityMemberUpdates
+=== Tagging (1) ===
+  GET api/v2.0/Tagging/GetTags?searchText={searchText}&communityKey={communityKey}
+=== Volunteer (15) ===
+  POST api/v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={sendEmailNotifications}
+  POST api/v2.0/Volunteer/AddToPoolByContactKey?contactKey={contactKey}
+  POST api/v2.0/Volunteer/AddToPoolByLegacyKey?legacyContactKey={legacyContactKey}
+  DELETE api/v2.0/Volunteer/RemoveFromPoolByContactKey?contactKey={contactKey}
+  DELETE api/v2.0/Volunteer/RemoveFromPoolByLegacyContactKey?legacyContactKey={legacyContactKey}
+  POST api/v2.0/Volunteer/VolunteerForOpportunityByContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&contactKey={contactKey}&comments={comments}
+  POST api/v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&comments={comments}
+  POST api/v2.0/Volunteer/VolunteerForOpportunityByLegacyContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&legacyContactKey={legacyContactKey}&comments={comments}
+  DELETE api/v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&comments={comments}
+  DELETE api/v2.0/Volunteer/WithdrawFromOpportunityByContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&contactKey={contactKey}&comments={comments}
+  DELETE api/v2.0/Volunteer/WithdrawFromOpportunityByLegacyContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&legacyContactKey={legacyContactKey}&comments={comments}
+  GET api/v2.0/Volunteer/GetVolunteerOpportunityList
+  GET api/v2.0/Volunteer/GetVolunteerList?volunteerOpportunityKey={volunteerOpportunityKey}
+  GET api/v2.0/Volunteer/GetUpcomingVolunteerOpportunities?opportunityTypeKey={opportunityTypeKey}&communityKey={communityKey}&maxToRetrieve={maxToRetrieve}
+  GET api/v2.0/Volunteer/GetVolunteerOpportunityTypeList

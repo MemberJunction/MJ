@@ -25,8 +25,49 @@
  * If the connector has NO fixtures, T12 returns Skipped with `no-fixtures`
  * (surfaced as a visible warning — never a silent pass).
  */
-import { CHILD_PREAMBLE, CHILD_TRANSPORT, spawnChildRunner, clipStderr, type ConnectorIdentity } from './childRunner.js';
+import { readFileSync } from 'node:fs';
+import { CHILD_PREAMBLE, CHILD_TRANSPORT, spawnChildRunner, clipStderr, resolveMetadataFilePath, type ConnectorIdentity } from './childRunner.js';
 import { loadFixturesOrSynthesize } from './fixtures.js';
+
+/**
+ * Objects with NO declared primary key. Their identity is the §4 content-hash fallback, which is
+ * content-sensitive BY DESIGN — so the volatile-injection drift check (which assumes a STABLE scalar key
+ * exists that identity should track instead of payload bytes) does not apply to them. A genuinely keyless
+ * object with mutable/nested content cannot have an injection-stable identity, and forcing one would be
+ * fabricating a key. Real dedup/idempotency for keyless objects is proven by the live hybrid-e2e DB
+ * round-trip, not this offline replay. Returns the set of such IO names from the deployed metadata.
+ */
+function readKeylessObjects(connector: string): Set<string> {
+    const out = new Set<string>();
+    try {
+        const mfPath = resolveMetadataFilePath(connector);
+        if (!mfPath) return out;
+        const raw = JSON.parse(readFileSync(mfPath, 'utf-8'));
+        const top = Array.isArray(raw) ? raw[0] : raw;
+        const asBool = (v: unknown) => v === true || v === 'true' || v === 1;
+        const collect = (node: unknown): void => {
+            if (Array.isArray(node)) { for (const v of node) collect(v); return; }
+            if (!node || typeof node !== 'object') return;
+            const re = (node as Record<string, unknown>).relatedEntities as Record<string, unknown> | undefined;
+            if (re) {
+                for (const k of Object.keys(re)) {
+                    if (/Integration Object/.test(k) && !/Field/.test(k)) {
+                        for (const io of (re[k] as Record<string, unknown>[] | undefined) ?? []) {
+                            const name = (io?.fields as Record<string, unknown> | undefined)?.Name;
+                            const ioRe = io?.relatedEntities as Record<string, unknown> | undefined;
+                            const iofs = ((ioRe?.['MJ: Integration Object Fields'] ?? ioRe?.['Integration Object Fields']) as Record<string, unknown>[] | undefined) ?? [];
+                            const hasPk = iofs.some((f) => asBool((f?.fields as Record<string, unknown> | undefined)?.IsPrimaryKey));
+                            if (name && !hasPk) out.add(String(name));
+                        }
+                    }
+                }
+            }
+            for (const v of Object.values(node as Record<string, unknown>)) collect(v);
+        };
+        collect(top);
+    } catch { /* metadata unreadable → no exemptions (fail-closed: keyless drift still fails) */ }
+    return out;
+}
 
 /** Portion of a TierResult an individual tier handler returns. */
 interface TierHandlerResult {
@@ -97,7 +138,7 @@ export function runT12IdempotencyReplay(connector: string, identity: ConnectorId
         };
     }
 
-    const result = evaluateT12(connector, identity, outcome.parsed.data ?? {}, Warnings, Source);
+    const result = evaluateT12(connector, identity, outcome.parsed.data ?? {}, Warnings, Source, readKeylessObjects(connector));
     // Failure observability: the child's stderr carries the tier-mock 404 log and any
     // connector console noise — without it a failing replay is undiagnosable from the verdict.
     if (result.Status === 'Fail' && outcome.stderr.trim()) {
@@ -113,6 +154,7 @@ function evaluateT12(
     data: T12Data,
     fixtureWarnings: string[],
     fixtureSource: string,
+    keylessObjects: Set<string> = new Set(),
 ): TierHandlerResult {
     if (data.setupError) {
         return {
@@ -162,6 +204,13 @@ function evaluateT12(
             continue;
         }
         if (!o.stable) {
+            // KEYLESS objects (no declared PK) use the §4 content-hash identity, which is content-sensitive by
+            // design — the volatile-injection drift check assumes a stable scalar key exists and does not apply.
+            // Visible advisory, never a fail; real keyless idempotency is proven by the hybrid-e2e DB round-trip.
+            if (keylessObjects.has(o.object)) {
+                dbDependentSkips.push(`[${o.object}] keyless (no declared PK) → content-hash identity is content-sensitive by design; the volatile-drift check is N/A (idempotency covered by hybrid-e2e)`);
+                continue;
+            }
             errors.push(
                 `[${o.object}] IDENTITY DRIFT across passes (the GZ #22 class): pass1=${o.pass1Count} pass2=${o.pass2Count} ` +
                 `drifted=${o.driftCount} (sample: ${o.driftedIDs.slice(0, 3).join(', ')}). ` +

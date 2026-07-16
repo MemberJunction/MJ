@@ -1,0 +1,2147 @@
+{
+  "HandAuthored": true,
+  "Transport": "http",
+  "ConfigUrlKey": "HostUrl",
+  "Configuration": {
+    "HostUrl": "http://127.0.0.1:9",
+    "BaseURL": "http://127.0.0.1:9",
+    "AuthModel": "apikey",
+    "ApiKey": "mock-token",
+    "apiKey": "mock-token",
+    "APIKey": "mock-token",
+    "x-api-key": "mock-token",
+    "Token": "mock-token",
+    "AccessToken": "mock-token",
+    "AppId": "mock-app-id",
+    "AppKey": "mock-app-key",
+    "AppName": "mock-app",
+    "Email": "mock-user@example.com",
+    "Password": "mock-pass",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "OrgID": "mock-org",
+    "orgId": "mock-org",
+    "Subdomain": "mock",
+    "Scope": "all",
+    "Scopes": "all"
+  },
+  "Routes": [
+    {
+      "Path": "/api/v1/Individuals/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "firstName": "Alex",
+            "lastName": "Rivera",
+            "middleName": "Lee",
+            "preferredFirstName": "Alex",
+            "secondLastName": "Rivera",
+            "prefix": "Dr.",
+            "suffix": "Dr.",
+            "gender": "F",
+            "committees": [],
+            "securityRoles": [],
+            "designationData": [],
+            "relationships": [],
+            "jobRoles": [],
+            "tags": [],
+            "id": "Individuals-1",
+            "customerType": "Member",
+            "recordNumber": "recordNumber-1",
+            "title": "Dr.",
+            "name": "Alex Rivera",
+            "addresses": [],
+            "email": "user1@example.com",
+            "imageUri": "https://example.com/imageUri/1",
+            "twitter": "@user1",
+            "linkedIn": "https://example.com/linkedIn/1",
+            "emails": [],
+            "phones": [],
+            "webSite": "https://example.com/webSite/1",
+            "memberships": [],
+            "category": "Standard",
+            "categories": [],
+            "customFields": [],
+            "showInDirectory": true,
+            "links": [],
+            "oldId": "oldId 1",
+            "isDeceased": true,
+            "primaryOrganization": {},
+            "user": {},
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "firstName": "Jordan",
+            "lastName": "Chen",
+            "middleName": "Sky",
+            "preferredFirstName": "Jordan",
+            "secondLastName": "Chen",
+            "prefix": "Mr.",
+            "suffix": "Mr.",
+            "gender": "M",
+            "committees": [],
+            "securityRoles": [],
+            "designationData": [],
+            "relationships": [],
+            "jobRoles": [],
+            "tags": [],
+            "id": "Individuals-2",
+            "customerType": "Nonmember",
+            "recordNumber": "recordNumber-2",
+            "title": "Mr.",
+            "name": "Jordan Chen",
+            "addresses": [],
+            "email": "user2@example.com",
+            "imageUri": "https://example.com/imageUri/2",
+            "twitter": "@user2",
+            "linkedIn": "https://example.com/linkedIn/2",
+            "emails": [],
+            "phones": [],
+            "webSite": "https://example.com/webSite/2",
+            "memberships": [],
+            "category": "Premium",
+            "categories": [],
+            "customFields": [],
+            "showInDirectory": false,
+            "links": [],
+            "oldId": "oldId 2",
+            "isDeceased": false,
+            "primaryOrganization": {},
+            "user": {},
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "firstName": "Taylor",
+            "lastName": "Patel",
+            "middleName": "Ray",
+            "preferredFirstName": "Taylor",
+            "secondLastName": "Patel",
+            "prefix": "Ms.",
+            "suffix": "Ms.",
+            "gender": "X",
+            "committees": [],
+            "securityRoles": [],
+            "designationData": [],
+            "relationships": [],
+            "jobRoles": [],
+            "tags": [],
+            "id": "Individuals-3",
+            "customerType": "Staff",
+            "recordNumber": "recordNumber-3",
+            "title": "Ms.",
+            "name": "Taylor Patel",
+            "addresses": [],
+            "email": "user3@example.com",
+            "imageUri": "https://example.com/imageUri/3",
+            "twitter": "@user3",
+            "linkedIn": "https://example.com/linkedIn/3",
+            "emails": [],
+            "phones": [],
+            "webSite": "https://example.com/webSite/3",
+            "memberships": [],
+            "category": "Basic",
+            "categories": [],
+            "customFields": [],
+            "showInDirectory": true,
+            "links": [],
+            "oldId": "oldId 3",
+            "isDeceased": true,
+            "primaryOrganization": {},
+            "user": {},
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Organizations/Members/All/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "contactIds": [],
+            "parentCompanyId": "Acme Assoc",
+            "description": "Sample description 1",
+            "branchName": "Acme Assoc",
+            "tags": [],
+            "id": "Organizations-1",
+            "customerType": "Member",
+            "recordNumber": "recordNumber-1",
+            "title": "Dr.",
+            "name": "Alex Rivera",
+            "addresses": [],
+            "email": "user1@example.com",
+            "imageUri": "https://example.com/imageUri/1",
+            "twitter": "@user1",
+            "linkedIn": "https://example.com/linkedIn/1",
+            "emails": [],
+            "phones": [],
+            "webSite": "https://example.com/webSite/1",
+            "memberships": [],
+            "category": "Standard",
+            "categories": [],
+            "customFields": [],
+            "showInDirectory": true,
+            "links": [],
+            "oldId": "oldId 1",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "contactIds": [],
+            "parentCompanyId": "Globex Society",
+            "description": "Sample description 2",
+            "branchName": "Globex Society",
+            "tags": [],
+            "id": "Organizations-2",
+            "customerType": "Nonmember",
+            "recordNumber": "recordNumber-2",
+            "title": "Mr.",
+            "name": "Jordan Chen",
+            "addresses": [],
+            "email": "user2@example.com",
+            "imageUri": "https://example.com/imageUri/2",
+            "twitter": "@user2",
+            "linkedIn": "https://example.com/linkedIn/2",
+            "emails": [],
+            "phones": [],
+            "webSite": "https://example.com/webSite/2",
+            "memberships": [],
+            "category": "Premium",
+            "categories": [],
+            "customFields": [],
+            "showInDirectory": false,
+            "links": [],
+            "oldId": "oldId 2",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "contactIds": [],
+            "parentCompanyId": "Initech Guild",
+            "description": "Sample description 3",
+            "branchName": "Initech Guild",
+            "tags": [],
+            "id": "Organizations-3",
+            "customerType": "Staff",
+            "recordNumber": "recordNumber-3",
+            "title": "Ms.",
+            "name": "Taylor Patel",
+            "addresses": [],
+            "email": "user3@example.com",
+            "imageUri": "https://example.com/imageUri/3",
+            "twitter": "@user3",
+            "linkedIn": "https://example.com/linkedIn/3",
+            "emails": [],
+            "phones": [],
+            "webSite": "https://example.com/webSite/3",
+            "memberships": [],
+            "category": "Basic",
+            "categories": [],
+            "customFields": [],
+            "showInDirectory": true,
+            "links": [],
+            "oldId": "oldId 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Organizations/Members/All/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID}/Memberships/Inactive",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "membershipType": "Member",
+            "membershipTypeId": "membershipTypeId 1",
+            "code": "Memberships-1",
+            "expireDate": "2026-06-10T01:30:00Z",
+            "graceExpireDate": "2026-06-10T01:30:00Z",
+            "inheritedMembershipBenefits": true,
+            "renewalUrl": "https://example.com/renewalUrl/1",
+            "joinDate": "2026-06-10T01:30:00Z",
+            "terminateDate": "2026-06-10T01:30:00Z",
+            "effectiveDate": "2026-06-10T01:30:00Z",
+            "membershipUniqueId": "membershipUniqueId 1",
+            "termsList": [],
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "membershipType": "Nonmember",
+            "membershipTypeId": "membershipTypeId 2",
+            "code": "Memberships-2",
+            "expireDate": "2026-06-11T02:30:00Z",
+            "graceExpireDate": "2026-06-11T02:30:00Z",
+            "inheritedMembershipBenefits": false,
+            "renewalUrl": "https://example.com/renewalUrl/2",
+            "joinDate": "2026-06-11T02:30:00Z",
+            "terminateDate": "2026-06-11T02:30:00Z",
+            "effectiveDate": "2026-06-11T02:30:00Z",
+            "membershipUniqueId": "membershipUniqueId 2",
+            "termsList": [],
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "membershipType": "Staff",
+            "membershipTypeId": "membershipTypeId 3",
+            "code": "Memberships-3",
+            "expireDate": "2026-06-12T03:30:00Z",
+            "graceExpireDate": "2026-06-12T03:30:00Z",
+            "inheritedMembershipBenefits": true,
+            "renewalUrl": "https://example.com/renewalUrl/3",
+            "joinDate": "2026-06-12T03:30:00Z",
+            "terminateDate": "2026-06-12T03:30:00Z",
+            "effectiveDate": "2026-06-12T03:30:00Z",
+            "membershipUniqueId": "membershipUniqueId 3",
+            "termsList": [],
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Events/All/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "eventId": "Events-1",
+            "eventCode": "eventCode 1",
+            "eventName": "Alex Rivera",
+            "eventStartDate": "2026-06-10T01:30:00Z",
+            "eventStartTime": "eventStartTime 1",
+            "eventEndDate": "2026-06-10T01:30:00Z",
+            "eventEndTime": "eventEndTime 1",
+            "eventTimezone": "America/New_York",
+            "eventDescription": "Sample eventDescription 1",
+            "shortDescription": "Sample shortDescription 1",
+            "publicEvent": true,
+            "imageUrl": {},
+            "externalUrl": "https://example.com/externalUrl/1",
+            "externalCode": "externalCode 1",
+            "eventLocations": [],
+            "categories": [],
+            "educationCredits": [],
+            "uploadsData": [],
+            "relatedProducts": [],
+            "tags": [],
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "eventId": "Events-2",
+            "eventCode": "eventCode 2",
+            "eventName": "Jordan Chen",
+            "eventStartDate": "2026-06-11T02:30:00Z",
+            "eventStartTime": "eventStartTime 2",
+            "eventEndDate": "2026-06-11T02:30:00Z",
+            "eventEndTime": "eventEndTime 2",
+            "eventTimezone": "America/New_York",
+            "eventDescription": "Sample eventDescription 2",
+            "shortDescription": "Sample shortDescription 2",
+            "publicEvent": false,
+            "imageUrl": {},
+            "externalUrl": "https://example.com/externalUrl/2",
+            "externalCode": "externalCode 2",
+            "eventLocations": [],
+            "categories": [],
+            "educationCredits": [],
+            "uploadsData": [],
+            "relatedProducts": [],
+            "tags": [],
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "eventId": "Events-3",
+            "eventCode": "eventCode 3",
+            "eventName": "Taylor Patel",
+            "eventStartDate": "2026-06-12T03:30:00Z",
+            "eventStartTime": "eventStartTime 3",
+            "eventEndDate": "2026-06-12T03:30:00Z",
+            "eventEndTime": "eventEndTime 3",
+            "eventTimezone": "America/New_York",
+            "eventDescription": "Sample eventDescription 3",
+            "shortDescription": "Sample shortDescription 3",
+            "publicEvent": true,
+            "imageUrl": {},
+            "externalUrl": "https://example.com/externalUrl/3",
+            "externalCode": "externalCode 3",
+            "eventLocations": [],
+            "categories": [],
+            "educationCredits": [],
+            "uploadsData": [],
+            "relatedProducts": [],
+            "tags": [],
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Events/All/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Events/{Event Code}/Registrations/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "title": "Dr.",
+            "badgeName": "Alex Rivera",
+            "badgeOrganization": "Acme Assoc",
+            "badgeCity": "Boston",
+            "badgeState": "MA",
+            "attendedDate": "2026-06-10T01:30:00Z",
+            "itemizedCustomFields": [],
+            "guestOfRecordNumber": "guestOfRecordNumber 1",
+            "registrantTypeCode": "registrantTypeCode 1",
+            "registrantTypeName": "Member",
+            "registrationNumber": "registrationNumber 1",
+            "firstName": "Alex",
+            "lastName": "Rivera",
+            "middleName": "Lee",
+            "preferredFirstName": "Alex",
+            "secondLastName": "Rivera",
+            "prefix": "Dr.",
+            "suffix": "Dr.",
+            "gender": "F",
+            "id": "EventRegistrations-1",
+            "customerType": "Member",
+            "recordNumber": "recordNumber-1",
+            "showInDirectory": true,
+            "individualId": "individualId 1",
+            "event": {},
+            "sessions": [],
+            "boughtTogetherWith": {},
+            "primaryOrganization": {},
+            "addresses": [],
+            "phones": [],
+            "emails": [],
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "title": "Mr.",
+            "badgeName": "Jordan Chen",
+            "badgeOrganization": "Globex Society",
+            "badgeCity": "New York",
+            "badgeState": "NY",
+            "attendedDate": "2026-06-11T02:30:00Z",
+            "itemizedCustomFields": [],
+            "guestOfRecordNumber": "guestOfRecordNumber 2",
+            "registrantTypeCode": "registrantTypeCode 2",
+            "registrantTypeName": "Nonmember",
+            "registrationNumber": "registrationNumber 2",
+            "firstName": "Jordan",
+            "lastName": "Chen",
+            "middleName": "Sky",
+            "preferredFirstName": "Jordan",
+            "secondLastName": "Chen",
+            "prefix": "Mr.",
+            "suffix": "Mr.",
+            "gender": "M",
+            "id": "EventRegistrations-2",
+            "customerType": "Nonmember",
+            "recordNumber": "recordNumber-2",
+            "showInDirectory": false,
+            "individualId": "individualId 2",
+            "event": {},
+            "sessions": [],
+            "boughtTogetherWith": {},
+            "primaryOrganization": {},
+            "addresses": [],
+            "phones": [],
+            "emails": [],
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "title": "Ms.",
+            "badgeName": "Taylor Patel",
+            "badgeOrganization": "Initech Guild",
+            "badgeCity": "San Francisco",
+            "badgeState": "CA",
+            "attendedDate": "2026-06-12T03:30:00Z",
+            "itemizedCustomFields": [],
+            "guestOfRecordNumber": "guestOfRecordNumber 3",
+            "registrantTypeCode": "registrantTypeCode 3",
+            "registrantTypeName": "Staff",
+            "registrationNumber": "registrationNumber 3",
+            "firstName": "Taylor",
+            "lastName": "Patel",
+            "middleName": "Ray",
+            "preferredFirstName": "Taylor",
+            "secondLastName": "Patel",
+            "prefix": "Ms.",
+            "suffix": "Ms.",
+            "gender": "X",
+            "id": "EventRegistrations-3",
+            "customerType": "Staff",
+            "recordNumber": "recordNumber-3",
+            "showInDirectory": true,
+            "individualId": "individualId 3",
+            "event": {},
+            "sessions": [],
+            "boughtTogetherWith": {},
+            "primaryOrganization": {},
+            "addresses": [],
+            "phones": [],
+            "emails": [],
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Events/{Event Code}/Registrations/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Events/{Event Code}/Cancellations/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "title": "Dr.",
+            "registrationNumber": "registrationNumber 1",
+            "eventCancellationDate": "2026-06-10T01:30:00Z",
+            "guestOfRecordNumber": "guestOfRecordNumber 1",
+            "cancelledSessions": [],
+            "firstName": "Alex",
+            "lastName": "Rivera",
+            "middleName": "Lee",
+            "preferredFirstName": "Alex",
+            "secondLastName": "Rivera",
+            "prefix": "Dr.",
+            "suffix": "Dr.",
+            "gender": "F",
+            "primaryOrganization": {},
+            "id": "EventCancellations-1",
+            "customerType": "Member",
+            "recordNumber": "recordNumber-1",
+            "showInDirectory": true,
+            "addresses": [],
+            "emails": [],
+            "phones": [],
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "title": "Mr.",
+            "registrationNumber": "registrationNumber 2",
+            "eventCancellationDate": "2026-06-11T02:30:00Z",
+            "guestOfRecordNumber": "guestOfRecordNumber 2",
+            "cancelledSessions": [],
+            "firstName": "Jordan",
+            "lastName": "Chen",
+            "middleName": "Sky",
+            "preferredFirstName": "Jordan",
+            "secondLastName": "Chen",
+            "prefix": "Mr.",
+            "suffix": "Mr.",
+            "gender": "M",
+            "primaryOrganization": {},
+            "id": "EventCancellations-2",
+            "customerType": "Nonmember",
+            "recordNumber": "recordNumber-2",
+            "showInDirectory": false,
+            "addresses": [],
+            "emails": [],
+            "phones": [],
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "title": "Ms.",
+            "registrationNumber": "registrationNumber 3",
+            "eventCancellationDate": "2026-06-12T03:30:00Z",
+            "guestOfRecordNumber": "guestOfRecordNumber 3",
+            "cancelledSessions": [],
+            "firstName": "Taylor",
+            "lastName": "Patel",
+            "middleName": "Ray",
+            "preferredFirstName": "Taylor",
+            "secondLastName": "Patel",
+            "prefix": "Ms.",
+            "suffix": "Ms.",
+            "gender": "X",
+            "primaryOrganization": {},
+            "id": "EventCancellations-3",
+            "customerType": "Staff",
+            "recordNumber": "recordNumber-3",
+            "showInDirectory": true,
+            "addresses": [],
+            "emails": [],
+            "phones": [],
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Events/{Event Code}/Cancellations/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Courses/{Code}/Attendees/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "title": "Dr.",
+            "registeredDate": "2026-06-10T01:30:00Z",
+            "attendedDate": "2026-06-10T01:30:00Z",
+            "itemizedCustomFields": [],
+            "firstName": "Alex",
+            "lastName": "Rivera",
+            "middleName": "Lee",
+            "preferredFirstName": "Alex",
+            "secondLastName": "Rivera",
+            "prefix": "Dr.",
+            "suffix": "Dr.",
+            "gender": "F",
+            "id": "CourseAttendees-1",
+            "customerType": "Member",
+            "recordNumber": "recordNumber-1",
+            "showInDirectory": true,
+            "addresses": [],
+            "emails": [],
+            "phones": [],
+            "primaryOrganization": {},
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "title": "Mr.",
+            "registeredDate": "2026-06-11T02:30:00Z",
+            "attendedDate": "2026-06-11T02:30:00Z",
+            "itemizedCustomFields": [],
+            "firstName": "Jordan",
+            "lastName": "Chen",
+            "middleName": "Sky",
+            "preferredFirstName": "Jordan",
+            "secondLastName": "Chen",
+            "prefix": "Mr.",
+            "suffix": "Mr.",
+            "gender": "M",
+            "id": "CourseAttendees-2",
+            "customerType": "Nonmember",
+            "recordNumber": "recordNumber-2",
+            "showInDirectory": false,
+            "addresses": [],
+            "emails": [],
+            "phones": [],
+            "primaryOrganization": {},
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "title": "Ms.",
+            "registeredDate": "2026-06-12T03:30:00Z",
+            "attendedDate": "2026-06-12T03:30:00Z",
+            "itemizedCustomFields": [],
+            "firstName": "Taylor",
+            "lastName": "Patel",
+            "middleName": "Ray",
+            "preferredFirstName": "Taylor",
+            "secondLastName": "Patel",
+            "prefix": "Ms.",
+            "suffix": "Ms.",
+            "gender": "X",
+            "id": "CourseAttendees-3",
+            "customerType": "Staff",
+            "recordNumber": "recordNumber-3",
+            "showInDirectory": true,
+            "addresses": [],
+            "emails": [],
+            "phones": [],
+            "primaryOrganization": {},
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Courses/{Code}/Attendees/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID or Record Number}/Orders/Open/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "number": "number-1",
+            "date": "2026-06-10",
+            "balance": 19.99,
+            "lineItems": [],
+            "type": "type 1",
+            "id": "Orders-1",
+            "customerId": "customerId 1",
+            "totalAmount": 19.99,
+            "title": "Dr.",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "number": "number-2",
+            "date": "2026-06-11",
+            "balance": 29.99,
+            "lineItems": [],
+            "type": "type 2",
+            "id": "Orders-2",
+            "customerId": "customerId 2",
+            "totalAmount": 29.99,
+            "title": "Mr.",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "number": "number-3",
+            "date": "2026-06-12",
+            "balance": 39.99,
+            "lineItems": [],
+            "type": "type 3",
+            "id": "Orders-3",
+            "customerId": "customerId 3",
+            "totalAmount": 39.99,
+            "title": "Ms.",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID or Record Number}/Orders/Open/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID or Record Number}/Purchases/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "orderNumber": "orderNumber 1",
+            "productCode": "productCode 1",
+            "productName": "productName 1",
+            "productType": "productType 1",
+            "purchaseDate": "2026-06-10T01:30:00Z",
+            "additionalInfo": "additionalInfo 1",
+            "quantity": 4,
+            "itemizedCustomFields": [],
+            "productCategories": [],
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "orderNumber": "orderNumber 2",
+            "productCode": "productCode 2",
+            "productName": "productName 2",
+            "productType": "productType 2",
+            "purchaseDate": "2026-06-11T02:30:00Z",
+            "additionalInfo": "additionalInfo 2",
+            "quantity": 7,
+            "itemizedCustomFields": [],
+            "productCategories": [],
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "orderNumber": "orderNumber 3",
+            "productCode": "productCode 3",
+            "productName": "productName 3",
+            "productType": "productType 3",
+            "purchaseDate": "2026-06-12T03:30:00Z",
+            "additionalInfo": "additionalInfo 3",
+            "quantity": 10,
+            "itemizedCustomFields": [],
+            "productCategories": [],
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID or Record Number}/Purchases/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Shopping/AbandonedCheckOuts/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "createdOn": "createdOn 1",
+            "createdByEmailAddress": "user1@example.com",
+            "currency": "USD",
+            "lineItems": [],
+            "customer": {},
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "createdOn": "createdOn 2",
+            "createdByEmailAddress": "user2@example.com",
+            "currency": "USD",
+            "lineItems": [],
+            "customer": {},
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "createdOn": "createdOn 3",
+            "createdByEmailAddress": "user3@example.com",
+            "currency": "USD",
+            "lineItems": [],
+            "customer": {},
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Shopping/AbandonedCheckOuts/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Committees/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "name": "Alex Rivera",
+            "code": "code-1",
+            "website": "https://example.com/website/1",
+            "id": "Committees-1",
+            "parentCommitteeId": "parentCommitteeId 1",
+            "categoryName": "Standard",
+            "categoryCode": "Standard",
+            "description": "Sample description 1",
+            "startDate": "2026-06-10T01:30:00Z",
+            "endDate": "2026-06-10T01:30:00Z",
+            "showInDirectory": true,
+            "term": {},
+            "tags": [],
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "name": "Jordan Chen",
+            "code": "code-2",
+            "website": "https://example.com/website/2",
+            "id": "Committees-2",
+            "parentCommitteeId": "parentCommitteeId 2",
+            "categoryName": "Premium",
+            "categoryCode": "Premium",
+            "description": "Sample description 2",
+            "startDate": "2026-06-11T02:30:00Z",
+            "endDate": "2026-06-11T02:30:00Z",
+            "showInDirectory": false,
+            "term": {},
+            "tags": [],
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "name": "Taylor Patel",
+            "code": "code-3",
+            "website": "https://example.com/website/3",
+            "id": "Committees-3",
+            "parentCommitteeId": "parentCommitteeId 3",
+            "categoryName": "Basic",
+            "categoryCode": "Basic",
+            "description": "Sample description 3",
+            "startDate": "2026-06-12T03:30:00Z",
+            "endDate": "2026-06-12T03:30:00Z",
+            "showInDirectory": true,
+            "term": {},
+            "tags": [],
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Committees/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID}/Committees/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "position": "position 1",
+            "positionCode": "positionCode 1",
+            "code": "code-1",
+            "startDate": "2026-06-10T01:30:00Z",
+            "endDate": "2026-06-10T01:30:00Z",
+            "committee": {},
+            "memberRecordNumber": "CommitteeMembers-1",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "position": "position 2",
+            "positionCode": "positionCode 2",
+            "code": "code-2",
+            "startDate": "2026-06-11T02:30:00Z",
+            "endDate": "2026-06-11T02:30:00Z",
+            "committee": {},
+            "memberRecordNumber": "CommitteeMembers-2",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "position": "position 3",
+            "positionCode": "positionCode 3",
+            "code": "code-3",
+            "startDate": "2026-06-12T03:30:00Z",
+            "endDate": "2026-06-12T03:30:00Z",
+            "committee": {},
+            "memberRecordNumber": "CommitteeMembers-3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID}/Committees/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Committees/{Code}/Positions",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "code": "CommitteePositions-1",
+            "name": "Alex Rivera",
+            "term": 2,
+            "description": "Sample description 1",
+            "isAdmin": true,
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "code": "CommitteePositions-2",
+            "name": "Jordan Chen",
+            "term": 3,
+            "description": "Sample description 2",
+            "isAdmin": false,
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "code": "CommitteePositions-3",
+            "name": "Taylor Patel",
+            "term": 4,
+            "description": "Sample description 3",
+            "isAdmin": true,
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Committees/{Code}/Nominations/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "id": "CommitteeNominees-1",
+            "firstName": "Alex",
+            "lastName": "Rivera",
+            "code": "code-1",
+            "position": "position 1",
+            "positionCode": "positionCode 1",
+            "startDate": "2026-06-10T01:30:00Z",
+            "endDate": "2026-06-10T01:30:00Z",
+            "rank": 2,
+            "primaryOrganization": {},
+            "organizationRepresenting": {},
+            "nominatedByCustomer": {},
+            "addresses": [],
+            "phones": [],
+            "emails": [],
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "id": "CommitteeNominees-2",
+            "firstName": "Jordan",
+            "lastName": "Chen",
+            "code": "code-2",
+            "position": "position 2",
+            "positionCode": "positionCode 2",
+            "startDate": "2026-06-11T02:30:00Z",
+            "endDate": "2026-06-11T02:30:00Z",
+            "rank": 3,
+            "primaryOrganization": {},
+            "organizationRepresenting": {},
+            "nominatedByCustomer": {},
+            "addresses": [],
+            "phones": [],
+            "emails": [],
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "id": "CommitteeNominees-3",
+            "firstName": "Taylor",
+            "lastName": "Patel",
+            "code": "code-3",
+            "position": "position 3",
+            "positionCode": "positionCode 3",
+            "startDate": "2026-06-12T03:30:00Z",
+            "endDate": "2026-06-12T03:30:00Z",
+            "rank": 4,
+            "primaryOrganization": {},
+            "organizationRepresenting": {},
+            "nominatedByCustomer": {},
+            "addresses": [],
+            "phones": [],
+            "emails": [],
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Committees/{Code}/Nominations/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Awards/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "id": "Awards-1",
+            "name": "Alex Rivera",
+            "description": "Sample description 1",
+            "year": 2021,
+            "customerType": "Member",
+            "allowPublicNomination": true,
+            "nominationStartDate": "2026-06-10T01:30:00Z",
+            "nominationEndDate": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "id": "Awards-2",
+            "name": "Jordan Chen",
+            "description": "Sample description 2",
+            "year": 2022,
+            "customerType": "Nonmember",
+            "allowPublicNomination": false,
+            "nominationStartDate": "2026-06-11T02:30:00Z",
+            "nominationEndDate": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "id": "Awards-3",
+            "name": "Taylor Patel",
+            "description": "Sample description 3",
+            "year": 2023,
+            "customerType": "Staff",
+            "allowPublicNomination": true,
+            "nominationStartDate": "2026-06-12T03:30:00Z",
+            "nominationEndDate": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Awards/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Awards/{id}/Recipients/Individuals/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "awardedDate": "2026-06-10T01:30:00Z",
+            "firstName": "Alex",
+            "lastName": "Rivera",
+            "middleName": "Lee",
+            "preferredFirstName": "Alex",
+            "secondLastName": "Rivera",
+            "prefix": "Dr.",
+            "suffix": "Dr.",
+            "gender": "F",
+            "id": "AwardIndividualRecipients-1",
+            "customerType": "Member",
+            "recordNumber": "recordNumber-1",
+            "title": "Dr.",
+            "addresses": [],
+            "emails": [],
+            "phones": [],
+            "showInDirectory": true,
+            "primaryOrganization": {},
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "awardedDate": "2026-06-11T02:30:00Z",
+            "firstName": "Jordan",
+            "lastName": "Chen",
+            "middleName": "Sky",
+            "preferredFirstName": "Jordan",
+            "secondLastName": "Chen",
+            "prefix": "Mr.",
+            "suffix": "Mr.",
+            "gender": "M",
+            "id": "AwardIndividualRecipients-2",
+            "customerType": "Nonmember",
+            "recordNumber": "recordNumber-2",
+            "title": "Mr.",
+            "addresses": [],
+            "emails": [],
+            "phones": [],
+            "showInDirectory": false,
+            "primaryOrganization": {},
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "awardedDate": "2026-06-12T03:30:00Z",
+            "firstName": "Taylor",
+            "lastName": "Patel",
+            "middleName": "Ray",
+            "preferredFirstName": "Taylor",
+            "secondLastName": "Patel",
+            "prefix": "Ms.",
+            "suffix": "Ms.",
+            "gender": "X",
+            "id": "AwardIndividualRecipients-3",
+            "customerType": "Staff",
+            "recordNumber": "recordNumber-3",
+            "title": "Ms.",
+            "addresses": [],
+            "emails": [],
+            "phones": [],
+            "showInDirectory": true,
+            "primaryOrganization": {},
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Awards/{id}/Recipients/Individuals/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Awards/{id}/Recipients/Organizations/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "awardedDate": "2026-06-10T01:30:00Z",
+            "name": "Alex Rivera",
+            "acronym": "acronym 1",
+            "branchName": "Acme Assoc",
+            "annualSales": 2,
+            "employeeRangeId": "employeeRangeId 1",
+            "id": "AwardOrganizationRecipients-1",
+            "customerType": "Member",
+            "recordNumber": "recordNumber-1",
+            "showInDirectory": true,
+            "addresses": [],
+            "emails": [],
+            "phones": [],
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "awardedDate": "2026-06-11T02:30:00Z",
+            "name": "Jordan Chen",
+            "acronym": "acronym 2",
+            "branchName": "Globex Society",
+            "annualSales": 3,
+            "employeeRangeId": "employeeRangeId 2",
+            "id": "AwardOrganizationRecipients-2",
+            "customerType": "Nonmember",
+            "recordNumber": "recordNumber-2",
+            "showInDirectory": false,
+            "addresses": [],
+            "emails": [],
+            "phones": [],
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "awardedDate": "2026-06-12T03:30:00Z",
+            "name": "Taylor Patel",
+            "acronym": "acronym 3",
+            "branchName": "Initech Guild",
+            "annualSales": 4,
+            "employeeRangeId": "employeeRangeId 3",
+            "id": "AwardOrganizationRecipients-3",
+            "customerType": "Staff",
+            "recordNumber": "recordNumber-3",
+            "showInDirectory": true,
+            "addresses": [],
+            "emails": [],
+            "phones": [],
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Awards/{id}/Recipients/Organizations/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID}/Certifications/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "code": "Certifications-1",
+            "name": "Alex Rivera",
+            "expireDate": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "code": "Certifications-2",
+            "name": "Jordan Chen",
+            "expireDate": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "code": "Certifications-3",
+            "name": "Taylor Patel",
+            "expireDate": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID}/Certifications/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID}/Licenses/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "id": "Licenses-1",
+            "licenseType": "licenseType 1",
+            "number": "number-1",
+            "state": "MA",
+            "status": "Active",
+            "startDate": "2026-06-10T01:30:00Z",
+            "expirationDate": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "id": "Licenses-2",
+            "licenseType": "licenseType 2",
+            "number": "number-2",
+            "state": "NY",
+            "status": "Pending",
+            "startDate": "2026-06-11T02:30:00Z",
+            "expirationDate": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "id": "Licenses-3",
+            "licenseType": "licenseType 3",
+            "number": "number-3",
+            "state": "CA",
+            "status": "Completed",
+            "startDate": "2026-06-12T03:30:00Z",
+            "expirationDate": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID}/Licenses/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Products/Exams/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "examStartDate": "2026-06-10T01:30:00Z",
+            "examEndDate": "2026-06-10T01:30:00Z",
+            "examNumber": "examNumber 1",
+            "educationCredits": [],
+            "categories": [],
+            "activePrices": [],
+            "relatedProducts": [],
+            "tags": [],
+            "id": "Exams-1",
+            "code": "code-1",
+            "name": "Alex Rivera",
+            "shortDescription": "Sample shortDescription 1",
+            "longDescription": "Sample longDescription 1",
+            "type": "type 1",
+            "url": "https://example.com/url/1",
+            "imageUrl": {},
+            "isPublic": true,
+            "availableFrom": "availableFrom 1",
+            "availableUntil": "availableUntil 1",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "examStartDate": "2026-06-11T02:30:00Z",
+            "examEndDate": "2026-06-11T02:30:00Z",
+            "examNumber": "examNumber 2",
+            "educationCredits": [],
+            "categories": [],
+            "activePrices": [],
+            "relatedProducts": [],
+            "tags": [],
+            "id": "Exams-2",
+            "code": "code-2",
+            "name": "Jordan Chen",
+            "shortDescription": "Sample shortDescription 2",
+            "longDescription": "Sample longDescription 2",
+            "type": "type 2",
+            "url": "https://example.com/url/2",
+            "imageUrl": {},
+            "isPublic": false,
+            "availableFrom": "availableFrom 2",
+            "availableUntil": "availableUntil 2",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "examStartDate": "2026-06-12T03:30:00Z",
+            "examEndDate": "2026-06-12T03:30:00Z",
+            "examNumber": "examNumber 3",
+            "educationCredits": [],
+            "categories": [],
+            "activePrices": [],
+            "relatedProducts": [],
+            "tags": [],
+            "id": "Exams-3",
+            "code": "code-3",
+            "name": "Taylor Patel",
+            "shortDescription": "Sample shortDescription 3",
+            "longDescription": "Sample longDescription 3",
+            "type": "type 3",
+            "url": "https://example.com/url/3",
+            "imageUrl": {},
+            "isPublic": true,
+            "availableFrom": "availableFrom 3",
+            "availableUntil": "availableUntil 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Products/Exams/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID}/Subscriptions/All/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "code": "Subscriptions-1",
+            "name": "Alex Rivera",
+            "expireDate": "2026-06-10T01:30:00Z",
+            "quantity": 4,
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "code": "Subscriptions-2",
+            "name": "Jordan Chen",
+            "expireDate": "2026-06-11T02:30:00Z",
+            "quantity": 7,
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "code": "Subscriptions-3",
+            "name": "Taylor Patel",
+            "expireDate": "2026-06-12T03:30:00Z",
+            "quantity": 10,
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID}/Subscriptions/All/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/tasks/Users/{User ID or Email}/Completed/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "taskNumber": "UserTasks-1",
+            "title": "Dr.",
+            "category": "Standard",
+            "description": "Sample description 1",
+            "assignedBy": "assignedBy 1",
+            "startDate": "2026-06-10T01:30:00Z",
+            "dueDate": "2026-06-10T01:30:00Z",
+            "progress": "progress 1",
+            "completedDate": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "taskNumber": "UserTasks-2",
+            "title": "Mr.",
+            "category": "Premium",
+            "description": "Sample description 2",
+            "assignedBy": "assignedBy 2",
+            "startDate": "2026-06-11T02:30:00Z",
+            "dueDate": "2026-06-11T02:30:00Z",
+            "progress": "progress 2",
+            "completedDate": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "taskNumber": "UserTasks-3",
+            "title": "Ms.",
+            "category": "Basic",
+            "description": "Sample description 3",
+            "assignedBy": "assignedBy 3",
+            "startDate": "2026-06-12T03:30:00Z",
+            "dueDate": "2026-06-12T03:30:00Z",
+            "progress": "progress 3",
+            "completedDate": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/tasks/Users/{User ID or Email}/Completed/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Requests/Open/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "requestNumber": "CustomerRequests-1",
+            "requestDate": "2026-06-10T01:30:00Z",
+            "requestedByCustomerRecordNumber": "requestedByCustomerRecordNumber 1",
+            "requestType": "requestType 1",
+            "description": "Sample description 1",
+            "source": "source 1",
+            "closedDate": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "requestNumber": "CustomerRequests-2",
+            "requestDate": "2026-06-11T02:30:00Z",
+            "requestedByCustomerRecordNumber": "requestedByCustomerRecordNumber 2",
+            "requestType": "requestType 2",
+            "description": "Sample description 2",
+            "source": "source 2",
+            "closedDate": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "requestNumber": "CustomerRequests-3",
+            "requestDate": "2026-06-12T03:30:00Z",
+            "requestedByCustomerRecordNumber": "requestedByCustomerRecordNumber 3",
+            "requestType": "requestType 3",
+            "description": "Sample description 3",
+            "source": "source 3",
+            "closedDate": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Requests/Open/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Exhibits/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "code": "Exhibits-1",
+            "name": "Alex Rivera",
+            "startDate": "2026-06-10T01:30:00Z",
+            "startTime": "startTime 1",
+            "endDate": "2026-06-10T01:30:00Z",
+            "endTime": "endTime 1",
+            "categories": [],
+            "shortDescription": "Sample shortDescription 1",
+            "longDescription": "Sample longDescription 1",
+            "featuredListing": [],
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "code": "Exhibits-2",
+            "name": "Jordan Chen",
+            "startDate": "2026-06-11T02:30:00Z",
+            "startTime": "startTime 2",
+            "endDate": "2026-06-11T02:30:00Z",
+            "endTime": "endTime 2",
+            "categories": [],
+            "shortDescription": "Sample shortDescription 2",
+            "longDescription": "Sample longDescription 2",
+            "featuredListing": [],
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "code": "Exhibits-3",
+            "name": "Taylor Patel",
+            "startDate": "2026-06-12T03:30:00Z",
+            "startTime": "startTime 3",
+            "endDate": "2026-06-12T03:30:00Z",
+            "endTime": "endTime 3",
+            "categories": [],
+            "shortDescription": "Sample shortDescription 3",
+            "longDescription": "Sample longDescription 3",
+            "featuredListing": [],
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Exhibits/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Exhibits/{Exhibit Code}/Exhibitors/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "organization": {},
+            "booths": [],
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "organization": {},
+            "booths": [],
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "organization": {},
+            "booths": [],
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Exhibits/{Exhibit Code}/Exhibitors/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID}/Relationships/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "relationshipName": "relationshipName 1",
+            "relatedToCustomer": {},
+            "reciprocalRelationshipName": "reciprocalRelationshipName 1",
+            "isPrimary": true,
+            "startDate": "2026-06-10T01:30:00Z",
+            "endDate": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "relationshipName": "relationshipName 2",
+            "relatedToCustomer": {},
+            "reciprocalRelationshipName": "reciprocalRelationshipName 2",
+            "isPrimary": false,
+            "startDate": "2026-06-11T02:30:00Z",
+            "endDate": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "relationshipName": "relationshipName 3",
+            "relatedToCustomer": {},
+            "reciprocalRelationshipName": "reciprocalRelationshipName 3",
+            "isPrimary": true,
+            "startDate": "2026-06-12T03:30:00Z",
+            "endDate": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID}/Relationships/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Countries/All/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "id": "Countries-1",
+            "name": "Alex Rivera",
+            "twoLetterIsoCode": "US",
+            "threeLetterIsoCode": "USA",
+            "code": 4,
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "id": "Countries-2",
+            "name": "Jordan Chen",
+            "twoLetterIsoCode": "US",
+            "threeLetterIsoCode": "USA",
+            "code": 7,
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "id": "Countries-3",
+            "name": "Taylor Patel",
+            "twoLetterIsoCode": "US",
+            "threeLetterIsoCode": "USA",
+            "code": 10,
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Countries/All/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Countries/{Country ID}/States/All/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "id": "States-1",
+            "name": "Alex Rivera",
+            "abbreviation": "abbreviation 1",
+            "isoCode": true,
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "id": "States-2",
+            "name": "Jordan Chen",
+            "abbreviation": "abbreviation 2",
+            "isoCode": false,
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "id": "States-3",
+            "name": "Taylor Patel",
+            "abbreviation": "abbreviation 3",
+            "isoCode": true,
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Countries/{Country ID}/States/All/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Customers/RelationshipTypes/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "name": "RelationshipTypes-1",
+            "reciprocalRelationshipName": "reciprocalRelationshipName 1",
+            "relationshipType": "relationshipType 1",
+            "allowPrimary": true,
+            "canPurchaseForOrganization": true,
+            "canManagePAC": true,
+            "canManageOrganization": true,
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "name": "RelationshipTypes-2",
+            "reciprocalRelationshipName": "reciprocalRelationshipName 2",
+            "relationshipType": "relationshipType 2",
+            "allowPrimary": false,
+            "canPurchaseForOrganization": false,
+            "canManagePAC": false,
+            "canManageOrganization": false,
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "name": "RelationshipTypes-3",
+            "reciprocalRelationshipName": "reciprocalRelationshipName 3",
+            "relationshipType": "relationshipType 3",
+            "allowPrimary": true,
+            "canPurchaseForOrganization": true,
+            "canManagePAC": true,
+            "canManageOrganization": true,
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Customers/RelationshipTypes/2",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 2,
+        "dataList": []
+      }
+    },
+    {
+      "Path": "/api/v1/Organizations/{ID}/Services",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "code": "OrganizationServices-1",
+            "name": "Alex Rivera",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "code": "OrganizationServices-2",
+            "name": "Jordan Chen",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "code": "OrganizationServices-3",
+            "name": "Taylor Patel",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Setup/customfields/1",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "name": "CustomFieldDefinitions-1",
+            "caption": "caption 1",
+            "description": "Sample description 1",
+            "dataType": "dataType 1",
+            "inputType": "inputType 1",
+            "availableValues": [],
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "name": "CustomFieldDefinitions-2",
+            "caption": "caption 2",
+            "description": "Sample description 2",
+            "dataType": "dataType 2",
+            "inputType": "inputType 2",
+            "availableValues": [],
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "name": "CustomFieldDefinitions-3",
+            "caption": "caption 3",
+            "description": "Sample description 3",
+            "dataType": "dataType 3",
+            "inputType": "inputType 3",
+            "availableValues": [],
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v1/Individuals/{ID}/CustomFields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pageNumber": 1,
+        "dataList": [
+          {
+            "individualId": "individualId 1",
+            "name": "CustomFieldValues-1",
+            "caption": "caption 1",
+            "value": "value 1",
+            "mj_e2e_custom_attr": "custom-1"
+          },
+          {
+            "individualId": "individualId 2",
+            "name": "CustomFieldValues-2",
+            "caption": "caption 2",
+            "value": "value 2",
+            "mj_e2e_custom_attr": "custom-2"
+          },
+          {
+            "individualId": "individualId 3",
+            "name": "CustomFieldValues-3",
+            "caption": "caption 3",
+            "value": "value 3",
+            "mj_e2e_custom_attr": "custom-3"
+          }
+        ]
+      }
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "Individuals",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Organizations",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Memberships",
+      "OrderingField": "code"
+    },
+    {
+      "Name": "Events",
+      "OrderingField": "eventId"
+    },
+    {
+      "Name": "EventRegistrations",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "EventCancellations",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "CourseAttendees",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Orders",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Purchases",
+      "OrderingField": "orderNumber"
+    },
+    {
+      "Name": "AbandonedCheckouts",
+      "OrderingField": "createdOn"
+    },
+    {
+      "Name": "Committees",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "CommitteeMembers",
+      "OrderingField": "memberRecordNumber"
+    },
+    {
+      "Name": "CommitteePositions",
+      "OrderingField": "code"
+    },
+    {
+      "Name": "CommitteeNominees",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Awards",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "AwardIndividualRecipients",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "AwardOrganizationRecipients",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Certifications",
+      "OrderingField": "code"
+    },
+    {
+      "Name": "Licenses",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Exams",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Subscriptions",
+      "OrderingField": "code"
+    },
+    {
+      "Name": "UserTasks",
+      "OrderingField": "taskNumber"
+    },
+    {
+      "Name": "CustomerRequests",
+      "OrderingField": "requestNumber"
+    },
+    {
+      "Name": "Exhibits",
+      "OrderingField": "code"
+    },
+    {
+      "Name": "Exhibitors",
+      "OrderingField": "organization"
+    },
+    {
+      "Name": "Relationships",
+      "OrderingField": "relationshipName"
+    },
+    {
+      "Name": "Countries",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "States",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "RelationshipTypes",
+      "OrderingField": "name"
+    },
+    {
+      "Name": "OrganizationServices",
+      "OrderingField": "code"
+    },
+    {
+      "Name": "CustomFieldDefinitions",
+      "OrderingField": "name"
+    },
+    {
+      "Name": "CustomFieldValues",
+      "OrderingField": "name"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "Countries",
+      "Routes": [
+        {
+          "Path": "/api/v1/Countries/All/1",
+          "Method": "GET",
+          "Status": 200,
+          "Body": {
+            "pageNumber": 1,
+            "dataList": [
+              {
+                "id": "Countries-1",
+                "name": "updated-delta",
+                "twoLetterIsoCode": "US",
+                "threeLetterIsoCode": "USA",
+                "code": 4,
+                "mj_e2e_custom_attr": "custom-1"
+              },
+              {
+                "id": "Countries-2",
+                "name": "Jordan Chen",
+                "twoLetterIsoCode": "US",
+                "threeLetterIsoCode": "USA",
+                "code": 7,
+                "mj_e2e_custom_attr": "custom-2"
+              }
+            ]
+          }
+        }
+      ],
+      "ExpectedPresent": [
+        "Countries-1",
+        "Countries-2"
+      ],
+      "ExpectedDeletes": [
+        "Countries-3"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "Countries-1",
+          "Field": "name",
+          "Value": "updated-delta"
+        }
+      ]
+    }
+  ]
+}

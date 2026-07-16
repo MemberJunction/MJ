@@ -1,0 +1,2524 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "BaseURL": "http://127.0.0.1:9",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "Username": "mock-user@example.com",
+    "Password": "mock-pass",
+    "RefreshToken": "mock-refresh-token",
+    "AdminEmail": "mock-admin@example.com",
+    "Token": "mock-token",
+    "AccessToken": "mock-token",
+    "apiKey": "mock-token",
+    "APIKey": "mock-token",
+    "ApiKey": "mock-token",
+    "ApiSecret": "mock-api-secret",
+    "apiSecret": "mock-api-secret",
+    "Secret": "mock-secret",
+    "AppKey": "mock-app-key",
+    "AppSecret": "mock-app-secret",
+    "PrivateToken": "mock-private-token",
+    "PublicKey": "mock-public-key",
+    "TokenURL": "http://127.0.0.1:9/token",
+    "TokenEndpoint": "http://127.0.0.1:9/token",
+    "TokenUrl": "http://127.0.0.1:9/token",
+    "LoginUrl": "http://127.0.0.1:9",
+    "InstanceURL": "http://127.0.0.1:9",
+    "InstanceUrl": "http://127.0.0.1:9",
+    "HostBaseURL": "http://127.0.0.1:9",
+    "Subdomain": "mock",
+    "Scope": "all",
+    "Scopes": "all",
+    "SubscriptionKey": "mock-subscription-key",
+    "subscriptionKey": "mock-subscription-key",
+    "subscription_key": "mock-subscription-key",
+    "SubscriptionId": "mock-subscription-key",
+    "OrgID": "mock-org",
+    "orgId": "mock-org",
+    "ClientKey": "mock-client-key",
+    "applicationId": "mock-app-id",
+    "applicationSecret": "mock-app-secret",
+    "AuthFlow": "client_credentials",
+    "PrivateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDmQcln2pQ/dZX+\nrdKuBa3VF/Kvo6DRZpw7Ffxc2SptzeihCCz5q6BqK5xM8RXx75m2ScwOt8SpYIB9\nRa5dm7PfCBfxtHtMeA0BhD4+EJe0A4gLaa4/tM11I2xvfWEQpLhbOdgSgb0vIYPW\n1FrPBp8Nde2pzpYT5NMw9+o+GrLDk2O+mi8ijflSQI7Q0CeQEROz7zQscfkH/45E\n1ZewxQnySnfJDLKbNV3rNuwRYi53rHew6AH6dUjtEKJb+KsG5/vQYYfM6CWzGi6n\naX3eeOf6WxS2GMbeAn1JRByagpqHpa2H4L3lEzLpmTbi0PtPmKEifgWOkMCFVt7E\n7Vv4rldFAgMBAAECggEABVJVP/vim+oxIpxh13kfdg1Xo+I5lUgJ1FPDFreY2MYp\nhOSWJYRnRgzmpTXtNpToYzjRaTBWGz61DtrNbNxsYSXkEnIEEisJdz+B221cFDer\nV+2EBB+USrYcNiIaXDLHuqlblRHqjWxONROIsGrhbNjiOp/LrX9cYjADT0F5YDZn\nRmNAt2UecHgJc2GhZXeTSXGnNB+pavaa0PPtaEygEJ8sCBs5YKIvtuJUBz563vcM\nfNS4/GPq0V//3r/ZNH2ALkejt6kbBmfctEwop48Z0r+lmYiD36iBp/nHUp0xiLd9\nWxvgpAry9rIghY3YdYf1Q//K8Y6DjO3S3Qk44SU3AQKBgQD+OcwDbSt2QoPCHGo4\n1K8Lecv4Tf8ztCMW4T8twAZJFNe2nXE/Fotbk2HYT2WpmAJSpKP6IxsS7K7FSYz3\nqEcUfxlA4EvqbRIR1M8Ku8DVZeJWxlIaFB+5bEZ1SVA72D8JZH6PgIWluqzZPAFB\nN1Sst+UXdgy1NQy0oGmNsRFDzwKBgQDn3Sq3bha1f1GohXRy8No+I6s8sgU26X2+\nOW8HbFhhx/GEcn5a+pjS1pXv4uoiJo0qs7khy0GOWLHg45hT/QthuIYi/HifaZmd\neMRuAA5fydtjJUcc/BM4ED3FrGCKwbTwUZj77Wk2Xr0slChmmDHnlBvQHwewI+Nw\na3x/AaA0qwKBgFwSJI/tHrtytXM8hT/Vzxtx3ewsm0tnZvnnU9FG5T/ce49Yj+YQ\nTSI6S0pi3ue/9L9nfzedNTXyYA11aMdcu3lx2nyDfxsEq3Gnx+AURW9DuehBZQSq\n2x51V0Ms7RDvbU0Ch0+DdWOjKux17eJnnpP6+c44Y7vQ3awhGHlHcoBDAoGAXUQv\nvJ1B8TwHotwb3WhYwYojhUSuqEn/1JbRvJCudJay5e4QOZR4CMdchKQoPhh3zGeC\n3r8d3Z573tRuH8q321UYT9Zyxtz5d8huazkGjy1pXFZQZq5XJMQTtQIDy4zjtY99\nFEmJet9dBSOLpMkvudFv5qW0t/uXr07tQ0FqKgUCgYB3hNutKGwKwEHxtxnb7dA3\nhb4xn9Bd7vQuv2Td1sQVlPTcqCrJTb/CetSb9I8QR+jOeShF2iTtzDXbQhmnfQID\n1iihXjL03cR1tzUv0nb0UBbg3yrySBXoR+KOXybVVb+KE3DlsuB6B8nRhuE6u/cN\nZukUhlInr3rnVucvqIWnLA==\n-----END PRIVATE KEY-----\n",
+    "ConsumerKey": "mock-consumer",
+    "ConsumerSecret": "mock-consumer-secret",
+    "TokenId": "mock-token-id",
+    "TokenSecret": "mock-token-secret",
+    "TokenID": "mock-token-id",
+    "TenantId": "mock-tenant-id",
+    "TenantID": "mock-tenant-id",
+    "tenantId": "mock-tenant-id",
+    "Tenant": "mock-tenant"
+  },
+  "Routes": [
+    {
+      "Path": "/accounts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "BillingPlan": "BillingPlan 1",
+          "ContactLimitInfo": "ContactLimitInfo 1",
+          "Currency": "USD",
+          "Id": 1,
+          "IsFreeAccount": true,
+          "Localization": "Localization 1",
+          "Name": "Alex Rivera",
+          "PaymentSettings": "PaymentSettings 1",
+          "PrimaryDomainName": "PrimaryDomainName 1",
+          "Resources": "Resources 1",
+          "SquareRegisterSettings": "SquareRegisterSettings 1",
+          "TimeZone": "America/New_York",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "BillingPlan": "BillingPlan 2",
+          "ContactLimitInfo": "ContactLimitInfo 2",
+          "Currency": "USD",
+          "Id": 2,
+          "IsFreeAccount": false,
+          "Localization": "Localization 2",
+          "Name": "Jordan Chen",
+          "PaymentSettings": "PaymentSettings 2",
+          "PrimaryDomainName": "PrimaryDomainName 2",
+          "Resources": "Resources 2",
+          "SquareRegisterSettings": "SquareRegisterSettings 2",
+          "TimeZone": "America/New_York",
+          "Url": "https://example.com/Url/2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "BillingPlan": "BillingPlan 3",
+          "ContactLimitInfo": "ContactLimitInfo 3",
+          "Currency": "USD",
+          "Id": 3,
+          "IsFreeAccount": true,
+          "Localization": "Localization 3",
+          "Name": "Taylor Patel",
+          "PaymentSettings": "PaymentSettings 3",
+          "PrimaryDomainName": "PrimaryDomainName 3",
+          "Resources": "Resources 3",
+          "SquareRegisterSettings": "SquareRegisterSettings 3",
+          "TimeZone": "America/New_York",
+          "Url": "https://example.com/Url/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/attachments/GetInfos",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Data": "Data 1",
+          "Id": 1,
+          "MimeType": "MimeType 1",
+          "Name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/attachments/GetInfos",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Data": "Data 2",
+          "Id": 2,
+          "MimeType": "MimeType 2",
+          "Name": "Jordan Chen",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/attachments/GetInfos",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Data": "Data 3",
+          "Id": 3,
+          "MimeType": "MimeType 3",
+          "Name": "Taylor Patel",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/attachments/GetInfos",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Data": "Data 1",
+          "Id": 1,
+          "MimeType": "MimeType 1",
+          "Name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/auditLogItems",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "Contact 1",
+          "Document": "Document 1",
+          "DocumentAction": "DocumentAction 1",
+          "DocumentType": "DocumentType 1",
+          "Email": "user1@example.com",
+          "FirstName": "Alex",
+          "Id": 1,
+          "LastName": "Rivera",
+          "Message": "Sample Message 1",
+          "OrderType": "OrderType 1",
+          "Organization": "Acme Corp",
+          "Properties": "Properties 1",
+          "Severity": "Severity 1",
+          "Timestamp": "2026-06-10T01:30:00Z",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/auditLogItems",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "Contact 2",
+          "Document": "Document 2",
+          "DocumentAction": "DocumentAction 2",
+          "DocumentType": "DocumentType 2",
+          "Email": "user2@example.com",
+          "FirstName": "Jordan",
+          "Id": 2,
+          "LastName": "Chen",
+          "Message": "Sample Message 2",
+          "OrderType": "OrderType 2",
+          "Organization": "Globex LLC",
+          "Properties": "Properties 2",
+          "Severity": "Severity 2",
+          "Timestamp": "2026-06-11T02:30:00Z",
+          "Url": "https://example.com/Url/2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/auditLogItems",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "Contact 3",
+          "Document": "Document 3",
+          "DocumentAction": "DocumentAction 3",
+          "DocumentType": "DocumentType 3",
+          "Email": "user3@example.com",
+          "FirstName": "Taylor",
+          "Id": 3,
+          "LastName": "Patel",
+          "Message": "Sample Message 3",
+          "OrderType": "OrderType 3",
+          "Organization": "Initech",
+          "Properties": "Properties 3",
+          "Severity": "Severity 3",
+          "Timestamp": "2026-06-12T03:30:00Z",
+          "Url": "https://example.com/Url/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/auditLogItems",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "Contact 1",
+          "Document": "Document 1",
+          "DocumentAction": "DocumentAction 1",
+          "DocumentType": "DocumentType 1",
+          "Email": "user1@example.com",
+          "FirstName": "Alex",
+          "Id": 1,
+          "LastName": "Rivera",
+          "Message": "Sample Message 1",
+          "OrderType": "OrderType 1",
+          "Organization": "Acme Corp",
+          "Properties": "Properties 1",
+          "Severity": "Severity 1",
+          "Timestamp": "2026-06-10T01:30:00Z",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/bundles",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Administrator": "Administrator 1",
+          "Email": "user1@example.com",
+          "Id": 1,
+          "Members": "Members 1",
+          "MembershipLevel": "standard",
+          "ParticipantsCount": 4,
+          "SpacesLeft": 2,
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/bundles",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Administrator": "Administrator 2",
+          "Email": "user2@example.com",
+          "Id": 2,
+          "Members": "Members 2",
+          "MembershipLevel": "premium",
+          "ParticipantsCount": 7,
+          "SpacesLeft": 3,
+          "Url": "https://example.com/Url/2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/bundles",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Administrator": "Administrator 3",
+          "Email": "user3@example.com",
+          "Id": 3,
+          "Members": "Members 3",
+          "MembershipLevel": "basic",
+          "ParticipantsCount": 10,
+          "SpacesLeft": 4,
+          "Url": "https://example.com/Url/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/bundles",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Administrator": "Administrator 1",
+          "Email": "user1@example.com",
+          "Id": 1,
+          "Members": "Members 1",
+          "MembershipLevel": "standard",
+          "ParticipantsCount": 4,
+          "SpacesLeft": 2,
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/ceuRecords",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ActivityTitle": "Sample Title 1",
+          "CertificateUrl": "https://example.com/CertificateUrl/1",
+          "CEUType": "CEUType 1",
+          "Contact": "Contact 1",
+          "CreationDate": "2026-06-10T01:30:00Z",
+          "CreditsEarned": 2,
+          "EndDate": "2026-06-10T01:30:00Z",
+          "ExpiryDate": "2026-06-10T01:30:00Z",
+          "Id": 1,
+          "InstructorProvider": "InstructorProvider 1",
+          "InternalNotes": "Sample InternalNotes 1",
+          "LastModified": "2026-06-10T01:30:00Z",
+          "PublicNotes": "Sample PublicNotes 1",
+          "RecordStatus": "active",
+          "SourceRefId": "SourceRefId 1",
+          "SourceType": "SourceType 1",
+          "StartDate": "2026-06-10T01:30:00Z",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/ceuRecords",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ActivityTitle": "Sample Title 2",
+          "CertificateUrl": "https://example.com/CertificateUrl/2",
+          "CEUType": "CEUType 2",
+          "Contact": "Contact 2",
+          "CreationDate": "2026-06-11T02:30:00Z",
+          "CreditsEarned": 3,
+          "EndDate": "2026-06-11T02:30:00Z",
+          "ExpiryDate": "2026-06-11T02:30:00Z",
+          "Id": 2,
+          "InstructorProvider": "InstructorProvider 2",
+          "InternalNotes": "Sample InternalNotes 2",
+          "LastModified": "2026-06-11T02:30:00Z",
+          "PublicNotes": "Sample PublicNotes 2",
+          "RecordStatus": "pending",
+          "SourceRefId": "SourceRefId 2",
+          "SourceType": "SourceType 2",
+          "StartDate": "2026-06-11T02:30:00Z",
+          "Url": "https://example.com/Url/2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/ceuRecords",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ActivityTitle": "Sample Title 3",
+          "CertificateUrl": "https://example.com/CertificateUrl/3",
+          "CEUType": "CEUType 3",
+          "Contact": "Contact 3",
+          "CreationDate": "2026-06-12T03:30:00Z",
+          "CreditsEarned": 4,
+          "EndDate": "2026-06-12T03:30:00Z",
+          "ExpiryDate": "2026-06-12T03:30:00Z",
+          "Id": 3,
+          "InstructorProvider": "InstructorProvider 3",
+          "InternalNotes": "Sample InternalNotes 3",
+          "LastModified": "2026-06-12T03:30:00Z",
+          "PublicNotes": "Sample PublicNotes 3",
+          "RecordStatus": "completed",
+          "SourceRefId": "SourceRefId 3",
+          "SourceType": "SourceType 3",
+          "StartDate": "2026-06-12T03:30:00Z",
+          "Url": "https://example.com/Url/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/ceuRecords",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ActivityTitle": "Sample Title 1",
+          "CertificateUrl": "https://example.com/CertificateUrl/1",
+          "CEUType": "CEUType 1",
+          "Contact": "Contact 1",
+          "CreationDate": "2026-06-10T01:30:00Z",
+          "CreditsEarned": 2,
+          "EndDate": "2026-06-10T01:30:00Z",
+          "ExpiryDate": "2026-06-10T01:30:00Z",
+          "Id": 1,
+          "InstructorProvider": "InstructorProvider 1",
+          "InternalNotes": "Sample InternalNotes 1",
+          "LastModified": "2026-06-10T01:30:00Z",
+          "PublicNotes": "Sample PublicNotes 1",
+          "RecordStatus": "active",
+          "SourceRefId": "SourceRefId 1",
+          "SourceType": "SourceType 1",
+          "StartDate": "2026-06-10T01:30:00Z",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/contacts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DisplayName": "Alex Rivera",
+          "Email": "user1@example.com",
+          "FieldValues": "FieldValues 1",
+          "FirstName": "Alex",
+          "Id": 1,
+          "IsAccountAdministrator": true,
+          "LastName": "Rivera",
+          "MembershipEnabled": true,
+          "MembershipLevel": "standard",
+          "Organization": "Acme Corp",
+          "ProfileLastUpdated": "2026-06-11T00:00:00Z",
+          "Status": "active",
+          "TermsOfUseAccepted": true,
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/contacts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DisplayName": "Jordan Chen",
+          "Email": "user2@example.com",
+          "FieldValues": "FieldValues 2",
+          "FirstName": "Jordan",
+          "Id": 2,
+          "IsAccountAdministrator": false,
+          "LastName": "Chen",
+          "MembershipEnabled": false,
+          "MembershipLevel": "premium",
+          "Organization": "Globex LLC",
+          "ProfileLastUpdated": "2026-06-12T00:00:00Z",
+          "Status": "pending",
+          "TermsOfUseAccepted": false,
+          "Url": "https://example.com/Url/2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/contacts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DisplayName": "Taylor Patel",
+          "Email": "user3@example.com",
+          "FieldValues": "FieldValues 3",
+          "FirstName": "Taylor",
+          "Id": 3,
+          "IsAccountAdministrator": true,
+          "LastName": "Patel",
+          "MembershipEnabled": true,
+          "MembershipLevel": "basic",
+          "Organization": "Initech",
+          "ProfileLastUpdated": "2026-06-13T00:00:00Z",
+          "Status": "completed",
+          "TermsOfUseAccepted": true,
+          "Url": "https://example.com/Url/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/contacts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DisplayName": "Alex Rivera",
+          "Email": "user1@example.com",
+          "FieldValues": "FieldValues 1",
+          "FirstName": "Alex",
+          "Id": 1,
+          "IsAccountAdministrator": true,
+          "LastName": "Rivera",
+          "MembershipEnabled": true,
+          "MembershipLevel": "standard",
+          "Organization": "Acme Corp",
+          "ProfileLastUpdated": "2026-06-11T00:00:00Z",
+          "Status": "active",
+          "TermsOfUseAccepted": true,
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/contactfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Access": "Access 1",
+          "AdminOnly": true,
+          "AllowedValues": "AllowedValues 1",
+          "Description": "Sample Description 1",
+          "DisplayType": "DisplayType 1",
+          "ExistsInLevels": "standard",
+          "ExtraCharge": "ExtraCharge 1",
+          "FieldInstructions": "FieldInstructions 1",
+          "FieldName": "FieldName 1",
+          "FieldType": "FieldType 1",
+          "Id": 1,
+          "IsBuiltIn": true,
+          "IsEditable": true,
+          "IsSystem": true,
+          "MemberAccess": "MemberAccess 1",
+          "MemberOnly": true,
+          "Order": 2,
+          "ProrateInApplication": true,
+          "RenewalPolicy": "RenewalPolicy 1",
+          "RulesAndTermsInfo": "RulesAndTermsInfo 1",
+          "SupportSearch": true,
+          "SystemCode": "SystemCode 1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/contactfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Access": "Access 2",
+          "AdminOnly": false,
+          "AllowedValues": "AllowedValues 2",
+          "Description": "Sample Description 2",
+          "DisplayType": "DisplayType 2",
+          "ExistsInLevels": "premium",
+          "ExtraCharge": "ExtraCharge 2",
+          "FieldInstructions": "FieldInstructions 2",
+          "FieldName": "FieldName 2",
+          "FieldType": "FieldType 2",
+          "Id": 2,
+          "IsBuiltIn": false,
+          "IsEditable": false,
+          "IsSystem": false,
+          "MemberAccess": "MemberAccess 2",
+          "MemberOnly": false,
+          "Order": 3,
+          "ProrateInApplication": false,
+          "RenewalPolicy": "RenewalPolicy 2",
+          "RulesAndTermsInfo": "RulesAndTermsInfo 2",
+          "SupportSearch": false,
+          "SystemCode": "SystemCode 2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/contactfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Access": "Access 3",
+          "AdminOnly": true,
+          "AllowedValues": "AllowedValues 3",
+          "Description": "Sample Description 3",
+          "DisplayType": "DisplayType 3",
+          "ExistsInLevels": "basic",
+          "ExtraCharge": "ExtraCharge 3",
+          "FieldInstructions": "FieldInstructions 3",
+          "FieldName": "FieldName 3",
+          "FieldType": "FieldType 3",
+          "Id": 3,
+          "IsBuiltIn": true,
+          "IsEditable": true,
+          "IsSystem": true,
+          "MemberAccess": "MemberAccess 3",
+          "MemberOnly": true,
+          "Order": 4,
+          "ProrateInApplication": true,
+          "RenewalPolicy": "RenewalPolicy 3",
+          "RulesAndTermsInfo": "RulesAndTermsInfo 3",
+          "SupportSearch": true,
+          "SystemCode": "SystemCode 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/contactfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Access": "Access 1",
+          "AdminOnly": true,
+          "AllowedValues": "AllowedValues 1",
+          "Description": "Sample Description 1",
+          "DisplayType": "DisplayType 1",
+          "ExistsInLevels": "standard",
+          "ExtraCharge": "ExtraCharge 1",
+          "FieldInstructions": "FieldInstructions 1",
+          "FieldName": "FieldName 1",
+          "FieldType": "FieldType 1",
+          "Id": 1,
+          "IsBuiltIn": true,
+          "IsEditable": true,
+          "IsSystem": true,
+          "MemberAccess": "MemberAccess 1",
+          "MemberOnly": true,
+          "Order": 2,
+          "ProrateInApplication": true,
+          "RenewalPolicy": "RenewalPolicy 1",
+          "RulesAndTermsInfo": "RulesAndTermsInfo 1",
+          "SupportSearch": true,
+          "SystemCode": "SystemCode 1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/donations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Comment": "Sample Comment 1",
+          "Contact": "Contact 1",
+          "DonationDate": "2026-06-10T01:30:00Z",
+          "Email": "user1@example.com",
+          "FieldValues": "FieldValues 1",
+          "FirstName": "Alex",
+          "IdentityKey": "Donation-1",
+          "LastName": "Rivera",
+          "Organization": "Acme Corp",
+          "Payment": "Payment 1",
+          "PaymentMethodID": "PaymentMethodID 1",
+          "Phone": "555-0101",
+          "PublicComment": "Sample PublicComment 1",
+          "Type": "standard",
+          "Value": 2,
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/donations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Comment": "Sample Comment 2",
+          "Contact": "Contact 2",
+          "DonationDate": "2026-06-11T02:30:00Z",
+          "Email": "user2@example.com",
+          "FieldValues": "FieldValues 2",
+          "FirstName": "Jordan",
+          "IdentityKey": "Donation-2",
+          "LastName": "Chen",
+          "Organization": "Globex LLC",
+          "Payment": "Payment 2",
+          "PaymentMethodID": "PaymentMethodID 2",
+          "Phone": "555-0102",
+          "PublicComment": "Sample PublicComment 2",
+          "Type": "premium",
+          "Value": 3,
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/donations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Comment": "Sample Comment 3",
+          "Contact": "Contact 3",
+          "DonationDate": "2026-06-12T03:30:00Z",
+          "Email": "user3@example.com",
+          "FieldValues": "FieldValues 3",
+          "FirstName": "Taylor",
+          "IdentityKey": "Donation-3",
+          "LastName": "Patel",
+          "Organization": "Initech",
+          "Payment": "Payment 3",
+          "PaymentMethodID": "PaymentMethodID 3",
+          "Phone": "555-0103",
+          "PublicComment": "Sample PublicComment 3",
+          "Type": "basic",
+          "Value": 4,
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/donations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Comment": "Sample Comment 1",
+          "Contact": "Contact 1",
+          "DonationDate": "2026-06-10T01:30:00Z",
+          "Email": "user1@example.com",
+          "FieldValues": "FieldValues 1",
+          "FirstName": "Alex",
+          "IdentityKey": "Donation-1",
+          "LastName": "Rivera",
+          "Organization": "Acme Corp",
+          "Payment": "Payment 1",
+          "PaymentMethodID": "PaymentMethodID 1",
+          "Phone": "555-0101",
+          "PublicComment": "Sample PublicComment 1",
+          "Type": "standard",
+          "Value": 2,
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/EmailDrafts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Body": "Sample Body 1",
+          "CreatedDate": "2026-06-10T01:30:00Z",
+          "Creator": "Creator 1",
+          "EventId": 2,
+          "Id": 1,
+          "IsLinkTrackingAllowed": true,
+          "IsScheduled": true,
+          "LastChangedDate": "2026-06-10T01:30:00Z",
+          "Modifier": "Modifier 1",
+          "Recipients": "Recipients 1",
+          "ReplyToAddress": "101 Test St",
+          "ReplyToName": "ReplyToName 1",
+          "ScheduledDate": "2026-06-10T01:30:00Z",
+          "Subject": "Sample Title 1",
+          "Type": "standard",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/EmailDrafts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Body": "Sample Body 2",
+          "CreatedDate": "2026-06-11T02:30:00Z",
+          "Creator": "Creator 2",
+          "EventId": 3,
+          "Id": 2,
+          "IsLinkTrackingAllowed": false,
+          "IsScheduled": false,
+          "LastChangedDate": "2026-06-11T02:30:00Z",
+          "Modifier": "Modifier 2",
+          "Recipients": "Recipients 2",
+          "ReplyToAddress": "102 Test St",
+          "ReplyToName": "ReplyToName 2",
+          "ScheduledDate": "2026-06-11T02:30:00Z",
+          "Subject": "Sample Title 2",
+          "Type": "premium",
+          "Url": "https://example.com/Url/2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/EmailDrafts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Body": "Sample Body 3",
+          "CreatedDate": "2026-06-12T03:30:00Z",
+          "Creator": "Creator 3",
+          "EventId": 4,
+          "Id": 3,
+          "IsLinkTrackingAllowed": true,
+          "IsScheduled": true,
+          "LastChangedDate": "2026-06-12T03:30:00Z",
+          "Modifier": "Modifier 3",
+          "Recipients": "Recipients 3",
+          "ReplyToAddress": "103 Test St",
+          "ReplyToName": "ReplyToName 3",
+          "ScheduledDate": "2026-06-12T03:30:00Z",
+          "Subject": "Sample Title 3",
+          "Type": "basic",
+          "Url": "https://example.com/Url/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/EmailDrafts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Body": "Sample Body 1",
+          "CreatedDate": "2026-06-10T01:30:00Z",
+          "Creator": "Creator 1",
+          "EventId": 2,
+          "Id": 1,
+          "IsLinkTrackingAllowed": true,
+          "IsScheduled": true,
+          "LastChangedDate": "2026-06-10T01:30:00Z",
+          "Modifier": "Modifier 1",
+          "Recipients": "Recipients 1",
+          "ReplyToAddress": "101 Test St",
+          "ReplyToName": "ReplyToName 1",
+          "ScheduledDate": "2026-06-10T01:30:00Z",
+          "Subject": "Sample Title 1",
+          "Type": "standard",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/SentEmails",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Emails": "user1@example.com",
+          "EmailsIdentifiers": "user1@example.com",
+          "Id": 1,
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/SentEmails",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Emails": "user2@example.com",
+          "EmailsIdentifiers": "user2@example.com",
+          "Id": 2,
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/SentEmails",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Emails": "user3@example.com",
+          "EmailsIdentifiers": "user3@example.com",
+          "Id": 3,
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/SentEmails",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Emails": "user1@example.com",
+          "EmailsIdentifiers": "user1@example.com",
+          "Id": 1,
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/donationfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AllowedValues": "AllowedValues 1",
+          "Description": "Sample Description 1",
+          "DisplayType": "DisplayType 1",
+          "FieldInstructions": "FieldInstructions 1",
+          "FieldName": "FieldName 1",
+          "IsSystem": true,
+          "Order": 2,
+          "RulesAndTermsInfo": "RulesAndTermsInfo 1",
+          "SystemCode": "EntityFieldDescription-1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/donationfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AllowedValues": "AllowedValues 2",
+          "Description": "Sample Description 2",
+          "DisplayType": "DisplayType 2",
+          "FieldInstructions": "FieldInstructions 2",
+          "FieldName": "FieldName 2",
+          "IsSystem": false,
+          "Order": 3,
+          "RulesAndTermsInfo": "RulesAndTermsInfo 2",
+          "SystemCode": "EntityFieldDescription-2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/donationfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AllowedValues": "AllowedValues 3",
+          "Description": "Sample Description 3",
+          "DisplayType": "DisplayType 3",
+          "FieldInstructions": "FieldInstructions 3",
+          "FieldName": "FieldName 3",
+          "IsSystem": true,
+          "Order": 4,
+          "RulesAndTermsInfo": "RulesAndTermsInfo 3",
+          "SystemCode": "EntityFieldDescription-3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/donationfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AllowedValues": "AllowedValues 1",
+          "Description": "Sample Description 1",
+          "DisplayType": "DisplayType 1",
+          "FieldInstructions": "FieldInstructions 1",
+          "FieldName": "FieldName 1",
+          "IsSystem": true,
+          "Order": 2,
+          "RulesAndTermsInfo": "RulesAndTermsInfo 1",
+          "SystemCode": "EntityFieldDescription-1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/events",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AccessLevel": "standard",
+          "CheckedInAttendeesNumber": 4,
+          "ConfirmedRegistrationsCount": 0.1,
+          "Details": "Details 1",
+          "EndDate": "2026-06-10T01:30:00Z",
+          "EndTimeSpecified": true,
+          "EventType": "EventType 1",
+          "HasEnabledRegistrationTypes": true,
+          "Id": 1,
+          "InviteeStat": "InviteeStat 1",
+          "Location": "Location 1",
+          "Name": "Alex Rivera",
+          "PendingRegistrationsCount": 0.1,
+          "RegistrationEnabled": true,
+          "RegistrationsLimit": 0.1,
+          "Sessions": "Sessions 1",
+          "StartDate": "2026-06-10T01:30:00Z",
+          "StartTimeSpecified": true,
+          "Tags": "Tags 1",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/events",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AccessLevel": "premium",
+          "CheckedInAttendeesNumber": 7,
+          "ConfirmedRegistrationsCount": 0.2,
+          "Details": "Details 2",
+          "EndDate": "2026-06-11T02:30:00Z",
+          "EndTimeSpecified": false,
+          "EventType": "EventType 2",
+          "HasEnabledRegistrationTypes": false,
+          "Id": 2,
+          "InviteeStat": "InviteeStat 2",
+          "Location": "Location 2",
+          "Name": "Jordan Chen",
+          "PendingRegistrationsCount": 0.2,
+          "RegistrationEnabled": false,
+          "RegistrationsLimit": 0.2,
+          "Sessions": "Sessions 2",
+          "StartDate": "2026-06-11T02:30:00Z",
+          "StartTimeSpecified": false,
+          "Tags": "Tags 2",
+          "Url": "https://example.com/Url/2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/events",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AccessLevel": "basic",
+          "CheckedInAttendeesNumber": 10,
+          "ConfirmedRegistrationsCount": 0.3,
+          "Details": "Details 3",
+          "EndDate": "2026-06-12T03:30:00Z",
+          "EndTimeSpecified": true,
+          "EventType": "EventType 3",
+          "HasEnabledRegistrationTypes": true,
+          "Id": 3,
+          "InviteeStat": "InviteeStat 3",
+          "Location": "Location 3",
+          "Name": "Taylor Patel",
+          "PendingRegistrationsCount": 0.3,
+          "RegistrationEnabled": true,
+          "RegistrationsLimit": 0.3,
+          "Sessions": "Sessions 3",
+          "StartDate": "2026-06-12T03:30:00Z",
+          "StartTimeSpecified": true,
+          "Tags": "Tags 3",
+          "Url": "https://example.com/Url/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/events",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AccessLevel": "standard",
+          "CheckedInAttendeesNumber": 4,
+          "ConfirmedRegistrationsCount": 0.1,
+          "Details": "Details 1",
+          "EndDate": "2026-06-10T01:30:00Z",
+          "EndTimeSpecified": true,
+          "EventType": "EventType 1",
+          "HasEnabledRegistrationTypes": true,
+          "Id": 1,
+          "InviteeStat": "InviteeStat 1",
+          "Location": "Location 1",
+          "Name": "Alex Rivera",
+          "PendingRegistrationsCount": 0.1,
+          "RegistrationEnabled": true,
+          "RegistrationsLimit": 0.1,
+          "Sessions": "Sessions 1",
+          "StartDate": "2026-06-10T01:30:00Z",
+          "StartTimeSpecified": true,
+          "Tags": "Tags 1",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/eventregistrations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "Contact 1",
+          "DisplayName": "Alex Rivera",
+          "Event": "Event 1",
+          "GuestRegistrationsSummary": "Sample GuestRegistrationsSummary 1",
+          "Id": 1,
+          "IsCheckedIn": true,
+          "IsGuestRegistration": true,
+          "IsPaid": true,
+          "Memo": "Memo 1",
+          "OnWaitlist": true,
+          "Organization": "Acme Corp",
+          "PaidSum": 19.99,
+          "ParentRegistration": "ParentRegistration 1",
+          "RecreateInvoice": true,
+          "RegistrationDate": "2026-06-10T01:30:00Z",
+          "RegistrationFee": 19.99,
+          "RegistrationFields": "RegistrationFields 1",
+          "RegistrationType": "RegistrationType 1",
+          "RegistrationTypeId": 0.1,
+          "ShowToPublic": true,
+          "Status": "active",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/eventregistrations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "Contact 2",
+          "DisplayName": "Jordan Chen",
+          "Event": "Event 2",
+          "GuestRegistrationsSummary": "Sample GuestRegistrationsSummary 2",
+          "Id": 2,
+          "IsCheckedIn": false,
+          "IsGuestRegistration": false,
+          "IsPaid": false,
+          "Memo": "Memo 2",
+          "OnWaitlist": false,
+          "Organization": "Globex LLC",
+          "PaidSum": 29.99,
+          "ParentRegistration": "ParentRegistration 2",
+          "RecreateInvoice": false,
+          "RegistrationDate": "2026-06-11T02:30:00Z",
+          "RegistrationFee": 29.99,
+          "RegistrationFields": "RegistrationFields 2",
+          "RegistrationType": "RegistrationType 2",
+          "RegistrationTypeId": 0.2,
+          "ShowToPublic": false,
+          "Status": "pending",
+          "Url": "https://example.com/Url/2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/eventregistrations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "Contact 3",
+          "DisplayName": "Taylor Patel",
+          "Event": "Event 3",
+          "GuestRegistrationsSummary": "Sample GuestRegistrationsSummary 3",
+          "Id": 3,
+          "IsCheckedIn": true,
+          "IsGuestRegistration": true,
+          "IsPaid": true,
+          "Memo": "Memo 3",
+          "OnWaitlist": true,
+          "Organization": "Initech",
+          "PaidSum": 39.99,
+          "ParentRegistration": "ParentRegistration 3",
+          "RecreateInvoice": true,
+          "RegistrationDate": "2026-06-12T03:30:00Z",
+          "RegistrationFee": 39.99,
+          "RegistrationFields": "RegistrationFields 3",
+          "RegistrationType": "RegistrationType 3",
+          "RegistrationTypeId": 0.3,
+          "ShowToPublic": true,
+          "Status": "completed",
+          "Url": "https://example.com/Url/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/eventregistrations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "Contact 1",
+          "DisplayName": "Alex Rivera",
+          "Event": "Event 1",
+          "GuestRegistrationsSummary": "Sample GuestRegistrationsSummary 1",
+          "Id": 1,
+          "IsCheckedIn": true,
+          "IsGuestRegistration": true,
+          "IsPaid": true,
+          "Memo": "Memo 1",
+          "OnWaitlist": true,
+          "Organization": "Acme Corp",
+          "PaidSum": 19.99,
+          "ParentRegistration": "ParentRegistration 1",
+          "RecreateInvoice": true,
+          "RegistrationDate": "2026-06-10T01:30:00Z",
+          "RegistrationFee": 19.99,
+          "RegistrationFields": "RegistrationFields 1",
+          "RegistrationType": "RegistrationType 1",
+          "RegistrationTypeId": 0.1,
+          "ShowToPublic": true,
+          "Status": "active",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/EventRegistrationTypes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Availability": "Availability 1",
+          "AvailableForMembershipLevels": "standard",
+          "AvailableFrom": "2026-06-10T01:30:00Z",
+          "AvailableThrough": "2026-06-10T01:30:00Z",
+          "BasePrice": 19.99,
+          "CancellationBehaviour": "555-0101",
+          "CancellationDaysBeforeEvent": 2,
+          "CurrentRegistrantsCount": 4,
+          "Description": "Sample Description 1",
+          "EventId": 2,
+          "GuestPrice": 19.99,
+          "GuestRegistrationPolicy": "GuestRegistrationPolicy 1",
+          "Id": 1,
+          "IsEnabled": true,
+          "IsGuestRegistrationRequired": true,
+          "IsWaitlistEnabled": true,
+          "MaximumRegistrantsCount": 4,
+          "Name": "Alex Rivera",
+          "RegistrationCode": "RegistrationCode 1",
+          "UnavailabilityPolicy": "UnavailabilityPolicy 1",
+          "Url": "https://example.com/Url/1",
+          "UseTaxScopeSettings": true,
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/EventRegistrationTypes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Availability": "Availability 2",
+          "AvailableForMembershipLevels": "premium",
+          "AvailableFrom": "2026-06-11T02:30:00Z",
+          "AvailableThrough": "2026-06-11T02:30:00Z",
+          "BasePrice": 29.99,
+          "CancellationBehaviour": "555-0102",
+          "CancellationDaysBeforeEvent": 3,
+          "CurrentRegistrantsCount": 7,
+          "Description": "Sample Description 2",
+          "EventId": 3,
+          "GuestPrice": 29.99,
+          "GuestRegistrationPolicy": "GuestRegistrationPolicy 2",
+          "Id": 2,
+          "IsEnabled": false,
+          "IsGuestRegistrationRequired": false,
+          "IsWaitlistEnabled": false,
+          "MaximumRegistrantsCount": 7,
+          "Name": "Jordan Chen",
+          "RegistrationCode": "RegistrationCode 2",
+          "UnavailabilityPolicy": "UnavailabilityPolicy 2",
+          "Url": "https://example.com/Url/2",
+          "UseTaxScopeSettings": false,
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/EventRegistrationTypes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Availability": "Availability 3",
+          "AvailableForMembershipLevels": "basic",
+          "AvailableFrom": "2026-06-12T03:30:00Z",
+          "AvailableThrough": "2026-06-12T03:30:00Z",
+          "BasePrice": 39.99,
+          "CancellationBehaviour": "555-0103",
+          "CancellationDaysBeforeEvent": 4,
+          "CurrentRegistrantsCount": 10,
+          "Description": "Sample Description 3",
+          "EventId": 4,
+          "GuestPrice": 39.99,
+          "GuestRegistrationPolicy": "GuestRegistrationPolicy 3",
+          "Id": 3,
+          "IsEnabled": true,
+          "IsGuestRegistrationRequired": true,
+          "IsWaitlistEnabled": true,
+          "MaximumRegistrantsCount": 10,
+          "Name": "Taylor Patel",
+          "RegistrationCode": "RegistrationCode 3",
+          "UnavailabilityPolicy": "UnavailabilityPolicy 3",
+          "Url": "https://example.com/Url/3",
+          "UseTaxScopeSettings": true,
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/EventRegistrationTypes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Availability": "Availability 1",
+          "AvailableForMembershipLevels": "standard",
+          "AvailableFrom": "2026-06-10T01:30:00Z",
+          "AvailableThrough": "2026-06-10T01:30:00Z",
+          "BasePrice": 19.99,
+          "CancellationBehaviour": "555-0101",
+          "CancellationDaysBeforeEvent": 2,
+          "CurrentRegistrantsCount": 4,
+          "Description": "Sample Description 1",
+          "EventId": 2,
+          "GuestPrice": 19.99,
+          "GuestRegistrationPolicy": "GuestRegistrationPolicy 1",
+          "Id": 1,
+          "IsEnabled": true,
+          "IsGuestRegistrationRequired": true,
+          "IsWaitlistEnabled": true,
+          "MaximumRegistrantsCount": 4,
+          "Name": "Alex Rivera",
+          "RegistrationCode": "RegistrationCode 1",
+          "UnavailabilityPolicy": "UnavailabilityPolicy 1",
+          "Url": "https://example.com/Url/1",
+          "UseTaxScopeSettings": true,
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/invoices",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "Contact 1",
+          "CreatedBy": "CreatedBy 1",
+          "CreatedDate": "2026-06-10T01:30:00Z",
+          "DocumentDate": "2026-06-10T01:30:00Z",
+          "DocumentNumber": "DocumentNumber 1",
+          "EventRegistration": "EventRegistration 1",
+          "Id": 1,
+          "IsPaid": true,
+          "Memo": "Memo 1",
+          "OrderDetails": "OrderDetails 1",
+          "OrderType": "OrderType 1",
+          "PaidAmount": 19.99,
+          "PublicMemo": "PublicMemo 1",
+          "UpdatedBy": "UpdatedBy 1",
+          "UpdatedDate": "2026-06-11T00:00:00Z",
+          "Url": "https://example.com/Url/1",
+          "Value": 2,
+          "VoidedDate": "2026-06-10T01:30:00Z",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/invoices",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "Contact 2",
+          "CreatedBy": "CreatedBy 2",
+          "CreatedDate": "2026-06-11T02:30:00Z",
+          "DocumentDate": "2026-06-11T02:30:00Z",
+          "DocumentNumber": "DocumentNumber 2",
+          "EventRegistration": "EventRegistration 2",
+          "Id": 2,
+          "IsPaid": false,
+          "Memo": "Memo 2",
+          "OrderDetails": "OrderDetails 2",
+          "OrderType": "OrderType 2",
+          "PaidAmount": 29.99,
+          "PublicMemo": "PublicMemo 2",
+          "UpdatedBy": "UpdatedBy 2",
+          "UpdatedDate": "2026-06-12T00:00:00Z",
+          "Url": "https://example.com/Url/2",
+          "Value": 3,
+          "VoidedDate": "2026-06-11T02:30:00Z",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/invoices",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "Contact 3",
+          "CreatedBy": "CreatedBy 3",
+          "CreatedDate": "2026-06-12T03:30:00Z",
+          "DocumentDate": "2026-06-12T03:30:00Z",
+          "DocumentNumber": "DocumentNumber 3",
+          "EventRegistration": "EventRegistration 3",
+          "Id": 3,
+          "IsPaid": true,
+          "Memo": "Memo 3",
+          "OrderDetails": "OrderDetails 3",
+          "OrderType": "OrderType 3",
+          "PaidAmount": 39.99,
+          "PublicMemo": "PublicMemo 3",
+          "UpdatedBy": "UpdatedBy 3",
+          "UpdatedDate": "2026-06-13T00:00:00Z",
+          "Url": "https://example.com/Url/3",
+          "Value": 4,
+          "VoidedDate": "2026-06-12T03:30:00Z",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/invoices",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "Contact 1",
+          "CreatedBy": "CreatedBy 1",
+          "CreatedDate": "2026-06-10T01:30:00Z",
+          "DocumentDate": "2026-06-10T01:30:00Z",
+          "DocumentNumber": "DocumentNumber 1",
+          "EventRegistration": "EventRegistration 1",
+          "Id": 1,
+          "IsPaid": true,
+          "Memo": "Memo 1",
+          "OrderDetails": "OrderDetails 1",
+          "OrderType": "OrderType 1",
+          "PaidAmount": 19.99,
+          "PublicMemo": "PublicMemo 1",
+          "UpdatedBy": "UpdatedBy 1",
+          "UpdatedDate": "2026-06-11T00:00:00Z",
+          "Url": "https://example.com/Url/1",
+          "Value": 2,
+          "VoidedDate": "2026-06-10T01:30:00Z",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/membergroups",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ContactIds": "ContactIds 1",
+          "ContactsCount": 4,
+          "Description": "Sample Description 1",
+          "Id": 1,
+          "Name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/membergroups",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ContactIds": "ContactIds 2",
+          "ContactsCount": 7,
+          "Description": "Sample Description 2",
+          "Id": 2,
+          "Name": "Jordan Chen",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/membergroups",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ContactIds": "ContactIds 3",
+          "ContactsCount": 10,
+          "Description": "Sample Description 3",
+          "Id": 3,
+          "Name": "Taylor Patel",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/membergroups",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ContactIds": "ContactIds 1",
+          "ContactsCount": 4,
+          "Description": "Sample Description 1",
+          "Id": 1,
+          "Name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/membershiplevels",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "BundleMembersLimit": 2,
+          "Description": "Sample Description 1",
+          "Id": 1,
+          "MemberCanChangeToLevels": "standard",
+          "MembershipFee": 19.99,
+          "Name": "Alex Rivera",
+          "PublicCanApply": true,
+          "RenewalPeriod": "RenewalPeriod 1",
+          "Type": "standard",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/membershiplevels",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "BundleMembersLimit": 3,
+          "Description": "Sample Description 2",
+          "Id": 2,
+          "MemberCanChangeToLevels": "premium",
+          "MembershipFee": 29.99,
+          "Name": "Jordan Chen",
+          "PublicCanApply": false,
+          "RenewalPeriod": "RenewalPeriod 2",
+          "Type": "premium",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/membershiplevels",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "BundleMembersLimit": 4,
+          "Description": "Sample Description 3",
+          "Id": 3,
+          "MemberCanChangeToLevels": "basic",
+          "MembershipFee": 39.99,
+          "Name": "Taylor Patel",
+          "PublicCanApply": true,
+          "RenewalPeriod": "RenewalPeriod 3",
+          "Type": "basic",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/membershiplevels",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "BundleMembersLimit": 2,
+          "Description": "Sample Description 1",
+          "Id": 1,
+          "MemberCanChangeToLevels": "standard",
+          "MembershipFee": 19.99,
+          "Name": "Alex Rivera",
+          "PublicCanApply": true,
+          "RenewalPeriod": "RenewalPeriod 1",
+          "Type": "standard",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/store/orders",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "billingPerson": "billingPerson 1",
+          "comment": "Sample comment 1",
+          "contactId": 2,
+          "created": "2026-06-10T01:30:00Z",
+          "currency": "USD",
+          "deliveryOption": "deliveryOption 1",
+          "externalNote": "Sample externalNote 1",
+          "internalNote": "Sample internalNote 1",
+          "invoiceId": 2,
+          "invoiceNumber": 4,
+          "isTaxesApplied": true,
+          "isTaxesIncludedTotal": true,
+          "number": "Order-1",
+          "paymentStatus": "active",
+          "products": "products 1",
+          "shippingAddress": "101 Test St",
+          "status": "active",
+          "subTotal": 19.99,
+          "total": 19.99,
+          "url": "https://example.com/url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/store/orders",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "billingPerson": "billingPerson 2",
+          "comment": "Sample comment 2",
+          "contactId": 3,
+          "created": "2026-06-11T02:30:00Z",
+          "currency": "USD",
+          "deliveryOption": "deliveryOption 2",
+          "externalNote": "Sample externalNote 2",
+          "internalNote": "Sample internalNote 2",
+          "invoiceId": 3,
+          "invoiceNumber": 7,
+          "isTaxesApplied": false,
+          "isTaxesIncludedTotal": false,
+          "number": "Order-2",
+          "paymentStatus": "pending",
+          "products": "products 2",
+          "shippingAddress": "102 Test St",
+          "status": "pending",
+          "subTotal": 29.99,
+          "total": 29.99,
+          "url": "https://example.com/url/2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/store/orders",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "billingPerson": "billingPerson 3",
+          "comment": "Sample comment 3",
+          "contactId": 4,
+          "created": "2026-06-12T03:30:00Z",
+          "currency": "USD",
+          "deliveryOption": "deliveryOption 3",
+          "externalNote": "Sample externalNote 3",
+          "internalNote": "Sample internalNote 3",
+          "invoiceId": 4,
+          "invoiceNumber": 10,
+          "isTaxesApplied": true,
+          "isTaxesIncludedTotal": true,
+          "number": "Order-3",
+          "paymentStatus": "completed",
+          "products": "products 3",
+          "shippingAddress": "103 Test St",
+          "status": "completed",
+          "subTotal": 39.99,
+          "total": 39.99,
+          "url": "https://example.com/url/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/store/orders",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "billingPerson": "billingPerson 1",
+          "comment": "Sample comment 1",
+          "contactId": 2,
+          "created": "2026-06-10T01:30:00Z",
+          "currency": "USD",
+          "deliveryOption": "deliveryOption 1",
+          "externalNote": "Sample externalNote 1",
+          "internalNote": "Sample internalNote 1",
+          "invoiceId": 2,
+          "invoiceNumber": 4,
+          "isTaxesApplied": true,
+          "isTaxesIncludedTotal": true,
+          "number": "Order-1",
+          "paymentStatus": "active",
+          "products": "products 1",
+          "shippingAddress": "101 Test St",
+          "status": "active",
+          "subTotal": 19.99,
+          "total": 19.99,
+          "url": "https://example.com/url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/payments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AllocatedValue": 2,
+          "Comment": "Sample Comment 1",
+          "Contact": "Contact 1",
+          "CreatedBy": "CreatedBy 1",
+          "CreatedDate": "2026-06-10T01:30:00Z",
+          "DocumentDate": "2026-06-10T01:30:00Z",
+          "DonationId": 2,
+          "FieldValues": "FieldValues 1",
+          "Id": 1,
+          "PaymentMethodID": "PaymentMethodID 1",
+          "PublicComment": "Sample PublicComment 1",
+          "RefundedAmount": 19.99,
+          "Tender": "Tender 1",
+          "Type": "standard",
+          "UpdatedBy": "UpdatedBy 1",
+          "UpdatedDate": "2026-06-11T00:00:00Z",
+          "Url": "https://example.com/Url/1",
+          "Value": 2,
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/payments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AllocatedValue": 3,
+          "Comment": "Sample Comment 2",
+          "Contact": "Contact 2",
+          "CreatedBy": "CreatedBy 2",
+          "CreatedDate": "2026-06-11T02:30:00Z",
+          "DocumentDate": "2026-06-11T02:30:00Z",
+          "DonationId": 3,
+          "FieldValues": "FieldValues 2",
+          "Id": 2,
+          "PaymentMethodID": "PaymentMethodID 2",
+          "PublicComment": "Sample PublicComment 2",
+          "RefundedAmount": 29.99,
+          "Tender": "Tender 2",
+          "Type": "premium",
+          "UpdatedBy": "UpdatedBy 2",
+          "UpdatedDate": "2026-06-12T00:00:00Z",
+          "Url": "https://example.com/Url/2",
+          "Value": 3,
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/payments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AllocatedValue": 4,
+          "Comment": "Sample Comment 3",
+          "Contact": "Contact 3",
+          "CreatedBy": "CreatedBy 3",
+          "CreatedDate": "2026-06-12T03:30:00Z",
+          "DocumentDate": "2026-06-12T03:30:00Z",
+          "DonationId": 4,
+          "FieldValues": "FieldValues 3",
+          "Id": 3,
+          "PaymentMethodID": "PaymentMethodID 3",
+          "PublicComment": "Sample PublicComment 3",
+          "RefundedAmount": 39.99,
+          "Tender": "Tender 3",
+          "Type": "basic",
+          "UpdatedBy": "UpdatedBy 3",
+          "UpdatedDate": "2026-06-13T00:00:00Z",
+          "Url": "https://example.com/Url/3",
+          "Value": 4,
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/payments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AllocatedValue": 2,
+          "Comment": "Sample Comment 1",
+          "Contact": "Contact 1",
+          "CreatedBy": "CreatedBy 1",
+          "CreatedDate": "2026-06-10T01:30:00Z",
+          "DocumentDate": "2026-06-10T01:30:00Z",
+          "DonationId": 2,
+          "FieldValues": "FieldValues 1",
+          "Id": 1,
+          "PaymentMethodID": "PaymentMethodID 1",
+          "PublicComment": "Sample PublicComment 1",
+          "RefundedAmount": 19.99,
+          "Tender": "Tender 1",
+          "Type": "standard",
+          "UpdatedBy": "UpdatedBy 1",
+          "UpdatedDate": "2026-06-11T00:00:00Z",
+          "Url": "https://example.com/Url/1",
+          "Value": 2,
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/paymentAllocations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 1,
+          "Invoice": "Invoice 1",
+          "InvoiceDate": "2026-06-10T01:30:00Z",
+          "InvoiceNumber": "InvoiceNumber 1",
+          "Payment": "Payment 1",
+          "PaymentDate": "2026-06-10T01:30:00Z",
+          "PaymentType": "PaymentType 1",
+          "Refund": "Refund 1",
+          "RefundDate": "2026-06-10T01:30:00Z",
+          "Value": 2,
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/paymentAllocations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 2,
+          "Invoice": "Invoice 2",
+          "InvoiceDate": "2026-06-11T02:30:00Z",
+          "InvoiceNumber": "InvoiceNumber 2",
+          "Payment": "Payment 2",
+          "PaymentDate": "2026-06-11T02:30:00Z",
+          "PaymentType": "PaymentType 2",
+          "Refund": "Refund 2",
+          "RefundDate": "2026-06-11T02:30:00Z",
+          "Value": 3,
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/paymentAllocations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 3,
+          "Invoice": "Invoice 3",
+          "InvoiceDate": "2026-06-12T03:30:00Z",
+          "InvoiceNumber": "InvoiceNumber 3",
+          "Payment": "Payment 3",
+          "PaymentDate": "2026-06-12T03:30:00Z",
+          "PaymentType": "PaymentType 3",
+          "Refund": "Refund 3",
+          "RefundDate": "2026-06-12T03:30:00Z",
+          "Value": 4,
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/paymentAllocations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 1,
+          "Invoice": "Invoice 1",
+          "InvoiceDate": "2026-06-10T01:30:00Z",
+          "InvoiceNumber": "InvoiceNumber 1",
+          "Payment": "Payment 1",
+          "PaymentDate": "2026-06-10T01:30:00Z",
+          "PaymentType": "PaymentType 1",
+          "Refund": "Refund 1",
+          "RefundDate": "2026-06-10T01:30:00Z",
+          "Value": 2,
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/store/products",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "created": "2026-06-10T01:30:00Z",
+          "description": "Sample description 1",
+          "digitalProduct": "digitalProduct 1",
+          "ecourseProduct": "ecourseProduct 1",
+          "id": 1,
+          "outOfStock": true,
+          "pictures": "pictures 1",
+          "price": "price 1",
+          "productOptions": "productOptions 1",
+          "productVariants": "productVariants 1",
+          "status": "active",
+          "stock": 2,
+          "tags": "tags 1",
+          "title": "Sample Title 1",
+          "totalStock": 19.99,
+          "trackInventory": true,
+          "type": "standard",
+          "url": "https://example.com/url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/store/products",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "created": "2026-06-11T02:30:00Z",
+          "description": "Sample description 2",
+          "digitalProduct": "digitalProduct 2",
+          "ecourseProduct": "ecourseProduct 2",
+          "id": 2,
+          "outOfStock": false,
+          "pictures": "pictures 2",
+          "price": "price 2",
+          "productOptions": "productOptions 2",
+          "productVariants": "productVariants 2",
+          "status": "pending",
+          "stock": 3,
+          "tags": "tags 2",
+          "title": "Sample Title 2",
+          "totalStock": 29.99,
+          "trackInventory": false,
+          "type": "premium",
+          "url": "https://example.com/url/2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/store/products",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "created": "2026-06-12T03:30:00Z",
+          "description": "Sample description 3",
+          "digitalProduct": "digitalProduct 3",
+          "ecourseProduct": "ecourseProduct 3",
+          "id": 3,
+          "outOfStock": true,
+          "pictures": "pictures 3",
+          "price": "price 3",
+          "productOptions": "productOptions 3",
+          "productVariants": "productVariants 3",
+          "status": "completed",
+          "stock": 4,
+          "tags": "tags 3",
+          "title": "Sample Title 3",
+          "totalStock": 39.99,
+          "trackInventory": true,
+          "type": "basic",
+          "url": "https://example.com/url/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/store/products",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "created": "2026-06-10T01:30:00Z",
+          "description": "Sample description 1",
+          "digitalProduct": "digitalProduct 1",
+          "ecourseProduct": "ecourseProduct 1",
+          "id": 1,
+          "outOfStock": true,
+          "pictures": "pictures 1",
+          "price": "price 1",
+          "productOptions": "productOptions 1",
+          "productVariants": "productVariants 1",
+          "status": "active",
+          "stock": 2,
+          "tags": "tags 1",
+          "title": "Sample Title 1",
+          "totalStock": 19.99,
+          "trackInventory": true,
+          "type": "standard",
+          "url": "https://example.com/url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/refunds",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Comment": "Sample Comment 1",
+          "Contact": "Contact 1",
+          "CreatedBy": "CreatedBy 1",
+          "CreatedDate": "2026-06-10T01:30:00Z",
+          "DocumentDate": "2026-06-10T01:30:00Z",
+          "Id": 1,
+          "PublicComment": "Sample PublicComment 1",
+          "SettledValue": 2,
+          "Tender": "Tender 1",
+          "UpdatedBy": "UpdatedBy 1",
+          "UpdatedDate": "2026-06-11T00:00:00Z",
+          "Url": "https://example.com/Url/1",
+          "Value": 2,
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/refunds",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Comment": "Sample Comment 2",
+          "Contact": "Contact 2",
+          "CreatedBy": "CreatedBy 2",
+          "CreatedDate": "2026-06-11T02:30:00Z",
+          "DocumentDate": "2026-06-11T02:30:00Z",
+          "Id": 2,
+          "PublicComment": "Sample PublicComment 2",
+          "SettledValue": 3,
+          "Tender": "Tender 2",
+          "UpdatedBy": "UpdatedBy 2",
+          "UpdatedDate": "2026-06-12T00:00:00Z",
+          "Url": "https://example.com/Url/2",
+          "Value": 3,
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/refunds",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Comment": "Sample Comment 3",
+          "Contact": "Contact 3",
+          "CreatedBy": "CreatedBy 3",
+          "CreatedDate": "2026-06-12T03:30:00Z",
+          "DocumentDate": "2026-06-12T03:30:00Z",
+          "Id": 3,
+          "PublicComment": "Sample PublicComment 3",
+          "SettledValue": 4,
+          "Tender": "Tender 3",
+          "UpdatedBy": "UpdatedBy 3",
+          "UpdatedDate": "2026-06-13T00:00:00Z",
+          "Url": "https://example.com/Url/3",
+          "Value": 4,
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/refunds",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Comment": "Sample Comment 1",
+          "Contact": "Contact 1",
+          "CreatedBy": "CreatedBy 1",
+          "CreatedDate": "2026-06-10T01:30:00Z",
+          "DocumentDate": "2026-06-10T01:30:00Z",
+          "Id": 1,
+          "PublicComment": "Sample PublicComment 1",
+          "SettledValue": 2,
+          "Tender": "Tender 1",
+          "UpdatedBy": "UpdatedBy 1",
+          "UpdatedDate": "2026-06-11T00:00:00Z",
+          "Url": "https://example.com/Url/1",
+          "Value": 2,
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/savedsearches",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ContactIds": "ContactIds 1",
+          "Description": "Sample Description 1",
+          "Id": 1,
+          "Name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/savedsearches",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ContactIds": "ContactIds 2",
+          "Description": "Sample Description 2",
+          "Id": 2,
+          "Name": "Jordan Chen",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/savedsearches",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ContactIds": "ContactIds 3",
+          "Description": "Sample Description 3",
+          "Id": 3,
+          "Name": "Taylor Patel",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/savedsearches",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ContactIds": "ContactIds 1",
+          "Description": "Sample Description 1",
+          "Id": 1,
+          "Name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/SentEmailRecipients",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ClickedLinks": "https://example.com/ClickedLinks/1",
+          "ContactId": 2,
+          "Email": "user1@example.com",
+          "EventRegistrationId": 0.1,
+          "FirstName": "Alex",
+          "IdentityKey": "SentEmailRecipient-1",
+          "IsDelivered": true,
+          "IsOpened": true,
+          "LastName": "Rivera",
+          "Organization": "Acme Corp",
+          "RecipientName": "RecipientName 1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/SentEmailRecipients",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ClickedLinks": "https://example.com/ClickedLinks/2",
+          "ContactId": 3,
+          "Email": "user2@example.com",
+          "EventRegistrationId": 0.2,
+          "FirstName": "Jordan",
+          "IdentityKey": "SentEmailRecipient-2",
+          "IsDelivered": false,
+          "IsOpened": false,
+          "LastName": "Chen",
+          "Organization": "Globex LLC",
+          "RecipientName": "RecipientName 2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/SentEmailRecipients",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ClickedLinks": "https://example.com/ClickedLinks/3",
+          "ContactId": 4,
+          "Email": "user3@example.com",
+          "EventRegistrationId": 0.3,
+          "FirstName": "Taylor",
+          "IdentityKey": "SentEmailRecipient-3",
+          "IsDelivered": true,
+          "IsOpened": true,
+          "LastName": "Patel",
+          "Organization": "Initech",
+          "RecipientName": "RecipientName 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/SentEmailRecipients",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ClickedLinks": "https://example.com/ClickedLinks/1",
+          "ContactId": 2,
+          "Email": "user1@example.com",
+          "EventRegistrationId": 0.1,
+          "FirstName": "Alex",
+          "IdentityKey": "SentEmailRecipient-1",
+          "IsDelivered": true,
+          "IsOpened": true,
+          "LastName": "Rivera",
+          "Organization": "Acme Corp",
+          "RecipientName": "RecipientName 1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/1/tenders",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DisplayPosition": 2,
+          "Id": 1,
+          "IsCustom": true,
+          "Name": "Alex Rivera",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/2/tenders",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DisplayPosition": 3,
+          "Id": 2,
+          "IsCustom": false,
+          "Name": "Jordan Chen",
+          "Url": "https://example.com/Url/2",
+          "mj_e2e_custom_attr": "custom-2"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/3/tenders",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DisplayPosition": 4,
+          "Id": 3,
+          "IsCustom": true,
+          "Name": "Taylor Patel",
+          "Url": "https://example.com/Url/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/accounts/{accountId}/tenders",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DisplayPosition": 2,
+          "Id": 1,
+          "IsCustom": true,
+          "Name": "Alex Rivera",
+          "Url": "https://example.com/Url/1",
+          "mj_e2e_custom_attr": "custom-1"
+        }
+      ]
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "Account",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "AttachmentData",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "AuditLogItem",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "Bundle",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "CeuRecord",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "Contact",
+      "OrderingField": "ProfileLastUpdated"
+    },
+    {
+      "Name": "ContactFieldDescription",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "Donation",
+      "OrderingField": "IdentityKey"
+    },
+    {
+      "Name": "EmailDraft",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "EmailLog",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "EntityFieldDescription",
+      "OrderingField": "SystemCode"
+    },
+    {
+      "Name": "Event",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "EventRegistration",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "EventRegistrationType",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "Invoice",
+      "OrderingField": "UpdatedDate"
+    },
+    {
+      "Name": "MembershipGroup",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "MembershipLevel",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "Order",
+      "OrderingField": "number"
+    },
+    {
+      "Name": "Payment",
+      "OrderingField": "UpdatedDate"
+    },
+    {
+      "Name": "PaymentAllocation",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "Product",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Refund",
+      "OrderingField": "UpdatedDate"
+    },
+    {
+      "Name": "SavedSearch",
+      "OrderingField": "Id"
+    },
+    {
+      "Name": "SentEmailRecipient",
+      "OrderingField": "IdentityKey"
+    },
+    {
+      "Name": "Tender",
+      "OrderingField": "Id"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "Account",
+      "Routes": [
+        {
+          "Path": "/accounts",
+          "Method": "GET",
+          "Status": 200,
+          "Body": [
+            {
+              "BillingPlan": "BillingPlan 1",
+              "ContactLimitInfo": "ContactLimitInfo 1",
+              "Currency": "USD",
+              "Id": 1,
+              "IsFreeAccount": true,
+              "Localization": "Localization 1",
+              "Name": "updated-delta",
+              "PaymentSettings": "PaymentSettings 1",
+              "PrimaryDomainName": "PrimaryDomainName 1",
+              "Resources": "Resources 1",
+              "SquareRegisterSettings": "SquareRegisterSettings 1",
+              "TimeZone": "America/New_York",
+              "Url": "https://example.com/Url/1",
+              "mj_e2e_custom_attr": "custom-1"
+            },
+            {
+              "BillingPlan": "BillingPlan 2",
+              "ContactLimitInfo": "ContactLimitInfo 2",
+              "Currency": "USD",
+              "Id": 2,
+              "IsFreeAccount": false,
+              "Localization": "Localization 2",
+              "Name": "Jordan Chen",
+              "PaymentSettings": "PaymentSettings 2",
+              "PrimaryDomainName": "PrimaryDomainName 2",
+              "Resources": "Resources 2",
+              "SquareRegisterSettings": "SquareRegisterSettings 2",
+              "TimeZone": "America/New_York",
+              "Url": "https://example.com/Url/2",
+              "mj_e2e_custom_attr": "custom-2"
+            }
+          ]
+        }
+      ],
+      "ExpectedPresent": [
+        "1",
+        "2"
+      ],
+      "ExpectedDeletes": [
+        "3"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "1",
+          "Field": "Name",
+          "Value": "updated-delta"
+        }
+      ]
+    }
+  ],
+  "Lifecycle": {
+    "supportsDiscovery": false,
+    "supportsFieldDiscovery": false,
+    "authoritativeDiscovery": false,
+    "supportsCustomColumns": true,
+    "incrementalStrategy": "watermark",
+    "supportsWrite": false,
+    "writeRoundTrip": null,
+    "writeRoundTrips": [],
+    "supportsScheduling": true,
+    "connectionTestable": true,
+    "derivedFromMetadata": true,
+    "sourceClass": "@memberjunction/connector-wild-apricot"
+  }
+}

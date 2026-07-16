@@ -1,0 +1,605 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "incrementalWatermarkByPath": {
+          "/contacts": [
+            "updated_after",
+            "updated_before",
+            "created_after",
+            "created_before",
+            "optout_after",
+            "optout_before"
+          ],
+          "/emails": [
+            "before_date",
+            "after_date"
+          ]
+        },
+        "note": "Full scan of every GET-collection operation's query-parameter names in the saved openapi.json against a candidate incremental-filter name list. Only these 2 of 67 in-scope objects matched."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "webhookSurface": {
+          "allWebhookPathCount": 3,
+          "nonPartnerWebhookPathCount": 0,
+          "allWebhookPaths": [
+            "/partner/webhooks/subscriptions",
+            "/partner/webhooks/subscriptions/{topic_id}",
+            "/partner/webhooks/subscriptions/{topic_id}/tests"
+          ]
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WebhooksAvailable"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "tagMethods": {
+          "Bulk Activities": [
+            "get",
+            "post"
+          ]
+        },
+        "note": "12 Bulk Activities leaf endpoints confirmed present in openapi.json paths under this tag, base path /activities."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.BulkOperationsAvailable"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "tagMethods": {
+          "Account Services": [
+            "get",
+            "post",
+            "put"
+          ],
+          "Bulk Activities": [
+            "get",
+            "post"
+          ],
+          "Contact Lists": [
+            "delete",
+            "get",
+            "post",
+            "put"
+          ],
+          "Contact Tags": [
+            "delete",
+            "get",
+            "post",
+            "put"
+          ],
+          "Contacts": [
+            "delete",
+            "get",
+            "post",
+            "put"
+          ],
+          "Contacts Custom Fields": [
+            "delete",
+            "get",
+            "post",
+            "put"
+          ],
+          "Contacts Reporting": [
+            "get"
+          ],
+          "Email Campaigns": [
+            "delete",
+            "get",
+            "patch",
+            "post",
+            "put"
+          ],
+          "Email Campaigns AB Tests": [
+            "delete",
+            "get",
+            "post"
+          ],
+          "Email Reporting": [
+            "get"
+          ],
+          "Email Scheduling": [
+            "delete",
+            "get",
+            "post"
+          ],
+          "Events": [
+            "get",
+            "patch",
+            "post",
+            "put"
+          ],
+          "Landing Pages Reporting": [
+            "get"
+          ],
+          "SMS Reporting": [
+            "get"
+          ],
+          "Segments": [
+            "delete",
+            "get",
+            "patch",
+            "post",
+            "put"
+          ],
+          "Social": [
+            "get",
+            "post"
+          ]
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WriteCapability"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "concurrencyHeaderScan": {
+          "ETag": false,
+          "If-Match": false,
+          "If-Unmodified-Since": false
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ConcurrencyControl"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "deleteOps": [
+          {
+            "path": "/contacts/{contact_id}",
+            "reviveOrRestoreLanguage": true
+          },
+          {
+            "path": "/emails/{campaign_id}",
+            "reviveOrRestoreLanguage": true
+          },
+          {
+            "path": "/contact_lists/{list_id}",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/contact_tags/{tag_id}",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/contact_custom_fields/{custom_field_id}",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/segments/{segment_id}",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/emails/activities/{campaign_activity_id}/schedules",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/emails/activities/{campaign_activity_id}/non_opener_resends/{resend_request_id}",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/emails/activities/{campaign_activity_id}/abtest",
+            "reviveOrRestoreLanguage": false
+          },
+          {
+            "path": "/partner/webhooks/subscriptions/{topic_id}",
+            "reviveOrRestoreLanguage": false
+          }
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.DeleteSemantics"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "securitySchemeCounts": {
+          "[\"oauth2_access_code\",\"oauth2_implicit\"]": 111,
+          "[\"api_key\",\"ctctPartnerAuthorizer\"]": 13
+        },
+        "note": "Every non-partner operation (111 of 124) requires the shared oauth2_access_code/oauth2_implicit scheme; the 13 Technology-Partner operations use a wholly separate api_key+ctctPartnerAuthorizer scheme, corroborating the OutOfScopeObjectFamilies split."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "pkNamingConvention": {
+          "totalGetByIdPathsChecked": 15,
+          "totalMatchingConvention": 11,
+          "matchRatio": 0.7333333333333333
+        },
+        "note": "73.3% match ratio does NOT clear the >=95% significance bar for a universalPK hard-constraint hint; recorded as an informational PKNamingObservation only, universalPK deliberately left unset."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PKNamingObservation"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "baseUrl": {
+          "host": "api.cc.email",
+          "basePath": "/v3",
+          "schemes": [
+            "https"
+          ],
+          "derivedNavigationBaseURL": "https://api.cc.email/v3"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.NavigationBaseURL"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "account_emails",
+        "apiPath": "/account/emails",
+        "fields": 7,
+        "supportsWrite": true,
+        "source": "GET /account/emails 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_emails.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "account_physical_address",
+        "apiPath": "/account/summary/physical_address",
+        "fields": 8,
+        "supportsWrite": true,
+        "source": "GET /account/summary/physical_address 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_physical_address.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "account_summary",
+        "apiPath": "/account/summary",
+        "fields": 14,
+        "supportsWrite": true,
+        "source": "GET /account/summary 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_summary.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "account_user_privileges",
+        "apiPath": "/account/user/privileges",
+        "fields": 2,
+        "supportsWrite": false,
+        "source": "GET /account/user/privileges 200 (body)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.account_user_privileges.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "GET /activities/{activity_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities",
+        "apiPath": "/activities",
+        "fields": 11,
+        "supportsWrite": false,
+        "source": "GET /activities/{activity_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/contact_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_delete.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_delete",
+        "apiPath": "/activities/contact_delete",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contact_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_delete.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "field": "activity_id",
+        "target": "activities",
+        "proof": "resource-id reference to sibling resource PK"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_export.activity_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_export",
+        "apiPath": "/contact_exports/{file_export_id}",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contact_exports response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_export.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/contacts_file_import response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_file_import.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_file_import",
+        "apiPath": "/activities/contacts_file_import",
+        "fields": 11,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_file_import response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_file_import.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/contacts_json_import response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_json_import.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_json_import",
+        "apiPath": "/activities/contacts_json_import",
+        "fields": 11,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_json_import response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_json_import.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/contacts_taggings_add response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_taggings_add.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_taggings_add",
+        "apiPath": "/activities/contacts_taggings_add",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_taggings_add response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_taggings_add.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/contacts_taggings_remove response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_taggings_remove.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_taggings_remove",
+        "apiPath": "/activities/contacts_taggings_remove",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_taggings_remove response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_taggings_remove.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/contacts_tags_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_contacts_tags_delete.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_contacts_tags_delete",
+        "apiPath": "/activities/contacts_tags_delete",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/contacts_tags_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_contacts_tags_delete.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/custom_fields_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_custom_fields_delete.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_custom_fields_delete",
+        "apiPath": "/activities/custom_fields_delete",
+        "fields": 9,
+        "supportsWrite": true,
+        "source": "POST /activities/custom_fields_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_custom_fields_delete.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/list_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_list_delete.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_list_delete",
+        "apiPath": "/activities/list_delete",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/list_delete response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_list_delete.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/add_list_memberships response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_list_memberships_add.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_list_memberships_add",
+        "apiPath": "/activities/add_list_memberships",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/add_list_memberships response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_list_memberships_add.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "activity_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "POST /activities/remove_list_memberships response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.activities_list_memberships_remove.activity_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "io": "activities_list_memberships_remove",
+        "apiPath": "/activities/remove_list_memberships",
+        "fields": 10,
+        "supportsWrite": true,
+        "source": "POST /activities/remove_list_memberships response"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.activities_list_memberships_remove.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-11T23:03:40.496Z",
+      "StructuredOutput": {
+        "pk": "custom_field_id",
+        "proof": "GET-by-id path-parameter addressing",
+        "source": "GET /contact_custom_fields/{custom_field_id} 200"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.contact_custom_fields.custom_field_id.IsPrimaryKey"
+    }
+  ]
+}

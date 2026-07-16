@@ -1,0 +1,74 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/higherlogic-thrive/scripts/verify-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T18:28:40.250Z",
+      "StructuredOutput": {
+        "urlChecks": {
+          "helpPageUS": {
+            "url": "https://api.connectedcommunity.org/v2.0/Help",
+            "status": 200,
+            "ok": true
+          },
+          "helpPageMirror": {
+            "url": "https://api.higherlogic.com/v2.0/Help",
+            "status": 200,
+            "ok": true
+          },
+          "helpPageCanada": {
+            "url": "https://api.onlinecommunity.ca/v2.0/Help",
+            "status": 200,
+            "ok": true
+          },
+          "bareUS": {
+            "url": "https://api.connectedcommunity.org/",
+            "status": 200,
+            "ok": true
+          },
+          "bareCanada": {
+            "url": "https://api.onlinecommunity.ca/",
+            "status": 200,
+            "ok": true
+          }
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.NavigationBaseURL"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/higherlogic-thrive/scripts/verify-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T18:28:40.250Z",
+      "StructuredOutput": {
+        "urlChecks": {
+          "helpPageUS": {
+            "url": "https://api.connectedcommunity.org/v2.0/Help",
+            "status": 200,
+            "ok": true
+          },
+          "helpPageMirror": {
+            "url": "https://api.higherlogic.com/v2.0/Help",
+            "status": 200,
+            "ok": true
+          },
+          "helpPageCanada": {
+            "url": "https://api.onlinecommunity.ca/v2.0/Help",
+            "status": 200,
+            "ok": true
+          },
+          "bareUS": {
+            "url": "https://api.connectedcommunity.org/",
+            "status": 200,
+            "ok": true
+          },
+          "bareCanada": {
+            "url": "https://api.onlinecommunity.ca/",
+            "status": 200,
+            "ok": true
+          }
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.RegionalBaseURLs"
+    }
+  ]
+}

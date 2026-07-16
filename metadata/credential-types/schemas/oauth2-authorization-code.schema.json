@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "clientId": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "OAuth2 application client ID issued by the vendor's developer portal",
+      "isSecret": false,
+      "order": 0
+    },
+    "clientSecret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "OAuth2 application client secret issued by the vendor's developer portal",
+      "isSecret": true,
+      "order": 1
+    },
+    "authorizationUrl": {
+      "type": "string",
+      "title": "Authorization URL",
+      "description": "OAuth2 authorization endpoint the user is redirected to for consent (user-facing leg of the Authorization Code grant)",
+      "format": "uri",
+      "isSecret": false,
+      "order": 2
+    },
+    "tokenUrl": {
+      "type": "string",
+      "title": "Token URL",
+      "description": "OAuth2 token endpoint used to exchange the authorization code (and later, refresh tokens) for an access token",
+      "format": "uri",
+      "isSecret": false,
+      "order": 3
+    },
+    "redirectUri": {
+      "type": "string",
+      "title": "Redirect URI",
+      "description": "Registered OAuth2 redirect (callback) URI the vendor sends the authorization code to",
+      "isSecret": false,
+      "order": 4
+    },
+    "accessToken": {
+      "type": "string",
+      "title": "Access Token",
+      "description": "Current OAuth2 access token (short-lived; refreshed automatically via refreshToken)",
+      "isSecret": true,
+      "order": 5
+    },
+    "refreshToken": {
+      "type": "string",
+      "title": "Refresh Token",
+      "description": "OAuth2 refresh token used to mint a new access token when the current one expires. Some vendors ROTATE the refresh token on every use (the token returned by a refresh call is single-use and replaces the prior one) -- when supportsRotatingRefreshToken is true, the connector MUST persist the newest refresh token returned by every token-exchange call, not just the initial one, or subsequent refreshes will fail.",
+      "isSecret": true,
+      "order": 6
+    },
+    "scope": {
+      "type": "string",
+      "title": "Scope",
+      "description": "OAuth2 scopes requested at authorization time (space-separated)",
+      "isSecret": false,
+      "order": 7
+    },
+    "supportsRotatingRefreshToken": {
+      "type": "boolean",
+      "title": "Rotating Refresh Token",
+      "description": "True when the vendor issues a NEW single-use refresh token on every refresh call (the connector must overwrite refreshToken with the newest value after each exchange). False when the vendor issues a long-lived refresh token that stays valid across many refreshes.",
+      "isSecret": false,
+      "order": 8,
+      "default": false
+    }
+  },
+  "required": ["clientId", "clientSecret", "tokenUrl", "redirectUri"]
+}

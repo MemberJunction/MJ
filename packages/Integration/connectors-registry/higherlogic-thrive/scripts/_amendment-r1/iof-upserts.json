@@ -1,0 +1,179 @@
+[
+  {
+    "ioName": "Announcements",
+    "iof": {
+      "Name": "CommunityKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "Announcements",
+    "iof": {
+      "Name": "CreatedByContactKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "Announcements",
+    "iof": {
+      "Name": "UpdatedByContactKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "AutomationRuleContactData",
+    "iof": {
+      "Name": "ContactKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "BlogComments",
+    "iof": {
+      "Name": "CommentKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "Communities",
+    "iof": {
+      "Name": "CreatedByContactKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "Communities",
+    "iof": {
+      "Name": "LibraryKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "Communities",
+    "iof": {
+      "Name": "DiscussionKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "CommunityMembers",
+    "iof": {
+      "Name": "ContactKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "CommunityMembers",
+    "iof": {
+      "Name": "UpdatedByContactKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "DiscussionPosts",
+    "iof": {
+      "Name": "ContactKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "DiscussionPosts",
+    "iof": {
+      "Name": "DiscussionThreadKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "DiscussionPosts",
+    "iof": {
+      "Name": "CommunityKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "DiscussionPosts",
+    "iof": {
+      "Name": "DiscussionKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "DiscussionThreads",
+    "iof": {
+      "Name": "DiscussionKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "DiscussionThreads",
+    "iof": {
+      "Name": "CommunityKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "EventRegistrants",
+    "iof": {
+      "Name": "ContactKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "ExternalActivity",
+    "iof": {
+      "Name": "ContactKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "VolunteerOpportunities",
+    "iof": {
+      "Name": "VolunteerOpportunityTypeKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "Volunteers",
+    "iof": {
+      "Name": "CreatedByContactKey",
+      "Type": "String",
+      "IsForeignKey": true
+    }
+  },
+  {
+    "ioName": "BlogComments",
+    "iof": {
+      "Name": "ItemKey",
+      "Type": "String",
+      "IsForeignKey": true,
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Blogs&IntegrationID=@parent:IntegrationID"
+    }
+  },
+  {
+    "ioName": "IdeaVoters",
+    "iof": {
+      "Name": "IdeationKey",
+      "Type": "String",
+      "IsPrimaryKey": false
+    }
+  }
+]

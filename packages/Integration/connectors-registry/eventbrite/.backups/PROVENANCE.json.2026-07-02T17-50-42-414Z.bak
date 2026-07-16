@@ -1,0 +1,44 @@
+{
+  "Entries": [
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:21.513Z",
+      "UsedFor": "Confirming the v3 API base URL (HOST directive) for Configuration/NavigationBaseURL and the URL-path API versioning strategy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "HOST: https://www.eventbriteapi.com/v3/ (blueprint line 2). \"All URLs referenced in the API documentation have the following base: https://www.eventbrite.com/v3.\" (prose restatement, line 14)."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:21.513Z",
+      "UsedFor": "Establishing Configuration.APIVersioningStrategy=url-path -- the v3 version segment is embedded directly in the HOST base URL, with no separate version header/param used by any of the 102 documented endpoints.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.APIVersioningStrategy",
+      "Excerpt": "HOST: https://www.eventbriteapi.com/v3/"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:21.513Z",
+      "UsedFor": "Confirming the documented hourly rate limit (429 HIT_RATE_LIMIT) used to derive BatchMaxRequestCount/BatchRequestWaitTime and Configuration.RateLimitPolicy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "429 | HIT_RATE_LIMIT | Hourly rate limit has been reached for this token. Default rate limits are 2,000 calls per hour."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:21.513Z",
+      "UsedFor": "Same rate-limit statement supports BatchRequestWaitTime (the 1-hour/3600s window the 2,000-call budget replenishes over) and Configuration.RateLimitPolicy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "429 | HIT_RATE_LIMIT | Hourly rate limit has been reached for this token. Default rate limits are 2,000 calls per hour."
+    }
+  ]
+}

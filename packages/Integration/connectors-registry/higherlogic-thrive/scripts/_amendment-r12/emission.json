@@ -1,0 +1,60 @@
+[
+  {
+    "objectName": "Volunteers",
+    "fieldsExtracted": 17,
+    "gapsRemaining": [],
+    "claims": [
+      {
+        "slot": "io.Volunteers.SupportsUpdate",
+        "value": false,
+        "sourcePath": "sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html"
+      },
+      {
+        "slot": "io.Volunteers.UpdateAPIPath",
+        "value": null,
+        "sourcePath": "sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html"
+      },
+      {
+        "slot": "io.Volunteers.UpdateMethod",
+        "value": null,
+        "sourcePath": "sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html"
+      },
+      {
+        "slot": "io.Volunteers.UpdateBodyShape",
+        "value": null,
+        "sourcePath": "sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html"
+      },
+      {
+        "slot": "io.Volunteers.UpdateIDLocation",
+        "value": null,
+        "sourcePath": "sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html"
+      },
+      {
+        "slot": "io.Volunteers.SupportsWrite",
+        "value": true,
+        "sourcePath": "sources/ops/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments.html"
+      },
+      {
+        "slot": "io.Volunteers.AdditionalObservations",
+        "value": "ApproveVolunteerApplication (POST /v2.0/Volunteer/ApproveVolunteerApplication) exists as an admin-approval RPC action on Volunteers but is intentionally NOT modeled as generic Update — its body ({VolunteerOpportunityKey, ContactKey, LegacyContactKey}) doesn't match this object's field set and carries no settable field value, only an implicit approve/reject side-effect baked into the endpoint name.",
+        "sourcePath": "sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html"
+      }
+    ],
+    "matrixRow": {
+      "IOName": "Volunteers",
+      "ExistingConnectorTs": "n/a",
+      "ExistingMetadataJson": "yes",
+      "OpenAPIxPK": "no",
+      "OpenAPIPathOps": "yes",
+      "OpenAPILocationHeader": "no",
+      "VendorDocsProseScan": "yes",
+      "SDKTypes": "n/a",
+      "PostmanCommunity": "n/a",
+      "NamingConvention": "yes",
+      "CrossIOMatch": "yes",
+      "PKVerdict": "emit",
+      "FKVerdict": "emit-N",
+      "EvidenceCount": 2
+    }
+  }
+]

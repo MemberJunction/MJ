@@ -1,0 +1,568 @@
+
+
+<html>
+
+    <head><link rel="alternate" type="text/xml" href="/mmapi.asmx?disco" />
+
+    <style type="text/css">
+    
+		BODY { color: #000000; background-color: white; font-family: Verdana; margin-left: 0px; margin-top: 0px; }
+		#content { margin-left: 30px; font-size: .70em; padding-bottom: 2em; }
+		A:link { color: #336699; font-weight: bold; text-decoration: underline; }
+		A:visited { color: #6699cc; font-weight: bold; text-decoration: underline; }
+		A:active { color: #336699; font-weight: bold; text-decoration: underline; }
+		A:hover { color: cc3300; font-weight: bold; text-decoration: underline; }
+		P { color: #000000; margin-top: 0px; margin-bottom: 12px; font-family: Verdana; }
+		pre { background-color: #e5e5cc; padding: 5px; font-family: Courier New; font-size: x-small; margin-top: -5px; border: 1px #f0f0e0 solid; }
+		td { color: #000000; font-family: Verdana; font-size: .7em; }
+		h2 { font-size: 1.5em; font-weight: bold; margin-top: 25px; margin-bottom: 10px; border-top: 1px solid #003366; margin-left: -15px; color: #003366; }
+		h3 { font-size: 1.1em; color: #000000; margin-left: -15px; margin-top: 10px; margin-bottom: 10px; }
+		ul { margin-top: 10px; margin-left: 20px; }
+		ol { margin-top: 10px; margin-left: 20px; }
+		li { margin-top: 10px; color: #000000; }
+		font.value { color: darkblue; font: bold; }
+		font.key { color: darkgreen; font: bold; }
+		font.error { color: darkred; font: bold; }
+		.heading1 { color: #ffffff; font-family: Tahoma; font-size: 26px; font-weight: normal; background-color: #003366; margin-top: 0px; margin-bottom: 0px; margin-left: -30px; padding-top: 10px; padding-bottom: 3px; padding-left: 15px; width: 105%; }
+		.button { background-color: #dcdcdc; font-family: Verdana; font-size: 1em; border-top: #cccccc 1px solid; border-bottom: #666666 1px solid; border-left: #cccccc 1px solid; border-right: #666666 1px solid; }
+		.frmheader { color: #000000; background: #dcdcdc; font-family: Verdana; font-size: .7em; font-weight: normal; border-bottom: 1px solid #dcdcdc; padding-top: 2px; padding-bottom: 2px; }
+		.frmtext { font-family: Verdana; font-size: .7em; margin-top: 8px; margin-bottom: 0px; margin-left: 32px; }
+		.frmInput { font-family: Verdana; font-size: 1em; }
+		.intro { margin-left: -15px; }
+           
+    </style>
+
+    <title>
+	MagnetMail Web Service Web Service
+</title></head>
+
+  <body>
+
+    <div id="content">
+
+      <p class="heading1">MagnetMail Web Service</p><br>
+
+      <span>
+          <p class="intro">Web Service to access data and add data to MagnetMail.</p>
+      </span>
+
+      <span>
+
+          <p class="intro">The following operations are supported.  For a formal definition, please review the <a href="mmapi.asmx?WSDL">Service Description</a>. </p>
+          
+          
+              <ul>
+            
+              <li>
+                <a href="mmapi.asmx?op=Authenticate">Authenticate</a>
+                
+                <span>
+                  <br>Authenticate
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=CreateEventSignUp">CreateEventSignUp</a>
+                
+                <span>
+                  <br>Event Sign Up
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=GetAllGroupCategories">GetAllGroupCategories</a>
+                
+                <span>
+                  <br>Get Group Categories
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=GetEnhancedPersonalizedFields">GetEnhancedPersonalizedFields</a>
+                
+                <span>
+                  <br>Enhanced Personalization Field List <b>In BETA</b>
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=GetGroupCategory">GetGroupCategory</a>
+                
+                <span>
+                  <br>Get Group Category
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=GetMessageCategory">GetMessageCategory</a>
+                
+                <span>
+                  <br>Get Message Category
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=GetMessageDetails">GetMessageDetails</a>
+                
+                <span>
+                  <br>Get Message Details
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=GetMessageLinkTracking">GetMessageLinkTracking</a>
+                
+                <span>
+                  <br>Get Message Link Tracking.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=GetMessageOpenTracking">GetMessageOpenTracking</a>
+                
+                <span>
+                  <br>Get Message Open Tracking
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=GetMessageSentTracking">GetMessageSentTracking</a>
+                
+                <span>
+                  <br>Get Message Sent Tracking.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=GetUnsubscribeTracking">GetUnsubscribeTracking</a>
+                
+                <span>
+                  <br>Get Unsubscribe Tracking
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=GetUploadInitialQueueJobStatus">GetUploadInitialQueueJobStatus</a>
+                
+                <span>
+                  <br>Upload Initial Queue Job Status <b>In BETA</b>
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=SearchPersonifySubscriptionMappings">SearchPersonifySubscriptionMappings</a>
+                
+                <span>
+                  <br>Get Personify Subscription Mappings
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=UploadListInitialQueue">UploadListInitialQueue</a>
+                
+                <span>
+                  <br>Upload List (w/Enhanced Personalization Support) <b>In BETA</b>
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=addGroup">addGroup</a>
+                
+                <span>
+                  <br>Add a recipient group to your account.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=addRecipient">addRecipient</a>
+                
+                <span>
+                  <br>add a recipient to MagnetMail
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=createMagnetMailMessage">createMagnetMailMessage</a>
+                
+                <span>
+                  <br>Create a new MagnetMail message
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=editMagnetMailMessage">editMagnetMailMessage</a>
+                
+                <span>
+                  <br>Edit an existing MagnetMail message
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=editRecipient">editRecipient</a>
+                
+                <span>
+                  <br>edit a MagnetMail recipient
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=editRecipientGroups">editRecipientGroups</a>
+                
+                <span>
+                  <br>Edit a recipients group
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getDetailedTracking">getDetailedTracking</a>
+                
+                <span>
+                  <br>Get detailed tracking data for a message.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getDetailedTrackingUTC">getDetailedTrackingUTC</a>
+                
+                <span>
+                  <br>Get detailed tracking data for a message.  UTC Times returned for dates
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getErrorDetails">getErrorDetails</a>
+                
+                <span>
+                  <br>Takes an error_nbr and returns details on that error.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getGroupDetails">getGroupDetails</a>
+                
+                <span>
+                  <br>Get Group Details
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getGroupRecipients">getGroupRecipients</a>
+                
+                <span>
+                  <br>Get Group Recipients Details
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getGroupRecipientsCount">getGroupRecipientsCount</a>
+                
+                <span>
+                  <br>Get Group Recipient Count
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getGroups">getGroups</a>
+                
+                <span>
+                  <br>Takes 3 arguments - user_id, display_status and subscription_groups. Returns an array of 'group' type. (Deprecated, use getGroupsEx instead.)
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getGroupsUTC">getGroupsUTC</a>
+                
+                <span>
+                  <br>Takes 3 arguments - user_id, display_status and subscription_groups. Returns an array of 'group' type, UTC formatted dates
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getLinkURLs">getLinkURLs</a>
+                
+                <span>
+                  <br>Return links in a message that were tracked
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getMessageList">getMessageList</a>
+                
+                <span>
+                  <br>Get A List Of Messages
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getMessageListUtc">getMessageListUtc</a>
+                
+                <span>
+                  <br>Get A List Of Messages Using UTC Date Times
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getMessages">getMessages</a>
+                
+                <span>
+                  <br>Returns a list of messages by different criterion. Messages can be filtered by sent date , create date, archive status, hide status, if it has fax, if it has email.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getMessagesUTC">getMessagesUTC</a>
+                
+                <span>
+                  <br>Returns a list of messages by different criterion. Messages can be filtered by sent date , create date, archive status, hide status, if it has fax, if it has email.  Dates returned in UTC format
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getOverallTracking">getOverallTracking</a>
+                
+                <span>
+                  <br>Return overall tracking data for a message
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getRecipientDetails">getRecipientDetails</a>
+                
+                <span>
+                  <br>Get recipient details based on the recipient_id.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getRecipientFields">getRecipientFields</a>
+                
+                <span>
+                  <br>Takes a user_id as argument and returns contact fields defined in that account. Returns 2 values for each user1 - fieldNameText and fieldNameValue.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getRecipientGroups">getRecipientGroups</a>
+                
+                <span>
+                  <br>get the groups that a recipient belongs to
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getRecipientHistory">getRecipientHistory</a>
+                
+                <span>
+                  <br>BETA: Get recipient history based on the recipient_id.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getSavedSearches">getSavedSearches</a>
+                
+                <span>
+                  <br>Get an array of saved searches in the account.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getSpamComplaints">getSpamComplaints</a>
+                
+                <span>
+                  <br>Get list of recipients that have reported a message as spam.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getSubscribedRecipients">getSubscribedRecipients</a>
+                
+                <span>
+                  <br>Returns Array of subscription recipients.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getSuppressedRecipientList">getSuppressedRecipientList</a>
+                
+                <span>
+                  <br>Get the list of suppressed recipients based on date range and/or groupId
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getTrackingData">getTrackingData</a>
+                
+                <span>
+                  <br>Get Tracking Data
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getUnsubscribes">getUnsubscribes</a>
+                
+                <span>
+                  <br>Get list of recipients that have unsubscribed from account.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getUploadJobStatus">getUploadJobStatus</a>
+                
+                <span>
+                  <br>Takes a jobid and returns the status of an upload jobid.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getUploadJobStatusUTC">getUploadJobStatusUTC</a>
+                
+                <span>
+                  <br>Takes a jobid and returns the status of an upload jobid.  Dates returned in UTC
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=getUserDetails">getUserDetails</a>
+                
+                <span>
+                  <br>Returns user(also called 'account') options/details
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=runSavedSearch">runSavedSearch</a>
+                
+                <span>
+                  <br>Run a saved search in the account.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=searchForRecipients">searchForRecipients</a>
+                
+                <span>
+                  <br>search for Recipients
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=sendEmailToIndividual">sendEmailToIndividual</a>
+                
+                <span>
+                  <br>send email to individual
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=sendMessageToGroup">sendMessageToGroup</a>
+                
+                <span>
+                  <br>BETA: Send message to a group.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=unsubscribeRecipients">unsubscribeRecipients</a>
+                
+                <span>
+                  <br>Unsubscribe Recipients
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=uploadListQueue">uploadListQueue</a>
+                
+                <span>
+                  <br>Takes an upload job and queues it for upload. Returns status in a complex type.The argument 'csvData' is your contact data in csv format. 'replace_group' specifies if recipients in group should be replaced with new list. 'update_dups' specifies if existing contact records should be overwritten with new values. 'header_line' specifies if your csvData has a header line. 'mapping_name' is name for the mapping between your headers and magnetMail fields. MM_1 thro MM_42 are names of MagnetMail fields to which your fields in csvData are mapped to. See API documentation for details of these fields.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=uploadListQueueTest">uploadListQueueTest</a>
+                
+                <span>
+                  <br>Takes an upload job and queues it for upload. Returns status in a complex type.The argument 'csvData' is your contact data in csv format. 'replace_group' specifies if recipients in group should be replaced with new list. 'update_dups' specifies if existing contact records should be overwritten with new values. 'header_line' specifies if your csvData has a header line. 'mapping_name' is name for the mapping between your headers and magnetMail fields. MM_1 thro MM_42 are names of MagnetMail fields to which your fields in csvData are mapped to. See API documentation for details of these fields.
+                </span>
+              </li>
+              <p>
+            
+              <li>
+                <a href="mmapi.asmx?op=uploadSuppressionList">uploadSuppressionList</a>
+                
+                <span>
+                  <br>suppress a list of recipients
+                </span>
+              </li>
+              <p>
+            
+              </ul>
+            
+      </span>
+
+      
+      
+
+    <span>
+        
+    </span>
+    
+      
+
+      
+
+    
+  </body>
+</html>

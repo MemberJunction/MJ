@@ -1,0 +1,244 @@
+{
+  "Entries": [
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming the base URL / resource-oriented path convention (https://api.stripe.com/v1/<resource>) and the global HTTP bearer security scheme used for API-key auth.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "servers: [{url: 'https://api.stripe.com/v1'}]; all 414 paths are relative to this server root (e.g. /customers, /charges, /payment_intents); components.securitySchemes declares an HTTP bearer scheme applied globally."
+    },
+    {
+      "URL": "https://docs.stripe.com/api",
+      "AccessedAt": "2026-07-02T19:00:00.000Z",
+      "UsedFor": "Confirming the Stripe-Version header pins the API version per-request, overriding the key's account-default pinned version.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthAdditionalHeaders",
+      "Excerpt": "Versioning section: requests may pin a specific API version by sending the Stripe-Version header; omitting it uses the version associated with the API key's account settings at request time."
+    },
+    {
+      "URL": "https://docs.stripe.com/api/pagination",
+      "AccessedAt": "2026-07-02T19:00:00.000Z",
+      "UsedFor": "Confirming the cursor pagination contract: list envelope shape, has_more flag, starting_after/ending_before cursor params, limit bound.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "All top-level API resources ... support 'list' API methods ... For instance, you can list charges, list customers, and list invoices. These list API methods share a common structure, taking at least these three parameters: limit, starting_after, and ending_before. ... The response ... object is always list ... has_more attribute ... url attribute."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/stripe-node/master/src/autoPagination.ts",
+      "AccessedAt": "2026-07-02T19:00:00.000Z",
+      "UsedFor": "Independent SDK-level corroboration of the has_more/starting_after/ending_before cursor mechanics, confirming stripe-node's generated auto-pagination loop matches the spec + docs exactly.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialSDK",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "autoPagination.ts implements iteration by tracking `lastId` from the previous page's final `data[]` element and requesting the next page with `starting_after: lastId`, stopping when `has_more` is false."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming the universal write-body content-type is application/x-www-form-urlencoded across all in-scope Create/Update operations, with zero JSON request bodies (the sole exception being the out-of-scope file-upload endpoint).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WriteBodyEncoding",
+      "Excerpt": "Content-type tally across all POST/PUT/PATCH requestBody definitions in spec3.json: application/x-www-form-urlencoded=292, application/json=0, other=1 (POST /v1/files, multipart/form-data). Nested/array attributes use bracket notation, e.g. address[line1]=123+Main+St, metadata[key]=value."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming Update operations always use POST (never PATCH/PUT) across all 33 in-scope resource schemas, distinguished from Create only by path (collection root vs. /{id}).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.UpdateVerbConvention",
+      "Excerpt": "Per-operation method presence tabulated across all 33 in-scope object paths (e.g. POST /v1/customers = create, POST /v1/customers/{customer} = update): every Update operation across the checked object set uses the POST method; no PATCH or PUT operation is declared anywhere in the spec for these resources."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming the Delete response tombstone shape (deleted_<object> schema) and that the deleted record's id is returned in the response body, not a header.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DeleteResponseShape",
+      "Excerpt": "components.schemas.deleted_customer: {properties: {deleted: {enum:[true]}, id: {type:'string'}, object: {enum:['customer']}}, required: [deleted, id, object]}. DELETE /v1/customers/{customer} responses.200.content.application/json.schema: $ref deleted_customer. Same pattern confirmed for deleted_product, deleted_plan, deleted_subscription, deleted_invoiceitem, deleted_coupon, deleted_account, deleted_person, deleted_invoice, deleted_subscription_item, deleted_invoice."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming the uniform error envelope shape returned on all error responses (components.schemas.api_errors) and the per-status-code meanings.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ErrorResponseShape",
+      "Excerpt": "components.schemas.api_errors: {properties: {error: {type:'object', properties: {type, code, message, param, doc_url, ...}}}}. Confirmed present as the default error response schema referenced from every operation's non-2xx responses across the spec."
+    },
+    {
+      "URL": "https://docs.stripe.com/rate-limits",
+      "AccessedAt": "2026-07-02T19:00:00.000Z",
+      "UsedFor": "Confirming the Stripe-Rate-Limited-Reason header returned on 429 responses, naming which limit was breached.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ErrorResponseShape",
+      "Excerpt": "When you exceed a rate limit, Stripe returns a 429 error and includes a Stripe-Rate-Limited-Reason header that identifies the specific limit that was exceeded: global-rate, endpoint-rate, global-concurrency, endpoint-concurrency, or resource-specific."
+    },
+    {
+      "URL": "https://docs.stripe.com/api/idempotent_requests",
+      "AccessedAt": "2026-07-02T19:00:00.000Z",
+      "UsedFor": "Confirming the Idempotency-Key header contract: POST-only, 24-hour server-side cache, parameter-consistency validation on replay.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IdempotencySupport",
+      "Excerpt": "To perform an idempotent request, provide an additional Idempotency-Key header... Stripe's idempotency layer compares the incoming parameters with those of the original request... Keys expire after 24 hours."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.sdk.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming Stripe has no general-purpose batch/bulk write endpoint for in-scope core resources -- every Create/Update/Delete operation is single-resource.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.BulkOperationsAvailable",
+      "Excerpt": "Path enumeration across spec3.sdk.json's 414 paths for the 33 in-scope resources found no /batch or bulk-create/update/delete path family (distinct from the Imports/Sigma/Reporting out-of-scope bulk-data products); each in-scope Create/Update/Delete path addresses exactly one resource id."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.sdk.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming the universal `id` primary-key contract and the absence of any documented/guaranteed ID-prefix scheme, used to justify the Configuration.universalPK hint.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.universalPK",
+      "Excerpt": "Every in-scope top-level resource schema (customer, charge, payment_intent, ... 33 total) declares: id: {type:'string', description:'Unique identifier for the object.'} as a required property, plus object: {enum:['<resource name>']}. Confirmed identically across all 33 in-scope component schemas via a walking script (sources/stripe-extraction-v2.json)."
+    },
+    {
+      "URL": "https://gist.github.com/fnky/76f533366f75cf75802c8052058f8e2b",
+      "AccessedAt": "2026-07-02T19:00:00.000Z",
+      "UsedFor": "Negative-evidence citation: Stripe explicitly disclaims a canonical/contractual ID-prefix list, confirming why prefixes (cus_, ch_, etc.) are NOT encoded as a structural constraint in Configuration.universalPK.",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "integration.Configuration.universalPK",
+      "Excerpt": "Community-compiled ID-prefix reference explicitly notes Stripe support's own statement that there is no canonical list, internally or externally, of object ID prefixes, and that Stripe considers adding/removing a fixed prefix a backwards-compatible change. Retained only as corroborating negative evidence (per SOURCE_STUDY.md S8) -- not used as a source for any hard constraint."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Per-object Delete-verb presence/absence across all 33 in-scope schemas, used to set the mixed Configuration.DeleteSemantics value (hard delete on 10 named objects, soft/deactivate-only on price, none on the remaining 22).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DeleteSemantics",
+      "Excerpt": "DELETE operation present (paths.*.delete key exists) for: /v1/customers/{customer}, /v1/products/{id}, /v1/plans/{plan}, /v1/subscriptions/{subscription_exposed_id}, /v1/subscription_items/{item}, /v1/invoices/{invoice}, /v1/invoiceitems/{invoiceitem}, /v1/coupons/{coupon}, /v1/accounts/{account}, /v1/accounts/{account}/persons/{person}. DELETE absent (no delete key) for all other 22 in-scope resources including /v1/prices/{price} (price is deactivated via POST update {active:false}, never deleted)."
+    },
+    {
+      "URL": "https://docs.stripe.com/rate-limits",
+      "AccessedAt": "2026-07-02T19:00:00.000Z",
+      "UsedFor": "Confirming Stripe's documented per-account rate limit used to populate BatchMaxRequestCount / BatchRequestWaitTime and Configuration.RateLimitPolicy.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "In live mode, your account can send 100 requests per second... In sandboxes (test mode), the limit is 25 requests per second. If you exceed this, Stripe returns a 429 error with a Stripe-Rate-Limited-Reason header identifying which limit (global-rate, endpoint-rate, global-concurrency, endpoint-concurrency, resource-specific) was breached. Documented per-resource overrides include Payment Intents (1000 updates per PI per hour), Subscriptions (10 new invoices per subscription per minute, 20 per day), Payouts (15 creates per second), and the Files API (20 read+write requests per second)."
+    },
+    {
+      "URL": "https://docs.stripe.com/rate-limits",
+      "AccessedAt": "2026-07-02T19:00:00.000Z",
+      "UsedFor": "Confirming Stripe's documented per-account rate limit used to populate BatchMaxRequestCount / BatchRequestWaitTime and Configuration.RateLimitPolicy.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "In live mode, your account can send 100 requests per second... In sandboxes (test mode), the limit is 25 requests per second. If you exceed this, Stripe returns a 429 error with a Stripe-Rate-Limited-Reason header identifying which limit (global-rate, endpoint-rate, global-concurrency, endpoint-concurrency, resource-specific) was breached. Documented per-resource overrides include Payment Intents (1000 updates per PI per hour), Subscriptions (10 new invoices per subscription per minute, 20 per day), Payouts (15 creates per second), and the Files API (20 read+write requests per second)."
+    },
+    {
+      "URL": "https://docs.stripe.com/rate-limits",
+      "AccessedAt": "2026-07-02T19:00:00.000Z",
+      "UsedFor": "Confirming Stripe's documented per-account rate limit used to populate BatchMaxRequestCount / BatchRequestWaitTime and Configuration.RateLimitPolicy.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.RateLimitPolicy",
+      "Excerpt": "In live mode, your account can send 100 requests per second... In sandboxes (test mode), the limit is 25 requests per second. If you exceed this, Stripe returns a 429 error with a Stripe-Rate-Limited-Reason header identifying which limit (global-rate, endpoint-rate, global-concurrency, endpoint-concurrency, resource-specific) was breached. Documented per-resource overrides include Payment Intents (1000 updates per PI per hour), Subscriptions (10 new invoices per subscription per minute, 20 per day), Payouts (15 creates per second), and the Files API (20 read+write requests per second)."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming API-key bearer auth shape (Authorization: Bearer sk_...) and the absence of any OAuth2 authorization-code/client-credentials scheme for the direct secret-key integration model.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "components.securitySchemes.bearer_auth: {type: 'http', scheme: 'bearer'} applied as the global `security` requirement on every operation. No OAuth2 flows (authorizationCode/clientCredentials) are declared anywhere in the spec's securitySchemes for the direct API. Secret keys (sk_live_/sk_test_) are the credential; they are long-lived with no expiry/refresh mechanism in the standard API-key model."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming API-key bearer auth shape (Authorization: Bearer sk_...) and the absence of any OAuth2 authorization-code/client-credentials scheme for the direct secret-key integration model.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthHeaderPattern",
+      "Excerpt": "components.securitySchemes.bearer_auth: {type: 'http', scheme: 'bearer'} applied as the global `security` requirement on every operation. No OAuth2 flows (authorizationCode/clientCredentials) are declared anywhere in the spec's securitySchemes for the direct API. Secret keys (sk_live_/sk_test_) are the credential; they are long-lived with no expiry/refresh mechanism in the standard API-key model."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming API-key bearer auth shape (Authorization: Bearer sk_...) and the absence of any OAuth2 authorization-code/client-credentials scheme for the direct secret-key integration model.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.TokenRefreshStrategy",
+      "Excerpt": "components.securitySchemes.bearer_auth: {type: 'http', scheme: 'bearer'} applied as the global `security` requirement on every operation. No OAuth2 flows (authorizationCode/clientCredentials) are declared anywhere in the spec's securitySchemes for the direct API. Secret keys (sk_live_/sk_test_) are the credential; they are long-lived with no expiry/refresh mechanism in the standard API-key model."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming the exact response-envelope key ('data') and the byte-identical prose bound on the `limit` parameter (1-100, default 10) repeated across all 30 checked list endpoints.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "parameters[name=limit].description (identical across /v1/customers, /v1/charges, /v1/invoices, ... 30 endpoints checked): 'A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 10.' components.schemas.list.properties.data: {type: 'array'}; components.schemas.list.properties.has_more: {type:'boolean'}; required:[data,has_more,object,url]."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.sdk.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming Stripe has no ETag / If-Match / If-Unmodified-Since precondition header or document-level version field documented for in-scope resources, used to set ConcurrencyControl=none and DefaultConflictResolution=Manual.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ConcurrencyControl",
+      "Excerpt": "No parameter named If-Match, If-Unmodified-Since, ETag, or a response header of that kind is declared on any Update operation across the 33 in-scope schemas; no schema property represents an opaque version/revision token for optimistic-concurrency comparison."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.sdk.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming Stripe has no ETag / If-Match / If-Unmodified-Since precondition header or document-level version field documented for in-scope resources, used to set ConcurrencyControl=none and DefaultConflictResolution=Manual.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DefaultConflictResolution",
+      "Excerpt": "No parameter named If-Match, If-Unmodified-Since, ETag, or a response header of that kind is declared on any Update operation across the 33 in-scope schemas; no schema property represents an opaque version/revision token for optimistic-concurrency comparison."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.sdk.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming Stripe has no per-object custom-object naming convention (no equivalent to a customer-defined object marker) and that the generic `metadata` Hash field is the universal customer-defined-data extension point on every in-scope resource.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.CustomObjectMarkerPattern",
+      "Excerpt": "Every in-scope resource schema declares a `metadata: {type:'object', additionalProperties:{type:'string'}}` (Hash) property with description text describing it as a place to store additional structured information; no resource schema in the spec declares a customer-namespaced object-name convention analogous to HubSpot's p_<accountID>_<name> pattern."
+    }
+  ]
+}

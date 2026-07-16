@@ -1,0 +1,98 @@
+[
+  {
+    "ioName": "ResourceLibraryDocuments",
+    "iof": {
+      "Name": "LibraryKey",
+      "Type": "String",
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ResourceLibraryLibraries&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "LibraryKey",
+      "Configuration": {
+        "ReferencedType": "ResourceLibraryLibraries"
+      }
+    }
+  },
+  {
+    "ioName": "DocumentAttachments",
+    "iof": {
+      "Name": "DocumentKey",
+      "Type": "String",
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ResourceLibraryDocuments&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "DocumentKey",
+      "Configuration": {
+        "ReferencedType": "ResourceLibraryDocuments"
+      }
+    }
+  },
+  {
+    "ioName": "EventSessions",
+    "iof": {
+      "Name": "EventSessionCategoryKey",
+      "Type": "String",
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=EventSessions&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "EventSessionKey",
+      "Configuration": {
+        "ReferencedType": "EventSessions"
+      }
+    }
+  },
+  {
+    "ioName": "EventSessions",
+    "iof": {
+      "Name": "CreatedByContactKey",
+      "Type": "String",
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "ContactKey",
+      "Configuration": {
+        "ReferencedType": "Contacts"
+      }
+    }
+  },
+  {
+    "ioName": "EventSessions",
+    "iof": {
+      "Name": "UpdatedByContactKey",
+      "Type": "String",
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "ContactKey",
+      "Configuration": {
+        "ReferencedType": "Contacts"
+      }
+    }
+  },
+  {
+    "ioName": "Communities",
+    "iof": {
+      "Name": "ParentCommunityKey",
+      "Type": "String",
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Communities&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "CommunityKey",
+      "Configuration": {
+        "ReferencedType": "Communities"
+      }
+    }
+  },
+  {
+    "ioName": "CommunityMembers",
+    "iof": {
+      "Name": "InvitedByContactKey",
+      "Type": "String",
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "ContactKey",
+      "Configuration": {
+        "ReferencedType": "Contacts"
+      }
+    }
+  },
+  {
+    "ioName": "Volunteers",
+    "iof": {
+      "Name": "AdjustedByContactKey",
+      "Type": "String",
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "ContactKey",
+      "Configuration": {
+        "ReferencedType": "Contacts"
+      }
+    }
+  }
+]

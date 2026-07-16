@@ -1,0 +1,32 @@
+[
+  {
+    "URL": "https://developer.constantcontact.com/api_guide/server_flow.html",
+    "AccessedAt": "2026-07-13T19:58:42.000Z",
+    "UsedFor": "Confirming the Authorization request header format used on every authenticated V3 API call, for integration.Configuration.AuthHeaderPattern",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "integration.Configuration.AuthHeaderPattern",
+    "Excerpt": "After verifying the access token claims and signature, use the access token to send requests in the V3 API by adding it to the Authorization request header in the format Authorization: Bearer {your_access_token}."
+  },
+  {
+    "URL": "https://developer.constantcontact.com/api_guide/v3_technical_overview.html",
+    "AccessedAt": "2026-07-13T19:58:42.000Z",
+    "UsedFor": "Corroborating the Authorization header format via the required-headers table, for integration.Configuration.AuthHeaderPattern",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "integration.Configuration.AuthHeaderPattern",
+    "Excerpt": "Header: Authorization | Accepted Values: Bearer {access_token} | Comment: The access_token generated during the grant access leg of the OAuth2 flow"
+  },
+  {
+    "URL": "https://developer.constantcontact.com/api_guide/rate_limits.html",
+    "AccessedAt": "2026-07-13T19:58:42.000Z",
+    "UsedFor": "Same 429 body evidence already cited for RateLimitPolicy, additionally targeting integration.Configuration.ErrorResponseShape's 429-specific body shape (previously uncited under this TargetField)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "integration.Configuration.ErrorResponseShape",
+    "Excerpt": "If you exceed the 10,000 request per day quota the response body is: {\"error_key\":\"quota_exceeded\",\"error_message\":\"Limit Exceeded\"} If you exceed the rate of 4 requests per second the response body is: {\"error_key\":\"throttled\",\"error_message\":\"Too Many Requests\"}"
+  }
+]

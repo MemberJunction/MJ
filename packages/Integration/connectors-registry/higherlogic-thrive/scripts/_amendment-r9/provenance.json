@@ -1,0 +1,62 @@
+[
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T02:04:18.577Z",
+    "UsedFor": "Volunteers.SupportsWrite — reaffirm read-only (VolunteerForOpportunity is an identity-implicit RPC action on the parent VolunteerOpportunity, not per-record CRUD)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsWrite",
+    "Excerpt": "POST VolunteerForOpportunity/{volunteerOpportunityKey}: enrolls the CURRENT user; response resource is the parent VolunteerOpportunity, not a distinct keyed registration record — out-of-scope for generic per-record Create. FINAL standing operator decision."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html",
+    "AccessedAt": "2026-07-10T02:04:18.577Z",
+    "UsedFor": "Volunteers.SupportsUpdate — reaffirm read-only (ApproveVolunteerApplication is an identity-implicit RPC action, not per-record Update)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsUpdate",
+    "Excerpt": "POST ApproveVolunteerApplication: admin approval action; no distinct keyed registration record returned — not generic per-record Update."
+  },
+  {
+    "URL": "file://sources/ops/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T02:04:18.577Z",
+    "UsedFor": "Volunteers.SupportsDelete — reaffirm read-only (WithdrawFromOpportunity is an identity-implicit RPC action, not per-record Delete)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsDelete",
+    "Excerpt": "DELETE WithdrawFromOpportunity/{volunteerOpportunityKey}: withdraws the CURRENT user; identity-implicit action, not a keyed per-record Delete. Same shape/resolution as EventRegistrants (round 3)."
+  },
+  {
+    "URL": "file://sources/ops/GET-api-v2.0-Demographics-GetDemographicChoices_demographicTypeKey.html",
+    "AccessedAt": "2026-07-10T02:04:18.577Z",
+    "UsedFor": "DemographicChoices.DemographicTypeKey — scalar FK flattened from nested DemographicType.DemographicTypeKey → DemographicTypes",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.DemographicChoices.DemographicTypeKey.RelatedIntegrationObjectID",
+    "Excerpt": "GetDemographicChoices response nests DemographicType { DemographicTypeKey }; flattened to a scalar FK field targeting DemographicTypes (pattern mirrors BlogComments.ItemKey / DocumentAttachments.DocumentKey)."
+  },
+  {
+    "URL": "file://sources/ops/GET-api-v2.0-Volunteer-GetVolunteerList_volunteerOpportunityKey.html",
+    "AccessedAt": "2026-07-10T02:04:18.577Z",
+    "UsedFor": "Volunteers.VolunteerContactKey — scalar FK flattened from nested VolunteerContact.ContactKey → Contacts",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Volunteers.VolunteerContactKey.RelatedIntegrationObjectID",
+    "Excerpt": "GetVolunteerList response nests VolunteerContact { ContactKey } (the volunteering member); flattened to a scalar FK targeting Contacts, consistent with the 4 other ContactKey FKs on this IO."
+  },
+  {
+    "URL": "file://sources/ops/GET-api-v2.0-EventSessions-GetSession_sessionKey.html",
+    "AccessedAt": "2026-07-10T02:04:18.577Z",
+    "UsedFor": "EventSessions.EventSessionCategoryKey — CLEAR incorrect self-FK; identifies a session-category/track grouping, no EventSessionCategories object to target",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.EventSessions.EventSessionCategoryKey.RelatedIntegrationObjectID",
+    "Excerpt": "EventSessionCategoryKey names a session-category/track grouping, NOT another EventSession record. No EventSessionCategories object exists in the 34-leaf taxonomy; leave FK-less (matching sibling CategoryKey, already unresolved)."
+  }
+]

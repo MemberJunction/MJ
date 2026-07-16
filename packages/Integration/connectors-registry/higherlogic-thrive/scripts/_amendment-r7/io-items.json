@@ -1,0 +1,26 @@
+[
+  {
+    "io": {
+      "Name": "EventTypes",
+      "APIPath": "/v2.0/Events/GetEventTypes"
+    }
+  },
+  {
+    "io": {
+      "Name": "ResourceLibraryDocuments",
+      "APIPath": "/v2.0/ResourceLibrary/GetLibraryDocuments"
+    }
+  },
+  {
+    "io": {
+      "Name": "Contacts",
+      "Description": "Contact — If no afterContactKey or beforeContactKey is provided, returns the first page of Contacts based on the limit provided, ordered by LastName, FirstName."
+    }
+  },
+  {
+    "io": {
+      "Name": "Communities",
+      "Description": "Community — Returns a list of the Current User's joined Communities."
+    }
+  }
+]

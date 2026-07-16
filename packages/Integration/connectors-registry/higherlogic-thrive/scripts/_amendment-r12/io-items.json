@@ -1,0 +1,16 @@
+[
+  {
+    "ioName": "Volunteers",
+    "io": {
+      "Name": "Volunteers",
+      "SupportsUpdate": false,
+      "UpdateAPIPath": null,
+      "UpdateMethod": null,
+      "UpdateBodyShape": null,
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": null,
+      "SupportsWrite": true,
+      "AdditionalObservations": "ApproveVolunteerApplication (POST /v2.0/Volunteer/ApproveVolunteerApplication) exists as an admin-approval RPC action on Volunteers but is intentionally NOT modeled as generic Update — its body ({VolunteerOpportunityKey, ContactKey, LegacyContactKey}) doesn't match this object's field set and carries no settable field value, only an implicit approve/reject side-effect baked into the endpoint name."
+    }
+  }
+]

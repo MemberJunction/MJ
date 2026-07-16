@@ -1,0 +1,5843 @@
+{
+  "coverable": [
+    "account",
+    "application_fee",
+    "balance_transaction",
+    "capability",
+    "charge",
+    "checkout.session",
+    "coupon",
+    "credit_note",
+    "customer",
+    "dispute",
+    "event",
+    "external_account",
+    "invoice",
+    "invoiceitem",
+    "payment_intent",
+    "payment_link",
+    "payment_method",
+    "payout",
+    "person",
+    "plan",
+    "price",
+    "product",
+    "promotion_code",
+    "quote",
+    "refund",
+    "setup_intent",
+    "source",
+    "subscription",
+    "subscription_item",
+    "tax_rate",
+    "token",
+    "topup",
+    "transfer"
+  ],
+  "deletedVariantFolded": [
+    "deleted_account",
+    "deleted_coupon",
+    "deleted_customer",
+    "deleted_external_account",
+    "deleted_invoice",
+    "deleted_invoiceitem",
+    "deleted_person",
+    "deleted_plan",
+    "deleted_price",
+    "deleted_product",
+    "deleted_subscription_item"
+  ],
+  "outOfScopeFamily": {
+    "Apps/Secrets": [
+      "apps.secret"
+    ],
+    "Treasury": [
+      "bank_connections_resource_account_number_details",
+      "bank_connections_resource_account_status_details",
+      "bank_connections_resource_account_status_details_api_resource_active_status_details",
+      "bank_connections_resource_accountholder",
+      "bank_connections_resource_balance",
+      "bank_connections_resource_balance_api_resource_cash_balance",
+      "bank_connections_resource_balance_api_resource_credit_balance",
+      "bank_connections_resource_balance_refresh",
+      "bank_connections_resource_link_account_session_filters",
+      "bank_connections_resource_ownership_refresh",
+      "bank_connections_resource_transaction_refresh",
+      "bank_connections_resource_transaction_resource_status_transitions",
+      "treasury.credit_reversal",
+      "treasury.credit_reversal.created",
+      "treasury.credit_reversal.posted",
+      "treasury.debit_reversal",
+      "treasury.debit_reversal.completed",
+      "treasury.debit_reversal.created",
+      "treasury.debit_reversal.initial_credit_granted",
+      "treasury.financial_account",
+      "treasury.financial_account.closed",
+      "treasury.financial_account.created",
+      "treasury.financial_account.features_status_updated",
+      "treasury.financial_account_features",
+      "treasury.inbound_transfer",
+      "treasury.inbound_transfer.canceled",
+      "treasury.inbound_transfer.created",
+      "treasury.inbound_transfer.failed",
+      "treasury.inbound_transfer.succeeded",
+      "treasury.outbound_payment",
+      "treasury.outbound_payment.canceled",
+      "treasury.outbound_payment.created",
+      "treasury.outbound_payment.expected_arrival_date_updated",
+      "treasury.outbound_payment.failed",
+      "treasury.outbound_payment.posted",
+      "treasury.outbound_payment.returned",
+      "treasury.outbound_payment.tracking_details_updated",
+      "treasury.outbound_transfer",
+      "treasury.outbound_transfer.canceled",
+      "treasury.outbound_transfer.created",
+      "treasury.outbound_transfer.expected_arrival_date_updated",
+      "treasury.outbound_transfer.failed",
+      "treasury.outbound_transfer.posted",
+      "treasury.outbound_transfer.returned",
+      "treasury.outbound_transfer.tracking_details_updated",
+      "treasury.received_credit",
+      "treasury.received_credit.created",
+      "treasury.received_credit.failed",
+      "treasury.received_credit.succeeded",
+      "treasury.received_debit",
+      "treasury.received_debit.created",
+      "treasury.transaction",
+      "treasury.transaction_entry",
+      "treasury_financial_accounts_resource_aba_record",
+      "treasury_financial_accounts_resource_aba_toggle_settings",
+      "treasury_financial_accounts_resource_balance",
+      "treasury_financial_accounts_resource_closed_status_details",
+      "treasury_financial_accounts_resource_financial_address",
+      "treasury_financial_accounts_resource_financial_addresses_features",
+      "treasury_financial_accounts_resource_inbound_ach_toggle_settings",
+      "treasury_financial_accounts_resource_inbound_transfers",
+      "treasury_financial_accounts_resource_outbound_ach_toggle_settings",
+      "treasury_financial_accounts_resource_outbound_payments",
+      "treasury_financial_accounts_resource_outbound_transfers",
+      "treasury_financial_accounts_resource_platform_restrictions",
+      "treasury_financial_accounts_resource_status_details",
+      "treasury_financial_accounts_resource_toggle_settings",
+      "treasury_financial_accounts_resource_toggles_setting_status_details",
+      "treasury_inbound_transfers_resource_failure_details",
+      "treasury_inbound_transfers_resource_inbound_transfer_resource_linked_flows",
+      "treasury_inbound_transfers_resource_inbound_transfer_resource_status_transitions",
+      "treasury_outbound_payments_resource_ach_tracking_details",
+      "treasury_outbound_payments_resource_outbound_payment_resource_end_user_details",
+      "treasury_outbound_payments_resource_outbound_payment_resource_status_transitions",
+      "treasury_outbound_payments_resource_outbound_payment_resource_tracking_details",
+      "treasury_outbound_payments_resource_returned_status",
+      "treasury_outbound_payments_resource_us_domestic_wire_tracking_details",
+      "treasury_outbound_transfers_resource_ach_tracking_details",
+      "treasury_outbound_transfers_resource_outbound_transfer_resource_tracking_details",
+      "treasury_outbound_transfers_resource_returned_details",
+      "treasury_outbound_transfers_resource_status_transitions",
+      "treasury_outbound_transfers_resource_us_domestic_wire_tracking_details",
+      "treasury_received_credits_resource_linked_flows",
+      "treasury_received_credits_resource_reversal_details",
+      "treasury_received_credits_resource_source_flows_details",
+      "treasury_received_credits_resource_status_transitions",
+      "treasury_received_debits_resource_debit_reversal_linked_flows",
+      "treasury_received_debits_resource_linked_flows",
+      "treasury_received_debits_resource_reversal_details",
+      "treasury_received_debits_resource_status_transitions",
+      "treasury_shared_resource_billing_details",
+      "treasury_shared_resource_initiating_payment_method_details_initiating_payment_method_details",
+      "treasury_shared_resource_initiating_payment_method_details_us_bank_account",
+      "treasury_transactions_resource_abstract_transaction_resource_status_transitions",
+      "treasury_transactions_resource_balance_impact",
+      "treasury_transactions_resource_flow_details"
+    ],
+    "Billing Portal": [
+      "billing_portal.configuration",
+      "billing_portal.configuration.created",
+      "billing_portal.configuration.updated",
+      "billing_portal.session",
+      "billing_portal.session.created"
+    ],
+    "Climate": [
+      "climate.order",
+      "climate.order.canceled",
+      "climate.order.created",
+      "climate.order.delayed",
+      "climate.order.delivered",
+      "climate.order.product_substituted",
+      "climate.product",
+      "climate.product.created",
+      "climate.product.pricing_updated",
+      "climate.supplier",
+      "climate_removals_beneficiary",
+      "climate_removals_location",
+      "climate_removals_order_deliveries",
+      "climate_removals_products_price"
+    ],
+    "Radar": [
+      "deleted_radar.value_list",
+      "deleted_radar.value_list_item",
+      "radar.early_fraud_warning",
+      "radar.early_fraud_warning.created",
+      "radar.early_fraud_warning.updated",
+      "radar.payment_evaluation",
+      "radar.value_list",
+      "radar.value_list_item",
+      "radar_radar_options",
+      "radar_review_resource_location",
+      "radar_review_resource_session",
+      "review",
+      "review.closed",
+      "review.opened"
+    ],
+    "Terminal": [
+      "deleted_terminal.configuration",
+      "deleted_terminal.location",
+      "deleted_terminal.reader",
+      "terminal.configuration",
+      "terminal.connection_token",
+      "terminal.location",
+      "terminal.onboarding_link",
+      "terminal.reader",
+      "terminal.reader.action_failed",
+      "terminal.reader.action_succeeded",
+      "terminal.reader.action_updated",
+      "terminal_configuration_configuration_resource_cellular_config",
+      "terminal_configuration_configuration_resource_currency_specific_config",
+      "terminal_configuration_configuration_resource_device_type_specific_config",
+      "terminal_configuration_configuration_resource_enterprise_peap_wifi",
+      "terminal_configuration_configuration_resource_enterprise_tls_wifi",
+      "terminal_configuration_configuration_resource_offline_config",
+      "terminal_configuration_configuration_resource_personal_psk_wifi",
+      "terminal_configuration_configuration_resource_reboot_window",
+      "terminal_configuration_configuration_resource_tipping",
+      "terminal_configuration_configuration_resource_wifi_config",
+      "terminal_onboarding_link_apple_terms_and_conditions",
+      "terminal_onboarding_link_link_options",
+      "terminal_reader_reader_resource_cart",
+      "terminal_reader_reader_resource_choice",
+      "terminal_reader_reader_resource_collect_config",
+      "terminal_reader_reader_resource_collect_inputs_action",
+      "terminal_reader_reader_resource_collect_payment_method_action",
+      "terminal_reader_reader_resource_confirm_config",
+      "terminal_reader_reader_resource_confirm_payment_intent_action",
+      "terminal_reader_reader_resource_custom_text",
+      "terminal_reader_reader_resource_email",
+      "terminal_reader_reader_resource_file_metadata",
+      "terminal_reader_reader_resource_input",
+      "terminal_reader_reader_resource_line_item",
+      "terminal_reader_reader_resource_numeric",
+      "terminal_reader_reader_resource_phone",
+      "terminal_reader_reader_resource_print_content",
+      "terminal_reader_reader_resource_process_config",
+      "terminal_reader_reader_resource_process_payment_intent_action",
+      "terminal_reader_reader_resource_process_setup_config",
+      "terminal_reader_reader_resource_process_setup_intent_action",
+      "terminal_reader_reader_resource_reader_action",
+      "terminal_reader_reader_resource_refund_payment_action",
+      "terminal_reader_reader_resource_refund_payment_config",
+      "terminal_reader_reader_resource_selection",
+      "terminal_reader_reader_resource_set_reader_display_action",
+      "terminal_reader_reader_resource_signature",
+      "terminal_reader_reader_resource_text",
+      "terminal_reader_reader_resource_tipping_config",
+      "terminal_reader_reader_resource_toggle"
+    ],
+    "Test Helpers": [
+      "deleted_test_helpers.test_clock",
+      "test_helpers.test_clock",
+      "test_helpers.test_clock.advancing",
+      "test_helpers.test_clock.created",
+      "test_helpers.test_clock.deleted",
+      "test_helpers.test_clock.internal_failure",
+      "test_helpers.test_clock.ready"
+    ],
+    "Entitlements": [
+      "entitlements.active_entitlement",
+      "entitlements.active_entitlement_summary",
+      "entitlements.active_entitlement_summary.updated",
+      "entitlements.feature"
+    ],
+    "Files": [
+      "file",
+      "file_link"
+    ],
+    "Financial Connections": [
+      "financial_connections.account",
+      "financial_connections.account.account_numbers_updated",
+      "financial_connections.account.created",
+      "financial_connections.account.deactivated",
+      "financial_connections.account.disconnected",
+      "financial_connections.account.reactivated",
+      "financial_connections.account.refreshed_balance",
+      "financial_connections.account.refreshed_ownership",
+      "financial_connections.account.refreshed_transactions",
+      "financial_connections.account.upcoming_account_number_expiry",
+      "financial_connections.account_owner",
+      "financial_connections.account_ownership",
+      "financial_connections.session",
+      "financial_connections.transaction",
+      "linked_account_options_common"
+    ],
+    "Forwarding": [
+      "forwarding.request"
+    ],
+    "Identity": [
+      "identity.verification_report",
+      "identity.verification_session",
+      "identity.verification_session.canceled",
+      "identity.verification_session.created",
+      "identity.verification_session.processing",
+      "identity.verification_session.redacted",
+      "identity.verification_session.requires_input",
+      "identity.verification_session.verified"
+    ],
+    "Issuing": [
+      "issuing.authorization",
+      "issuing.card",
+      "issuing.cardholder",
+      "issuing.dispute",
+      "issuing.personalization_design",
+      "issuing.physical_bundle",
+      "issuing.token",
+      "issuing.transaction",
+      "issuing_authorization.created",
+      "issuing_authorization.request",
+      "issuing_authorization.updated",
+      "issuing_authorization_amount_details",
+      "issuing_authorization_authentication_exemption",
+      "issuing_authorization_fleet_cardholder_prompt_data",
+      "issuing_authorization_fleet_data",
+      "issuing_authorization_fleet_fuel_price_data",
+      "issuing_authorization_fleet_non_fuel_price_data",
+      "issuing_authorization_fleet_reported_breakdown",
+      "issuing_authorization_fleet_tax_data",
+      "issuing_authorization_fraud_challenge",
+      "issuing_authorization_fuel_data",
+      "issuing_authorization_merchant_data",
+      "issuing_authorization_network_data",
+      "issuing_authorization_pending_request",
+      "issuing_authorization_request",
+      "issuing_authorization_three_d_secure",
+      "issuing_authorization_treasury",
+      "issuing_authorization_verification_data",
+      "issuing_card.created",
+      "issuing_card.updated",
+      "issuing_card_apple_pay",
+      "issuing_card_authorization_controls",
+      "issuing_card_fraud_warning",
+      "issuing_card_google_pay",
+      "issuing_card_lifecycle_conditions",
+      "issuing_card_lifecycle_controls",
+      "issuing_card_shipping",
+      "issuing_card_shipping_address_validation",
+      "issuing_card_shipping_customs",
+      "issuing_card_spending_limit",
+      "issuing_card_wallets",
+      "issuing_cardholder.created",
+      "issuing_cardholder.updated",
+      "issuing_cardholder_address",
+      "issuing_cardholder_authorization_controls",
+      "issuing_cardholder_card_issuing",
+      "issuing_cardholder_company",
+      "issuing_cardholder_id_document",
+      "issuing_cardholder_individual",
+      "issuing_cardholder_individual_dob",
+      "issuing_cardholder_requirements",
+      "issuing_cardholder_spending_limit",
+      "issuing_cardholder_user_terms_acceptance",
+      "issuing_cardholder_verification",
+      "issuing_dispute.closed",
+      "issuing_dispute.created",
+      "issuing_dispute.funds_reinstated",
+      "issuing_dispute.funds_rescinded",
+      "issuing_dispute.submitted",
+      "issuing_dispute.updated",
+      "issuing_dispute_canceled_evidence",
+      "issuing_dispute_duplicate_evidence",
+      "issuing_dispute_evidence",
+      "issuing_dispute_fraudulent_evidence",
+      "issuing_dispute_merchandise_not_as_described_evidence",
+      "issuing_dispute_no_valid_authorization_evidence",
+      "issuing_dispute_not_received_evidence",
+      "issuing_dispute_other_evidence",
+      "issuing_dispute_service_not_as_described_evidence",
+      "issuing_dispute_treasury",
+      "issuing_network_token_address",
+      "issuing_network_token_device",
+      "issuing_network_token_mastercard",
+      "issuing_network_token_network_data",
+      "issuing_network_token_visa",
+      "issuing_network_token_wallet_provider",
+      "issuing_personalization_design.activated",
+      "issuing_personalization_design.deactivated",
+      "issuing_personalization_design.rejected",
+      "issuing_personalization_design.updated",
+      "issuing_personalization_design_carrier_text",
+      "issuing_personalization_design_preferences",
+      "issuing_personalization_design_rejection_reasons",
+      "issuing_physical_bundle_features",
+      "issuing_token.created",
+      "issuing_token.updated",
+      "issuing_transaction.created",
+      "issuing_transaction.purchase_details_receipt_updated",
+      "issuing_transaction.updated",
+      "issuing_transaction_amount_details",
+      "issuing_transaction_fleet_cardholder_prompt_data",
+      "issuing_transaction_fleet_data",
+      "issuing_transaction_fleet_fuel_price_data",
+      "issuing_transaction_fleet_non_fuel_price_data",
+      "issuing_transaction_fleet_reported_breakdown",
+      "issuing_transaction_fleet_tax_data",
+      "issuing_transaction_flight_data",
+      "issuing_transaction_flight_data_leg",
+      "issuing_transaction_fuel_data",
+      "issuing_transaction_lodging_data",
+      "issuing_transaction_network_data",
+      "issuing_transaction_purchase_details",
+      "issuing_transaction_receipt_data",
+      "issuing_transaction_treasury"
+    ],
+    "Reporting": [
+      "reporting.report_run",
+      "reporting.report_run.failed",
+      "reporting.report_run.succeeded",
+      "reporting.report_type",
+      "reporting.report_type.updated"
+    ],
+    "Sigma": [
+      "sigma.scheduled_query_run.created",
+      "sigma_scheduled_query_run_error"
+    ],
+    "Tax": [
+      "tax.association",
+      "tax.calculation",
+      "tax.calculation_line_item",
+      "tax.registration",
+      "tax.settings",
+      "tax.settings.updated",
+      "tax.transaction",
+      "tax.transaction_line_item",
+      "tax_code",
+      "tax_deducted_at_source",
+      "tax_i_ds_owner",
+      "tax_id",
+      "tax_id_verification",
+      "tax_product_registrations_resource_country_options",
+      "tax_product_registrations_resource_country_options_ca_province_standard",
+      "tax_product_registrations_resource_country_options_canada",
+      "tax_product_registrations_resource_country_options_default",
+      "tax_product_registrations_resource_country_options_default_inbound_goods",
+      "tax_product_registrations_resource_country_options_default_standard",
+      "tax_product_registrations_resource_country_options_eu_standard",
+      "tax_product_registrations_resource_country_options_europe",
+      "tax_product_registrations_resource_country_options_simplified",
+      "tax_product_registrations_resource_country_options_thailand",
+      "tax_product_registrations_resource_country_options_united_states",
+      "tax_product_registrations_resource_country_options_us_local_amusement_tax",
+      "tax_product_registrations_resource_country_options_us_local_lease_tax",
+      "tax_product_registrations_resource_country_options_us_state_sales_tax",
+      "tax_product_registrations_resource_country_options_us_state_sales_tax_election",
+      "tax_product_resource_customer_details",
+      "tax_product_resource_customer_details_resource_tax_id",
+      "tax_product_resource_jurisdiction",
+      "tax_product_resource_line_item_tax_breakdown",
+      "tax_product_resource_line_item_tax_rate_details",
+      "tax_product_resource_postal_address",
+      "tax_product_resource_ship_from_details",
+      "tax_product_resource_tax_association_transaction_attempts",
+      "tax_product_resource_tax_association_transaction_attempts_resource_committed",
+      "tax_product_resource_tax_association_transaction_attempts_resource_errored",
+      "tax_product_resource_tax_breakdown",
+      "tax_product_resource_tax_calculation_shipping_cost",
+      "tax_product_resource_tax_rate_details",
+      "tax_product_resource_tax_settings_defaults",
+      "tax_product_resource_tax_settings_head_office",
+      "tax_product_resource_tax_settings_status_details",
+      "tax_product_resource_tax_settings_status_details_resource_active",
+      "tax_product_resource_tax_settings_status_details_resource_pending",
+      "tax_product_resource_tax_transaction_line_item_resource_reversal",
+      "tax_product_resource_tax_transaction_resource_reversal",
+      "tax_product_resource_tax_transaction_shipping_cost"
+    ],
+    "Webhook Endpoints (mgmt)": [
+      "webhook_endpoint"
+    ]
+  },
+  "informational": [
+    "api_errors",
+    "error"
+  ],
+  "webhookEventNames": [
+    "account.application.authorized",
+    "account.application.deauthorized",
+    "account.external_account.created",
+    "account.external_account.deleted",
+    "account.external_account.updated",
+    "account.updated",
+    "application_fee.created",
+    "application_fee.refund.updated",
+    "application_fee.refunded",
+    "balance_settings.updated",
+    "billing.alert.triggered",
+    "billing.credit_balance_transaction.created",
+    "billing.credit_grant.created",
+    "billing.credit_grant.updated",
+    "billing.meter.created",
+    "billing.meter.deactivated",
+    "billing.meter.updated",
+    "capability.updated",
+    "charge.dispute.closed",
+    "charge.dispute.created",
+    "charge.dispute.updated",
+    "charge.expired",
+    "charge.failed",
+    "charge.pending",
+    "charge.refund.updated",
+    "charge.refunded",
+    "charge.succeeded",
+    "charge.updated",
+    "checkout.session.expired",
+    "coupon.created",
+    "coupon.deleted",
+    "coupon.updated",
+    "credit_note.created",
+    "credit_note.updated",
+    "credit_note.voided",
+    "customer.created",
+    "customer.deleted",
+    "customer.discount.created",
+    "customer.discount.deleted",
+    "customer.discount.updated",
+    "customer.source.created",
+    "customer.source.deleted",
+    "customer.source.updated",
+    "customer.subscription.created",
+    "customer.subscription.deleted",
+    "customer.subscription.trial_will_end",
+    "customer.subscription.updated",
+    "customer.tax_id.created",
+    "customer.tax_id.deleted",
+    "customer.tax_id.updated",
+    "customer.updated",
+    "customer_cash_balance_transaction.created",
+    "file.created",
+    "invoice.created",
+    "invoice.deleted",
+    "invoice.finalized",
+    "invoice.marked_uncollectible",
+    "invoice.paid",
+    "invoice.payment_action_required",
+    "invoice.payment_failed",
+    "invoice.sent",
+    "invoice.updated",
+    "invoice.voided",
+    "invoice_payment.paid",
+    "invoiceitem.created",
+    "invoiceitem.deleted",
+    "mandate.updated",
+    "payment_intent.canceled",
+    "payment_intent.created",
+    "payment_intent.payment_failed",
+    "payment_intent.processing",
+    "payment_intent.requires_action",
+    "payment_intent.succeeded",
+    "payment_link.created",
+    "payment_link.updated",
+    "payment_method.attached",
+    "payment_method.detached",
+    "payment_method.updated",
+    "payout.canceled",
+    "payout.created",
+    "payout.failed",
+    "payout.paid",
+    "payout.updated",
+    "person.created",
+    "person.deleted",
+    "person.updated",
+    "plan.created",
+    "plan.deleted",
+    "plan.updated",
+    "price.created",
+    "price.deleted",
+    "price.updated",
+    "product.created",
+    "product.deleted",
+    "product.updated",
+    "promotion_code.created",
+    "promotion_code.updated",
+    "quote.canceled",
+    "quote.created",
+    "quote.finalized",
+    "refund.created",
+    "refund.failed",
+    "refund.updated",
+    "reserve.hold.created",
+    "reserve.hold.updated",
+    "reserve.plan.created",
+    "reserve.plan.expired",
+    "reserve.plan.updated",
+    "reserve.release.created",
+    "setup_intent.canceled",
+    "setup_intent.created",
+    "setup_intent.requires_action",
+    "setup_intent.succeeded",
+    "source.canceled",
+    "source.failed",
+    "source.transaction.created",
+    "source.transaction.updated",
+    "subscription_schedule.canceled",
+    "subscription_schedule.created",
+    "subscription_schedule.updated",
+    "tax_rate.created",
+    "tax_rate.updated",
+    "topup.canceled",
+    "topup.created",
+    "topup.failed",
+    "topup.succeeded",
+    "transfer.created",
+    "transfer.updated"
+  ],
+  "subShapeOfCoverable": [
+    {
+      "name": "account_annual_revenue",
+      "reachableVia": [
+        "(transitive via account_business_profile)"
+      ]
+    },
+    {
+      "name": "account_bacs_debit_payments_settings",
+      "reachableVia": [
+        "(transitive via account_settings)"
+      ]
+    },
+    {
+      "name": "account_branding_settings",
+      "reachableVia": [
+        "(transitive via account_settings)"
+      ]
+    },
+    {
+      "name": "account_business_profile",
+      "reachableVia": [
+        "account"
+      ]
+    },
+    {
+      "name": "account_capabilities",
+      "reachableVia": [
+        "account"
+      ]
+    },
+    {
+      "name": "account_capability_future_requirements",
+      "reachableVia": [
+        "capability"
+      ]
+    },
+    {
+      "name": "account_capability_requirements",
+      "reachableVia": [
+        "capability"
+      ]
+    },
+    {
+      "name": "account_card_issuing_settings",
+      "reachableVia": [
+        "(transitive via account_settings)"
+      ]
+    },
+    {
+      "name": "account_card_payments_settings",
+      "reachableVia": [
+        "(transitive via account_settings)"
+      ]
+    },
+    {
+      "name": "account_dashboard_settings",
+      "reachableVia": [
+        "(transitive via account_settings)"
+      ]
+    },
+    {
+      "name": "account_decline_charge_on",
+      "reachableVia": [
+        "(transitive via account_card_payments_settings)"
+      ]
+    },
+    {
+      "name": "account_future_requirements",
+      "reachableVia": [
+        "account"
+      ]
+    },
+    {
+      "name": "account_group_membership",
+      "reachableVia": [
+        "account"
+      ]
+    },
+    {
+      "name": "account_invoices_settings",
+      "reachableVia": [
+        "(transitive via account_settings)"
+      ]
+    },
+    {
+      "name": "account_monthly_estimated_revenue",
+      "reachableVia": [
+        "(transitive via account_business_profile)"
+      ]
+    },
+    {
+      "name": "account_payments_settings",
+      "reachableVia": [
+        "(transitive via account_settings)"
+      ]
+    },
+    {
+      "name": "account_payout_settings",
+      "reachableVia": [
+        "(transitive via account_settings)"
+      ]
+    },
+    {
+      "name": "account_requirements",
+      "reachableVia": [
+        "account"
+      ]
+    },
+    {
+      "name": "account_requirements_alternative",
+      "reachableVia": [
+        "(transitive via account_future_requirements)"
+      ]
+    },
+    {
+      "name": "account_requirements_error",
+      "reachableVia": [
+        "(transitive via account_future_requirements)"
+      ]
+    },
+    {
+      "name": "account_sepa_debit_payments_settings",
+      "reachableVia": [
+        "(transitive via account_settings)"
+      ]
+    },
+    {
+      "name": "account_settings",
+      "reachableVia": [
+        "account"
+      ]
+    },
+    {
+      "name": "account_terms_of_service",
+      "reachableVia": [
+        "(transitive via account_treasury_settings)"
+      ]
+    },
+    {
+      "name": "account_tos_acceptance",
+      "reachableVia": [
+        "account"
+      ]
+    },
+    {
+      "name": "account_treasury_settings",
+      "reachableVia": [
+        "(transitive via account_settings)"
+      ]
+    },
+    {
+      "name": "account_unification_account_controller",
+      "reachableVia": [
+        "account"
+      ]
+    },
+    {
+      "name": "account_unification_account_controller_fees",
+      "reachableVia": [
+        "(transitive via account_unification_account_controller)"
+      ]
+    },
+    {
+      "name": "account_unification_account_controller_losses",
+      "reachableVia": [
+        "(transitive via account_unification_account_controller)"
+      ]
+    },
+    {
+      "name": "account_unification_account_controller_stripe_dashboard",
+      "reachableVia": [
+        "(transitive via account_unification_account_controller)"
+      ]
+    },
+    {
+      "name": "address",
+      "reachableVia": [
+        "customer",
+        "invoice",
+        "person"
+      ]
+    },
+    {
+      "name": "alma_installments",
+      "reachableVia": [
+        "(transitive via payment_method_details_alma)"
+      ]
+    },
+    {
+      "name": "amazon_pay_underlying_payment_method_funding_details",
+      "reachableVia": [
+        "(transitive via payment_method_details_amazon_pay)"
+      ]
+    },
+    {
+      "name": "application",
+      "reachableVia": [
+        "charge",
+        "payment_intent",
+        "setup_intent",
+        "subscription",
+        "invoice",
+        "quote",
+        "application_fee",
+        "payment_link"
+      ]
+    },
+    {
+      "name": "automatic_tax",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "balance_transaction_source",
+      "reachableVia": [
+        "balance_transaction"
+      ]
+    },
+    {
+      "name": "bank_account",
+      "reachableVia": [
+        "token"
+      ]
+    },
+    {
+      "name": "billing.credit_balance_transaction",
+      "reachableVia": [
+        "(transitive via invoices_resource_pretax_credit_amount)"
+      ]
+    },
+    {
+      "name": "billing.credit_grant",
+      "reachableVia": [
+        "(transitive via billing.credit_balance_transaction)"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoice_item_parents_invoice_item_parent",
+      "reachableVia": [
+        "invoiceitem"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoice_item_parents_invoice_item_subscription_parent",
+      "reachableVia": [
+        "(transitive via billing_bill_resource_invoice_item_parents_invoice_item_parent)"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoicing_lines_common_proration_details",
+      "reachableVia": [
+        "(transitive via billing_bill_resource_invoicing_lines_parents_invoice_line_item_invoice_item_parent)"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoicing_lines_parents_invoice_line_item_invoice_item_parent",
+      "reachableVia": [
+        "(transitive via billing_bill_resource_invoicing_lines_parents_invoice_line_item_parent)"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoicing_lines_parents_invoice_line_item_parent",
+      "reachableVia": [
+        "(transitive via line_item)"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoicing_lines_parents_invoice_line_item_subscription_item_parent",
+      "reachableVia": [
+        "(transitive via billing_bill_resource_invoicing_lines_parents_invoice_line_item_parent)"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoicing_parents_invoice_parent",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoicing_parents_invoice_quote_parent",
+      "reachableVia": [
+        "(transitive via billing_bill_resource_invoicing_parents_invoice_parent)"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoicing_parents_invoice_subscription_parent",
+      "reachableVia": [
+        "(transitive via billing_bill_resource_invoicing_parents_invoice_parent)"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoicing_pricing_pricing",
+      "reachableVia": [
+        "invoiceitem"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoicing_pricing_pricing_price_details",
+      "reachableVia": [
+        "(transitive via billing_bill_resource_invoicing_pricing_pricing)"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoicing_taxes_tax",
+      "reachableVia": [
+        "invoice",
+        "credit_note"
+      ]
+    },
+    {
+      "name": "billing_bill_resource_invoicing_taxes_tax_rate_details",
+      "reachableVia": [
+        "(transitive via billing_bill_resource_invoicing_taxes_tax)"
+      ]
+    },
+    {
+      "name": "billing_clocks_resource_status_details_advancing_status_details",
+      "reachableVia": [
+        "(transitive via billing_clocks_resource_status_details_status_details)"
+      ]
+    },
+    {
+      "name": "billing_clocks_resource_status_details_status_details",
+      "reachableVia": [
+        "(transitive via test_helpers.test_clock)"
+      ]
+    },
+    {
+      "name": "billing_credit_grants_resource_amount",
+      "reachableVia": [
+        "(transitive via billing_credit_grants_resource_balance_credit)"
+      ]
+    },
+    {
+      "name": "billing_credit_grants_resource_applicability_config",
+      "reachableVia": [
+        "(transitive via billing.credit_grant)"
+      ]
+    },
+    {
+      "name": "billing_credit_grants_resource_balance_credit",
+      "reachableVia": [
+        "(transitive via billing.credit_balance_transaction)"
+      ]
+    },
+    {
+      "name": "billing_credit_grants_resource_balance_credits_application_invoice_voided",
+      "reachableVia": [
+        "(transitive via billing_credit_grants_resource_balance_credit)"
+      ]
+    },
+    {
+      "name": "billing_credit_grants_resource_balance_credits_applied",
+      "reachableVia": [
+        "(transitive via billing_credit_grants_resource_balance_debit)"
+      ]
+    },
+    {
+      "name": "billing_credit_grants_resource_balance_debit",
+      "reachableVia": [
+        "(transitive via billing.credit_balance_transaction)"
+      ]
+    },
+    {
+      "name": "billing_details",
+      "reachableVia": [
+        "charge",
+        "payment_method"
+      ]
+    },
+    {
+      "name": "cancellation_details",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "card",
+      "reachableVia": [
+        "token"
+      ]
+    },
+    {
+      "name": "card_generated_from_payment_method_details",
+      "reachableVia": [
+        "(transitive via payment_method_card_generated_card)"
+      ]
+    },
+    {
+      "name": "card_issuing_account_terms_of_service",
+      "reachableVia": [
+        "(transitive via account_card_issuing_settings)"
+      ]
+    },
+    {
+      "name": "card_mandate_payment_method_details",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "cash_balance",
+      "reachableVia": [
+        "customer"
+      ]
+    },
+    {
+      "name": "charge_fraud_details",
+      "reachableVia": [
+        "charge"
+      ]
+    },
+    {
+      "name": "charge_outcome",
+      "reachableVia": [
+        "charge"
+      ]
+    },
+    {
+      "name": "charge_transfer_data",
+      "reachableVia": [
+        "charge"
+      ]
+    },
+    {
+      "name": "checkout_acss_debit_mandate_options",
+      "reachableVia": [
+        "(transitive via checkout_acss_debit_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_acss_debit_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_affirm_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_afterpay_clearpay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_alipay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_alma_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_amazon_pay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_au_becs_debit_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_bacs_debit_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_bancontact_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_billie_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_boleto_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_card_installments_options",
+      "reachableVia": [
+        "(transitive via checkout_card_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_card_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_cashapp_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_customer_balance_bank_transfer_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_customer_balance_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_customer_balance_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_eps_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_fpx_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_giropay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_grab_pay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_ideal_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_kakao_pay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_klarna_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_konbini_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_kr_card_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_link_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_link_wallet_options",
+      "reachableVia": [
+        "(transitive via checkout_session_wallet_options)"
+      ]
+    },
+    {
+      "name": "checkout_mobilepay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_multibanco_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_naver_pay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_oxxo_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_p24_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_payco_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_payment_method_options_mandate_options_bacs_debit",
+      "reachableVia": [
+        "(transitive via checkout_bacs_debit_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_payment_method_options_mandate_options_sepa_debit",
+      "reachableVia": [
+        "(transitive via checkout_sepa_debit_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_paynow_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_paypal_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_payto_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_pix_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_revolut_pay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_samsung_pay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_satispay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_scalapay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_sepa_debit_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_session_payment_method_options",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "checkout_session_wallet_options",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "checkout_sofort_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_sunbit_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_swish_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_twint_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_upi_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_us_bank_account_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "checkout_wechat_pay_payment_method_options",
+      "reachableVia": [
+        "(transitive via checkout_session_payment_method_options)"
+      ]
+    },
+    {
+      "name": "connect_account_reference",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "coupon_applies_to",
+      "reachableVia": [
+        "coupon"
+      ]
+    },
+    {
+      "name": "credit_note_line_item",
+      "reachableVia": [
+        "credit_note"
+      ]
+    },
+    {
+      "name": "credit_note_refund",
+      "reachableVia": [
+        "credit_note"
+      ]
+    },
+    {
+      "name": "credit_notes_payment_record_refund",
+      "reachableVia": [
+        "(transitive via credit_note_refund)"
+      ]
+    },
+    {
+      "name": "credit_notes_pretax_credit_amount",
+      "reachableVia": [
+        "credit_note"
+      ]
+    },
+    {
+      "name": "credited_items_invoice_line_items",
+      "reachableVia": [
+        "(transitive via invoice_item_proration_credited_items)"
+      ]
+    },
+    {
+      "name": "custom_logo",
+      "reachableVia": [
+        "(transitive via payment_method_custom)"
+      ]
+    },
+    {
+      "name": "custom_unit_amount",
+      "reachableVia": [
+        "price"
+      ]
+    },
+    {
+      "name": "customer_acceptance",
+      "reachableVia": [
+        "(transitive via mandate)"
+      ]
+    },
+    {
+      "name": "customer_balance_customer_balance_settings",
+      "reachableVia": [
+        "(transitive via cash_balance)"
+      ]
+    },
+    {
+      "name": "customer_balance_transaction",
+      "reachableVia": [
+        "credit_note"
+      ]
+    },
+    {
+      "name": "customer_tax",
+      "reachableVia": [
+        "customer"
+      ]
+    },
+    {
+      "name": "customer_tax_location",
+      "reachableVia": [
+        "(transitive via customer_tax)"
+      ]
+    },
+    {
+      "name": "deleted_application",
+      "reachableVia": [
+        "subscription",
+        "invoice",
+        "quote",
+        "payment_link"
+      ]
+    },
+    {
+      "name": "deleted_discount",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "deleted_payment_source",
+      "reachableVia": [
+        "payment_intent"
+      ]
+    },
+    {
+      "name": "deleted_tax_id",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "destination_details_unimplemented",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "discount",
+      "reachableVia": [
+        "customer",
+        "subscription",
+        "subscription_item",
+        "invoice",
+        "invoiceitem",
+        "quote"
+      ]
+    },
+    {
+      "name": "discount_source",
+      "reachableVia": [
+        "(transitive via discount)"
+      ]
+    },
+    {
+      "name": "discounts_resource_discount_amount",
+      "reachableVia": [
+        "invoice",
+        "credit_note"
+      ]
+    },
+    {
+      "name": "discounts_resource_stackable_discount_with_discount_end",
+      "reachableVia": [
+        "(transitive via subscription_schedule_add_invoice_item)"
+      ]
+    },
+    {
+      "name": "dispute_enhanced_eligibility",
+      "reachableVia": [
+        "(transitive via dispute_evidence_details)"
+      ]
+    },
+    {
+      "name": "dispute_enhanced_eligibility_mastercard_compliance",
+      "reachableVia": [
+        "(transitive via dispute_enhanced_eligibility)"
+      ]
+    },
+    {
+      "name": "dispute_enhanced_eligibility_visa_compelling_evidence3",
+      "reachableVia": [
+        "(transitive via dispute_enhanced_eligibility)"
+      ]
+    },
+    {
+      "name": "dispute_enhanced_eligibility_visa_compliance",
+      "reachableVia": [
+        "(transitive via dispute_enhanced_eligibility)"
+      ]
+    },
+    {
+      "name": "dispute_enhanced_evidence",
+      "reachableVia": [
+        "(transitive via dispute_evidence)"
+      ]
+    },
+    {
+      "name": "dispute_enhanced_evidence_mastercard_compliance",
+      "reachableVia": [
+        "(transitive via dispute_enhanced_evidence)"
+      ]
+    },
+    {
+      "name": "dispute_enhanced_evidence_visa_compelling_evidence3",
+      "reachableVia": [
+        "(transitive via dispute_enhanced_evidence)"
+      ]
+    },
+    {
+      "name": "dispute_enhanced_evidence_visa_compliance",
+      "reachableVia": [
+        "(transitive via dispute_enhanced_evidence)"
+      ]
+    },
+    {
+      "name": "dispute_evidence",
+      "reachableVia": [
+        "dispute"
+      ]
+    },
+    {
+      "name": "dispute_evidence_details",
+      "reachableVia": [
+        "dispute"
+      ]
+    },
+    {
+      "name": "dispute_payment_method_details",
+      "reachableVia": [
+        "dispute"
+      ]
+    },
+    {
+      "name": "dispute_payment_method_details_amazon_pay",
+      "reachableVia": [
+        "(transitive via dispute_payment_method_details)"
+      ]
+    },
+    {
+      "name": "dispute_payment_method_details_card",
+      "reachableVia": [
+        "(transitive via dispute_payment_method_details)"
+      ]
+    },
+    {
+      "name": "dispute_payment_method_details_klarna",
+      "reachableVia": [
+        "(transitive via dispute_payment_method_details)"
+      ]
+    },
+    {
+      "name": "dispute_payment_method_details_paypal",
+      "reachableVia": [
+        "(transitive via dispute_payment_method_details)"
+      ]
+    },
+    {
+      "name": "dispute_visa_compelling_evidence3_disputed_transaction",
+      "reachableVia": [
+        "(transitive via dispute_enhanced_evidence_visa_compelling_evidence3)"
+      ]
+    },
+    {
+      "name": "dispute_visa_compelling_evidence3_prior_undisputed_transaction",
+      "reachableVia": [
+        "(transitive via dispute_enhanced_evidence_visa_compelling_evidence3)"
+      ]
+    },
+    {
+      "name": "email_sent",
+      "reachableVia": [
+        "(transitive via refund_next_action_display_details)"
+      ]
+    },
+    {
+      "name": "external_account_requirements",
+      "reachableVia": [
+        "(transitive via bank_account)"
+      ]
+    },
+    {
+      "name": "fee",
+      "reachableVia": [
+        "balance_transaction"
+      ]
+    },
+    {
+      "name": "fee_refund",
+      "reachableVia": [
+        "application_fee"
+      ]
+    },
+    {
+      "name": "funding_instructions_bank_transfer_aba_record",
+      "reachableVia": [
+        "(transitive via funding_instructions_bank_transfer_financial_address)"
+      ]
+    },
+    {
+      "name": "funding_instructions_bank_transfer_financial_address",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action_display_bank_transfer_instructions)"
+      ]
+    },
+    {
+      "name": "funding_instructions_bank_transfer_iban_record",
+      "reachableVia": [
+        "(transitive via funding_instructions_bank_transfer_financial_address)"
+      ]
+    },
+    {
+      "name": "funding_instructions_bank_transfer_sort_code_record",
+      "reachableVia": [
+        "(transitive via funding_instructions_bank_transfer_financial_address)"
+      ]
+    },
+    {
+      "name": "funding_instructions_bank_transfer_spei_record",
+      "reachableVia": [
+        "(transitive via funding_instructions_bank_transfer_financial_address)"
+      ]
+    },
+    {
+      "name": "funding_instructions_bank_transfer_swift_record",
+      "reachableVia": [
+        "(transitive via funding_instructions_bank_transfer_financial_address)"
+      ]
+    },
+    {
+      "name": "funding_instructions_bank_transfer_zengin_record",
+      "reachableVia": [
+        "(transitive via funding_instructions_bank_transfer_financial_address)"
+      ]
+    },
+    {
+      "name": "internal_card",
+      "reachableVia": [
+        "(transitive via payment_method_details_mobilepay)"
+      ]
+    },
+    {
+      "name": "invoice_installments_card",
+      "reachableVia": [
+        "(transitive via invoice_payment_method_options_card)"
+      ]
+    },
+    {
+      "name": "invoice_item_proration_credited_items",
+      "reachableVia": [
+        "(transitive via proration_details)"
+      ]
+    },
+    {
+      "name": "invoice_item_threshold_reason",
+      "reachableVia": [
+        "(transitive via invoice_threshold_reason)"
+      ]
+    },
+    {
+      "name": "invoice_line_item_period",
+      "reachableVia": [
+        "invoiceitem"
+      ]
+    },
+    {
+      "name": "invoice_mandate_options_card",
+      "reachableVia": [
+        "(transitive via subscription_payment_method_options_card)"
+      ]
+    },
+    {
+      "name": "invoice_mandate_options_payto",
+      "reachableVia": [
+        "(transitive via invoice_payment_method_options_payto)"
+      ]
+    },
+    {
+      "name": "invoice_payment",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_acss_debit",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_acss_debit_mandate_options",
+      "reachableVia": [
+        "(transitive via invoice_payment_method_options_acss_debit)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_bancontact",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_card",
+      "reachableVia": [
+        "(transitive via invoices_payment_method_options)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_customer_balance",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_customer_balance_bank_transfer",
+      "reachableVia": [
+        "(transitive via invoice_payment_method_options_customer_balance)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_konbini",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_mandate_options_upi",
+      "reachableVia": [
+        "(transitive via invoice_payment_method_options_upi)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_payto",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_pix",
+      "reachableVia": [
+        "(transitive via invoices_payment_method_options)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_sepa_debit",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_upi",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_us_bank_account",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "invoice_payment_method_options_us_bank_account_linked_account_options",
+      "reachableVia": [
+        "(transitive via invoice_payment_method_options_us_bank_account)"
+      ]
+    },
+    {
+      "name": "invoice_rendering_pdf",
+      "reachableVia": [
+        "(transitive via invoices_resource_invoice_rendering)"
+      ]
+    },
+    {
+      "name": "invoice_setting_checkout_rendering_options",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_invoice_settings)"
+      ]
+    },
+    {
+      "name": "invoice_setting_custom_field",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "invoice_setting_customer_rendering_options",
+      "reachableVia": [
+        "(transitive via invoice_setting_customer_setting)"
+      ]
+    },
+    {
+      "name": "invoice_setting_customer_setting",
+      "reachableVia": [
+        "customer"
+      ]
+    },
+    {
+      "name": "invoice_setting_quote_setting",
+      "reachableVia": [
+        "quote"
+      ]
+    },
+    {
+      "name": "invoice_setting_subscription_schedule_phase_setting",
+      "reachableVia": [
+        "(transitive via subscription_schedule_phase_configuration)"
+      ]
+    },
+    {
+      "name": "invoice_setting_subscription_schedule_setting",
+      "reachableVia": [
+        "(transitive via subscription_schedules_resource_default_settings)"
+      ]
+    },
+    {
+      "name": "invoice_threshold_reason",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "invoices_payment_method_options",
+      "reachableVia": [
+        "(transitive via invoices_payment_settings)"
+      ]
+    },
+    {
+      "name": "invoices_payment_settings",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "invoices_payments_invoice_payment_associated_payment",
+      "reachableVia": [
+        "(transitive via invoice_payment)"
+      ]
+    },
+    {
+      "name": "invoices_payments_invoice_payment_status_transitions",
+      "reachableVia": [
+        "(transitive via invoice_payment)"
+      ]
+    },
+    {
+      "name": "invoices_resource_confirmation_secret",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "invoices_resource_from_invoice",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "invoices_resource_invoice_rendering",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "invoices_resource_invoice_tax_id",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "invoices_resource_pretax_credit_amount",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "invoices_resource_shipping_cost",
+      "reachableVia": [
+        "invoice",
+        "credit_note"
+      ]
+    },
+    {
+      "name": "invoices_resource_status_transitions",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "item",
+      "reachableVia": [
+        "quote",
+        "checkout.session",
+        "payment_link"
+      ]
+    },
+    {
+      "name": "klarna_address",
+      "reachableVia": [
+        "(transitive via klarna_payer_details)"
+      ]
+    },
+    {
+      "name": "klarna_payer_details",
+      "reachableVia": [
+        "(transitive via payment_method_details_klarna)"
+      ]
+    },
+    {
+      "name": "legal_entity_company",
+      "reachableVia": [
+        "account"
+      ]
+    },
+    {
+      "name": "legal_entity_company_verification",
+      "reachableVia": [
+        "(transitive via legal_entity_company)"
+      ]
+    },
+    {
+      "name": "legal_entity_company_verification_document",
+      "reachableVia": [
+        "(transitive via legal_entity_company_verification)"
+      ]
+    },
+    {
+      "name": "legal_entity_directorship_declaration",
+      "reachableVia": [
+        "(transitive via legal_entity_company)"
+      ]
+    },
+    {
+      "name": "legal_entity_dob",
+      "reachableVia": [
+        "person"
+      ]
+    },
+    {
+      "name": "legal_entity_japan_address",
+      "reachableVia": [
+        "person"
+      ]
+    },
+    {
+      "name": "legal_entity_person_verification",
+      "reachableVia": [
+        "person"
+      ]
+    },
+    {
+      "name": "legal_entity_person_verification_document",
+      "reachableVia": [
+        "(transitive via legal_entity_person_verification)"
+      ]
+    },
+    {
+      "name": "legal_entity_registration_date",
+      "reachableVia": [
+        "(transitive via legal_entity_company)"
+      ]
+    },
+    {
+      "name": "legal_entity_representative_declaration",
+      "reachableVia": [
+        "(transitive via legal_entity_company)"
+      ]
+    },
+    {
+      "name": "legal_entity_ubo_declaration",
+      "reachableVia": [
+        "(transitive via legal_entity_company)"
+      ]
+    },
+    {
+      "name": "level3",
+      "reachableVia": [
+        "charge"
+      ]
+    },
+    {
+      "name": "level3_line_items",
+      "reachableVia": [
+        "(transitive via level3)"
+      ]
+    },
+    {
+      "name": "line_item",
+      "reachableVia": [
+        "invoice"
+      ]
+    },
+    {
+      "name": "line_items_adjustable_quantity",
+      "reachableVia": [
+        "(transitive via item)"
+      ]
+    },
+    {
+      "name": "line_items_discount_amount",
+      "reachableVia": [
+        "(transitive via item)"
+      ]
+    },
+    {
+      "name": "line_items_tax_amount",
+      "reachableVia": [
+        "(transitive via invoices_resource_shipping_cost)"
+      ]
+    },
+    {
+      "name": "mandate",
+      "reachableVia": [
+        "setup_intent"
+      ]
+    },
+    {
+      "name": "mandate_acss_debit",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_amazon_pay",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_au_becs_debit",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_bacs_debit",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_cashapp",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_kakao_pay",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_klarna",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_kr_card",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_link",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_multi_use",
+      "reachableVia": [
+        "(transitive via mandate)"
+      ]
+    },
+    {
+      "name": "mandate_naver_pay",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_nz_bank_account",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_options_payto",
+      "reachableVia": [
+        "(transitive via checkout_payto_payment_method_options)"
+      ]
+    },
+    {
+      "name": "mandate_options_upi",
+      "reachableVia": [
+        "(transitive via checkout_upi_payment_method_options)"
+      ]
+    },
+    {
+      "name": "mandate_payment_method_details",
+      "reachableVia": [
+        "(transitive via mandate)"
+      ]
+    },
+    {
+      "name": "mandate_paypal",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_payto",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_pix",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_revolut_pay",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_sepa_debit",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_single_use",
+      "reachableVia": [
+        "(transitive via mandate)"
+      ]
+    },
+    {
+      "name": "mandate_twint",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_upi",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "mandate_us_bank_account",
+      "reachableVia": [
+        "(transitive via mandate_payment_method_details)"
+      ]
+    },
+    {
+      "name": "networks",
+      "reachableVia": [
+        "(transitive via payment_method_card)"
+      ]
+    },
+    {
+      "name": "notification_event_data",
+      "reachableVia": [
+        "event"
+      ]
+    },
+    {
+      "name": "notification_event_request",
+      "reachableVia": [
+        "event"
+      ]
+    },
+    {
+      "name": "offline_acceptance",
+      "reachableVia": [
+        "(transitive via customer_acceptance)"
+      ]
+    },
+    {
+      "name": "online_acceptance",
+      "reachableVia": [
+        "(transitive via customer_acceptance)"
+      ]
+    },
+    {
+      "name": "package_dimensions",
+      "reachableVia": [
+        "product"
+      ]
+    },
+    {
+      "name": "payment_data",
+      "reachableVia": [
+        "(transitive via transfer_data)"
+      ]
+    },
+    {
+      "name": "payment_flows_amount_details",
+      "reachableVia": [
+        "payment_intent"
+      ]
+    },
+    {
+      "name": "payment_flows_amount_details_client_resource_tip",
+      "reachableVia": [
+        "(transitive via payment_flows_amount_details)"
+      ]
+    },
+    {
+      "name": "payment_flows_amount_details_resource_error",
+      "reachableVia": [
+        "(transitive via payment_flows_amount_details)"
+      ]
+    },
+    {
+      "name": "payment_flows_amount_details_resource_line_items_list_resource_line_item_resource_payment_method_options",
+      "reachableVia": [
+        "(transitive via payment_intent_amount_details_line_item)"
+      ]
+    },
+    {
+      "name": "payment_flows_amount_details_resource_line_items_list_resource_line_item_resource_tax",
+      "reachableVia": [
+        "(transitive via payment_intent_amount_details_line_item)"
+      ]
+    },
+    {
+      "name": "payment_flows_amount_details_resource_shipping",
+      "reachableVia": [
+        "(transitive via payment_flows_amount_details)"
+      ]
+    },
+    {
+      "name": "payment_flows_amount_details_resource_tax",
+      "reachableVia": [
+        "(transitive via payment_flows_amount_details)"
+      ]
+    },
+    {
+      "name": "payment_flows_automatic_payment_methods_payment_intent",
+      "reachableVia": [
+        "payment_intent"
+      ]
+    },
+    {
+      "name": "payment_flows_automatic_payment_methods_setup_intent",
+      "reachableVia": [
+        "setup_intent"
+      ]
+    },
+    {
+      "name": "payment_flows_payment_details",
+      "reachableVia": [
+        "payment_intent"
+      ]
+    },
+    {
+      "name": "payment_flows_payment_intent_async_workflows",
+      "reachableVia": [
+        "payment_intent"
+      ]
+    },
+    {
+      "name": "payment_flows_payment_intent_async_workflows_resource_inputs",
+      "reachableVia": [
+        "(transitive via payment_flows_payment_intent_async_workflows)"
+      ]
+    },
+    {
+      "name": "payment_flows_payment_intent_async_workflows_resource_inputs_resource_tax",
+      "reachableVia": [
+        "(transitive via payment_flows_payment_intent_async_workflows_resource_inputs)"
+      ]
+    },
+    {
+      "name": "payment_flows_payment_intent_presentment_details",
+      "reachableVia": [
+        "charge",
+        "payment_intent",
+        "refund",
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_alipay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_alipay_details",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_card_details_api_resource_enterprise_features_extended_authorization_extended_authorization",
+      "reachableVia": [
+        "(transitive via payment_method_details_card)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_card_details_api_resource_enterprise_features_incremental_authorization_incremental_authorization",
+      "reachableVia": [
+        "(transitive via payment_method_details_card)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_card_details_api_resource_enterprise_features_overcapture_overcapture",
+      "reachableVia": [
+        "(transitive via payment_method_details_card)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_card_details_api_resource_multicapture",
+      "reachableVia": [
+        "(transitive via payment_method_details_card)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_card_payment_intent_amount_details_line_item_payment_method_options",
+      "reachableVia": [
+        "(transitive via payment_flows_amount_details_resource_line_items_list_resource_line_item_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_card_present_amount_details_line_item_payment_method_options",
+      "reachableVia": [
+        "(transitive via payment_flows_amount_details_resource_line_items_list_resource_line_item_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_card_present_common_wallet",
+      "reachableVia": [
+        "(transitive via payment_method_card_present)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_financial_connections_common_linked_account_options_filters",
+      "reachableVia": [
+        "(transitive via linked_account_options_common)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_kakao_pay_payment_method_options",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_klarna_dob",
+      "reachableVia": [
+        "(transitive via payment_method_klarna)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_klarna_payment_intent_amount_details_line_item_payment_method_options",
+      "reachableVia": [
+        "(transitive via payment_flows_amount_details_resource_line_items_list_resource_line_item_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_naver_pay_payment_method_options",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_payco_payment_method_options",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_paypal_amount_details_line_item_payment_method_options",
+      "reachableVia": [
+        "(transitive via payment_flows_amount_details_resource_line_items_list_resource_line_item_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_samsung_pay_payment_method_options",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_flows_private_payment_methods_satispay_setup_attempt_details",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_intent_amount_details_line_item",
+      "reachableVia": [
+        "(transitive via payment_flows_amount_details)"
+      ]
+    },
+    {
+      "name": "payment_intent_card_processing",
+      "reachableVia": [
+        "(transitive via payment_intent_processing)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action",
+      "reachableVia": [
+        "payment_intent"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_alipay_handle_redirect",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_blik_authorize",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_boleto",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_card_await_notification",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_cashapp_handle_redirect_or_display_qr_code",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_cashapp_qr_code",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action_cashapp_handle_redirect_or_display_qr_code)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_display_bank_transfer_instructions",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_display_multibanco_details",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_display_oxxo_details",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_klarna_display_qr_code",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_konbini",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_konbini_familymart",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action_konbini_stores)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_konbini_lawson",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action_konbini_stores)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_konbini_ministop",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action_konbini_stores)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_konbini_seicomart",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action_konbini_stores)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_konbini_stores",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action_konbini)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_paynow_display_qr_code",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_pix_display_qr_code",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_promptpay_display_qr_code",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_redirect_to_url",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_swish_handle_redirect_or_display_qr_code",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_swish_qr_code",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action_swish_handle_redirect_or_display_qr_code)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_upi_handle_redirect_or_display_qr_code",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_upiqr_code",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action_upi_handle_redirect_or_display_qr_code)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_verify_with_microdeposits",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_wechat_pay_display_qr_code",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_wechat_pay_redirect_to_android_app",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_next_action_wechat_pay_redirect_to_ios_app",
+      "reachableVia": [
+        "(transitive via payment_intent_next_action)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options",
+      "reachableVia": [
+        "payment_intent"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_acss_debit",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_au_becs_debit",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_bacs_debit",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_blik",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_card",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_eps",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_link",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_mandate_options_acss_debit",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options_acss_debit)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_mandate_options_bacs_debit",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options_bacs_debit)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_mandate_options_payto",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options_payto)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_mandate_options_sepa_debit",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options_sepa_debit)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_mobilepay",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_nz_bank_account",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_payto",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_sepa_debit",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_swish",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_payment_method_options_us_bank_account",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_intent_processing",
+      "reachableVia": [
+        "payment_intent"
+      ]
+    },
+    {
+      "name": "payment_intent_processing_customer_notification",
+      "reachableVia": [
+        "(transitive via payment_intent_card_processing)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_after_completion",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_automatic_tax",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_business_name",
+      "reachableVia": [
+        "(transitive via payment_links_resource_name_collection)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_card_payment_method_options",
+      "reachableVia": [
+        "(transitive via payment_links_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_card_restrictions",
+      "reachableVia": [
+        "(transitive via payment_links_resource_card_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_completed_sessions",
+      "reachableVia": [
+        "(transitive via payment_links_resource_restrictions)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_completion_behavior_confirmation_page",
+      "reachableVia": [
+        "(transitive via payment_links_resource_after_completion)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_completion_behavior_redirect",
+      "reachableVia": [
+        "(transitive via payment_links_resource_after_completion)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_consent_collection",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_custom_fields",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_custom_fields_dropdown",
+      "reachableVia": [
+        "(transitive via payment_links_resource_custom_fields)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_custom_fields_dropdown_option",
+      "reachableVia": [
+        "(transitive via payment_links_resource_custom_fields_dropdown)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_custom_fields_label",
+      "reachableVia": [
+        "(transitive via payment_links_resource_custom_fields)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_custom_fields_numeric",
+      "reachableVia": [
+        "(transitive via payment_links_resource_custom_fields)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_custom_fields_text",
+      "reachableVia": [
+        "(transitive via payment_links_resource_custom_fields)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_custom_text",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_custom_text_position",
+      "reachableVia": [
+        "(transitive via payment_links_resource_custom_text)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_individual_name",
+      "reachableVia": [
+        "(transitive via payment_links_resource_name_collection)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_invoice_creation",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_invoice_settings",
+      "reachableVia": [
+        "(transitive via payment_links_resource_invoice_creation)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_name_collection",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_optional_item",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_optional_item_adjustable_quantity",
+      "reachableVia": [
+        "(transitive via payment_links_resource_optional_item)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_payment_intent_data",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_payment_method_options",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_payment_method_reuse_agreement",
+      "reachableVia": [
+        "(transitive via payment_links_resource_consent_collection)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_phone_number_collection",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_restrictions",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_shipping_address_collection",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_shipping_option",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_subscription_data",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_subscription_data_invoice_settings",
+      "reachableVia": [
+        "(transitive via payment_links_resource_subscription_data)"
+      ]
+    },
+    {
+      "name": "payment_links_resource_tax_id_collection",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_links_resource_transfer_data",
+      "reachableVia": [
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_method_acss_debit",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_affirm",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_afterpay_clearpay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_alma",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_amazon_pay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_au_becs_debit",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_bacs_debit",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_bancontact",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_billie",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_bizum",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_blik",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_boleto",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_card",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_card_checks",
+      "reachableVia": [
+        "(transitive via payment_method_card)"
+      ]
+    },
+    {
+      "name": "payment_method_card_generated_card",
+      "reachableVia": [
+        "(transitive via payment_method_card)"
+      ]
+    },
+    {
+      "name": "payment_method_card_present",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_card_present_networks",
+      "reachableVia": [
+        "(transitive via payment_method_card_present)"
+      ]
+    },
+    {
+      "name": "payment_method_card_wallet",
+      "reachableVia": [
+        "(transitive via payment_method_card)"
+      ]
+    },
+    {
+      "name": "payment_method_card_wallet_amex_express_checkout",
+      "reachableVia": [
+        "(transitive via payment_method_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_card_wallet_apple_pay",
+      "reachableVia": [
+        "(transitive via payment_method_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_card_wallet_google_pay",
+      "reachableVia": [
+        "(transitive via payment_method_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_card_wallet_link",
+      "reachableVia": [
+        "(transitive via payment_method_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_card_wallet_masterpass",
+      "reachableVia": [
+        "(transitive via payment_method_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_card_wallet_samsung_pay",
+      "reachableVia": [
+        "(transitive via payment_method_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_card_wallet_visa_checkout",
+      "reachableVia": [
+        "(transitive via payment_method_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_cashapp",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_config_biz_payment_method_configuration_details",
+      "reachableVia": [
+        "payment_intent",
+        "setup_intent",
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_method_crypto",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_custom",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_customer_balance",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_details",
+      "reachableVia": [
+        "charge"
+      ]
+    },
+    {
+      "name": "payment_method_details_ach_credit_transfer",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_ach_debit",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_acss_debit",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_affirm",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_afterpay_clearpay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_alma",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_amazon_pay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_au_becs_debit",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_bacs_debit",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_bancontact",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_billie",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_bizum",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_blik",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_boleto",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_checks",
+      "reachableVia": [
+        "(transitive via payment_method_details_card)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_installments",
+      "reachableVia": [
+        "(transitive via payment_method_details_card)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_installments_plan",
+      "reachableVia": [
+        "(transitive via payment_method_details_card_installments)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_network_token",
+      "reachableVia": [
+        "(transitive via payment_method_details_card)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_present",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_present_offline",
+      "reachableVia": [
+        "(transitive via payment_method_card_present)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_present_receipt",
+      "reachableVia": [
+        "(transitive via payment_method_details_card_present)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_wallet",
+      "reachableVia": [
+        "(transitive via payment_method_details_card)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_wallet_amex_express_checkout",
+      "reachableVia": [
+        "(transitive via payment_method_details_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_wallet_apple_pay",
+      "reachableVia": [
+        "(transitive via payment_method_details_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_wallet_google_pay",
+      "reachableVia": [
+        "(transitive via payment_method_details_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_wallet_link",
+      "reachableVia": [
+        "(transitive via payment_method_details_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_wallet_masterpass",
+      "reachableVia": [
+        "(transitive via payment_method_details_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_wallet_samsung_pay",
+      "reachableVia": [
+        "(transitive via payment_method_details_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_details_card_wallet_visa_checkout",
+      "reachableVia": [
+        "(transitive via payment_method_details_card_wallet)"
+      ]
+    },
+    {
+      "name": "payment_method_details_cashapp",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_crypto",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_customer_balance",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_eps",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_fpx",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_giropay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_grabpay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_ideal",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_interac_present",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_interac_present_receipt",
+      "reachableVia": [
+        "(transitive via payment_method_details_interac_present)"
+      ]
+    },
+    {
+      "name": "payment_method_details_kakao_pay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_klarna",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_konbini",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_konbini_store",
+      "reachableVia": [
+        "(transitive via payment_method_details_konbini)"
+      ]
+    },
+    {
+      "name": "payment_method_details_kr_card",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_link",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_mb_way",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_mobilepay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_multibanco",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_naver_pay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_nz_bank_account",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_oxxo",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_p24",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_passthrough_card",
+      "reachableVia": [
+        "(transitive via amazon_pay_underlying_payment_method_funding_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_pay_by_bank",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_payco",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_paynow",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_paypal",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_payto",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_pix",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_promptpay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_revolut_pay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_samsung_pay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_satispay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_scalapay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_sepa_credit_transfer",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_sepa_debit",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_sofort",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_stripe_account",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_sunbit",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_swish",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_twint",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_upi",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_us_bank_account",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_wechat",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_wechat_pay",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_details_zip",
+      "reachableVia": [
+        "(transitive via payment_method_details)"
+      ]
+    },
+    {
+      "name": "payment_method_eps",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_fpx",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_giropay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_grabpay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_ideal",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_interac_present",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_kakao_pay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_klarna",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_konbini",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_kr_card",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_link",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_mb_way",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_mobilepay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_multibanco",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_naver_pay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_nz_bank_account",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_options_affirm",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_afterpay_clearpay",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_alipay",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_alma",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_amazon_pay",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_bancontact",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_billie",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_bizum",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_boleto",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_card_installments",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options_card)"
+      ]
+    },
+    {
+      "name": "payment_method_options_card_mandate_options",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options_card)"
+      ]
+    },
+    {
+      "name": "payment_method_options_card_present",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_card_present_routing",
+      "reachableVia": [
+        "(transitive via payment_method_options_card_present)"
+      ]
+    },
+    {
+      "name": "payment_method_options_cashapp",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_crypto",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_customer_balance",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_customer_balance_bank_transfer",
+      "reachableVia": [
+        "(transitive via payment_method_options_customer_balance)"
+      ]
+    },
+    {
+      "name": "payment_method_options_customer_balance_eu_bank_account",
+      "reachableVia": [
+        "(transitive via payment_method_options_customer_balance_bank_transfer)"
+      ]
+    },
+    {
+      "name": "payment_method_options_fpx",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_giropay",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_grabpay",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_ideal",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_interac_present",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_klarna",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_konbini",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_kr_card",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_mandate_options_pix",
+      "reachableVia": [
+        "(transitive via payment_method_options_pix)"
+      ]
+    },
+    {
+      "name": "payment_method_options_mandate_options_upi",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options_upi)"
+      ]
+    },
+    {
+      "name": "payment_method_options_mb_way",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_multibanco",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_oxxo",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_p24",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_pay_by_bank",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_paynow",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_paypal",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_pix",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_promptpay",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_revolut_pay",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_satispay",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_scalapay",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_sofort",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_sunbit",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_twint",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_upi",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_us_bank_account_mandate_options",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options_us_bank_account)"
+      ]
+    },
+    {
+      "name": "payment_method_options_wechat_pay",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_options_zip",
+      "reachableVia": [
+        "(transitive via payment_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_method_oxxo",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_p24",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_pay_by_bank",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_payco",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_paynow",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_paypal",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_payto",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_pix",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_promptpay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_revolut_pay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_samsung_pay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_satispay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_scalapay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_sepa_debit",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_sofort",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_sunbit",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_swish",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_twint",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_upi",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_us_bank_account",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_us_bank_account_blocked",
+      "reachableVia": [
+        "(transitive via payment_method_us_bank_account_status_details)"
+      ]
+    },
+    {
+      "name": "payment_method_us_bank_account_status_details",
+      "reachableVia": [
+        "(transitive via payment_method_us_bank_account)"
+      ]
+    },
+    {
+      "name": "payment_method_wechat_pay",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_method_zip",
+      "reachableVia": [
+        "payment_method"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_adaptive_pricing",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_after_expiration",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_after_expiration_recovery",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_after_expiration)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_automatic_tax",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_branding_settings",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_branding_settings_icon",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_branding_settings)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_branding_settings_logo",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_branding_settings)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_business_name",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_name_collection)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_checkout_address_details",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_collected_information)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_collected_information",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_consent",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_consent_collection",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_currency_conversion",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_custom_fields",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_custom_fields_dropdown",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_custom_fields)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_custom_fields_label",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_custom_fields)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_custom_fields_numeric",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_custom_fields)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_custom_fields_option",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_custom_fields_dropdown)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_custom_fields_text",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_custom_fields)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_custom_text",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_custom_text_position",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_custom_text)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_customer_details",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_discount",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_individual_name",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_name_collection)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_invoice_creation",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_invoice_settings",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_invoice_creation)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_managed_payments",
+      "reachableVia": [
+        "checkout.session",
+        "payment_link"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_name_collection",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_optional_item",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_optional_item_adjustable_quantity",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_optional_item)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_payment_method_reuse_agreement",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_consent_collection)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_permissions",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_phone_number_collection",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_saved_payment_method_options",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_shipping_address_collection",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_shipping_cost",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_shipping_option",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_tax_id",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_customer_details)"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_tax_id_collection",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_total_details",
+      "reachableVia": [
+        "checkout.session"
+      ]
+    },
+    {
+      "name": "payment_pages_checkout_session_total_details_resource_breakdown",
+      "reachableVia": [
+        "(transitive via payment_pages_checkout_session_total_details)"
+      ]
+    },
+    {
+      "name": "payment_pages_private_card_payment_method_options_resource_restrictions",
+      "reachableVia": [
+        "(transitive via checkout_card_payment_method_options)"
+      ]
+    },
+    {
+      "name": "payment_record",
+      "reachableVia": [
+        "(transitive via invoices_payments_invoice_payment_associated_payment)"
+      ]
+    },
+    {
+      "name": "payment_source",
+      "reachableVia": [
+        "customer",
+        "charge",
+        "payment_intent",
+        "subscription",
+        "invoice"
+      ]
+    },
+    {
+      "name": "payments_primitives_payment_records_resource_amount",
+      "reachableVia": [
+        "(transitive via payment_record)"
+      ]
+    },
+    {
+      "name": "payments_primitives_payment_records_resource_customer_details",
+      "reachableVia": [
+        "(transitive via payment_record)"
+      ]
+    },
+    {
+      "name": "payments_primitives_payment_records_resource_payment_method_details",
+      "reachableVia": [
+        "(transitive via payment_record)"
+      ]
+    },
+    {
+      "name": "payments_primitives_payment_records_resource_processor_details",
+      "reachableVia": [
+        "(transitive via payment_record)"
+      ]
+    },
+    {
+      "name": "payments_primitives_payment_records_resource_shipping_details",
+      "reachableVia": [
+        "(transitive via payment_record)"
+      ]
+    },
+    {
+      "name": "payouts_trace_id",
+      "reachableVia": [
+        "payout"
+      ]
+    },
+    {
+      "name": "paypal_seller_protection",
+      "reachableVia": [
+        "(transitive via payment_method_details_paypal)"
+      ]
+    },
+    {
+      "name": "person_additional_tos_acceptance",
+      "reachableVia": [
+        "(transitive via person_additional_tos_acceptances)"
+      ]
+    },
+    {
+      "name": "person_additional_tos_acceptances",
+      "reachableVia": [
+        "person"
+      ]
+    },
+    {
+      "name": "person_ethnicity_details",
+      "reachableVia": [
+        "(transitive via person_us_cfpb_data)"
+      ]
+    },
+    {
+      "name": "person_future_requirements",
+      "reachableVia": [
+        "person"
+      ]
+    },
+    {
+      "name": "person_race_details",
+      "reachableVia": [
+        "(transitive via person_us_cfpb_data)"
+      ]
+    },
+    {
+      "name": "person_relationship",
+      "reachableVia": [
+        "person"
+      ]
+    },
+    {
+      "name": "person_requirements",
+      "reachableVia": [
+        "person"
+      ]
+    },
+    {
+      "name": "person_us_cfpb_data",
+      "reachableVia": [
+        "person"
+      ]
+    },
+    {
+      "name": "plan_tier",
+      "reachableVia": [
+        "plan"
+      ]
+    },
+    {
+      "name": "platform_earning_fee_source",
+      "reachableVia": [
+        "application_fee"
+      ]
+    },
+    {
+      "name": "price_tier",
+      "reachableVia": [
+        "price"
+      ]
+    },
+    {
+      "name": "product_marketing_feature",
+      "reachableVia": [
+        "product"
+      ]
+    },
+    {
+      "name": "promotion_codes_resource_promotion",
+      "reachableVia": [
+        "promotion_code"
+      ]
+    },
+    {
+      "name": "promotion_codes_resource_restrictions",
+      "reachableVia": [
+        "promotion_code"
+      ]
+    },
+    {
+      "name": "proration_details",
+      "reachableVia": [
+        "invoiceitem"
+      ]
+    },
+    {
+      "name": "quotes_resource_automatic_tax",
+      "reachableVia": [
+        "quote"
+      ]
+    },
+    {
+      "name": "quotes_resource_computed",
+      "reachableVia": [
+        "quote"
+      ]
+    },
+    {
+      "name": "quotes_resource_from_quote",
+      "reachableVia": [
+        "quote"
+      ]
+    },
+    {
+      "name": "quotes_resource_recurring",
+      "reachableVia": [
+        "(transitive via quotes_resource_computed)"
+      ]
+    },
+    {
+      "name": "quotes_resource_status_transitions",
+      "reachableVia": [
+        "quote"
+      ]
+    },
+    {
+      "name": "quotes_resource_subscription_data_billing_mode",
+      "reachableVia": [
+        "(transitive via quotes_resource_subscription_data_subscription_data)"
+      ]
+    },
+    {
+      "name": "quotes_resource_subscription_data_subscription_data",
+      "reachableVia": [
+        "quote"
+      ]
+    },
+    {
+      "name": "quotes_resource_total_details",
+      "reachableVia": [
+        "quote"
+      ]
+    },
+    {
+      "name": "quotes_resource_total_details_resource_breakdown",
+      "reachableVia": [
+        "(transitive via quotes_resource_total_details)"
+      ]
+    },
+    {
+      "name": "quotes_resource_transfer_data",
+      "reachableVia": [
+        "quote"
+      ]
+    },
+    {
+      "name": "quotes_resource_upfront",
+      "reachableVia": [
+        "(transitive via quotes_resource_computed)"
+      ]
+    },
+    {
+      "name": "recurring",
+      "reachableVia": [
+        "price"
+      ]
+    },
+    {
+      "name": "refund_destination_details",
+      "reachableVia": [
+        "refund"
+      ]
+    },
+    {
+      "name": "refund_destination_details_blik",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_br_bank_transfer",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_card",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_crypto",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_eu_bank_transfer",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_gb_bank_transfer",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_jp_bank_transfer",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_mb_way",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_multibanco",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_mx_bank_transfer",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_p24",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_paypal",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_swish",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_th_bank_transfer",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_destination_details_us_bank_transfer",
+      "reachableVia": [
+        "(transitive via refund_destination_details)"
+      ]
+    },
+    {
+      "name": "refund_next_action",
+      "reachableVia": [
+        "refund"
+      ]
+    },
+    {
+      "name": "refund_next_action_display_details",
+      "reachableVia": [
+        "(transitive via refund_next_action)"
+      ]
+    },
+    {
+      "name": "revolut_pay_underlying_payment_method_funding_details",
+      "reachableVia": [
+        "(transitive via payment_method_details_revolut_pay)"
+      ]
+    },
+    {
+      "name": "rule",
+      "reachableVia": [
+        "(transitive via charge_outcome)"
+      ]
+    },
+    {
+      "name": "schedules_phase_automatic_tax",
+      "reachableVia": [
+        "(transitive via subscription_schedule_phase_configuration)"
+      ]
+    },
+    {
+      "name": "sepa_debit_generated_from",
+      "reachableVia": [
+        "(transitive via payment_method_sepa_debit)"
+      ]
+    },
+    {
+      "name": "setup_attempt",
+      "reachableVia": [
+        "setup_intent"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details",
+      "reachableVia": [
+        "(transitive via setup_attempt)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_acss_debit",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_amazon_pay",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_au_becs_debit",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_bacs_debit",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_bancontact",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_boleto",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_card",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_card_checks",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details_card)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_card_present",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_card_wallet",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details_card)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_cashapp",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_ideal",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_kakao_pay",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_klarna",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_kr_card",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_link",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_naver_pay",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_nz_bank_account",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_paypal",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_payto",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_pix",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_revolut_pay",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_sepa_debit",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_sofort",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_twint",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_upi",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_attempt_payment_method_details_us_bank_account",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details)"
+      ]
+    },
+    {
+      "name": "setup_intent_next_action",
+      "reachableVia": [
+        "setup_intent"
+      ]
+    },
+    {
+      "name": "setup_intent_next_action_pix_display_qr_code",
+      "reachableVia": [
+        "(transitive via setup_intent_next_action)"
+      ]
+    },
+    {
+      "name": "setup_intent_next_action_redirect_to_url",
+      "reachableVia": [
+        "(transitive via setup_intent_next_action)"
+      ]
+    },
+    {
+      "name": "setup_intent_next_action_verify_with_microdeposits",
+      "reachableVia": [
+        "(transitive via setup_intent_next_action)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options",
+      "reachableVia": [
+        "setup_intent"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_acss_debit",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_amazon_pay",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_bacs_debit",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_bizum",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_card",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_card_mandate_options",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options_card)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_card_present",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_klarna",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_link",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_mandate_options_acss_debit",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options_acss_debit)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_mandate_options_bacs_debit",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options_bacs_debit)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_mandate_options_payto",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options_payto)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_mandate_options_sepa_debit",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options_sepa_debit)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_paypal",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_payto",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_pix",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_sepa_debit",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_upi",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "setup_intent_payment_method_options_us_bank_account",
+      "reachableVia": [
+        "(transitive via setup_intent_payment_method_options)"
+      ]
+    },
+    {
+      "name": "shipping",
+      "reachableVia": [
+        "customer",
+        "charge",
+        "payment_intent",
+        "invoice"
+      ]
+    },
+    {
+      "name": "shipping_rate",
+      "reachableVia": [
+        "(transitive via invoices_resource_shipping_cost)"
+      ]
+    },
+    {
+      "name": "shipping_rate_delivery_estimate",
+      "reachableVia": [
+        "(transitive via shipping_rate)"
+      ]
+    },
+    {
+      "name": "shipping_rate_delivery_estimate_bound",
+      "reachableVia": [
+        "(transitive via shipping_rate_delivery_estimate)"
+      ]
+    },
+    {
+      "name": "shipping_rate_fixed_amount",
+      "reachableVia": [
+        "(transitive via shipping_rate)"
+      ]
+    },
+    {
+      "name": "smor_resource_managed_payments",
+      "reachableVia": [
+        "payment_intent",
+        "setup_intent",
+        "subscription"
+      ]
+    },
+    {
+      "name": "source_code_verification_flow",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_order",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_order_item",
+      "reachableVia": [
+        "(transitive via source_order)"
+      ]
+    },
+    {
+      "name": "source_owner",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_receiver_flow",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_redirect_flow",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_ach_credit_transfer",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_ach_debit",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_acss_debit",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_alipay",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_au_becs_debit",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_bancontact",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_card",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_card_present",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_eps",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_giropay",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_ideal",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_klarna",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_multibanco",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_p24",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_sepa_credit_transfer",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_sepa_debit",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_sofort",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_three_d_secure",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "source_type_wechat",
+      "reachableVia": [
+        "source"
+      ]
+    },
+    {
+      "name": "stackable_discount_with_discount_settings",
+      "reachableVia": [
+        "(transitive via subscription_schedule_configuration_item)"
+      ]
+    },
+    {
+      "name": "stackable_discount_with_discount_settings_and_discount_end",
+      "reachableVia": [
+        "(transitive via subscription_schedule_phase_configuration)"
+      ]
+    },
+    {
+      "name": "subscription_automatic_tax",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscription_billing_thresholds",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscription_item_billing_thresholds",
+      "reachableVia": [
+        "subscription_item"
+      ]
+    },
+    {
+      "name": "subscription_payment_method_options_card",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "subscription_payment_method_options_mandate_options_pix",
+      "reachableVia": [
+        "(transitive via subscription_payment_method_options_pix)"
+      ]
+    },
+    {
+      "name": "subscription_payment_method_options_pix",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_payment_method_options)"
+      ]
+    },
+    {
+      "name": "subscription_pending_invoice_item_interval",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscription_schedule",
+      "reachableVia": [
+        "subscription",
+        "quote"
+      ]
+    },
+    {
+      "name": "subscription_schedule_add_invoice_item",
+      "reachableVia": [
+        "(transitive via subscription_schedule_phase_configuration)"
+      ]
+    },
+    {
+      "name": "subscription_schedule_add_invoice_item_period",
+      "reachableVia": [
+        "(transitive via subscription_schedule_add_invoice_item)"
+      ]
+    },
+    {
+      "name": "subscription_schedule_configuration_item",
+      "reachableVia": [
+        "(transitive via subscription_schedule_phase_configuration)"
+      ]
+    },
+    {
+      "name": "subscription_schedule_current_phase",
+      "reachableVia": [
+        "(transitive via subscription_schedule)"
+      ]
+    },
+    {
+      "name": "subscription_schedule_phase_configuration",
+      "reachableVia": [
+        "(transitive via subscription_schedule)"
+      ]
+    },
+    {
+      "name": "subscription_schedules_resource_default_settings",
+      "reachableVia": [
+        "(transitive via subscription_schedule)"
+      ]
+    },
+    {
+      "name": "subscription_schedules_resource_default_settings_automatic_tax",
+      "reachableVia": [
+        "(transitive via subscription_schedules_resource_default_settings)"
+      ]
+    },
+    {
+      "name": "subscription_transfer_data",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_billing_cycle_anchor_config",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_billing_mode",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_billing_mode_flexible",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_billing_mode)"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_billing_schedules",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_billing_schedules_applies_to",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_billing_schedules)"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_billing_schedules_bill_until",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_billing_schedules)"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_billing_schedules_bill_until_duration",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_billing_schedules_bill_until)"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_pause_collection",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_payment_method_options",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_payment_settings)"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_payment_settings",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_pending_update",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_subscription_invoice_settings",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_subscription_presentment_details",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_trial_settings_end_behavior",
+      "reachableVia": [
+        "(transitive via subscriptions_resource_trial_settings_trial_settings)"
+      ]
+    },
+    {
+      "name": "subscriptions_resource_trial_settings_trial_settings",
+      "reachableVia": [
+        "subscription"
+      ]
+    },
+    {
+      "name": "subscriptions_trials_resource_end_behavior",
+      "reachableVia": [
+        "(transitive via subscriptions_trials_resource_trial_settings)"
+      ]
+    },
+    {
+      "name": "subscriptions_trials_resource_trial_settings",
+      "reachableVia": [
+        "(transitive via payment_links_resource_subscription_data)"
+      ]
+    },
+    {
+      "name": "tax_rate_flat_amount",
+      "reachableVia": [
+        "tax_rate"
+      ]
+    },
+    {
+      "name": "three_d_secure_details",
+      "reachableVia": [
+        "(transitive via setup_attempt_payment_method_details_card)"
+      ]
+    },
+    {
+      "name": "three_d_secure_details_charge",
+      "reachableVia": [
+        "(transitive via payment_method_details_card)"
+      ]
+    },
+    {
+      "name": "three_d_secure_usage",
+      "reachableVia": [
+        "(transitive via payment_method_card)"
+      ]
+    },
+    {
+      "name": "token_card_networks",
+      "reachableVia": [
+        "(transitive via card)"
+      ]
+    },
+    {
+      "name": "transfer_data",
+      "reachableVia": [
+        "payment_intent"
+      ]
+    },
+    {
+      "name": "transfer_reversal",
+      "reachableVia": [
+        "refund",
+        "transfer"
+      ]
+    },
+    {
+      "name": "transfer_schedule",
+      "reachableVia": [
+        "(transitive via account_payout_settings)"
+      ]
+    },
+    {
+      "name": "transform_quantity",
+      "reachableVia": [
+        "price"
+      ]
+    },
+    {
+      "name": "transform_usage",
+      "reachableVia": [
+        "plan"
+      ]
+    },
+    {
+      "name": "us_bank_account_networks",
+      "reachableVia": [
+        "(transitive via payment_method_us_bank_account)"
+      ]
+    }
+  ],
+  "outOfScopeCoreObject": [
+    "account_link",
+    "account_session",
+    "apple_pay_domain",
+    "balance",
+    "balance.available",
+    "balance_amount",
+    "balance_amount_by_source_type",
+    "balance_amount_net",
+    "balance_detail",
+    "balance_detail_ungated",
+    "balance_net_available",
+    "balance_settings",
+    "balance_settings_resource_automatic_transfer_rule",
+    "balance_settings_resource_payments",
+    "balance_settings_resource_payout_schedule",
+    "balance_settings_resource_payouts",
+    "balance_settings_resource_settlement_timing",
+    "balance_settings_resource_start_of_day",
+    "billing.alert",
+    "billing.alert_triggered",
+    "billing.credit_balance_summary",
+    "billing.meter",
+    "billing.meter.reactivated",
+    "billing.meter_event",
+    "billing.meter_event_adjustment",
+    "billing.meter_event_summary",
+    "billing_bill_resource_invoicing_lines_common_credited_items",
+    "billing_credit_grants_resource_applicable_price",
+    "billing_credit_grants_resource_monetary_amount",
+    "billing_credit_grants_resource_scope",
+    "billing_meter_resource_aggregation_settings",
+    "billing_meter_resource_billing_meter_event_adjustment_cancel",
+    "billing_meter_resource_billing_meter_status_transitions",
+    "billing_meter_resource_billing_meter_value",
+    "billing_meter_resource_customer_mapping_settings",
+    "cash_balance.funds_available",
+    "charge.captured",
+    "charge.dispute.funds_reinstated",
+    "charge.dispute.funds_withdrawn",
+    "checkout.session.async_payment_failed",
+    "checkout.session.async_payment_succeeded",
+    "checkout.session.completed",
+    "confirmation_token",
+    "confirmation_tokens_resource_mandate_data",
+    "confirmation_tokens_resource_mandate_data_resource_customer_acceptance",
+    "confirmation_tokens_resource_mandate_data_resource_customer_acceptance_resource_online",
+    "confirmation_tokens_resource_payment_method_options",
+    "confirmation_tokens_resource_payment_method_options_resource_card",
+    "confirmation_tokens_resource_payment_method_options_resource_card_resource_installment",
+    "confirmation_tokens_resource_payment_method_preview",
+    "confirmation_tokens_resource_shipping",
+    "connect_collection_transfer",
+    "connect_embedded_account_config_claim",
+    "connect_embedded_account_features_claim",
+    "connect_embedded_account_session_create_components",
+    "connect_embedded_base_config_claim",
+    "connect_embedded_base_features",
+    "connect_embedded_disputes_list_config",
+    "connect_embedded_disputes_list_features",
+    "connect_embedded_financial_account_config_claim",
+    "connect_embedded_financial_account_features",
+    "connect_embedded_financial_account_transactions_config_claim",
+    "connect_embedded_financial_account_transactions_features",
+    "connect_embedded_instant_payouts_promotion_config",
+    "connect_embedded_instant_payouts_promotion_features",
+    "connect_embedded_issuing_card_config_claim",
+    "connect_embedded_issuing_card_features",
+    "connect_embedded_issuing_cards_list_config_claim",
+    "connect_embedded_issuing_cards_list_features",
+    "connect_embedded_payment_disputes_config",
+    "connect_embedded_payment_disputes_features",
+    "connect_embedded_payments_config_claim",
+    "connect_embedded_payments_features",
+    "connect_embedded_payouts_config",
+    "connect_embedded_payouts_features",
+    "country_spec",
+    "country_spec_verification_field_details",
+    "country_spec_verification_fields",
+    "coupon_currency_option",
+    "credit_balance",
+    "currency_option",
+    "customer.source.expiring",
+    "customer.subscription.paused",
+    "customer.subscription.pending_update_applied",
+    "customer.subscription.pending_update_expired",
+    "customer.subscription.resumed",
+    "customer_balance_resource_cash_balance_transaction_resource_adjusted_for_overdraft",
+    "customer_balance_resource_cash_balance_transaction_resource_applied_to_payment_transaction",
+    "customer_balance_resource_cash_balance_transaction_resource_funded_transaction",
+    "customer_balance_resource_cash_balance_transaction_resource_funded_transaction_resource_bank_transfer",
+    "customer_balance_resource_cash_balance_transaction_resource_funded_transaction_resource_bank_transfer_resource_eu_bank_transfer",
+    "customer_balance_resource_cash_balance_transaction_resource_funded_transaction_resource_bank_transfer_resource_gb_bank_transfer",
+    "customer_balance_resource_cash_balance_transaction_resource_funded_transaction_resource_bank_transfer_resource_jp_bank_transfer",
+    "customer_balance_resource_cash_balance_transaction_resource_funded_transaction_resource_bank_transfer_resource_us_bank_transfer",
+    "customer_balance_resource_cash_balance_transaction_resource_refunded_from_payment_transaction",
+    "customer_balance_resource_cash_balance_transaction_resource_transferred_to_balance",
+    "customer_balance_resource_cash_balance_transaction_resource_unapplied_from_payment_transaction",
+    "customer_cash_balance_transaction",
+    "customer_session",
+    "customer_session_resource_components",
+    "customer_session_resource_components_resource_buy_button",
+    "customer_session_resource_components_resource_customer_sheet",
+    "customer_session_resource_components_resource_customer_sheet_resource_features",
+    "customer_session_resource_components_resource_mobile_payment_element",
+    "customer_session_resource_components_resource_mobile_payment_element_resource_features",
+    "customer_session_resource_components_resource_payment_element",
+    "customer_session_resource_components_resource_payment_element_resource_features",
+    "customer_session_resource_components_resource_pricing_table",
+    "deleted_apple_pay_domain",
+    "deleted_bank_account",
+    "deleted_card",
+    "deleted_product_feature",
+    "deleted_webhook_endpoint",
+    "dispute_transaction_shipping_address",
+    "ephemeral_key",
+    "exchange_rate",
+    "financial_reporting_finance_report_run_run_parameters",
+    "forwarded_request_context",
+    "forwarded_request_details",
+    "forwarded_request_header",
+    "forwarded_response_details",
+    "funding_instructions",
+    "funding_instructions_bank_transfer",
+    "gelato_data_document_report_date_of_birth",
+    "gelato_data_document_report_expiration_date",
+    "gelato_data_document_report_issued_date",
+    "gelato_data_id_number_report_date",
+    "gelato_data_verified_outputs_date",
+    "gelato_document_report",
+    "gelato_document_report_error",
+    "gelato_email_report",
+    "gelato_email_report_error",
+    "gelato_id_number_report",
+    "gelato_id_number_report_error",
+    "gelato_phone_report",
+    "gelato_phone_report_error",
+    "gelato_provided_details",
+    "gelato_related_person",
+    "gelato_report_document_options",
+    "gelato_report_id_number_options",
+    "gelato_selfie_report",
+    "gelato_selfie_report_error",
+    "gelato_session_document_options",
+    "gelato_session_email_options",
+    "gelato_session_id_number_options",
+    "gelato_session_last_error",
+    "gelato_session_matching_options",
+    "gelato_session_phone_options",
+    "gelato_verification_report_options",
+    "gelato_verification_session_options",
+    "gelato_verified_outputs",
+    "inbound_transfers",
+    "inbound_transfers_payment_method_details_us_bank_account",
+    "insights_resources_payment_evaluation_address",
+    "insights_resources_payment_evaluation_billing_details",
+    "insights_resources_payment_evaluation_client_device_metadata",
+    "insights_resources_payment_evaluation_customer_details",
+    "insights_resources_payment_evaluation_dispute_opened",
+    "insights_resources_payment_evaluation_early_fraud_warning_received",
+    "insights_resources_payment_evaluation_event",
+    "insights_resources_payment_evaluation_merchant_blocked",
+    "insights_resources_payment_evaluation_money_movement_card",
+    "insights_resources_payment_evaluation_money_movement_details",
+    "insights_resources_payment_evaluation_outcome",
+    "insights_resources_payment_evaluation_payment_details",
+    "insights_resources_payment_evaluation_payment_method_details",
+    "insights_resources_payment_evaluation_refunded",
+    "insights_resources_payment_evaluation_rejected",
+    "insights_resources_payment_evaluation_rejected_card",
+    "insights_resources_payment_evaluation_shipping",
+    "insights_resources_payment_evaluation_signal_v2",
+    "insights_resources_payment_evaluation_signals",
+    "insights_resources_payment_evaluation_succeeded",
+    "insights_resources_payment_evaluation_succeeded_card",
+    "insights_resources_payment_evaluation_user_intervention_raised",
+    "insights_resources_payment_evaluation_user_intervention_raised_custom",
+    "insights_resources_payment_evaluation_user_intervention_resolved",
+    "invoice.finalization_failed",
+    "invoice.overdue",
+    "invoice.overpaid",
+    "invoice.payment_attempt_required",
+    "invoice.payment_succeeded",
+    "invoice.upcoming",
+    "invoice.will_be_due",
+    "invoice_payment_method_options_customer_balance_bank_transfer_eu_bank_transfer",
+    "invoice_payment_method_options_us_bank_account_linked_account_options_filters",
+    "invoice_rendering_template",
+    "login_link",
+    "outbound_payments_payment_method_details",
+    "outbound_payments_payment_method_details_financial_account",
+    "outbound_payments_payment_method_details_us_bank_account",
+    "outbound_transfers_payment_method_details",
+    "outbound_transfers_payment_method_details_financial_account",
+    "outbound_transfers_payment_method_details_us_bank_account",
+    "payment_attempt_record",
+    "payment_flows_amount_details_client",
+    "payment_flows_installment_options",
+    "payment_intent.amount_capturable_updated",
+    "payment_intent.partially_funded",
+    "payment_intent_type_specific_payment_method_options_client",
+    "payment_method.automatically_updated",
+    "payment_method_config_resource_display_preference",
+    "payment_method_config_resource_payment_method_properties",
+    "payment_method_configuration",
+    "payment_method_details_payment_record_acss_debit",
+    "payment_method_details_payment_record_affirm",
+    "payment_method_details_payment_record_afterpay_clearpay",
+    "payment_method_details_payment_record_alma",
+    "payment_method_details_payment_record_amazon_pay",
+    "payment_method_details_payment_record_bancontact",
+    "payment_method_details_payment_record_billie",
+    "payment_method_details_payment_record_bizum",
+    "payment_method_details_payment_record_blik",
+    "payment_method_details_payment_record_boleto",
+    "payment_method_details_payment_record_cashapp",
+    "payment_method_details_payment_record_eps",
+    "payment_method_details_payment_record_giropay",
+    "payment_method_details_payment_record_ideal",
+    "payment_method_details_payment_record_kakao_pay",
+    "payment_method_details_payment_record_klarna",
+    "payment_method_details_payment_record_konbini",
+    "payment_method_details_payment_record_link",
+    "payment_method_details_payment_record_mb_way",
+    "payment_method_details_payment_record_mobilepay",
+    "payment_method_details_payment_record_multibanco",
+    "payment_method_details_payment_record_naver_pay",
+    "payment_method_details_payment_record_oxxo",
+    "payment_method_details_payment_record_p24",
+    "payment_method_details_payment_record_pay_by_bank",
+    "payment_method_details_payment_record_payco",
+    "payment_method_details_payment_record_paynow",
+    "payment_method_details_payment_record_payto",
+    "payment_method_details_payment_record_pix",
+    "payment_method_details_payment_record_promptpay",
+    "payment_method_details_payment_record_revolut_pay",
+    "payment_method_details_payment_record_samsung_pay",
+    "payment_method_details_payment_record_satispay",
+    "payment_method_details_payment_record_scalapay",
+    "payment_method_details_payment_record_sepa_debit",
+    "payment_method_details_payment_record_sofort",
+    "payment_method_details_payment_record_sunbit",
+    "payment_method_details_payment_record_swish",
+    "payment_method_details_payment_record_twint",
+    "payment_method_details_payment_record_upi",
+    "payment_method_details_payment_record_us_bank_account",
+    "payment_method_details_payment_record_wechat_pay",
+    "payment_method_details_payment_record_zip",
+    "payment_method_domain",
+    "payment_method_domain_resource_payment_method_status",
+    "payment_method_domain_resource_payment_method_status_details",
+    "payments_primitives_payment_records_resource_address",
+    "payments_primitives_payment_records_resource_billing_details",
+    "payments_primitives_payment_records_resource_payment_method_alma_details_resource_installments",
+    "payments_primitives_payment_records_resource_payment_method_amazon_pay_details_resource_funding",
+    "payments_primitives_payment_records_resource_payment_method_amazon_pay_details_resource_funding_resource_funding_card",
+    "payments_primitives_payment_records_resource_payment_method_card_details",
+    "payments_primitives_payment_records_resource_payment_method_card_details_resource_checks",
+    "payments_primitives_payment_records_resource_payment_method_card_details_resource_installment_plan",
+    "payments_primitives_payment_records_resource_payment_method_card_details_resource_installments",
+    "payments_primitives_payment_records_resource_payment_method_card_details_resource_network_token",
+    "payments_primitives_payment_records_resource_payment_method_card_details_resource_three_d_secure",
+    "payments_primitives_payment_records_resource_payment_method_card_details_resource_wallet",
+    "payments_primitives_payment_records_resource_payment_method_card_details_resource_wallet_resource_apple_pay",
+    "payments_primitives_payment_records_resource_payment_method_card_details_resource_wallet_resource_google_pay",
+    "payments_primitives_payment_records_resource_payment_method_custom_details",
+    "payments_primitives_payment_records_resource_payment_method_klarna_details_resource_payer_details",
+    "payments_primitives_payment_records_resource_payment_method_klarna_details_resource_payer_details_resource_payer_details_address",
+    "payments_primitives_payment_records_resource_payment_method_konbini_details_resource_store",
+    "payments_primitives_payment_records_resource_payment_method_mobilepay_details_resource_card",
+    "payments_primitives_payment_records_resource_payment_method_revolut_pay_details_resource_funding",
+    "payments_primitives_payment_records_resource_payment_method_revolut_pay_details_resource_funding_resource_funding_card",
+    "payments_primitives_payment_records_resource_processor_details_resource_custom_details",
+    "payout.reconciliation_completed",
+    "portal_business_profile",
+    "portal_customer_update",
+    "portal_features",
+    "portal_flows_after_completion_hosted_confirmation",
+    "portal_flows_after_completion_redirect",
+    "portal_flows_coupon_offer",
+    "portal_flows_flow",
+    "portal_flows_flow_after_completion",
+    "portal_flows_flow_subscription_cancel",
+    "portal_flows_flow_subscription_update",
+    "portal_flows_flow_subscription_update_confirm",
+    "portal_flows_retention",
+    "portal_flows_subscription_update_confirm_discount",
+    "portal_flows_subscription_update_confirm_item",
+    "portal_invoice_list",
+    "portal_login_page",
+    "portal_payment_method_update",
+    "portal_resource_schedule_update_at_period_end",
+    "portal_resource_schedule_update_at_period_end_condition",
+    "portal_subscription_cancel",
+    "portal_subscription_cancellation_reason",
+    "portal_subscription_update",
+    "portal_subscription_update_product",
+    "portal_subscription_update_product_adjustable_quantity",
+    "product_feature",
+    "promotion_code_currency_option",
+    "quote.accepted",
+    "received_payment_method_details_financial_account",
+    "reserve.hold",
+    "reserve.plan",
+    "reserve.plan.disabled",
+    "reserve.release",
+    "reserve_transaction",
+    "reserves_reserve_holds_resources_release_detail",
+    "reserves_reserve_holds_resources_release_schedule",
+    "reserves_reserve_plans_resources_fixed_release",
+    "reserves_reserve_plans_resources_rolling_release",
+    "reserves_reserve_releases_resources_source_transaction",
+    "scheduled_query_run",
+    "secret_service_resource_scope",
+    "setup_intent.setup_failed",
+    "setup_intent_type_specific_payment_method_options_client",
+    "shipping_rate_currency_option",
+    "source.chargeable",
+    "source.mandate_notification",
+    "source.refund_attributes_required",
+    "source_mandate_notification",
+    "source_mandate_notification_acss_debit_data",
+    "source_mandate_notification_bacs_debit_data",
+    "source_mandate_notification_sepa_debit_data",
+    "source_transaction",
+    "source_transaction_ach_credit_transfer_data",
+    "source_transaction_chf_credit_transfer_data",
+    "source_transaction_gbp_credit_transfer_data",
+    "source_transaction_paper_check_data",
+    "source_transaction_sepa_credit_transfer_data",
+    "subscription_schedule.aborted",
+    "subscription_schedule.completed",
+    "subscription_schedule.expiring",
+    "subscription_schedule.released",
+    "subscription_schedules_resource_invoice_item_period_resource_period_end",
+    "subscription_schedules_resource_invoice_item_period_resource_period_start",
+    "thresholds_resource_usage_alert_filter",
+    "thresholds_resource_usage_threshold_config",
+    "topup.reversed",
+    "transfer.reversed",
+    "verification_session_redaction"
+  ]
+}

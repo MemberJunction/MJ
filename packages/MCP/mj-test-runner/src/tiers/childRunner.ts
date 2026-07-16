@@ -461,7 +461,8 @@ async function setupTransport(manifest) {
     };
   }
 
-  let routes = manifest.Routes || [];
+  const baseRoutes = manifest.Routes || [];
+  let routes = baseRoutes;
   const server = await new Promise((resolveServer) => {
     const s = _http.createServer((req, res) => {
       const u = new URL(req.url || '/', 'http://127.0.0.1');
@@ -501,7 +502,19 @@ async function setupTransport(manifest) {
   return {
     transport, baseURL,
     configuration: JSON.stringify(templatedCfg),
-    setRoutes(next) { routes = next || []; },
+    // A delta pass declares only the routes whose RESPONSE CHANGES for the second sync (e.g. a member was
+    // deleted so that object list route now returns fewer records). It must NOT re-declare every OTHER route
+    // the second sync still needs: unchanged objects list routes AND, critically, the page-in-path pagination
+    // TERMINATORS (an empty next-page route so the connector stops paging). MERGE delta routes OVER the base
+    // (delta wins by METHOD+PATH; unchanged base routes are retained) instead of replacing the whole set,
+    // else a paginated object in the delta pass 404s on its next page and every object not in the delta pass
+    // vanishes. (NOTE: this code lives inside the CHILD_TRANSPORT template string - no backticks / no dollar-brace.)
+    setRoutes(next) {
+      const nextRoutes = next || [];
+      const keyOf = (r) => ((r.Method || 'GET').toUpperCase() + ' ' + r.Path);
+      const overridden = new Set(nextRoutes.map(keyOf));
+      routes = nextRoutes.concat(baseRoutes.filter((r) => !overridden.has(keyOf(r))));
+    },
     setFileContent() {},
     wireBaseURL(connector) {
       // Swap only the ORIGIN (scheme+host) to the mock, PRESERVING the connector's own

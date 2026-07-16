@@ -1,0 +1,18 @@
+{
+  "total": 3,
+  "results": [
+    {
+      "id": "712",
+      "properties": {
+        "hs_object_id": "712",
+        "email": "example+12@example.com",
+        "hs_lastmodifieddate": "1773000000000",
+        "createdate": "2026-03-07T00:00:00.000Z"
+      },
+      "createdAt": "2026-03-07T00:00:00.000Z",
+      "updatedAt": "2026-03-07T00:00:00.000Z",
+      "archived": false
+    }
+  ],
+  "paging": null
+}

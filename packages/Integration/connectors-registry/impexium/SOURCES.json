@@ -1,0 +1,92 @@
+{
+  "Vendor": "re:Members AMS (formerly Impexium)",
+  "VendorSlug": "impexium",
+  "AuditedAt": "2026-07-11T23:00:00.000Z",
+  "Disambiguation": "This vendor is 'Impexium', the association-management-software (AMS) company rebranded 're:Members AMS' (acquired by Community Brands). It is UNRELATED to 'ImpexDocs' (apidocs.impexdocs.com), an export/shipping-logistics documentation vendor — a pure name collision. apidocs.impexdocs.com was NOT fetched, cited, or used anywhere in this audit, per explicit instruction. Also distinct from other Community Brands AMS lines (e.g. MemberSuite).",
+  "Sources": [
+    {
+      "URL": "https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/certified-connectors/Impexium/apiDefinition.swagger.json",
+      "LocalArtifact": "sources/apiDefinition.swagger.json",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "Title": "re:Members AMS (formerly Impexium) — Power Platform certified-connector Swagger 2.0 definition (apiDefinition.swagger.json)",
+      "CoversTaxonomies": [
+        "Individuals", "Organizations", "Memberships", "Events", "Event Registrations & Registrants",
+        "Event Cancellations", "Course Attendees", "Orders (Open Orders)", "Purchases", "Abandoned Checkouts",
+        "Committees & Sub-Committees", "Committee Members", "Committee Positions", "Committee Nominees",
+        "Awards", "Award Nominations", "Award Recipients (Individual/Organization)", "Certifications", "Licenses",
+        "Exams", "Exam Scores", "Education Credits", "Subscriptions", "Tasks", "User Tasks", "Customer Requests",
+        "Exhibits", "Exhibitors", "Activities", "Notes", "Relationships", "Countries", "States", "Relationship Types",
+        "Organization Services", "Custom Field Definitions", "Custom Field Values (nested)", "Contact Mechanisms (nested)",
+        "Categories (nested)", "Webhooks / Event Notifications", "Authentication & Connection Parameters", "Pagination Mechanics"
+      ],
+      "AccessNotes": "Downloaded IN FULL via curl (843,708 bytes; Swagger 2.0; 116 paths / 137 operations across 14 tags + 14 webhook triggers; 73 named response/request `definitions`). Discovered by directly probing the known PowerPlatformConnectors repo path pattern `certified-connectors/Impexium/apiDefinition.swagger.json` after the MS Learn reference page and its linked GitHub docs-source (MicrosoftDocs/BusinessApplicationPlatform-Connectors, live/dev branches — both 404'd, likely private/renamed) failed to yield the raw spec directly. This IS the vendor's own generator source for the Microsoft Learn connector reference page — highest-value credential-free machine-readable contract. Cross-checked with the shared `enumerate-catalog.mjs` primitive: 73 record types / 573 fields, matching `Object.keys(definitions).length` exactly (independent in-file signal agrees). Also pulled the sibling `apiProperties.json` (connection-parameter + auth-policy metadata) into `sources/apiProperties.json`, and a full flattened path/method/operationId/tag/response-ref listing into `sources/full-operation-list.txt` for the extractor to consume without re-parsing the 843KB file in-context."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/connectors/impexium/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Impexium — Connectors reference | Microsoft Learn (rendered connector reference page)",
+      "CoversTaxonomies": [
+        "Individuals", "Organizations", "Memberships", "Events", "Event Registrations & Registrants",
+        "Committees & Sub-Committees", "Committee Members", "Committee Nominees", "Awards", "Award Nominations",
+        "Certifications", "Licenses", "Exams", "Tasks", "Customer Requests", "Exhibits", "Exhibitors",
+        "Course Attendees", "Countries", "States", "Authentication & Connection Parameters"
+      ],
+      "AccessNotes": "Fetched successfully; renders a curated, human-readable action list (100+ actions) generated from the same swagger. CROSS-CHECK FINDING: this page's summary claimed 'No Triggers Documented — actions only', but the underlying swagger.json (Tier-1, above) proves 14 real webhook triggers exist (x-ms-trigger:'single' + x-ms-notification-content on 14 distinct `/api/v1/Webhooks/*` paths). This is a direct, concrete demonstration of why the raw machine-readable swagger outranks the rendered prose page — the prose page under-reported the connector's actual surface. Retained as a secondary, corroborating source for human-readable action naming/grouping, never as the primary structural source."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/360033050011-Impexium-Integration-Overview",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Impexium Integration Overview — Higher Logic Support (Thrive Marketing Enterprise <-> Impexium sync)",
+      "CoversTaxonomies": ["Individuals", "Organizations", "Event Registrations & Registrants"],
+      "AccessNotes": "Fetched successfully (200, 21,348 bytes). Coverage is COARSE: names record types searchable/exportable from Impexium (Individual, Organization, Prospects, Customers, Booth staff, Event registrants) and Higher Logic's own destination objects (Distribution Lists, Target groups, Interests), but documents NO field-level API endpoint/schema detail — it is a partner-workflow guide, not an API reference. Confirms object EXISTENCE/naming only; cannot supply CRUD paths, field lists, or PK/FK evidence. This is the Thrive-Marketing-route integration, explicitly out-of-scope per the task's family exclusions (marketing sync route != core AMS API), retained only as corroborating naming evidence for Individuals/Organizations/Event-Registrants."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/360039980692-Impexium-Integration-Guide",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Impexium Integration Guide — Higher Logic Support",
+      "CoversTaxonomies": ["Individuals", "Organizations"],
+      "AccessNotes": "Fetched successfully (200, 23,218 bytes). Same coarse-grain limitation as the Overview article above — describes the daily-sync / query-driven segment-definition workflow, not the Impexium REST API's own endpoints or field schemas. No new taxonomy coverage beyond the Overview article."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/6047553759124-Impexium-Integration-Technical-Worksheet",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Impexium Integration Technical Worksheet — Higher Logic Support",
+      "CoversTaxonomies": [],
+      "AccessNotes": "302-redirected to a Zendesk `/access` login gate (`higherlogic.zendesk.com/access?...&return_to=...`) — this specific article requires an authenticated Higher Logic support-portal session, unlike the two Overview/Guide articles above which are public. Retried once via WebFetch (redirect-follow instructed) and once via direct curl -L (confirmed 302 -> login page, no content). Could not extract any technical-worksheet field-mapping content. Tagged WebFetchBlocked; downstream extractor should not assume this source contributed evidence."
+    },
+    {
+      "URL": "https://help.remembers.com/ams/Content/integrations.htm",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Title": "re:Members AMS Help Center — Integrations (and all sibling Content/*.htm pages, e.g. web_samples.htm, config_section_integration.htm, impexium environments.htm)",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Every `help.remembers.com/ams/Content/*.htm` URL tested (integrations.htm, web_samples.htm, impexium%20environments.htm, config_section_integration.htm, Home.htm) returns an IDENTICAL 4,006-byte static shell: a MadCap Central 'Secure Login' single-page-app (`<base href=\"/secure/\">`, `window.mcEnvironment={...centralLoginPortalBaseUri...}`) that requires a customer/admin login session before any real topic content renders client-side via JS. Confirmed via curl (3 attempts, all 200 status but identical login-shell bytes, not the real topic) and WebFetch (first attempt returned the same login-page summary). This is a genuine authentication wall, not a WebFetch bot-block — the HTML itself declares 'Secure Login'. Search-engine result snippets (e.g. 'GET /api/v1/Individual/{Page}...') appear to originate from a search-engine's own cached/indexed crawl of the authenticated content, not from a live, credential-free fetch path available to this audit. Tagged WebFetchBlocked; this help center likely documents the widest field-level prose coverage of any source here (per its search-snippet hints) but NONE of it could be verified or extracted. This is the single largest coverage gap in this audit — see Gaps."
+    },
+    {
+      "URL": "https://www.postman.com/martian-moon-680873/workspace/what-we-do-api/collection/8491869-98f4df90-a9d6-464d-924e-ae4a81011354",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 3,
+      "SourceCategory": "PostmanCollection",
+      "Title": "Impexium API - Getting Started | 'What we do API' Postman workspace (community/individual-published, not vendor-owned)",
+      "CoversTaxonomies": [],
+      "AccessNotes": "The workspace/collection web view is a JavaScript SPA (WebFetch returned only a bare 'Postman' heading, no folder/request content). Attempted the Postman public-collection API (`api.getpostman.com/collections/98f4df90-a9d6-464d-924e-ae4a81011354`) via curl — returned `401 {\"error\":{\"message\":\"Invalid API Key...\"}}`; the raw collection JSON export requires an authenticated Postman API key, which is out of credential-free scope. Also tried `postman.com/collections/<id>` direct-export pattern — 404. IMPORTANT: this workspace is owned by an individual account handle ('martian-moon-680873'), NOT an official Impexium/re:Members-branded Postman org — SourceTier downgraded to 3 (community-published, not vendor-owned) pending any evidence of official affiliation. Existence confirmed via web search only; zero structural content extracted. Tagged WebFetchBlocked."
+    }
+  ],
+  "ExcludedSources": [
+    {
+      "URL": "https://apidocs.impexdocs.com",
+      "Reason": "NAME-COLLISION EXCLUSION (explicit task instruction). 'ImpexDocs' is an unrelated export/shipping-logistics documentation vendor — a different company from Impexium/re:Members AMS. NOT fetched, NOT cited, NOT used anywhere in this audit or in any downstream extraction."
+    }
+  ]
+}

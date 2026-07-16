@@ -1,0 +1,14 @@
+{
+  "Entries": [
+    {
+      "URL": "https://developer.constantcontact.com/api_guide/rate_limits.html",
+      "AccessedAt": "2026-07-11T23:05:00.000Z",
+      "UsedFor": "Confirming vendor rate limit (4 req/sec + 10,000 req/day) for integration.BatchMaxRequestCount / BatchRequestWaitTime / Configuration.RateLimitPolicy",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "You can use your API key to send up to 10,000 requests per day and 4 requests per second. The request limit resets each day at UTC 00:00:00."
+    }
+  ]
+}

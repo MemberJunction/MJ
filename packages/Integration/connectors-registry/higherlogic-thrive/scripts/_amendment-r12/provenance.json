@@ -1,0 +1,22 @@
+[
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html",
+    "AccessedAt": "2026-07-10T03:26:48.916Z",
+    "UsedFor": "Volunteers.SupportsUpdate downgrade — ApproveVolunteerApplication is an admin approve/reject RPC, not a generic record Update",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsUpdate",
+    "Excerpt": "ApproveVolunteerApplicationRequest body ({VolunteerOpportunityKey, ContactKey, LegacyContactKey}) does not match any of Volunteers' own 17 field names (PK VolunteerOpportunityVolunteerKey; contact ref VolunteerContactKey). No settable field value — an implicit approve/reject side-effect. Update leg cleared; mirrors Ideas.SupportsUpdate downgrade."
+  },
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/ops/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T03:26:48.916Z",
+    "UsedFor": "Volunteers.SupportsWrite retained — VolunteerForOpportunity (Create) + WithdrawFromOpportunity (Delete) remain genuine record CRUD",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsWrite",
+    "Excerpt": "SupportsWrite stays true: Create (VolunteerForOpportunity) and Delete (WithdrawFromOpportunity) are unambiguous record CRUD; only the Update leg is defective and is downgraded. Do not overcorrect SupportsWrite to false."
+  }
+]

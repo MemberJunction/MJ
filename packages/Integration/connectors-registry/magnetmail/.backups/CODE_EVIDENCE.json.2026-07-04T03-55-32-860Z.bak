@@ -1,0 +1,1001 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/magnetmail/scripts/extract-wsdl-facts.mjs",
+      "ScriptRunAt": "2026-07-04T03:38:35.784Z",
+      "StructuredOutput": {
+        "soapAddr": [
+          "https://hlma-apie1.magnetmail.net/mmapi.asmx"
+        ],
+        "targetNamespace": "http://www.magnetmail.net/",
+        "operationCount": 55,
+        "authenticateShape": [
+          "<s:element minOccurs=\"0\" maxOccurs=\"1\" name=\"username\" type=\"s:string\" />",
+          "<s:element minOccurs=\"0\" maxOccurs=\"1\" name=\"password\" type=\"s:string\" />"
+        ],
+        "authenticateRespShape": [
+          "<s:element minOccurs=\"0\" maxOccurs=\"1\" name=\"AuthenticateResult\" type=\"tns:AuthenticationResult\" />"
+        ],
+        "mutationLike": [
+          "addGroup",
+          "addRecipient",
+          "createMagnetMailMessage",
+          "unsubscribeRecipients",
+          "CreateEventSignUp"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.NavigationBaseURL"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/magnetmail/scripts/extract-wsdl-facts.mjs",
+      "ScriptRunAt": "2026-07-04T03:38:35.784Z",
+      "StructuredOutput": {
+        "paginationOps": {
+          "getGroupRecipients": [
+            "groupId",
+            "pageNumber",
+            "pageCount"
+          ]
+        },
+        "watermarkOps": {
+          "getUnsubscribes": [
+            "user_id",
+            "fromDate",
+            "toDate"
+          ],
+          "getSpamComplaints": [
+            "user_id",
+            "fromDate",
+            "toDate"
+          ],
+          "getMessages": [
+            "user_id",
+            "createStartDate",
+            "createEndDate",
+            "sentStartDate",
+            "sentEndDate",
+            "archived",
+            "hidden",
+            "hasFax",
+            "hasEmail"
+          ],
+          "getMessagesUTC": [
+            "user_id",
+            "createStartDate",
+            "createEndDate",
+            "sentStartDate",
+            "sentEndDate",
+            "archived",
+            "hidden",
+            "hasFax",
+            "hasEmail"
+          ],
+          "getSubscribedRecipients": [
+            "user_id",
+            "startDate",
+            "endDate",
+            "group_ids",
+            "report_type"
+          ],
+          "getSuppressedRecipientList": [
+            "group_id",
+            "start_date",
+            "end_date"
+          ],
+          "getMessageList": [
+            "user_id",
+            "createStartDate",
+            "createEndDate",
+            "sentStartDate",
+            "sentEndDate",
+            "archived",
+            "hidden",
+            "hasFax",
+            "hasEmail"
+          ],
+          "getMessageListUtc": [
+            "user_id",
+            "createStartDate",
+            "createEndDate",
+            "sentStartDate",
+            "sentEndDate",
+            "archived",
+            "hidden",
+            "hasFax",
+            "hasEmail"
+          ]
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PaginationDefaults"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/magnetmail/scripts/extract-criteria-types.mjs",
+      "ScriptRunAt": "2026-07-04T03:38:35.784Z",
+      "StructuredOutput": {
+        "criteriaTypes": {
+          "SearchCriteria": {
+            "base": null,
+            "ownFields": [
+              {
+                "name": "pageNo",
+                "type": "s:int"
+              },
+              {
+                "name": "pageSize",
+                "type": "s:int"
+              }
+            ]
+          },
+          "PagedSearchCriteria": {
+            "base": "DomainBase",
+            "ownFields": [
+              {
+                "name": "PageNo",
+                "type": "s:int"
+              },
+              {
+                "name": "PageSize",
+                "type": "s:int"
+              }
+            ]
+          },
+          "DateRangeSearchCriteria": {
+            "base": "PagedSearchCriteria",
+            "ownFields": [
+              {
+                "name": "SearchStartDate",
+                "type": "s:dateTime"
+              },
+              {
+                "name": "SearchEndDate",
+                "type": "s:dateTime"
+              }
+            ]
+          },
+          "MessageLinkTrackingSearchCriteria": {
+            "base": "DateRangeSearchCriteria",
+            "ownFields": [
+              {
+                "name": "MessageId",
+                "type": "s:long"
+              },
+              {
+                "name": "LinkUrl",
+                "type": "s:string"
+              }
+            ]
+          },
+          "MessageTrackingSearchCriteria": {
+            "base": "DateRangeSearchCriteria",
+            "ownFields": [
+              {
+                "name": "ReportType",
+                "type": "tns:MessageTrackingReportType"
+              }
+            ]
+          },
+          "PersonifySubscriptionMappingSearchCriteria": {
+            "base": "DomainBase",
+            "ownFields": [
+              {
+                "name": "ObjectInPersonify",
+                "type": "tns:PersonifyObject"
+              }
+            ]
+          },
+          "UnsubscribeSearchCriteria": {
+            "base": "DateRangeSearchCriteria",
+            "ownFields": [
+              {
+                "name": "MessageId",
+                "type": "s:long"
+              },
+              {
+                "name": "GroupId",
+                "type": "s:long"
+              },
+              {
+                "name": "GroupCategoryId",
+                "type": "s:long"
+              }
+            ]
+          },
+          "RecipientSearchCriteria": null
+        },
+        "wrapperOps": {
+          "GetMessageLinkTracking": "MessageLinkTrackingSearchCriteria",
+          "GetMessageSentTracking": "MessageTrackingSearchCriteria",
+          "GetMessageOpenTracking": "MessageTrackingSearchCriteria",
+          "SearchPersonifySubscriptionMappings": "PersonifySubscriptionMappingSearchCriteria",
+          "GetUnsubscribeTracking": "UnsubscribeSearchCriteria",
+          "searchForRecipients": "RecipientSearchCriteria"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.COMPLEX_WRAPPERS"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.366Z",
+      "StructuredOutput": {
+        "io": "Error",
+        "fields": 5,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Error"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "newsletter",
+        "fields": 3,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.newsletter"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "recipient_history",
+        "fields": 3,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.recipient_history"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "message_id",
+        "how": "field 'message_id' is the best-available own-identity id (score 1); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.email_history.message_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "email_history",
+        "fields": 6,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_history"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "link_url_id",
+        "how": "field 'link_url_id' is the best-available own-identity id (score 4); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.link.link_url_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "link",
+        "fields": 3,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.link"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "website_link_url_id",
+        "how": "field 'website_link_url_id' is the best-available own-identity id (score 4); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.website_link.website_link_url_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "website_link",
+        "fields": 2,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.website_link"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "fax_history",
+        "fields": 4,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fax_history"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "form_history",
+        "fields": 2,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.form_history"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "recp_unsubscribe",
+        "fields": 5,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.recp_unsubscribe"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "id",
+        "how": "field 'id' — universal own-identity convention",
+        "strength": "Convergent"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Recipient.id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "Recipient",
+        "fields": 50,
+        "base": "Asset"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Recipient"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "User_Id",
+        "how": "field 'User_Id' matches own-entity id convention '<User>_id'",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.User.User_Id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "User",
+        "fields": 22,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.User"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "MessageList",
+        "fields": 3,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.MessageList"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "message_id",
+        "how": "field 'message_id' matches own-entity id convention '<Message>_id'",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Message.message_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "Message",
+        "fields": 6,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Message"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "group_id",
+        "how": "field 'group_id' is the best-available own-identity id (score 4); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.JobToGroup.group_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "JobToGroup",
+        "fields": 3,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.JobToGroup"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "linkid",
+        "how": "field 'linkid' is the best-available own-identity id (score 4); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Links.linkid.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "Links",
+        "fields": 7,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Links"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "TrackingData",
+        "fields": 15,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.TrackingData"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "TrackingDetails",
+        "fields": 4,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.TrackingDetails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "MMId",
+        "how": "field 'MMId' is the best-available own-identity id (score 1); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.recp_track.MMId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "recp_track",
+        "fields": 7,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.recp_track"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "group_id",
+        "how": "field 'group_id' matches own-entity id convention '<group>_id'",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.group.group_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "group",
+        "fields": 7,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.group"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "fieldDefn",
+        "fields": 2,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fieldDefn"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "error",
+        "fields": 5,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.error"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "message_id",
+        "how": "field 'message_id' matches own-entity id convention '<MessageDetails>_id'",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.MessageDetails.message_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "MessageDetails",
+        "fields": 24,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.MessageDetails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "Search_Id",
+        "how": "field 'Search_Id' is the best-available own-identity id (score 1); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.MagnetMailQueries.Search_Id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "MagnetMailQueries",
+        "fields": 4,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.MagnetMailQueries"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "subscription",
+        "fields": 3,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.subscription"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "RecipientSuppressionList",
+        "fields": 3,
+        "base": "Asset"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.RecipientSuppressionList"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "RecipientExtended",
+        "fields": 2,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.RecipientExtended"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "RecipientExtendedField",
+        "fields": 2,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.RecipientExtendedField"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "Id",
+        "how": "field 'id' — universal own-identity convention",
+        "strength": "Convergent"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.RecipientGroup.Id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "RecipientGroup",
+        "fields": 7,
+        "base": "Asset"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.RecipientGroup"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "pkField": "Id",
+        "how": "field 'id' — universal own-identity convention",
+        "strength": "Convergent"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Unsubscribe.Id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.367Z",
+      "StructuredOutput": {
+        "io": "Unsubscribe",
+        "fields": 7,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Unsubscribe"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "pkField": "group_id",
+        "how": "field 'group_id' is the best-available own-identity id (score 4); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.MailRecipientGroup.group_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "MailRecipientGroup",
+        "fields": 12,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.MailRecipientGroup"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "GroupRecipients",
+        "fields": 1,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupRecipients"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "pkField": "RecipientId",
+        "how": "field 'RecipientId' is the best-available own-identity id (score 4); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.GroupRecipient.RecipientId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "GroupRecipient",
+        "fields": 3,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupRecipient"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "MessageLinkTrackingData",
+        "fields": 7,
+        "base": "TrackingDataBase"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.MessageLinkTrackingData"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "MessageSentTrackingData",
+        "fields": 6,
+        "base": "MessageTrackingData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.MessageSentTrackingData"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "MessageTrackingData",
+        "fields": 5,
+        "base": "TrackingDataBase"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.MessageTrackingData"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "UnsubscribeTrackingData",
+        "fields": 7,
+        "base": "TrackingDataBase"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UnsubscribeTrackingData"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "pkField": "ID",
+        "how": "field 'id' — universal own-identity convention",
+        "strength": "Convergent"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.PersonifySubscriptionMapping.ID.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "PersonifySubscriptionMapping",
+        "fields": 9,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.PersonifySubscriptionMapping"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "pkField": "ID",
+        "how": "field 'id' — universal own-identity convention",
+        "strength": "Convergent"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.MessageCategory.ID.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "MessageCategory",
+        "fields": 5,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.MessageCategory"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "pkField": "ID",
+        "how": "field 'id' — universal own-identity convention",
+        "strength": "Convergent"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.GroupCategory.ID.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "GroupCategory",
+        "fields": 6,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupCategory"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "pkField": "InitialQueueId",
+        "how": "field 'InitialQueueId' is the best-available own-identity id (score 1); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.UploadInitialJob.InitialQueueId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "UploadInitialJob",
+        "fields": 5,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UploadInitialJob"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "pkField": "GroupId",
+        "how": "field 'GroupId' is the best-available own-identity id (score 1); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.UploadJobSettings.GroupId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "UploadJobSettings",
+        "fields": 7,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UploadJobSettings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "UploadColumnMapping",
+        "fields": 2,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UploadColumnMapping"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "pkField": "fieldId",
+        "how": "field 'fieldId' is the best-available own-identity id (score 4); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.ExtendedField.fieldId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "ExtendedField",
+        "fields": 4,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.ExtendedField"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "pkField": "UploadId",
+        "how": "field 'UploadId' is the best-available own-identity id (score 4); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.UploadInitialQueueStatus.UploadId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "UploadInitialQueueStatus",
+        "fields": 5,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UploadInitialQueueStatus"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "pkField": "EventId",
+        "how": "field 'EventId' matches own-entity id convention '<EventSignUp>_id'",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.EventSignUp.EventId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "EventSignUp",
+        "fields": 8,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.EventSignUp"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "pkField": "RMPaidItemReferenceId",
+        "how": "field 'RMPaidItemReferenceId' is the best-available own-identity id (score 4); soft PK, refine at runtime",
+        "strength": "Weak"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.PaidItem.RMPaidItemReferenceId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-04T03:55:32.368Z",
+      "StructuredOutput": {
+        "io": "PaidItem",
+        "fields": 3,
+        "base": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.PaidItem"
+    }
+  ]
+}

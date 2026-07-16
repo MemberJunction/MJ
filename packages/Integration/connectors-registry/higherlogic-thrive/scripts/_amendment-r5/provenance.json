@@ -1,0 +1,132 @@
+[
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Blogs-UpdateBlog_blogKey.html",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "Blogs.SupportsUpdate — real field editor UpdateBlog (EditBlogRequest), not RPC",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Blogs.SupportsUpdate",
+    "Excerpt": "POST api/v2.0/Blogs/UpdateBlog?blogKey={blogKey} — EditBlogRequest flat field set."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Blogs-UpdateBlog_blogKey.html",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "Blogs.UpdateAPIPath — path template for UpdateBlog",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Blogs.UpdateAPIPath",
+    "Excerpt": "POST api/v2.0/Blogs/UpdateBlog?blogKey={blogKey}."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Blogs-UpdateBlog_blogKey.html",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "Blogs.UpdateMethod — POST per HelpPage title",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Blogs.UpdateMethod",
+    "Excerpt": "POST api/v2.0/Blogs/UpdateBlog?blogKey={blogKey}."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Blogs-UpdateBlog_blogKey.html",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "Blogs.UpdateBodyShape — EditBlogRequest is a flat field set",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Blogs.UpdateBodyShape",
+    "Excerpt": "EditBlogRequest body is a flat set of blog fields."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Blogs-UpdateBlog_blogKey.html",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "Blogs.UpdateIDLocation — blogKey is a path/query template segment",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Blogs.UpdateIDLocation",
+    "Excerpt": "blogKey={blogKey} is a URL template segment, not in the request body."
+  },
+  {
+    "URL": "file://SOURCE_STUDY.md",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "ResourceLibraryDocuments.LibraryKey FK -> ResourceLibraryLibraries (documented, sibling IO emitted)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.ResourceLibraryDocuments.LibraryKey.RelatedIntegrationObjectID",
+    "Excerpt": "SOURCE_STUDY.md line 170 — LibraryKey references the library."
+  },
+  {
+    "URL": "file://SOURCE_STUDY.md",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "DocumentAttachments.DocumentKey FK -> ResourceLibraryDocuments (documented, sibling IO emitted)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.DocumentAttachments.DocumentKey.RelatedIntegrationObjectID",
+    "Excerpt": "SOURCE_STUDY.md line 171 — DocumentKey references the parent document."
+  },
+  {
+    "URL": "file://SOURCE_STUDY.md",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "EventSessions.EventSessionCategoryKey self-ref FK -> EventSessions (documented)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.EventSessions.EventSessionCategoryKey.RelatedIntegrationObjectID",
+    "Excerpt": "SOURCE_STUDY.md line 167 — session category self-reference."
+  },
+  {
+    "URL": "file://SOURCE_STUDY.md",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "EventSessions.CreatedByContactKey FK -> Contacts (documented)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.EventSessions.CreatedByContactKey.RelatedIntegrationObjectID",
+    "Excerpt": "SOURCE_STUDY.md line 167 — created-by contact."
+  },
+  {
+    "URL": "file://SOURCE_STUDY.md",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "EventSessions.UpdatedByContactKey FK -> Contacts (documented)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.EventSessions.UpdatedByContactKey.RelatedIntegrationObjectID",
+    "Excerpt": "SOURCE_STUDY.md line 167 — updated-by contact."
+  },
+  {
+    "URL": "file://SOURCE_STUDY.md",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "Communities.ParentCommunityKey self-ref FK -> Communities (documented)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Communities.ParentCommunityKey.RelatedIntegrationObjectID",
+    "Excerpt": "SOURCE_STUDY.md line 154 — parent community self-reference."
+  },
+  {
+    "URL": "file://SOURCE_STUDY.md",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "CommunityMembers.InvitedByContactKey FK -> Contacts (documented)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.CommunityMembers.InvitedByContactKey.RelatedIntegrationObjectID",
+    "Excerpt": "SOURCE_STUDY.md line 155 — invited-by contact."
+  },
+  {
+    "URL": "file://SOURCE_STUDY.md",
+    "AccessedAt": "2026-07-09T23:46:51.716Z",
+    "UsedFor": "Volunteers.AdjustedByContactKey FK -> Contacts (documented)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Volunteers.AdjustedByContactKey.RelatedIntegrationObjectID",
+    "Excerpt": "SOURCE_STUDY.md line 181 — adjusted-by contact."
+  }
+]

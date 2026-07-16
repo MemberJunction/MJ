@@ -184,11 +184,18 @@ function mockSoqlTerminators() {
  *  real runtime mock origin. Covers BaseURL / TokenURL / TokenEndpoint / InstanceURL / etc. */
 function rewriteConfigToOrigin(configuration, realOrigin) {
     const PLACEHOLDER = 'http://127.0.0.1:9';
-    const out = {};
-    for (const [k, v] of Object.entries(configuration)) {
-        out[k] = (typeof v === 'string' && v.includes(PLACEHOLDER)) ? v.split(PLACEHOLDER).join(realOrigin) : v;
-    }
-    return out;
+    // DEEP-walk: rewrite the placeholder origin ANYWHERE in the Configuration tree, not just top-level
+    // keys. Connectors whose base URL is NESTED (e.g. a multi-product connector with a per-product
+    // baseURL under Configuration.products.<P>.baseURL) would otherwise never be redirected to the mock origin and every
+    // request would hit the dead placeholder port. Shallow rewrite was the REST/JSON-norm assumption;
+    // this generalizes the mock to ANY config shape (a paradigm requirement for out-of-norm connectors).
+    const rewrite = (v) => {
+        if (typeof v === 'string') return v.includes(PLACEHOLDER) ? v.split(PLACEHOLDER).join(realOrigin) : v;
+        if (Array.isArray(v)) return v.map(rewrite);
+        if (v && typeof v === 'object') { const o = {}; for (const [k, val] of Object.entries(v)) o[k] = rewrite(val); return o; }
+        return v;
+    };
+    return rewrite(configuration);
 }
 
 /** Read PEM cert/key file paths into buffers for the HTTPS-MITM proxy, if supplied. */
@@ -259,6 +266,9 @@ export function matrixSpecsFromManifest(manifest) {
         // write-back (stage 9) — supportsWrite must align with the connector's CRUD capability flags
         supportsWrite: lc.supportsWrite === true || manifest?.WriteRoundTrip != null,
         writeRoundTrip: lc.writeRoundTrip ?? manifest?.WriteRoundTrip ?? null,
+        // ALL write-capable flat objects (E2E_WRITE_ALL → phaseBidirectional round-trips every one).
+        writeRoundTrips: Array.isArray(lc.writeRoundTrips) ? lc.writeRoundTrips
+            : (lc.writeRoundTrip ? [lc.writeRoundTrip] : (manifest?.WriteRoundTrip ? [manifest.WriteRoundTrip] : [])),
         // scheduling (stage 10b) + connection test (stage 1) default ON
         supportsScheduling: lc.supportsScheduling !== false,
         connectionTestable: lc.connectionTestable !== false,

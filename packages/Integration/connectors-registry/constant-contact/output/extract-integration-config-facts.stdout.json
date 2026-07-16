@@ -1,0 +1,618 @@
+{
+  "baseUrl": {
+    "host": "api.cc.email",
+    "basePath": "/v3",
+    "schemes": [
+      "https"
+    ],
+    "derivedNavigationBaseURL": "https://api.cc.email/v3"
+  },
+  "rateLimit": {
+    "dailyCallCap": 10000,
+    "perSecondCap": 4,
+    "dailyResetUTC": "00:00:00",
+    "throttleStatusCode": 429,
+    "dailyQuotaErrorKey": "quota_exceeded",
+    "perSecondErrorKey": "throttled",
+    "sourceFound": true,
+    "excerpt": "nd to prevent abuse. You can use your API key to send up to 10,000 requests per day and 4 requests per second. The request limit resets each day at UTC 00:00:00. To prevent abuse, there are also rate limits on the number of requests you can send to certain endpoints in the V3 API. All requests that exceed a rate limit"
+  },
+  "oauth": {
+    "authorizationUrl": "https://authz.constantcontact.com/oauth2/default/v1/authorize",
+    "tokenUrl": "https://authz.constantcontact.com/oauth2/default/v1/token",
+    "accessTokenLifetimeMinutes": 1440,
+    "accessTokenLifetimeSeconds": 86400,
+    "offlineAccessScopeRequiredForRefreshToken": true,
+    "rotatingRefreshTokenConfirmed": true,
+    "evidence": {
+      "authorizeEndpointFound": true,
+      "tokenEndpointFound": true,
+      "rotatingExcerpt": "token returned with the access token. * The response will contain a new 'access_token' and 'refresh_token' */ /** * @param $refreshToken - The refresh token provided with the previous access token * @param $clientId - API Key * @param $clientSecret - API Secre",
+      "expiresExcerpt": "e V3 API. Access tokens automatically expire 1440 minutes (86,400 seconds). Making an API call with an expired access token returns a 401 unauthorized status code. scope — The type of data in Constant Contact that the user is gran",
+      "offlineAccessExcerpt": "eturns a 401 unauthorized status code. scope — The type of data in Constant Contact that the user is granting your application permission to use. The offline_access scope is required to get a refresh token. refresh_token — Each refresh token correspo"
+    }
+  },
+  "pagination": {
+    "mechanism": "cursor",
+    "responseNextLinkPath": "_links.next.href",
+    "cursorQueryParam": "cursor",
+    "dateFormat": "ISO-8601",
+    "evidence": {
+      "cursorFound": true,
+      "cursorExcerpt": "lts, as shown here: \"_links\" : { \"next\" : { \"href\" : \"/v3/contacts?cursor=bGltaXQ9NSZuZXh0PTImc3RhdHVzJTVCJTVEPWFsbA==\" Partial Response - Contact Subresources Use the include quer",
+      "isoFound": true,
+      "isoExcerpt": "offset). ISO-8601 standard format: YYYY-MM-DDThh:mm:ss.sZ --&gt; 2013-03-29T19:20:30.00Z Learn more . API Status and Support The Constant Contact V3"
+    }
+  },
+  "incrementalWatermarkByPath": {
+    "/contacts": [
+      "updated_after",
+      "updated_before",
+      "created_after",
+      "created_before",
+      "optout_after",
+      "optout_before"
+    ],
+    "/emails": [
+      "before_date",
+      "after_date"
+    ]
+  },
+  "limitParamByPath": {
+    "/activities": {
+      "default": 50,
+      "max": 500,
+      "min": 1
+    },
+    "/events": {
+      "default": null,
+      "max": null,
+      "min": null
+    },
+    "/events/{event_id}/tracks/{track_id}/registrations": {
+      "default": null,
+      "max": null,
+      "min": null
+    },
+    "/social/hashtags/groups": {
+      "default": 5,
+      "max": 5,
+      "min": 1
+    },
+    "/segments": {
+      "default": "1000",
+      "max": null,
+      "min": null
+    },
+    "/contacts": {
+      "default": 50,
+      "max": 500,
+      "min": 1
+    },
+    "/contact_custom_fields": {
+      "default": 50,
+      "max": 100,
+      "min": 1
+    },
+    "/contact_lists": {
+      "default": 50,
+      "max": 1000,
+      "min": 1
+    },
+    "/contact_tags": {
+      "default": 50,
+      "max": null,
+      "min": null
+    },
+    "/emails": {
+      "default": 50,
+      "max": null,
+      "min": null
+    },
+    "/reports/contact_reports/{contact_id}/activity_details": {
+      "default": "100",
+      "max": 100,
+      "min": 1
+    },
+    "/reports/email_reports/{campaign_activity_id}/tracking/sends": {
+      "default": "500",
+      "max": 500,
+      "min": 1
+    },
+    "/reports/email_reports/{campaign_activity_id}/tracking/opens": {
+      "default": "500",
+      "max": 500,
+      "min": 1
+    },
+    "/reports/email_reports/{campaign_activity_id}/tracking/unique_opens": {
+      "default": "500",
+      "max": 500,
+      "min": 1
+    },
+    "/reports/email_reports/{campaign_activity_id}/tracking/didnotopens": {
+      "default": "500",
+      "max": 500,
+      "min": 1
+    },
+    "/reports/email_reports/{campaign_activity_id}/tracking/clicks": {
+      "default": "500",
+      "max": 500,
+      "min": 1
+    },
+    "/reports/email_reports/{campaign_activity_id}/tracking/forwards": {
+      "default": "500",
+      "max": 500,
+      "min": 1
+    },
+    "/reports/email_reports/{campaign_activity_id}/tracking/optouts": {
+      "default": "500",
+      "max": 500,
+      "min": 1
+    },
+    "/reports/email_reports/{campaign_activity_id}/tracking/bounces": {
+      "default": "500",
+      "max": 500,
+      "min": 1
+    },
+    "/reports/summary_reports/email_campaign_summaries": {
+      "default": "50",
+      "max": null,
+      "min": null
+    },
+    "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_clicks": {
+      "default": "50",
+      "max": null,
+      "min": null
+    },
+    "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_opens": {
+      "default": "50",
+      "max": null,
+      "min": null
+    },
+    "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_contact_opens": {
+      "default": "50",
+      "max": null,
+      "min": null
+    },
+    "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_updates": {
+      "default": "50",
+      "max": null,
+      "min": null
+    },
+    "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_adds": {
+      "default": "50",
+      "max": null,
+      "min": null
+    },
+    "/reports/landing_pages/campaign_details/{campaign_activity_id}/p_unique_contact_sms_optins": {
+      "default": "50",
+      "max": null,
+      "min": null
+    },
+    "/reports/summary_reports/sms_campaign_summaries": {
+      "default": "50",
+      "max": null,
+      "min": null
+    },
+    "/partner/accounts": {
+      "default": "50",
+      "max": 50,
+      "min": 10
+    }
+  },
+  "pkNamingConvention": {
+    "totalGetByIdPathsChecked": 15,
+    "totalMatchingConvention": 11,
+    "matchRatio": 0.7333333333333333,
+    "detail": [
+      {
+        "path": "/activities/{activity_id}",
+        "pathParamName": "activity_id",
+        "defsChecked": [
+          {
+            "defName": "Activity",
+            "hasField": true,
+            "propCount": 11
+          }
+        ],
+        "fieldFoundOnAnyDef": true
+      },
+      {
+        "path": "/contact_exports/{file_export_id}",
+        "pathParamName": "file_export_id",
+        "defsChecked": [
+          {
+            "defName": "ActivityGetExport",
+            "hasField": false,
+            "propCount": 0
+          }
+        ],
+        "fieldFoundOnAnyDef": false
+      },
+      {
+        "path": "/events/{event_id}",
+        "pathParamName": "event_id",
+        "defsChecked": [
+          {
+            "defName": "EventDto",
+            "hasField": true,
+            "propCount": 36
+          }
+        ],
+        "fieldFoundOnAnyDef": true
+      },
+      {
+        "path": "/events/{event_id}/tracks/{track_id}/registrations/{registration_id}",
+        "pathParamName": "registration_id",
+        "defsChecked": [
+          {
+            "defName": "DetailedRegistrationDto",
+            "hasField": true,
+            "propCount": 11
+          }
+        ],
+        "fieldFoundOnAnyDef": true
+      },
+      {
+        "path": "/segments/{segment_id}",
+        "pathParamName": "segment_id",
+        "defsChecked": [
+          {
+            "defName": "SegmentDetail",
+            "hasField": true,
+            "propCount": 5
+          }
+        ],
+        "fieldFoundOnAnyDef": true
+      },
+      {
+        "path": "/contacts/{contact_id}",
+        "pathParamName": "contact_id",
+        "defsChecked": [
+          {
+            "defName": "ContactResource",
+            "hasField": true,
+            "propCount": 21
+          }
+        ],
+        "fieldFoundOnAnyDef": true
+      },
+      {
+        "path": "/contact_custom_fields/{custom_field_id}",
+        "pathParamName": "custom_field_id",
+        "defsChecked": [
+          {
+            "defName": "CustomField",
+            "hasField": true,
+            "propCount": 9
+          }
+        ],
+        "fieldFoundOnAnyDef": true
+      },
+      {
+        "path": "/contact_lists/{list_id}",
+        "pathParamName": "list_id",
+        "defsChecked": [
+          {
+            "defName": "ContactList",
+            "hasField": true,
+            "propCount": 8
+          }
+        ],
+        "fieldFoundOnAnyDef": true
+      },
+      {
+        "path": "/contacts/sms_engagement_history/{contact_id}",
+        "pathParamName": "contact_id",
+        "defsChecked": [
+          {
+            "defName": "SmsEngagementHistory",
+            "hasField": false,
+            "propCount": 0
+          }
+        ],
+        "fieldFoundOnAnyDef": false
+      },
+      {
+        "path": "/contact_tags/{tag_id}",
+        "pathParamName": "tag_id",
+        "defsChecked": [
+          {
+            "defName": "Tag",
+            "hasField": true,
+            "propCount": 6
+          }
+        ],
+        "fieldFoundOnAnyDef": true
+      },
+      {
+        "path": "/emails/{campaign_id}",
+        "pathParamName": "campaign_id",
+        "defsChecked": [
+          {
+            "defName": "EmailCampaign",
+            "hasField": true,
+            "propCount": 8
+          }
+        ],
+        "fieldFoundOnAnyDef": true
+      },
+      {
+        "path": "/emails/activities/{campaign_activity_id}",
+        "pathParamName": "campaign_activity_id",
+        "defsChecked": [
+          {
+            "defName": "EmailCampaignActivity",
+            "hasField": true,
+            "propCount": 17
+          }
+        ],
+        "fieldFoundOnAnyDef": true
+      },
+      {
+        "path": "/reports/stats/email_campaigns/{campaign_ids}",
+        "pathParamName": "campaign_ids",
+        "defsChecked": [
+          {
+            "defName": "CampaignStatsQueryResultEmail",
+            "hasField": false,
+            "propCount": 2
+          }
+        ],
+        "fieldFoundOnAnyDef": false
+      },
+      {
+        "path": "/reports/stats/email_campaign_activities/{campaign_activity_ids}",
+        "pathParamName": "campaign_activity_ids",
+        "defsChecked": [
+          {
+            "defName": "CampaignActivityStatsQueryResultEmail",
+            "hasField": false,
+            "propCount": 2
+          }
+        ],
+        "fieldFoundOnAnyDef": false
+      },
+      {
+        "path": "/partner/webhooks/subscriptions/{topic_id}",
+        "pathParamName": "topic_id",
+        "defsChecked": [
+          {
+            "defName": "WebhooksSubscriptionResponse",
+            "hasField": true,
+            "propCount": 4
+          }
+        ],
+        "fieldFoundOnAnyDef": true
+      }
+    ]
+  },
+  "openApiTags": [
+    "Account Services",
+    "Bulk Activities",
+    "Contacts",
+    "Contact Lists",
+    "Contact Tags",
+    "Contacts Reporting",
+    "Contacts Custom Fields",
+    "Email Campaigns",
+    "Email Campaigns AB Tests",
+    "Email Reporting",
+    "Email Scheduling",
+    "Events",
+    "Segments",
+    "Landing Pages Reporting",
+    "SMS Reporting",
+    "Technology Partners",
+    "Technology Partners Webhooks"
+  ],
+  "webhookSurface": {
+    "allWebhookPaths": [
+      {
+        "path": "/partner/webhooks/subscriptions",
+        "tags": [
+          "Technology Partners Webhooks"
+        ]
+      },
+      {
+        "path": "/partner/webhooks/subscriptions/{topic_id}",
+        "tags": [
+          "Technology Partners Webhooks",
+          "Technology Partners Webhooks",
+          "Technology Partners Webhooks"
+        ]
+      },
+      {
+        "path": "/partner/webhooks/subscriptions/{topic_id}/tests",
+        "tags": [
+          "Technology Partners Webhooks"
+        ]
+      }
+    ],
+    "nonPartnerWebhookPathCount": 0
+  },
+  "tagMethods": {
+    "Account Services": [
+      "get",
+      "post",
+      "put"
+    ],
+    "Bulk Activities": [
+      "get",
+      "post"
+    ],
+    "Events": [
+      "get",
+      "patch",
+      "post",
+      "put"
+    ],
+    "Social": [
+      "get",
+      "post"
+    ],
+    "Segments": [
+      "delete",
+      "get",
+      "patch",
+      "post",
+      "put"
+    ],
+    "Contacts": [
+      "delete",
+      "get",
+      "post",
+      "put"
+    ],
+    "Contacts Custom Fields": [
+      "delete",
+      "get",
+      "post",
+      "put"
+    ],
+    "Contact Lists": [
+      "delete",
+      "get",
+      "post",
+      "put"
+    ],
+    "Contact Tags": [
+      "delete",
+      "get",
+      "post",
+      "put"
+    ],
+    "Email Campaigns": [
+      "delete",
+      "get",
+      "patch",
+      "post",
+      "put"
+    ],
+    "Email Scheduling": [
+      "delete",
+      "get",
+      "post"
+    ],
+    "Email Campaigns AB Tests": [
+      "delete",
+      "get",
+      "post"
+    ],
+    "Contacts Reporting": [
+      "get"
+    ],
+    "Email Reporting": [
+      "get"
+    ],
+    "Landing Pages Reporting": [
+      "get"
+    ],
+    "SMS Reporting": [
+      "get"
+    ],
+    "Technology Partners": [
+      "get",
+      "post",
+      "put"
+    ],
+    "Technology Partners Webhooks": [
+      "delete",
+      "get",
+      "post",
+      "put"
+    ]
+  },
+  "concurrencyHeaderScan": {
+    "ETag": false,
+    "If-Match": false,
+    "If-Unmodified-Since": false
+  },
+  "deleteOps": [
+    {
+      "path": "/segments/{segment_id}",
+      "tags": [
+        "Segments"
+      ],
+      "reviveOrRestoreLanguage": false,
+      "descriptionExcerpt": "Use this method to delete a segment from your account. Before deleting a segment, verify that the segment is not associated with a scheduled campaign.\n\nDeleted segments do not display in the results when using the `GET /"
+    },
+    {
+      "path": "/contacts/{contact_id}",
+      "tags": [
+        "Contacts"
+      ],
+      "reviveOrRestoreLanguage": true,
+      "descriptionExcerpt": "Deletes the contact identified by the contact_id path parameter. Deleted contacts won't receive email from you, and they don't count as active contacts. Unlike unsubscribed contacts, deleted contacts can be revived, or a"
+    },
+    {
+      "path": "/contact_custom_fields/{custom_field_id}",
+      "tags": [
+        "Contacts Custom Fields"
+      ],
+      "reviveOrRestoreLanguage": false,
+      "descriptionExcerpt": "Delete a custom field from the user's account."
+    },
+    {
+      "path": "/contact_lists/{list_id}",
+      "tags": [
+        "Contact Lists"
+      ],
+      "reviveOrRestoreLanguage": false,
+      "descriptionExcerpt": "Deletes the specified contact list and its membership. DELETE List requests are processed asynchronously, and you can track the status of the request by making a GET call to the URI shown in the `_links` property in the "
+    },
+    {
+      "path": "/contact_tags/{tag_id}",
+      "tags": [
+        "Contact Tags"
+      ],
+      "reviveOrRestoreLanguage": false,
+      "descriptionExcerpt": "Use this method to create an activity used to un-assign a tag from all assigned contacts and delete the tag. This is an asynchronous activity. To view activity details for the delete request, use the href link returned i"
+    },
+    {
+      "path": "/emails/{campaign_id}",
+      "tags": [
+        "Email Campaigns"
+      ],
+      "reviveOrRestoreLanguage": true,
+      "descriptionExcerpt": "Use this method to delete an email campaign and the email campaign activities associated with the email campaign. You cannot delete an email campaign when it has a `Scheduled` status.\n\nConstant Contact users can restore "
+    },
+    {
+      "path": "/emails/activities/{campaign_activity_id}/schedules",
+      "tags": [
+        "Email Scheduling"
+      ],
+      "reviveOrRestoreLanguage": false,
+      "descriptionExcerpt": "Use this method to unschedule an email campaign activity by deleting the schedule. You can only unschedule email campaign activities that are in `SCHEDULED` status. Unscheduling reverts the email campaign activity to the"
+    },
+    {
+      "path": "/emails/activities/{campaign_activity_id}/non_opener_resends/{resend_request_id}",
+      "tags": [
+        "Email Campaigns"
+      ],
+      "reviveOrRestoreLanguage": false,
+      "descriptionExcerpt": "Use this `DELETE` method to delete (unschedule) a resend to non openers activity."
+    },
+    {
+      "path": "/emails/activities/{campaign_activity_id}/abtest",
+      "tags": [
+        "Email Campaigns AB Tests"
+      ],
+      "reviveOrRestoreLanguage": false,
+      "descriptionExcerpt": "Deletes an A/B Test on an primary email campaign activity. You can only delete A/B tests that have a `current_status` of `Draft`. Deleting an A/B tests reverts the email campaign activity `type` from A/B Test (code= `57`"
+    },
+    {
+      "path": "/partner/webhooks/subscriptions/{topic_id}",
+      "tags": [
+        "Technology Partners Webhooks"
+      ],
+      "reviveOrRestoreLanguage": false,
+      "descriptionExcerpt": "Use this DELETE method to unsubscribe your application from notifications on a certain `topic_id`. Possible `topic_id` values include:\n\n * `1` - Billing tier upgrade.\n * `2` - Billing tier downgrade.\n * `3` - Account can"
+    }
+  ],
+  "securitySchemeCounts": {
+    "[\"oauth2_access_code\",\"oauth2_implicit\"]": 111,
+    "[\"api_key\",\"ctctPartnerAuthorizer\"]": 13
+  },
+  "generatedAt": "2026-07-11T22:36:27.283Z"
+}

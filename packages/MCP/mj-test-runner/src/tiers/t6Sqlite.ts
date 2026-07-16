@@ -258,6 +258,19 @@ async function main() {
 
     // Delta passes — swap routes (http) / file content (file), re-pull, re-apply, assert.
     const deltas = MANIFEST.DeltaPasses || [];
+    // SEED every object a delta pass targets with its BASE routes FIRST (before any route swap), so the
+    // records the delta will remove/update already exist in staging. Without this, a delta pass whose Object
+    // differs from Objects[0] (the initial target) tombstones/updates a record that was never synced → a
+    // false 'absent'. Only the FIRST fixture object is pulled initially above; this backfills the rest.
+    const seededObjects = new Set([targetObject]);
+    for (const d of deltas) {
+      const dObj = d.Object || targetObject;
+      if (dObj && !seededObjects.has(dObj)) {
+        seededObjects.add(dObj);
+        const seed = await pull(ctx.connector, ctx.companyIntegration, ctx.contextUser, dObj);
+        applier.apply(seed, orderingFieldFor(MANIFEST, dObj));
+      }
+    }
     for (let i = 0; i < deltas.length; i++) {
       const d = deltas[i];
       if (tr.transport === 'http' && d.Routes && d.Routes.length) tr.setRoutes(d.Routes);

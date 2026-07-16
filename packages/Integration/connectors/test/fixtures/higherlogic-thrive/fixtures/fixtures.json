@@ -1,0 +1,3378 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "BaseURL": "http://127.0.0.1:9",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "Username": "mock-user@example.com",
+    "Password": "mock-pass",
+    "RefreshToken": "mock-refresh-token",
+    "AdminEmail": "mock-admin@example.com",
+    "Token": "mock-token",
+    "AccessToken": "mock-token",
+    "apiKey": "mock-token",
+    "APIKey": "mock-token",
+    "ApiKey": "mock-token",
+    "ApiSecret": "mock-api-secret",
+    "apiSecret": "mock-api-secret",
+    "Secret": "mock-secret",
+    "AppKey": "mock-app-key",
+    "AppSecret": "mock-app-secret",
+    "PrivateToken": "mock-private-token",
+    "PublicKey": "mock-public-key",
+    "TokenURL": "http://127.0.0.1:9/token",
+    "TokenEndpoint": "http://127.0.0.1:9/token",
+    "TokenUrl": "http://127.0.0.1:9/token",
+    "LoginUrl": "http://127.0.0.1:9",
+    "InstanceURL": "http://127.0.0.1:9",
+    "InstanceUrl": "http://127.0.0.1:9",
+    "HostBaseURL": "http://127.0.0.1:9",
+    "Subdomain": "mock",
+    "Scope": "all",
+    "Scopes": "all",
+    "SubscriptionKey": "mock-subscription-key",
+    "subscriptionKey": "mock-subscription-key",
+    "subscription_key": "mock-subscription-key",
+    "SubscriptionId": "mock-subscription-key",
+    "OrgID": "mock-org",
+    "orgId": "mock-org",
+    "ClientKey": "mock-client-key",
+    "applicationId": "mock-app-id",
+    "applicationSecret": "mock-app-secret",
+    "AuthFlow": "client_credentials",
+    "PrivateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDmQcln2pQ/dZX+\nrdKuBa3VF/Kvo6DRZpw7Ffxc2SptzeihCCz5q6BqK5xM8RXx75m2ScwOt8SpYIB9\nRa5dm7PfCBfxtHtMeA0BhD4+EJe0A4gLaa4/tM11I2xvfWEQpLhbOdgSgb0vIYPW\n1FrPBp8Nde2pzpYT5NMw9+o+GrLDk2O+mi8ijflSQI7Q0CeQEROz7zQscfkH/45E\n1ZewxQnySnfJDLKbNV3rNuwRYi53rHew6AH6dUjtEKJb+KsG5/vQYYfM6CWzGi6n\naX3eeOf6WxS2GMbeAn1JRByagpqHpa2H4L3lEzLpmTbi0PtPmKEifgWOkMCFVt7E\n7Vv4rldFAgMBAAECggEABVJVP/vim+oxIpxh13kfdg1Xo+I5lUgJ1FPDFreY2MYp\nhOSWJYRnRgzmpTXtNpToYzjRaTBWGz61DtrNbNxsYSXkEnIEEisJdz+B221cFDer\nV+2EBB+USrYcNiIaXDLHuqlblRHqjWxONROIsGrhbNjiOp/LrX9cYjADT0F5YDZn\nRmNAt2UecHgJc2GhZXeTSXGnNB+pavaa0PPtaEygEJ8sCBs5YKIvtuJUBz563vcM\nfNS4/GPq0V//3r/ZNH2ALkejt6kbBmfctEwop48Z0r+lmYiD36iBp/nHUp0xiLd9\nWxvgpAry9rIghY3YdYf1Q//K8Y6DjO3S3Qk44SU3AQKBgQD+OcwDbSt2QoPCHGo4\n1K8Lecv4Tf8ztCMW4T8twAZJFNe2nXE/Fotbk2HYT2WpmAJSpKP6IxsS7K7FSYz3\nqEcUfxlA4EvqbRIR1M8Ku8DVZeJWxlIaFB+5bEZ1SVA72D8JZH6PgIWluqzZPAFB\nN1Sst+UXdgy1NQy0oGmNsRFDzwKBgQDn3Sq3bha1f1GohXRy8No+I6s8sgU26X2+\nOW8HbFhhx/GEcn5a+pjS1pXv4uoiJo0qs7khy0GOWLHg45hT/QthuIYi/HifaZmd\neMRuAA5fydtjJUcc/BM4ED3FrGCKwbTwUZj77Wk2Xr0slChmmDHnlBvQHwewI+Nw\na3x/AaA0qwKBgFwSJI/tHrtytXM8hT/Vzxtx3ewsm0tnZvnnU9FG5T/ce49Yj+YQ\nTSI6S0pi3ue/9L9nfzedNTXyYA11aMdcu3lx2nyDfxsEq3Gnx+AURW9DuehBZQSq\n2x51V0Ms7RDvbU0Ch0+DdWOjKux17eJnnpP6+c44Y7vQ3awhGHlHcoBDAoGAXUQv\nvJ1B8TwHotwb3WhYwYojhUSuqEn/1JbRvJCudJay5e4QOZR4CMdchKQoPhh3zGeC\n3r8d3Z573tRuH8q321UYT9Zyxtz5d8huazkGjy1pXFZQZq5XJMQTtQIDy4zjtY99\nFEmJet9dBSOLpMkvudFv5qW0t/uXr07tQ0FqKgUCgYB3hNutKGwKwEHxtxnb7dA3\nhb4xn9Bd7vQuv2Td1sQVlPTcqCrJTb/CetSb9I8QR+jOeShF2iTtzDXbQhmnfQID\n1iihXjL03cR1tzUv0nb0UBbg3yrySBXoR+KOXybVVb+KE3DlsuB6B8nRhuE6u/cN\nZukUhlInr3rnVucvqIWnLA==\n-----END PRIVATE KEY-----\n",
+    "ConsumerKey": "mock-consumer",
+    "ConsumerSecret": "mock-consumer-secret",
+    "TokenId": "mock-token-id",
+    "TokenSecret": "mock-token-secret",
+    "TokenID": "mock-token-id",
+    "TenantId": "mock-tenant-id",
+    "TenantID": "mock-tenant-id",
+    "tenantId": "mock-tenant-id",
+    "Tenant": "mock-tenant"
+  },
+  "Routes": [
+    {
+      "Path": "/v2.0/Announcements/GetAnnouncements",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AnnouncementKey": "Announcements-1",
+          "AnnouncementText": "AnnouncementText 1",
+          "AnnouncementTitle": "Sample Title 1",
+          "AnnouncementType": "AnnouncementType 1",
+          "CommunityKey": "CommunityKey 1",
+          "CommunityName": "CommunityName 1",
+          "CreatedByContactKey": "CreatedByContactKey 1",
+          "ContactDisplayName": "Alex Rivera",
+          "LinkToContactProfile": "https://example.com/LinkToContactProfile/1",
+          "ContactLargePictureUrl": "https://example.com/ContactLargePictureUrl/1",
+          "ContactSmallPictureUrl": "https://example.com/ContactSmallPictureUrl/1",
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "IsLoggingEnabled": true,
+          "LinkText": "https://example.com/LinkText/1",
+          "LinkUrl": "https://example.com/LinkUrl/1",
+          "MicrositeGroupTypeRouteDesignKey": "MicrositeGroupTypeRouteDesignKey 1",
+          "OpenNewWindow": true,
+          "UpdatedByContactKey": "UpdatedByContactKey 1",
+          "UpdatedOn": "2026-06-11T00:00:00Z",
+          "UserPermissions": "UserPermissions 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "AnnouncementKey": "Announcements-2",
+          "AnnouncementText": "AnnouncementText 2",
+          "AnnouncementTitle": "Sample Title 2",
+          "AnnouncementType": "AnnouncementType 2",
+          "CommunityKey": "CommunityKey 2",
+          "CommunityName": "CommunityName 2",
+          "CreatedByContactKey": "CreatedByContactKey 2",
+          "ContactDisplayName": "Jordan Chen",
+          "LinkToContactProfile": "https://example.com/LinkToContactProfile/2",
+          "ContactLargePictureUrl": "https://example.com/ContactLargePictureUrl/2",
+          "ContactSmallPictureUrl": "https://example.com/ContactSmallPictureUrl/2",
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "IsLoggingEnabled": false,
+          "LinkText": "https://example.com/LinkText/2",
+          "LinkUrl": "https://example.com/LinkUrl/2",
+          "MicrositeGroupTypeRouteDesignKey": "MicrositeGroupTypeRouteDesignKey 2",
+          "OpenNewWindow": false,
+          "UpdatedByContactKey": "UpdatedByContactKey 2",
+          "UpdatedOn": "2026-06-12T00:00:00Z",
+          "UserPermissions": "UserPermissions 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "AnnouncementKey": "Announcements-3",
+          "AnnouncementText": "AnnouncementText 3",
+          "AnnouncementTitle": "Sample Title 3",
+          "AnnouncementType": "AnnouncementType 3",
+          "CommunityKey": "CommunityKey 3",
+          "CommunityName": "CommunityName 3",
+          "CreatedByContactKey": "CreatedByContactKey 3",
+          "ContactDisplayName": "Taylor Patel",
+          "LinkToContactProfile": "https://example.com/LinkToContactProfile/3",
+          "ContactLargePictureUrl": "https://example.com/ContactLargePictureUrl/3",
+          "ContactSmallPictureUrl": "https://example.com/ContactSmallPictureUrl/3",
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "IsLoggingEnabled": true,
+          "LinkText": "https://example.com/LinkText/3",
+          "LinkUrl": "https://example.com/LinkUrl/3",
+          "MicrositeGroupTypeRouteDesignKey": "MicrositeGroupTypeRouteDesignKey 3",
+          "OpenNewWindow": true,
+          "UpdatedByContactKey": "UpdatedByContactKey 3",
+          "UpdatedOn": "2026-06-13T00:00:00Z",
+          "UserPermissions": "UserPermissions 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Question/GetAnswers",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AnswerKey": "Answers-1",
+          "ParentKey": "ParentKey 1",
+          "IsBestAnswer": true,
+          "BestAnswerOn": "2026-06-10T01:30:00Z",
+          "Content": "Sample Content 1",
+          "PublishedOn": "2026-06-10T01:30:00Z",
+          "IsAnonymous": true,
+          "EditedOn": "2026-06-11T00:00:00Z",
+          "IsModerated": true,
+          "RecommendationCount": 4,
+          "HasRecommended": true,
+          "UserPermissions": "UserPermissions 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "AnswerKey": "Answers-2",
+          "ParentKey": "ParentKey 2",
+          "IsBestAnswer": false,
+          "BestAnswerOn": "2026-06-11T02:30:00Z",
+          "Content": "Sample Content 2",
+          "PublishedOn": "2026-06-11T02:30:00Z",
+          "IsAnonymous": false,
+          "EditedOn": "2026-06-12T00:00:00Z",
+          "IsModerated": false,
+          "RecommendationCount": 7,
+          "HasRecommended": false,
+          "UserPermissions": "UserPermissions 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "AnswerKey": "Answers-3",
+          "ParentKey": "ParentKey 3",
+          "IsBestAnswer": true,
+          "BestAnswerOn": "2026-06-12T03:30:00Z",
+          "Content": "Sample Content 3",
+          "PublishedOn": "2026-06-12T03:30:00Z",
+          "IsAnonymous": true,
+          "EditedOn": "2026-06-13T00:00:00Z",
+          "IsModerated": true,
+          "RecommendationCount": 10,
+          "HasRecommended": true,
+          "UserPermissions": "UserPermissions 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/AutomationRules/GetContactData",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ContactKey": "AutomationRuleContactData-1",
+          "RecordCount": 4,
+          "ContactData": "ContactData 1",
+          "UpdatedOn": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "ContactKey": "AutomationRuleContactData-2",
+          "RecordCount": 7,
+          "ContactData": "ContactData 2",
+          "UpdatedOn": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "ContactKey": "AutomationRuleContactData-3",
+          "RecordCount": 10,
+          "ContactData": "ContactData 3",
+          "UpdatedOn": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/AutomationRules/GetActiveRulesByType",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "RuleScheduleKey": "AutomationRuleSchedules-1",
+          "RuleName": "RuleName 1",
+          "RuleDescription": "Sample RuleDescription 1",
+          "RuleTypeName": "RuleTypeName 1",
+          "GroupName": "GroupName 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "RuleScheduleKey": "AutomationRuleSchedules-2",
+          "RuleName": "RuleName 2",
+          "RuleDescription": "Sample RuleDescription 2",
+          "RuleTypeName": "RuleTypeName 2",
+          "GroupName": "GroupName 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "RuleScheduleKey": "AutomationRuleSchedules-3",
+          "RuleName": "RuleName 3",
+          "RuleDescription": "Sample RuleDescription 3",
+          "RuleTypeName": "RuleTypeName 3",
+          "GroupName": "GroupName 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Comments/GetComments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "CommentKey": "BlogComments-1",
+          "CommentBody": "Sample CommentBody 1",
+          "IsOfficial": true,
+          "ItemKey": "ItemKey 1",
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "UpdatedOn": "2026-06-10T01:30:00Z",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "CommentKey": "BlogComments-2",
+          "CommentBody": "Sample CommentBody 2",
+          "IsOfficial": false,
+          "ItemKey": "ItemKey 2",
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "UpdatedOn": "2026-06-11T02:30:00Z",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "CommentKey": "BlogComments-3",
+          "CommentBody": "Sample CommentBody 3",
+          "IsOfficial": true,
+          "ItemKey": "ItemKey 3",
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "UpdatedOn": "2026-06-12T03:30:00Z",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Blogs/GetBlogEntriesByGrouping",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "BlogKey": "Blogs-1",
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "BlogText": "BlogText 1",
+          "IsPublished": true,
+          "LinkToReadBlog": "https://example.com/LinkToReadBlog/1",
+          "PublishedOn": "2026-06-10T01:30:00Z",
+          "BlogTitle": "Sample Title 1",
+          "UpdatedOn": "2026-06-11T00:00:00Z",
+          "ViewPermission": "ViewPermission 1",
+          "CommentPermission": "Sample CommentPermission 1",
+          "ViewCount": 4,
+          "RatingCount": 4,
+          "CommentCount": 4,
+          "AuthenticatedUserRecommends": true,
+          "AuthenticatedUserFavorite": true,
+          "CreatedByContactKey": "CreatedByContactKey 1",
+          "CommunityKey": "CommunityKey 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "BlogKey": "Blogs-2",
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "BlogText": "BlogText 2",
+          "IsPublished": false,
+          "LinkToReadBlog": "https://example.com/LinkToReadBlog/2",
+          "PublishedOn": "2026-06-11T02:30:00Z",
+          "BlogTitle": "Sample Title 2",
+          "UpdatedOn": "2026-06-12T00:00:00Z",
+          "ViewPermission": "ViewPermission 2",
+          "CommentPermission": "Sample CommentPermission 2",
+          "ViewCount": 7,
+          "RatingCount": 7,
+          "CommentCount": 7,
+          "AuthenticatedUserRecommends": false,
+          "AuthenticatedUserFavorite": false,
+          "CreatedByContactKey": "CreatedByContactKey 2",
+          "CommunityKey": "CommunityKey 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "BlogKey": "Blogs-3",
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "BlogText": "BlogText 3",
+          "IsPublished": true,
+          "LinkToReadBlog": "https://example.com/LinkToReadBlog/3",
+          "PublishedOn": "2026-06-12T03:30:00Z",
+          "BlogTitle": "Sample Title 3",
+          "UpdatedOn": "2026-06-13T00:00:00Z",
+          "ViewPermission": "ViewPermission 3",
+          "CommentPermission": "Sample CommentPermission 3",
+          "ViewCount": 10,
+          "RatingCount": 10,
+          "CommentCount": 10,
+          "AuthenticatedUserRecommends": true,
+          "AuthenticatedUserFavorite": true,
+          "CreatedByContactKey": "CreatedByContactKey 3",
+          "CommunityKey": "CommunityKey 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Comments/GetComments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "CommentKey": "Comments-1",
+          "CommentBody": "Sample CommentBody 1",
+          "IsOfficial": true,
+          "ItemKey": "ItemKey 1",
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "UpdatedOn": "2026-06-10T01:30:00Z",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "CommentKey": "Comments-2",
+          "CommentBody": "Sample CommentBody 2",
+          "IsOfficial": false,
+          "ItemKey": "ItemKey 2",
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "UpdatedOn": "2026-06-11T02:30:00Z",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "CommentKey": "Comments-3",
+          "CommentBody": "Sample CommentBody 3",
+          "IsOfficial": true,
+          "ItemKey": "ItemKey 3",
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "UpdatedOn": "2026-06-12T03:30:00Z",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Communities/GetMyCommunities",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AllowMemberCreatedEvents": true,
+          "AllowTickets": true,
+          "ThreadTypes": "ThreadTypes 1",
+          "CanMembersInviteOthers": true,
+          "CommunityKey": "Communities-1",
+          "LegacyGroupKey": "LegacyGroupKey 1",
+          "CommunityName": "CommunityName 1",
+          "CommunitySize": 2,
+          "CommunityTypeKey": "CommunityTypeKey 1",
+          "CommunityType": "CommunityType 1",
+          "CommunityTypeName": "CommunityTypeName 1",
+          "CreatedByContactKey": "CreatedByContactKey 1",
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "Description": "Sample Description 1",
+          "Html": "Html 1",
+          "IsTopicCommunity": true,
+          "IsSubscribedToDiscussion": true,
+          "IsOnCommunitySync": true,
+          "JoinPermissionKey": "JoinPermissionKey 1",
+          "LibraryKey": "LibraryKey 1",
+          "LibraryName": "LibraryName 1",
+          "LinkToCommunity": "https://example.com/LinkToCommunity/1",
+          "LinkToCommunityCalendar": "https://example.com/LinkToCommunityCalendar/1",
+          "LinkToDiscussion": "https://example.com/LinkToDiscussion/1",
+          "LinkToLibrary": "https://example.com/LinkToLibrary/1",
+          "LinkToWebsite": "https://example.com/LinkToWebsite/1",
+          "DiscussionKey": "DiscussionKey 1",
+          "DiscussionName": "DiscussionName 1",
+          "MicrositeGroupKey": "MicrositeGroupKey 1",
+          "SiteName": "SiteName 1",
+          "ViewPermissionKey": "ViewPermissionKey 1",
+          "IntegrationKey": "IntegrationKey 1",
+          "IntegrationTypeKey": "IntegrationTypeKey 1",
+          "ParentCommunityKey": "ParentCommunityKey 1",
+          "CanPostQuestions": true,
+          "CanPostAnonymously": true,
+          "CanReplyAnonymously": true,
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "AllowMemberCreatedEvents": false,
+          "AllowTickets": false,
+          "ThreadTypes": "ThreadTypes 2",
+          "CanMembersInviteOthers": false,
+          "CommunityKey": "Communities-2",
+          "LegacyGroupKey": "LegacyGroupKey 2",
+          "CommunityName": "CommunityName 2",
+          "CommunitySize": 3,
+          "CommunityTypeKey": "CommunityTypeKey 2",
+          "CommunityType": "CommunityType 2",
+          "CommunityTypeName": "CommunityTypeName 2",
+          "CreatedByContactKey": "CreatedByContactKey 2",
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "Description": "Sample Description 2",
+          "Html": "Html 2",
+          "IsTopicCommunity": false,
+          "IsSubscribedToDiscussion": false,
+          "IsOnCommunitySync": false,
+          "JoinPermissionKey": "JoinPermissionKey 2",
+          "LibraryKey": "LibraryKey 2",
+          "LibraryName": "LibraryName 2",
+          "LinkToCommunity": "https://example.com/LinkToCommunity/2",
+          "LinkToCommunityCalendar": "https://example.com/LinkToCommunityCalendar/2",
+          "LinkToDiscussion": "https://example.com/LinkToDiscussion/2",
+          "LinkToLibrary": "https://example.com/LinkToLibrary/2",
+          "LinkToWebsite": "https://example.com/LinkToWebsite/2",
+          "DiscussionKey": "DiscussionKey 2",
+          "DiscussionName": "DiscussionName 2",
+          "MicrositeGroupKey": "MicrositeGroupKey 2",
+          "SiteName": "SiteName 2",
+          "ViewPermissionKey": "ViewPermissionKey 2",
+          "IntegrationKey": "IntegrationKey 2",
+          "IntegrationTypeKey": "IntegrationTypeKey 2",
+          "ParentCommunityKey": "ParentCommunityKey 2",
+          "CanPostQuestions": false,
+          "CanPostAnonymously": false,
+          "CanReplyAnonymously": false,
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "AllowMemberCreatedEvents": true,
+          "AllowTickets": true,
+          "ThreadTypes": "ThreadTypes 3",
+          "CanMembersInviteOthers": true,
+          "CommunityKey": "Communities-3",
+          "LegacyGroupKey": "LegacyGroupKey 3",
+          "CommunityName": "CommunityName 3",
+          "CommunitySize": 4,
+          "CommunityTypeKey": "CommunityTypeKey 3",
+          "CommunityType": "CommunityType 3",
+          "CommunityTypeName": "CommunityTypeName 3",
+          "CreatedByContactKey": "CreatedByContactKey 3",
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "Description": "Sample Description 3",
+          "Html": "Html 3",
+          "IsTopicCommunity": true,
+          "IsSubscribedToDiscussion": true,
+          "IsOnCommunitySync": true,
+          "JoinPermissionKey": "JoinPermissionKey 3",
+          "LibraryKey": "LibraryKey 3",
+          "LibraryName": "LibraryName 3",
+          "LinkToCommunity": "https://example.com/LinkToCommunity/3",
+          "LinkToCommunityCalendar": "https://example.com/LinkToCommunityCalendar/3",
+          "LinkToDiscussion": "https://example.com/LinkToDiscussion/3",
+          "LinkToLibrary": "https://example.com/LinkToLibrary/3",
+          "LinkToWebsite": "https://example.com/LinkToWebsite/3",
+          "DiscussionKey": "DiscussionKey 3",
+          "DiscussionName": "DiscussionName 3",
+          "MicrositeGroupKey": "MicrositeGroupKey 3",
+          "SiteName": "SiteName 3",
+          "ViewPermissionKey": "ViewPermissionKey 3",
+          "IntegrationKey": "IntegrationKey 3",
+          "IntegrationTypeKey": "IntegrationTypeKey 3",
+          "ParentCommunityKey": "ParentCommunityKey 3",
+          "CanPostQuestions": true,
+          "CanPostAnonymously": true,
+          "CanReplyAnonymously": true,
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Communities/GetMyCommunityInvitations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ChangedDate": "2026-06-11T00:00:00Z",
+          "Comment": "Sample Comment 1",
+          "CommunityKey": "CommunityKey 1",
+          "CommunityInvitationKey": "CommunityInvitations-1",
+          "ContactFirstLast": "ContactFirstLast 1",
+          "ContactKey": "ContactKey 1",
+          "EndDate": "2026-06-10T01:30:00Z",
+          "InvitationText": "InvitationText 1",
+          "InvitedByContactKey": "InvitedByContactKey 1",
+          "InvitedByDisplayName": "Alex Rivera",
+          "InvitedOn": "2026-06-10T01:30:00Z",
+          "IsActive": true,
+          "IsAdmin": true,
+          "IsBanned": true,
+          "IsLoggingEnabled": true,
+          "LinkToInvitedByLargeImage": "https://example.com/LinkToInvitedByLargeImage/1",
+          "LinkToInvitedBySmallImage": "https://example.com/LinkToInvitedBySmallImage/1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "ChangedDate": "2026-06-12T00:00:00Z",
+          "Comment": "Sample Comment 2",
+          "CommunityKey": "CommunityKey 2",
+          "CommunityInvitationKey": "CommunityInvitations-2",
+          "ContactFirstLast": "ContactFirstLast 2",
+          "ContactKey": "ContactKey 2",
+          "EndDate": "2026-06-11T02:30:00Z",
+          "InvitationText": "InvitationText 2",
+          "InvitedByContactKey": "InvitedByContactKey 2",
+          "InvitedByDisplayName": "Jordan Chen",
+          "InvitedOn": "2026-06-11T02:30:00Z",
+          "IsActive": false,
+          "IsAdmin": false,
+          "IsBanned": false,
+          "IsLoggingEnabled": false,
+          "LinkToInvitedByLargeImage": "https://example.com/LinkToInvitedByLargeImage/2",
+          "LinkToInvitedBySmallImage": "https://example.com/LinkToInvitedBySmallImage/2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "ChangedDate": "2026-06-13T00:00:00Z",
+          "Comment": "Sample Comment 3",
+          "CommunityKey": "CommunityKey 3",
+          "CommunityInvitationKey": "CommunityInvitations-3",
+          "ContactFirstLast": "ContactFirstLast 3",
+          "ContactKey": "ContactKey 3",
+          "EndDate": "2026-06-12T03:30:00Z",
+          "InvitationText": "InvitationText 3",
+          "InvitedByContactKey": "InvitedByContactKey 3",
+          "InvitedByDisplayName": "Taylor Patel",
+          "InvitedOn": "2026-06-12T03:30:00Z",
+          "IsActive": true,
+          "IsAdmin": true,
+          "IsBanned": true,
+          "IsLoggingEnabled": true,
+          "LinkToInvitedByLargeImage": "https://example.com/LinkToInvitedByLargeImage/3",
+          "LinkToInvitedBySmallImage": "https://example.com/LinkToInvitedBySmallImage/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Communities/GetCommunityMembers",
+      "Method": "POST",
+      "Status": 200,
+      "Body": [
+        {
+          "LinkToProfile": "https://example.com/LinkToProfile/1",
+          "PictureUrl": "https://example.com/PictureUrl/1",
+          "ContactKey": "CommunityMembers-1",
+          "FirstName": "Alex",
+          "LastName": "Rivera",
+          "DisplayName": "Alex Rivera",
+          "EmailAddress": "user1@example.com",
+          "ContactStatusCode": "active",
+          "PrefixCode": "PrefixCode 1",
+          "UpdatedOn": "2026-06-10T01:30:00Z",
+          "UpdatedByContactKey": "UpdatedByContactKey 1",
+          "CompanyName": "Acme Corp",
+          "CompanyTitle": "Acme Corp",
+          "SuffixCode": "SuffixCode 1",
+          "Designation": "Designation 1",
+          "LegacyContactKey": "LegacyContactKey 1",
+          "InformalName": "Rivera",
+          "MiddleName": "MiddleName 1",
+          "IsCompany": true,
+          "CompanyLegacyContactKey": "Acme Corp",
+          "AMSDirectoryOptOut": true,
+          "HLDirectoryOptOut": true,
+          "HLContactMeOptOut": true,
+          "LargePictureUrl": "https://example.com/LargePictureUrl/1",
+          "AgreedToTermsDateTime": "2026-06-10T01:30:00Z",
+          "AcceptedOn": "2026-06-10T01:30:00Z",
+          "CommunityMemberRoles": "CommunityMemberRoles 1",
+          "InvitedByContactKey": "InvitedByContactKey 1",
+          "InvitedOn": "2026-06-10T01:30:00Z",
+          "IsActive": true,
+          "IsAdmin": true,
+          "RemovedOn": "2026-06-10T01:30:00Z",
+          "StartDate": "2026-06-10T01:30:00Z",
+          "EndDate": "2026-06-10T01:30:00Z",
+          "CommunityKey": "CommunityKey 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "LinkToProfile": "https://example.com/LinkToProfile/2",
+          "PictureUrl": "https://example.com/PictureUrl/2",
+          "ContactKey": "CommunityMembers-2",
+          "FirstName": "Jordan",
+          "LastName": "Chen",
+          "DisplayName": "Jordan Chen",
+          "EmailAddress": "user2@example.com",
+          "ContactStatusCode": "pending",
+          "PrefixCode": "PrefixCode 2",
+          "UpdatedOn": "2026-06-11T02:30:00Z",
+          "UpdatedByContactKey": "UpdatedByContactKey 2",
+          "CompanyName": "Globex LLC",
+          "CompanyTitle": "Globex LLC",
+          "SuffixCode": "SuffixCode 2",
+          "Designation": "Designation 2",
+          "LegacyContactKey": "LegacyContactKey 2",
+          "InformalName": "Chen",
+          "MiddleName": "MiddleName 2",
+          "IsCompany": false,
+          "CompanyLegacyContactKey": "Globex LLC",
+          "AMSDirectoryOptOut": false,
+          "HLDirectoryOptOut": false,
+          "HLContactMeOptOut": false,
+          "LargePictureUrl": "https://example.com/LargePictureUrl/2",
+          "AgreedToTermsDateTime": "2026-06-11T02:30:00Z",
+          "AcceptedOn": "2026-06-11T02:30:00Z",
+          "CommunityMemberRoles": "CommunityMemberRoles 2",
+          "InvitedByContactKey": "InvitedByContactKey 2",
+          "InvitedOn": "2026-06-11T02:30:00Z",
+          "IsActive": false,
+          "IsAdmin": false,
+          "RemovedOn": "2026-06-11T02:30:00Z",
+          "StartDate": "2026-06-11T02:30:00Z",
+          "EndDate": "2026-06-11T02:30:00Z",
+          "CommunityKey": "CommunityKey 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "LinkToProfile": "https://example.com/LinkToProfile/3",
+          "PictureUrl": "https://example.com/PictureUrl/3",
+          "ContactKey": "CommunityMembers-3",
+          "FirstName": "Taylor",
+          "LastName": "Patel",
+          "DisplayName": "Taylor Patel",
+          "EmailAddress": "user3@example.com",
+          "ContactStatusCode": "completed",
+          "PrefixCode": "PrefixCode 3",
+          "UpdatedOn": "2026-06-12T03:30:00Z",
+          "UpdatedByContactKey": "UpdatedByContactKey 3",
+          "CompanyName": "Initech",
+          "CompanyTitle": "Initech",
+          "SuffixCode": "SuffixCode 3",
+          "Designation": "Designation 3",
+          "LegacyContactKey": "LegacyContactKey 3",
+          "InformalName": "Patel",
+          "MiddleName": "MiddleName 3",
+          "IsCompany": true,
+          "CompanyLegacyContactKey": "Initech",
+          "AMSDirectoryOptOut": true,
+          "HLDirectoryOptOut": true,
+          "HLContactMeOptOut": true,
+          "LargePictureUrl": "https://example.com/LargePictureUrl/3",
+          "AgreedToTermsDateTime": "2026-06-12T03:30:00Z",
+          "AcceptedOn": "2026-06-12T03:30:00Z",
+          "CommunityMemberRoles": "CommunityMemberRoles 3",
+          "InvitedByContactKey": "InvitedByContactKey 3",
+          "InvitedOn": "2026-06-12T03:30:00Z",
+          "IsActive": true,
+          "IsAdmin": true,
+          "RemovedOn": "2026-06-12T03:30:00Z",
+          "StartDate": "2026-06-12T03:30:00Z",
+          "EndDate": "2026-06-12T03:30:00Z",
+          "CommunityKey": "CommunityKey 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Contacts/GetMyContactsPage",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "LinkToProfile": "https://example.com/LinkToProfile/1",
+          "PictureUrl": "https://example.com/PictureUrl/1",
+          "LargePictureUrl": "https://example.com/LargePictureUrl/1",
+          "ContactKey": "Contacts-1",
+          "FirstName": "Alex",
+          "LastName": "Rivera",
+          "DisplayName": "Alex Rivera",
+          "EmailAddress": "user1@example.com",
+          "ContactStatusCode": "active",
+          "PrefixCode": "PrefixCode 1",
+          "UpdatedOn": "2026-06-11T00:00:00Z",
+          "UpdatedByContactKey": "UpdatedByContactKey 1",
+          "CompanyName": "Acme Corp",
+          "CompanyTitle": "Acme Corp",
+          "SuffixCode": "SuffixCode 1",
+          "Designation": "Designation 1",
+          "LegacyContactKey": "LegacyContactKey 1",
+          "InformalName": "Rivera",
+          "Phone1": "555-0101",
+          "Phone1Type": "555-0101",
+          "Phone2": "555-0101",
+          "Phone2Type": "555-0101",
+          "Phone3": "555-0101",
+          "Phone3Type": "555-0101",
+          "Phone4": "555-0101",
+          "Phone4Type": "555-0101",
+          "WebsiteUrl": "https://example.com/WebsiteUrl/1",
+          "MemberAwardKey": "MemberAwardKey 1",
+          "IsMember": true,
+          "AgreedToTermsDateTime": "2026-06-10T01:30:00Z",
+          "MemberId": "MemberId 1",
+          "MaidenName": "MaidenName 1",
+          "PrimarySecurityGroupKey": "PrimarySecurityGroupKey 1",
+          "MiddleName": "MiddleName 1",
+          "IsCompany": true,
+          "CompanyLegacyContactKey": "Acme Corp",
+          "AMSDirectoryOptOut": true,
+          "HLDirectoryOptOut": true,
+          "HLContactMeOptOut": true,
+          "IsBlogger": true,
+          "UnreadMessageCount": 4,
+          "LinkToVolunteerProfile": "https://example.com/LinkToVolunteerProfile/1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "LinkToProfile": "https://example.com/LinkToProfile/2",
+          "PictureUrl": "https://example.com/PictureUrl/2",
+          "LargePictureUrl": "https://example.com/LargePictureUrl/2",
+          "ContactKey": "Contacts-2",
+          "FirstName": "Jordan",
+          "LastName": "Chen",
+          "DisplayName": "Jordan Chen",
+          "EmailAddress": "user2@example.com",
+          "ContactStatusCode": "pending",
+          "PrefixCode": "PrefixCode 2",
+          "UpdatedOn": "2026-06-12T00:00:00Z",
+          "UpdatedByContactKey": "UpdatedByContactKey 2",
+          "CompanyName": "Globex LLC",
+          "CompanyTitle": "Globex LLC",
+          "SuffixCode": "SuffixCode 2",
+          "Designation": "Designation 2",
+          "LegacyContactKey": "LegacyContactKey 2",
+          "InformalName": "Chen",
+          "Phone1": "555-0102",
+          "Phone1Type": "555-0102",
+          "Phone2": "555-0102",
+          "Phone2Type": "555-0102",
+          "Phone3": "555-0102",
+          "Phone3Type": "555-0102",
+          "Phone4": "555-0102",
+          "Phone4Type": "555-0102",
+          "WebsiteUrl": "https://example.com/WebsiteUrl/2",
+          "MemberAwardKey": "MemberAwardKey 2",
+          "IsMember": false,
+          "AgreedToTermsDateTime": "2026-06-11T02:30:00Z",
+          "MemberId": "MemberId 2",
+          "MaidenName": "MaidenName 2",
+          "PrimarySecurityGroupKey": "PrimarySecurityGroupKey 2",
+          "MiddleName": "MiddleName 2",
+          "IsCompany": false,
+          "CompanyLegacyContactKey": "Globex LLC",
+          "AMSDirectoryOptOut": false,
+          "HLDirectoryOptOut": false,
+          "HLContactMeOptOut": false,
+          "IsBlogger": false,
+          "UnreadMessageCount": 7,
+          "LinkToVolunteerProfile": "https://example.com/LinkToVolunteerProfile/2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "LinkToProfile": "https://example.com/LinkToProfile/3",
+          "PictureUrl": "https://example.com/PictureUrl/3",
+          "LargePictureUrl": "https://example.com/LargePictureUrl/3",
+          "ContactKey": "Contacts-3",
+          "FirstName": "Taylor",
+          "LastName": "Patel",
+          "DisplayName": "Taylor Patel",
+          "EmailAddress": "user3@example.com",
+          "ContactStatusCode": "completed",
+          "PrefixCode": "PrefixCode 3",
+          "UpdatedOn": "2026-06-13T00:00:00Z",
+          "UpdatedByContactKey": "UpdatedByContactKey 3",
+          "CompanyName": "Initech",
+          "CompanyTitle": "Initech",
+          "SuffixCode": "SuffixCode 3",
+          "Designation": "Designation 3",
+          "LegacyContactKey": "LegacyContactKey 3",
+          "InformalName": "Patel",
+          "Phone1": "555-0103",
+          "Phone1Type": "555-0103",
+          "Phone2": "555-0103",
+          "Phone2Type": "555-0103",
+          "Phone3": "555-0103",
+          "Phone3Type": "555-0103",
+          "Phone4": "555-0103",
+          "Phone4Type": "555-0103",
+          "WebsiteUrl": "https://example.com/WebsiteUrl/3",
+          "MemberAwardKey": "MemberAwardKey 3",
+          "IsMember": true,
+          "AgreedToTermsDateTime": "2026-06-12T03:30:00Z",
+          "MemberId": "MemberId 3",
+          "MaidenName": "MaidenName 3",
+          "PrimarySecurityGroupKey": "PrimarySecurityGroupKey 3",
+          "MiddleName": "MiddleName 3",
+          "IsCompany": true,
+          "CompanyLegacyContactKey": "Initech",
+          "AMSDirectoryOptOut": true,
+          "HLDirectoryOptOut": true,
+          "HLContactMeOptOut": true,
+          "IsBlogger": true,
+          "UnreadMessageCount": 10,
+          "LinkToVolunteerProfile": "https://example.com/LinkToVolunteerProfile/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/DataFeed/GetData",
+      "Method": "POST",
+      "Status": 200,
+      "Body": [
+        {
+          "ItemKey": "DataFeed-1",
+          "Title": "Sample Title 1",
+          "Body": "Sample Body 1",
+          "ActionText": "ActionText 1",
+          "CreateDate": "2026-06-10T01:30:00Z",
+          "PublishedDate": "2026-06-10T01:30:00Z",
+          "PublicationStatus": "active",
+          "Date01": "2026-06-10T01:30:00Z",
+          "Date02": "2026-06-10T01:30:00Z",
+          "HasRecommended": true,
+          "HasReplied": true,
+          "Bool01": true,
+          "Bool02": true,
+          "ItemType": "ItemType 1",
+          "LinkToViewItem": "https://example.com/LinkToViewItem/1",
+          "RecommendationCount": 4,
+          "ResponseCount": 4,
+          "Text01": "Text01 1",
+          "Text02": "Text02 1",
+          "Text03": "Text03 1",
+          "Text04": "Text04 1",
+          "FeaturedImageUrl": "https://example.com/FeaturedImageUrl/1",
+          "ThreadKey": "ThreadKey 1",
+          "Marker": "Marker 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "ItemKey": "DataFeed-2",
+          "Title": "Sample Title 2",
+          "Body": "Sample Body 2",
+          "ActionText": "ActionText 2",
+          "CreateDate": "2026-06-11T02:30:00Z",
+          "PublishedDate": "2026-06-11T02:30:00Z",
+          "PublicationStatus": "pending",
+          "Date01": "2026-06-11T02:30:00Z",
+          "Date02": "2026-06-11T02:30:00Z",
+          "HasRecommended": false,
+          "HasReplied": false,
+          "Bool01": false,
+          "Bool02": false,
+          "ItemType": "ItemType 2",
+          "LinkToViewItem": "https://example.com/LinkToViewItem/2",
+          "RecommendationCount": 7,
+          "ResponseCount": 7,
+          "Text01": "Text01 2",
+          "Text02": "Text02 2",
+          "Text03": "Text03 2",
+          "Text04": "Text04 2",
+          "FeaturedImageUrl": "https://example.com/FeaturedImageUrl/2",
+          "ThreadKey": "ThreadKey 2",
+          "Marker": "Marker 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "ItemKey": "DataFeed-3",
+          "Title": "Sample Title 3",
+          "Body": "Sample Body 3",
+          "ActionText": "ActionText 3",
+          "CreateDate": "2026-06-12T03:30:00Z",
+          "PublishedDate": "2026-06-12T03:30:00Z",
+          "PublicationStatus": "completed",
+          "Date01": "2026-06-12T03:30:00Z",
+          "Date02": "2026-06-12T03:30:00Z",
+          "HasRecommended": true,
+          "HasReplied": true,
+          "Bool01": true,
+          "Bool02": true,
+          "ItemType": "ItemType 3",
+          "LinkToViewItem": "https://example.com/LinkToViewItem/3",
+          "RecommendationCount": 10,
+          "ResponseCount": 10,
+          "Text01": "Text01 3",
+          "Text02": "Text02 3",
+          "Text03": "Text03 3",
+          "Text04": "Text04 3",
+          "FeaturedImageUrl": "https://example.com/FeaturedImageUrl/3",
+          "ThreadKey": "ThreadKey 3",
+          "Marker": "Marker 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Demographics/GetDemographicChoices",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DemographicKey": "DemographicChoices-1",
+          "Name": "Alex Rivera",
+          "Description": "Sample Description 1",
+          "DemographicTypeKey": "DemographicTypeKey 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "DemographicKey": "DemographicChoices-2",
+          "Name": "Jordan Chen",
+          "Description": "Sample Description 2",
+          "DemographicTypeKey": "DemographicTypeKey 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "DemographicKey": "DemographicChoices-3",
+          "Name": "Taylor Patel",
+          "Description": "Sample Description 3",
+          "DemographicTypeKey": "DemographicTypeKey 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Demographics/GetDemographicTypes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DemographicTypeKey": "DemographicTypes-1",
+          "Name": "Alex Rivera",
+          "Description": "Sample Description 1",
+          "IsNetwork": true,
+          "IsFreeFormAllowed": true,
+          "IsMultiSelect": true,
+          "IsPerson": true,
+          "ShowDescriptionInProfile": true,
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "DemographicTypeKey": "DemographicTypes-2",
+          "Name": "Jordan Chen",
+          "Description": "Sample Description 2",
+          "IsNetwork": false,
+          "IsFreeFormAllowed": false,
+          "IsMultiSelect": false,
+          "IsPerson": false,
+          "ShowDescriptionInProfile": false,
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "DemographicTypeKey": "DemographicTypes-3",
+          "Name": "Taylor Patel",
+          "Description": "Sample Description 3",
+          "IsNetwork": true,
+          "IsFreeFormAllowed": true,
+          "IsMultiSelect": true,
+          "IsPerson": true,
+          "ShowDescriptionInProfile": true,
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Discussions/GetPagedDiscussionPosts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Body": "Sample Body 1",
+          "BodyWithoutMarkup": "Sample BodyWithoutMarkup 1",
+          "ContactKey": "ContactKey 1",
+          "DatePosted": "2026-06-11T00:00:00Z",
+          "LinkToDiscussion": "https://example.com/LinkToDiscussion/1",
+          "LinkToMessageInContext": "https://example.com/LinkToMessageInContext/1",
+          "DiscussionName": "DiscussionName 1",
+          "EmailAddress": "user1@example.com",
+          "LinkToMessage": "https://example.com/LinkToMessage/1",
+          "DiscussionPostKey": "DiscussionPosts-1",
+          "ParentDiscussionPostKey": "ParentDiscussionPostKey 1",
+          "DiscussionThreadKey": "DiscussionThreadKey 1",
+          "CommunityName": "CommunityName 1",
+          "CommunityKey": "CommunityKey 1",
+          "DiscussionKey": "DiscussionKey 1",
+          "MessageStatus": "active",
+          "ModerationType": "ModerationType 1",
+          "DiscussionPostId": 2,
+          "Pinned": true,
+          "Subject": "Sample Title 1",
+          "HasRecommended": true,
+          "RecommendationCount": 4,
+          "IsAnswer": true,
+          "UserPermissions": "UserPermissions 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "Body": "Sample Body 2",
+          "BodyWithoutMarkup": "Sample BodyWithoutMarkup 2",
+          "ContactKey": "ContactKey 2",
+          "DatePosted": "2026-06-12T00:00:00Z",
+          "LinkToDiscussion": "https://example.com/LinkToDiscussion/2",
+          "LinkToMessageInContext": "https://example.com/LinkToMessageInContext/2",
+          "DiscussionName": "DiscussionName 2",
+          "EmailAddress": "user2@example.com",
+          "LinkToMessage": "https://example.com/LinkToMessage/2",
+          "DiscussionPostKey": "DiscussionPosts-2",
+          "ParentDiscussionPostKey": "ParentDiscussionPostKey 2",
+          "DiscussionThreadKey": "DiscussionThreadKey 2",
+          "CommunityName": "CommunityName 2",
+          "CommunityKey": "CommunityKey 2",
+          "DiscussionKey": "DiscussionKey 2",
+          "MessageStatus": "pending",
+          "ModerationType": "ModerationType 2",
+          "DiscussionPostId": 3,
+          "Pinned": false,
+          "Subject": "Sample Title 2",
+          "HasRecommended": false,
+          "RecommendationCount": 7,
+          "IsAnswer": false,
+          "UserPermissions": "UserPermissions 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "Body": "Sample Body 3",
+          "BodyWithoutMarkup": "Sample BodyWithoutMarkup 3",
+          "ContactKey": "ContactKey 3",
+          "DatePosted": "2026-06-13T00:00:00Z",
+          "LinkToDiscussion": "https://example.com/LinkToDiscussion/3",
+          "LinkToMessageInContext": "https://example.com/LinkToMessageInContext/3",
+          "DiscussionName": "DiscussionName 3",
+          "EmailAddress": "user3@example.com",
+          "LinkToMessage": "https://example.com/LinkToMessage/3",
+          "DiscussionPostKey": "DiscussionPosts-3",
+          "ParentDiscussionPostKey": "ParentDiscussionPostKey 3",
+          "DiscussionThreadKey": "DiscussionThreadKey 3",
+          "CommunityName": "CommunityName 3",
+          "CommunityKey": "CommunityKey 3",
+          "DiscussionKey": "DiscussionKey 3",
+          "MessageStatus": "completed",
+          "ModerationType": "ModerationType 3",
+          "DiscussionPostId": 4,
+          "Pinned": true,
+          "Subject": "Sample Title 3",
+          "HasRecommended": true,
+          "RecommendationCount": 10,
+          "IsAnswer": true,
+          "UserPermissions": "UserPermissions 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Discussions/GetSubscribedDiscussions",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DiscussionKey": "Discussions-1",
+          "DiscussionName": "DiscussionName 1",
+          "LinkToDiscussion": "https://example.com/LinkToDiscussion/1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "DiscussionKey": "Discussions-2",
+          "DiscussionName": "DiscussionName 2",
+          "LinkToDiscussion": "https://example.com/LinkToDiscussion/2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "DiscussionKey": "Discussions-3",
+          "DiscussionName": "DiscussionName 3",
+          "LinkToDiscussion": "https://example.com/LinkToDiscussion/3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Discussions/GetRecentThreads",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "MessageCount": 4,
+          "DiscussionThreadKey": "DiscussionThreads-1",
+          "Subject": "Sample Title 1",
+          "LastPostDate": "2026-06-11T00:00:00Z",
+          "LinkToViewThread": "https://example.com/LinkToViewThread/1",
+          "DiscussionKey": "DiscussionKey 1",
+          "CommunityName": "CommunityName 1",
+          "CommunityKey": "CommunityKey 1",
+          "IsFollowing": true,
+          "UserPermissions": "UserPermissions 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "MessageCount": 7,
+          "DiscussionThreadKey": "DiscussionThreads-2",
+          "Subject": "Sample Title 2",
+          "LastPostDate": "2026-06-12T00:00:00Z",
+          "LinkToViewThread": "https://example.com/LinkToViewThread/2",
+          "DiscussionKey": "DiscussionKey 2",
+          "CommunityName": "CommunityName 2",
+          "CommunityKey": "CommunityKey 2",
+          "IsFollowing": false,
+          "UserPermissions": "UserPermissions 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "MessageCount": 10,
+          "DiscussionThreadKey": "DiscussionThreads-3",
+          "Subject": "Sample Title 3",
+          "LastPostDate": "2026-06-13T00:00:00Z",
+          "LinkToViewThread": "https://example.com/LinkToViewThread/3",
+          "DiscussionKey": "DiscussionKey 3",
+          "CommunityName": "CommunityName 3",
+          "CommunityKey": "CommunityKey 3",
+          "IsFollowing": true,
+          "UserPermissions": "UserPermissions 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/ResourceLibrary/GetDocumentAttachments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DocumentAttachmentKey": "DocumentAttachments-1",
+          "DocumentKey": "DocumentKey 1",
+          "FileName": "FileName 1",
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "FileExtension": "FileExtension 1",
+          "FileSizeInBytes": 2,
+          "Width": 2,
+          "Height": 2,
+          "DurationSeconds": 0.1,
+          "DownloadUrl": "https://example.com/DownloadUrl/1",
+          "IconUrl": "https://example.com/IconUrl/1",
+          "Status": "active",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "DocumentAttachmentKey": "DocumentAttachments-2",
+          "DocumentKey": "DocumentKey 2",
+          "FileName": "FileName 2",
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "FileExtension": "FileExtension 2",
+          "FileSizeInBytes": 3,
+          "Width": 3,
+          "Height": 3,
+          "DurationSeconds": 0.2,
+          "DownloadUrl": "https://example.com/DownloadUrl/2",
+          "IconUrl": "https://example.com/IconUrl/2",
+          "Status": "pending",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "DocumentAttachmentKey": "DocumentAttachments-3",
+          "DocumentKey": "DocumentKey 3",
+          "FileName": "FileName 3",
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "FileExtension": "FileExtension 3",
+          "FileSizeInBytes": 4,
+          "Width": 4,
+          "Height": 4,
+          "DurationSeconds": 0.3,
+          "DownloadUrl": "https://example.com/DownloadUrl/3",
+          "IconUrl": "https://example.com/IconUrl/3",
+          "Status": "completed",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Events/GetEventRegistrants",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "RegistrantKey": "EventRegistrants-1",
+          "BadgeName": "BadgeName 1",
+          "FirstName": "Alex",
+          "LastName": "Rivera",
+          "Email": "user1@example.com",
+          "CompanyName": "Acme Corp",
+          "CompanyTitle": "Acme Corp",
+          "WebsiteUrl": "https://example.com/WebsiteUrl/1",
+          "PictureUrl": "https://example.com/PictureUrl/1",
+          "LargePictureUrl": "https://example.com/LargePictureUrl/1",
+          "DirectoryOptOut": true,
+          "ContactMeOptOut": true,
+          "RegistrationKey": "RegistrationKey 1",
+          "ContactKey": "ContactKey 1",
+          "UpdatedOn": "2026-06-10T01:30:00Z",
+          "RegistrantClass": "RegistrantClass 1",
+          "modifiedDateTime": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "RegistrantKey": "EventRegistrants-2",
+          "BadgeName": "BadgeName 2",
+          "FirstName": "Jordan",
+          "LastName": "Chen",
+          "Email": "user2@example.com",
+          "CompanyName": "Globex LLC",
+          "CompanyTitle": "Globex LLC",
+          "WebsiteUrl": "https://example.com/WebsiteUrl/2",
+          "PictureUrl": "https://example.com/PictureUrl/2",
+          "LargePictureUrl": "https://example.com/LargePictureUrl/2",
+          "DirectoryOptOut": false,
+          "ContactMeOptOut": false,
+          "RegistrationKey": "RegistrationKey 2",
+          "ContactKey": "ContactKey 2",
+          "UpdatedOn": "2026-06-11T02:30:00Z",
+          "RegistrantClass": "RegistrantClass 2",
+          "modifiedDateTime": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "RegistrantKey": "EventRegistrants-3",
+          "BadgeName": "BadgeName 3",
+          "FirstName": "Taylor",
+          "LastName": "Patel",
+          "Email": "user3@example.com",
+          "CompanyName": "Initech",
+          "CompanyTitle": "Initech",
+          "WebsiteUrl": "https://example.com/WebsiteUrl/3",
+          "PictureUrl": "https://example.com/PictureUrl/3",
+          "LargePictureUrl": "https://example.com/LargePictureUrl/3",
+          "DirectoryOptOut": true,
+          "ContactMeOptOut": true,
+          "RegistrationKey": "RegistrationKey 3",
+          "ContactKey": "ContactKey 3",
+          "UpdatedOn": "2026-06-12T03:30:00Z",
+          "RegistrantClass": "RegistrantClass 3",
+          "modifiedDateTime": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Events/GetUpcoming",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "EventKey": "Events-1",
+          "ParticipationType": 2,
+          "DialInInstructions": "DialInInstructions 1",
+          "EventURL": "https://example.com/EventURL/1",
+          "LoginInstructions": "LoginInstructions 1",
+          "EventTitle": "Sample Title 1",
+          "ShortTitle": "Sample Title 1",
+          "EventTypeKey": "EventTypeKey 1",
+          "CommunityKey": "CommunityKey 1",
+          "StartDateTime": "2026-06-10T01:30:00Z",
+          "StartDateTimeUTC": "2026-06-10T01:30:00Z",
+          "EndDateTime": "2026-06-10T01:30:00Z",
+          "EndDateTimeUTC": "2026-06-10T01:30:00Z",
+          "EndDateTimeCalculated": "2026-06-10T01:30:00Z",
+          "ArchiveDateTime": "2026-06-10T01:30:00Z",
+          "TimeZoneKey": "America/New_York",
+          "EventListDisplayType": 2,
+          "SearchResultsDisplayType": 2,
+          "ContactKey": "ContactKey 1",
+          "ContactFirstName": "Alex",
+          "ContactFirstLast": "ContactFirstLast 1",
+          "ContactLastName": "Rivera",
+          "ContactEmail": "user1@example.com",
+          "ContactPhone": "555-0101",
+          "EventDescription": "Sample EventDescription 1",
+          "PictureFileName": "PictureFileName 1",
+          "PictureUrl": "https://example.com/PictureUrl/1",
+          "PictureHeight": 2,
+          "PictureWidth": 2,
+          "RegistrationProcessOption": 0.1,
+          "RegRedirectURL": "https://example.com/RegRedirectURL/1",
+          "UseBadgeName": true,
+          "UseDisabilityOrSpecial": true,
+          "SpecialInstructions": true,
+          "SpecialInstructionsLabelText": "Sample Title 1",
+          "EarlyRegistrationDate": "2026-06-10T01:30:00Z",
+          "RegularRegistrationDate": "2026-06-10T01:30:00Z",
+          "RegularRegistrationEndDate": "2026-06-10T01:30:00Z",
+          "LateRegistrationEndDate": "2026-06-10T01:30:00Z",
+          "SuppressSessionDisplay": true,
+          "ShowPriceDetails": true,
+          "LegacyEventKey": "LegacyEventKey 1",
+          "ConfirmationEmailText": "user1@example.com",
+          "DetailURL": "https://example.com/DetailURL/1",
+          "EventTypeName": "EventTypeName 1",
+          "FormatedDateRange": "FormatedDateRange 1",
+          "FormatedDateRangeLong": "FormatedDateRangeLong 1",
+          "FormatedDateRangeLongMonth": "FormatedDateRangeLongMonth 1",
+          "FormatedDateRangeYear": "FormatedDateRangeYear 1",
+          "HasPricing": true,
+          "ICalendarData": "ICalendarData 1",
+          "IsAcceptingRegistrations": true,
+          "IsActive": true,
+          "IsReadyForRegistration": true,
+          "LinkToEventDetails": "https://example.com/LinkToEventDetails/1",
+          "MemberFee": 19.99,
+          "NonMemberFee": 19.99,
+          "RegistrantCount": 4,
+          "RegThankyouMessage": "Sample RegThankyouMessage 1",
+          "SuppressOptionDisplay": true,
+          "UseForm": true,
+          "CreatedByUser": "CreatedByUser 1",
+          "CreatedByUserKey": "CreatedByUserKey 1",
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "UpdatedByUser": "UpdatedByUser 1",
+          "UpdatedByUserKey": "UpdatedByUserKey 1",
+          "UpdatedOn": "2026-06-11T00:00:00Z",
+          "RequireAttendanceToVote": true,
+          "AttendedInd": "AttendedInd 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "EventKey": "Events-2",
+          "ParticipationType": 3,
+          "DialInInstructions": "DialInInstructions 2",
+          "EventURL": "https://example.com/EventURL/2",
+          "LoginInstructions": "LoginInstructions 2",
+          "EventTitle": "Sample Title 2",
+          "ShortTitle": "Sample Title 2",
+          "EventTypeKey": "EventTypeKey 2",
+          "CommunityKey": "CommunityKey 2",
+          "StartDateTime": "2026-06-11T02:30:00Z",
+          "StartDateTimeUTC": "2026-06-11T02:30:00Z",
+          "EndDateTime": "2026-06-11T02:30:00Z",
+          "EndDateTimeUTC": "2026-06-11T02:30:00Z",
+          "EndDateTimeCalculated": "2026-06-11T02:30:00Z",
+          "ArchiveDateTime": "2026-06-11T02:30:00Z",
+          "TimeZoneKey": "America/New_York",
+          "EventListDisplayType": 3,
+          "SearchResultsDisplayType": 3,
+          "ContactKey": "ContactKey 2",
+          "ContactFirstName": "Jordan",
+          "ContactFirstLast": "ContactFirstLast 2",
+          "ContactLastName": "Chen",
+          "ContactEmail": "user2@example.com",
+          "ContactPhone": "555-0102",
+          "EventDescription": "Sample EventDescription 2",
+          "PictureFileName": "PictureFileName 2",
+          "PictureUrl": "https://example.com/PictureUrl/2",
+          "PictureHeight": 3,
+          "PictureWidth": 3,
+          "RegistrationProcessOption": 0.2,
+          "RegRedirectURL": "https://example.com/RegRedirectURL/2",
+          "UseBadgeName": false,
+          "UseDisabilityOrSpecial": false,
+          "SpecialInstructions": false,
+          "SpecialInstructionsLabelText": "Sample Title 2",
+          "EarlyRegistrationDate": "2026-06-11T02:30:00Z",
+          "RegularRegistrationDate": "2026-06-11T02:30:00Z",
+          "RegularRegistrationEndDate": "2026-06-11T02:30:00Z",
+          "LateRegistrationEndDate": "2026-06-11T02:30:00Z",
+          "SuppressSessionDisplay": false,
+          "ShowPriceDetails": false,
+          "LegacyEventKey": "LegacyEventKey 2",
+          "ConfirmationEmailText": "user2@example.com",
+          "DetailURL": "https://example.com/DetailURL/2",
+          "EventTypeName": "EventTypeName 2",
+          "FormatedDateRange": "FormatedDateRange 2",
+          "FormatedDateRangeLong": "FormatedDateRangeLong 2",
+          "FormatedDateRangeLongMonth": "FormatedDateRangeLongMonth 2",
+          "FormatedDateRangeYear": "FormatedDateRangeYear 2",
+          "HasPricing": false,
+          "ICalendarData": "ICalendarData 2",
+          "IsAcceptingRegistrations": false,
+          "IsActive": false,
+          "IsReadyForRegistration": false,
+          "LinkToEventDetails": "https://example.com/LinkToEventDetails/2",
+          "MemberFee": 29.99,
+          "NonMemberFee": 29.99,
+          "RegistrantCount": 7,
+          "RegThankyouMessage": "Sample RegThankyouMessage 2",
+          "SuppressOptionDisplay": false,
+          "UseForm": false,
+          "CreatedByUser": "CreatedByUser 2",
+          "CreatedByUserKey": "CreatedByUserKey 2",
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "UpdatedByUser": "UpdatedByUser 2",
+          "UpdatedByUserKey": "UpdatedByUserKey 2",
+          "UpdatedOn": "2026-06-12T00:00:00Z",
+          "RequireAttendanceToVote": false,
+          "AttendedInd": "AttendedInd 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "EventKey": "Events-3",
+          "ParticipationType": 4,
+          "DialInInstructions": "DialInInstructions 3",
+          "EventURL": "https://example.com/EventURL/3",
+          "LoginInstructions": "LoginInstructions 3",
+          "EventTitle": "Sample Title 3",
+          "ShortTitle": "Sample Title 3",
+          "EventTypeKey": "EventTypeKey 3",
+          "CommunityKey": "CommunityKey 3",
+          "StartDateTime": "2026-06-12T03:30:00Z",
+          "StartDateTimeUTC": "2026-06-12T03:30:00Z",
+          "EndDateTime": "2026-06-12T03:30:00Z",
+          "EndDateTimeUTC": "2026-06-12T03:30:00Z",
+          "EndDateTimeCalculated": "2026-06-12T03:30:00Z",
+          "ArchiveDateTime": "2026-06-12T03:30:00Z",
+          "TimeZoneKey": "America/New_York",
+          "EventListDisplayType": 4,
+          "SearchResultsDisplayType": 4,
+          "ContactKey": "ContactKey 3",
+          "ContactFirstName": "Taylor",
+          "ContactFirstLast": "ContactFirstLast 3",
+          "ContactLastName": "Patel",
+          "ContactEmail": "user3@example.com",
+          "ContactPhone": "555-0103",
+          "EventDescription": "Sample EventDescription 3",
+          "PictureFileName": "PictureFileName 3",
+          "PictureUrl": "https://example.com/PictureUrl/3",
+          "PictureHeight": 4,
+          "PictureWidth": 4,
+          "RegistrationProcessOption": 0.3,
+          "RegRedirectURL": "https://example.com/RegRedirectURL/3",
+          "UseBadgeName": true,
+          "UseDisabilityOrSpecial": true,
+          "SpecialInstructions": true,
+          "SpecialInstructionsLabelText": "Sample Title 3",
+          "EarlyRegistrationDate": "2026-06-12T03:30:00Z",
+          "RegularRegistrationDate": "2026-06-12T03:30:00Z",
+          "RegularRegistrationEndDate": "2026-06-12T03:30:00Z",
+          "LateRegistrationEndDate": "2026-06-12T03:30:00Z",
+          "SuppressSessionDisplay": true,
+          "ShowPriceDetails": true,
+          "LegacyEventKey": "LegacyEventKey 3",
+          "ConfirmationEmailText": "user3@example.com",
+          "DetailURL": "https://example.com/DetailURL/3",
+          "EventTypeName": "EventTypeName 3",
+          "FormatedDateRange": "FormatedDateRange 3",
+          "FormatedDateRangeLong": "FormatedDateRangeLong 3",
+          "FormatedDateRangeLongMonth": "FormatedDateRangeLongMonth 3",
+          "FormatedDateRangeYear": "FormatedDateRangeYear 3",
+          "HasPricing": true,
+          "ICalendarData": "ICalendarData 3",
+          "IsAcceptingRegistrations": true,
+          "IsActive": true,
+          "IsReadyForRegistration": true,
+          "LinkToEventDetails": "https://example.com/LinkToEventDetails/3",
+          "MemberFee": 39.99,
+          "NonMemberFee": 39.99,
+          "RegistrantCount": 10,
+          "RegThankyouMessage": "Sample RegThankyouMessage 3",
+          "SuppressOptionDisplay": true,
+          "UseForm": true,
+          "CreatedByUser": "CreatedByUser 3",
+          "CreatedByUserKey": "CreatedByUserKey 3",
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "UpdatedByUser": "UpdatedByUser 3",
+          "UpdatedByUserKey": "UpdatedByUserKey 3",
+          "UpdatedOn": "2026-06-13T00:00:00Z",
+          "RequireAttendanceToVote": true,
+          "AttendedInd": "AttendedInd 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/EventSessions/GetSession",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "EventSessionCategoryKey": "standard",
+          "EventSessionKey": "EventSessions-1",
+          "CategoryKey": "standard",
+          "CategoryName": "standard",
+          "CategorySortOrder": 2,
+          "CECredits": 2,
+          "CreatedByContactKey": "CreatedByContactKey 1",
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "Description": "Sample Description 1",
+          "EarlyRegistrationPrice": 19.99,
+          "EndDateTime": "2026-06-10T01:30:00Z",
+          "EndDateTimeUTC": "2026-06-10T01:30:00Z",
+          "ICalendarData": "ICalendarData 1",
+          "IsActive": true,
+          "IsDefault": true,
+          "IsDisplayed": true,
+          "IsLoggingEnabled": true,
+          "IsRequired": true,
+          "IsSession": true,
+          "LateRegistrationPrice": 19.99,
+          "LegacyOptionKey": "LegacyOptionKey 1",
+          "Location": "Location 1",
+          "MaximumRegistrants": 2,
+          "PriceTypeCode": 19.99,
+          "RegistrantCount": 4,
+          "RegularRegistrationPrice": 19.99,
+          "SortOrder": 2,
+          "StartDateTime": "2026-06-10T01:30:00Z",
+          "StartDateTimeUTC": "2026-06-10T01:30:00Z",
+          "Title": "Sample Title 1",
+          "UpdatedByContactKey": "UpdatedByContactKey 1",
+          "UpdatedOn": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "EventSessionCategoryKey": "premium",
+          "EventSessionKey": "EventSessions-2",
+          "CategoryKey": "premium",
+          "CategoryName": "premium",
+          "CategorySortOrder": 3,
+          "CECredits": 3,
+          "CreatedByContactKey": "CreatedByContactKey 2",
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "Description": "Sample Description 2",
+          "EarlyRegistrationPrice": 29.99,
+          "EndDateTime": "2026-06-11T02:30:00Z",
+          "EndDateTimeUTC": "2026-06-11T02:30:00Z",
+          "ICalendarData": "ICalendarData 2",
+          "IsActive": false,
+          "IsDefault": false,
+          "IsDisplayed": false,
+          "IsLoggingEnabled": false,
+          "IsRequired": false,
+          "IsSession": false,
+          "LateRegistrationPrice": 29.99,
+          "LegacyOptionKey": "LegacyOptionKey 2",
+          "Location": "Location 2",
+          "MaximumRegistrants": 3,
+          "PriceTypeCode": 29.99,
+          "RegistrantCount": 7,
+          "RegularRegistrationPrice": 29.99,
+          "SortOrder": 3,
+          "StartDateTime": "2026-06-11T02:30:00Z",
+          "StartDateTimeUTC": "2026-06-11T02:30:00Z",
+          "Title": "Sample Title 2",
+          "UpdatedByContactKey": "UpdatedByContactKey 2",
+          "UpdatedOn": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "EventSessionCategoryKey": "basic",
+          "EventSessionKey": "EventSessions-3",
+          "CategoryKey": "basic",
+          "CategoryName": "basic",
+          "CategorySortOrder": 4,
+          "CECredits": 4,
+          "CreatedByContactKey": "CreatedByContactKey 3",
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "Description": "Sample Description 3",
+          "EarlyRegistrationPrice": 39.99,
+          "EndDateTime": "2026-06-12T03:30:00Z",
+          "EndDateTimeUTC": "2026-06-12T03:30:00Z",
+          "ICalendarData": "ICalendarData 3",
+          "IsActive": true,
+          "IsDefault": true,
+          "IsDisplayed": true,
+          "IsLoggingEnabled": true,
+          "IsRequired": true,
+          "IsSession": true,
+          "LateRegistrationPrice": 39.99,
+          "LegacyOptionKey": "LegacyOptionKey 3",
+          "Location": "Location 3",
+          "MaximumRegistrants": 4,
+          "PriceTypeCode": 39.99,
+          "RegistrantCount": 10,
+          "RegularRegistrationPrice": 39.99,
+          "SortOrder": 4,
+          "StartDateTime": "2026-06-12T03:30:00Z",
+          "StartDateTimeUTC": "2026-06-12T03:30:00Z",
+          "Title": "Sample Title 3",
+          "UpdatedByContactKey": "UpdatedByContactKey 3",
+          "UpdatedOn": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Events/GetEventTypes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "EventTypeKey": "EventTypes-1",
+          "Name": "Alex Rivera",
+          "EventTypeName": "EventTypeName 1",
+          "EventTypeDescription": "Sample EventTypeDescription 1",
+          "AllowMultipleRegistrations": true,
+          "AllowMultipleOptions": true,
+          "AllowMultipleSessions": true,
+          "AcceptPayment": true,
+          "IsActive": true,
+          "AllowRegistration": true,
+          "AllowSameSelections": true,
+          "ShowAddEditScreenDescription": true,
+          "AllowNonMemberRegistration": true,
+          "AllowPublicUserRegistration": true,
+          "AllowEarlyRegistrationRate": true,
+          "AllowLateRegistrationRate": true,
+          "AddEditScreenDescription": "Sample AddEditScreenDescription 1",
+          "EventTypeDescriptionWaterMarkText": "Sample EventTypeDescriptionWaterMarkText 1",
+          "AllowMultiDay": true,
+          "AllowPhysicalAddress": true,
+          "AllowOnlinePhone": true,
+          "AllowEventLogo": true,
+          "AllowCommunityAdminToUse": true,
+          "AllowCommunityMemberToUse": true,
+          "AllowEventVisibilityChanges": true,
+          "SuppressOptionDisplay": true,
+          "SuppressSessionDisplay": true,
+          "AllowCredits": true,
+          "RegistrationProcessOption": 0.1,
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "EventTypeKey": "EventTypes-2",
+          "Name": "Jordan Chen",
+          "EventTypeName": "EventTypeName 2",
+          "EventTypeDescription": "Sample EventTypeDescription 2",
+          "AllowMultipleRegistrations": false,
+          "AllowMultipleOptions": false,
+          "AllowMultipleSessions": false,
+          "AcceptPayment": false,
+          "IsActive": false,
+          "AllowRegistration": false,
+          "AllowSameSelections": false,
+          "ShowAddEditScreenDescription": false,
+          "AllowNonMemberRegistration": false,
+          "AllowPublicUserRegistration": false,
+          "AllowEarlyRegistrationRate": false,
+          "AllowLateRegistrationRate": false,
+          "AddEditScreenDescription": "Sample AddEditScreenDescription 2",
+          "EventTypeDescriptionWaterMarkText": "Sample EventTypeDescriptionWaterMarkText 2",
+          "AllowMultiDay": false,
+          "AllowPhysicalAddress": false,
+          "AllowOnlinePhone": false,
+          "AllowEventLogo": false,
+          "AllowCommunityAdminToUse": false,
+          "AllowCommunityMemberToUse": false,
+          "AllowEventVisibilityChanges": false,
+          "SuppressOptionDisplay": false,
+          "SuppressSessionDisplay": false,
+          "AllowCredits": false,
+          "RegistrationProcessOption": 0.2,
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "EventTypeKey": "EventTypes-3",
+          "Name": "Taylor Patel",
+          "EventTypeName": "EventTypeName 3",
+          "EventTypeDescription": "Sample EventTypeDescription 3",
+          "AllowMultipleRegistrations": true,
+          "AllowMultipleOptions": true,
+          "AllowMultipleSessions": true,
+          "AcceptPayment": true,
+          "IsActive": true,
+          "AllowRegistration": true,
+          "AllowSameSelections": true,
+          "ShowAddEditScreenDescription": true,
+          "AllowNonMemberRegistration": true,
+          "AllowPublicUserRegistration": true,
+          "AllowEarlyRegistrationRate": true,
+          "AllowLateRegistrationRate": true,
+          "AddEditScreenDescription": "Sample AddEditScreenDescription 3",
+          "EventTypeDescriptionWaterMarkText": "Sample EventTypeDescriptionWaterMarkText 3",
+          "AllowMultiDay": true,
+          "AllowPhysicalAddress": true,
+          "AllowOnlinePhone": true,
+          "AllowEventLogo": true,
+          "AllowCommunityAdminToUse": true,
+          "AllowCommunityMemberToUse": true,
+          "AllowEventVisibilityChanges": true,
+          "SuppressOptionDisplay": true,
+          "SuppressSessionDisplay": true,
+          "AllowCredits": true,
+          "RegistrationProcessOption": 0.3,
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/ExternalActivity/Create",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ExternalActivityKey": "ExternalActivity-1",
+          "ExternalActivityTypeKey": "ExternalActivityTypeKey 1",
+          "LegacyActivityTypeKey": "LegacyActivityTypeKey 1",
+          "ContactKey": "ContactKey 1",
+          "LegacyContactKey": "LegacyContactKey 1",
+          "ActivityDateTime": "2026-06-10T01:30:00Z",
+          "ActivityTitle": "Sample Title 1",
+          "ActivityDetails": "ActivityDetails 1",
+          "ActivityUrl": "https://example.com/ActivityUrl/1",
+          "LegacyActivityKey": "LegacyActivityKey 1",
+          "Date1": "2026-06-10T01:30:00Z",
+          "Date2": "2026-06-10T01:30:00Z",
+          "Date3": "2026-06-10T01:30:00Z",
+          "Number1": 4,
+          "Number2": 4,
+          "Number3": 4,
+          "Text1": "Text1 1",
+          "Text2": "Text2 1",
+          "Text3": "Text3 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "ExternalActivityKey": "ExternalActivity-2",
+          "ExternalActivityTypeKey": "ExternalActivityTypeKey 2",
+          "LegacyActivityTypeKey": "LegacyActivityTypeKey 2",
+          "ContactKey": "ContactKey 2",
+          "LegacyContactKey": "LegacyContactKey 2",
+          "ActivityDateTime": "2026-06-11T02:30:00Z",
+          "ActivityTitle": "Sample Title 2",
+          "ActivityDetails": "ActivityDetails 2",
+          "ActivityUrl": "https://example.com/ActivityUrl/2",
+          "LegacyActivityKey": "LegacyActivityKey 2",
+          "Date1": "2026-06-11T02:30:00Z",
+          "Date2": "2026-06-11T02:30:00Z",
+          "Date3": "2026-06-11T02:30:00Z",
+          "Number1": 7,
+          "Number2": 7,
+          "Number3": 7,
+          "Text1": "Text1 2",
+          "Text2": "Text2 2",
+          "Text3": "Text3 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "ExternalActivityKey": "ExternalActivity-3",
+          "ExternalActivityTypeKey": "ExternalActivityTypeKey 3",
+          "LegacyActivityTypeKey": "LegacyActivityTypeKey 3",
+          "ContactKey": "ContactKey 3",
+          "LegacyContactKey": "LegacyContactKey 3",
+          "ActivityDateTime": "2026-06-12T03:30:00Z",
+          "ActivityTitle": "Sample Title 3",
+          "ActivityDetails": "ActivityDetails 3",
+          "ActivityUrl": "https://example.com/ActivityUrl/3",
+          "LegacyActivityKey": "LegacyActivityKey 3",
+          "Date1": "2026-06-12T03:30:00Z",
+          "Date2": "2026-06-12T03:30:00Z",
+          "Date3": "2026-06-12T03:30:00Z",
+          "Number1": 10,
+          "Number2": 10,
+          "Number3": 10,
+          "Text1": "Text1 3",
+          "Text2": "Text2 3",
+          "Text3": "Text3 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Ideation/GetIdeaCategories",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "CategoryName": "standard",
+          "CategoryKey": "IdeaCategories-1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "CategoryName": "premium",
+          "CategoryKey": "IdeaCategories-2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "CategoryName": "basic",
+          "CategoryKey": "IdeaCategories-3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Ideation/GetIdeasByStatus",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "IdeationKey": "Ideas-1",
+          "Title": "Sample Title 1",
+          "Description": "Sample Description 1",
+          "LinkToViewIdea": "https://example.com/LinkToViewIdea/1",
+          "TotalUpvotes": 19.99,
+          "TotalDownvotes": 19.99,
+          "HasOfficialComment": true,
+          "IsAnonymous": true,
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "UpdatedOn": "2026-06-11T00:00:00Z",
+          "CommunityKey": "CommunityKey 1",
+          "IdeaStatusKey": "active",
+          "AuthorContactKey": "AuthorContactKey 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "IdeationKey": "Ideas-2",
+          "Title": "Sample Title 2",
+          "Description": "Sample Description 2",
+          "LinkToViewIdea": "https://example.com/LinkToViewIdea/2",
+          "TotalUpvotes": 29.99,
+          "TotalDownvotes": 29.99,
+          "HasOfficialComment": false,
+          "IsAnonymous": false,
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "UpdatedOn": "2026-06-12T00:00:00Z",
+          "CommunityKey": "CommunityKey 2",
+          "IdeaStatusKey": "pending",
+          "AuthorContactKey": "AuthorContactKey 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "IdeationKey": "Ideas-3",
+          "Title": "Sample Title 3",
+          "Description": "Sample Description 3",
+          "LinkToViewIdea": "https://example.com/LinkToViewIdea/3",
+          "TotalUpvotes": 39.99,
+          "TotalDownvotes": 39.99,
+          "HasOfficialComment": true,
+          "IsAnonymous": true,
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "UpdatedOn": "2026-06-13T00:00:00Z",
+          "CommunityKey": "CommunityKey 3",
+          "IdeaStatusKey": "completed",
+          "AuthorContactKey": "AuthorContactKey 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Ideation/GetIdeaStatuses",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "StatusName": "active",
+          "StatusKey": "IdeaStatuses-1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "StatusName": "pending",
+          "StatusKey": "IdeaStatuses-2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "StatusName": "completed",
+          "StatusKey": "IdeaStatuses-3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Ideation/GetVoters",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "IdeationKey": "IdeationKey 1",
+          "Upvoters": "Upvoters 1",
+          "Downvoters": "Downvoters 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "IdeationKey": "IdeationKey 2",
+          "Upvoters": "Upvoters 2",
+          "Downvoters": "Downvoters 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "IdeationKey": "IdeationKey 3",
+          "Upvoters": "Upvoters 3",
+          "Downvoters": "Downvoters 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Question/GetThread",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AnswerCount": 4,
+          "QuestionKey": "Questions-1",
+          "Title": "Sample Title 1",
+          "HasBestAnswer": true,
+          "HasReplied": true,
+          "BestAnswerOn": "2026-06-10T01:30:00Z",
+          "IsThreadClosed": true,
+          "ThreadClosedOn": "2026-06-10T01:30:00Z",
+          "IsFollowing": true,
+          "Content": "Sample Content 1",
+          "PublishedOn": "2026-06-10T01:30:00Z",
+          "IsAnonymous": true,
+          "EditedOn": "2026-06-11T00:00:00Z",
+          "IsModerated": true,
+          "RecommendationCount": 4,
+          "HasRecommended": true,
+          "UserPermissions": "UserPermissions 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "AnswerCount": 7,
+          "QuestionKey": "Questions-2",
+          "Title": "Sample Title 2",
+          "HasBestAnswer": false,
+          "HasReplied": false,
+          "BestAnswerOn": "2026-06-11T02:30:00Z",
+          "IsThreadClosed": false,
+          "ThreadClosedOn": "2026-06-11T02:30:00Z",
+          "IsFollowing": false,
+          "Content": "Sample Content 2",
+          "PublishedOn": "2026-06-11T02:30:00Z",
+          "IsAnonymous": false,
+          "EditedOn": "2026-06-12T00:00:00Z",
+          "IsModerated": false,
+          "RecommendationCount": 7,
+          "HasRecommended": false,
+          "UserPermissions": "UserPermissions 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "AnswerCount": 10,
+          "QuestionKey": "Questions-3",
+          "Title": "Sample Title 3",
+          "HasBestAnswer": true,
+          "HasReplied": true,
+          "BestAnswerOn": "2026-06-12T03:30:00Z",
+          "IsThreadClosed": true,
+          "ThreadClosedOn": "2026-06-12T03:30:00Z",
+          "IsFollowing": true,
+          "Content": "Sample Content 3",
+          "PublishedOn": "2026-06-12T03:30:00Z",
+          "IsAnonymous": true,
+          "EditedOn": "2026-06-13T00:00:00Z",
+          "IsModerated": true,
+          "RecommendationCount": 10,
+          "HasRecommended": true,
+          "UserPermissions": "UserPermissions 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/RegistrantClass/GetRegistrantClasses",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "RegistrantClassKey": "RegistrantClassKey 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "RegistrantClassKey": "RegistrantClassKey 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "RegistrantClassKey": "RegistrantClassKey 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/ResourceLibrary/GetLibraryDocuments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "DocumentKey": "ResourceLibraryDocuments-1",
+          "DocumentTitle": "Sample Title 1",
+          "Description": "Sample Description 1",
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "LibraryKey": "LibraryKey 1",
+          "LegacyDocumentKey": "LegacyDocumentKey 1",
+          "SerializedData": "SerializedData 1",
+          "LibraryName": "LibraryName 1",
+          "LibraryFolderName": "LibraryFolderName 1",
+          "CommunityName": "CommunityName 1",
+          "CommunityKey": "CommunityKey 1",
+          "CommentCount": 4,
+          "ViewCount": 4,
+          "DownloadCount": 4,
+          "RatingCount": 4,
+          "AttachmentCount": 4,
+          "LinkToLibraryDocument": "https://example.com/LinkToLibraryDocument/1",
+          "AuthenticatedUserRecommends": true,
+          "AuthenticatedUserFavorite": true,
+          "UserPermissions": "UserPermissions 1",
+          "IsFollowing": true,
+          "CreatedByContactKey": "CreatedByContactKey 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "DocumentKey": "ResourceLibraryDocuments-2",
+          "DocumentTitle": "Sample Title 2",
+          "Description": "Sample Description 2",
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "LibraryKey": "LibraryKey 2",
+          "LegacyDocumentKey": "LegacyDocumentKey 2",
+          "SerializedData": "SerializedData 2",
+          "LibraryName": "LibraryName 2",
+          "LibraryFolderName": "LibraryFolderName 2",
+          "CommunityName": "CommunityName 2",
+          "CommunityKey": "CommunityKey 2",
+          "CommentCount": 7,
+          "ViewCount": 7,
+          "DownloadCount": 7,
+          "RatingCount": 7,
+          "AttachmentCount": 7,
+          "LinkToLibraryDocument": "https://example.com/LinkToLibraryDocument/2",
+          "AuthenticatedUserRecommends": false,
+          "AuthenticatedUserFavorite": false,
+          "UserPermissions": "UserPermissions 2",
+          "IsFollowing": false,
+          "CreatedByContactKey": "CreatedByContactKey 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "DocumentKey": "ResourceLibraryDocuments-3",
+          "DocumentTitle": "Sample Title 3",
+          "Description": "Sample Description 3",
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "LibraryKey": "LibraryKey 3",
+          "LegacyDocumentKey": "LegacyDocumentKey 3",
+          "SerializedData": "SerializedData 3",
+          "LibraryName": "LibraryName 3",
+          "LibraryFolderName": "LibraryFolderName 3",
+          "CommunityName": "CommunityName 3",
+          "CommunityKey": "CommunityKey 3",
+          "CommentCount": 10,
+          "ViewCount": 10,
+          "DownloadCount": 10,
+          "RatingCount": 10,
+          "AttachmentCount": 10,
+          "LinkToLibraryDocument": "https://example.com/LinkToLibraryDocument/3",
+          "AuthenticatedUserRecommends": true,
+          "AuthenticatedUserFavorite": true,
+          "UserPermissions": "UserPermissions 3",
+          "IsFollowing": true,
+          "CreatedByContactKey": "CreatedByContactKey 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/ResourceLibrary/GetLibraryList",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "EntryCount": 4,
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "IsCommunityRelated": true,
+          "CanPost": true,
+          "CanView": true,
+          "LastApprovedDocumentCreatedOn": "2026-06-10T01:30:00Z",
+          "LastApprovedDocumentOrFileCreatedOn": "2026-06-10T01:30:00Z",
+          "LastApprovedFileCreatedOn": "2026-06-10T01:30:00Z",
+          "LibraryDescription": "Sample LibraryDescription 1",
+          "LibraryKey": "ResourceLibraryLibraries-1",
+          "LibraryName": "LibraryName 1",
+          "LibraryUrl": "https://example.com/LibraryUrl/1",
+          "NumApprovedEntries": 4,
+          "NumApprovedFiles": 4,
+          "NumApprovedImages": 4,
+          "NumApprovedVideos": 4,
+          "SecurityRolesRequiredView": "SecurityRolesRequiredView 1",
+          "SecurityRolesRequiredViewInfo": "SecurityRolesRequiredViewInfo 1",
+          "SecurityRolesRequiredViewInfoList": "SecurityRolesRequiredViewInfoList 1",
+          "SecurityRolesRequiredViewList": "SecurityRolesRequiredViewList 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "EntryCount": 7,
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "IsCommunityRelated": false,
+          "CanPost": false,
+          "CanView": false,
+          "LastApprovedDocumentCreatedOn": "2026-06-11T02:30:00Z",
+          "LastApprovedDocumentOrFileCreatedOn": "2026-06-11T02:30:00Z",
+          "LastApprovedFileCreatedOn": "2026-06-11T02:30:00Z",
+          "LibraryDescription": "Sample LibraryDescription 2",
+          "LibraryKey": "ResourceLibraryLibraries-2",
+          "LibraryName": "LibraryName 2",
+          "LibraryUrl": "https://example.com/LibraryUrl/2",
+          "NumApprovedEntries": 7,
+          "NumApprovedFiles": 7,
+          "NumApprovedImages": 7,
+          "NumApprovedVideos": 7,
+          "SecurityRolesRequiredView": "SecurityRolesRequiredView 2",
+          "SecurityRolesRequiredViewInfo": "SecurityRolesRequiredViewInfo 2",
+          "SecurityRolesRequiredViewInfoList": "SecurityRolesRequiredViewInfoList 2",
+          "SecurityRolesRequiredViewList": "SecurityRolesRequiredViewList 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "EntryCount": 10,
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "IsCommunityRelated": true,
+          "CanPost": true,
+          "CanView": true,
+          "LastApprovedDocumentCreatedOn": "2026-06-12T03:30:00Z",
+          "LastApprovedDocumentOrFileCreatedOn": "2026-06-12T03:30:00Z",
+          "LastApprovedFileCreatedOn": "2026-06-12T03:30:00Z",
+          "LibraryDescription": "Sample LibraryDescription 3",
+          "LibraryKey": "ResourceLibraryLibraries-3",
+          "LibraryName": "LibraryName 3",
+          "LibraryUrl": "https://example.com/LibraryUrl/3",
+          "NumApprovedEntries": 10,
+          "NumApprovedFiles": 10,
+          "NumApprovedImages": 10,
+          "NumApprovedVideos": 10,
+          "SecurityRolesRequiredView": "SecurityRolesRequiredView 3",
+          "SecurityRolesRequiredViewInfo": "SecurityRolesRequiredViewInfo 3",
+          "SecurityRolesRequiredViewInfoList": "SecurityRolesRequiredViewInfoList 3",
+          "SecurityRolesRequiredViewList": "SecurityRolesRequiredViewList 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Tagging/GetTags",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "TagGroupKey": "Tags-1",
+          "IsTopicTagGroup": true,
+          "Name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "TagGroupKey": "Tags-2",
+          "IsTopicTagGroup": false,
+          "Name": "Jordan Chen",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "TagGroupKey": "Tags-3",
+          "IsTopicTagGroup": true,
+          "Name": "Taylor Patel",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Volunteer/GetUpcomingVolunteerOpportunities",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "VolunteerOpportunityKey": "VolunteerOpportunities-1",
+          "Title": "Sample Title 1",
+          "Description": "Sample Description 1",
+          "Deadline": "Deadline 1",
+          "AdditionalRequirements": "AdditionalRequirements 1",
+          "Location": "Location 1",
+          "VolunteersNeeded": 2,
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "CloseDate": "2026-06-10T01:30:00Z",
+          "UpdatedOn": "2026-06-11T00:00:00Z",
+          "EstimatedHours": 2,
+          "SkillMultiplier": 2,
+          "StartDateTime": "2026-06-10T01:30:00Z",
+          "EndDateTime": "2026-06-10T01:30:00Z",
+          "RequiresApproval": true,
+          "StatusText": "active",
+          "CanSignUpViaApi": true,
+          "ApplicationStatusText": "active",
+          "VolunteerOpportunityTypeKey": "VolunteerOpportunityTypeKey 1",
+          "LinkToListOfOpportunities": "https://example.com/LinkToListOfOpportunities/1",
+          "PictureUrl": "https://example.com/PictureUrl/1",
+          "LinkToOpportunity": "https://example.com/LinkToOpportunity/1",
+          "OpportunityName": "OpportunityName 1",
+          "OpportunityAddress": "101 Test St",
+          "VolunteerSpotsAvailable": 2,
+          "Points": 2,
+          "VolunteerOpportunityIntegrationCode": "VolunteerOpportunityIntegrationCode 1",
+          "CommunityKey": "CommunityKey 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "VolunteerOpportunityKey": "VolunteerOpportunities-2",
+          "Title": "Sample Title 2",
+          "Description": "Sample Description 2",
+          "Deadline": "Deadline 2",
+          "AdditionalRequirements": "AdditionalRequirements 2",
+          "Location": "Location 2",
+          "VolunteersNeeded": 3,
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "CloseDate": "2026-06-11T02:30:00Z",
+          "UpdatedOn": "2026-06-12T00:00:00Z",
+          "EstimatedHours": 3,
+          "SkillMultiplier": 3,
+          "StartDateTime": "2026-06-11T02:30:00Z",
+          "EndDateTime": "2026-06-11T02:30:00Z",
+          "RequiresApproval": false,
+          "StatusText": "pending",
+          "CanSignUpViaApi": false,
+          "ApplicationStatusText": "pending",
+          "VolunteerOpportunityTypeKey": "VolunteerOpportunityTypeKey 2",
+          "LinkToListOfOpportunities": "https://example.com/LinkToListOfOpportunities/2",
+          "PictureUrl": "https://example.com/PictureUrl/2",
+          "LinkToOpportunity": "https://example.com/LinkToOpportunity/2",
+          "OpportunityName": "OpportunityName 2",
+          "OpportunityAddress": "102 Test St",
+          "VolunteerSpotsAvailable": 3,
+          "Points": 3,
+          "VolunteerOpportunityIntegrationCode": "VolunteerOpportunityIntegrationCode 2",
+          "CommunityKey": "CommunityKey 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "VolunteerOpportunityKey": "VolunteerOpportunities-3",
+          "Title": "Sample Title 3",
+          "Description": "Sample Description 3",
+          "Deadline": "Deadline 3",
+          "AdditionalRequirements": "AdditionalRequirements 3",
+          "Location": "Location 3",
+          "VolunteersNeeded": 4,
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "CloseDate": "2026-06-12T03:30:00Z",
+          "UpdatedOn": "2026-06-13T00:00:00Z",
+          "EstimatedHours": 4,
+          "SkillMultiplier": 4,
+          "StartDateTime": "2026-06-12T03:30:00Z",
+          "EndDateTime": "2026-06-12T03:30:00Z",
+          "RequiresApproval": true,
+          "StatusText": "completed",
+          "CanSignUpViaApi": true,
+          "ApplicationStatusText": "completed",
+          "VolunteerOpportunityTypeKey": "VolunteerOpportunityTypeKey 3",
+          "LinkToListOfOpportunities": "https://example.com/LinkToListOfOpportunities/3",
+          "PictureUrl": "https://example.com/PictureUrl/3",
+          "LinkToOpportunity": "https://example.com/LinkToOpportunity/3",
+          "OpportunityName": "OpportunityName 3",
+          "OpportunityAddress": "103 Test St",
+          "VolunteerSpotsAvailable": 4,
+          "Points": 4,
+          "VolunteerOpportunityIntegrationCode": "VolunteerOpportunityIntegrationCode 3",
+          "CommunityKey": "CommunityKey 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Volunteer/GetVolunteerOpportunityTypeList",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "VolunteerOpportunityTypeKey": "VolunteerOpportunityTypes-1",
+          "VolunteerOpportunityTypeName": "VolunteerOpportunityTypeName 1",
+          "IsActive": true,
+          "IsRsvp": true,
+          "AcceptNominations": true,
+          "IsVirtual": true,
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "VolunteerOpportunityTypeKey": "VolunteerOpportunityTypes-2",
+          "VolunteerOpportunityTypeName": "VolunteerOpportunityTypeName 2",
+          "IsActive": false,
+          "IsRsvp": false,
+          "AcceptNominations": false,
+          "IsVirtual": false,
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "VolunteerOpportunityTypeKey": "VolunteerOpportunityTypes-3",
+          "VolunteerOpportunityTypeName": "VolunteerOpportunityTypeName 3",
+          "IsActive": true,
+          "IsRsvp": true,
+          "AcceptNominations": true,
+          "IsVirtual": true,
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Volunteer/GetVolunteerList",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "VolunteerOpportunityVolunteerKey": "Volunteers-1",
+          "VolunteerComments": "Sample VolunteerComments 1",
+          "VolunteerAdminComments": "Sample VolunteerAdminComments 1",
+          "CreatedByContactKey": "CreatedByContactKey 1",
+          "CreatedOn": "2026-06-10T01:30:00Z",
+          "IsReAppointment": true,
+          "IsActive": true,
+          "IsComplete": true,
+          "ApprovedOn": "2026-06-10T01:30:00Z",
+          "ApprovedByContactKey": "ApprovedByContactKey 1",
+          "IsPublic": true,
+          "RejectedOn": "2026-06-10T01:30:00Z",
+          "RejectedByContactKey": "RejectedByContactKey 1",
+          "AdjustPoints": 2,
+          "AdjustedByContactKey": "AdjustedByContactKey 1",
+          "AdjustedOn": "2026-06-10T01:30:00Z",
+          "VolunteerContactKey": "VolunteerContactKey 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "VolunteerOpportunityVolunteerKey": "Volunteers-2",
+          "VolunteerComments": "Sample VolunteerComments 2",
+          "VolunteerAdminComments": "Sample VolunteerAdminComments 2",
+          "CreatedByContactKey": "CreatedByContactKey 2",
+          "CreatedOn": "2026-06-11T02:30:00Z",
+          "IsReAppointment": false,
+          "IsActive": false,
+          "IsComplete": false,
+          "ApprovedOn": "2026-06-11T02:30:00Z",
+          "ApprovedByContactKey": "ApprovedByContactKey 2",
+          "IsPublic": false,
+          "RejectedOn": "2026-06-11T02:30:00Z",
+          "RejectedByContactKey": "RejectedByContactKey 2",
+          "AdjustPoints": 3,
+          "AdjustedByContactKey": "AdjustedByContactKey 2",
+          "AdjustedOn": "2026-06-11T02:30:00Z",
+          "VolunteerContactKey": "VolunteerContactKey 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "VolunteerOpportunityVolunteerKey": "Volunteers-3",
+          "VolunteerComments": "Sample VolunteerComments 3",
+          "VolunteerAdminComments": "Sample VolunteerAdminComments 3",
+          "CreatedByContactKey": "CreatedByContactKey 3",
+          "CreatedOn": "2026-06-12T03:30:00Z",
+          "IsReAppointment": true,
+          "IsActive": true,
+          "IsComplete": true,
+          "ApprovedOn": "2026-06-12T03:30:00Z",
+          "ApprovedByContactKey": "ApprovedByContactKey 3",
+          "IsPublic": true,
+          "RejectedOn": "2026-06-12T03:30:00Z",
+          "RejectedByContactKey": "RejectedByContactKey 3",
+          "AdjustPoints": 4,
+          "AdjustedByContactKey": "AdjustedByContactKey 3",
+          "AdjustedOn": "2026-06-12T03:30:00Z",
+          "VolunteerContactKey": "VolunteerContactKey 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.0/Answer/Delete",
+      "Method": "DELETE",
+      "Status": 200,
+      "Body": {
+        "Result": "success"
+      }
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "Announcements",
+      "OrderingField": "UpdatedOn"
+    },
+    {
+      "Name": "Answers",
+      "OrderingField": "EditedOn"
+    },
+    {
+      "Name": "AutomationRuleContactData",
+      "OrderingField": "UpdatedOn"
+    },
+    {
+      "Name": "AutomationRuleSchedules",
+      "OrderingField": "RuleScheduleKey"
+    },
+    {
+      "Name": "BlogComments",
+      "OrderingField": "CommentKey"
+    },
+    {
+      "Name": "Blogs",
+      "OrderingField": "UpdatedOn"
+    },
+    {
+      "Name": "Comments",
+      "OrderingField": "CommentKey"
+    },
+    {
+      "Name": "Communities",
+      "OrderingField": "CommunityKey"
+    },
+    {
+      "Name": "CommunityInvitations",
+      "OrderingField": "ChangedDate"
+    },
+    {
+      "Name": "CommunityMembers",
+      "OrderingField": "ContactKey"
+    },
+    {
+      "Name": "Contacts",
+      "OrderingField": "UpdatedOn"
+    },
+    {
+      "Name": "DataFeed",
+      "OrderingField": "ItemKey"
+    },
+    {
+      "Name": "DemographicChoices",
+      "OrderingField": "DemographicKey"
+    },
+    {
+      "Name": "DemographicTypes",
+      "OrderingField": "DemographicTypeKey"
+    },
+    {
+      "Name": "DiscussionPosts",
+      "OrderingField": "DatePosted"
+    },
+    {
+      "Name": "Discussions",
+      "OrderingField": "DiscussionKey"
+    },
+    {
+      "Name": "DiscussionThreads",
+      "OrderingField": "LastPostDate"
+    },
+    {
+      "Name": "DocumentAttachments",
+      "OrderingField": "DocumentAttachmentKey"
+    },
+    {
+      "Name": "EventRegistrants",
+      "OrderingField": "modifiedDateTime"
+    },
+    {
+      "Name": "Events",
+      "OrderingField": "UpdatedOn"
+    },
+    {
+      "Name": "EventSessions",
+      "OrderingField": "UpdatedOn"
+    },
+    {
+      "Name": "EventTypes",
+      "OrderingField": "EventTypeKey"
+    },
+    {
+      "Name": "ExternalActivity",
+      "OrderingField": "ExternalActivityKey"
+    },
+    {
+      "Name": "IdeaCategories",
+      "OrderingField": "CategoryKey"
+    },
+    {
+      "Name": "Ideas",
+      "OrderingField": "UpdatedOn"
+    },
+    {
+      "Name": "IdeaStatuses",
+      "OrderingField": "StatusKey"
+    },
+    {
+      "Name": "IdeaVoters",
+      "OrderingField": null
+    },
+    {
+      "Name": "Questions",
+      "OrderingField": "EditedOn"
+    },
+    {
+      "Name": "RegistrantClasses",
+      "OrderingField": null
+    },
+    {
+      "Name": "ResourceLibraryDocuments",
+      "OrderingField": "DocumentKey"
+    },
+    {
+      "Name": "ResourceLibraryLibraries",
+      "OrderingField": "LibraryKey"
+    },
+    {
+      "Name": "Tags",
+      "OrderingField": "TagGroupKey"
+    },
+    {
+      "Name": "VolunteerOpportunities",
+      "OrderingField": "UpdatedOn"
+    },
+    {
+      "Name": "VolunteerOpportunityTypes",
+      "OrderingField": "VolunteerOpportunityTypeKey"
+    },
+    {
+      "Name": "Volunteers",
+      "OrderingField": "VolunteerOpportunityVolunteerKey"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "Announcements",
+      "Routes": [
+        {
+          "Path": "/v2.0/Announcements/GetAnnouncements",
+          "Method": "GET",
+          "Status": 200,
+          "Body": [
+            {
+              "AnnouncementKey": "Announcements-1",
+              "AnnouncementText": "updated-delta",
+              "AnnouncementTitle": "Sample Title 1",
+              "AnnouncementType": "AnnouncementType 1",
+              "CommunityKey": "CommunityKey 1",
+              "CommunityName": "CommunityName 1",
+              "CreatedByContactKey": "CreatedByContactKey 1",
+              "ContactDisplayName": "Alex Rivera",
+              "LinkToContactProfile": "https://example.com/LinkToContactProfile/1",
+              "ContactLargePictureUrl": "https://example.com/ContactLargePictureUrl/1",
+              "ContactSmallPictureUrl": "https://example.com/ContactSmallPictureUrl/1",
+              "CreatedOn": "2026-06-10T01:30:00Z",
+              "IsLoggingEnabled": true,
+              "LinkText": "https://example.com/LinkText/1",
+              "LinkUrl": "https://example.com/LinkUrl/1",
+              "MicrositeGroupTypeRouteDesignKey": "MicrositeGroupTypeRouteDesignKey 1",
+              "OpenNewWindow": true,
+              "UpdatedByContactKey": "UpdatedByContactKey 1",
+              "UpdatedOn": "2026-06-11T00:00:00Z",
+              "UserPermissions": "UserPermissions 1",
+              "mj_e2e_custom_attr": "custom-1"
+            },
+            {
+              "AnnouncementKey": "Announcements-2",
+              "AnnouncementText": "AnnouncementText 2",
+              "AnnouncementTitle": "Sample Title 2",
+              "AnnouncementType": "AnnouncementType 2",
+              "CommunityKey": "CommunityKey 2",
+              "CommunityName": "CommunityName 2",
+              "CreatedByContactKey": "CreatedByContactKey 2",
+              "ContactDisplayName": "Jordan Chen",
+              "LinkToContactProfile": "https://example.com/LinkToContactProfile/2",
+              "ContactLargePictureUrl": "https://example.com/ContactLargePictureUrl/2",
+              "ContactSmallPictureUrl": "https://example.com/ContactSmallPictureUrl/2",
+              "CreatedOn": "2026-06-11T02:30:00Z",
+              "IsLoggingEnabled": false,
+              "LinkText": "https://example.com/LinkText/2",
+              "LinkUrl": "https://example.com/LinkUrl/2",
+              "MicrositeGroupTypeRouteDesignKey": "MicrositeGroupTypeRouteDesignKey 2",
+              "OpenNewWindow": false,
+              "UpdatedByContactKey": "UpdatedByContactKey 2",
+              "UpdatedOn": "2026-06-12T00:00:00Z",
+              "UserPermissions": "UserPermissions 2",
+              "mj_e2e_custom_attr": "custom-2"
+            }
+          ]
+        }
+      ],
+      "ExpectedPresent": [
+        "Announcements-1",
+        "Announcements-2"
+      ],
+      "ExpectedDeletes": [
+        "Announcements-3"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "Announcements-1",
+          "Field": "AnnouncementText",
+          "Value": "updated-delta"
+        }
+      ]
+    }
+  ],
+  "Lifecycle": {
+    "supportsDiscovery": false,
+    "supportsFieldDiscovery": false,
+    "authoritativeDiscovery": false,
+    "supportsCustomColumns": true,
+    "incrementalStrategy": "watermark",
+    "supportsWrite": true,
+    "writeRoundTrip": {
+      "Object": "Answers",
+      "Routes": [
+        {
+          "Path": "/v2.0/Question/Answer",
+          "Method": "POST",
+          "Status": 200,
+          "Body": {
+            "id": "mock-wr-id-1",
+            "ID": "mock-wr-id-1",
+            "Id": "mock-wr-id-1",
+            "externalID": "mock-wr-id-1",
+            "ExternalID": "mock-wr-id-1",
+            "ParentKey": "mock-created"
+          },
+          "Headers": {
+            "content-type": "application/json"
+          }
+        },
+        {
+          "Path": "/v2.0/Answer/Edit",
+          "Method": "POST",
+          "Status": 200,
+          "Body": {
+            "id": "mock-wr-id-1",
+            "ID": "mock-wr-id-1",
+            "Id": "mock-wr-id-1",
+            "externalID": "mock-wr-id-1",
+            "ExternalID": "mock-wr-id-1",
+            "ParentKey": "mock-updated"
+          }
+        },
+        {
+          "Path": "/v2.0/Answer/Delete?answerKey={id}",
+          "Method": "DELETE",
+          "Status": 200,
+          "Body": {
+            "id": "mock-wr-id-1",
+            "deleted": true
+          }
+        }
+      ],
+      "CreateAttributes": {
+        "ParentKey": "mock-created"
+      },
+      "CreatePathMatch": "v2.0",
+      "DeleteMethodMatch": "DELETE",
+      "UpdateAttributes": {
+        "ParentKey": "mock-updated"
+      }
+    },
+    "writeRoundTrips": [
+      {
+        "Object": "Answers",
+        "Routes": [
+          {
+            "Path": "/v2.0/Question/Answer",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "ParentKey": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/Answer/Edit",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "ParentKey": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/Answer/Delete?answerKey={id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "ParentKey": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "ParentKey": "mock-updated"
+        }
+      },
+      {
+        "Object": "BlogComments",
+        "Routes": [
+          {
+            "Path": "/v2.0/Blogs/AddComment?blogKey={parent}",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "CommentBody": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/Blogs/UpdateComment?blogCommentKey={id}",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "CommentBody": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/Blogs/DeleteComment?blogCommentKey={id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "CommentBody": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "CommentBody": "mock-updated"
+        }
+      },
+      {
+        "Object": "Blogs",
+        "Routes": [
+          {
+            "Path": "/v2.0/Blogs/CreateBlog",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "BlogText": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/Blogs/UpdateBlog?blogKey={id}",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "BlogText": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/Blogs/DeleteBlog?blogKey={id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "BlogText": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "BlogText": "mock-updated"
+        }
+      },
+      {
+        "Object": "Comments",
+        "Routes": [
+          {
+            "Path": "/v2.0/Blogs/AddComment?blogKey={parent}",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "CommentBody": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/Blogs/UpdateComment?blogCommentKey={id}",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "CommentBody": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/Blogs/DeleteComment?blogCommentKey={id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "CommentBody": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "CommentBody": "mock-updated"
+        }
+      },
+      {
+        "Object": "DemographicChoices",
+        "Routes": [
+          {
+            "Path": "/v2.0/Demographics/AddDemographicChoice",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "Name": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/Demographics/AddDemographicChoice/{id}",
+            "Method": "PATCH",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "Name": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/Demographics/AddDemographicChoice/{id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "Name": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "Name": "mock-updated"
+        }
+      },
+      {
+        "Object": "DemographicTypes",
+        "Routes": [
+          {
+            "Path": "/v2.0/Demographics/AddDemographicCategory",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "Name": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/Demographics/AddDemographicCategory/{id}",
+            "Method": "PATCH",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "Name": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/Demographics/AddDemographicCategory/{id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "Name": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "Name": "mock-updated"
+        }
+      },
+      {
+        "Object": "DiscussionPosts",
+        "Routes": [
+          {
+            "Path": "/v2.0/Discussions/PostToDiscussion",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "Body": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/Discussions/Edit",
+            "Method": "PUT",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "Body": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/Discussions/RemovePost?discussionPostKey={id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "Body": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "Body": "mock-updated"
+        }
+      },
+      {
+        "Object": "DocumentAttachments",
+        "Routes": [
+          {
+            "Path": "/v2.0/ResourceLibrary/PostDocumentAttachments?documentKey={parent}",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "DocumentKey": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/ResourceLibrary/PostDocumentAttachments?documentKey={parent}/{id}",
+            "Method": "PATCH",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "DocumentKey": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/ResourceLibrary/DeleteDocumentAttachment?documentAttachmentKey={id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "DocumentKey": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "DocumentKey": "mock-updated"
+        }
+      },
+      {
+        "Object": "EventTypes",
+        "Routes": [
+          {
+            "Path": "/v2.0/Events/SaveEventType",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "Name": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/Events/SaveEventType",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "Name": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/Events/DeleteEventType?eventTypeKey={id}",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "Name": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "POST",
+        "UpdateAttributes": {
+          "Name": "mock-updated"
+        }
+      },
+      {
+        "Object": "ExternalActivity",
+        "Routes": [
+          {
+            "Path": "/v2.0/ExternalActivity/Create",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "ExternalActivityTypeKey": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/ExternalActivity/Update",
+            "Method": "PUT",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "ExternalActivityTypeKey": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/ExternalActivity/Delete?externalActivityKey={id}&legacyActivityKey={id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "ExternalActivityTypeKey": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "ExternalActivityTypeKey": "mock-updated"
+        }
+      },
+      {
+        "Object": "Ideas",
+        "Routes": [
+          {
+            "Path": "/v2.0/Ideation/Post",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "Title": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/Ideation/Post/{id}",
+            "Method": "PATCH",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "Title": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/Ideation/Post/{id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "Title": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "Title": "mock-updated"
+        }
+      },
+      {
+        "Object": "Questions",
+        "Routes": [
+          {
+            "Path": "/v2.0/Question/Post",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "Title": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/Question/Edit",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "Title": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/Question/Delete?questionKey={id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "Title": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "Title": "mock-updated"
+        }
+      },
+      {
+        "Object": "ResourceLibraryDocuments",
+        "Routes": [
+          {
+            "Path": "/v2.0/ResourceLibrary/PostDocument?libraryKey={parent}",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "DocumentTitle": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/ResourceLibrary/Edit",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "DocumentTitle": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/ResourceLibrary/DeleteLibraryDocument?documentKey={id}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "DocumentTitle": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "DocumentTitle": "mock-updated"
+        }
+      },
+      {
+        "Object": "Volunteers",
+        "Routes": [
+          {
+            "Path": "/v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&comments={comments}",
+            "Method": "POST",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "VolunteerComments": "mock-created"
+            },
+            "Headers": {
+              "content-type": "application/json"
+            }
+          },
+          {
+            "Path": "/v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&comments={comments}/{id}",
+            "Method": "PATCH",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "ID": "mock-wr-id-1",
+              "Id": "mock-wr-id-1",
+              "externalID": "mock-wr-id-1",
+              "ExternalID": "mock-wr-id-1",
+              "VolunteerComments": "mock-updated"
+            }
+          },
+          {
+            "Path": "/v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&comments={comments}",
+            "Method": "DELETE",
+            "Status": 200,
+            "Body": {
+              "id": "mock-wr-id-1",
+              "deleted": true
+            }
+          }
+        ],
+        "CreateAttributes": {
+          "VolunteerComments": "mock-created"
+        },
+        "CreatePathMatch": "v2.0",
+        "DeleteMethodMatch": "DELETE",
+        "UpdateAttributes": {
+          "VolunteerComments": "mock-updated"
+        }
+      }
+    ],
+    "supportsScheduling": true,
+    "connectionTestable": true,
+    "derivedFromMetadata": true,
+    "sourceClass": "HigherLogicThriveCommunityConnector"
+  }
+}

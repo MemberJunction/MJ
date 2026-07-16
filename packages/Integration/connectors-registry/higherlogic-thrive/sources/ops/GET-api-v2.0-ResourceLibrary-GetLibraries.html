@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/ResourceLibrary/GetLibraries</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/ResourceLibrary/GetLibraries</h1>
+<div>
+    <p>Returns a list of libraries that the Current user is allowed to view/join. This will return a truncated version of the library data.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>List of Libraries.</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=Library">Library</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">CommunityKey</td>
+                    <td class="parameter-documentation">
+                        <p>Community key of the library.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EntryCount</td>
+                    <td class="parameter-documentation">
+                        <p>Number of approved entires in the library.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>The date time denoting the creation of the library</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsCommunityRelated</td>
+                    <td class="parameter-documentation">
+                        <p>Boolean denoting if the library is related to a community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CanPost</td>
+                    <td class="parameter-documentation">
+                        <p>Boolean denoting if the current user can post to the library.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CanView</td>
+                    <td class="parameter-documentation">
+                        <p>Boolean denoting if the current user can view the library.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryDescription</td>
+                    <td class="parameter-documentation">
+                        <p>Description of the library.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique identifier for the specified library.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryName</td>
+                    <td class="parameter-documentation">
+                        <p>Name of the library.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryUrl</td>
+                    <td class="parameter-documentation">
+                        <p>URL that will navigate teh user to the library via the web.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;CommunityKey&quot;: &quot;a6b6e576-bf90-4de1-80a4-01c5c0ed062e&quot;,
+    &quot;EntryCount&quot;: 2,
+    &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.0425388Z&quot;,
+    &quot;IsCommunityRelated&quot;: true,
+    &quot;CanPost&quot;: true,
+    &quot;CanView&quot;: true,
+    &quot;LibraryDescription&quot;: &quot;sample string 7&quot;,
+    &quot;LibraryKey&quot;: &quot;1bfaedf4-0118-4d56-80ea-9ddc845a305f&quot;,
+    &quot;LibraryName&quot;: &quot;sample string 9&quot;,
+    &quot;LibraryUrl&quot;: &quot;sample string 10&quot;
+  },
+  {
+    &quot;CommunityKey&quot;: &quot;a6b6e576-bf90-4de1-80a4-01c5c0ed062e&quot;,
+    &quot;EntryCount&quot;: 2,
+    &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:38.0425388Z&quot;,
+    &quot;IsCommunityRelated&quot;: true,
+    &quot;CanPost&quot;: true,
+    &quot;CanView&quot;: true,
+    &quot;LibraryDescription&quot;: &quot;sample string 7&quot;,
+    &quot;LibraryKey&quot;: &quot;1bfaedf4-0118-4d56-80ea-9ddc845a305f&quot;,
+    &quot;LibraryName&quot;: &quot;sample string 9&quot;,
+    &quot;LibraryUrl&quot;: &quot;sample string 10&quot;
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfLibrary xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.ResourceLibrary&quot;&gt;
+  &lt;Library&gt;
+    &lt;CanPost&gt;true&lt;/CanPost&gt;
+    &lt;CanView&gt;true&lt;/CanView&gt;
+    &lt;CommunityKey&gt;a6b6e576-bf90-4de1-80a4-01c5c0ed062e&lt;/CommunityKey&gt;
+    &lt;CreatedOn&gt;2026-07-08T13:53:38.0425388-04:00&lt;/CreatedOn&gt;
+    &lt;EntryCount&gt;2&lt;/EntryCount&gt;
+    &lt;IsCommunityRelated&gt;true&lt;/IsCommunityRelated&gt;
+    &lt;LibraryDescription&gt;sample string 7&lt;/LibraryDescription&gt;
+    &lt;LibraryKey&gt;1bfaedf4-0118-4d56-80ea-9ddc845a305f&lt;/LibraryKey&gt;
+    &lt;LibraryName&gt;sample string 9&lt;/LibraryName&gt;
+    &lt;LibraryUrl&gt;sample string 10&lt;/LibraryUrl&gt;
+  &lt;/Library&gt;
+  &lt;Library&gt;
+    &lt;CanPost&gt;true&lt;/CanPost&gt;
+    &lt;CanView&gt;true&lt;/CanView&gt;
+    &lt;CommunityKey&gt;a6b6e576-bf90-4de1-80a4-01c5c0ed062e&lt;/CommunityKey&gt;
+    &lt;CreatedOn&gt;2026-07-08T13:53:38.0425388-04:00&lt;/CreatedOn&gt;
+    &lt;EntryCount&gt;2&lt;/EntryCount&gt;
+    &lt;IsCommunityRelated&gt;true&lt;/IsCommunityRelated&gt;
+    &lt;LibraryDescription&gt;sample string 7&lt;/LibraryDescription&gt;
+    &lt;LibraryKey&gt;1bfaedf4-0118-4d56-80ea-9ddc845a305f&lt;/LibraryKey&gt;
+    &lt;LibraryName&gt;sample string 9&lt;/LibraryName&gt;
+    &lt;LibraryUrl&gt;sample string 10&lt;/LibraryUrl&gt;
+  &lt;/Library&gt;
+&lt;/ArrayOfLibrary&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

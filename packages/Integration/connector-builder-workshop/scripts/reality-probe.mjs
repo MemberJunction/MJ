@@ -123,6 +123,25 @@ function recordsOf(body) {
     }
     return null; // non-list shape from a list endpoint = ZERO records, named in the verdict (never a guess)
 }
+/**
+ * Resolve a declared dotted response path (e.g. `paging.next.after`) against a response body and
+ * return the value if it is a non-empty scalar (string/number), else null. Used for TOKEN-cursor
+ * pagination: an opaque cursor (HubSpot `after`, Stripe `starting_after`, …) is NOT a synthesizable
+ * integer — it can only be advanced with the REAL token the prior page returned at this path. When the
+ * metadata declares `Configuration.pagination.cursorResponsePath`, the probe reads the real token here
+ * and advances with IT (the docs-supported form) rather than the offset-style synthetic integer a token
+ * cursor silently ignores. Declared convention (P10), never guessed: no path ⇒ offset behavior as before.
+ */
+function resolveBodyPath(body, dottedPath) {
+    if (!body || typeof body !== 'object' || !dottedPath) return null;
+    let cur = body;
+    for (const seg of String(dottedPath).split('.')) {
+        if (cur && typeof cur === 'object' && seg in cur) cur = cur[seg];
+        else return null;
+    }
+    if (cur != null && (typeof cur === 'string' || typeof cur === 'number') && String(cur).length > 0) return String(cur);
+    return null;
+}
 /** Stable ID list of a record page for pagination-advance comparison. */
 // Stable per-record identity for pagination-advance comparison (#H5). The old `JSON.stringify(r).slice(0,200)`
 // was collision-prone (two different records sharing a 200-char prefix read as identical → false NO-advance)
@@ -206,20 +225,30 @@ for (const io of ios) {
 
     if (!TOKEN || r.status < 200 || r.status >= 300) continue; // deeper claims need a readable page
 
-    // 2. PAGINATION claim: does the DECLARED param advance? Does the $-prefixed alternate?
+    // 2. PAGINATION claim: does the DECLARED param advance? Two shapes, chosen from DECLARED convention
+    //    (Configuration.pagination), never guessed:
+    //      • TOKEN cursor  — cursorResponsePath is declared AND page 1 returned a real token at that path
+    //                        (e.g. HubSpot `after` ← paging.next.after). An opaque token can ONLY be advanced
+    //                        with the REAL token; a synthetic integer is silently ignored (the pre-fix false
+    //                        NO-advance that falsified HubSpot's correct `after` cursor). Advance with the token.
+    //      • OFFSET/page   — no token path (or token absent) ⇒ the original synthetic-integer offset test.
     const pag = cfg.pagination || {};
     const skipParam = pag.skipParam || 'skip';
     if (f.SupportsPagination && recs && recs.length > 0) {
         const sep = url.includes('?') ? '&' : '?';
         const p0 = pageIDs(recs);
         const off = Math.max(1, Math.min(3, recs.length));
-        const declared = await get(`${url}${sep}${encodeURIComponent(skipParam)}=${off}`, true);
+        const cursorToken = resolveBodyPath(r.body, pag.cursorResponsePath); // real next-page token from page 1, or null
+        const isTokenCursor = !!(pag.cursorResponsePath && cursorToken);
+        const declaredValue = isTokenCursor ? cursorToken : String(off);
+        const declared = await get(`${url}${sep}${encodeURIComponent(skipParam)}=${encodeURIComponent(declaredValue)}`, true);
         const dRecs = recordsOf(declared.body);
         const declaredAdvances = dRecs != null && JSON.stringify(pageIDs(dRecs)) !== JSON.stringify(p0);
         // Alternates are DIAGNOSTIC ONLY (P10) — tried after a declared-form failure to give the
-        // amend round a docs-checkable lead; the verdict is about the DECLARED claim.
+        // amend round a docs-checkable lead; the verdict is about the DECLARED claim. For a token cursor the
+        // synthetic-integer alternates cannot apply (an opaque token has no integer form), so skip them.
         const altHints = [];
-        if (!declaredAdvances) {
+        if (!declaredAdvances && !isTokenCursor) {
             for (const form of ALT_PARAM_FORMS) {
                 const alt = form.includes('<param>') ? form.replace('<param>', skipParam) : form;
                 if (alt === skipParam) continue;
@@ -228,12 +257,15 @@ for (const io of ios) {
                 if (a2 != null && JSON.stringify(pageIDs(a2)) !== JSON.stringify(p0)) { altHints.push(alt); break; }
             }
         }
+        const advanceMode = isTokenCursor ? `token cursor (${pag.cursorResponsePath})` : 'offset';
         emitVerdict({
             object: name, kind: 'pagination', claim: `param '${skipParam}' advances`,
-            verdict: declaredAdvances ? 'confirmed' : 'wrong',
+            verdict: declaredAdvances ? 'confirmed' : (isTokenCursor && dRecs != null ? 'unverified' : 'wrong'),
             evidence: declaredAdvances
-                ? `'${skipParam}' advanced past page 1`
-                : `'${skipParam}' did NOT advance (silently-ignored-param class)${altHints.length ? `; alternate '${altHints[0]}' DID advance — verify against the docs in the amend round` : '; no probed alternate advanced'}`,
+                ? `'${skipParam}' advanced past page 1 via ${advanceMode}`
+                : isTokenCursor
+                    ? `'${skipParam}' token cursor: fetched next page with the real paging.next.after token but page IDs did not differ (probe page may be the last page — account has <=${recs.length} records; declared ${advanceMode} form is docs-correct, advance UNVERIFIED on this small dataset)`
+                    : `'${skipParam}' did NOT advance (silently-ignored-param class)${altHints.length ? `; alternate '${altHints[0]}' DID advance — verify against the docs in the amend round` : '; no probed alternate advanced'}`,
         });
     }
 

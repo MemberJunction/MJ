@@ -1,0 +1,355 @@
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="physical_address_in_footer"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="contact_list_ids"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="template_id"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="permalink_url"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="campaign_id"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="segment_ids"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="role"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="campaign_activity_id"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="format_type"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="document_properties"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="from_email"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="reply_to_email"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="html_content"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="current_status"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="preheader"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="subject"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="from_name"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_integration_SyncStatus"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_integration_LastSyncedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_integration_LastSyncedSnapshot"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_integration_SyncMessage"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_integration_ContentHash"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_integration_CustomOverflow"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_integration_ExternalVersion"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_integration_LastSeenModifiedValue"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_integration_LastReconciledAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_integration_LastWriterDirection"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_integration_IsTombstoned"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_integration_DeletedDetectedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- ========================================
+         RELATED ENTITY PANELS
+         ======================================== -->
+
+    <!-- Contact Reports Activity Summaries Section -->
+    <mj-collapsible-panel
+        SectionKey="contactReportsActivitySummaries"
+        SectionName="Contact Reports Activity Summaries"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('contactReportsActivitySummaries')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Contact Reports Activity Summaries','campaign_activity_id')"
+                [NewRecordValues]="NewRecordValues('Contact Reports Activity Summaries')"
+                [AllowLoad]="IsSectionExpanded('contactReportsActivitySummaries')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('contactReportsActivitySummaries', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Email Campaign Activity Previews Section -->
+    <mj-collapsible-panel
+        SectionKey="emailCampaignActivityPreviews"
+        SectionName="Email Campaign Activity Previews"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('emailCampaignActivityPreviews')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Email Campaign Activity Previews','campaign_activity_id')"
+                [NewRecordValues]="NewRecordValues('Email Campaign Activity Previews')"
+                [AllowLoad]="IsSectionExpanded('emailCampaignActivityPreviews')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('emailCampaignActivityPreviews', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Emails Xrefs Section -->
+    <mj-collapsible-panel
+        SectionKey="emailsXrefs"
+        SectionName="Emails Xrefs"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('emailsXrefs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Emails Xrefs','campaign_activity_id')"
+                [NewRecordValues]="NewRecordValues('Emails Xrefs')"
+                [AllowLoad]="IsSectionExpanded('emailsXrefs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('emailsXrefs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+</mj-record-form-container>
+        

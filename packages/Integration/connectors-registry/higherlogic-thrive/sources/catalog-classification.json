@@ -1,0 +1,698 @@
+{
+  "enumeratedUniverseCount": 116,
+  "coverableModelCount": 33,
+  "taxonomyLeavesCount": 34,
+  "taxonomyLeaves": [
+    "Announcements",
+    "Answers",
+    "AutomationRuleContactData",
+    "AutomationRuleSchedules",
+    "BlogComments",
+    "Blogs",
+    "Comments",
+    "Communities",
+    "CommunityInvitations",
+    "CommunityMembers",
+    "Contacts",
+    "DataFeed",
+    "DemographicChoices",
+    "DemographicTypes",
+    "DiscussionPosts",
+    "DiscussionThreads",
+    "Discussions",
+    "DocumentAttachments",
+    "EventRegistrants",
+    "EventSessions",
+    "EventTypes",
+    "Events",
+    "ExternalActivity",
+    "IdeaCategories",
+    "IdeaStatuses",
+    "IdeaVoters",
+    "Ideas",
+    "Questions",
+    "ResourceLibraryDocuments",
+    "ResourceLibraryLibraries",
+    "Tags",
+    "VolunteerOpportunities",
+    "VolunteerOpportunityTypes",
+    "Volunteers"
+  ],
+  "informationalCount": 54,
+  "excludedScaffoldingCount": 7,
+  "outOfScopeFamilyCount": 4,
+  "containerFoldedCount": 18,
+  "unclassifiedCount": 0,
+  "unclassified": [],
+  "closureCheck": true,
+  "buckets": {
+    "COVERABLE": [
+      {
+        "model": "Announcement",
+        "bucket": "COVERABLE",
+        "leaf": "Announcements",
+        "evidence": "GET Announcements/GetAnnouncements, GetAnnouncement"
+      },
+      {
+        "model": "Answer",
+        "bucket": "COVERABLE",
+        "leaf": "Answers",
+        "evidence": "GET Answer/Get, Question/GetAnswers (Cursor: afterAnswerKey/beforeAnswerKey+limit)"
+      },
+      {
+        "model": "Blog",
+        "bucket": "COVERABLE",
+        "leaf": "Blogs",
+        "evidence": "GET Blogs/GetBlog, GetBlogsByContactKey, GetLatestEntries, GetBlogEntriesByGrouping"
+      },
+      {
+        "model": "Comment",
+        "bucket": "COVERABLE",
+        "leaf": [
+          "Comments",
+          "BlogComments"
+        ],
+        "evidence": "GET Comments/Get?itemKey={itemKey} (generic, any parent -- blogs, library documents), GetComments (Cursor: afterCommentKey/beforeCommentKey+limit, cross-item). BlogComments = the SAME Comment model + endpoint scoped to itemKey={blogKey} (Blogs/AddComment writes into this scope); documented as a distinct leaf per task instruction because its parent FK is Blogs, not a generic Item."
+      },
+      {
+        "model": "Community",
+        "bucket": "COVERABLE",
+        "leaf": "Communities",
+        "evidence": "GET Communities/Get, GetMyCommunities, GetViewableCommunities"
+      },
+      {
+        "model": "CommunityInvitation",
+        "bucket": "COVERABLE",
+        "leaf": "CommunityInvitations",
+        "evidence": "GET Communities/GetMyCommunityInvitations -- ADDED beyond base candidate list (dedicated GET + own resource model)"
+      },
+      {
+        "model": "CommunityMember",
+        "bucket": "COVERABLE",
+        "leaf": "CommunityMembers",
+        "evidence": "POST Communities/GetCommunityMembers (Offset: StartRecord/EndRecord)"
+      },
+      {
+        "model": "Contact",
+        "bucket": "COVERABLE",
+        "leaf": "Contacts",
+        "evidence": "GET Contacts/GetContact, GetMyContactsPage (Cursor), SearchContacts"
+      },
+      {
+        "model": "ContactDataPage",
+        "bucket": "COVERABLE",
+        "leaf": "AutomationRuleContactData",
+        "evidence": "GET AutomationRules/GetContactData (Cursor: continuationToken+maxRecords, cursor=last row ContactKey; selective fieldList)"
+      },
+      {
+        "model": "DataFeedItem",
+        "bucket": "COVERABLE",
+        "leaf": "DataFeed",
+        "evidence": "POST DataFeed/GetData (generic content feed); also GetContactContributions/GetMyContributions (contact-scoped access-path variant)"
+      },
+      {
+        "model": "DemographicChoice",
+        "bucket": "COVERABLE",
+        "leaf": "DemographicChoices",
+        "evidence": "GET Demographics/GetDemographicChoices (x2 overloads)"
+      },
+      {
+        "model": "DemographicType",
+        "bucket": "COVERABLE",
+        "leaf": "DemographicTypes",
+        "evidence": "GET Demographics/GetDemographicTypes"
+      },
+      {
+        "model": "Discussion",
+        "bucket": "COVERABLE",
+        "leaf": "Discussions",
+        "evidence": "GET Discussions/GetDiscussion, GetSubscribedDiscussions, GetEligibleDiscussions"
+      },
+      {
+        "model": "DiscussionPost",
+        "bucket": "COVERABLE",
+        "leaf": "DiscussionPosts",
+        "evidence": "GET Discussions/GetDiscussionPost, GetDiscussionPosts, GetLatestDiscussionPosts"
+      },
+      {
+        "model": "DiscussionThread",
+        "bucket": "COVERABLE",
+        "leaf": "DiscussionThreads",
+        "evidence": "GET Discussions/GetRecentThreads -- ADDED beyond base candidate list (a genuine 3rd tier: Discussion forum > DiscussionThread > DiscussionPost)"
+      },
+      {
+        "model": "Document",
+        "bucket": "COVERABLE",
+        "leaf": "ResourceLibraryDocuments",
+        "evidence": "POST GetLibraryDocuments, GET GetLibraryDocument, GetMyLibraryDocuments, GetFavorites"
+      },
+      {
+        "model": "DocumentAttachment",
+        "bucket": "COVERABLE",
+        "leaf": "DocumentAttachments",
+        "evidence": "GET ResourceLibrary/GetDocumentAttachments, GetDocumentAttachment"
+      },
+      {
+        "model": "DocumentLibrary",
+        "bucket": "COVERABLE",
+        "leaf": "ResourceLibraryLibraries",
+        "evidence": "GET ResourceLibrary/GetLibraryList (primary, richer 19-field shape)"
+      },
+      {
+        "model": "Event",
+        "bucket": "COVERABLE",
+        "leaf": "Events",
+        "evidence": "GET Events/GetUpcoming, POST SearchEvents/SearchCurrentAndFutureEvents (76-field model; GetEvent-by-key has a vendor doc bug returning HttpResponseMessage placeholder)"
+      },
+      {
+        "model": "EventRegistrantConcise",
+        "bucket": "COVERABLE",
+        "leaf": "EventRegistrants",
+        "evidence": "GET Events/GetEventRegistrants (Cursor: continuationToken+maxRecords; IncrementalWatermarkField=modifiedDateTime)"
+      },
+      {
+        "model": "EventSession",
+        "bucket": "COVERABLE",
+        "leaf": "EventSessions",
+        "evidence": "GET EventSessions/GetSession (34 fields, well documented)"
+      },
+      {
+        "model": "EventType",
+        "bucket": "COVERABLE",
+        "leaf": "EventTypes",
+        "evidence": "GET Events/GetEventTypes, GetEventTypesList -- FIELD GAP: vendor doc bug, all ops return HttpResponseMessage placeholder, zero fields documented"
+      },
+      {
+        "model": "ExternalActivity",
+        "bucket": "COVERABLE",
+        "leaf": "ExternalActivity",
+        "evidence": "POST/PUT/DELETE ExternalActivity Create/Update/Delete -- WRITE-ONLY stream, no GET/list exists"
+      },
+      {
+        "model": "IdeaCategory",
+        "bucket": "COVERABLE",
+        "leaf": "IdeaCategories",
+        "evidence": "GET Ideation/GetIdeaCategories -- ADDED beyond base list (parallel to DemographicTypes/Choices pattern)"
+      },
+      {
+        "model": "IdeaDetails",
+        "bucket": "COVERABLE",
+        "leaf": "Ideas",
+        "evidence": "GET Ideation/IdeaDetails, GetIdeasByStatus/GetIdeasByCategory (Cursor: afterIdeaKey/beforeIdeaKey+numberToReturn via PagedIdeaList)"
+      },
+      {
+        "model": "IdeaStatus",
+        "bucket": "COVERABLE",
+        "leaf": "IdeaStatuses",
+        "evidence": "GET Ideation/GetIdeaStatuses -- ADDED beyond base list"
+      },
+      {
+        "model": "IdeationVoterModel",
+        "bucket": "COVERABLE",
+        "leaf": "IdeaVoters",
+        "evidence": "GET Ideation/GetVoters -- ADDED beyond base list (per-idea voter/contact join, analogous to EventRegistrants)"
+      },
+      {
+        "model": "QuestionThread",
+        "bucket": "COVERABLE",
+        "leaf": "Questions",
+        "evidence": "GET Question/GetThread -- the ONLY read path for a question (bundles Question+Answers); no bulk GetQuestions list exists (GAP)"
+      },
+      {
+        "model": "RuleSchedule",
+        "bucket": "COVERABLE",
+        "leaf": "AutomationRuleSchedules",
+        "evidence": "GET AutomationRules/GetActiveRulesByType -- the configured-rule catalog (parent of AutomationRuleContactData)"
+      },
+      {
+        "model": "TagGroupModel",
+        "bucket": "COVERABLE",
+        "leaf": "Tags",
+        "evidence": "GET Tagging/GetTags"
+      },
+      {
+        "model": "VolunteerOpportunity",
+        "bucket": "COVERABLE",
+        "leaf": "VolunteerOpportunities",
+        "evidence": "GET Volunteer/GetVolunteerOpportunityList, GetUpcomingVolunteerOpportunities"
+      },
+      {
+        "model": "VolunteerOpportunityType",
+        "bucket": "COVERABLE",
+        "leaf": "VolunteerOpportunityTypes",
+        "evidence": "GET Volunteer/GetVolunteerOpportunityTypeList -- ADDED beyond base list"
+      },
+      {
+        "model": "VolunteerOpportunityVolunteer",
+        "bucket": "COVERABLE",
+        "leaf": "Volunteers",
+        "evidence": "GET Volunteer/GetVolunteerList (per-opportunity scoped)"
+      }
+    ],
+    "INFORMATIONAL": [
+      {
+        "model": "Address",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested address sub-object of Contact"
+      },
+      {
+        "model": "AuthToken",
+        "bucket": "INFORMATIONAL",
+        "evidence": "POST Authentication/Login RPC action result -- not an object per the anti-RPC rule"
+      },
+      {
+        "model": "AvailableFields",
+        "bucket": "INFORMATIONAL",
+        "evidence": "GetContactDataFields schema-introspection metadata (field catalog), not a record set itself"
+      },
+      {
+        "model": "BlogRating",
+        "bucket": "INFORMATIONAL",
+        "evidence": "POST RecommendBlog toggle-state action-result, not a list"
+      },
+      {
+        "model": "CodeOfConduct",
+        "bucket": "INFORMATIONAL",
+        "evidence": "GET System/GetCodeOfConduct -- single tenant-wide document, not a record set"
+      },
+      {
+        "model": "CommunityAddition",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested child of ContactCommunityUpdate delta envelope"
+      },
+      {
+        "model": "CommunityRemoval",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested child of ContactCommunityUpdate delta envelope"
+      },
+      {
+        "model": "CommunityStatistics",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested statistics block on Community"
+      },
+      {
+        "model": "ContactConcise",
+        "bucket": "INFORMATIONAL",
+        "evidence": "universal lightweight \"referenced contact\" embed used across Blogs/Discussions/Events/Ideas/Questions/Answers; its only standalone op (Federation/GetContact) is an out-of-scope family"
+      },
+      {
+        "model": "ContactDemographic",
+        "bucket": "INFORMATIONAL",
+        "evidence": "write-echo for POST SetContactDemographic; no bulk GET"
+      },
+      {
+        "model": "ContactMentionSearchResult",
+        "bucket": "INFORMATIONAL",
+        "evidence": "POST SearchContactsForMentions @mention-autocomplete helper, narrow UI-support search, not a general sync source (Contacts already covered)"
+      },
+      {
+        "model": "CurrencyType",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested currency-ref on Event; no dedicated GetCurrencyTypes endpoint"
+      },
+      {
+        "model": "DataFeedAttachmentsContainer",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested attachments container within DataFeedItem"
+      },
+      {
+        "model": "DataFeedContributor",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested contributor sub-object within DataFeedItem"
+      },
+      {
+        "model": "DataFeedParentContainer",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested parent-item container within DataFeedItem"
+      },
+      {
+        "model": "Demographic",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested per-contact demographic value embedded in Contact.Demographics; no standalone bulk list endpoint"
+      },
+      {
+        "model": "DiscussionPostAncestry",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested breadcrumb/ancestry chain within DiscussionPostInContext"
+      },
+      {
+        "model": "DiscussionThreadDetails",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested detail shape referenced within thread-update responses"
+      },
+      {
+        "model": "DiscussionThreadResponse",
+        "bucket": "INFORMATIONAL",
+        "evidence": "POST GetDiscussionThreadUpdates batch-check result, action-shaped not a list"
+      },
+      {
+        "model": "DocumentFavorite",
+        "bucket": "INFORMATIONAL",
+        "evidence": "POST AddToFavorites write-echo; GetFavorites itself returns Collection of Document (folds into ResourceLibraryDocuments), not DocumentFavorite"
+      },
+      {
+        "model": "DocumentRating",
+        "bucket": "INFORMATIONAL",
+        "evidence": "POST RecommendDocument toggle-state action-result"
+      },
+      {
+        "model": "Education",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested education-history sub-object of Contact"
+      },
+      {
+        "model": "EmailPreference",
+        "bucket": "INFORMATIONAL",
+        "evidence": "GET GetMyEmailPreferences -- current-authenticated-user only, no bulk-by-contact GET exists"
+      },
+      {
+        "model": "EmailPreferenceByContact",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested per-contact preference row within bulk UpdateEmailPreferences request/response"
+      },
+      {
+        "model": "EmailPreferenceByContactUpdateFailure",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested failure-detail row within EmailPreferenceUpdateByContactResponse"
+      },
+      {
+        "model": "EmailPreferenceUpdateByContactResponse",
+        "bucket": "INFORMATIONAL",
+        "evidence": "POST UpdateEmailPreferences write-result wrapper"
+      },
+      {
+        "model": "EmailPreferenceUpdateFailure",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested failure-detail row within EmailPreferenceUpdateResponse"
+      },
+      {
+        "model": "EmailPreferenceUpdateResponse",
+        "bucket": "INFORMATIONAL",
+        "evidence": "POST UpdateMyEmailPreferences write-result wrapper"
+      },
+      {
+        "model": "EventOption",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested registration-option sub-object of Event"
+      },
+      {
+        "model": "EventPresenter",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested presenter sub-object of EventSession"
+      },
+      {
+        "model": "IdeaAttachment",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested attachment sub-object of IdeaDetails"
+      },
+      {
+        "model": "InitiateDirectUploadResponse",
+        "bucket": "INFORMATIONAL",
+        "evidence": "multipart-upload state-machine plumbing (InitiateUpload), not a record"
+      },
+      {
+        "model": "ItemError",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested per-item error row within AddItemsResponse (ExternalSearch, out-of-scope family)"
+      },
+      {
+        "model": "ItemRating",
+        "bucket": "INFORMATIONAL",
+        "evidence": "POST RecommendDiscussionPost toggle-state action-result"
+      },
+      {
+        "model": "MessageClass",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested email-preference class-ref"
+      },
+      {
+        "model": "MessageStatus",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested moderation-status enum-ref on DiscussionPost"
+      },
+      {
+        "model": "MobileAppSettingsModel",
+        "bucket": "INFORMATIONAL",
+        "evidence": "GET System/GetMobileAppSettings -- tenant-level config"
+      },
+      {
+        "model": "ModerationTypeRef",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested moderation-type enum-ref on DocumentLibrary"
+      },
+      {
+        "model": "MultipartInitiatedUpload",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested multipart-upload session state"
+      },
+      {
+        "model": "Profile",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested profile-config sub-object of Contact"
+      },
+      {
+        "model": "ProfileSectionUrlModel",
+        "bucket": "INFORMATIONAL",
+        "evidence": "GET System/GetProfileUrls -- tenant-level URL-template config"
+      },
+      {
+        "model": "RelatedLink",
+        "bucket": "INFORMATIONAL",
+        "evidence": "write-only echo for AddRelatedLink (Blogs+ResourceLibrary); no GET/list endpoint exists"
+      },
+      {
+        "model": "SecurityGroupConcise",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested security-group ref on Contact/CommunityMember (no independent list endpoint)"
+      },
+      {
+        "model": "Status",
+        "bucket": "INFORMATIONAL",
+        "evidence": "generic write-result status wrapper for Volunteer opportunity-signup actions"
+      },
+      {
+        "model": "TagDataModel",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested individual tag within TagGroupModel.Tags"
+      },
+      {
+        "model": "TenantDetail",
+        "bucket": "INFORMATIONAL",
+        "evidence": "GET Authentication/GetTenantDetail RPC action result -- tenant/base-URL lookup, not a record stream"
+      },
+      {
+        "model": "TenantInfo",
+        "bucket": "INFORMATIONAL",
+        "evidence": "POST Authentication/Widget RPC action result"
+      },
+      {
+        "model": "TimeZoneRef",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested timezone-ref on Event; no dedicated GetTimeZones endpoint"
+      },
+      {
+        "model": "TopicTagGroup",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested topic-tag-group ref on Community"
+      },
+      {
+        "model": "VolunteerApplicationStatuses",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested status-ref on VolunteerOpportunity"
+      },
+      {
+        "model": "VolunteerExperienceLevel",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested experience-level ref (no dedicated GET list found)"
+      },
+      {
+        "model": "VolunteerOpportunityTravel",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested travel-requirement sub-object of VolunteerOpportunity"
+      },
+      {
+        "model": "VolunteerRole",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested role-ref on VolunteerOpportunityVolunteer"
+      },
+      {
+        "model": "WorkExperience",
+        "bucket": "INFORMATIONAL",
+        "evidence": "nested job-history sub-object of Contact"
+      }
+    ],
+    "EXCLUDED_SCAFFOLDING": [
+      {
+        "model": "Controller",
+        "bucket": "EXCLUDED_SCAFFOLDING",
+        "evidence": "leaks into System/GetApiDetails page -- .NET reflection/introspection artifact, not a Higher Logic business object"
+      },
+      {
+        "model": "Endpoint",
+        "bucket": "EXCLUDED_SCAFFOLDING",
+        "evidence": "leaks into System/GetApiDetails page -- same framework-introspection artifact"
+      },
+      {
+        "model": "HttpContent",
+        "bucket": "EXCLUDED_SCAFFOLDING",
+        "evidence": "leaks into the vendor doc-generation bug affecting GetEvent/GetEventType(s)/RegistrantClass pages"
+      },
+      {
+        "model": "HttpRequestMessage",
+        "bucket": "EXCLUDED_SCAFFOLDING",
+        "evidence": "same vendor doc-generation bug"
+      },
+      {
+        "model": "HttpResponseMessage",
+        "bucket": "EXCLUDED_SCAFFOLDING",
+        "evidence": "same vendor doc-generation bug -- several ops literally document the raw ASP.NET HttpResponseMessage envelope instead of the typed model (FIELD-LEVEL GAP for EventType/RegistrantClass)"
+      },
+      {
+        "model": "HttpStatusCode",
+        "bucket": "EXCLUDED_SCAFFOLDING",
+        "evidence": "same vendor doc-generation bug"
+      },
+      {
+        "model": "Version",
+        "bucket": "EXCLUDED_SCAFFOLDING",
+        "evidence": "same vendor doc-generation bug (.NET AssemblyVersion type)"
+      }
+    ],
+    "OUT_OF_SCOPE_FAMILY": [
+      {
+        "model": "AddItemsResponse",
+        "bucket": "OUT_OF_SCOPE_FAMILY",
+        "family": "ExternalSearch (add-on, separate IAMKey)",
+        "evidence": "POST ExternalSearch/Add*Items write-result wrapper -- ExternalSearch is an explicitly out-of-scope family (see outOfScopeFamilies)"
+      },
+      {
+        "model": "Friend",
+        "bucket": "OUT_OF_SCOPE_FAMILY",
+        "family": "Friends (social graph)",
+        "evidence": "GET Friends/GetPendingReceivedFriendRequests etc. -- member-to-member social connections, not an AMS/CRM sync target"
+      },
+      {
+        "model": "MailboxMessage",
+        "bucket": "OUT_OF_SCOPE_FAMILY",
+        "family": "Messaging (private inbox)",
+        "evidence": "GET Messaging/GetInboxMessages, GetSentMessages -- private user-to-user messages (Offset: firstRecord+maxRecords)"
+      },
+      {
+        "model": "MarkMessageAsReadResponse",
+        "bucket": "OUT_OF_SCOPE_FAMILY",
+        "family": "Messaging (private inbox)",
+        "evidence": "POST MarkMessagesAsRead write-result within the Messaging family"
+      }
+    ],
+    "CONTAINER_FOLDED": [
+      {
+        "model": "AutomationRuleDataSubset",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "AutomationRuleContactData",
+        "evidence": "GetContactDataSubsetByRuleScheduleKey subset-of-fields variant"
+      },
+      {
+        "model": "ContactCommunityUpdate",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "CommunityMembers",
+        "evidence": "POST System/GetCommunityMemberUpdates incremental delta (StartDate/EndDate window)"
+      },
+      {
+        "model": "DiscussionPostExtended",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "DiscussionPosts",
+        "evidence": "GetDiscussionPostReplies reply-list variant"
+      },
+      {
+        "model": "DiscussionPostInContext",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "DiscussionPosts",
+        "evidence": "GetDiscussionPostInThread breadcrumb-context variant"
+      },
+      {
+        "model": "DiscussionPostPage",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "DiscussionPosts",
+        "evidence": "envelope wrapper for GetPagedDiscussionPosts (Cursor: continuationToken+maxRecords)"
+      },
+      {
+        "model": "EventRegistrant",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "EventRegistrants",
+        "evidence": "legacy narrow shape (GetRegistrantDetails, GetRegistrantsByCalendarEvent, RSVPToEvent echo)"
+      },
+      {
+        "model": "FreeFormDemographic",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "DemographicTypes",
+        "evidence": "free-form (open-text) variant surfaced via GetDemographicsVisibleOnMainMicrositeProfile"
+      },
+      {
+        "model": "ItemTagResponse",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "Tags",
+        "evidence": "GET Discussions/GetThreadTags item-scoped tag application (access-path variant of Tags)"
+      },
+      {
+        "model": "Library",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "ResourceLibraryLibraries",
+        "evidence": "GET ResourceLibrary/GetLibraries -- legacy/alt duplicate list op, thinner shape (source idiosyncrasy: two library-list endpoints)"
+      },
+      {
+        "model": "PagedIdeaList",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "Ideas",
+        "evidence": "envelope wrapper for GetIdeasByStatus/GetIdeasByCategory"
+      },
+      {
+        "model": "PaginatedAnswers",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "Answers",
+        "evidence": "envelope wrapper for GetAnswers / nested within QuestionThread.AnswerContainer"
+      },
+      {
+        "model": "PaginatedComments",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "Comments",
+        "evidence": "envelope wrapper {Comments[],HasMoreComments,Next,Previous} for GetComments"
+      },
+      {
+        "model": "PaginatedContacts",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "Contacts",
+        "evidence": "envelope wrapper for GetMyContactsPage (Cursor: afterContactKey/beforeContactKey+limit)"
+      },
+      {
+        "model": "PaginatedReplies",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "DiscussionPosts",
+        "evidence": "envelope wrapper for GetDiscussionPostReplies (Cursor: afterReplyDiscussionPostKey/beforeReplyDiscussionPostKey+limit)"
+      },
+      {
+        "model": "Question",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "Questions",
+        "evidence": "write/echo model for Question/Post, Edit, Recommend, Follow -- no GET returns bare Question"
+      },
+      {
+        "model": "SubscribedDiscussionPost",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "DiscussionPosts",
+        "evidence": "POST GetDiscussionPosts body-filtered variant"
+      },
+      {
+        "model": "ViewableCommunity",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "Communities",
+        "evidence": "GetViewableCommunities variant shape of Community"
+      },
+      {
+        "model": "Volunteer",
+        "bucket": "CONTAINER_FOLDED",
+        "leaf": "Volunteers",
+        "evidence": "write-echo for AddToPoolByContactKey/AddToPoolByLegacyKey general-pool sign-up; no GET returns bare Volunteer"
+      }
+    ]
+  }
+}

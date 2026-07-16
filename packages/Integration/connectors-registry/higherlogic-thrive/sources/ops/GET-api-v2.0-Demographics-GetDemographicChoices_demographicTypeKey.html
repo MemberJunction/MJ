@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/Demographics/GetDemographicChoices?demographicTypeKey={demographicTypeKey}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/Demographics/GetDemographicChoices?demographicTypeKey={demographicTypeKey}</h1>
+<div>
+    <p>Returns a list of all existing demographic choices for a given demographic category</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">demographicTypeKey</td>
+                    <td class="parameter-documentation">
+                        <p>The DemographicTypeKey for the desired demographic category</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p></p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=DemographicChoice">DemographicChoice</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">DemographicKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique key for the Demographic.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DemographicType</td>
+                    <td class="parameter-documentation">
+                        <p>Associated Demographic Type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=DemographicType">DemographicType</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Name</td>
+                    <td class="parameter-documentation">
+                        <p>Name of the Demographic Choice</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Description</td>
+                    <td class="parameter-documentation">
+                        <p>Description of the Demographic Choice</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;DemographicKey&quot;: &quot;e0388a41-4438-4da1-ba20-3a9009d25091&quot;,
+    &quot;DemographicType&quot;: {
+      &quot;DemographicTypeKey&quot;: &quot;eed74b76-d0dc-4acb-9a7d-327adfdc893f&quot;,
+      &quot;Name&quot;: &quot;sample string 2&quot;,
+      &quot;Description&quot;: &quot;sample string 3&quot;,
+      &quot;IsNetwork&quot;: true,
+      &quot;IsFreeFormAllowed&quot;: true,
+      &quot;IsMultiSelect&quot;: true,
+      &quot;IsPerson&quot;: true,
+      &quot;ShowDescriptionInProfile&quot;: true
+    },
+    &quot;Name&quot;: &quot;sample string 2&quot;,
+    &quot;Description&quot;: &quot;sample string 3&quot;
+  },
+  {
+    &quot;DemographicKey&quot;: &quot;e0388a41-4438-4da1-ba20-3a9009d25091&quot;,
+    &quot;DemographicType&quot;: {
+      &quot;DemographicTypeKey&quot;: &quot;eed74b76-d0dc-4acb-9a7d-327adfdc893f&quot;,
+      &quot;Name&quot;: &quot;sample string 2&quot;,
+      &quot;Description&quot;: &quot;sample string 3&quot;,
+      &quot;IsNetwork&quot;: true,
+      &quot;IsFreeFormAllowed&quot;: true,
+      &quot;IsMultiSelect&quot;: true,
+      &quot;IsPerson&quot;: true,
+      &quot;ShowDescriptionInProfile&quot;: true
+    },
+    &quot;Name&quot;: &quot;sample string 2&quot;,
+    &quot;Description&quot;: &quot;sample string 3&quot;
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfDemographicChoice xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Demographics&quot;&gt;
+  &lt;DemographicChoice&gt;
+    &lt;DemographicKey&gt;e0388a41-4438-4da1-ba20-3a9009d25091&lt;/DemographicKey&gt;
+    &lt;DemographicType&gt;
+      &lt;DemographicTypeKey&gt;eed74b76-d0dc-4acb-9a7d-327adfdc893f&lt;/DemographicTypeKey&gt;
+      &lt;Description&gt;sample string 3&lt;/Description&gt;
+      &lt;IsFreeFormAllowed&gt;true&lt;/IsFreeFormAllowed&gt;
+      &lt;IsMultiSelect&gt;true&lt;/IsMultiSelect&gt;
+      &lt;IsNetwork&gt;true&lt;/IsNetwork&gt;
+      &lt;IsPerson&gt;true&lt;/IsPerson&gt;
+      &lt;Name&gt;sample string 2&lt;/Name&gt;
+      &lt;ShowDescriptionInProfile&gt;true&lt;/ShowDescriptionInProfile&gt;
+    &lt;/DemographicType&gt;
+    &lt;Description&gt;sample string 3&lt;/Description&gt;
+    &lt;Name&gt;sample string 2&lt;/Name&gt;
+  &lt;/DemographicChoice&gt;
+  &lt;DemographicChoice&gt;
+    &lt;DemographicKey&gt;e0388a41-4438-4da1-ba20-3a9009d25091&lt;/DemographicKey&gt;
+    &lt;DemographicType&gt;
+      &lt;DemographicTypeKey&gt;eed74b76-d0dc-4acb-9a7d-327adfdc893f&lt;/DemographicTypeKey&gt;
+      &lt;Description&gt;sample string 3&lt;/Description&gt;
+      &lt;IsFreeFormAllowed&gt;true&lt;/IsFreeFormAllowed&gt;
+      &lt;IsMultiSelect&gt;true&lt;/IsMultiSelect&gt;
+      &lt;IsNetwork&gt;true&lt;/IsNetwork&gt;
+      &lt;IsPerson&gt;true&lt;/IsPerson&gt;
+      &lt;Name&gt;sample string 2&lt;/Name&gt;
+      &lt;ShowDescriptionInProfile&gt;true&lt;/ShowDescriptionInProfile&gt;
+    &lt;/DemographicType&gt;
+    &lt;Description&gt;sample string 3&lt;/Description&gt;
+    &lt;Name&gt;sample string 2&lt;/Name&gt;
+  &lt;/DemographicChoice&gt;
+&lt;/ArrayOfDemographicChoice&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

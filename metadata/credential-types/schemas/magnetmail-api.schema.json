@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "Username": {
+      "type": "string",
+      "title": "Username",
+      "description": "MagnetMail account username, passed as the 'username' argument to the Authenticate SOAP operation.",
+      "order": 0
+    },
+    "Password": {
+      "type": "string",
+      "title": "Password",
+      "description": "MagnetMail account password, passed as the 'password' argument to the Authenticate SOAP operation.",
+      "isSecret": true,
+      "order": 1
+    },
+    "Endpoint": {
+      "type": "string",
+      "title": "Endpoint",
+      "description": "Optional SOAP endpoint override. Default: https://hlma-apie1.magnetmail.net/mmapi.asmx.",
+      "order": 2
+    }
+  },
+  "required": [
+    "Username",
+    "Password"
+  ]
+}

@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/Ideation/Post</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/Ideation/Post</h1>
+<div>
+    <p>Create a new idea.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p>New idea to submit</p>
+
+<a href="/Help/ResourceModel?modelName=NewIdeaRequest">NewIdeaRequest</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">Title</td>
+                    <td class="parameter-documentation">
+                        <p>Title of the idea. Maximum length is 100 characters.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Description</td>
+                    <td class="parameter-documentation">
+                        <p>Description of the idea.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IdeationStatusKey</td>
+                    <td class="parameter-documentation">
+                        <p>Key for the status of the idea. Statuses are configurable on a per-site basis, the list of available statuses can be retrieved from the getStatuses endpoint.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IdeationCategoryKeys</td>
+                    <td class="parameter-documentation">
+                        <p>Keys for the categories the idea is associated to. Categories are configurable on a per-site basis, the list of available categories can be retrieved from the getCategories endpoint.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of globally unique identifier
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsAnonymous</td>
+                    <td class="parameter-documentation">
+                        <p>True if the idea is being submitted anonymously.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Request Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;Title&quot;: &quot;sample string 1&quot;,
+  &quot;Description&quot;: &quot;sample string 2&quot;,
+  &quot;IdeationStatusKey&quot;: &quot;c0ce22b5-80f6-4bcf-ba63-79ad50977380&quot;,
+  &quot;IdeationCategoryKeys&quot;: [
+    &quot;1b093ed9-22e4-4037-94c1-d40658bfb02a&quot;,
+    &quot;c784eaca-03d4-4a0c-860a-afeb15a449c6&quot;
+  ],
+  &quot;IsAnonymous&quot;: true
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;NewIdeaRequest xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Ideation&quot;&gt;
+  &lt;Description&gt;sample string 2&lt;/Description&gt;
+  &lt;IdeationCategoryKeys xmlns:d2p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+    &lt;d2p1:guid&gt;1b093ed9-22e4-4037-94c1-d40658bfb02a&lt;/d2p1:guid&gt;
+    &lt;d2p1:guid&gt;c784eaca-03d4-4a0c-860a-afeb15a449c6&lt;/d2p1:guid&gt;
+  &lt;/IdeationCategoryKeys&gt;
+  &lt;IdeationStatusKey&gt;c0ce22b5-80f6-4bcf-ba63-79ad50977380&lt;/IdeationStatusKey&gt;
+  &lt;IsAnonymous&gt;true&lt;/IsAnonymous&gt;
+  &lt;Title&gt;sample string 1&lt;/Title&gt;
+&lt;/NewIdeaRequest&gt;
+</pre>
+        </div>
+</div>
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>Submitted idea</p>
+
+<a href="/Help/ResourceModel?modelName=IdeaDetails">IdeaDetails</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">IdeationKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique identifier of the idea.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Title</td>
+                    <td class="parameter-documentation">
+                        <p>Title of the idea.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Description</td>
+                    <td class="parameter-documentation">
+                        <p>Description of the idea.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToViewIdea</td>
+                    <td class="parameter-documentation">
+                        <p>Direct link to view the idea on the main microsite.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Status</td>
+                    <td class="parameter-documentation">
+                        <p>Object containing information about the status of the idea.</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=IdeaStatus">IdeaStatus</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Community</td>
+                    <td class="parameter-documentation">
+                        <p>The community the idea has been associated to.
+            If null or doesn&#39;t exist (i.e. the idea is not associated to any community), the idea is considered to be a site-wide idea.</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=Community">Community</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Categories</td>
+                    <td class="parameter-documentation">
+                        <p>All categories the idea has been associated to.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=IdeaCategory">IdeaCategory</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">TotalUpvotes</td>
+                    <td class="parameter-documentation">
+                        <p>Number of upvotes.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">TotalDownvotes</td>
+                    <td class="parameter-documentation">
+                        <p>Number of downvotes.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">HasOfficialComment</td>
+                    <td class="parameter-documentation">
+                        <p>True if this idea has an official comment from an admin.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Author</td>
+                    <td class="parameter-documentation">
+                        <p>Information about the author of the idea.</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=ContactConcise">ContactConcise</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsAnonymous</td>
+                    <td class="parameter-documentation">
+                        <p>True if the idea was submitted anonymously.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>DateTime the idea was created.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UpdatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>Most recent DateTime the idea was updated.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AttachmentURLs</td>
+                    <td class="parameter-documentation">
+                        <p>Temporary URLs to view or download any attachments associated with the idea.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=IdeaAttachment">IdeaAttachment</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;IdeationKey&quot;: &quot;b52531d0-6cdd-4dd6-b42e-bf79821bdd01&quot;,
+  &quot;Title&quot;: &quot;sample string 2&quot;,
+  &quot;Description&quot;: &quot;sample string 3&quot;,
+  &quot;LinkToViewIdea&quot;: &quot;sample string 4&quot;,
+  &quot;Status&quot;: null,
+  &quot;Community&quot;: null,
+  &quot;Categories&quot;: null,
+  &quot;TotalUpvotes&quot;: 5,
+  &quot;TotalDownvotes&quot;: 6,
+  &quot;HasOfficialComment&quot;: true,
+  &quot;Author&quot;: {
+    &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+    &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+    &quot;ContactKey&quot;: &quot;d5be89ff-dce4-48c6-8f2d-11f9d62f1b77&quot;,
+    &quot;FirstName&quot;: &quot;sample string 4&quot;,
+    &quot;LastName&quot;: &quot;sample string 5&quot;,
+    &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+    &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+    &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+    &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+    &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:37.7107289Z&quot;,
+    &quot;UpdatedByContactKey&quot;: &quot;030f6745-8c39-4f7c-9e36-f4a2d4ecb88e&quot;,
+    &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+    &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+    &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+    &quot;Designation&quot;: &quot;sample string 15&quot;,
+    &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+    &quot;InformalName&quot;: &quot;sample string 17&quot;,
+    &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+    &quot;IsCompany&quot;: true,
+    &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+    &quot;AMSDirectoryOptOut&quot;: true,
+    &quot;HLDirectoryOptOut&quot;: true,
+    &quot;HLContactMeOptOut&quot;: true,
+    &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+    &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:37.7107289Z&quot;
+  },
+  &quot;IsAnonymous&quot;: true,
+  &quot;CreatedOn&quot;: &quot;2026-07-08T17:53:37.7107289Z&quot;,
+  &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:37.7107289Z&quot;,
+  &quot;AttachmentURLs&quot;: null
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+    <p>Sample not available.</p>
+
+        </div>
+        <h4 class="sample-header">text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+    <p>Sample not available.</p>
+
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

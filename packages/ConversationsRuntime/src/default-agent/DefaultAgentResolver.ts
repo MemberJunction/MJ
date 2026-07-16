@@ -186,7 +186,12 @@ export class DefaultAgentResolver {
             if (!result.Success || !result.Results || result.Results.length === 0) {
                 return undefined;
             }
-            return result.Results[0].AgentSettingsObject?.DefaultAgentID ?? undefined;
+            const app = result.Results[0];
+            const agentSettingsJson = app.AgentSettings;
+            if (!agentSettingsJson) return undefined;
+            const agentSettings = JSON.parse(agentSettingsJson) as any;
+            // Note: AgentSettingsObject doesn't exist; AgentSettings is a JSON string
+            return agentSettings?.DefaultAgentID ?? undefined;
         } catch (e) {
             console.warn(
                 `DefaultAgentResolver: failed to read Application.AgentSettings for applicationId="${applicationId}": ${e instanceof Error ? e.message : String(e)}`

@@ -2,6 +2,9 @@ import sql from 'mssql';
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate } from './config.js';
 
 const createMSSQLConfig = (): sql.config => {
+  // Check DB_ENCRYPT environment variable (default to true for security)
+  const dbEncrypt = process.env.DB_ENCRYPT === 'false' ? false : true;
+  
   const mssqlConfig: sql.config = {
     server: dbHost,
     port: dbPort,
@@ -17,7 +20,7 @@ const createMSSQLConfig = (): sql.config => {
       acquireTimeoutMillis: configInfo.databaseSettings.connectionPool?.acquireTimeoutMillis ?? 30000,
     },
     options: {
-      encrypt: true, // Use encryption
+      encrypt: dbEncrypt, // Use encryption (controlled by DB_ENCRYPT env var, defaults to true)
       enableArithAbort: true,
     },
   };

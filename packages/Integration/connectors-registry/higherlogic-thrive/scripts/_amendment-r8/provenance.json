@@ -1,0 +1,42 @@
+[
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Communities-GetCommunityMembers.html",
+    "AccessedAt": "2026-07-10T01:15:53.192Z",
+    "UsedFor": "CommunityMembers.Configuration.paginationDetail.params — recorded the Offset pagination param names",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.CommunityMembers.Configuration.paginationDetail.params",
+    "Excerpt": "GetCommunityMembers paginates by StartRecord / EndRecord offset window (SOURCE_STUDY.md line 155). PaginationType=Offset; param names StartRecord,EndRecord."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T01:15:53.192Z",
+    "UsedFor": "Volunteers.SupportsWrite — reaffirm read-only (VolunteerForOpportunity is an identity-implicit RPC action on the parent VolunteerOpportunity, not per-record CRUD)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsWrite",
+    "Excerpt": "POST VolunteerForOpportunity/{volunteerOpportunityKey}: enrolls the CURRENT user; response resource is the parent VolunteerOpportunity, not a distinct keyed registration record — out-of-scope for generic per-record Create."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications.html",
+    "AccessedAt": "2026-07-10T01:15:53.192Z",
+    "UsedFor": "Volunteers.SupportsWrite — reaffirm read-only (ApproveVolunteerApplication is an identity-implicit RPC action, not per-record Update)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsUpdate",
+    "Excerpt": "POST ApproveVolunteerApplication: admin approval action; no distinct keyed registration record returned — not generic per-record Update."
+  },
+  {
+    "URL": "file://sources/ops/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunity_volunteerOpportunityKey_comments.html",
+    "AccessedAt": "2026-07-10T01:15:53.192Z",
+    "UsedFor": "Volunteers.SupportsWrite — reaffirm read-only (WithdrawFromOpportunity is an identity-implicit RPC action, not per-record Delete)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsDelete",
+    "Excerpt": "DELETE WithdrawFromOpportunity/{volunteerOpportunityKey}: withdraws the CURRENT user; identity-implicit action, not a keyed per-record Delete. Same shape/resolution as EventRegistrants (round 3)."
+  }
+]

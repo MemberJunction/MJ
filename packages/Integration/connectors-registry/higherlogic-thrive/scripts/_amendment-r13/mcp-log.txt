@@ -1,0 +1,11 @@
+OK upsert_integration_object: Upserted IO 'RegistrantClasses' for higherlogic-thrive
+OK upsert_integration_object_field: Upserted IOF 'RegistrantClasses.RegistrantClassKey' for higherlogic-thrive
+OK upsert_integration_object_field: Upserted IOF 'BlogComments.ItemKey' for higherlogic-thrive
+OK delete_integration_object_field: Deleted field 'Configuration' from IOF 'Comments.ItemKey' for higherlogic-thrive
+OK delete_integration_object_field: Deleted field 'RelatedIntegrationObjectFieldName' from IOF 'Comments.ItemKey' for higherlogic-thrive
+OK upsert_integration_object_field: Upserted IOF 'CommunityMembers.CommunityKey' for higherlogic-thrive
+OK append_provenance: Appended provenance entry for higherlogic-thrive
+OK append_provenance: Appended provenance entry for higherlogic-thrive
+OK append_provenance: Appended provenance entry for higherlogic-thrive
+OK append_provenance: Appended provenance entry for higherlogic-thrive
+OK append_provenance: Appended provenance entry for higherlogic-thrive

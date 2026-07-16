@@ -1,0 +1,4791 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "pageSegmentPathCount": 46,
+        "totalListPathCount": 55,
+        "pageSegmentSamples": [
+          "/api/v1/Shopping/AbandonedCheckOuts/{Page Number}",
+          "/api/v1/Exhibits/{Exhibit Code}/Exhibitors/{Page Number}",
+          "/api/v1/Products/Exams/{Page Number}",
+          "/api/v1/Events/{Event Code}/Registrations/{Page Number}",
+          "/api/v1/Courses/{Code}/Attendees/{Page Number}",
+          "/api/v1/Customers/Members/FindByName/{Name}/{Page Number}"
+        ],
+        "explicitPageSizeFound": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PaginationDefaults"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": [
+        {
+          "path": "/api/v1/Products/Exams/{Page Number}",
+          "param": "changedSince",
+          "description": "When a date (yyyy-MM-ddTHH:mm:ss (UTC)) is specified, only Exams modified after this date will be displayed."
+        },
+        {
+          "path": "/api/v1/Events/{Event Code}/Registrations/{Page Number}",
+          "param": "registeredSince",
+          "description": "Registered Since"
+        },
+        {
+          "path": "/api/v1/Individuals/{ID or Record Number}/Purchases/{Page Number}",
+          "param": "purchasedSince",
+          "description": "yyyy-MM-ddTHH:mm:ss"
+        },
+        {
+          "path": "/api/v1/Events/{Event Code}/Cancellations/{Page Number}",
+          "param": "cancelledSince",
+          "description": "The initial date to search cancellations (yyyy-MM-ddTHH:mm:ss)"
+        }
+      ],
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "paths": [
+          "/api/v1/Webhooks/{Id}",
+          "/api/v1/Webhooks/IndividualCreated",
+          "/api/v1/Webhooks/Individual.Deleted",
+          "/api/v1/Webhooks/Individual.RequestToBeForgotten",
+          "/api/v1/Webhooks/ProductPurchased",
+          "/api/v1/Webhooks/CommitteeMemberUpdated",
+          "/api/v1/Webhooks/PurchaseCancelled",
+          "/api/v1/Webhooks/RequestUpdated",
+          "/api/v1/Webhooks/EmailUpdated",
+          "/api/v1/Webhooks/Customer.CustomFieldValueUpdated",
+          "/api/v1/Webhooks/Customer.Merged",
+          "/api/v1/Webhooks/Customer.RelationshipUpdated",
+          "/api/v1/Webhooks/Customer.PhoneUpdated",
+          "/api/v1/Webhooks/Customer.AddressUpdated",
+          "/api/v1/Webhooks/Event.Registration.Substituted",
+          "/api/v1/Webhooks/Purchase.Paid",
+          "/api/v1/Webhooks/Membership.Terminated"
+        ],
+        "triggerCount": 16,
+        "deletePathExists": true,
+        "signatureHeaderDocumented": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WebhooksAvailable"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "totalOperations": 121,
+        "operationsWithNon2xxResponseDocumented": 0,
+        "note": "Every sampled operation declares ONLY a 200 response schema; zero operations declare a 4xx/5xx response schema anywhere in the spec."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ErrorResponseShape"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "postCount": 50,
+        "putCount": 10,
+        "deleteCount": 6,
+        "getCount": 55
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WriteCapability"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "definitionCount": 73,
+        "idFieldCounts": {
+          "id": 20,
+          "recordNumber": 12
+        },
+        "note": "20 of 73 definitions use bare 'id'; 12 use 'recordNumber' — no single field name clears a >=95% vendor-wide convention threshold."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.IdentifierConventionNote"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.ts",
+      "ScriptRunAt": "2026-07-11T23:19:48.361Z",
+      "StructuredOutput": {
+        "paths": [
+          "/api/v1/CustomData/{Table Name}/{ID}"
+        ],
+        "note": "DELETE-only path with no GET/POST/schema documented anywhere in the spec."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.CustomObjectMarkerPattern"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "leaf": "Individuals",
+        "category": "People",
+        "backingDefinition": "definitions[IndividualData]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": "/api/v1/Individuals/{Page Number}",
+        "swaggerPath": "/api/v1/Individuals/{Page Number}",
+        "note": "documented list/read path (page segment templated)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": "PageNumber",
+        "pageSegmentInPath": true,
+        "evidence": "path carries a {Page Number}/{pageNumber}/{Page} segment"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.PaginationType"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": true,
+        "evidence": "page-number path segment present"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.SupportsPagination"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": false,
+        "watermarkQueryParam": null,
+        "evidence": "no documented since/changed/modified in:query parameter on this path"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": true,
+        "create": true,
+        "update": false,
+        "delete": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.SupportsWrite"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "path": "/api/v1/Individuals",
+        "method": "POST",
+        "evidence": "POST operation documented at /api/v1/Individuals"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.CreateAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "method": "POST",
+        "path": "/api/v1/Individuals"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.CreateMethod"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "bodyShape": "flat",
+        "bodyKey": null,
+        "evidence": "request body is the attributes verbatim (flat) per the operation's in:body parameter schema"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.CreateBodyShape"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "idLocation": "body",
+        "evidence": "created record id read from the 200 response body ('id')"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.CreateIDLocation"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": "Active",
+        "evidence": "leaf is a syncable record type documented in the current API surface"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Individuals.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "firstName",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.firstName.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "firstName",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.firstName.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "firstName",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.firstName.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "firstName",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.firstName.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "firstName",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.firstName.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "firstName",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.firstName.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "lastName",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.lastName.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "lastName",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.lastName.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "lastName",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.lastName.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "lastName",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.lastName.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "lastName",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.lastName.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "lastName",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.lastName.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "middleName",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.middleName.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "middleName",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.middleName.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "middleName",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.middleName.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "middleName",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.middleName.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "middleName",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.middleName.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "middleName",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.middleName.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "preferredFirstName",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.preferredFirstName.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "preferredFirstName",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.preferredFirstName.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "preferredFirstName",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.preferredFirstName.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "preferredFirstName",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.preferredFirstName.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "preferredFirstName",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.preferredFirstName.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "preferredFirstName",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.preferredFirstName.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "secondLastName",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.secondLastName.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "secondLastName",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.secondLastName.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "secondLastName",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.secondLastName.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "secondLastName",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.secondLastName.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "secondLastName",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.secondLastName.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "secondLastName",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.secondLastName.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "prefix",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.prefix.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "prefix",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.prefix.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "prefix",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.prefix.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "prefix",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.prefix.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "prefix",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.prefix.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "prefix",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.prefix.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "suffix",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.suffix.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "suffix",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.suffix.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "suffix",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.suffix.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "suffix",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.suffix.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "suffix",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.suffix.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "suffix",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.suffix.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "gender",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.gender.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "gender",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.gender.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "gender",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.gender.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "gender",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.gender.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "gender",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.gender.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "gender",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.gender.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "primaryOrganization",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.primaryOrganization.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "primaryOrganization",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "object",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.primaryOrganization.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "primaryOrganization",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.primaryOrganization.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "primaryOrganization",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.primaryOrganization.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "primaryOrganization",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.primaryOrganization.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "primaryOrganization",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.primaryOrganization.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "committees",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.committees.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "committees",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.committees.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "committees",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.committees.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "committees",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.committees.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "committees",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.committees.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "committees",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.committees.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "securityRoles",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.securityRoles.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "securityRoles",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.securityRoles.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "securityRoles",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.securityRoles.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "securityRoles",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.securityRoles.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "securityRoles",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.securityRoles.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "securityRoles",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.securityRoles.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "user",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.user.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "user",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "object",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.user.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "user",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.user.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "user",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.user.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "user",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.user.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "user",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.user.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "designationData",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.designationData.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "designationData",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.designationData.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "designationData",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.designationData.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "designationData",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.designationData.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "designationData",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.designationData.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "designationData",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.designationData.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "relationships",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.relationships.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "relationships",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.relationships.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "relationships",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.relationships.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "relationships",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.relationships.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "relationships",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.relationships.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "relationships",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.relationships.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "jobRoles",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.jobRoles.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "jobRoles",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.jobRoles.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "jobRoles",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.jobRoles.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "jobRoles",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.jobRoles.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "jobRoles",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.jobRoles.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "jobRoles",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.jobRoles.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "tags",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.tags.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "tags",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.tags.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "tags",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.tags.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "tags",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.tags.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "tags",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.tags.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "tags",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.tags.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.id.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": "uuid",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.id.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.id.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "value": true,
+        "evidence": "primary key (system-managed identity)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.id.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "value": true,
+        "evidence": "primary key ⇒ unique"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.id.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "backingDefinition": "IndividualData",
+        "pickerRule": "definition has a bare 'id' property",
+        "addressingPathParam": "/api/v1/Individuals/{Page Number}",
+        "evidence": "soft PK: definition has a bare 'id' property; corroborated by the addressing path /api/v1/Individuals/{Page Number}"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.id.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customerType",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.customerType.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customerType",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.customerType.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customerType",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.customerType.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customerType",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.customerType.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customerType",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.customerType.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customerType",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.customerType.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "recordNumber",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.recordNumber.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "recordNumber",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.recordNumber.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "recordNumber",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.recordNumber.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "recordNumber",
+        "value": true,
+        "evidence": "system/computed field ('recordNumber' in the system-managed read-only set)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.recordNumber.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "recordNumber",
+        "value": true,
+        "evidence": "'recordNumber' is an alternate unique identifier (paths accept {ID or Record Number})"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.recordNumber.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "recordNumber",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.recordNumber.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "title",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.title.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "title",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.title.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "title",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.title.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "title",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.title.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "title",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.title.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "title",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.title.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "name",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.name.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "name",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.name.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "name",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.name.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "name",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.name.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "name",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.name.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "name",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.name.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "addresses",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.addresses.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "addresses",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.addresses.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "addresses",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.addresses.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "addresses",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.addresses.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "addresses",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.addresses.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "addresses",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.addresses.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "email",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.email.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "email",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": "email",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.email.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "email",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.email.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "email",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.email.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "email",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.email.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "email",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.email.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "imageUri",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.imageUri.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "imageUri",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": "uri",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.imageUri.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "imageUri",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.imageUri.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "imageUri",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.imageUri.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "imageUri",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.imageUri.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "imageUri",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.imageUri.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "twitter",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.twitter.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "twitter",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": "uri",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.twitter.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "twitter",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.twitter.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "twitter",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.twitter.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "twitter",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.twitter.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "twitter",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.twitter.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "linkedIn",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.linkedIn.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "linkedIn",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": "uri",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.linkedIn.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "linkedIn",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.linkedIn.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "linkedIn",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.linkedIn.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "linkedIn",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.linkedIn.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "linkedIn",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.linkedIn.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "emails",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.emails.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "emails",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.emails.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "emails",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.emails.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "emails",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.emails.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "emails",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.emails.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "emails",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.emails.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "phones",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.phones.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "phones",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.phones.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "phones",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.phones.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "phones",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.phones.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "phones",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.phones.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "phones",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.phones.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "webSite",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.webSite.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "webSite",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": "uri",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.webSite.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "webSite",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.webSite.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "webSite",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.webSite.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "webSite",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.webSite.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "webSite",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.webSite.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "memberships",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.memberships.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "memberships",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.memberships.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "memberships",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.memberships.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "memberships",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.memberships.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "memberships",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.memberships.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "memberships",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.memberships.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "category",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.category.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "category",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.category.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "category",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.category.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "category",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.category.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "category",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.category.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "category",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.category.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "categories",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.categories.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "categories",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.categories.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "categories",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.categories.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "categories",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.categories.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "categories",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.categories.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "categories",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.categories.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customFields",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.customFields.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customFields",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.customFields.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customFields",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.customFields.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customFields",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.customFields.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customFields",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.customFields.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customFields",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.customFields.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "showInDirectory",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.showInDirectory.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "showInDirectory",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "boolean",
+        "swaggerFormat": null,
+        "mappedType": "Boolean"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.showInDirectory.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "showInDirectory",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.showInDirectory.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "showInDirectory",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.showInDirectory.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "showInDirectory",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.showInDirectory.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "showInDirectory",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.showInDirectory.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "links",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.links.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "links",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.links.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "links",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.links.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "links",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.links.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "links",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.links.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "links",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.links.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "oldId",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.oldId.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "oldId",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.oldId.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "oldId",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.oldId.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "oldId",
+        "value": true,
+        "evidence": "system/computed field ('oldId' in the system-managed read-only set)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.oldId.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "oldId",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.oldId.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "oldId",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.oldId.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "isDeceased",
+        "backingDefinition": "IndividualData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.isDeceased.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "isDeceased",
+        "backingDefinition": "IndividualData",
+        "swaggerType": "boolean",
+        "swaggerFormat": null,
+        "mappedType": "Boolean"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.isDeceased.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "isDeceased",
+        "backingDefinition": "IndividualData",
+        "value": false,
+        "evidence": "not in definitions[IndividualData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.isDeceased.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "isDeceased",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.isDeceased.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "isDeceased",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.isDeceased.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "isDeceased",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Individuals.isDeceased.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "leaf": "Organizations",
+        "category": "People",
+        "backingDefinition": "definitions[OrganizationData]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": "/api/v1/Organizations/Members/All/{Page Number}",
+        "swaggerPath": "/api/v1/Organizations/Members/All/{Page Number}",
+        "note": "documented list/read path (page segment templated)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": "PageNumber",
+        "pageSegmentInPath": true,
+        "evidence": "path carries a {Page Number}/{pageNumber}/{Page} segment"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.PaginationType"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": true,
+        "evidence": "page-number path segment present"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.SupportsPagination"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": false,
+        "watermarkQueryParam": null,
+        "evidence": "no documented since/changed/modified in:query parameter on this path"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": true,
+        "create": true,
+        "update": true,
+        "delete": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.SupportsWrite"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "path": "/api/v1/Organizations",
+        "method": "POST",
+        "evidence": "POST operation documented at /api/v1/Organizations"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.CreateAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "method": "POST",
+        "path": "/api/v1/Organizations"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.CreateMethod"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "bodyShape": "flat",
+        "bodyKey": null,
+        "evidence": "request body is the attributes verbatim (flat) per the operation's in:body parameter schema"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.CreateBodyShape"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "idLocation": "body",
+        "evidence": "created record id read from the 200 response body ('id')"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.CreateIDLocation"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "path": "/api/v1/Organizations/{id}",
+        "method": "PUT",
+        "evidence": "PUT operation documented at /api/v1/Organizations/{id}"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.UpdateAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "method": "PUT",
+        "path": "/api/v1/Organizations/{id}"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.UpdateMethod"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "bodyShape": "flat",
+        "bodyKey": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.UpdateBodyShape"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "idLocation": "path",
+        "evidence": "target id substituted into the path template"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.UpdateIDLocation"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "value": "Active",
+        "evidence": "leaf is a syncable record type documented in the current API surface"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organizations.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "contactIds",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.contactIds.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "contactIds",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.contactIds.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "contactIds",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.contactIds.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "contactIds",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.contactIds.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "contactIds",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.contactIds.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "contactIds",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.contactIds.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "parentCompanyId",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.parentCompanyId.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "parentCompanyId",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": "uuid",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.parentCompanyId.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "parentCompanyId",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.parentCompanyId.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "parentCompanyId",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.parentCompanyId.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "parentCompanyId",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.parentCompanyId.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "parentCompanyId",
+        "selfReferentialTarget": "Organizations",
+        "evidence": "provable self-referential hierarchy FK: 'parentCompanyId' references the same object's ('Organizations') own id (unambiguous single target)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.parentCompanyId.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "parentCompanyId",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.parentCompanyId.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "description",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.description.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "description",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.description.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "description",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.description.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "description",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.description.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "description",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.description.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "description",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.description.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "branchName",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.branchName.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "branchName",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.branchName.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "branchName",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.branchName.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "branchName",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.branchName.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "branchName",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.branchName.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "branchName",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.branchName.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "tags",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.tags.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "tags",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.tags.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "tags",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.tags.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "tags",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.tags.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "tags",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.tags.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "tags",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.tags.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.id.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": "uuid",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.id.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.id.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "value": true,
+        "evidence": "primary key (system-managed identity)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.id.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "value": true,
+        "evidence": "primary key ⇒ unique"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.id.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "backingDefinition": "OrganizationData",
+        "pickerRule": "definition has a bare 'id' property",
+        "addressingPathParam": "/api/v1/Organizations/Members/All/{Page Number}",
+        "evidence": "soft PK: definition has a bare 'id' property; corroborated by the addressing path /api/v1/Organizations/Members/All/{Page Number}"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "id",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.id.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customerType",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.customerType.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customerType",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.customerType.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customerType",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.customerType.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customerType",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.customerType.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customerType",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.customerType.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customerType",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.customerType.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "recordNumber",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.recordNumber.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "recordNumber",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.recordNumber.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "recordNumber",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.recordNumber.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "recordNumber",
+        "value": true,
+        "evidence": "system/computed field ('recordNumber' in the system-managed read-only set)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.recordNumber.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "recordNumber",
+        "value": true,
+        "evidence": "'recordNumber' is an alternate unique identifier (paths accept {ID or Record Number})"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.recordNumber.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "recordNumber",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.recordNumber.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "title",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.title.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "title",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.title.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "title",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.title.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "title",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.title.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "title",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.title.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "title",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.title.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "name",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.name.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "name",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.name.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "name",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.name.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "name",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.name.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "name",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.name.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "name",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.name.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "addresses",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.addresses.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "addresses",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.addresses.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "addresses",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.addresses.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "addresses",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.addresses.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "addresses",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.addresses.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "addresses",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.addresses.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "email",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.email.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "email",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": "email",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.email.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "email",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.email.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "email",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.email.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "email",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.email.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "email",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.email.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "imageUri",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.imageUri.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "imageUri",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": "uri",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.imageUri.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "imageUri",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.imageUri.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "imageUri",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.imageUri.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "imageUri",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.imageUri.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "imageUri",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.imageUri.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "twitter",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.twitter.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "twitter",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": "uri",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.twitter.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "twitter",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.twitter.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "twitter",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.twitter.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "twitter",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.twitter.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "twitter",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.twitter.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "linkedIn",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.linkedIn.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "linkedIn",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": "uri",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.linkedIn.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "linkedIn",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.linkedIn.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "linkedIn",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.linkedIn.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "linkedIn",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.linkedIn.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "linkedIn",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.linkedIn.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "emails",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.emails.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "emails",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.emails.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "emails",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.emails.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "emails",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.emails.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "emails",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.emails.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "emails",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.emails.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "phones",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.phones.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "phones",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.phones.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "phones",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.phones.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "phones",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.phones.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "phones",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.phones.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "phones",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.phones.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "webSite",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.webSite.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "webSite",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": "uri",
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.webSite.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "webSite",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.webSite.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "webSite",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.webSite.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "webSite",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.webSite.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "webSite",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.webSite.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "memberships",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.memberships.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "memberships",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.memberships.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "memberships",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.memberships.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "memberships",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.memberships.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "memberships",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.memberships.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "memberships",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.memberships.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "category",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.category.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "category",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "string",
+        "swaggerFormat": null,
+        "mappedType": "String"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.category.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "category",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.category.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "category",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.category.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "category",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.category.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "category",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.category.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "categories",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.categories.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "categories",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.categories.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "categories",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.categories.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "categories",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.categories.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "categories",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.categories.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "categories",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.categories.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customFields",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.customFields.Name"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customFields",
+        "backingDefinition": "OrganizationData",
+        "swaggerType": "array",
+        "swaggerFormat": null,
+        "mappedType": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.customFields.Type"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customFields",
+        "backingDefinition": "OrganizationData",
+        "value": false,
+        "evidence": "not in definitions[OrganizationData].required[]"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.customFields.IsRequired"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customFields",
+        "value": false,
+        "evidence": "user-writable field"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.customFields.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customFields",
+        "value": false,
+        "evidence": "not a unique key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.customFields.IsUniqueKey"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "customFields",
+        "value": "Active"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.customFields.Status"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-12T08:38:46.153Z",
+      "StructuredOutput": {
+        "source": "packages/Integration/connectors-registry/impexium/sources/apiDefinition.swagger.json",
+        "property": "showInDirectory",
+        "backingDefinition": "OrganizationData"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Organizations.showInDirectory.Name"
+    }
+  ]
+}

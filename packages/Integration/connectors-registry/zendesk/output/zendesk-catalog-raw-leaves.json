@@ -1,0 +1,2782 @@
+{
+  "leafCount": 110,
+  "leaves": [
+    "access_rules",
+    "actions",
+    "activities",
+    "approval_requests",
+    "article_attachments",
+    "articles",
+    "asset_types",
+    "assets",
+    "attribute_values",
+    "attributes",
+    "audit_logs",
+    "audits",
+    "automations",
+    "bookmarks",
+    "brand_agents",
+    "brands",
+    "categories",
+    "clients",
+    "columns",
+    "comments",
+    "compliance_deletion_statuses",
+    "custom_field_options",
+    "custom_object_fields",
+    "custom_object_record_attachments",
+    "custom_object_records",
+    "custom_objects",
+    "custom_roles",
+    "custom_statuses",
+    "deleted_tickets",
+    "deleted_users",
+    "deletion_schedules",
+    "email_notifications",
+    "events",
+    "expected_cnames",
+    "fields",
+    "followup_source_ids",
+    "fulfilled_ticket_ids",
+    "global_clients",
+    "group_memberships",
+    "group_sla_policies",
+    "groups",
+    "identities",
+    "instance_values",
+    "items",
+    "job_statuses",
+    "labels",
+    "locales",
+    "locations",
+    "macro_attachments",
+    "macros",
+    "monitored_twitter_handles",
+    "organization_fields",
+    "organization_memberships",
+    "organization_merges",
+    "organization_subscriptions",
+    "organizations",
+    "policies",
+    "posts",
+    "queues",
+    "reason",
+    "reasons",
+    "recipient_addresses",
+    "remote_authentications",
+    "requests",
+    "requirements",
+    "resource_collections",
+    "results",
+    "satisfaction_rating",
+    "satisfaction_ratings",
+    "saved_searches",
+    "sections",
+    "service_catalog_items",
+    "session",
+    "sessions",
+    "sharing_agreements",
+    "skips",
+    "sla_policies",
+    "statuses",
+    "subscriptions",
+    "suspended_tickets",
+    "tags",
+    "target_failures",
+    "targets",
+    "task_list_templates",
+    "task_lists",
+    "tasks",
+    "ticket_content_pins",
+    "ticket_events",
+    "ticket_fields",
+    "ticket_form_statuses",
+    "ticket_forms",
+    "ticket_metric",
+    "ticket_metric_events",
+    "ticket_metrics",
+    "tickets",
+    "tokens",
+    "topics",
+    "translations",
+    "trigger_categories",
+    "trigger_revisions",
+    "triggers",
+    "user_fields",
+    "user_segments",
+    "user_subscriptions",
+    "users",
+    "variants",
+    "view_counts",
+    "views",
+    "votes",
+    "workspaces"
+  ],
+  "fullLeaves": [
+    {
+      "objectName": "access_rules",
+      "listPath": "/api/v2/custom_objects/{custom_object_key}/access_rules",
+      "responseDataKey": "access_rules",
+      "itemSchemaName": "AccessRule",
+      "tags": [
+        "Custom Object Permissions"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "custom_objects",
+      "parentIdField": "custom_object_key",
+      "hierarchyPath": "custom_objects/{custom_object_key}/access_rules",
+      "operationId": "ListAccessRules",
+      "score": 6,
+      "variants": [
+        "/api/v2/custom_objects/{custom_object_key}/access_rules"
+      ]
+    },
+    {
+      "objectName": "actions",
+      "listPath": "/api/v2/macros/actions",
+      "responseDataKey": "actions",
+      "itemSchemaName": null,
+      "tags": [
+        "Macros"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListMacrosActions",
+      "score": 2,
+      "variants": [
+        "/api/v2/macros/actions"
+      ]
+    },
+    {
+      "objectName": "activities",
+      "listPath": "/api/v2/activities",
+      "responseDataKey": "activities",
+      "itemSchemaName": "ActivityObject",
+      "tags": [
+        "Activity Stream"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListActivities",
+      "score": 1,
+      "variants": [
+        "/api/v2/activities"
+      ]
+    },
+    {
+      "objectName": "approval_requests",
+      "listPath": "/api/v2/approval_requests",
+      "responseDataKey": "approval_requests",
+      "itemSchemaName": null,
+      "tags": [
+        "Approval Requests"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListApprovalRequests",
+      "score": 1,
+      "variants": [
+        "/api/v2/approval_requests"
+      ]
+    },
+    {
+      "objectName": "article_attachments",
+      "listPath": "/api/v2/help_center/articles/{article_id}/attachments",
+      "responseDataKey": "article_attachments",
+      "itemSchemaName": "ArticleAttachmentObject",
+      "tags": [
+        "Article Attachments"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": "articles",
+      "parentIdField": "article_id",
+      "hierarchyPath": "help_center/articles/{article_id}/attachments",
+      "operationId": "ListArticleAttachments",
+      "score": 7,
+      "variants": [
+        "/api/v2/help_center/{locale}/articles/{article_id}/attachments",
+        "/api/v2/help_center/{locale}/articles/{article_id}/attachments/block",
+        "/api/v2/help_center/{locale}/articles/{article_id}/attachments/inline",
+        "/api/v2/help_center/articles/{article_id}/attachments",
+        "/api/v2/help_center/articles/{article_id}/attachments/block",
+        "/api/v2/help_center/articles/{article_id}/attachments/inline"
+      ]
+    },
+    {
+      "objectName": "articles",
+      "listPath": "/api/v2/help_center/articles",
+      "responseDataKey": "articles",
+      "itemSchemaName": "ArticleObject",
+      "tags": [
+        "Articles"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListArticlesNoLocale",
+      "score": 2,
+      "variants": [
+        "/api/v2/help_center/{locale}/articles",
+        "/api/v2/help_center/{locale}/categories/{category_id}/articles",
+        "/api/v2/help_center/{locale}/sections/{section_id}/articles",
+        "/api/v2/help_center/articles",
+        "/api/v2/help_center/categories/{category_id}/articles",
+        "/api/v2/help_center/incremental/articles",
+        "/api/v2/help_center/sections/{section_id}/articles",
+        "/api/v2/help_center/users/{user_id}/articles"
+      ]
+    },
+    {
+      "objectName": "asset_types",
+      "listPath": "/api/v2/it_asset_management/asset_types",
+      "responseDataKey": "asset_types",
+      "itemSchemaName": "ItamAssetType",
+      "tags": [
+        "ITAM Asset Types"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListItamAssetTypes",
+      "score": 2,
+      "variants": [
+        "/api/v2/it_asset_management/asset_types"
+      ]
+    },
+    {
+      "objectName": "assets",
+      "listPath": "/api/v2/it_asset_management/assets",
+      "responseDataKey": "assets",
+      "itemSchemaName": "ItamAsset",
+      "tags": [
+        "ITAM Assets"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListItamAssets",
+      "score": 2,
+      "variants": [
+        "/api/v2/it_asset_management/assets",
+        "/api/v2/it_asset_management/assets/search"
+      ]
+    },
+    {
+      "objectName": "attribute_values",
+      "listPath": "/api/v2/routing/agents/{user_id}/instance_values",
+      "responseDataKey": "attribute_values",
+      "itemSchemaName": "SkillBasedRoutingAttributeValueObject",
+      "tags": [
+        "Skill Based Routing"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "agents",
+      "parentIdField": "user_id",
+      "hierarchyPath": "routing/agents/{user_id}/instance_values",
+      "operationId": "ListAGentAttributeValues",
+      "score": 7,
+      "variants": [
+        "/api/v2/incremental/routing/attribute_values",
+        "/api/v2/incremental/routing/attributes",
+        "/api/v2/incremental/routing/instance_values",
+        "/api/v2/routing/agents/{user_id}/instance_values",
+        "/api/v2/routing/attributes/{attribute_id}/values",
+        "/api/v2/routing/tickets/{ticket_id}/instance_values"
+      ]
+    },
+    {
+      "objectName": "attributes",
+      "listPath": "/api/v2/routing/attributes",
+      "responseDataKey": "attributes",
+      "itemSchemaName": "SkillBasedRoutingAttributeObject",
+      "tags": [
+        "Skill Based Routing"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListAccountAttributes",
+      "score": 2,
+      "variants": [
+        "/api/v2/routing/attributes"
+      ]
+    },
+    {
+      "objectName": "audit_logs",
+      "listPath": "/api/v2/audit_logs",
+      "responseDataKey": "audit_logs",
+      "itemSchemaName": "AuditLogObject",
+      "tags": [
+        "Audit Logs"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListAuditLogs",
+      "score": 1,
+      "variants": [
+        "/api/v2/audit_logs"
+      ]
+    },
+    {
+      "objectName": "audits",
+      "listPath": "/api/v2/ticket_audits",
+      "responseDataKey": "audits",
+      "itemSchemaName": "TicketAuditObject",
+      "tags": [
+        "Ticket Audits"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTicketAudits",
+      "score": 1,
+      "variants": [
+        "/api/v2/ticket_audits",
+        "/api/v2/tickets/{ticket_id}/audits"
+      ]
+    },
+    {
+      "objectName": "automations",
+      "listPath": "/api/v2/automations",
+      "responseDataKey": "automations",
+      "itemSchemaName": "AutomationObject",
+      "tags": [
+        "Automations"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListAutomations",
+      "score": 1,
+      "variants": [
+        "/api/v2/automations",
+        "/api/v2/automations/active",
+        "/api/v2/automations/search"
+      ]
+    },
+    {
+      "objectName": "bookmarks",
+      "listPath": "/api/v2/bookmarks",
+      "responseDataKey": "bookmarks",
+      "itemSchemaName": "BookmarkObject",
+      "tags": [
+        "Bookmarks"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListBookmarks",
+      "score": 1,
+      "variants": [
+        "/api/v2/bookmarks"
+      ]
+    },
+    {
+      "objectName": "brand_agents",
+      "listPath": "/api/v2/brand_agents",
+      "responseDataKey": "brand_agents",
+      "itemSchemaName": "BrandAgentObject",
+      "tags": [
+        "Brand Agents"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListBrandAgents",
+      "score": 1,
+      "variants": [
+        "/api/v2/brand_agents",
+        "/api/v2/brands/{brand_id}/agents",
+        "/api/v2/users/{user_id}/brand_agents"
+      ]
+    },
+    {
+      "objectName": "brands",
+      "listPath": "/api/v2/brands",
+      "responseDataKey": "brands",
+      "itemSchemaName": "BrandObject",
+      "tags": [
+        "Brands"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListBrands",
+      "score": 1,
+      "variants": [
+        "/api/v2/brands"
+      ]
+    },
+    {
+      "objectName": "categories",
+      "listPath": "/api/v2/macros/categories",
+      "responseDataKey": "categories",
+      "itemSchemaName": null,
+      "tags": [
+        "Macros"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListMacroCategories",
+      "score": 2,
+      "variants": [
+        "/api/v2/macros/categories",
+        "/api/v2/help_center/{locale}/categories",
+        "/api/v2/help_center/categories"
+      ]
+    },
+    {
+      "objectName": "clients",
+      "listPath": "/api/v2/oauth/clients",
+      "responseDataKey": "clients",
+      "itemSchemaName": "OAuthClientObject",
+      "tags": [
+        "OAuth Clients"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListOAuthClients",
+      "score": 2,
+      "variants": [
+        "/api/v2/oauth/clients",
+        "/api/v2/users/me/oauth/clients"
+      ]
+    },
+    {
+      "objectName": "columns",
+      "listPath": "/api/v2/views/{view_id}",
+      "responseDataKey": "columns",
+      "itemSchemaName": null,
+      "tags": [
+        "Views"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "views",
+      "parentIdField": "view_id",
+      "hierarchyPath": "views/{view_id}",
+      "operationId": "ShowView",
+      "score": 5,
+      "variants": [
+        "/api/v2/views/{view_id}",
+        "/api/v2/views/{view_id}/execute"
+      ]
+    },
+    {
+      "objectName": "comments",
+      "listPath": "/api/v2/requests/{request_id}/comments",
+      "responseDataKey": "comments",
+      "itemSchemaName": "TicketCommentObject",
+      "tags": [
+        "Requests"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "requests",
+      "parentIdField": "request_id",
+      "hierarchyPath": "requests/{request_id}/comments",
+      "operationId": "ListComments",
+      "score": 6,
+      "variants": [
+        "/api/v2/requests/{request_id}/comments",
+        "/api/v2/tickets/{ticket_id}/comments",
+        "/api/v2/community/posts/{post_id}/comments",
+        "/api/v2/community/users/{user_id}/comments",
+        "/api/v2/help_center/{locale}/articles/{article_id}/comments",
+        "/api/v2/help_center/articles/{article_id}/comments",
+        "/api/v2/help_center/users/{user_id}/comments"
+      ]
+    },
+    {
+      "objectName": "compliance_deletion_statuses",
+      "listPath": "/api/v2/users/{user_id}/compliance_deletion_statuses",
+      "responseDataKey": "compliance_deletion_statuses",
+      "itemSchemaName": "ComplianceDeletionStatusObject",
+      "tags": [
+        "Users"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "users",
+      "parentIdField": "user_id",
+      "hierarchyPath": "users/{user_id}/compliance_deletion_statuses",
+      "operationId": "ShowUserComplianceDeletionStatuses",
+      "score": 6,
+      "variants": [
+        "/api/v2/users/{user_id}/compliance_deletion_statuses"
+      ]
+    },
+    {
+      "objectName": "custom_field_options",
+      "listPath": "/api/v2/ticket_fields/{ticket_field_id}/options",
+      "responseDataKey": "custom_field_options",
+      "itemSchemaName": "CustomFieldOptionObject",
+      "tags": [
+        "Ticket Fields"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "ticket_fields",
+      "parentIdField": "ticket_field_id",
+      "hierarchyPath": "ticket_fields/{ticket_field_id}/options",
+      "operationId": "ListTicketFieldOptions",
+      "score": 6,
+      "variants": [
+        "/api/v2/ticket_fields/{ticket_field_id}/options",
+        "/api/v2/user_fields/{user_field_id}/options"
+      ]
+    },
+    {
+      "objectName": "custom_object_fields",
+      "listPath": "/api/v2/custom_objects/{custom_object_key}/fields",
+      "responseDataKey": "custom_object_fields",
+      "itemSchemaName": "CustomObjectField",
+      "tags": [
+        "Custom Object Fields"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "custom_objects",
+      "parentIdField": "custom_object_key",
+      "hierarchyPath": "custom_objects/{custom_object_key}/fields",
+      "operationId": "ListCustomObjectFields",
+      "score": 6,
+      "variants": [
+        "/api/v2/custom_objects/{custom_object_key}/fields"
+      ]
+    },
+    {
+      "objectName": "custom_object_record_attachments",
+      "listPath": "/api/v2/custom_objects/{custom_object_key}/records/{record_id}/attachments",
+      "responseDataKey": "custom_object_record_attachments",
+      "itemSchemaName": "CustomObjectRecordAttachment",
+      "tags": [
+        "Custom Object Record Attachments"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "custom_objects",
+      "parentIdField": "custom_object_key",
+      "hierarchyPath": "custom_objects/{custom_object_key}/records/{record_id}/attachments",
+      "operationId": "ListCustomObjectRecordAttachments",
+      "score": 11,
+      "variants": [
+        "/api/v2/custom_objects/{custom_object_key}/records/{record_id}/attachments"
+      ]
+    },
+    {
+      "objectName": "custom_object_records",
+      "listPath": "/api/v2/custom_objects/{custom_object_key}/records",
+      "responseDataKey": "custom_object_records",
+      "itemSchemaName": "CustomObjectRecord",
+      "tags": [
+        "Custom Object Records"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "custom_objects",
+      "parentIdField": "custom_object_key",
+      "hierarchyPath": "custom_objects/{custom_object_key}/records",
+      "operationId": "ListCustomObjectRecords",
+      "score": 6,
+      "variants": [
+        "/api/v2/custom_objects/{custom_object_key}/records",
+        "/api/v2/custom_objects/{custom_object_key}/records/autocomplete",
+        "/api/v2/custom_objects/{custom_object_key}/records/search",
+        "/api/v2/incremental/custom_objects/{custom_object_key}/cursor"
+      ]
+    },
+    {
+      "objectName": "custom_objects",
+      "listPath": "/api/v2/custom_objects",
+      "responseDataKey": "custom_objects",
+      "itemSchemaName": "CustomObject",
+      "tags": [
+        "Custom Objects"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListCustomObjects",
+      "score": 1,
+      "variants": [
+        "/api/v2/custom_objects"
+      ]
+    },
+    {
+      "objectName": "custom_roles",
+      "listPath": "/api/v2/custom_roles",
+      "responseDataKey": "custom_roles",
+      "itemSchemaName": "CustomRoleObject",
+      "tags": [
+        "Custom Roles"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListCustomRoles",
+      "score": 1,
+      "variants": [
+        "/api/v2/custom_roles"
+      ]
+    },
+    {
+      "objectName": "custom_statuses",
+      "listPath": "/api/v2/custom_statuses",
+      "responseDataKey": "custom_statuses",
+      "itemSchemaName": "CustomStatusObject",
+      "tags": [
+        "Custom Ticket Statuses"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListCustomStatuses",
+      "score": 1,
+      "variants": [
+        "/api/v2/custom_statuses"
+      ]
+    },
+    {
+      "objectName": "deleted_tickets",
+      "listPath": "/api/v2/deleted_tickets",
+      "responseDataKey": "deleted_tickets",
+      "itemSchemaName": null,
+      "tags": [
+        "Tickets"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListDeletedTickets",
+      "score": 1,
+      "variants": [
+        "/api/v2/deleted_tickets"
+      ]
+    },
+    {
+      "objectName": "deleted_users",
+      "listPath": "/api/v2/deleted_users",
+      "responseDataKey": "deleted_users",
+      "itemSchemaName": "DeletedUserObject",
+      "tags": [
+        "Users"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListDeletedUsers",
+      "score": 1,
+      "variants": [
+        "/api/v2/deleted_users"
+      ]
+    },
+    {
+      "objectName": "deletion_schedules",
+      "listPath": "/api/v2/deletion_schedules",
+      "responseDataKey": "deletion_schedules",
+      "itemSchemaName": "DeletionSchedule",
+      "tags": [
+        "Deletion Schedules"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListDeletionSchedules",
+      "score": 1,
+      "variants": [
+        "/api/v2/deletion_schedules"
+      ]
+    },
+    {
+      "objectName": "email_notifications",
+      "listPath": "/api/v2/email_notifications",
+      "responseDataKey": "email_notifications",
+      "itemSchemaName": "EmailNotificationObject",
+      "tags": [
+        "Email Notifications"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListEmailNotifications",
+      "score": 1,
+      "variants": [
+        "/api/v2/email_notifications"
+      ]
+    },
+    {
+      "objectName": "events",
+      "listPath": "/api/v2/tickets/{ticket_id}/conversation_log",
+      "responseDataKey": "events",
+      "itemSchemaName": "ConversationLogObject",
+      "tags": [
+        "Conversation Log"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "tickets",
+      "parentIdField": "ticket_id",
+      "hierarchyPath": "tickets/{ticket_id}/conversation_log",
+      "operationId": "ListConversationLogForTicket",
+      "score": 6,
+      "variants": [
+        "/api/v2/tickets/{ticket_id}/conversation_log"
+      ]
+    },
+    {
+      "objectName": "expected_cnames",
+      "listPath": "/api/v2/brands/check_host_mapping",
+      "responseDataKey": "expected_cnames",
+      "itemSchemaName": null,
+      "tags": [
+        "Brands"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "CheckHostMappingValidity",
+      "score": 2,
+      "variants": [
+        "/api/v2/brands/{brand_id}/check_host_mapping",
+        "/api/v2/brands/check_host_mapping"
+      ]
+    },
+    {
+      "objectName": "fields",
+      "listPath": "/api/v2/it_asset_management/asset_types/{asset_type_id}/fields",
+      "responseDataKey": "fields",
+      "itemSchemaName": "ItamAssetField",
+      "tags": [
+        "ITAM Asset Fields"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "asset_types",
+      "parentIdField": "asset_type_id",
+      "hierarchyPath": "it_asset_management/asset_types/{asset_type_id}/fields",
+      "operationId": "ListItamAssetTypeFields",
+      "score": 7,
+      "variants": [
+        "/api/v2/it_asset_management/asset_types/{asset_type_id}/fields"
+      ]
+    },
+    {
+      "objectName": "followup_source_ids",
+      "listPath": "/api/v2/tickets/{ticket_id}/related",
+      "responseDataKey": "followup_source_ids",
+      "itemSchemaName": null,
+      "tags": [
+        "Tickets"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "tickets",
+      "parentIdField": "ticket_id",
+      "hierarchyPath": "tickets/{ticket_id}/related",
+      "operationId": "TicketRelatedInformation",
+      "score": 6,
+      "variants": [
+        "/api/v2/tickets/{ticket_id}/related"
+      ]
+    },
+    {
+      "objectName": "fulfilled_ticket_ids",
+      "listPath": "/api/v2/routing/requirements/fulfilled",
+      "responseDataKey": "fulfilled_ticket_ids",
+      "itemSchemaName": null,
+      "tags": [
+        "Skill Based Routing"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTicketsFullfilledByUser",
+      "score": 3,
+      "variants": [
+        "/api/v2/routing/requirements/fulfilled"
+      ]
+    },
+    {
+      "objectName": "global_clients",
+      "listPath": "/api/v2/oauth/global_clients",
+      "responseDataKey": "global_clients",
+      "itemSchemaName": "GlobalClientObject",
+      "tags": [
+        "Global Clients"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListGlobalOAuthClients",
+      "score": 2,
+      "variants": [
+        "/api/v2/oauth/global_clients",
+        "/api/v2/oauth/global_clients/token_summary"
+      ]
+    },
+    {
+      "objectName": "group_memberships",
+      "listPath": "/api/v2/group_memberships",
+      "responseDataKey": "group_memberships",
+      "itemSchemaName": "GroupMembershipObject",
+      "tags": [
+        "Group Memberships"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListGroupMemberships",
+      "score": 1,
+      "variants": [
+        "/api/v2/group_memberships",
+        "/api/v2/group_memberships/assignable",
+        "/api/v2/groups/{group_id}/memberships",
+        "/api/v2/groups/{group_id}/memberships/assignable",
+        "/api/v2/users/{user_id}/group_memberships"
+      ]
+    },
+    {
+      "objectName": "group_sla_policies",
+      "listPath": "/api/v2/group_slas/policies",
+      "responseDataKey": "group_sla_policies",
+      "itemSchemaName": "GroupSLAPolicyObject",
+      "tags": [
+        "Group SLA Policies"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListGroupSLAPolicies",
+      "score": 2,
+      "variants": [
+        "/api/v2/group_slas/policies"
+      ]
+    },
+    {
+      "objectName": "groups",
+      "listPath": "/api/v2/groups",
+      "responseDataKey": "groups",
+      "itemSchemaName": "GroupObject",
+      "tags": [
+        "Groups"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListGroups",
+      "score": 1,
+      "variants": [
+        "/api/v2/groups",
+        "/api/v2/groups/assignable",
+        "/api/v2/users/{user_id}/groups"
+      ]
+    },
+    {
+      "objectName": "identities",
+      "listPath": "/api/v2/end_users/{user_id}/identities",
+      "responseDataKey": "identities",
+      "itemSchemaName": "UserIdentityObject",
+      "tags": [
+        "User Identities"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "end_users",
+      "parentIdField": "user_id",
+      "hierarchyPath": "end_users/{user_id}/identities",
+      "operationId": "ListEndUserIdentities",
+      "score": 6,
+      "variants": [
+        "/api/v2/end_users/{user_id}/identities",
+        "/api/v2/users/{user_id}/identities"
+      ]
+    },
+    {
+      "objectName": "instance_values",
+      "listPath": "/api/v2/routing/agents/instance_values",
+      "responseDataKey": "instance_values",
+      "itemSchemaName": "ManySkillBasedRoutingAttributeValues",
+      "tags": [
+        "Skill Based Routing"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListManyAgentsAttributeValues",
+      "score": 3,
+      "variants": [
+        "/api/v2/routing/agents/instance_values"
+      ]
+    },
+    {
+      "objectName": "items",
+      "listPath": "/api/v2/dynamic_content/items",
+      "responseDataKey": "items",
+      "itemSchemaName": "DynamicContentObject",
+      "tags": [
+        "Dynamic Content"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListDynamicContents",
+      "score": 2,
+      "variants": [
+        "/api/v2/dynamic_content/items",
+        "/api/v2/dynamic_content/items/show_many"
+      ]
+    },
+    {
+      "objectName": "job_statuses",
+      "listPath": "/api/v2/job_statuses",
+      "responseDataKey": "job_statuses",
+      "itemSchemaName": "JobStatusObject",
+      "tags": [
+        "Job Statuses"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListJobStatuses",
+      "score": 1,
+      "variants": [
+        "/api/v2/job_statuses",
+        "/api/v2/job_statuses/show_many"
+      ]
+    },
+    {
+      "objectName": "labels",
+      "listPath": "/api/v2/help_center/articles/labels",
+      "responseDataKey": "labels",
+      "itemSchemaName": "LabelObject",
+      "tags": [
+        "Article Labels"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListAllArticleLabels",
+      "score": 3,
+      "variants": [
+        "/api/v2/help_center/{locale}/articles/{article_id}/labels",
+        "/api/v2/help_center/articles/{article_id}/labels",
+        "/api/v2/help_center/articles/labels"
+      ]
+    },
+    {
+      "objectName": "locales",
+      "listPath": "/api/v2/locales",
+      "responseDataKey": "locales",
+      "itemSchemaName": "LocaleObject",
+      "tags": [
+        "Locales"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListLocales",
+      "score": 1,
+      "variants": [
+        "/api/v2/locales",
+        "/api/v2/locales/agent",
+        "/api/v2/locales/public",
+        "/api/v2/help_center/articles/{article_id}/translations/missing",
+        "/api/v2/help_center/categories/{category_id}/translations/missing",
+        "/api/v2/help_center/locales",
+        "/api/v2/help_center/sections/{section_id}/translations/missing"
+      ]
+    },
+    {
+      "objectName": "locations",
+      "listPath": "/api/v2/it_asset_management/locations",
+      "responseDataKey": "locations",
+      "itemSchemaName": "ItamAssetLocation",
+      "tags": [
+        "ITAM Asset Locations"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListItamLocations",
+      "score": 2,
+      "variants": [
+        "/api/v2/it_asset_management/locations"
+      ]
+    },
+    {
+      "objectName": "macro_attachments",
+      "listPath": "/api/v2/macros/{macro_id}/attachments",
+      "responseDataKey": "macro_attachments",
+      "itemSchemaName": "MacroAttachmentObject",
+      "tags": [
+        "Macros"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "macros",
+      "parentIdField": "macro_id",
+      "hierarchyPath": "macros/{macro_id}/attachments",
+      "operationId": "ListMacroAttachments",
+      "score": 6,
+      "variants": [
+        "/api/v2/macros/{macro_id}/attachments"
+      ]
+    },
+    {
+      "objectName": "macros",
+      "listPath": "/api/v2/macros",
+      "responseDataKey": "macros",
+      "itemSchemaName": "MacroObject",
+      "tags": [
+        "Macros"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListMacros",
+      "score": 1,
+      "variants": [
+        "/api/v2/macros",
+        "/api/v2/macros/active",
+        "/api/v2/macros/search"
+      ]
+    },
+    {
+      "objectName": "monitored_twitter_handles",
+      "listPath": "/api/v2/channels/twitter/monitored_twitter_handles",
+      "responseDataKey": "monitored_twitter_handles",
+      "itemSchemaName": "TwitterChannelObject",
+      "tags": [
+        "X Channel"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListMonitoredTwitterHandles",
+      "score": 3,
+      "variants": [
+        "/api/v2/channels/twitter/monitored_twitter_handles"
+      ]
+    },
+    {
+      "objectName": "organization_fields",
+      "listPath": "/api/v2/organization_fields",
+      "responseDataKey": "organization_fields",
+      "itemSchemaName": "OrganizationFieldObject",
+      "tags": [
+        "Organization Fields"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListOrganizationFields",
+      "score": 1,
+      "variants": [
+        "/api/v2/organization_fields"
+      ]
+    },
+    {
+      "objectName": "organization_memberships",
+      "listPath": "/api/v2/organization_memberships",
+      "responseDataKey": "organization_memberships",
+      "itemSchemaName": "OrganizationMembershipObject",
+      "tags": [
+        "Organization Memberships"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListOrganizationMemberships",
+      "score": 1,
+      "variants": [
+        "/api/v2/organization_memberships",
+        "/api/v2/organizations/{organization_id}/organization_memberships",
+        "/api/v2/users/{user_id}/organization_memberships"
+      ]
+    },
+    {
+      "objectName": "organization_merges",
+      "listPath": "/api/v2/organizations/{organization_id}/merges",
+      "responseDataKey": "organization_merges",
+      "itemSchemaName": null,
+      "tags": [
+        "Organizations"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "organizations",
+      "parentIdField": "organization_id",
+      "hierarchyPath": "organizations/{organization_id}/merges",
+      "operationId": "ListOrganizationMerges",
+      "score": 6,
+      "variants": [
+        "/api/v2/organizations/{organization_id}/merges"
+      ]
+    },
+    {
+      "objectName": "organization_subscriptions",
+      "listPath": "/api/v2/organization_subscriptions",
+      "responseDataKey": "organization_subscriptions",
+      "itemSchemaName": "OrganizationSubscriptionObject",
+      "tags": [
+        "Organization Subscriptions"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListOrganizationSubscriptions",
+      "score": 1,
+      "variants": [
+        "/api/v2/organization_subscriptions",
+        "/api/v2/organizations/{organization_id}/subscriptions",
+        "/api/v2/users/{user_id}/organization_subscriptions"
+      ]
+    },
+    {
+      "objectName": "organizations",
+      "listPath": "/api/v2/organizations",
+      "responseDataKey": "organizations",
+      "itemSchemaName": "OrganizationObject",
+      "tags": [
+        "Organizations"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListOrganizations",
+      "score": 1,
+      "variants": [
+        "/api/v2/incremental/organizations",
+        "/api/v2/organizations",
+        "/api/v2/organizations/autocomplete",
+        "/api/v2/organizations/search",
+        "/api/v2/organizations/show_many",
+        "/api/v2/users/{user_id}/organizations"
+      ]
+    },
+    {
+      "objectName": "policies",
+      "listPath": "/api/v2/custom_objects/{custom_object_key}/permission_policies",
+      "responseDataKey": "policies",
+      "itemSchemaName": "PermissionPolicy",
+      "tags": [
+        "Custom Object Permissions"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "custom_objects",
+      "parentIdField": "custom_object_key",
+      "hierarchyPath": "custom_objects/{custom_object_key}/permission_policies",
+      "operationId": "ListPermissionPolicies",
+      "score": 6,
+      "variants": [
+        "/api/v2/custom_objects/{custom_object_key}/permission_policies"
+      ]
+    },
+    {
+      "objectName": "posts",
+      "listPath": "/api/v2/community/posts",
+      "responseDataKey": "posts",
+      "itemSchemaName": "PostObject",
+      "tags": [
+        "Posts"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListPosts",
+      "score": 2,
+      "variants": [
+        "/api/v2/community/posts",
+        "/api/v2/community/topics/{topic_id}/posts",
+        "/api/v2/community/users/{user_id}/posts"
+      ]
+    },
+    {
+      "objectName": "queues",
+      "listPath": "/api/v2/queues",
+      "responseDataKey": "queues",
+      "itemSchemaName": "QueueObject",
+      "tags": [
+        "Omnichannel Routing Queues"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListQueues",
+      "score": 1,
+      "variants": [
+        "/api/v2/queues"
+      ]
+    },
+    {
+      "objectName": "reason",
+      "listPath": "/api/v2/satisfaction_reasons/{satisfaction_reason_id}",
+      "responseDataKey": "reason",
+      "itemSchemaName": "SatisfactionReasonObject",
+      "tags": [
+        "Satisfaction Reasons"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "satisfaction_reasons",
+      "parentIdField": "satisfaction_reason_id",
+      "hierarchyPath": "satisfaction_reasons/{satisfaction_reason_id}",
+      "operationId": "ShowSatisfactionRatings",
+      "score": 5,
+      "variants": [
+        "/api/v2/satisfaction_reasons/{satisfaction_reason_id}"
+      ]
+    },
+    {
+      "objectName": "reasons",
+      "listPath": "/api/v2/satisfaction_reasons",
+      "responseDataKey": "reasons",
+      "itemSchemaName": "SatisfactionReasonObject",
+      "tags": [
+        "Satisfaction Reasons"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListSatisfactionRatingReasons",
+      "score": 1,
+      "variants": [
+        "/api/v2/satisfaction_reasons"
+      ]
+    },
+    {
+      "objectName": "recipient_addresses",
+      "listPath": "/api/v2/recipient_addresses",
+      "responseDataKey": "recipient_addresses",
+      "itemSchemaName": "SupportAddressObject",
+      "tags": [
+        "Support Addresses"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListSupportAddresses",
+      "score": 1,
+      "variants": [
+        "/api/v2/recipient_addresses"
+      ]
+    },
+    {
+      "objectName": "remote_authentications",
+      "listPath": "/api/v2/remote_authentications",
+      "responseDataKey": "remote_authentications",
+      "itemSchemaName": "RemoteAuthenticationObject",
+      "tags": [
+        "Remote Authentications"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListRemoteAuthentications",
+      "score": 1,
+      "variants": [
+        "/api/v2/remote_authentications"
+      ]
+    },
+    {
+      "objectName": "requests",
+      "listPath": "/api/v2/requests",
+      "responseDataKey": "requests",
+      "itemSchemaName": "RequestObject",
+      "tags": [
+        "Requests"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListRequests",
+      "score": 1,
+      "variants": [
+        "/api/v2/organizations/{organization_id}/requests",
+        "/api/v2/requests",
+        "/api/v2/requests/ccd",
+        "/api/v2/requests/open",
+        "/api/v2/requests/search",
+        "/api/v2/requests/solved",
+        "/api/v2/users/{user_id}/requests"
+      ]
+    },
+    {
+      "objectName": "requirements",
+      "listPath": "/api/v2/users/{user_id}/password/requirements",
+      "responseDataKey": "requirements",
+      "itemSchemaName": null,
+      "tags": [
+        "User Passwords"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "users",
+      "parentIdField": "user_id",
+      "hierarchyPath": "users/{user_id}/password/requirements",
+      "operationId": "GetUserPasswordRequirements",
+      "score": 7,
+      "variants": [
+        "/api/v2/users/{user_id}/password/requirements"
+      ]
+    },
+    {
+      "objectName": "resource_collections",
+      "listPath": "/api/v2/resource_collections",
+      "responseDataKey": "resource_collections",
+      "itemSchemaName": "ResourceCollectionObject",
+      "tags": [
+        "Resource Collections"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListResourceCollections",
+      "score": 1,
+      "variants": [
+        "/api/v2/resource_collections"
+      ]
+    },
+    {
+      "objectName": "results",
+      "listPath": "/api/v2/help_center/deflection/suggestions",
+      "responseDataKey": "results",
+      "itemSchemaName": null,
+      "tags": [
+        "Help Center Search"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListDeflectionSuggestions",
+      "score": 3,
+      "variants": [
+        "/api/v2/search",
+        "/api/v2/search/export",
+        "/api/v2/guide/search",
+        "/api/v2/help_center/articles/search",
+        "/api/v2/help_center/community_posts/search",
+        "/api/v2/help_center/deflection/suggestions"
+      ]
+    },
+    {
+      "objectName": "satisfaction_rating",
+      "listPath": "/api/v2/satisfaction_ratings/{satisfaction_rating_id}",
+      "responseDataKey": "satisfaction_rating",
+      "itemSchemaName": "SatisfactionRatingObject",
+      "tags": [
+        "Satisfaction Ratings"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "satisfaction_ratings",
+      "parentIdField": "satisfaction_rating_id",
+      "hierarchyPath": "satisfaction_ratings/{satisfaction_rating_id}",
+      "operationId": "ShowSatisfactionRating",
+      "score": 5,
+      "variants": [
+        "/api/v2/satisfaction_ratings/{satisfaction_rating_id}"
+      ]
+    },
+    {
+      "objectName": "satisfaction_ratings",
+      "listPath": "/api/v2/satisfaction_ratings",
+      "responseDataKey": "satisfaction_ratings",
+      "itemSchemaName": "SatisfactionRatingObject",
+      "tags": [
+        "Satisfaction Ratings"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListSatisfactionRatings",
+      "score": 1,
+      "variants": [
+        "/api/v2/satisfaction_ratings"
+      ]
+    },
+    {
+      "objectName": "saved_searches",
+      "listPath": "/api/v2/saved_searches",
+      "responseDataKey": "saved_searches",
+      "itemSchemaName": "SavedSearchObject",
+      "tags": [
+        "Saved Searches"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListSavedSearches",
+      "score": 1,
+      "variants": [
+        "/api/v2/saved_searches"
+      ]
+    },
+    {
+      "objectName": "sections",
+      "listPath": "/api/v2/help_center/sections",
+      "responseDataKey": "sections",
+      "itemSchemaName": "SectionObject",
+      "tags": [
+        "Sections"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListSectionsNoLocale",
+      "score": 2,
+      "variants": [
+        "/api/v2/help_center/{locale}/categories/{category_id}/sections",
+        "/api/v2/help_center/{locale}/sections",
+        "/api/v2/help_center/categories/{category_id}/sections",
+        "/api/v2/help_center/sections",
+        "/api/v2/help_center/user_segments/{user_segment_id}/sections"
+      ]
+    },
+    {
+      "objectName": "service_catalog_items",
+      "listPath": "/api/v2/help_center/service_catalog/items",
+      "responseDataKey": "service_catalog_items",
+      "itemSchemaName": "ServiceCatalogItemObject",
+      "tags": [
+        "Service Catalog Items"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListAllServiceCatalogItems",
+      "score": 3,
+      "variants": [
+        "/api/v2/help_center/service_catalog/items",
+        "/api/v2/help_center/service_catalog/items/search"
+      ]
+    },
+    {
+      "objectName": "session",
+      "listPath": "/api/v2/users/me/session",
+      "responseDataKey": "session",
+      "itemSchemaName": "SessionObject",
+      "tags": [
+        "Sessions"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ShowCurrentlyAuthenticatedSession",
+      "score": 3,
+      "variants": [
+        "/api/v2/users/{user_id}/sessions/{session_id}",
+        "/api/v2/users/me/session"
+      ]
+    },
+    {
+      "objectName": "sessions",
+      "listPath": "/api/v2/sessions",
+      "responseDataKey": "sessions",
+      "itemSchemaName": "SessionObject",
+      "tags": [
+        "Sessions"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListSessions",
+      "score": 1,
+      "variants": [
+        "/api/v2/sessions",
+        "/api/v2/users/{user_id}/sessions"
+      ]
+    },
+    {
+      "objectName": "sharing_agreements",
+      "listPath": "/api/v2/sharing_agreements",
+      "responseDataKey": "sharing_agreements",
+      "itemSchemaName": "SharingAgreementObject",
+      "tags": [
+        "Sharing Agreements"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListSharingAgreements",
+      "score": 1,
+      "variants": [
+        "/api/v2/sharing_agreements"
+      ]
+    },
+    {
+      "objectName": "skips",
+      "listPath": "/api/v2/skips",
+      "responseDataKey": "skips",
+      "itemSchemaName": "TicketSkipObject",
+      "tags": [
+        "Ticket Skips"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListSkips",
+      "score": 1,
+      "variants": [
+        "/api/v2/skips",
+        "/api/v2/tickets/{ticket_id}/skips",
+        "/api/v2/users/{user_id}/skips"
+      ]
+    },
+    {
+      "objectName": "sla_policies",
+      "listPath": "/api/v2/slas/policies",
+      "responseDataKey": "sla_policies",
+      "itemSchemaName": "SLAPolicyObject",
+      "tags": [
+        "SLA Policies"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListSLAPolicies",
+      "score": 2,
+      "variants": [
+        "/api/v2/slas/policies"
+      ]
+    },
+    {
+      "objectName": "statuses",
+      "listPath": "/api/v2/it_asset_management/statuses",
+      "responseDataKey": "statuses",
+      "itemSchemaName": "ItamAssetStatus",
+      "tags": [
+        "ITAM Asset Statuses"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListItamStatuses",
+      "score": 2,
+      "variants": [
+        "/api/v2/channels/twitter/tickets/{comment_id}/statuses",
+        "/api/v2/it_asset_management/statuses"
+      ]
+    },
+    {
+      "objectName": "subscriptions",
+      "listPath": "/api/v2/community/posts/{post_id}/subscriptions",
+      "responseDataKey": "subscriptions",
+      "itemSchemaName": "ContentSubscriptionObject",
+      "tags": [
+        "Content Subscriptions"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": "posts",
+      "parentIdField": "post_id",
+      "hierarchyPath": "community/posts/{post_id}/subscriptions",
+      "operationId": "ListPostSubscriptions",
+      "score": 7,
+      "variants": [
+        "/api/v2/community/posts/{post_id}/subscriptions",
+        "/api/v2/community/topics/{topic_id}/subscriptions",
+        "/api/v2/help_center/{locale}/articles/{article_id}/subscriptions",
+        "/api/v2/help_center/{locale}/sections/{section_id}/subscriptions",
+        "/api/v2/help_center/articles/{article_id}/subscriptions",
+        "/api/v2/help_center/sections/{section_id}/subscriptions",
+        "/api/v2/help_center/users/{user_id}/subscriptions"
+      ]
+    },
+    {
+      "objectName": "suspended_tickets",
+      "listPath": "/api/v2/suspended_tickets",
+      "responseDataKey": "suspended_tickets",
+      "itemSchemaName": "SuspendedTicketObject",
+      "tags": [
+        "Suspended Tickets"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListSuspendedTickets",
+      "score": 1,
+      "variants": [
+        "/api/v2/suspended_tickets",
+        "/api/v2/suspended_tickets/{id}"
+      ]
+    },
+    {
+      "objectName": "tags",
+      "listPath": "/api/v2/tags",
+      "responseDataKey": "tags",
+      "itemSchemaName": "TagListTagObject",
+      "tags": [
+        "Tags"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTags",
+      "score": 1,
+      "variants": [
+        "/api/v2/autocomplete/tags",
+        "/api/v2/organizations/{organization_id}/tags",
+        "/api/v2/tags",
+        "/api/v2/tickets/{ticket_id}/tags",
+        "/api/v2/users/{user_id}/tags"
+      ]
+    },
+    {
+      "objectName": "target_failures",
+      "listPath": "/api/v2/target_failures",
+      "responseDataKey": "target_failures",
+      "itemSchemaName": "TargetFailureObject",
+      "tags": [
+        "Target Failures"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTargetFailures",
+      "score": 1,
+      "variants": [
+        "/api/v2/target_failures"
+      ]
+    },
+    {
+      "objectName": "targets",
+      "listPath": "/api/v2/targets",
+      "responseDataKey": "targets",
+      "itemSchemaName": "TargetObject",
+      "tags": [
+        "Targets"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTargets",
+      "score": 1,
+      "variants": [
+        "/api/v2/targets"
+      ]
+    },
+    {
+      "objectName": "task_list_templates",
+      "listPath": "/api/v2/task_list_templates",
+      "responseDataKey": "task_list_templates",
+      "itemSchemaName": "TaskListTemplateObject",
+      "tags": [
+        "Task List Templates"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTaskListTemplates",
+      "score": 1,
+      "variants": [
+        "/api/v2/task_list_templates"
+      ]
+    },
+    {
+      "objectName": "task_lists",
+      "listPath": "/api/v2/tickets/{ticket_id}/task_lists",
+      "responseDataKey": "task_lists",
+      "itemSchemaName": "TaskListObject",
+      "tags": [
+        "Task Lists"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "tickets",
+      "parentIdField": "ticket_id",
+      "hierarchyPath": "tickets/{ticket_id}/task_lists",
+      "operationId": "ShowTaskList",
+      "score": 6,
+      "variants": [
+        "/api/v2/tickets/{ticket_id}/task_lists"
+      ]
+    },
+    {
+      "objectName": "tasks",
+      "listPath": "/api/v2/task_list_templates/{task_list_template_id}/tasks",
+      "responseDataKey": "tasks",
+      "itemSchemaName": "TaskObject",
+      "tags": [
+        "Task List Templates"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "task_list_templates",
+      "parentIdField": "task_list_template_id",
+      "hierarchyPath": "task_list_templates/{task_list_template_id}/tasks",
+      "operationId": "GetTasksByTaskListTemplateId",
+      "score": 6,
+      "variants": [
+        "/api/v2/task_list_templates/{task_list_template_id}/tasks"
+      ]
+    },
+    {
+      "objectName": "ticket_content_pins",
+      "listPath": "/api/v2/ticket_content_pins",
+      "responseDataKey": "ticket_content_pins",
+      "itemSchemaName": "TicketContentPin",
+      "tags": [
+        "Ticket Content Pins"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTicketContentPins",
+      "score": 1,
+      "variants": [
+        "/api/v2/ticket_content_pins"
+      ]
+    },
+    {
+      "objectName": "ticket_events",
+      "listPath": "/api/v2/incremental/ticket_events",
+      "responseDataKey": "ticket_events",
+      "itemSchemaName": "TicketMetricEventBaseObject",
+      "tags": [
+        "Incremental Export"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "IncrementalTicketEvents",
+      "score": 12,
+      "variants": [
+        "/api/v2/incremental/ticket_events"
+      ]
+    },
+    {
+      "objectName": "ticket_fields",
+      "listPath": "/api/v2/ticket_fields",
+      "responseDataKey": "ticket_fields",
+      "itemSchemaName": "TicketFieldObject",
+      "tags": [
+        "Ticket Fields"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTicketFields",
+      "score": 1,
+      "variants": [
+        "/api/v2/ticket_fields",
+        "/api/v2/ticket_fields/show_many"
+      ]
+    },
+    {
+      "objectName": "ticket_form_statuses",
+      "listPath": "/api/v2/ticket_form_statuses",
+      "responseDataKey": "ticket_form_statuses",
+      "itemSchemaName": "TicketFormStatusObject",
+      "tags": [
+        "Ticket Form Statuses"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTicketFormStatuses",
+      "score": 1,
+      "variants": [
+        "/api/v2/ticket_form_statuses",
+        "/api/v2/ticket_form_statuses/show_many",
+        "/api/v2/ticket_forms/{ticket_form_id}/ticket_form_statuses"
+      ]
+    },
+    {
+      "objectName": "ticket_forms",
+      "listPath": "/api/v2/ticket_forms",
+      "responseDataKey": "ticket_forms",
+      "itemSchemaName": "TicketFormObject",
+      "tags": [
+        "Ticket Forms"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTicketForms",
+      "score": 1,
+      "variants": [
+        "/api/v2/ticket_forms",
+        "/api/v2/ticket_forms/show_many"
+      ]
+    },
+    {
+      "objectName": "ticket_metric",
+      "listPath": "/api/v2/ticket_metrics/{ticket_metric_id}",
+      "responseDataKey": "ticket_metric",
+      "itemSchemaName": "TicketMetricObject",
+      "tags": [
+        "Ticket Metrics"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "ticket_metrics",
+      "parentIdField": "ticket_metric_id",
+      "hierarchyPath": "ticket_metrics/{ticket_metric_id}",
+      "operationId": "ShowTicketMetrics",
+      "score": 5,
+      "variants": [
+        "/api/v2/ticket_metrics/{ticket_metric_id}",
+        "/api/v2/tickets/{ticket_id}/metrics"
+      ]
+    },
+    {
+      "objectName": "ticket_metric_events",
+      "listPath": "/api/v2/incremental/ticket_metric_events",
+      "responseDataKey": "ticket_metric_events",
+      "itemSchemaName": "TicketMetricEventBaseObject",
+      "tags": [
+        "Ticket Metric Events"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTicketMetricEvents",
+      "score": 12,
+      "variants": [
+        "/api/v2/incremental/ticket_metric_events"
+      ]
+    },
+    {
+      "objectName": "ticket_metrics",
+      "listPath": "/api/v2/ticket_metrics",
+      "responseDataKey": "ticket_metrics",
+      "itemSchemaName": "TicketMetricObject",
+      "tags": [
+        "Ticket Metrics"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTicketMetrics",
+      "score": 1,
+      "variants": [
+        "/api/v2/ticket_metrics"
+      ]
+    },
+    {
+      "objectName": "tickets",
+      "listPath": "/api/v2/tickets",
+      "responseDataKey": "tickets",
+      "itemSchemaName": "TicketObject",
+      "tags": [
+        "Tickets"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTickets",
+      "score": 1,
+      "variants": [
+        "/api/v2/incremental/{incremental_resource}/sample",
+        "/api/v2/incremental/tickets",
+        "/api/v2/incremental/tickets/cursor",
+        "/api/v2/organizations/{organization_id}/tickets",
+        "/api/v2/tickets",
+        "/api/v2/tickets/recent",
+        "/api/v2/tickets/show_many",
+        "/api/v2/users/{user_id}/tickets/assigned",
+        "/api/v2/users/{user_id}/tickets/ccd",
+        "/api/v2/users/{user_id}/tickets/followed",
+        "/api/v2/users/{user_id}/tickets/requested",
+        "/api/v2/views/{view_id}/tickets"
+      ]
+    },
+    {
+      "objectName": "tokens",
+      "listPath": "/api/v2/oauth/tokens",
+      "responseDataKey": "tokens",
+      "itemSchemaName": "OauthTokenObject",
+      "tags": [
+        "OAuth Tokens"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListOAuthTokens",
+      "score": 2,
+      "variants": [
+        "/api/v2/oauth/tokens"
+      ]
+    },
+    {
+      "objectName": "topics",
+      "listPath": "/api/v2/community/topics",
+      "responseDataKey": "topics",
+      "itemSchemaName": "TopicObject",
+      "tags": [
+        "Topics"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTopics",
+      "score": 2,
+      "variants": [
+        "/api/v2/community/topics",
+        "/api/v2/help_center/user_segments/{user_segment_id}/topics"
+      ]
+    },
+    {
+      "objectName": "translations",
+      "listPath": "/api/v2/help_center/articles/{article_id}/translations",
+      "responseDataKey": "translations",
+      "itemSchemaName": "TranslationObject",
+      "tags": [
+        "Translations"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": "articles",
+      "parentIdField": "article_id",
+      "hierarchyPath": "help_center/articles/{article_id}/translations",
+      "operationId": "ListTranslations",
+      "score": 7,
+      "variants": [
+        "/api/v2/help_center/articles/{article_id}/translations",
+        "/api/v2/help_center/categories/{category_id}/translations",
+        "/api/v2/help_center/sections/{section_id}/translations"
+      ]
+    },
+    {
+      "objectName": "trigger_categories",
+      "listPath": "/api/v2/trigger_categories",
+      "responseDataKey": "trigger_categories",
+      "itemSchemaName": null,
+      "tags": [
+        "Trigger Categories"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTriggerCategories",
+      "score": 1,
+      "variants": [
+        "/api/v2/trigger_categories"
+      ]
+    },
+    {
+      "objectName": "trigger_revisions",
+      "listPath": "/api/v2/triggers/{trigger_id}/revisions",
+      "responseDataKey": "trigger_revisions",
+      "itemSchemaName": null,
+      "tags": [
+        "Triggers"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "triggers",
+      "parentIdField": "trigger_id",
+      "hierarchyPath": "triggers/{trigger_id}/revisions",
+      "operationId": "ListTriggerRevisions",
+      "score": 6,
+      "variants": [
+        "/api/v2/triggers/{trigger_id}/revisions"
+      ]
+    },
+    {
+      "objectName": "triggers",
+      "listPath": "/api/v2/triggers",
+      "responseDataKey": "triggers",
+      "itemSchemaName": "TriggerObject",
+      "tags": [
+        "Triggers"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListTriggers",
+      "score": 1,
+      "variants": [
+        "/api/v2/custom_objects/{custom_object_key}/triggers",
+        "/api/v2/custom_objects/{custom_object_key}/triggers/active",
+        "/api/v2/custom_objects/{custom_object_key}/triggers/search",
+        "/api/v2/triggers",
+        "/api/v2/triggers/active",
+        "/api/v2/triggers/search"
+      ]
+    },
+    {
+      "objectName": "user_fields",
+      "listPath": "/api/v2/user_fields",
+      "responseDataKey": "user_fields",
+      "itemSchemaName": "UserFieldObject",
+      "tags": [
+        "User Fields"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListUserFields",
+      "score": 1,
+      "variants": [
+        "/api/v2/user_fields",
+        "/api/v2/user_fields/show_many"
+      ]
+    },
+    {
+      "objectName": "user_segments",
+      "listPath": "/api/v2/help_center/user_segments",
+      "responseDataKey": "user_segments",
+      "itemSchemaName": "UserSegmentObject",
+      "tags": [
+        "User Segments"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListUserSegments",
+      "score": 2,
+      "variants": [
+        "/api/v2/help_center/user_segments",
+        "/api/v2/help_center/user_segments/applicable",
+        "/api/v2/help_center/users/{user_id}/user_segments"
+      ]
+    },
+    {
+      "objectName": "user_subscriptions",
+      "listPath": "/api/v2/help_center/users/{user_id}/user_subscriptions",
+      "responseDataKey": "user_subscriptions",
+      "itemSchemaName": "UserSubscriptionObject",
+      "tags": [
+        "User Subscriptions"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": "users",
+      "parentIdField": "user_id",
+      "hierarchyPath": "help_center/users/{user_id}/user_subscriptions",
+      "operationId": "ListUserSubscriptionsByUserId",
+      "score": 7,
+      "variants": [
+        "/api/v2/help_center/users/{user_id}/user_subscriptions"
+      ]
+    },
+    {
+      "objectName": "users",
+      "listPath": "/api/v2/users",
+      "responseDataKey": "users",
+      "itemSchemaName": "UserObject",
+      "tags": [
+        "Users"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListUsers",
+      "score": 1,
+      "variants": [
+        "/api/v2/groups/{group_id}/users",
+        "/api/v2/incremental/users",
+        "/api/v2/incremental/users/cursor",
+        "/api/v2/organizations/{organization_id}/users",
+        "/api/v2/users",
+        "/api/v2/users/autocomplete",
+        "/api/v2/users/search",
+        "/api/v2/users/show_many"
+      ]
+    },
+    {
+      "objectName": "variants",
+      "listPath": "/api/v2/dynamic_content/items/{dynamic_content_item_id}/variants",
+      "responseDataKey": "variants",
+      "itemSchemaName": "DynamicContentVariantObject",
+      "tags": [
+        "Dynamic Content Item Variants"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": "items",
+      "parentIdField": "dynamic_content_item_id",
+      "hierarchyPath": "dynamic_content/items/{dynamic_content_item_id}/variants",
+      "operationId": "DynamicContentListVariants",
+      "score": 7,
+      "variants": [
+        "/api/v2/dynamic_content/items/{dynamic_content_item_id}/variants"
+      ]
+    },
+    {
+      "objectName": "view_counts",
+      "listPath": "/api/v2/views/count_many",
+      "responseDataKey": "view_counts",
+      "itemSchemaName": "ViewCountObject",
+      "tags": [
+        "Views"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "GetViewCounts",
+      "score": 12,
+      "variants": [
+        "/api/v2/views/count_many"
+      ]
+    },
+    {
+      "objectName": "views",
+      "listPath": "/api/v2/views",
+      "responseDataKey": "views",
+      "itemSchemaName": "ViewObject",
+      "tags": [
+        "Views"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListViews",
+      "score": 1,
+      "variants": [
+        "/api/v2/views",
+        "/api/v2/views/active",
+        "/api/v2/views/compact",
+        "/api/v2/views/search",
+        "/api/v2/views/show_many"
+      ]
+    },
+    {
+      "objectName": "votes",
+      "listPath": "/api/v2/help_center/votes",
+      "responseDataKey": "votes",
+      "itemSchemaName": "VoteObject",
+      "tags": [
+        "Votes"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/helpcenter-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListVotesNoUser",
+      "score": 2,
+      "variants": [
+        "/api/v2/community/posts/{post_id}/comments/{comment_id}/votes",
+        "/api/v2/community/posts/{post_id}/votes",
+        "/api/v2/help_center/{locale}/articles/{article_id}/comments/{comment_id}/votes",
+        "/api/v2/help_center/{locale}/articles/{article_id}/votes",
+        "/api/v2/help_center/articles/{article_id}/comments/{comment_id}/votes",
+        "/api/v2/help_center/articles/{article_id}/votes",
+        "/api/v2/help_center/users/{user_id}/votes",
+        "/api/v2/help_center/votes"
+      ]
+    },
+    {
+      "objectName": "workspaces",
+      "listPath": "/api/v2/workspaces",
+      "responseDataKey": "workspaces",
+      "itemSchemaName": "WorkspaceObject",
+      "tags": [
+        "Workspaces"
+      ],
+      "sourceFile": "packages/Integration/connectors-registry/zendesk/sources/ticketing-oas.json",
+      "parentObjectName": null,
+      "parentIdField": null,
+      "hierarchyPath": null,
+      "operationId": "ListWorkspaces",
+      "score": 1,
+      "variants": [
+        "/api/v2/workspaces"
+      ]
+    }
+  ],
+  "totalSchemas": 625,
+  "consumedAsLeafItemType": 101,
+  "ledgerCounts": {
+    "requestWrapper": 66,
+    "responseWrapper": 273,
+    "paramOrErrorOrMisc": 185
+  },
+  "ledger": {
+    "requestWrapper": [
+      "AccessRuleCreateRequest",
+      "AccessRuleUpdateRequest",
+      "ApprovalRequestCreateRequest",
+      "AttachmentUpdateRequest",
+      "BatchJobRequest",
+      "BookmarkCreateRequest",
+      "BrandCreateRequest",
+      "BrandUpdateRequest",
+      "BulkCreateGroupMembershipsRequest",
+      "BulkSkillBasedRoutingAttributeValuesRequest",
+      "BulkUpdateDefaultCustomStatusRequest",
+      "BulkUpdateDefaultCustomStatusResponse",
+      "CreateGroupMembershipRequest",
+      "CreateGroupRequest",
+      "CreateOrganizationRequest",
+      "CreateUserGroupMembershipRequest",
+      "CustomObjectFieldsCreateRequest",
+      "CustomObjectRecordAttachmentUpdateRequest",
+      "CustomObjectRecordsBulkCreateRequest",
+      "CustomObjectRecordsCreateRequest",
+      "CustomObjectRecordsUpsertRequest",
+      "CustomObjectsCreateRequest",
+      "CustomStatusCreateRequest",
+      "CustomStatusUpdateRequest",
+      "ItamAssetBulkJobRequest",
+      "ItamAssetCreateRequest",
+      "ItamAssetFieldCreateRequest",
+      "ItamAssetLocationCreateRequest",
+      "ItamAssetTypeCreateRequest",
+      "MacroUpdateManyInput",
+      "ObjectTriggerBulkUpdateItem",
+      "ObjectTriggerBulkUpdateRequest",
+      "ObjectTriggerRequest",
+      "OrganizationMergeRequest",
+      "OrganizationSubscriptionCreateRequest",
+      "PermissionPolicyUpdateRequest",
+      "PushNotificationDevicesRequest",
+      "TaskListCreateRequest",
+      "TaskListTemplateCreateRequest",
+      "TaskListTemplateUpdateRequest",
+      "TicketBulkImportRequest",
+      "TicketCreateRequest",
+      "TicketCreateVoicemailTicketRequest",
+      "TicketImportRequest",
+      "TicketUpdateRequest",
+      "TicketsCreateRequest",
+      "TicketsUpdateRequest",
+      "TriggerBatchRequest",
+      "TriggerBulkUpdateItem",
+      "TriggerBulkUpdateRequest",
+      "TriggerCategoryBatchRequest",
+      "TriggerCategoryRequest",
+      "TriggerWithCategoryRequest",
+      "UpdateGroupRequest",
+      "UserRequest",
+      "UserSettingsUpdateRequest",
+      "UserUpdateRequest",
+      "UsersRequest",
+      "ViewCategoryRequest",
+      "ArticleRequest",
+      "GenerativeAnswersFeedbackRequest",
+      "GenerativeAnswersKnowledgeActionsRequest",
+      "GenerativeAnswersKnowledgeRequest",
+      "KnowledgeQuickAnswersRequest",
+      "KnowledgeSuggestionsRequest",
+      "SectionPutRequest"
+    ],
+    "responseWrapper": [
+      "AccessRuleDefinitionsResponse",
+      "AccessRuleResponse",
+      "AccessRulesResponse",
+      "AccountSettingsResponse",
+      "ActivitiesCountResponse",
+      "ActivitiesResponse",
+      "ActivityResponse",
+      "ApprovalRequestSimpleResponse",
+      "ApprovalRequestsListResponse",
+      "AssigneeFieldAssignableGroupAgentsResponse",
+      "AssigneeFieldAssignableGroupsAndAgentsSearchResponse",
+      "AssigneeFieldAssignableGroupsResponse",
+      "AttachmentResponse",
+      "AttachmentUploadResponse",
+      "AuditLogResponse",
+      "AuditLogsResponse",
+      "AutomationResponse",
+      "AutomationsResponse",
+      "BatchJobResponse",
+      "BookmarkResponse",
+      "BookmarksResponse",
+      "BrandAgentResponse",
+      "BrandAgentsResponse",
+      "BrandResponse",
+      "BrandsResponse",
+      "ChannelFrameworkPushResultsResponse",
+      "ComplianceDeletionStatusesResponse",
+      "ConversationLogResponse",
+      "CountOrganizationResponse",
+      "CountResponse",
+      "CurrentUserResponse",
+      "CursorBasedExportIncrementalTicketsResponse",
+      "CursorBasedExportIncrementalUsersResponse",
+      "CustomFieldOptionResponse",
+      "CustomFieldOptionsResponse",
+      "CustomObjectFieldResponse",
+      "CustomObjectFieldsResponse",
+      "CustomObjectLimitsResponse",
+      "CustomObjectRecordAttachmentResponse",
+      "CustomObjectRecordAttachmentsResponse",
+      "CustomObjectRecordResponse",
+      "CustomObjectRecordsJobsResponse",
+      "CustomObjectRecordsResponse",
+      "CustomObjectResponse",
+      "CustomObjectsResponse",
+      "CustomRoleResponse",
+      "CustomRolesResponse",
+      "CustomStatusResponse",
+      "CustomStatusesResponse",
+      "DefinitionsResponse",
+      "DeletedUserResponse",
+      "DeletedUsersResponse",
+      "DynamicContentResponse",
+      "DynamicContentVariantResponse",
+      "DynamicContentVariantsResponse",
+      "DynamicContentsResponse",
+      "EmailNotificationResponse",
+      "EmailNotificationsResponse",
+      "EssentialsCardResponse",
+      "EssentialsCardsResponse",
+      "ExportIncrementalOrganizationsResponse",
+      "ExportIncrementalTicketEventsResponse",
+      "FeaturesResponse",
+      "GlobalClientResponse",
+      "GlobalClientsResponse",
+      "GlobalClientsTokenSummaryResponse",
+      "GroupMembershipResponse",
+      "GroupMembershipsResponse",
+      "GroupResponse",
+      "GroupSLAPoliciesResponse",
+      "GroupSLAPolicyFilterDefinitionResponse",
+      "GroupSLAPolicyResponse",
+      "GroupsResponse",
+      "IncrementalCustomObjectRecordsResponse",
+      "ItamAssetBulkJobResponse",
+      "ItamAssetFieldResponse",
+      "ItamAssetLocationResponse",
+      "ItamAssetLocationsResponse",
+      "ItamAssetResponse",
+      "ItamAssetStatusResponse",
+      "ItamAssetStatusesResponse",
+      "ItamAssetTypeFieldsResponse",
+      "ItamAssetTypeResponse",
+      "ItamAssetTypesResponse",
+      "ItamAssetsResponse",
+      "JobStatusResponse",
+      "JobStatusesResponse",
+      "ListDeletedTicketsResponse",
+      "ListTicketCollaboratorsResponse",
+      "ListTicketEmailCCsResponse",
+      "ListTicketFollowersResponse",
+      "ListTicketIncidentsResponse",
+      "ListTicketProblemsResponse",
+      "LocaleResponse",
+      "LocalesResponse",
+      "MacroApplyTicketResponse",
+      "MacroAttachmentResponse",
+      "MacroAttachmentsResponse",
+      "MacroCategoriesResponse",
+      "MacroResponse",
+      "MacrosResponse",
+      "ManySkillBasedRoutingAttributeValuesResponse",
+      "OAuthClientsResponse",
+      "OAuthTokenResponse",
+      "OAuthTokensResponse",
+      "OauthClientResponse",
+      "ObjectTriggerDefinitionResponse",
+      "ObjectTriggerResponse",
+      "ObjectTriggersResponse",
+      "OrganizationFieldResponse",
+      "OrganizationFieldsResponse",
+      "OrganizationMembershipResponse",
+      "OrganizationMembershipsResponse",
+      "OrganizationMergeListResponse",
+      "OrganizationMergeResponse",
+      "OrganizationResponse",
+      "OrganizationSubscriptionResponse",
+      "OrganizationSubscriptionsResponse",
+      "OrganizationsRelatedResponse",
+      "OrganizationsResponse",
+      "OtpSettingResponse",
+      "PermissionPoliciesResponse",
+      "PermissionPolicyResponse",
+      "QueueResponse",
+      "QueuesResponse",
+      "RecoverSuspendedTicketResponse",
+      "RecoverSuspendedTicketUnprocessableContentResponse",
+      "RecoverSuspendedTicketsResponse",
+      "RelationshipFilterDefinitionResponse",
+      "RemoteAuthenticationsResponse",
+      "RenewSessionResponse",
+      "RequestResponse",
+      "RequestsResponse",
+      "ResourceCollectionResponse",
+      "ResourceCollectionsResponse",
+      "ReverseLookupResponse",
+      "SLAPoliciesResponse",
+      "SLAPolicyFilterDefinitionResponse",
+      "SLAPolicyResponse",
+      "SatisfactionRatingResponse",
+      "SatisfactionRatingsCountResponse",
+      "SatisfactionRatingsResponse",
+      "SatisfactionReasonResponse",
+      "SatisfactionReasonsResponse",
+      "SavedSearchResponse",
+      "SavedSearchesResponse",
+      "SearchCountResponse",
+      "SearchExportResponse",
+      "SearchResponse",
+      "SecuritySettingsResponse",
+      "SessionResponse",
+      "SessionsResponse",
+      "SharingAgreementResponse",
+      "SharingAgreementsResponse",
+      "SkillBasedRoutingAttributeResponse",
+      "SkillBasedRoutingAttributeValueResponse",
+      "SkillBasedRoutingAttributeValuesResponse",
+      "SkillBasedRoutingAttributeValuesWithoutPriorityResponse",
+      "SkillBasedRoutingAttributesResponse",
+      "SkillBasedRoutingTicketFulfilledResponse",
+      "SupportAddressResponse",
+      "SupportAddressesResponse",
+      "SuspendedTicketResponse",
+      "SuspendedTicketsAttachmentsResponse",
+      "SuspendedTicketsExportResponse",
+      "SuspendedTicketsResponse",
+      "TagCountResponse",
+      "TagsByObjectIdResponse",
+      "TagsResponse",
+      "TargetFailureResponse",
+      "TargetFailuresResponse",
+      "TargetResponse",
+      "TargetsResponse",
+      "TaskListByTicketIdResponse",
+      "TaskListTemplateResponse",
+      "TaskListTemplatesResponse",
+      "TasksByTaskListTemplateIdResponse",
+      "TicketAuditResponse",
+      "TicketAuditsCountResponse",
+      "TicketAuditsResponse",
+      "TicketChatCommentRedactionResponse",
+      "TicketCommentResponse",
+      "TicketCommentsCountResponse",
+      "TicketCommentsResponse",
+      "TicketFieldCountResponse",
+      "TicketFieldResponse",
+      "TicketFieldsResponse",
+      "TicketFieldsShowManyResponse",
+      "TicketFormResponse",
+      "TicketFormStatusesResponse",
+      "TicketFormsResponse",
+      "TicketMetricEventsResponse",
+      "TicketMetricsByTicketMetricIdResponse",
+      "TicketMetricsResponse",
+      "TicketResponse",
+      "TicketSkipsResponse",
+      "TicketUpdateResponse",
+      "TicketsResponse",
+      "TimeBasedExportIncrementalTicketsResponse",
+      "TimeBasedExportIncrementalUsersResponse",
+      "TrialAccountResponse",
+      "TriggerCategoriesResponse",
+      "TriggerCategoryResponse",
+      "TriggerDefinitionResponse",
+      "TriggerResponse",
+      "TriggerRevisionResponse",
+      "TriggerRevisionsResponse",
+      "TriggersResponse",
+      "TwitterChannelResponse",
+      "TwitterChannelTwicketStatusResponse",
+      "TwitterChannelsResponse",
+      "UserEntitlementsFullResponse",
+      "UserFieldResponse",
+      "UserFieldsResponse",
+      "UserIdentitiesResponse",
+      "UserIdentityResponse",
+      "UserPasswordRequirementsResponse",
+      "UserRelatedResponse",
+      "UserResponse",
+      "UserSettingsResponse",
+      "UsersResponse",
+      "ViewCategoriesResponse",
+      "ViewCategoryResponse",
+      "ViewCountResponse",
+      "ViewCountsResponse",
+      "ViewExportResponse",
+      "ViewResponse",
+      "ViewsCountResponse",
+      "ViewsResponse",
+      "WorkspaceResponse",
+      "ArticleAttachmentResponse",
+      "ArticleAttachmentsResponse",
+      "ArticleResponse",
+      "ArticleSearchResponse",
+      "ArticlesResponse",
+      "BadRequestErrorResponse",
+      "CategoriesResponse",
+      "CategoryResponse",
+      "CommentResponse",
+      "CommentsResponse",
+      "CommunityPostSearchResponse",
+      "ContentSubscriptionsResponse",
+      "CreateUserImageResponse",
+      "DeflectionSuggestionsResponse",
+      "GenerativeAnswersHelpCenterResponse",
+      "GenerativeAnswersKnowledgeResponse",
+      "HelpCenterGenerativeSearchResponse",
+      "HelpCenterLocalesResponse",
+      "HelpCenterSessionResponse",
+      "KnowledgeQuickAnswersResponse",
+      "KnowledgeSuggestionsResponse",
+      "LabelResponse",
+      "LabelsResponse",
+      "LocalesWithDefaultResponse",
+      "PostCommentResponse",
+      "PostCommentsResponse",
+      "PostResponse",
+      "PostsResponse",
+      "RequestUserImageUploadResponse",
+      "SectionResponse",
+      "SectionsResponse",
+      "ServiceCatalogItemResponse",
+      "ServiceCatalogItemsResponse",
+      "SubscriptionResponse",
+      "TopicResponse",
+      "TopicsResponse",
+      "TranslationResponse",
+      "TranslationsResponse",
+      "UserSegmentResponse",
+      "UserSegmentsResponse",
+      "UserSubscriptionsResponse",
+      "VoteResponse",
+      "VotesResponse"
+    ],
+    "paramOrErrorOrMisc": [
+      "AccessRuleCondition",
+      "AccessRuleFieldDefinition",
+      "AccountSettingsActiveFeaturesObject",
+      "AccountSettingsAgentObject",
+      "AccountSettingsApiObject",
+      "AccountSettingsAppsObject",
+      "AccountSettingsBillingObject",
+      "AccountSettingsBrandingObject",
+      "AccountSettingsBrandsObject",
+      "AccountSettingsCdnObject",
+      "AccountSettingsChatObject",
+      "AccountSettingsCrossSellObject",
+      "AccountSettingsDeviceObject",
+      "AccountSettingsEmailObject",
+      "AccountSettingsGoogleAppsObject",
+      "AccountSettingsGroupObject",
+      "AccountSettingsKnowledgeObject",
+      "AccountSettingsLimitsObject",
+      "AccountSettingsLocalizationObject",
+      "AccountSettingsLotusObject",
+      "AccountSettingsMessageInactivityObject",
+      "AccountSettingsMetricsObject",
+      "AccountSettingsObject",
+      "AccountSettingsOnboardingObject",
+      "AccountSettingsRoutingObject",
+      "AccountSettingsRuleObject",
+      "AccountSettingsSideConversationsObject",
+      "AccountSettingsStatisticsObject",
+      "AccountSettingsTicketFormObject",
+      "AccountSettingsTicketObject",
+      "AccountSettingsTwitterObject",
+      "AccountSettingsUserObject",
+      "AccountSettingsVoiceObject",
+      "ActionObject",
+      "ActionsObject",
+      "ApprovalRequestError",
+      "ApprovalRequestErrors",
+      "ApprovalRequestObject",
+      "AssigneeFieldAssignableAgentObject",
+      "AssigneeFieldAssignableGroupObject",
+      "AssigneeFieldAssignableSearchAgentObject",
+      "AssigneeFieldAssignableSearchGroupObject",
+      "AttachmentBaseObject",
+      "AttachmentObject",
+      "AttachmentThumbnails",
+      "AttachmentUpdateInput",
+      "AuditObject",
+      "AuthorObject",
+      "BatchErrorItem",
+      "BookmarkInput",
+      "BulkSkillBasedRoutingAttributeValueJob",
+      "ChannelFrameworkResultObject",
+      "ChannelFrameworkResultStatusObject",
+      "CollaboratorObject",
+      "ConditionObject",
+      "ConditionsObject",
+      "CountOrganizationObject",
+      "CreateResourceResult",
+      "CursorPaginationMeta",
+      "CustomFieldObject",
+      "CustomObjectCreateInput",
+      "CustomObjectFieldPropertiesObject",
+      "CustomObjectRecordFilteredSearchCondition",
+      "CustomObjectRecordsFilteredSearchRequestBasic",
+      "CustomObjectRecordsFilteredSearchRequestComplex",
+      "CustomRoleConfigurationObject",
+      "CustomStatusCreateInput",
+      "CustomStatusUpdateInput",
+      "EmailCCObject",
+      "Error",
+      "Errors",
+      "EssentialsCardObject",
+      "FailedResult",
+      "FollowerObject",
+      "GroupSLAPolicyFilterConditionObject",
+      "GroupSLAPolicyFilterObject",
+      "GroupSLAPolicyMetricObject",
+      "GroupsCountObject",
+      "HostMappingObject",
+      "IncrementalSkillBasedRouting",
+      "IncrementalSkillBasedRoutingAttribute",
+      "IncrementalSkillBasedRoutingInstanceValue",
+      "ItamAssetFilteredSearchCondition",
+      "ItamAssetFilteredSearchRequestBasic",
+      "ItamAssetFilteredSearchRequestComplex",
+      "JobStatusResultObject",
+      "MacroCommonObject",
+      "MacroInput",
+      "OAuthTokenForGrantTypesObject",
+      "ObjectTriggerActionDefinitionObject",
+      "ObjectTriggerConditionDefinitionObjectAll",
+      "ObjectTriggerConditionDefinitionObjectAny",
+      "ObjectTriggerDefinitionObject",
+      "OffsetPaginationObject",
+      "OrganizationMetadataObject",
+      "OrganizationSubscriptionInput",
+      "Pagination",
+      "PermissionAction",
+      "PushNotificationDevicesInput",
+      "RecipientObject",
+      "RelationshipFilterDefinition",
+      "RoleAuthenticationObject",
+      "SLAPolicyFilterConditionObject",
+      "SLAPolicyFilterObject",
+      "SLAPolicyMetricObject",
+      "SavedSearchError",
+      "SavedSearchInput",
+      "SavedSearchValidationError",
+      "SecuritySettingsObject",
+      "SharingAgreementInput",
+      "SkillBasedRoutingAttributeDefinitions",
+      "SkillBasedRoutingAttributeValuesError",
+      "SystemFieldOptionObject",
+      "TagCountObject",
+      "TagUrlObject",
+      "TargetBasecamp",
+      "TargetCampfire",
+      "TargetClickatell",
+      "TargetCommonFields",
+      "TargetEmail",
+      "TargetFlowdock",
+      "TargetGetSatisfaction",
+      "TargetHTTP",
+      "TargetJira",
+      "TargetPivotal",
+      "TargetTwitter",
+      "TargetURL",
+      "TargetYammer",
+      "TicketAuditViaObject",
+      "TicketAuditsResponseNoneCursor",
+      "TicketCreateVoicemailTicketInput",
+      "TicketCreateVoicemailTicketVoiceCommentInput",
+      "TicketFieldCustomStatusObject",
+      "TicketFieldValueInput",
+      "TicketFormStatusesCreateParams",
+      "TicketFormStatusesParams",
+      "TicketFormStatusesUpdateParams",
+      "TicketImportInput",
+      "TicketMergeInput",
+      "TicketMetricEventBreachObject",
+      "TicketMetricEventGroupSLAObject",
+      "TicketMetricEventSLAObject",
+      "TicketMetricEventUpdateStatusObject",
+      "TicketMetricTimeObject",
+      "TicketPriorityEnum",
+      "TicketRelatedInformation",
+      "TicketSkipCreation",
+      "TrialAccountObject",
+      "TriggerActionDefinitionObject",
+      "TriggerActionDiffObject",
+      "TriggerActionObject",
+      "TriggerCategory",
+      "TriggerCategoryId",
+      "TriggerCategoryRequestRequired",
+      "TriggerCategoryRuleCounts",
+      "TriggerChangeObject",
+      "TriggerConditionDefinitionObjectAll",
+      "TriggerConditionDefinitionObjectAny",
+      "TriggerConditionDiffObject",
+      "TriggerConditionObject",
+      "TriggerConditionsDiffObject",
+      "TriggerConditionsObject",
+      "TriggerDefinitionObject",
+      "TriggerSnapshotObject",
+      "UpdateResourceResult",
+      "UpdateTicketFormStatusesParams",
+      "UrlObject",
+      "UserCreateInput",
+      "UserEntitlementObject",
+      "UserForAdmin",
+      "UserForEndUser",
+      "UserIdentityInput",
+      "UserInput",
+      "UserMergeInput",
+      "UserRelatedObject",
+      "UserUpdateInput",
+      "ViaObject",
+      "ViewCategory",
+      "ViewCategoryError",
+      "ViewCategoryErrors",
+      "ViewCategoryRequestRequired",
+      "WorkspaceInput",
+      "HelpCenterSessionObject",
+      "SearchObject",
+      "UnifiedSearchResultSet"
+    ]
+  }
+}

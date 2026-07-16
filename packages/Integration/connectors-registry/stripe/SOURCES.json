@@ -1,0 +1,120 @@
+{
+  "Vendor": "Stripe",
+  "GeneratedAt": "2026-07-02T19:57:32.000Z",
+  "Sources": [
+    {
+      "Rank": 1,
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.sdk.json",
+      "CanonicalGitHubURL": "https://github.com/stripe/openapi/blob/master/openapi/spec3.sdk.json",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "LocalRawFilePath": "packages/Integration/connectors-registry/stripe/sources/spec3.sdk.json",
+      "FileSizeBytes": 10059776,
+      "FormatVersion": "OpenAPI 3.0.0, Stripe API version 2026-06-24.dahlia",
+      "Notes": "The SDK variant of Stripe's official OpenAPI spec — richer than spec3.json (1703 vs 1431 object schemas; includes preview/deprecated/internal-annotated shapes used to generate stripe-node/stripe-python). This is the HIGHEST-authority machine-readable contract: 414 paths, 1703 component schemas, 106 detected FK fields via the x-expansionResources vendor extension. Used as the enumeration universe |E| for the accounting ledger.",
+      "CoversTaxonomies": [
+        "Core Payments", "Billing & Subscriptions", "Connect (Accounts/Persons/Capabilities)",
+        "Checkout & Payment Links", "Products & Pricing", "Balance & Money Movement",
+        "Customer & Payment Methods", "Events & Webhooks (object model)", "Tokens & Sources (legacy)"
+      ]
+    },
+    {
+      "Rank": 2,
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "CanonicalGitHubURL": "https://github.com/stripe/openapi/blob/master/openapi/spec3.json",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "LocalRawFilePath": "packages/Integration/connectors-registry/stripe/sources/spec3.json",
+      "FileSizeBytes": 7866866,
+      "FormatVersion": "OpenAPI 3.0.0, Stripe API version 2026-06-24.dahlia",
+      "Notes": "The PUBLIC variant of Stripe's official OpenAPI spec (414 paths, 1431 component schemas). Used as the primary source for CRUD path/method/body-shape extraction (the SDK variant's extra 272 schemas are mostly preview/internal annotations not relevant to public path derivation). Cross-validated against spec3.sdk.json — identical path structure for all in-scope objects.",
+      "CoversTaxonomies": [
+        "Core Payments", "Billing & Subscriptions", "Connect (Accounts/Persons/Capabilities)",
+        "Checkout & Payment Links", "Products & Pricing", "Balance & Money Movement",
+        "Customer & Payment Methods", "Events & Webhooks (object model)", "Tokens & Sources (legacy)"
+      ]
+    },
+    {
+      "Rank": 3,
+      "URL": "https://raw.githubusercontent.com/stripe/stripe-postman/master/StripeAPICollection.json",
+      "CanonicalGitHubURL": "https://github.com/stripe/stripe-postman",
+      "PublicWorkspaceURL": "https://www.postman.com/stripedev/workspace/stripe-developers",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "PostmanCollection",
+      "LocalRawFilePath": "packages/Integration/connectors-registry/stripe/sources/postman.collection.json",
+      "FileSizeBytes": 3649708,
+      "Notes": "Official Stripe-maintained Postman collection (stripe/stripe-postman GitHub repo, mirrored into the public postman.com/stripedev workspace). 107 top-level folders that map closely onto Stripe's own product-line taxonomy (Treasury, Issuing, Radar, Terminal, Identity, Billing Meters, etc.) — used as a STRUCTURAL corroboration of the path-prefix taxonomy derived from the OpenAPI spec, not as the primary path source (its request URLs use structured {path,host,variable} objects without a `raw` field, which the shared enumerate-catalog.mjs Postman parser does not read — see AccessNotes).",
+      "CoversTaxonomies": [
+        "Core Payments", "Billing & Subscriptions", "Connect (Accounts/Persons/Capabilities)",
+        "Checkout & Payment Links", "Products & Pricing"
+      ],
+      "AccessNotes": "Fetched directly via curl from the raw GitHub content URL (not the postman.com HTML page, which requires a logged-in session to export). The generic enumerate-catalog.mjs Postman-format parser returned 'unrecognized' (0 records) because this collection's request.url objects carry structured {path, host, variable} fields with no top-level `raw` string — a real limitation of the shared enumerator's fromPostman() function for this URL shape, not a fetch failure. Manual path-segment extraction (ad hoc script) confirms ~240 resource path segments consistent with the OpenAPI spec's object set. Not blocking: the OpenAPI spec (Rank 1/2) is the higher-fidelity, primary source for the object catalog; this collection corroborates it."
+    },
+    {
+      "Rank": 4,
+      "URL": "https://docs.stripe.com/api",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Notes": "The prose API reference (docs.stripe.com/api/*). Rendered as a client-side SPA — WebFetch returns only the intro/overview text, not the full per-object reference (JS-rendered content is not visible to a static fetch). Used successfully for TARGETED sub-pages that ARE server-rendered prose (pagination, idempotency, rate-limits — see Ranks 5-7 below), never for bulk object/field enumeration. The OpenAPI spec is authoritative for the object catalog; these docs are authoritative for cross-cutting API MECHANICS (pagination, auth, idempotency, rate limits, errors) that are not encoded in the spec's structural shape.",
+      "CoversTaxonomies": ["API Mechanics (INFORMATIONAL)"]
+    },
+    {
+      "Rank": 5,
+      "URL": "https://docs.stripe.com/api/pagination",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "Notes": "Confirms cursor pagination contract: limit (default 10, range 1-100), starting_after / ending_before (mutually exclusive), response envelope {object:'list', data:[], has_more, url}. Cross-validated against the OpenAPI spec's per-endpoint `limit` parameter description text (verbatim identical across all 30 list endpoints checked) and against stripe-node's autoPagination.ts implementation.",
+      "TargetFields": ["io.*.PaginationType", "io.*.Configuration.limitMax", "io.*.Configuration.limitDefault"]
+    },
+    {
+      "Rank": 6,
+      "URL": "https://docs.stripe.com/api/idempotent_requests",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "Notes": "Confirms Idempotency-Key header (all POST requests only, 24h server-side cache, parameter-consistency validation on replay).",
+      "TargetFields": ["integration.Configuration.idempotencySupport"]
+    },
+    {
+      "Rank": 7,
+      "URL": "https://docs.stripe.com/rate-limits",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "Notes": "Confirms rate limits: 100 req/s (live mode), 25 req/s (sandbox/test mode) per Stripe account; 429 + Stripe-Rate-Limited-Reason header on violation; several per-resource overrides (Payment Intents 1000 updates/hr, Payouts 15 create/s, Files API 20 read+write/s).",
+      "TargetFields": ["integration.BatchMaxRequestCount", "integration.Configuration.rateLimitPolicy"]
+    },
+    {
+      "Rank": 8,
+      "URL": "https://github.com/stripe/stripe-node",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialSDK",
+      "LocalRawFilePath": "packages/Integration/connectors-registry/stripe/sources/autopagination.ts",
+      "Notes": "Official TypeScript SDK, code-generated FROM the OpenAPI spec (per its OPENAPI_VERSION/CODEGEN_VERSION files — a downstream artifact, not an independent source of truth, but valuable as INDEPENDENT CORROBORATION of the spec's declared shapes). 101 top-level resource modules under src/resources/ (folder names Billing/, Checkout/, Climate/, Entitlements/, Issuing/, Terminal/, Treasury/ corroborate the product-line taxonomy). autoPagination.ts confirms the exact has_more/starting_after/ending_before cursor mechanics read from the spec.",
+      "CoversTaxonomies": ["Core Payments (type corroboration)", "Product-line taxonomy corroboration"]
+    },
+    {
+      "Rank": 9,
+      "URL": "https://github.com/stripe/stripe-python",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialSDK",
+      "Notes": "Official Python SDK, also code-generated from the same OpenAPI spec family. Not separately fetched in full (would be redundant with stripe-node's confirmation that both SDKs are spec-derived) — listed for downstream extractor awareness as an available Tier-2 cross-check source if stripe-node coverage is ever found insufficient for a given field's type.",
+      "CoversTaxonomies": ["Core Payments (type corroboration, not independently fetched)"]
+    }
+  ],
+  "OutOfScopeButAuthoritativeSources": [
+    {
+      "Note": "Community/API-evangelist blog commentary (e.g. apievangelist.com Stripe retrospective, gist.github.com/fnky ID-prefix list) surfaced during discovery. Explicitly NOT used as evidence for any hard constraint — Tier-3 community sources, and in the ID-prefix case Stripe's own docs state there is NO canonical/contractual list of ID prefixes (see SOURCE_STUDY.md idiosyncrasy notes). Retained here only for audit-trail completeness of what was found and rejected."
+    }
+  ]
+}

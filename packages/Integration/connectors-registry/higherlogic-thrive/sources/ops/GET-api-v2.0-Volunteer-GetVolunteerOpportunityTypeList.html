@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/Volunteer/GetVolunteerOpportunityTypeList</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/Volunteer/GetVolunteerOpportunityTypeList</h1>
+<div>
+    <p>Returns a list of Volunteer Opportunity Types.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p></p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=VolunteerOpportunityType">VolunteerOpportunityType</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">VolunteerOpportunityTypeKey</td>
+                    <td class="parameter-documentation">
+                        <p>The Unique Identifier for the Volunteer Opportunity Type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">VolunteerOpportunityTypeName</td>
+                    <td class="parameter-documentation">
+                        <p>The Title of the Volunteer Opportunity Type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsActive</td>
+                    <td class="parameter-documentation">
+                        <p>Indicates whether or not the Volunteer Opportunity Type can be used.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsRsvp</td>
+                    <td class="parameter-documentation">
+                        <p>Indicates whether or not you must RSVP to Volunteer Opportunities Under this Volunteer Opportunity Type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AcceptNominations</td>
+                    <td class="parameter-documentation">
+                        <p>Indicates if you are able to accept nominations under this type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsVirtual</td>
+                    <td class="parameter-documentation">
+                        <p>Indicates if the Volunteer Opportunities under this type are held online.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;VolunteerOpportunityTypeKey&quot;: &quot;2e44e091-2cb8-4d0d-b8bf-32af96bc6968&quot;,
+    &quot;VolunteerOpportunityTypeName&quot;: &quot;sample string 2&quot;,
+    &quot;IsActive&quot;: true,
+    &quot;IsRsvp&quot;: true,
+    &quot;AcceptNominations&quot;: true,
+    &quot;IsVirtual&quot;: true
+  },
+  {
+    &quot;VolunteerOpportunityTypeKey&quot;: &quot;2e44e091-2cb8-4d0d-b8bf-32af96bc6968&quot;,
+    &quot;VolunteerOpportunityTypeName&quot;: &quot;sample string 2&quot;,
+    &quot;IsActive&quot;: true,
+    &quot;IsRsvp&quot;: true,
+    &quot;AcceptNominations&quot;: true,
+    &quot;IsVirtual&quot;: true
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfVolunteerOpportunityType xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Volunteer&quot;&gt;
+  &lt;VolunteerOpportunityType&gt;
+    &lt;AcceptNominations&gt;true&lt;/AcceptNominations&gt;
+    &lt;IsActive&gt;true&lt;/IsActive&gt;
+    &lt;IsRsvp&gt;true&lt;/IsRsvp&gt;
+    &lt;IsVirtual&gt;true&lt;/IsVirtual&gt;
+    &lt;VolunteerOpportunityTypeKey&gt;2e44e091-2cb8-4d0d-b8bf-32af96bc6968&lt;/VolunteerOpportunityTypeKey&gt;
+    &lt;VolunteerOpportunityTypeName&gt;sample string 2&lt;/VolunteerOpportunityTypeName&gt;
+  &lt;/VolunteerOpportunityType&gt;
+  &lt;VolunteerOpportunityType&gt;
+    &lt;AcceptNominations&gt;true&lt;/AcceptNominations&gt;
+    &lt;IsActive&gt;true&lt;/IsActive&gt;
+    &lt;IsRsvp&gt;true&lt;/IsRsvp&gt;
+    &lt;IsVirtual&gt;true&lt;/IsVirtual&gt;
+    &lt;VolunteerOpportunityTypeKey&gt;2e44e091-2cb8-4d0d-b8bf-32af96bc6968&lt;/VolunteerOpportunityTypeKey&gt;
+    &lt;VolunteerOpportunityTypeName&gt;sample string 2&lt;/VolunteerOpportunityTypeName&gt;
+  &lt;/VolunteerOpportunityType&gt;
+&lt;/ArrayOfVolunteerOpportunityType&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

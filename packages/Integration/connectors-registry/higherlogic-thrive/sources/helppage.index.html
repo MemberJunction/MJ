@@ -1,0 +1,1789 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Higher Logic API v2.0</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<header class="help-page">
+    <div class="content-wrapper">
+        <div class="float-left">
+            <h1>Higher Logic API v2.0</h1>
+        </div>
+    </div>
+</header>
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <h2>Higher Logic API Endpoint Documentation</h2>
+            <p>
+                Click on a specific Endpoint to see examples of Request and Response data and formatting.
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+
+
+<h2 id="Announcements">Announcements</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Announcements-GetAnnouncements_announcementTypeFilter_communityKey_micrositeGroupTypeRouteDesignKey_sortOrder_maxResults_includeAnnouncementsWithNoType">GET api/v2.0/Announcements/GetAnnouncements?announcementTypeFilter={announcementTypeFilter}&amp;communityKey={communityKey}&amp;micrositeGroupTypeRouteDesignKey={micrositeGroupTypeRouteDesignKey}&amp;sortOrder={sortOrder}&amp;maxResults={maxResults}&amp;includeAnnouncementsWithNoType={includeAnnouncementsWithNoType}</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of Announcements given the specified criteria.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Announcements-GetAnnouncement_announcementKey">GET api/v2.0/Announcements/GetAnnouncement?announcementKey={announcementKey}</a></td>
+            <td class="api-documentation">
+                <p>Returns the details of the specified Announcement.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Answer">Answer</h2>
+    <p>Operations to return Answer-related information. 
+            These endpoints will be used for altering or modifying fields related to answers only.
+            This does not include publishing an answer since that is question-dependent.</p>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Answer-Recommend_answerKey">POST api/v2.0/Answer/Recommend?answerKey={answerKey}</a></td>
+            <td class="api-documentation">
+                <p>Acts as a toggle for recommending an answer. A POST request will recommend while DELETE will remove the recommendation. 
+            An answer recommendation refers to the answer being &quot;Helpful&quot; in a Q and A thread.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Answer-Recommend_answerKey">DELETE api/v2.0/Answer/Recommend?answerKey={answerKey}</a></td>
+            <td class="api-documentation">
+                <p>Acts as a toggle for recommending an answer. A POST request will recommend while DELETE will remove the recommendation. 
+            An answer recommendation refers to the answer being &quot;Helpful&quot; in a Q and A thread.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Answer-Get_answerKey">GET api/v2.0/Answer/Get?answerKey={answerKey}</a></td>
+            <td class="api-documentation">
+                <p>Returns the details of the specified Answer.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Answer-Delete_answerKey">DELETE api/v2.0/Answer/Delete?answerKey={answerKey}</a></td>
+            <td class="api-documentation">
+                <p>Administrator-only endpoint to delete the specified answer.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Answer-Edit">POST api/v2.0/Answer/Edit</a></td>
+            <td class="api-documentation">
+                <p>Edit an existing answer</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Authentication">Authentication</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Authentication-Login">POST api/v2.0/Authentication/Login</a></td>
+            <td class="api-documentation">
+                <p>Generates a Authentication Token for the user with the specified credentials.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Authentication-GetTenantDetail_communityUrl">GET api/v2.0/Authentication/GetTenantDetail?communityUrl={communityUrl}</a></td>
+            <td class="api-documentation">
+                <p>Returns information about a Tenant for a given Connected Community Site Url.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Authentication-Widget">POST api/v2.0/Authentication/Widget</a></td>
+            <td class="api-documentation">
+                <p>Used to Authenticate to the Widgets Platform</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="AutomationRules">AutomationRules</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-AutomationRules-GetActiveRulesByType">GET api/v2.0/AutomationRules/GetActiveRulesByType</a></td>
+            <td class="api-documentation">
+                <p>Retrieves a list of Automation Rules and associated data.  Accessible only by Admin Users.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-AutomationRules-GetContactsByRuleScheduleKey_ruleScheduleKey_integrationId">GET api/v2.0/AutomationRules/GetContactsByRuleScheduleKey?ruleScheduleKey={ruleScheduleKey}&amp;integrationId={integrationId}</a></td>
+            <td class="api-documentation">
+                <p>Retrieves a list of Contacts for which the specified RuleSchedule applies.  Accessible only by Admin Users.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-AutomationRules-GetContactData_ruleScheduleKey_maxRecords_continuationToken_fieldList">GET api/v2.0/AutomationRules/GetContactData?ruleScheduleKey={ruleScheduleKey}&amp;maxRecords={maxRecords}&amp;continuationToken={continuationToken}&amp;fieldList={fieldList}</a></td>
+            <td class="api-documentation">
+                <p>Returns a page of the requested Contact Data fields.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-AutomationRules-GetContactDataFields">GET api/v2.0/AutomationRules/GetContactDataFields</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of field names that can be requested via the GetContactData() Endpoint.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-AutomationRules-GetContactDataSubsetByRuleScheduleKey_ruleScheduleKey_integrationId">GET api/v2.0/AutomationRules/GetContactDataSubsetByRuleScheduleKey?ruleScheduleKey={ruleScheduleKey}&amp;integrationId={integrationId}</a></td>
+            <td class="api-documentation">
+                <p>Returns the requested subset of Contact Data.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Blogs">Blogs</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Blogs-GetLatestEntries">POST api/v2.0/Blogs/GetLatestEntries</a></td>
+            <td class="api-documentation">
+                <p>Retrieves the Blog Entries that meet the filter conditions.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Blogs-GetBlogEntriesByGrouping_groupingType_maxRecords">GET api/v2.0/Blogs/GetBlogEntriesByGrouping?groupingType={groupingType}&amp;maxRecords={maxRecords}</a></td>
+            <td class="api-documentation">
+                <p>Retrieves Blog Entries by the specified GroupingType.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Blogs-CreateBlog">POST api/v2.0/Blogs/CreateBlog</a></td>
+            <td class="api-documentation">
+                <p>Create a new Blog.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Blogs-PublishBlog_blogKey">POST api/v2.0/Blogs/PublishBlog?blogKey={blogKey}</a></td>
+            <td class="api-documentation">
+                <p>Publishes a previously Saved Blog.  If the Blog has already been Published, no changes are made.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Blogs-UpdateBlog_blogKey">POST api/v2.0/Blogs/UpdateBlog?blogKey={blogKey}</a></td>
+            <td class="api-documentation">
+                <p>Update a Blog&#39;s Title, Text, Comment Permissions, View Permissions and Associated Community.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Blogs-AddRelatedLink_blogKey">POST api/v2.0/Blogs/AddRelatedLink?blogKey={blogKey}</a></td>
+            <td class="api-documentation">
+                <p>Adds the specified URL as a RelatedLink to the specified Blog.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Blogs-GetBlogsByContactKey_contactKey">GET api/v2.0/Blogs/GetBlogsByContactKey?contactKey={contactKey}</a></td>
+            <td class="api-documentation">
+                <p>Retrieves all Published Blog Entries created by the Member with the specified ContactKey.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Blogs-GetBlog_blogKey">GET api/v2.0/Blogs/GetBlog?blogKey={blogKey}</a></td>
+            <td class="api-documentation">
+                <p>Retrieves the specified Blog by its key.  If the specified key does not match an existing BlogKey, no results will be returned.
+            If the User making the request does not have view permissions for the specified Blog, no results will be returned.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Blogs-RecommendBlog_blogKey">POST api/v2.0/Blogs/RecommendBlog?blogKey={blogKey}</a></td>
+            <td class="api-documentation">
+                <p>Adds a recommendation for the specified Blog.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Blogs-DeleteBlogRecommendation_blogKey">DELETE api/v2.0/Blogs/DeleteBlogRecommendation?blogKey={blogKey}</a></td>
+            <td class="api-documentation">
+                <p>Removes a previously made recommendation.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Blogs-DeleteBlog_blogKey">DELETE api/v2.0/Blogs/DeleteBlog?blogKey={blogKey}</a></td>
+            <td class="api-documentation">
+                <p>Deletes a Blog.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Blogs-AddComment_blogKey">POST api/v2.0/Blogs/AddComment?blogKey={blogKey}</a></td>
+            <td class="api-documentation">
+                <p>Add a new Comment to a Blog.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Blogs-UpdateComment_blogCommentKey">POST api/v2.0/Blogs/UpdateComment?blogCommentKey={blogCommentKey}</a></td>
+            <td class="api-documentation">
+                <p>Updates the specified Blog Comment with new Comment Text.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Blogs-DeleteRelatedLink_relatedResourceKey">DELETE api/v2.0/Blogs/DeleteRelatedLink?relatedResourceKey={relatedResourceKey}</a></td>
+            <td class="api-documentation">
+                <p>Deletes the specified RelatedLink.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Blogs-DeleteComment_blogCommentKey">DELETE api/v2.0/Blogs/DeleteComment?blogCommentKey={blogCommentKey}</a></td>
+            <td class="api-documentation">
+                <p>Deletes the specified Blog Comment.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Comments">Comments</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Comments-Get_itemKey_limit">GET api/v2.0/Comments/Get?itemKey={itemKey}&amp;limit={limit}</a></td>
+            <td class="api-documentation">
+                <p>This will return a collection of comments for a particular item on the site. The content types that can have comments associated to it
+            are Blogs, Documents, and Events</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Comments-Get_commentKey">GET api/v2.0/Comments/Get?commentKey={commentKey}</a></td>
+            <td class="api-documentation">
+                <p>Returns the details of the specified Comment.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Comments-GetComments_afterCommentKey_beforeCommentKey_limit">GET api/v2.0/Comments/GetComments?afterCommentKey={afterCommentKey}&amp;beforeCommentKey={beforeCommentKey}&amp;limit={limit}</a></td>
+            <td class="api-documentation">
+                <p>This will retrieve a paginated set of comments based on the commentKey provided. Using the afterCommentKey is recommended when continuing
+            the default order of comments provided by the Get endpoint or other various endpoints. Either the afterCommentKey or the beforeCommentKey must be provided.
+            If both keys are put in the request, the afterAnswerKey will take precedence.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Communities">Communities</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Communities-Get_communityKey">GET api/v2.0/Communities/Get?communityKey={communityKey}</a></td>
+            <td class="api-documentation">
+                <p>Given the unique identifier of a specific community, this make sure that the current user can view the community, and return
+            information pertaining to that community.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Communities-GetMyCommunities_includeStatistics_includeHiddenCommunities">GET api/v2.0/Communities/GetMyCommunities?includeStatistics={includeStatistics}&amp;includeHiddenCommunities={includeHiddenCommunities}</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of the Current User&#39;s joined Communities.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Communities-GetContactCommunities_contactKey_legacyContactKey">GET api/v2.0/Communities/GetContactCommunities?contactKey={contactKey}&amp;legacyContactKey={legacyContactKey}</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of the specified User&#39;s joined Communities that the current user can view.  If both a ContactKey and LegacyContactKey are specified,
+            the ContactKey will be used.  If neither parameter is specified, an error will be returned.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Communities-GetViewableCommunities_includeStatistics">GET api/v2.0/Communities/GetViewableCommunities?includeStatistics={includeStatistics}</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of Communities the Current User can see.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Communities-GetCommunitiesCanContribute_includeStatistics">GET api/v2.0/Communities/GetCommunitiesCanContribute?includeStatistics={includeStatistics}</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of Communities where the Current User can contribute discussions/messages.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Communities-GetCommunitiesICanJoin_includeStatistics">GET api/v2.0/Communities/GetCommunitiesICanJoin?includeStatistics={includeStatistics}</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of Communities the Current User is not a member of, but is eligible to join.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Communities-GetMyCommunityInvitations">GET api/v2.0/Communities/GetMyCommunityInvitations</a></td>
+            <td class="api-documentation">
+                <p>Retrieve all Community Invitations.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Communities-GetCommunityMembers">POST api/v2.0/Communities/GetCommunityMembers</a></td>
+            <td class="api-documentation">
+                <p>Retrieve a list of Members of the specified Community in LastName, FirstName order.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Communities-InviteToCommunity_contactKey_communityKey">POST api/v2.0/Communities/InviteToCommunity?contactKey={contactKey}&amp;communityKey={communityKey}</a></td>
+            <td class="api-documentation">
+                <p>Allows the Current User to invite a specified Contact to a specified Community.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Communities-JoinCommunity_communityKey">POST api/v2.0/Communities/JoinCommunity?communityKey={communityKey}</a></td>
+            <td class="api-documentation">
+                <p>Joins the current user to the Community identified by the specified Community Key.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Communities-AcceptInvitation">POST api/v2.0/Communities/AcceptInvitation</a></td>
+            <td class="api-documentation">
+                <p>Accept an invitation to a Community.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Communities-RejectInvitation_communityInvitationKey">DELETE api/v2.0/Communities/RejectInvitation?communityInvitationKey={communityInvitationKey}</a></td>
+            <td class="api-documentation">
+                <p>Reject an Invite to a Community.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Communities-LeaveCommunity_communityKey">DELETE api/v2.0/Communities/LeaveCommunity?communityKey={communityKey}</a></td>
+            <td class="api-documentation">
+                <p>Removes the Current Contact from the specified Community.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Contacts">Contacts</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Contacts-WhoAmI_includeSecurityGroups">POST api/v2.0/Contacts/WhoAmI?includeSecurityGroups={includeSecurityGroups}</a></td>
+            <td class="api-documentation">
+                <p>Returns information about the Currently Authenticated User.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Contacts-GetWhoAmI_includeSecurityGroups">GET api/v2.0/Contacts/GetWhoAmI?includeSecurityGroups={includeSecurityGroups}</a></td>
+            <td class="api-documentation">
+                <p>Returns information about the Currently Authenticated User.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Contacts-GetContact_contactKey_includeSecurityGroups">GET api/v2.0/Contacts/GetContact?contactKey={contactKey}&amp;includeSecurityGroups={includeSecurityGroups}</a></td>
+            <td class="api-documentation">
+                <p>Returns Contact information for the specified contactKey.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Contacts-GetContact_legacyContactKey_includeSecurityGroups">GET api/v2.0/Contacts/GetContact?legacyContactKey={legacyContactKey}&amp;includeSecurityGroups={includeSecurityGroups}</a></td>
+            <td class="api-documentation">
+                <p>Returns Contact information for the specified legacyContactKey.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Contacts-GetMyContacts">GET api/v2.0/Contacts/GetMyContacts</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of Contacts that are Friends of the Current User.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Contacts-GetMyContactsPage_afterContactKey_beforeContactKey_limit">GET api/v2.0/Contacts/GetMyContactsPage?afterContactKey={afterContactKey}&amp;beforeContactKey={beforeContactKey}&amp;limit={limit}</a></td>
+            <td class="api-documentation">
+                <p>If no afterContactKey or beforeContactKey is provided, then this endpoint will return the first specified set of contacts
+            based on the limit provided. Ordered by LastName, FirstName. To continue a list, using the afterContactKey is recommended 
+            to continue to the next page. Using the beforeContactKey will return you the set of contacts in LastName, FirstName order that
+            are prior to the contactKey provided. If both afterContactKey and beforeContactKey are provided, afterContactKey will take precedence.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Contacts-SearchContactsForMentions_searchText_maxCount">POST api/v2.0/Contacts/SearchContactsForMentions?searchText={searchText}&amp;maxCount={maxCount}</a></td>
+            <td class="api-documentation">
+                <p>Provides Contact search results to be used for adding @Mention functionality to Content.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Contacts-GetContactKeyByPrimaryEmail_emailAddress">GET api/v2.0/Contacts/GetContactKeyByPrimaryEmail?emailAddress={emailAddress}</a></td>
+            <td class="api-documentation">
+                <p>Used to find an active Contact by a primary email address. Can only be accessed by an Admin user.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Contacts-GetMyEmailPreferences">GET api/v2.0/Contacts/GetMyEmailPreferences</a></td>
+            <td class="api-documentation">
+                <p>Responds with the Currently Authenticated User&#39;s Global Email Opt-in/out settings.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Contacts-UpdateEmailPreferences">POST api/v2.0/Contacts/UpdateEmailPreferences</a></td>
+            <td class="api-documentation">
+                <p>Change Global Email preferences for 1 or more Contacts.  * For use by Administrators only *.  Individual users
+            can updated their own Email Preferences via the &quot;UpdateMyEmailPreferences&quot; endpoint.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Contacts-UpdateProfilePicture_contactKey_legacyContactKey">POST api/v2.0/Contacts/UpdateProfilePicture?contactKey={contactKey}&amp;legacyContactKey={legacyContactKey}</a></td>
+            <td class="api-documentation">
+                <p>Accepts a Multipart MIME file via a POST Request. Uploads a profile image for the supplied user. * For use by Administrators only *.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Contacts-UpdateMyProfilePicture">POST api/v2.0/Contacts/UpdateMyProfilePicture</a></td>
+            <td class="api-documentation">
+                <p>Accepts a Multipart MIME file via a POST Request. Uploads a profile image for the Currently Authenticated User.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Contacts-UpdateMyEmailPreferences">POST api/v2.0/Contacts/UpdateMyEmailPreferences</a></td>
+            <td class="api-documentation">
+                <p>Change Global Email preferences for the Currently Authenticated User.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Contacts-AcceptCodeOfConduct">POST api/v2.0/Contacts/AcceptCodeOfConduct</a></td>
+            <td class="api-documentation">
+                <p>Stores the Current Date as the Acceptance Date.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Contacts-SearchContacts_searchTerms_searchAllAddresses_memberStatus_searchOnlyCompanies_overrideOptOut_contactStatusCode_includeMiddleName_limitToAcceptedTerms_includeCurrentContact">GET api/v2.0/Contacts/SearchContacts?searchTerms={searchTerms}&amp;searchAllAddresses={searchAllAddresses}&amp;memberStatus={memberStatus}&amp;searchOnlyCompanies={searchOnlyCompanies}&amp;overrideOptOut={overrideOptOut}&amp;contactStatusCode={contactStatusCode}&amp;includeMiddleName={includeMiddleName}&amp;limitToAcceptedTerms={limitToAcceptedTerms}&amp;includeCurrentContact={includeCurrentContact}</a></td>
+            <td class="api-documentation">
+                <p>Returns Contact data for all Contact Records that match the specified criteria. Searches: City, State/Province, Company Name, Company Title, First Name, Last Name and optionally, Middle Name.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Contacts-SearchContactsForMessaging_searchTerms">GET api/v2.0/Contacts/SearchContactsForMessaging?searchTerms={searchTerms}</a></td>
+            <td class="api-documentation">
+                <p>Returns Contact data for all Contact Records that match the specified criteria that the authenticated user has permissions to message. Searches: City, State/Province, Company Name, Company Title, First Name, Last Name, and Middle Name.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Contacts-GetContactsByDemographic_demographicText">GET api/v2.0/Contacts/GetContactsByDemographic?demographicText={demographicText}</a></td>
+            <td class="api-documentation">
+                <p>Returns Contact data for all Contact Records that with the given demographic</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Contacts-GetContactContributions">POST api/v2.0/Contacts/GetContactContributions</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of published items a given Contact has authored.
+            The list includes Announcements, Blogs, Discussion Messages, Library Entries, Questions, and Answers.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Contacts-GetMyContributions">POST api/v2.0/Contacts/GetMyContributions</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of all items the authenticated user has authored.
+            The list includes Announcements, Blogs, Discussion Messages, Library Entries, Questions, and Answers.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="DataFeed">DataFeed</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-DataFeed-GetData">POST api/v2.0/DataFeed/GetData</a></td>
+            <td class="api-documentation">
+                <p>This returns a feed of content published on the site based on the request parameters provided. This endpoint provides content/items
+            in a generic pattern, so that users can display the items in the response as a feed of information pulling from the website. The feed can
+            provide you with several different types of content, which you can filter down to using the request to fit your needs. This
+            endpoint is relatively complex in terms of its capabilities in the request and response.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Demographics">Demographics</h2>
+    <p>Endpoints related to Demographics.</p>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Demographics-AddDemographicCategory">POST api/v2.0/Demographics/AddDemographicCategory</a></td>
+            <td class="api-documentation">
+                <p>Add a new demographic category.  Can only be accessed by an Admin user.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Demographics-AddDemographicChoice">POST api/v2.0/Demographics/AddDemographicChoice</a></td>
+            <td class="api-documentation">
+                <p>Add a new demographic choice.  Can only be accessed by an Admin user.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Demographics-SetContactDemographic_demographicKey">POST api/v2.0/Demographics/SetContactDemographic?demographicKey={demographicKey}</a></td>
+            <td class="api-documentation">
+                <p>Returns a collection of all existing demographic categories</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Demographics-RemoveContactDemographic_demographicKey">DELETE api/v2.0/Demographics/RemoveContactDemographic?demographicKey={demographicKey}</a></td>
+            <td class="api-documentation">
+                <p>Deletes the specified Demographic from the Current User&#39;s record.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Demographics-RemoveFreeFormContactDemographic_demographicTypeKey">DELETE api/v2.0/Demographics/RemoveFreeFormContactDemographic?demographicTypeKey={demographicTypeKey}</a></td>
+            <td class="api-documentation">
+                <p>Deletes the specified Free-Form Demographic entry from the Current User&#39;s record.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Demographics-SetFreeFormContactDemographic_demographicTypeKey_freeFormText">POST api/v2.0/Demographics/SetFreeFormContactDemographic?demographicTypeKey={demographicTypeKey}&amp;freeFormText={freeFormText}</a></td>
+            <td class="api-documentation">
+                <p>Update an existing Free-Form Demographic entry or add a new one.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Demographics-GetDemographicTypes">GET api/v2.0/Demographics/GetDemographicTypes</a></td>
+            <td class="api-documentation">
+                <p>Get the available Demographic Types.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Demographics-GetDemographicChoices">GET api/v2.0/Demographics/GetDemographicChoices</a></td>
+            <td class="api-documentation">
+                <p>Get the available Demographic choices.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Demographics-GetDemographicChoices_demographicTypeKey">GET api/v2.0/Demographics/GetDemographicChoices?demographicTypeKey={demographicTypeKey}</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of all existing demographic choices for a given demographic category</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Demographics-GetDemographicsVisibleOnMainMicrositeProfile">GET api/v2.0/Demographics/GetDemographicsVisibleOnMainMicrositeProfile</a></td>
+            <td class="api-documentation">
+                <p>Get all demographic types that are visible on the main microsite profile</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Discussions">Discussions</h2>
+    <p>Operations to return Discussion-related data.</p>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/PUT-api-v2.0-Discussions-Edit">PUT api/v2.0/Discussions/Edit</a></td>
+            <td class="api-documentation">
+                <p>Edit a current DiscussionPost</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetDiscussion_discussionKey">GET api/v2.0/Discussions/GetDiscussion?discussionKey={discussionKey}</a></td>
+            <td class="api-documentation">
+                <p>Get the Discussion by its Unique Key.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPost_discussionPostKey">GET api/v2.0/Discussions/GetDiscussionPost?discussionPostKey={discussionPostKey}</a></td>
+            <td class="api-documentation">
+                <p>Get a DiscussionPost by its Unique Key.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-GetDiscussionThreadUpdates">POST api/v2.0/Discussions/GetDiscussionThreadUpdates</a></td>
+            <td class="api-documentation">
+                <p>Retrieves details about all threads that have been updated since a specified date. Accessible only by Admin users.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetSubscribedDiscussions">GET api/v2.0/Discussions/GetSubscribedDiscussions</a></td>
+            <td class="api-documentation">
+                <p>Get a list of Discussions to which the Current User is subscribed.  Keep in mind that Community membership does not imply Discussion Subscription.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetLatestDiscussionPosts_discussionKey_maxToRetrieve_sortByScore_scoreSortDirection">GET api/v2.0/Discussions/GetLatestDiscussionPosts?discussionKey={discussionKey}&amp;maxToRetrieve={maxToRetrieve}&amp;sortByScore={sortByScore}&amp;scoreSortDirection={scoreSortDirection}</a></td>
+            <td class="api-documentation">
+                <p>Retrieves the latest Discussion Posts for either a single discussion or all viewable discussions.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPosts_discussionKey_maxToRetrieve_includeStaff_sortByScore_scoreSortDirection">GET api/v2.0/Discussions/GetDiscussionPosts?discussionKey={discussionKey}&amp;maxToRetrieve={maxToRetrieve}&amp;includeStaff={includeStaff}&amp;sortByScore={sortByScore}&amp;scoreSortDirection={scoreSortDirection}</a></td>
+            <td class="api-documentation">
+                <p>Retrieves latest discussion posts for either a single discussion or all viewable discussions. Exposes IncludeStaff parameter.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-GetDiscussionPosts">POST api/v2.0/Discussions/GetDiscussionPosts</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of Discussion Posts for the Current User.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPosts_discussionThreadKey">GET api/v2.0/Discussions/GetDiscussionPosts?discussionThreadKey={discussionThreadKey}</a></td>
+            <td class="api-documentation">
+                <p>Returns all Discussion Posts for the specified Discussion Thread.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPostInThread_discussionPostKey_numberOfReplies_maxBreadCrumbs">GET api/v2.0/Discussions/GetDiscussionPostInThread?discussionPostKey={discussionPostKey}&amp;numberOfReplies={numberOfReplies}&amp;maxBreadCrumbs={maxBreadCrumbs}</a></td>
+            <td class="api-documentation">
+                <p>This returns information for a specified discussion post, as well as information about its context within the thread. Returning both
+            parent hierarchical information as well as direct children discussion posts.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetPagedDiscussionPostFields">GET api/v2.0/Discussions/GetPagedDiscussionPostFields</a></td>
+            <td class="api-documentation">
+                <p>Administrator access only. Returns a list of field names that can be requested via the GetPagedDiscussionPosts() Endpoint.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetPagedDiscussionPosts_communityKey_maxRecords_continuationToken_fieldList">GET api/v2.0/Discussions/GetPagedDiscussionPosts?communityKey={communityKey}&amp;maxRecords={maxRecords}&amp;continuationToken={continuationToken}&amp;fieldList={fieldList}</a></td>
+            <td class="api-documentation">
+                <p>Administrator-only endpoint. Provides a customizable and paged list of Discussion Post Properties.  The paging mechanism is a &#39;continuationToken&#39; that is comprised of a DateTime and DiscussionPostId that informs
+            the query engine which DiscussionPost was last retrieved.  The Response will include a standard &#39;Link&#39; Header that will include rel=&quot;next&quot; to denote the Uri to be utilized for the
+            next page in the sequence.  Paging relies on the continuationToken property to determine the next set of requested DiscussionPosts, as page size may vary depending upon the &quot;maxRecords&quot; value
+            requested by the client.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetLatestTopics_discussionKey_maxToRetrieve">GET api/v2.0/Discussions/GetLatestTopics?discussionKey={discussionKey}&amp;maxToRetrieve={maxToRetrieve}</a></td>
+            <td class="api-documentation">
+                <p>No documentation available.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-SubmitDiscussionPost">POST api/v2.0/Discussions/SubmitDiscussionPost</a></td>
+            <td class="api-documentation">
+                <p>Submit a new DiscussionPost to a Discussion.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-PostDiscussionSimple">POST api/v2.0/Discussions/PostDiscussionSimple</a></td>
+            <td class="api-documentation">
+                <p>Submit a new DiscussionPost to a Discussion and return the created post details.
+            This endpoint is designed for AI Assistant and other integrations that need the full post information.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-UpdateSubscription">POST api/v2.0/Discussions/UpdateSubscription</a></td>
+            <td class="api-documentation">
+                <p>Update Discussion Subscription.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetRecentThreads_discussionKey_maxToRetrieve">GET api/v2.0/Discussions/GetRecentThreads?discussionKey={discussionKey}&amp;maxToRetrieve={maxToRetrieve}</a></td>
+            <td class="api-documentation">
+                <p>Retrieves Discussion Thread details. The Threads are returned in descending order of the Last Approval Date for Posts within each Thread.
+            So, Threads with more recent activity will be returned first in the list.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPostReplies_afterReplyDiscussionPostKey_beforeReplyDiscussionPostKey_limit">GET api/v2.0/Discussions/GetDiscussionPostReplies?afterReplyDiscussionPostKey={afterReplyDiscussionPostKey}&amp;beforeReplyDiscussionPostKey={beforeReplyDiscussionPostKey}&amp;limit={limit}</a></td>
+            <td class="api-documentation">
+                <p>Returns a specified number of messages using the afterReplyDiscussionPostKey or beforeReplyDiscussionPostKey as a starting point. If both keys are put in the request, the afterReplyDiscussionPostKey will take precedence.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-Follow_discussionThreadKey">POST api/v2.0/Discussions/Follow?discussionThreadKey={discussionThreadKey}</a></td>
+            <td class="api-documentation">
+                <p>POST request follows the specified discussion thread - DELETE removes the follow.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Discussions-Follow_discussionThreadKey">DELETE api/v2.0/Discussions/Follow?discussionThreadKey={discussionThreadKey}</a></td>
+            <td class="api-documentation">
+                <p>POST request follows the specified discussion thread - DELETE removes the follow.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetEligibleDiscussions">GET api/v2.0/Discussions/GetEligibleDiscussions</a></td>
+            <td class="api-documentation">
+                <p>Get a List of Discussions to which the Current User is Eligible to subscribe.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-PostToDiscussionWithCrossPost">POST api/v2.0/Discussions/PostToDiscussionWithCrossPost</a></td>
+            <td class="api-documentation">
+                <p>No documentation available.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-PostToDiscussionAnonymously">POST api/v2.0/Discussions/PostToDiscussionAnonymously</a></td>
+            <td class="api-documentation">
+                <p>No documentation available.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-PostToDiscussion">POST api/v2.0/Discussions/PostToDiscussion</a></td>
+            <td class="api-documentation">
+                <p>Post a Message to the specified Discussion.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-ReplyToDiscussion">POST api/v2.0/Discussions/ReplyToDiscussion</a></td>
+            <td class="api-documentation">
+                <p>Post a reply to the specified Discussion Post.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-ReplyToDiscussionAnonymously">POST api/v2.0/Discussions/ReplyToDiscussionAnonymously</a></td>
+            <td class="api-documentation">
+                <p>Submit a reply to a Discussion Post using the System&#39;s Anonymous user. This functionality requires Anonymous Posting to be
+            enabled at the system level.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-SendMessageToDiscussionPostAuthor">POST api/v2.0/Discussions/SendMessageToDiscussionPostAuthor</a></td>
+            <td class="api-documentation">
+                <p>Sends an Inbox Message Reply to a specified Discussion Post&#39;s Author.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-SearchDiscussionPosts">POST api/v2.0/Discussions/SearchDiscussionPosts</a></td>
+            <td class="api-documentation">
+                <p>Returns Discussion Post information that meet the search criteria.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-RecommendDiscussionPost_discussionPostKey">POST api/v2.0/Discussions/RecommendDiscussionPost?discussionPostKey={discussionPostKey}</a></td>
+            <td class="api-documentation">
+                <p>Adds a recommendation for the specified Discussion Post.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Discussions-ToggleBestAnswer_discussionPostKey">POST api/v2.0/Discussions/ToggleBestAnswer?discussionPostKey={discussionPostKey}</a></td>
+            <td class="api-documentation">
+                <p>Marks the specified Discussion Post as the best answer.  Will replace any previously set best answer for the thread.
+            Can only be called by the creator of the thread, or a site or community admin.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Discussions-RemovePost_discussionPostKey">DELETE api/v2.0/Discussions/RemovePost?discussionPostKey={discussionPostKey}</a></td>
+            <td class="api-documentation">
+                <p>Deletes the specified discussion post.
+            If a message has replies, the body will be updated to: &quot;This post was removed&quot;
+            and the message will be anonymized to preserve the thread structure.
+            All documents attached to the message will be deleted. Only administrators can remove/delete messages.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Discussions-DeleteDiscussionPostRecommendation_discussionPostKey">DELETE api/v2.0/Discussions/DeleteDiscussionPostRecommendation?discussionPostKey={discussionPostKey}</a></td>
+            <td class="api-documentation">
+                <p>Removes a previously made recommendation.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Discussions-GetThreadTags_discussionThreadKey">GET api/v2.0/Discussions/GetThreadTags?discussionThreadKey={discussionThreadKey}</a></td>
+            <td class="api-documentation">
+                <p>Get the tags for a thread by discussion thread key</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Events">Events</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-GetRegistrantDetails_calendarEventKey_contactKey_emailAddress_firstName_lastName_useLeadingWildcardSearch">GET api/v2.0/Events/GetRegistrantDetails?calendarEventKey={calendarEventKey}&amp;contactKey={contactKey}&amp;emailAddress={emailAddress}&amp;firstName={firstName}&amp;lastName={lastName}&amp;useLeadingWildcardSearch={useLeadingWildcardSearch}</a></td>
+            <td class="api-documentation">
+                <p>Administrator-accessible only endpoint.  Returns details about a Registrant for a given Calendar Event.
+            The calendarEventKey parameter is required, along with either contactKey, emailAddress, or lastName.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-GetRegistrantsByCalendarEvent_calendarEventKey_modifiedDateTime">GET api/v2.0/Events/GetRegistrantsByCalendarEvent?calendarEventKey={calendarEventKey}&amp;modifiedDateTime={modifiedDateTime}</a></td>
+            <td class="api-documentation">
+                <p>Administrator-accessible only endpoint.  Returns Registrant Data for a given Calendar Event
+            and optionally a modified datetime can be passed in to only get updated registrants.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-GetEventRegistrants_calendarEventKey_modifiedDateTime_maxRecords_continuationToken">GET api/v2.0/Events/GetEventRegistrants?calendarEventKey={calendarEventKey}&amp;modifiedDateTime={modifiedDateTime}&amp;maxRecords={maxRecords}&amp;continuationToken={continuationToken}</a></td>
+            <td class="api-documentation">
+                <p>Administrator-accessible only endpoint.  Returns Paged Registrant Data for a given Calendar Event.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-GetEventType_EventTypeKey">GET api/v2.0/Events/GetEventType?EventTypeKey={EventTypeKey}</a></td>
+            <td class="api-documentation">
+                <p>Returns an Event Type</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-GetEventTypes">GET api/v2.0/Events/GetEventTypes</a></td>
+            <td class="api-documentation">
+                <p>Returns all Event Types</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-GetEventTypesList">GET api/v2.0/Events/GetEventTypesList</a></td>
+            <td class="api-documentation">
+                <p>Get a list of active event types</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Events-SaveEventType">POST api/v2.0/Events/SaveEventType</a></td>
+            <td class="api-documentation">
+                <p>Saves an Event Type</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Events-DeleteEventType_eventTypeKey">POST api/v2.0/Events/DeleteEventType?eventTypeKey={eventTypeKey}</a></td>
+            <td class="api-documentation">
+                <p>Deletes an Event Type</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Events-RestoreEventType_eventTypeKey">POST api/v2.0/Events/RestoreEventType?eventTypeKey={eventTypeKey}</a></td>
+            <td class="api-documentation">
+                <p>Restores a Deleted Event Type</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-GetEvent_eventKey">GET api/v2.0/Events/GetEvent?eventKey={eventKey}</a></td>
+            <td class="api-documentation">
+                <p>Retrieve details about a single Event.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-GetUpcoming_maxRecords">GET api/v2.0/Events/GetUpcoming?maxRecords={maxRecords}</a></td>
+            <td class="api-documentation">
+                <p>Returns all Current (beginning today) and Future Events.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Events-SearchCurrentAndFutureEvents_includePastEvents_maxRecords">POST api/v2.0/Events/SearchCurrentAndFutureEvents?includePastEvents={includePastEvents}&amp;maxRecords={maxRecords}</a></td>
+            <td class="api-documentation">
+                <p>Returns all Current (beginning today) and Future Events unless otherwise specified.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Events-SearchEvents_maxRecords">POST api/v2.0/Events/SearchEvents?maxRecords={maxRecords}</a></td>
+            <td class="api-documentation">
+                <p>Get Event details.  The retrieved Events can be filtered by the values passed in the eventFilter parameter.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-CommunityPastEvents_communityId_maxRecords">GET api/v2.0/Events/CommunityPastEvents?communityId={communityId}&amp;maxRecords={maxRecords}</a></td>
+            <td class="api-documentation">
+                <p>Returns all events that count toward attendance tracking for the given community.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-ContactEventList_contactId_maxRecords">GET api/v2.0/Events/ContactEventList?contactId={contactId}&amp;maxRecords={maxRecords}</a></td>
+            <td class="api-documentation">
+                <p>Returns all recent events that the contact has attended.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-CommunityEventAttendance_communityId_numberOfMeetings">GET api/v2.0/Events/CommunityEventAttendance?communityId={communityId}&amp;numberOfMeetings={numberOfMeetings}</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of contacts that participated in the last x community events. The event has to be in the &#39;done state&#39;
+            to count as a recent meeting.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-EventAttendance_eventId">GET api/v2.0/Events/EventAttendance?eventId={eventId}</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of contacts that participated in the indicated event. The event has to be in the &#39;done state&#39;
+            to count as a recent meeting.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Events-GetEventEnabledCommunityList">GET api/v2.0/Events/GetEventEnabledCommunityList</a></td>
+            <td class="api-documentation">
+                <p>Gets a collection of allowed communities for the current user
+            that has an associated calendar.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Events-RSVPToEvent_eventKey">POST api/v2.0/Events/RSVPToEvent?eventKey={eventKey}</a></td>
+            <td class="api-documentation">
+                <p>RSVPs the current user to the designated event. For events with a registration type of RSVP only, not valid for other registrations.
+            Registering for a parent repeating event also registers you for all following occurrences.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Events-RSVP_eventKey">DELETE api/v2.0/Events/RSVP?eventKey={eventKey}</a></td>
+            <td class="api-documentation">
+                <p>Removes the current user&#39;s RSVP to the designated event. For events with a registration type of RSVP only, not valid for other registrations.
+            Removing RSVP for a parent repeating event also removes registration for all following occurrences.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="EventSessions">EventSessions</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-EventSessions-GetSession_sessionKey">GET api/v2.0/EventSessions/GetSession?sessionKey={sessionKey}</a></td>
+            <td class="api-documentation">
+                <p>No documentation available.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="ExternalActivity">ExternalActivity</h2>
+    <p>Provides Mechanisms to Create, Modify, Delete External Activity records.</p>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ExternalActivity-Create">POST api/v2.0/ExternalActivity/Create</a></td>
+            <td class="api-documentation">
+                <p>Create a new ExternalActivity record.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/PUT-api-v2.0-ExternalActivity-Update">PUT api/v2.0/ExternalActivity/Update</a></td>
+            <td class="api-documentation">
+                <p></p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-ExternalActivity-Delete_externalActivityKey_legacyActivityKey">DELETE api/v2.0/ExternalActivity/Delete?externalActivityKey={externalActivityKey}&amp;legacyActivityKey={legacyActivityKey}</a></td>
+            <td class="api-documentation">
+                <p></p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="ExternalSearch">ExternalSearch</h2>
+    <p>POST Endpoints for adding external items to the Higher Logic Search Index results.  
+            Note that External Search Endpoints are available as an add-on and they require a separate IAMKey for access.</p>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ExternalSearch-AddAnnouncementItems">POST api/v2.0/ExternalSearch/AddAnnouncementItems</a></td>
+            <td class="api-documentation">
+                <p>Add External Announcement Items to the Search Results.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ExternalSearch-AddLibraryItems">POST api/v2.0/ExternalSearch/AddLibraryItems</a></td>
+            <td class="api-documentation">
+                <p>Add External Library Items to the Search Results.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ExternalSearch-AddLibraryEntryItems">POST api/v2.0/ExternalSearch/AddLibraryEntryItems</a></td>
+            <td class="api-documentation">
+                <p>Add External Library Items to the Search Results.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ExternalSearch-AddCommunityItems">POST api/v2.0/ExternalSearch/AddCommunityItems</a></td>
+            <td class="api-documentation">
+                <p>Add External Communities to the Search Results.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ExternalSearch-AddCourseItems">POST api/v2.0/ExternalSearch/AddCourseItems</a></td>
+            <td class="api-documentation">
+                <p>Add External Courses/Webinars to the Search Results.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ExternalSearch-AddBlogItems">POST api/v2.0/ExternalSearch/AddBlogItems</a></td>
+            <td class="api-documentation">
+                <p>Add External Blog Items to the Search Results.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ExternalSearch-AddEventItems">POST api/v2.0/ExternalSearch/AddEventItems</a></td>
+            <td class="api-documentation">
+                <p>Add External Calendar Event Items to the Search Results.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ExternalSearch-AddPageContent">POST api/v2.0/ExternalSearch/AddPageContent</a></td>
+            <td class="api-documentation">
+                <p>Add External Navigation Items to the Search Results.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ExternalSearch-AddVolunteerOpportunityItems">POST api/v2.0/ExternalSearch/AddVolunteerOpportunityItems</a></td>
+            <td class="api-documentation">
+                <p>Add External Volunteer Opportunity Items to the Search Results.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ExternalSearch-AddGlossaryItems">POST api/v2.0/ExternalSearch/AddGlossaryItems</a></td>
+            <td class="api-documentation">
+                <p>Add External Glossary Items to the Search Results.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Federation">Federation</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Federation-GetTenant_tenantKey">GET api/v2.0/Federation/GetTenant?tenantKey={tenantKey}</a></td>
+            <td class="api-documentation">
+                <p>No documentation available.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Federation-GetContact_tenantKey_contactKey">GET api/v2.0/Federation/GetContact?tenantKey={tenantKey}&amp;contactKey={contactKey}</a></td>
+            <td class="api-documentation">
+                <p>No documentation available.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Friends">Friends</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Friends-GetPendingReceivedFriendRequests">GET api/v2.0/Friends/GetPendingReceivedFriendRequests</a></td>
+            <td class="api-documentation">
+                <p>Gets a List of FriendModel objects representing the pending Friend Requests that the Current User has RECEIVED.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Friends-GetPendingSentFriendRequests">GET api/v2.0/Friends/GetPendingSentFriendRequests</a></td>
+            <td class="api-documentation">
+                <p>Gets a List of FriendModel objects representing the pending Friend Requests that the Current User has SENT.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Friends-GetAcceptedFriendRequests_daysBack">GET api/v2.0/Friends/GetAcceptedFriendRequests?daysBack={daysBack}</a></td>
+            <td class="api-documentation">
+                <p>Gets a List of FriendModel objects representing the Friend Requests that the Current User has SENT which have been accepted.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Friends-PostFriendRequest_contactKey">POST api/v2.0/Friends/PostFriendRequest?contactKey={contactKey}</a></td>
+            <td class="api-documentation">
+                <p>Sends a friend request from the Current User to the specified Contact.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Friends-AcceptFriendRequest_friendRequestRecordKey">POST api/v2.0/Friends/AcceptFriendRequest?friendRequestRecordKey={friendRequestRecordKey}</a></td>
+            <td class="api-documentation">
+                <p>Accepts a Friend Request.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Friends-RejectFriendRequest_friendRequestRecordKey">POST api/v2.0/Friends/RejectFriendRequest?friendRequestRecordKey={friendRequestRecordKey}</a></td>
+            <td class="api-documentation">
+                <p>Rejects a Friend Request.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Friends-CancelFriendRequest_contactKey">DELETE api/v2.0/Friends/CancelFriendRequest?contactKey={contactKey}</a></td>
+            <td class="api-documentation">
+                <p>Cancels a Friend Request. Using the current contact and the contactKey of the person the request was sent to</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Friends-UnFriend_contactKey">POST api/v2.0/Friends/UnFriend?contactKey={contactKey}</a></td>
+            <td class="api-documentation">
+                <p>Removes a Friend Relationship from the Current User.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Ideation">Ideation</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Ideation-IdeaDetails_ideationKey">GET api/v2.0/Ideation/IdeaDetails?ideationKey={ideationKey}</a></td>
+            <td class="api-documentation">
+                <p>Gets the details of an idea.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Ideation-Post">POST api/v2.0/Ideation/Post</a></td>
+            <td class="api-documentation">
+                <p>Create a new idea.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Ideation-GetIdeasByStatus_ideationStatusKey_afterIdeaKey_beforeIdeaKey_numberToReturn">GET api/v2.0/Ideation/GetIdeasByStatus?ideationStatusKey={ideationStatusKey}&amp;afterIdeaKey={afterIdeaKey}&amp;beforeIdeaKey={beforeIdeaKey}&amp;numberToReturn={numberToReturn}</a></td>
+            <td class="api-documentation">
+                <p>Returns a specified number of ideas in a particular status, optionally using the afterIdeaKey or beforeIdeaKey as a starting point. Ideas are ordered by creation date, most recent to least recent. If both keys are included, afterIdeaKey will take precedence.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Ideation-GetIdeasByCategory_ideationCategoryKey_afterIdeaKey_beforeIdeaKey_numberToReturn">GET api/v2.0/Ideation/GetIdeasByCategory?ideationCategoryKey={ideationCategoryKey}&amp;afterIdeaKey={afterIdeaKey}&amp;beforeIdeaKey={beforeIdeaKey}&amp;numberToReturn={numberToReturn}</a></td>
+            <td class="api-documentation">
+                <p>Returns a specified number of ideas in a particular category, optionally using the afterIdeaKey or beforeIdeaKey as a starting point. Ideas are ordered by creation date, most recent to least recent. If both keys are included, afterIdeaKey will take precedence.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Ideation-AddIdeaCategories">POST api/v2.0/Ideation/AddIdeaCategories</a></td>
+            <td class="api-documentation">
+                <p>Add categories to an idea.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Ideation-GetIdeaStatuses">GET api/v2.0/Ideation/GetIdeaStatuses</a></td>
+            <td class="api-documentation">
+                <p>Get active statuses that can be applied to an idea.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Ideation-GetIdeaCategories">GET api/v2.0/Ideation/GetIdeaCategories</a></td>
+            <td class="api-documentation">
+                <p>Get active categories that an idea can be associated to.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Ideation-UpdateIdeaStatus">POST api/v2.0/Ideation/UpdateIdeaStatus</a></td>
+            <td class="api-documentation">
+                <p>Update the status of an idea.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Ideation-GetVoters_ideationKey">GET api/v2.0/Ideation/GetVoters?ideationKey={ideationKey}</a></td>
+            <td class="api-documentation">
+                <p>Admin-only endpoint to get all voters on an idea.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Messaging">Messaging</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Messaging-GetInboxMessage_messageKey">GET api/v2.0/Messaging/GetInboxMessage?messageKey={messageKey}</a></td>
+            <td class="api-documentation">
+                <p>Retrieves the specified Mailbox Message</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Messaging-GetInboxMessages_firstRecord_maxRecords">GET api/v2.0/Messaging/GetInboxMessages?firstRecord={firstRecord}&amp;maxRecords={maxRecords}</a></td>
+            <td class="api-documentation">
+                <p>Retrieves the most recent Inbox Messages for the Current User.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Messaging-GetSentMessages_firstRecord_maxRecords">GET api/v2.0/Messaging/GetSentMessages?firstRecord={firstRecord}&amp;maxRecords={maxRecords}</a></td>
+            <td class="api-documentation">
+                <p>Retrieves the most recent Mailbox Messages sent by the current user.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Messaging-SendMessageToContact">POST api/v2.0/Messaging/SendMessageToContact</a></td>
+            <td class="api-documentation">
+                <p>Sends a new Message to the specified Contact.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Messaging-ReplyToMessage">POST api/v2.0/Messaging/ReplyToMessage</a></td>
+            <td class="api-documentation">
+                <p>Submits a new reply to a specified Mailbox Message to the original message&#39;s author.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Messaging-MarkMessageAsRead_messageKey">POST api/v2.0/Messaging/MarkMessageAsRead?messageKey={messageKey}</a></td>
+            <td class="api-documentation">
+                <p>Changes the specified Mailbox Message Read Status to True.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Messaging-MarkMessageAsRead_messageKey">GET api/v2.0/Messaging/MarkMessageAsRead?messageKey={messageKey}</a></td>
+            <td class="api-documentation">
+                <p>Changes the specified Mailbox Message Read Status to True.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Messaging-MarkMessagesAsRead">POST api/v2.0/Messaging/MarkMessagesAsRead</a></td>
+            <td class="api-documentation">
+                <p>Marks the specified Mailbox Messages as &#39;Read&#39;.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Messaging-DeleteMessages">POST api/v2.0/Messaging/DeleteMessages</a></td>
+            <td class="api-documentation">
+                <p>Deletes Mailbox Messages from the Authenticated User&#39;s Inbox.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Messaging-MarkMessageAsUnRead_messageKey">POST api/v2.0/Messaging/MarkMessageAsUnRead?messageKey={messageKey}</a></td>
+            <td class="api-documentation">
+                <p>Changes the specified Mailbox Message Read Status to False.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Messaging-MarkMessageAsUnRead_messageKey">GET api/v2.0/Messaging/MarkMessageAsUnRead?messageKey={messageKey}</a></td>
+            <td class="api-documentation">
+                <p>Changes the specified Mailbox Message Read Status to False.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Messaging-GetUnreadMessageCounts">GET api/v2.0/Messaging/GetUnreadMessageCounts</a></td>
+            <td class="api-documentation">
+                <p>Returns a key-value pair of ContactKey and Unread Message Count.  Includes Inbox Messages, Friend Requests and Community Invitations.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Messaging-SendMessageToDiscussionPostAuthor">POST api/v2.0/Messaging/SendMessageToDiscussionPostAuthor</a></td>
+            <td class="api-documentation">
+                <p>Sends a private Mailbox Message to the Author of a DiscussionPost.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Question">Question</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Question-Post">POST api/v2.0/Question/Post</a></td>
+            <td class="api-documentation">
+                <p>Submit a new question</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Question-Answer">POST api/v2.0/Question/Answer</a></td>
+            <td class="api-documentation">
+                <p>Submit a new answer</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Question-GetThread_questionKey_numberOfAnswers">GET api/v2.0/Question/GetThread?questionKey={questionKey}&amp;numberOfAnswers={numberOfAnswers}</a></td>
+            <td class="api-documentation">
+                <p>Get a question thread, including the root question and it&#39;s first 10 associated answers.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Question-Recommend_questionKey">POST api/v2.0/Question/Recommend?questionKey={questionKey}</a></td>
+            <td class="api-documentation">
+                <p>Acts as a toggle for recommending a question. A POST request will recommend while DELETE will remove the recommendation.
+            A question recommendation refers to &quot;I have this question too&quot; listed under a question in a Q&amp;A thread.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Question-Recommend_questionKey">DELETE api/v2.0/Question/Recommend?questionKey={questionKey}</a></td>
+            <td class="api-documentation">
+                <p>Acts as a toggle for recommending a question. A POST request will recommend while DELETE will remove the recommendation.
+            A question recommendation refers to &quot;I have this question too&quot; listed under a question in a Q&amp;A thread.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Question-Follow_questionKey">POST api/v2.0/Question/Follow?questionKey={questionKey}</a></td>
+            <td class="api-documentation">
+                <p>POST request follows the specified question - DELETE removes the follow.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Question-Follow_questionKey">DELETE api/v2.0/Question/Follow?questionKey={questionKey}</a></td>
+            <td class="api-documentation">
+                <p>POST request follows the specified question - DELETE removes the follow.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Question-GetAnswers_afterAnswerKey_beforeAnswerKey_limit">GET api/v2.0/Question/GetAnswers?afterAnswerKey={afterAnswerKey}&amp;beforeAnswerKey={beforeAnswerKey}&amp;limit={limit}</a></td>
+            <td class="api-documentation">
+                <p>Returns a specified number of answers using the afterAnswerKey or beforeAnswerKey as a starting point. If both keys are put in the request, the afterAnswerKey will take precedence.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Question-Delete_questionKey">DELETE api/v2.0/Question/Delete?questionKey={questionKey}</a></td>
+            <td class="api-documentation">
+                <p>Administrator-only endpoint to delete the specified question. All answers associated with the question must
+            be deleted prior to the deletion of the question.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Question-Edit">POST api/v2.0/Question/Edit</a></td>
+            <td class="api-documentation">
+                <p>Edit an existing question</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="RegistrantClass">RegistrantClass</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-RegistrantClass-GetRegistrantClasses_Active">GET api/v2.0/RegistrantClass/GetRegistrantClasses?Active={Active}</a></td>
+            <td class="api-documentation">
+                <p>Get a list of Registrant Classes</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="ResourceLibrary">ResourceLibrary</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryList">GET api/v2.0/ResourceLibrary/GetLibraryList</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of Libraries that the Current User is Allowed to View/Join.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraries">GET api/v2.0/ResourceLibrary/GetLibraries</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of libraries that the Current user is allowed to view/join. This will return a truncated version of the library data.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryDocument_documentKey_paginateComments_commentLimit">GET api/v2.0/ResourceLibrary/GetLibraryDocument?documentKey={documentKey}&amp;paginateComments={paginateComments}&amp;commentLimit={commentLimit}</a></td>
+            <td class="api-documentation">
+                <p>Returns Document details for the specified DocumentKey.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-Follow_documentKey">POST api/v2.0/ResourceLibrary/Follow?documentKey={documentKey}</a></td>
+            <td class="api-documentation">
+                <p>Acts as a toggle for following a resource library entry. A POST request will follow while DELETE will remove the follow.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-ResourceLibrary-Follow_documentKey">DELETE api/v2.0/ResourceLibrary/Follow?documentKey={documentKey}</a></td>
+            <td class="api-documentation">
+                <p>Acts as a toggle for following a resource library entry. A POST request will follow while DELETE will remove the follow.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-ResourceLibrary-GetMyLibraryDocuments_maxRecords">GET api/v2.0/ResourceLibrary/GetMyLibraryDocuments?maxRecords={maxRecords}</a></td>
+            <td class="api-documentation">
+                <p>Returns Document Entries created by the Current User.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-GetLibraryDocuments">POST api/v2.0/ResourceLibrary/GetLibraryDocuments</a></td>
+            <td class="api-documentation">
+                <p>Returns Library Documents according to the optional filter values.  Results are returned in Descending Date order.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-ResourceLibrary-GetDocumentAttachments_documentKey">GET api/v2.0/ResourceLibrary/GetDocumentAttachments?documentKey={documentKey}</a></td>
+            <td class="api-documentation">
+                <p>Returns Document Attachment Details for the specified Document.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-AddComment_documentKey">POST api/v2.0/ResourceLibrary/AddComment?documentKey={documentKey}</a></td>
+            <td class="api-documentation">
+                <p>Add a new Comment to a Document.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-UpdateComment_documentCommentKey">POST api/v2.0/ResourceLibrary/UpdateComment?documentCommentKey={documentCommentKey}</a></td>
+            <td class="api-documentation">
+                <p>Updates the specified Document Comment with new Comment Text.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteComment_documentCommentKey">DELETE api/v2.0/ResourceLibrary/DeleteComment?documentCommentKey={documentCommentKey}</a></td>
+            <td class="api-documentation">
+                <p>Deletes the specified Document Comment.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteLibraryDocument_documentKey">DELETE api/v2.0/ResourceLibrary/DeleteLibraryDocument?documentKey={documentKey}</a></td>
+            <td class="api-documentation">
+                <p>Deletes the specified Library Document.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-AddRelatedLink_documentKey">POST api/v2.0/ResourceLibrary/AddRelatedLink?documentKey={documentKey}</a></td>
+            <td class="api-documentation">
+                <p>Adds the specified URL as a RelatedLink to the specified Document.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-GetFavorites">POST api/v2.0/ResourceLibrary/GetFavorites</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of Favorited Documents.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-AddToFavorites_documentKey">POST api/v2.0/ResourceLibrary/AddToFavorites?documentKey={documentKey}</a></td>
+            <td class="api-documentation">
+                <p>Add the specified Document to the Authenticated User&#39;s Favorite List.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-ResourceLibrary-RemoveFromFavorites_documentKey">DELETE api/v2.0/ResourceLibrary/RemoveFromFavorites?documentKey={documentKey}</a></td>
+            <td class="api-documentation">
+                <p>Remove the specified Document from the Authenticated User&#39;s Favorite List.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteRelatedLink_relatedLinkKey">DELETE api/v2.0/ResourceLibrary/DeleteRelatedLink?relatedLinkKey={relatedLinkKey}</a></td>
+            <td class="api-documentation">
+                <p>Deletes the specified RelatedLink.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-RecommendDocument_documentKey">POST api/v2.0/ResourceLibrary/RecommendDocument?documentKey={documentKey}</a></td>
+            <td class="api-documentation">
+                <p>Adds a recommendation for the specified Document.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteDocumentRecommendation_documentKey">DELETE api/v2.0/ResourceLibrary/DeleteDocumentRecommendation?documentKey={documentKey}</a></td>
+            <td class="api-documentation">
+                <p>Removes a previously made recommendation.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-ResourceLibrary-GetDocumentAttachment_documentAttachmentKey">GET api/v2.0/ResourceLibrary/GetDocumentAttachment?documentAttachmentKey={documentAttachmentKey}</a></td>
+            <td class="api-documentation">
+                <p>Returns Document Attachment Details for the specified Document Attachment.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteDocumentAttachment_documentAttachmentKey">DELETE api/v2.0/ResourceLibrary/DeleteDocumentAttachment?documentAttachmentKey={documentAttachmentKey}</a></td>
+            <td class="api-documentation">
+                <p>Removes the specified document attachment from the parent document.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-PostDocument_libraryKey">POST api/v2.0/ResourceLibrary/PostDocument?libraryKey={libraryKey}</a></td>
+            <td class="api-documentation">
+                <p>Creates a document and its attachments in the specified library. Accepts Multipart MIME files via a POST Request. Files must be smaller than 2 GB.
+            In the form data you must include a DocumentName. If posting to a library associated with a topic community, TopicTagKeys must included at least one valid key.
+            You may also include a Description for the document. The name field of each file will override the file name.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-PostDocumentAttachments_documentKey">POST api/v2.0/ResourceLibrary/PostDocumentAttachments?documentKey={documentKey}</a></td>
+            <td class="api-documentation">
+                <p>Accepts Multipart MIME files via a POST Request.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-InitiateUpload">POST api/v2.0/ResourceLibrary/InitiateUpload</a></td>
+            <td class="api-documentation">
+                <p>Initiate a file upload for use in associating files to resource library entries.
+             A small file (&lt;= 5MiB) can be uploaded with a single PUT request
+             using the upload URL contained in the response. Files larger than this threshold
+             must be partitioned into smaller parts/chunks and those chunks uploaded individually
+             via PUT requests with the upload URLs contained in the response.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-MultipartUploaded">POST api/v2.0/ResourceLibrary/MultipartUploaded</a></td>
+            <td class="api-documentation">
+                <p>Complete a multipart upload once all parts have been uploaded.
+            Reconstitutes the file from the uploaded parts in the file repository.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-AbortMultipartUpload">POST api/v2.0/ResourceLibrary/AbortMultipartUpload</a></td>
+            <td class="api-documentation">
+                <p>Abort an in-process multipart upload.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-DocumentFromUpload">POST api/v2.0/ResourceLibrary/DocumentFromUpload</a></td>
+            <td class="api-documentation">
+                <p>Using the ObjectKey returned when initiated the upload, creates a resource library
+            entry once the file upload is complete and has been reconstituted (if necessary).</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-AppendUploadedAttachment">POST api/v2.0/ResourceLibrary/AppendUploadedAttachment</a></td>
+            <td class="api-documentation">
+                <p>Appends one or more document attachments to an existing resource library entry using a previously uploaded file.
+            Uses the ObjectKey returned when the upload was initiated once the file upload is complete and has been reconstituted (if necessary).
+            Only valid on Documents (library entries) with a standard, copyright, or attachment entry type.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-ResourceLibrary-Edit">POST api/v2.0/ResourceLibrary/Edit</a></td>
+            <td class="api-documentation">
+                <p>Edits the metadata of an existing/published library entry.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="System">System</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-System-GetApiDetails">GET api/v2.0/System/GetApiDetails</a></td>
+            <td class="api-documentation">
+                <p>Returns name and parameter type descriptions for the public API endpoints.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-System-GetCodeOfConduct">GET api/v2.0/System/GetCodeOfConduct</a></td>
+            <td class="api-documentation">
+                <p>Get the Code of Conduct Details.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-System-GetProfileUrls">GET api/v2.0/System/GetProfileUrls</a></td>
+            <td class="api-documentation">
+                <p>Using a Tenant&#39;s main microsite, this endpoint will grab Urls that allow a user to
+            navigate to various important sections of their profile</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-System-GetMobileAppSettings">GET api/v2.0/System/GetMobileAppSettings</a></td>
+            <td class="api-documentation">
+                <p>Get the mobile app settings configured by a tenant&#39;s administrator.
+            If not set, values default to those of the main microsite.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-System-GetCommunityMemberUpdates">POST api/v2.0/System/GetCommunityMemberUpdates</a></td>
+            <td class="api-documentation">
+                <p>Allows an Admin User to View Members who have Joined and Left Communities in the Specified timeframe.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Tagging">Tagging</h2>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Tagging-GetTags_searchText_communityKey">GET api/v2.0/Tagging/GetTags?searchText={searchText}&amp;communityKey={communityKey}</a></td>
+            <td class="api-documentation">
+                <p>Returns a set of currently existing tags that have been used throughout the tenant in the past based
+            on the search term provided. This endpoint will provide the tags within their tag groups, as well as metadata
+            about each tag. This will also include the markup necessary to include in the body of content created via the api to properly associate the tags to the content.
+            Important Note: Some tags are reserved for admin use only, and there is a property on each tag that specifies if the current user can use the tag or not in content.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="Volunteer">Volunteer</h2>
+    <p>Endpoints related to the Volunteer Module.</p>
+<table class="help-page-table">
+    <thead>
+        <tr><th>API</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications">POST api/v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={sendEmailNotifications}</a></td>
+            <td class="api-documentation">
+                <p>Allows Administrators to automatically approve a Volunteer Application by the ContactKey of the Volunteer Applicant and the VolunteerOpportunityKey.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Volunteer-AddToPoolByContactKey_contactKey">POST api/v2.0/Volunteer/AddToPoolByContactKey?contactKey={contactKey}</a></td>
+            <td class="api-documentation">
+                <p>Add a new user to the General Volunteer Pool.  Can only be accessed by an Admin user.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Volunteer-AddToPoolByLegacyKey_legacyContactKey">POST api/v2.0/Volunteer/AddToPoolByLegacyKey?legacyContactKey={legacyContactKey}</a></td>
+            <td class="api-documentation">
+                <p>Add a new user to the General Volunteer Pool.  Can only be accessed by an Admin user.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Volunteer-RemoveFromPoolByContactKey_contactKey">DELETE api/v2.0/Volunteer/RemoveFromPoolByContactKey?contactKey={contactKey}</a></td>
+            <td class="api-documentation">
+                <p>Removes the specified Contact from the General Volunteer Pool. Can only be accessed by an Admin user.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Volunteer-RemoveFromPoolByLegacyContactKey_legacyContactKey">DELETE api/v2.0/Volunteer/RemoveFromPoolByLegacyContactKey?legacyContactKey={legacyContactKey}</a></td>
+            <td class="api-documentation">
+                <p>Removes the specified Contact from the General Volunteer Pool. Can only be accessed by an Admin user.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Volunteer-VolunteerForOpportunityByContactKey_volunteerOpportunityKey_contactKey_comments">POST api/v2.0/Volunteer/VolunteerForOpportunityByContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&amp;contactKey={contactKey}&amp;comments={comments}</a></td>
+            <td class="api-documentation">
+                <p>Volunteer a Contact for a specific Volunteer Opportunity. Can only be accessed by an Admin user.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments">POST api/v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&amp;comments={comments}</a></td>
+            <td class="api-documentation">
+                <p>Volunteer for a specific Volunteer Opportunity.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/POST-api-v2.0-Volunteer-VolunteerForOpportunityByLegacyContactKey_volunteerOpportunityKey_legacyContactKey_comments">POST api/v2.0/Volunteer/VolunteerForOpportunityByLegacyContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&amp;legacyContactKey={legacyContactKey}&amp;comments={comments}</a></td>
+            <td class="api-documentation">
+                <p>Volunteer a Contact for a specific Volunteer Opportunity.  Administrative access is required.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunity_volunteerOpportunityKey_comments">DELETE api/v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&amp;comments={comments}</a></td>
+            <td class="api-documentation">
+                <p>Removes the requesting user from a Volunteer Opportunity.  If successful, responds with a 204 (no content).  If the current
+            user is not currently listed as a Volunteer for the specified Volunteer Opportunity, responds with a 404 (not found).</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunityByContactKey_volunteerOpportunityKey_contactKey_comments">DELETE api/v2.0/Volunteer/WithdrawFromOpportunityByContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&amp;contactKey={contactKey}&amp;comments={comments}</a></td>
+            <td class="api-documentation">
+                <p>Removes the requesting user from a Volunteer Opportunity.  If successful, responds with a 204 (no content).  If the current
+            user is not currently listed as a Volunteer for the specified Volunteer Opportunity, responds with a 404 (not found). Can only be accessed by an Admin user.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunityByLegacyContactKey_volunteerOpportunityKey_legacyContactKey_comments">DELETE api/v2.0/Volunteer/WithdrawFromOpportunityByLegacyContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&amp;legacyContactKey={legacyContactKey}&amp;comments={comments}</a></td>
+            <td class="api-documentation">
+                <p>Removes the requesting user from a Volunteer Opportunity.  If successful, responds with a 204 (no content).  If the current
+            user is not currently listed as a Volunteer for the specified Volunteer Opportunity, responds with a 404 (not found). Can only be accessed by an Admin user.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityList">GET api/v2.0/Volunteer/GetVolunteerOpportunityList</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of active Volunteer Opportunities in the system.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerList_volunteerOpportunityKey">GET api/v2.0/Volunteer/GetVolunteerList?volunteerOpportunityKey={volunteerOpportunityKey}</a></td>
+            <td class="api-documentation">
+                <p>Accessible only by Super Admin, Community Admin (if the Volunteer Opportunity is associated with a Community), and Volunteer Admins only. Returns information about
+            all Volunteers for a specified Volunteer Opportunity.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Volunteer-GetUpcomingVolunteerOpportunities_opportunityTypeKey_communityKey_maxToRetrieve">GET api/v2.0/Volunteer/GetUpcomingVolunteerOpportunities?opportunityTypeKey={opportunityTypeKey}&amp;communityKey={communityKey}&amp;maxToRetrieve={maxToRetrieve}</a></td>
+            <td class="api-documentation">
+                <p>Returns Upcoming VolunteerOpportunies for Current User.</p>
+            </td>
+        </tr>
+        <tr>
+            <td class="api-name"><a href="/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityTypeList">GET api/v2.0/Volunteer/GetVolunteerOpportunityTypeList</a></td>
+            <td class="api-documentation">
+                <p>Returns a list of Volunteer Opportunity Types.</p>
+            </td>
+        </tr>
+    </tbody>
+</table>    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

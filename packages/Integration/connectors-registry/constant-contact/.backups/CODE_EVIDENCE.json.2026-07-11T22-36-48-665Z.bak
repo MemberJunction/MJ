@@ -1,0 +1,161 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "incrementalWatermarkByPath": {
+          "/contacts": [
+            "updated_after",
+            "updated_before",
+            "created_after",
+            "created_before",
+            "optout_after",
+            "optout_before"
+          ],
+          "/emails": [
+            "before_date",
+            "after_date"
+          ]
+        },
+        "note": "Full scan of every GET-collection operation's query-parameter names in the saved openapi.json against a candidate incremental-filter name list. Only these 2 of 67 in-scope objects matched."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "webhookSurface": {
+          "allWebhookPathCount": 3,
+          "nonPartnerWebhookPathCount": 0,
+          "allWebhookPaths": [
+            "/partner/webhooks/subscriptions",
+            "/partner/webhooks/subscriptions/{topic_id}",
+            "/partner/webhooks/subscriptions/{topic_id}/tests"
+          ]
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WebhooksAvailable"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "tagMethods": {
+          "Bulk Activities": [
+            "get",
+            "post"
+          ]
+        },
+        "note": "12 Bulk Activities leaf endpoints confirmed present in openapi.json paths under this tag, base path /activities."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.BulkOperationsAvailable"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "tagMethods": {
+          "Account Services": [
+            "get",
+            "post",
+            "put"
+          ],
+          "Bulk Activities": [
+            "get",
+            "post"
+          ],
+          "Contact Lists": [
+            "delete",
+            "get",
+            "post",
+            "put"
+          ],
+          "Contact Tags": [
+            "delete",
+            "get",
+            "post",
+            "put"
+          ],
+          "Contacts": [
+            "delete",
+            "get",
+            "post",
+            "put"
+          ],
+          "Contacts Custom Fields": [
+            "delete",
+            "get",
+            "post",
+            "put"
+          ],
+          "Contacts Reporting": [
+            "get"
+          ],
+          "Email Campaigns": [
+            "delete",
+            "get",
+            "patch",
+            "post",
+            "put"
+          ],
+          "Email Campaigns AB Tests": [
+            "delete",
+            "get",
+            "post"
+          ],
+          "Email Reporting": [
+            "get"
+          ],
+          "Email Scheduling": [
+            "delete",
+            "get",
+            "post"
+          ],
+          "Events": [
+            "get",
+            "patch",
+            "post",
+            "put"
+          ],
+          "Landing Pages Reporting": [
+            "get"
+          ],
+          "SMS Reporting": [
+            "get"
+          ],
+          "Segments": [
+            "delete",
+            "get",
+            "patch",
+            "post",
+            "put"
+          ],
+          "Social": [
+            "get",
+            "post"
+          ]
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WriteCapability"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "concurrencyHeaderScan": {
+          "ETag": false,
+          "If-Match": false,
+          "If-Unmodified-Since": false
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ConcurrencyControl"
+    }
+  ]
+}

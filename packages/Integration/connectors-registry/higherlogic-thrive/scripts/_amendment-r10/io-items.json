@@ -1,0 +1,24 @@
+[
+  {
+    "io": {
+      "Name": "Volunteers",
+      "SupportsWrite": true,
+      "SupportsCreate": true,
+      "CreateAPIPath": "/v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&comments={comments}",
+      "CreateMethod": "POST",
+      "CreateBodyShape": "literal",
+      "CreateBodyKey": null,
+      "CreateIDLocation": "n/a",
+      "SupportsUpdate": true,
+      "UpdateAPIPath": "/v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={sendEmailNotifications}",
+      "UpdateMethod": "POST",
+      "UpdateBodyShape": "flat",
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": "body",
+      "SupportsDelete": true,
+      "DeleteAPIPath": "/v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&comments={comments}",
+      "DeleteMethod": "DELETE",
+      "DeleteIDLocation": "path"
+    }
+  }
+]

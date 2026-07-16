@@ -1,0 +1,10 @@
+[
+  { "ioName": "Events", "iof": {
+      "Name": "CommunityKey",
+      "Type": "String",
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Communities&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "CommunityKey",
+      "IsReadOnly": true,
+      "Configuration": { "ReferencedType": "Communities", "flattenedFrom": "Community (Community)" }
+  } }
+]

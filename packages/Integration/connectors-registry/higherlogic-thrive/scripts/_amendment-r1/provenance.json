@@ -1,0 +1,162 @@
+[
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for DiscussionPosts",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.DiscussionPosts.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row DiscussionPosts: create=/v2.0/Discussions/PostToDiscussion (POST); update=/v2.0/Discussions/Edit (PUT); delete=/v2.0/Discussions/RemovePost?discussionPostKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for Questions",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Questions.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row Questions: create=/v2.0/Question/Post (POST); update=/v2.0/Question/Edit (POST); delete=/v2.0/Question/Delete?questionKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for Answers",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Answers.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row Answers: create=/v2.0/Question/Answer (POST); update=/v2.0/Answer/Edit (POST); delete=/v2.0/Answer/Delete?answerKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for Comments",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Comments.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row Comments: create=/v2.0/Blogs/AddComment?blogKey={parent} (POST); update=/v2.0/Blogs/UpdateComment?blogCommentKey={id} (POST); delete=/v2.0/Blogs/DeleteComment?blogCommentKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for BlogComments",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.BlogComments.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row BlogComments: create=/v2.0/Blogs/AddComment?blogKey={parent} (POST); update=/v2.0/Blogs/UpdateComment?blogCommentKey={id} (POST); delete=/v2.0/Blogs/DeleteComment?blogCommentKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for ResourceLibraryDocuments",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.ResourceLibraryDocuments.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row ResourceLibraryDocuments: create=/v2.0/ResourceLibrary/PostDocument?libraryKey={parent} (POST); update=/v2.0/ResourceLibrary/Edit (POST); delete=/v2.0/ResourceLibrary/DeleteLibraryDocument?documentKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for DocumentAttachments",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.DocumentAttachments.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row DocumentAttachments: create=/v2.0/ResourceLibrary/PostDocumentAttachments?documentKey={parent} (POST); delete=/v2.0/ResourceLibrary/DeleteDocumentAttachment?documentAttachmentKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for DemographicTypes",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.DemographicTypes.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row DemographicTypes: create=/v2.0/Demographics/AddDemographicCategory (POST). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for DemographicChoices",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.DemographicChoices.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row DemographicChoices: create=/v2.0/Demographics/AddDemographicChoice (POST). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for Ideas",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Ideas.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row Ideas: create=/v2.0/Ideation/Post (POST); update=/v2.0/Ideation/UpdateIdeaStatus (POST). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for IdeaCategories",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.IdeaCategories.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row IdeaCategories: create=/v2.0/Ideation/AddIdeaCategories (POST). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for Volunteers",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Volunteers.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row Volunteers: create=/v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={parent}&comments={comments} (POST); update=/v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={flag} (POST); delete=/v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={id}&comments={comments} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Confirming write capability + per-operation CRUD paths for Blogs",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Blogs.SupportsWrite",
+    "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed' table row Blogs: create=/v2.0/Blogs/CreateBlog (POST); delete=/v2.0/Blogs/DeleteBlog?blogKey={id} (DELETE). Each op has a dedicated HelpPage sub-page under sources/ops/."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Correcting DataFeed backing endpoint to the tenant-wide DataFeed/GetData cursor feed",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.DataFeed.APIPath",
+    "Excerpt": "SOURCE_STUDY.md leaf table: DataFeed | POST DataFeed/GetData | Cursor (Marker+Direction[up/down]+NumberToReturn, 0-25, def 10)."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Correcting DiscussionPosts pagination endpoint to GetPagedDiscussionPosts (continuation-token cursor)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.DiscussionPosts.APIPath",
+    "Excerpt": "sources/ops/GET-api-v2.0-Discussions-GetPagedDiscussionPosts_communityKey_maxRecords_continuationToken_fieldList.html declares a continuationToken cursor param; GetLatestDiscussionPosts has none."
+  },
+  {
+    "URL": "https://api.connectedcommunity.org/v2.0/Help",
+    "AccessedAt": "2026-07-09T19:06:04.477Z",
+    "UsedFor": "Retargeting BlogComments.ItemKey foreign key from DataFeed to Blogs",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ImpliedFromExample",
+    "TargetField": "iof.BlogComments.ItemKey.RelatedIntegrationObjectID",
+    "Excerpt": "SOURCE_STUDY.md leaf table row 'BlogComments': the Comments surface scoped to itemKey={blogKey} -> parent is Blogs."
+  }
+]

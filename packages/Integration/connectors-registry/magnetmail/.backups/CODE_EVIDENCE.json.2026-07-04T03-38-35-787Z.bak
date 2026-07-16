@@ -1,0 +1,31 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/magnetmail/scripts/extract-wsdl-facts.mjs",
+      "ScriptRunAt": "2026-07-04T03:38:35.784Z",
+      "StructuredOutput": {
+        "soapAddr": [
+          "https://hlma-apie1.magnetmail.net/mmapi.asmx"
+        ],
+        "targetNamespace": "http://www.magnetmail.net/",
+        "operationCount": 55,
+        "authenticateShape": [
+          "<s:element minOccurs=\"0\" maxOccurs=\"1\" name=\"username\" type=\"s:string\" />",
+          "<s:element minOccurs=\"0\" maxOccurs=\"1\" name=\"password\" type=\"s:string\" />"
+        ],
+        "authenticateRespShape": [
+          "<s:element minOccurs=\"0\" maxOccurs=\"1\" name=\"AuthenticateResult\" type=\"tns:AuthenticationResult\" />"
+        ],
+        "mutationLike": [
+          "addGroup",
+          "addRecipient",
+          "createMagnetMailMessage",
+          "unsubscribeRecipients",
+          "CreateEventSignUp"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.NavigationBaseURL"
+    }
+  ]
+}

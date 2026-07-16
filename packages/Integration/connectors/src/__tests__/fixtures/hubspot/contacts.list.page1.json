@@ -1,0 +1,40 @@
+{
+  "results": [
+    {
+      "id": "701",
+      "properties": {
+        "hs_object_id": "701",
+        "email": "example+1@example.com",
+        "firstname": "<scrubbed-name-1>",
+        "lastname": "<scrubbed-name-2>",
+        "createdate": "2026-03-01T10:00:00.000Z",
+        "lastmodifieddate": "2026-03-02T12:00:00.000Z",
+        "hs_lastmodifieddate": "1772539200000"
+      },
+      "createdAt": "2026-03-01T10:00:00.000Z",
+      "updatedAt": "2026-03-02T12:00:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "702",
+      "properties": {
+        "hs_object_id": "702",
+        "email": "example+2@example.com",
+        "firstname": "<scrubbed-name-3>",
+        "lastname": "<scrubbed-name-4>",
+        "createdate": "2026-03-03T08:30:00.000Z",
+        "lastmodifieddate": "2026-03-04T09:15:00.000Z",
+        "hs_lastmodifieddate": "1772709300000"
+      },
+      "createdAt": "2026-03-03T08:30:00.000Z",
+      "updatedAt": "2026-03-04T09:15:00.000Z",
+      "archived": false
+    }
+  ],
+  "paging": {
+    "next": {
+      "after": "702",
+      "link": "https://api.hubapi.com/crm/objects/2026-03/contacts?after=702"
+    }
+  }
+}

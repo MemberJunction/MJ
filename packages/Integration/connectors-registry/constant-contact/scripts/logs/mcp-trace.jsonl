@@ -1,0 +1,2 @@
+{"ts":"2026-07-13T21:41:13.403Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object","connector":"constant-contact","io":"social_posts"}
+{"ts":"2026-07-13T21:41:13.405Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object","ok":true,"connector":"constant-contact","io":"social_posts"}

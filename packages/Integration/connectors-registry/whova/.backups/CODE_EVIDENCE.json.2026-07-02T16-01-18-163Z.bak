@@ -1,0 +1,52 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T16:00:52.692Z",
+      "StructuredOutput": {
+        "io": "Attendees",
+        "supportsWrite": true,
+        "fieldsExtracted": 9,
+        "gaps": 3
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Attendees"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T16:00:52.692Z",
+      "StructuredOutput": {
+        "io": "Orders",
+        "supportsWrite": false,
+        "fieldsExtracted": 0,
+        "gaps": 1
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Orders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T16:00:52.692Z",
+      "StructuredOutput": {
+        "io": "Registrants",
+        "supportsWrite": false,
+        "fieldsExtracted": 0,
+        "gaps": 2
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Registrants"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T16:01:18.063Z",
+      "StructuredOutput": {
+        "io": "Attendees",
+        "supportsWrite": true,
+        "fieldsExtracted": 9,
+        "gaps": 3
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Attendees"
+    }
+  ]
+}

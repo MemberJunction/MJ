@@ -1,0 +1,157 @@
+[
+  {
+    "objectName": "Blogs",
+    "fieldsExtracted": 17,
+    "gapsRemaining": [],
+    "claims": [
+      {
+        "slot": "iof.Blogs.CreatedByContactKey.RelatedIntegrationObjectID",
+        "value": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+        "sourcePath": "sources/ops/GET-api-v2.0-Blogs-GetBlog_blogKey.html"
+      },
+      {
+        "slot": "iof.Blogs.CommunityKey.RelatedIntegrationObjectID",
+        "value": "@lookup:MJ: Integration Objects.Name=Communities&IntegrationID=@parent:IntegrationID",
+        "sourcePath": "sources/ops/GET-api-v2.0-Blogs-GetBlog_blogKey.html"
+      }
+    ],
+    "matrixRow": {
+      "IOName": "Blogs",
+      "ExistingConnectorTs": "n/a",
+      "ExistingMetadataJson": "yes",
+      "OpenAPIxPK": "no",
+      "OpenAPIPathOps": "yes",
+      "OpenAPILocationHeader": "no",
+      "VendorDocsProseScan": "yes",
+      "SDKTypes": "n/a",
+      "PostmanCommunity": "n/a",
+      "NamingConvention": "yes",
+      "CrossIOMatch": "yes",
+      "PKVerdict": "emit",
+      "FKVerdict": "emit-N",
+      "EvidenceCount": 2
+    }
+  },
+  {
+    "objectName": "ResourceLibraryDocuments",
+    "fieldsExtracted": 22,
+    "gapsRemaining": [],
+    "claims": [
+      {
+        "slot": "iof.ResourceLibraryDocuments.CreatedByContactKey.RelatedIntegrationObjectID",
+        "value": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+        "sourcePath": "sources/ops/GET-api-v2.0-ResourceLibrary-GetLibraryDocument_documentKey_paginateComments_commentLimit.html"
+      }
+    ],
+    "matrixRow": {
+      "IOName": "ResourceLibraryDocuments",
+      "ExistingConnectorTs": "n/a",
+      "ExistingMetadataJson": "yes",
+      "OpenAPIxPK": "no",
+      "OpenAPIPathOps": "yes",
+      "OpenAPILocationHeader": "no",
+      "VendorDocsProseScan": "yes",
+      "SDKTypes": "n/a",
+      "PostmanCommunity": "n/a",
+      "NamingConvention": "yes",
+      "CrossIOMatch": "yes",
+      "PKVerdict": "emit",
+      "FKVerdict": "emit-N",
+      "EvidenceCount": 1
+    }
+  },
+  {
+    "objectName": "Ideas",
+    "fieldsExtracted": 13,
+    "gapsRemaining": [],
+    "claims": [
+      {
+        "slot": "iof.Ideas.CommunityKey.RelatedIntegrationObjectID",
+        "value": "@lookup:MJ: Integration Objects.Name=Communities&IntegrationID=@parent:IntegrationID",
+        "sourcePath": "sources/ops/GET-api-v2.0-Ideation-IdeaDetails_ideationKey.html"
+      },
+      {
+        "slot": "iof.Ideas.IdeaStatusKey.RelatedIntegrationObjectID",
+        "value": "@lookup:MJ: Integration Objects.Name=IdeaStatuses&IntegrationID=@parent:IntegrationID",
+        "sourcePath": "sources/ops/GET-api-v2.0-Ideation-IdeaDetails_ideationKey.html"
+      },
+      {
+        "slot": "iof.Ideas.AuthorContactKey.RelatedIntegrationObjectID",
+        "value": "@lookup:MJ: Integration Objects.Name=Contacts&IntegrationID=@parent:IntegrationID",
+        "sourcePath": "sources/ops/GET-api-v2.0-Ideation-IdeaDetails_ideationKey.html"
+      }
+    ],
+    "matrixRow": {
+      "IOName": "Ideas",
+      "ExistingConnectorTs": "n/a",
+      "ExistingMetadataJson": "yes",
+      "OpenAPIxPK": "no",
+      "OpenAPIPathOps": "yes",
+      "OpenAPILocationHeader": "no",
+      "VendorDocsProseScan": "yes",
+      "SDKTypes": "n/a",
+      "PostmanCommunity": "n/a",
+      "NamingConvention": "yes",
+      "CrossIOMatch": "yes",
+      "PKVerdict": "emit",
+      "FKVerdict": "emit-N",
+      "EvidenceCount": 3
+    }
+  },
+  {
+    "objectName": "VolunteerOpportunities",
+    "fieldsExtracted": 28,
+    "gapsRemaining": [],
+    "claims": [
+      {
+        "slot": "iof.VolunteerOpportunities.CommunityKey.RelatedIntegrationObjectID",
+        "value": "@lookup:MJ: Integration Objects.Name=Communities&IntegrationID=@parent:IntegrationID",
+        "sourcePath": "sources/ops/GET-api-v2.0-Volunteer-GetVolunteerOpportunityList.html"
+      }
+    ],
+    "matrixRow": {
+      "IOName": "VolunteerOpportunities",
+      "ExistingConnectorTs": "n/a",
+      "ExistingMetadataJson": "yes",
+      "OpenAPIxPK": "no",
+      "OpenAPIPathOps": "yes",
+      "OpenAPILocationHeader": "no",
+      "VendorDocsProseScan": "yes",
+      "SDKTypes": "n/a",
+      "PostmanCommunity": "n/a",
+      "NamingConvention": "yes",
+      "CrossIOMatch": "yes",
+      "PKVerdict": "emit",
+      "FKVerdict": "emit-N",
+      "EvidenceCount": 1
+    }
+  },
+  {
+    "objectName": "Events",
+    "fieldsExtracted": 69,
+    "gapsRemaining": [],
+    "claims": [
+      {
+        "slot": "iof.Events.CommunityKey.RelatedIntegrationObjectID",
+        "value": "@lookup:MJ: Integration Objects.Name=Communities&IntegrationID=@parent:IntegrationID",
+        "sourcePath": "sources/ops/GET-api-v2.0-Events-GetEvent_eventKey.html"
+      }
+    ],
+    "matrixRow": {
+      "IOName": "Events",
+      "ExistingConnectorTs": "n/a",
+      "ExistingMetadataJson": "yes",
+      "OpenAPIxPK": "no",
+      "OpenAPIPathOps": "yes",
+      "OpenAPILocationHeader": "no",
+      "VendorDocsProseScan": "yes",
+      "SDKTypes": "n/a",
+      "PostmanCommunity": "n/a",
+      "NamingConvention": "yes",
+      "CrossIOMatch": "yes",
+      "PKVerdict": "emit",
+      "FKVerdict": "emit-N",
+      "EvidenceCount": 1
+    }
+  }
+]

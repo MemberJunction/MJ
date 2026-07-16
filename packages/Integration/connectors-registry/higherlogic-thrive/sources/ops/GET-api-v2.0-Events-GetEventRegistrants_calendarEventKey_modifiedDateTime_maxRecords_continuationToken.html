@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/Events/GetEventRegistrants?calendarEventKey={calendarEventKey}&amp;modifiedDateTime={modifiedDateTime}&amp;maxRecords={maxRecords}&amp;continuationToken={continuationToken}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/Events/GetEventRegistrants?calendarEventKey={calendarEventKey}&amp;modifiedDateTime={modifiedDateTime}&amp;maxRecords={maxRecords}&amp;continuationToken={continuationToken}</h1>
+<div>
+    <p>Administrator-accessible only endpoint.  Returns Paged Registrant Data for a given Calendar Event.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">calendarEventKey</td>
+                    <td class="parameter-documentation">
+                        <p>Required. Unique Identifier for a Calendar Event.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">modifiedDateTime</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. The format is &quot;yyyy-MM-ddTHH:mm:ss&quot;. If specified only registrant records that have been modified on or after this date will be returned.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">maxRecords</td>
+                    <td class="parameter-documentation">
+                        <p>The maximum number of records to return.  Defaults to 50 if not specified.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Default value is 50</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">continuationToken</td>
+                    <td class="parameter-documentation">
+                        <p>The last RegistrantKey seen.  If not provided, will start at the first Registrant record for the Event. The Registrants are sorted by a SQL Guid sort order.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>A list of Event Registrants for the provided CalendarEventKey.</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=EventRegistrantConcise">EventRegistrantConcise</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">RegistrantKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Key for the Registrant.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">BadgeName</td>
+                    <td class="parameter-documentation">
+                        <p>Name to display on the Registrant&#39;s Badge.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FirstName</td>
+                    <td class="parameter-documentation">
+                        <p>First Name of the Registrant.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LastName</td>
+                    <td class="parameter-documentation">
+                        <p>Last Name of the Registrant.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Email</td>
+                    <td class="parameter-documentation">
+                        <p>Email Address from the Registrant record.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CompanyName</td>
+                    <td class="parameter-documentation">
+                        <p>Company Name from the Registrant record.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CompanyTitle</td>
+                    <td class="parameter-documentation">
+                        <p>Company Title from the Registrant record.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">WebsiteUrl</td>
+                    <td class="parameter-documentation">
+                        <p>Registrant&#39;s Website URL - if specified.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PictureUrl</td>
+                    <td class="parameter-documentation">
+                        <p>Registrant&#39;s Picture URL.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LargePictureUrl</td>
+                    <td class="parameter-documentation">
+                        <p>Registrant&#39;s Large Picture URL.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DirectoryOptOut</td>
+                    <td class="parameter-documentation">
+                        <p>Is this Registrant opting out of the Directory?</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactMeOptOut</td>
+                    <td class="parameter-documentation">
+                        <p>Is this Registrant opting out of being Contacted?</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RegistrationKey</td>
+                    <td class="parameter-documentation">
+                        <p>The RegistrationKey associated with this Registrant.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>The System ContactKey for this Registrant.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UpdatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>The Last Updated Date for this Registrant.  This is the MAX value of:
+            Registrant.UpdatedOn, Registration.UpdatedOn and any Event Option&#39;s UpdatedOn Date.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RegistrantClass</td>
+                    <td class="parameter-documentation">
+                        <p>The Class or Type of Registrant.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;RegistrantKey&quot;: &quot;d7cbd733-5e9b-4e55-8caf-dbb37e65b24a&quot;,
+    &quot;BadgeName&quot;: &quot;sample string 2&quot;,
+    &quot;FirstName&quot;: &quot;sample string 3&quot;,
+    &quot;LastName&quot;: &quot;sample string 4&quot;,
+    &quot;Email&quot;: &quot;sample string 5&quot;,
+    &quot;CompanyName&quot;: &quot;sample string 6&quot;,
+    &quot;CompanyTitle&quot;: &quot;sample string 7&quot;,
+    &quot;WebsiteUrl&quot;: &quot;sample string 8&quot;,
+    &quot;PictureUrl&quot;: &quot;sample string 9&quot;,
+    &quot;LargePictureUrl&quot;: &quot;sample string 10&quot;,
+    &quot;DirectoryOptOut&quot;: true,
+    &quot;ContactMeOptOut&quot;: true,
+    &quot;RegistrationKey&quot;: &quot;aba46955-a48d-4270-a9d0-31c2e6e53e48&quot;,
+    &quot;ContactKey&quot;: &quot;d7595b21-34a2-4188-bf47-dc5f030e2840&quot;,
+    &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:37.1308554Z&quot;,
+    &quot;RegistrantClass&quot;: &quot;sample string 16&quot;
+  },
+  {
+    &quot;RegistrantKey&quot;: &quot;d7cbd733-5e9b-4e55-8caf-dbb37e65b24a&quot;,
+    &quot;BadgeName&quot;: &quot;sample string 2&quot;,
+    &quot;FirstName&quot;: &quot;sample string 3&quot;,
+    &quot;LastName&quot;: &quot;sample string 4&quot;,
+    &quot;Email&quot;: &quot;sample string 5&quot;,
+    &quot;CompanyName&quot;: &quot;sample string 6&quot;,
+    &quot;CompanyTitle&quot;: &quot;sample string 7&quot;,
+    &quot;WebsiteUrl&quot;: &quot;sample string 8&quot;,
+    &quot;PictureUrl&quot;: &quot;sample string 9&quot;,
+    &quot;LargePictureUrl&quot;: &quot;sample string 10&quot;,
+    &quot;DirectoryOptOut&quot;: true,
+    &quot;ContactMeOptOut&quot;: true,
+    &quot;RegistrationKey&quot;: &quot;aba46955-a48d-4270-a9d0-31c2e6e53e48&quot;,
+    &quot;ContactKey&quot;: &quot;d7595b21-34a2-4188-bf47-dc5f030e2840&quot;,
+    &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:37.1308554Z&quot;,
+    &quot;RegistrantClass&quot;: &quot;sample string 16&quot;
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfEventRegistrantConcise xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Events&quot;&gt;
+  &lt;EventRegistrantConcise&gt;
+    &lt;BadgeName&gt;sample string 2&lt;/BadgeName&gt;
+    &lt;CompanyName&gt;sample string 6&lt;/CompanyName&gt;
+    &lt;CompanyTitle&gt;sample string 7&lt;/CompanyTitle&gt;
+    &lt;ContactMeOptOut&gt;true&lt;/ContactMeOptOut&gt;
+    &lt;DirectoryOptOut&gt;true&lt;/DirectoryOptOut&gt;
+    &lt;Email&gt;sample string 5&lt;/Email&gt;
+    &lt;FirstName&gt;sample string 3&lt;/FirstName&gt;
+    &lt;LargePictureUrl&gt;sample string 10&lt;/LargePictureUrl&gt;
+    &lt;LastName&gt;sample string 4&lt;/LastName&gt;
+    &lt;PictureUrl&gt;sample string 9&lt;/PictureUrl&gt;
+    &lt;RegistrantClass&gt;sample string 16&lt;/RegistrantClass&gt;
+    &lt;RegistrantKey&gt;d7cbd733-5e9b-4e55-8caf-dbb37e65b24a&lt;/RegistrantKey&gt;
+    &lt;WebsiteUrl&gt;sample string 8&lt;/WebsiteUrl&gt;
+  &lt;/EventRegistrantConcise&gt;
+  &lt;EventRegistrantConcise&gt;
+    &lt;BadgeName&gt;sample string 2&lt;/BadgeName&gt;
+    &lt;CompanyName&gt;sample string 6&lt;/CompanyName&gt;
+    &lt;CompanyTitle&gt;sample string 7&lt;/CompanyTitle&gt;
+    &lt;ContactMeOptOut&gt;true&lt;/ContactMeOptOut&gt;
+    &lt;DirectoryOptOut&gt;true&lt;/DirectoryOptOut&gt;
+    &lt;Email&gt;sample string 5&lt;/Email&gt;
+    &lt;FirstName&gt;sample string 3&lt;/FirstName&gt;
+    &lt;LargePictureUrl&gt;sample string 10&lt;/LargePictureUrl&gt;
+    &lt;LastName&gt;sample string 4&lt;/LastName&gt;
+    &lt;PictureUrl&gt;sample string 9&lt;/PictureUrl&gt;
+    &lt;RegistrantClass&gt;sample string 16&lt;/RegistrantClass&gt;
+    &lt;RegistrantKey&gt;d7cbd733-5e9b-4e55-8caf-dbb37e65b24a&lt;/RegistrantKey&gt;
+    &lt;WebsiteUrl&gt;sample string 8&lt;/WebsiteUrl&gt;
+  &lt;/EventRegistrantConcise&gt;
+&lt;/ArrayOfEventRegistrantConcise&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

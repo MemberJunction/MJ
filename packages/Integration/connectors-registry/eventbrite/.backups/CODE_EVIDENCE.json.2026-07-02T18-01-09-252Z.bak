@@ -1,0 +1,472 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 59,
+        "fkCount": 7,
+        "msonType": "Event",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Event"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 28,
+        "fkCount": 3,
+        "msonType": "Attendee",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Attendee"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 17,
+        "fkCount": 1,
+        "msonType": "Order",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Order"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 31,
+        "fkCount": 1,
+        "msonType": "Ticket Class",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Ticket Class"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 5,
+        "fkCount": 0,
+        "msonType": "Ticket Group",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Ticket Group"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 8,
+        "fkCount": 0,
+        "msonType": "Venue Response",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Venue"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 7,
+        "fkCount": 0,
+        "msonType": "Category",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Category"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 4,
+        "fkCount": 0,
+        "msonType": "Subcategory",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Subcategory"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 6,
+        "fkCount": 0,
+        "msonType": "Format",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Format"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 4,
+        "fkCount": 0,
+        "msonType": "Organization",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organization"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 9,
+        "fkCount": 1,
+        "msonType": "Role",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organization Role"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 1,
+        "fkCount": 0,
+        "msonType": null,
+        "msonPresent": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Organization Member"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 15,
+        "fkCount": 2,
+        "msonType": "Discount",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Discount"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 16,
+        "fkCount": 1,
+        "msonType": "Inventory Tier",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Inventory Tier"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 9,
+        "fkCount": 1,
+        "msonType": "Event Team Response",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Event Team"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 13,
+        "fkCount": 0,
+        "msonType": "Canned Question",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Canned Question"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 13,
+        "fkCount": 0,
+        "msonType": "Base Question",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Question"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 11,
+        "fkCount": 0,
+        "msonType": "Fee Rate",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Fee Rate"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 6,
+        "fkCount": 2,
+        "msonType": "Seat Map",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Seat Map"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 7,
+        "fkCount": 2,
+        "msonType": "Webhook",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Webhook"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 6,
+        "fkCount": 0,
+        "msonType": "User",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.User"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 1,
+        "fkCount": 0,
+        "msonType": null,
+        "msonPresent": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Balance"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 1,
+        "fkCount": 0,
+        "msonType": null,
+        "msonPresent": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Structured Content Page"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 6,
+        "fkCount": 0,
+        "msonType": "Text Overrides Response Content",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Text Overrides"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 7,
+        "fkCount": 1,
+        "msonType": "Event Ticket Buyer Settings",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Ticket Buyer Settings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 11,
+        "fkCount": 0,
+        "msonType": "Display Settings",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Display Settings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 10,
+        "fkCount": 1,
+        "msonType": "Capacity Tier",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Event Capacity Tier"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 1,
+        "fkCount": 0,
+        "msonType": null,
+        "msonPresent": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Event Description"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 4,
+        "fkCount": 0,
+        "msonType": "Schedule",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Event Schedule"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 3,
+        "fkCount": 0,
+        "msonType": "Report Response Sales",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Sales Report"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 3,
+        "fkCount": 0,
+        "msonType": "Report Response Attendees",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Attendee Report"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T18:01:08.944Z",
+      "StructuredOutput": {
+        "fields": 59,
+        "fkCount": 7,
+        "msonType": "Event",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Event"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T18:01:08.944Z",
+      "StructuredOutput": {
+        "fields": 28,
+        "fkCount": 3,
+        "msonType": "Attendee",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Attendee"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T18:01:08.944Z",
+      "StructuredOutput": {
+        "fields": 17,
+        "fkCount": 1,
+        "msonType": "Order",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Order"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T18:01:08.944Z",
+      "StructuredOutput": {
+        "fields": 31,
+        "fkCount": 1,
+        "msonType": "Ticket Class",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Ticket Class"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T18:01:08.944Z",
+      "StructuredOutput": {
+        "fields": 5,
+        "fkCount": 0,
+        "msonType": "Ticket Group",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Ticket Group"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T18:01:08.944Z",
+      "StructuredOutput": {
+        "fields": 8,
+        "fkCount": 0,
+        "msonType": "Venue Response",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Venue"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T18:01:08.944Z",
+      "StructuredOutput": {
+        "fields": 7,
+        "fkCount": 0,
+        "msonType": "Category",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Category"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T18:01:08.944Z",
+      "StructuredOutput": {
+        "fields": 4,
+        "fkCount": 0,
+        "msonType": "Subcategory",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Subcategory"
+    }
+  ]
+}

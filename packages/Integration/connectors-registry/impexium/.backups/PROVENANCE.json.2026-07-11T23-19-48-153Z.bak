@@ -1,0 +1,44 @@
+{
+  "Entries": [
+    {
+      "URL": "https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/certified-connectors/Impexium/apiProperties.json",
+      "AccessedAt": "2026-07-11T23:19:48.080Z",
+      "UsedFor": "Confirming the per-tenant host connection-parameter name and URL shape for Configuration.APIBaseURLTemplate / Configuration.TenantHostConfigKey / NavigationBaseURL.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "\"hostUrl\": {\"type\": \"string\", \"uiDefinition\": {\"constraints\": {\"required\": \"true\"}, \"description\": \"Specify your API Url e.g. https://abc.mpxapi.com\", \"displayName\": \"API URL\", \"tooltip\": \"Specify your API Url e.g. https://abc.mpxapi.com\"}}"
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/certified-connectors/Impexium/apiProperties.json",
+      "AccessedAt": "2026-07-11T23:19:48.080Z",
+      "UsedFor": "Confirming Configuration.TenantHostConfigKey and Configuration.APIBaseURLTemplate (the dynamichosturl APIM policy rewrite).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.APIBaseURLTemplate",
+      "Excerpt": "\"policyTemplateInstances\": [{\"templateId\": \"dynamichosturl\", \"title\": \"Host Url\", \"parameters\": {\"x-ms-apimTemplateParameter.urlTemplate\": \"@connectionParameters('HostUrl')/\"}}]"
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/certified-connectors/Impexium/apiDefinition.swagger.json",
+      "AccessedAt": "2026-07-11T23:19:48.080Z",
+      "UsedFor": "Confirming Configuration.AuthModel.candidateB_altSurface (single x-api-key header) as the MS-certified connector's own auth contract -- NOT adopted as raw-host evidence.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthModel",
+      "Excerpt": "\"securityDefinitions\": {\"API Key\": {\"type\": \"apiKey\", \"in\": \"header\", \"name\": \"x-api-key\"}}, \"security\": [{\"API Key\": []}] applied uniformly across all 116 operations."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/connectors/impexium/",
+      "AccessedAt": "2026-07-11T23:19:48.080Z",
+      "UsedFor": "Confirming the MS-connector-layer (Azure APIM proxy) rate-limit figure recorded in Configuration.RateLimitAwareness -- explicitly NOT applied to Integration.BatchMaxRequestCount/BatchRequestWaitTime.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.RateLimitAwareness",
+      "Excerpt": "\"Throttling Limits\" table: <tr><td>API calls per connection</td><td>100</td><td>60 seconds</td></tr> (rendered <table>, not prose; independently re-fetched and confirmed present at the cited URL)."
+    }
+  ]
+}

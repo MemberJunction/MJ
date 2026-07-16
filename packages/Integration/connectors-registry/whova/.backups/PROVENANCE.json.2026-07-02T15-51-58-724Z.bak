@@ -1,0 +1,24 @@
+{
+  "Entries": [
+    {
+      "URL": "https://whova.com",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Confirming Whova's public navigation/marketing base URL (NavigationBaseURL). This is the product's public site, not a documented API base URL -- no API base URL exists credential-free (see SOURCE_STUDY.md §0).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "https://whova.com -- Whova's own primary domain, reachable directly (not bot-blocked, unlike whova.zendesk.com)."
+    },
+    {
+      "URL": "https://zapier.com/apps/whova/integrations",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Establishing Configuration.WriteCapability -- confirming the ONLY documented write surface is the 'Create or Update Attendee' action, and that 'Get Orders'/'Get Registrants' are read-only triggers with no corresponding write action.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WriteCapability",
+      "Excerpt": "Triggers: Get Attendees (\"Triggers when there is a change in the attendee list\"), Get Orders (\"Triggers when there is a change in the order list\"), Get Registrants (\"Triggers when a registrant submits their registration question form responses\"). Actions: Create or Update Attendee -- required: Event, First Name, Last Name, Email; optional: Title, Affiliation/Company, Location, Ticket Types, Audience Type, Categories."
+    }
+  ]
+}

@@ -1,0 +1,184 @@
+{
+  "Entries": [
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:21.513Z",
+      "UsedFor": "Confirming the v3 API base URL (HOST directive) for Configuration/NavigationBaseURL and the URL-path API versioning strategy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "HOST: https://www.eventbriteapi.com/v3/ (blueprint line 2). \"All URLs referenced in the API documentation have the following base: https://www.eventbrite.com/v3.\" (prose restatement, line 14)."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:21.513Z",
+      "UsedFor": "Establishing Configuration.APIVersioningStrategy=url-path -- the v3 version segment is embedded directly in the HOST base URL, with no separate version header/param used by any of the 102 documented endpoints.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.APIVersioningStrategy",
+      "Excerpt": "HOST: https://www.eventbriteapi.com/v3/"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:21.513Z",
+      "UsedFor": "Confirming the documented hourly rate limit (429 HIT_RATE_LIMIT) used to derive BatchMaxRequestCount/BatchRequestWaitTime and Configuration.RateLimitPolicy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "429 | HIT_RATE_LIMIT | Hourly rate limit has been reached for this token. Default rate limits are 2,000 calls per hour."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:21.513Z",
+      "UsedFor": "Same rate-limit statement supports BatchRequestWaitTime (the 1-hour/3600s window the 2,000-call budget replenishes over) and Configuration.RateLimitPolicy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "429 | HIT_RATE_LIMIT | Hourly rate limit has been reached for this token. Default rate limits are 2,000 calls per hour."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Confirming the v3 API base URL (HOST directive) for Configuration/NavigationBaseURL and the URL-path API versioning strategy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "HOST: https://www.eventbriteapi.com/v3/ (blueprint line 2). \"All URLs referenced in the API documentation have the following base: https://www.eventbrite.com/v3.\" (prose restatement, line 14)."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing Configuration.APIVersioningStrategy=url-path -- the v3 version segment is embedded directly in the HOST base URL, with no separate version header/param used by any of the 102 documented endpoints.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.APIVersioningStrategy",
+      "Excerpt": "HOST: https://www.eventbriteapi.com/v3/"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Confirming the documented hourly rate limit (429 HIT_RATE_LIMIT) used to derive BatchMaxRequestCount/BatchRequestWaitTime and Configuration.RateLimitPolicy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "429 | HIT_RATE_LIMIT | Hourly rate limit has been reached for this token. Default rate limits are 2,000 calls per hour."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Same rate-limit statement supports BatchRequestWaitTime (the 1-hour/3600s window the 2,000-call budget replenishes over) and Configuration.RateLimitPolicy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "429 | HIT_RATE_LIMIT | Hourly rate limit has been reached for this token. Default rate limits are 2,000 calls per hour."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing Configuration.AuthFlow=oauth2-authcode, AuthHeaderPattern, and OAuthEndpoints (authorize + token URLs) -- co-stated in the same Authentication section walkthrough.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "Server-Side Authorization: redirect to https://www.eventbrite.com/oauth/authorize?response_type=code&client_id=YOUR_API_KEY&redirect_uri=YOUR_REDIRECT_URI, then POST https://www.eventbrite.com/oauth/token with grant_type=authorization_code + client_id + client_secret + code + redirect_uri. \"To authenticate API requests... Include the following in your Authorization header: { Authorization: Bearer MYTOKEN }\"."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing Configuration.AuthFlow=oauth2-authcode, AuthHeaderPattern, and OAuthEndpoints (authorize + token URLs) -- co-stated in the same Authentication section walkthrough.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthHeaderPattern",
+      "Excerpt": "Server-Side Authorization: redirect to https://www.eventbrite.com/oauth/authorize?response_type=code&client_id=YOUR_API_KEY&redirect_uri=YOUR_REDIRECT_URI, then POST https://www.eventbrite.com/oauth/token with grant_type=authorization_code + client_id + client_secret + code + redirect_uri. \"To authenticate API requests... Include the following in your Authorization header: { Authorization: Bearer MYTOKEN }\"."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing Configuration.AuthFlow=oauth2-authcode, AuthHeaderPattern, and OAuthEndpoints (authorize + token URLs) -- co-stated in the same Authentication section walkthrough.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OAuthEndpoints",
+      "Excerpt": "Server-Side Authorization: redirect to https://www.eventbrite.com/oauth/authorize?response_type=code&client_id=YOUR_API_KEY&redirect_uri=YOUR_REDIRECT_URI, then POST https://www.eventbrite.com/oauth/token with grant_type=authorization_code + client_id + client_secret + code + redirect_uri. \"To authenticate API requests... Include the following in your Authorization header: { Authorization: Bearer MYTOKEN }\"."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Negative evidence for Configuration.TokenRefreshStrategy -- no refresh_token grant, token TTL, or refresh endpoint is documented anywhere in the Authentication section.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.TokenRefreshStrategy",
+      "Excerpt": "Section \"## Authentication\" (full walkthrough, lines 18-119) documents Private Token acquisition + OAuth2 authorization-code/implicit flows only; no refresh_token grant or token-expiry statement appears anywhere in this section or the rest of the 6,932-line document (confirmed via full-text search)."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing the full pagination envelope shape + continuation-token advance protocol for Configuration.PaginationDefaults and integration-level PaginationType=Cursor.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "{\"pagination\":{\"object_count\":4,\"continuation\":\"AEtFRy...\",\"page_count\":2,\"page_size\":2,\"has_more_items\":true,\"page_number\":1},\"categories\":[...]}. \"continuation: The continuation token you'll use to get to the next set of results by making the same request again but including this token... When all records have been retrieved, the continuation token will return an empty list of objects.\" \"has_more_items: Boolean indicating whether or not there are more items in your response... When all records have been retrieved, this attribute will be 'false'.\""
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Negative evidence for Configuration.IncrementalSyncCapability -- no incremental/delta/updated-since query parameter is documented on any of the 31 coverable list endpoints.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "Full-text search of all 102 documented endpoint + Parameters blocks across the 6,932-line source found no updated_since / changed_after / delta / incremental query parameter on any listing endpoint."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing Configuration.WebhooksAvailable=true and the webhook trigger-action vocabulary, from the dedicated Webhooks resource group (GET/POST /organizations/{organization_id}/webhooks/, DELETE /webhooks/{id}/).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WebhooksAvailable",
+      "Excerpt": "Group Webhooks: GET /organizations/{organization_id}/webhooks/ (list), POST /organizations/{organization_id}/webhooks/ (create, with \"actions\" array param), DELETE /webhooks/{id}/ (delete). Create Webhook MSON (~lines 5696-5711) enumerates the actions vocabulary: event.created, event.published, event.unpublished, event.updated, order.placed, order.refunded, order.updated, organizer.updated, attendee.updated, attendee.checked_in, attendee.checked_out, ticket_class.created, ticket_class.updated, ticket_class.deleted, venue.updated. Legacy non-scoped /webhooks/ (GET/POST) is marked deprecated effective 2020-06-01 via inline \"> Warning:\" blockquote."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Negative evidence for Configuration.BulkOperationsAvailable -- no batch create/update/delete endpoint is documented across the 102 cataloged operations, though a 400 INVALID_BATCH error code exists (suggestive but not conclusive).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.BulkOperationsAvailable",
+      "Excerpt": "Every one of the 102 cataloged endpoint operations (SOURCE_STUDY.md enumeration) is single-record CRUD; no endpoint path or operation title contains \"batch\"/\"bulk\". Common Errors table lists \"400 | INVALID_BATCH | Batched request is missing or invalid.\" with no corresponding documented batch endpoint."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing Configuration.ErrorResponseShape -- the vendor-wide error envelope and the common cross-endpoint error-code table.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ErrorResponseShape",
+      "Excerpt": "\"When an error occurs during an API request, you will receive: An HTTP error status (in the 400-500 range); A JSON response containing more information about the error.\" Example: {\"error\":\"VENUE_AND_ONLINE\",\"error_description\":\"You cannot both specify a venue and set online_event\",\"status_code\":400}. \"This constant value is what you should base your error handling logic on, because this string won't change depending on the locale or as the API changes over time.\""
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Negative evidence for Configuration.CustomObjectMarkerPattern and Configuration.CustomFieldMarkerPattern -- no vendor-documented naming convention for customer-defined custom objects/fields was found anywhere in the source; the only organizer-extensibility surface is the first-class Question/Canned Question resource groups.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.CustomObjectMarkerPattern",
+      "Excerpt": "Full-text search of the 6,932-line source for a custom-object/custom-field naming-prefix convention (comparable to HubSpot's p_<accountID>_<name>) returned no matches. Organizer-authored extensibility is expressed only through the fully-cataloged \"Question\" (custom, event-scoped) and \"Canned Question\" (pre-defined templates) resource groups, each with their own APIPath and CRUD surface -- not a dynamically-named custom-field suffix/prefix mechanism."
+    }
+  ]
+}

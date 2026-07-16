@@ -183,16 +183,16 @@ describe('E2E: HubSpot Connector', () => {
     });
 
     describe('Default Field Mappings', () => {
-        it('should return contact mappings for contacts object', () => {
-            const mappings = connector.GetDefaultFieldMappings('contacts', 'Contacts');
-            expect(mappings.length).toBe(6);
-            const keyField = mappings.find((m) => m.IsKeyField);
-            expect(keyField?.SourceFieldName).toBe('email');
+        // Post-frozen-contract: the HubSpot connector is pure mechanism — it holds NO baked object/field
+        // catalog, so it does NOT hand-author default field mappings in code. Field maps derive from the
+        // Declared metadata (the `properties` json column + the field-map layer), not a hardcoded list.
+        // GetDefaultFieldMappings therefore correctly returns the base default ([]).
+        it('returns no code-baked mappings for contacts (mappings are metadata-driven)', () => {
+            expect(connector.GetDefaultFieldMappings('contacts', 'Contacts')).toEqual([]);
         });
 
-        it('should return company mappings for companies object', () => {
-            const mappings = connector.GetDefaultFieldMappings('companies', 'Companies');
-            expect(mappings.length).toBe(5);
+        it('returns no code-baked mappings for companies (mappings are metadata-driven)', () => {
+            expect(connector.GetDefaultFieldMappings('companies', 'Companies')).toEqual([]);
         });
     });
 });

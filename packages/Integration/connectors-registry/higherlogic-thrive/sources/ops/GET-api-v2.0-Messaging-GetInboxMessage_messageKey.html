@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/Messaging/GetInboxMessage?messageKey={messageKey}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/Messaging/GetInboxMessage?messageKey={messageKey}</h1>
+<div>
+    <p>Retrieves the specified Mailbox Message</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">messageKey</td>
+                    <td class="parameter-documentation">
+                        <p>Key of the MailboxMessage to return</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>Requested Mailbox Message</p>
+
+<a href="/Help/ResourceModel?modelName=MailboxMessage">MailboxMessage</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">MessageKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FromContactKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SentOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Subject</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Message</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsInSentBox</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsRead</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FromFirstName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FromLastName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FromDisplayName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToSenderProfile</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ToContactKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ToFirstName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ToLastName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ToDisplayName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToRecipientProfile</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToRecipientSmallImage</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToRecipientLargeImage</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToSenderSmallImage</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToSenderLargeImage</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsSenderCompany</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsRecipientCompany</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;MessageKey&quot;: &quot;6d8aebe3-5498-4217-8936-40a5ee0032f3&quot;,
+  &quot;FromContactKey&quot;: &quot;f85f45eb-189b-4ccb-a701-7a328abd10be&quot;,
+  &quot;SentOn&quot;: &quot;2026-07-08T17:53:37.8094166Z&quot;,
+  &quot;Subject&quot;: &quot;sample string 4&quot;,
+  &quot;Message&quot;: &quot;sample string 5&quot;,
+  &quot;IsInSentBox&quot;: true,
+  &quot;IsRead&quot;: true,
+  &quot;FromFirstName&quot;: &quot;sample string 8&quot;,
+  &quot;FromLastName&quot;: &quot;sample string 9&quot;,
+  &quot;FromDisplayName&quot;: &quot;sample string 10&quot;,
+  &quot;LinkToSenderProfile&quot;: &quot;sample string 11&quot;,
+  &quot;ToContactKey&quot;: &quot;1e383e00-581f-447e-9fd8-050778430b4d&quot;,
+  &quot;ToFirstName&quot;: &quot;sample string 13&quot;,
+  &quot;ToLastName&quot;: &quot;sample string 14&quot;,
+  &quot;ToDisplayName&quot;: &quot;sample string 15&quot;,
+  &quot;LinkToRecipientProfile&quot;: &quot;sample string 16&quot;,
+  &quot;LinkToRecipientSmallImage&quot;: &quot;sample string 17&quot;,
+  &quot;LinkToRecipientLargeImage&quot;: &quot;sample string 18&quot;,
+  &quot;LinkToSenderSmallImage&quot;: &quot;sample string 19&quot;,
+  &quot;LinkToSenderLargeImage&quot;: &quot;sample string 20&quot;,
+  &quot;IsSenderCompany&quot;: true,
+  &quot;IsRecipientCompany&quot;: true
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;MailboxMessage xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+  &lt;FromContactKey&gt;f85f45eb-189b-4ccb-a701-7a328abd10be&lt;/FromContactKey&gt;
+  &lt;FromDisplayName&gt;sample string 10&lt;/FromDisplayName&gt;
+  &lt;FromFirstName&gt;sample string 8&lt;/FromFirstName&gt;
+  &lt;FromLastName&gt;sample string 9&lt;/FromLastName&gt;
+  &lt;IsInSentBox&gt;true&lt;/IsInSentBox&gt;
+  &lt;IsRead&gt;true&lt;/IsRead&gt;
+  &lt;IsRecipientCompany&gt;true&lt;/IsRecipientCompany&gt;
+  &lt;IsSenderCompany&gt;true&lt;/IsSenderCompany&gt;
+  &lt;LinkToRecipientLargeImage&gt;sample string 18&lt;/LinkToRecipientLargeImage&gt;
+  &lt;LinkToRecipientProfile&gt;sample string 16&lt;/LinkToRecipientProfile&gt;
+  &lt;LinkToRecipientSmallImage&gt;sample string 17&lt;/LinkToRecipientSmallImage&gt;
+  &lt;LinkToSenderLargeImage&gt;sample string 20&lt;/LinkToSenderLargeImage&gt;
+  &lt;LinkToSenderProfile&gt;sample string 11&lt;/LinkToSenderProfile&gt;
+  &lt;LinkToSenderSmallImage&gt;sample string 19&lt;/LinkToSenderSmallImage&gt;
+  &lt;Message&gt;sample string 5&lt;/Message&gt;
+  &lt;MessageKey&gt;6d8aebe3-5498-4217-8936-40a5ee0032f3&lt;/MessageKey&gt;
+  &lt;SentOn&gt;2026-07-08T17:53:37.8094166Z&lt;/SentOn&gt;
+  &lt;Subject&gt;sample string 4&lt;/Subject&gt;
+  &lt;ToContactKey&gt;1e383e00-581f-447e-9fd8-050778430b4d&lt;/ToContactKey&gt;
+  &lt;ToDisplayName&gt;sample string 15&lt;/ToDisplayName&gt;
+  &lt;ToFirstName&gt;sample string 13&lt;/ToFirstName&gt;
+  &lt;ToLastName&gt;sample string 14&lt;/ToLastName&gt;
+&lt;/MailboxMessage&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

@@ -259,7 +259,7 @@ export class ${serverGraphQLTypeName} {`;
       fieldOptions += (fieldOptions.length > 0 ? ', ' : '') + `description: \`${fieldInfo.Description.replace(/`/g, "\\`")}\``;
 
     return `
-    @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ? '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.MaxLength > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.MaxLength + ')' : ''}
+    @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ? '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.MaxLength > 0 && IsStringSQLType(fieldInfo.Type) /*string*/ ? '\n    @MaxLength(' + fieldInfo.MaxLength + ')' : ''}
     ${codeName}${fieldInfo.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
         `;
   }
@@ -281,10 +281,13 @@ export class ${serverGraphQLTypeName} {`;
     // String-shaped (text, varchar, char-family, citext, uuid, bytea-as-string,
     // and SQL Server's `rowversion`/`timestamp` which are 8-byte binary surfaced
     // as base64 string at the GraphQL layer) — TypeGraphQL infers String from TS.
-    if (IsStringSQLType(t) || IsUuidSQLType(t) || IsBinarySQLType(t)) return '';
+    // Emit an EXPLICIT type fn (not '') so resolvers work under loaders that do NOT emit
+    // `design:type` decorator metadata (esbuild/tsx). Reflection-only bare @Field breaks connector
+    // sync-entity resolvers compiled by tsx (NoExplicitTypeError); explicit is equivalent + robust.
+    if (IsStringSQLType(t) || IsUuidSQLType(t) || IsBinarySQLType(t)) return '() => String';
 
-    // Date / time — TypeGraphQL infers Date from the TS type.
-    if (IsDateSQLType(t)) return '';
+    // Date / time.
+    if (IsDateSQLType(t)) return '() => Date';
 
     if (IsBooleanSQLType(t)) return '() => Boolean';
 

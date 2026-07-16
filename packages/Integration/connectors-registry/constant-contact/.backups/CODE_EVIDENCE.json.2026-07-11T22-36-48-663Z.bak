@@ -1,0 +1,44 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "incrementalWatermarkByPath": {
+          "/contacts": [
+            "updated_after",
+            "updated_before",
+            "created_after",
+            "created_before",
+            "optout_after",
+            "optout_before"
+          ],
+          "/emails": [
+            "before_date",
+            "after_date"
+          ]
+        },
+        "note": "Full scan of every GET-collection operation's query-parameter names in the saved openapi.json against a candidate incremental-filter name list. Only these 2 of 67 in-scope objects matched."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+      "StructuredOutput": {
+        "webhookSurface": {
+          "allWebhookPathCount": 3,
+          "nonPartnerWebhookPathCount": 0,
+          "allWebhookPaths": [
+            "/partner/webhooks/subscriptions",
+            "/partner/webhooks/subscriptions/{topic_id}",
+            "/partner/webhooks/subscriptions/{topic_id}/tests"
+          ]
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WebhooksAvailable"
+    }
+  ]
+}

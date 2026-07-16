@@ -1,0 +1,336 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Zendesk Business Hours API",
+    "version": "2.0.0",
+    "description": "Business Hours Schedules and Schedule Holidays endpoints, transcribed independently from Zendesk's public developer documentation at https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ (these endpoints are not present in Zendesk's published oas.yaml OpenAPI spec)."
+  },
+  "servers": [
+    {
+      "url": "https://{subdomain}.zendesk.com",
+      "variables": {
+        "subdomain": {
+          "default": "support"
+        }
+      }
+    }
+  ],
+  "paths": {
+    "/api/v2/business_hours/schedules": {
+      "get": {
+        "operationId": "listSchedules",
+        "summary": "List Schedules",
+        "description": "Retrieve all business hours schedules for the account.",
+        "responses": {
+          "200": {
+            "description": "List of schedules"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createSchedule",
+        "summary": "Create Schedule",
+        "description": "Create a new business hours schedule.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Schedule created"
+          }
+        }
+      }
+    },
+    "/api/v2/business_hours/schedules/{schedule_id}": {
+      "get": {
+        "operationId": "showSchedule",
+        "summary": "Show Schedule",
+        "description": "Retrieve a specific schedule by ID.",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the schedule"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The schedule"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateSchedule",
+        "summary": "Update Schedule",
+        "description": "Modify an existing schedule.",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the schedule"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Schedule updated"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteSchedule",
+        "summary": "Delete Schedule",
+        "description": "Remove a schedule.",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the schedule"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Schedule deleted"
+          }
+        }
+      }
+    },
+    "/api/v2/business_hours/schedules/{schedule_id}/workweek": {
+      "put": {
+        "operationId": "updateIntervalsForSchedule",
+        "summary": "Update Intervals for a Schedule",
+        "description": "Updates the workweek (operating-hours intervals) for a schedule. Documented as 'Update Intervals for a Schedule' in Zendesk's developer docs; the underlying resource path is /workweek.",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the schedule"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workweek intervals updated"
+          }
+        }
+      }
+    },
+    "/api/v2/business_hours/schedules/{schedule_id}/holidays": {
+      "get": {
+        "operationId": "listHolidaysForSchedule",
+        "summary": "List Holidays for Schedule",
+        "description": "List holidays associated with a schedule. Supports start_date and end_date query parameters.",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the schedule"
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Return holidays beginning on or after this date"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Return holidays beginning on or before this date"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of holidays"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createHoliday",
+        "summary": "Create Holiday",
+        "description": "Add a holiday to a schedule. The holiday's start date must be no sooner than two years in the past and its end date no later than two years in the future.",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the schedule"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Holiday created"
+          }
+        }
+      }
+    },
+    "/api/v2/business_hours/schedules/{schedule_id}/holidays/{holiday_id}": {
+      "get": {
+        "operationId": "showHoliday",
+        "summary": "Show Holiday",
+        "description": "View a specific holiday.",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the schedule"
+          },
+          {
+            "name": "holiday_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the holiday"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The holiday"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateHoliday",
+        "summary": "Update Holiday",
+        "description": "Modify holiday details.",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the schedule"
+          },
+          {
+            "name": "holiday_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the holiday"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Holiday updated"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteHoliday",
+        "summary": "Delete Holiday",
+        "description": "Remove a holiday entry.",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the schedule"
+          },
+          {
+            "name": "holiday_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The ID of the holiday"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Holiday deleted"
+          }
+        }
+      }
+    }
+  }
+}

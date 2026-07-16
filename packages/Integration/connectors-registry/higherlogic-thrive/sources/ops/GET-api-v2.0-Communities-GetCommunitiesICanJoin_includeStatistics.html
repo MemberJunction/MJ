@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/Communities/GetCommunitiesICanJoin?includeStatistics={includeStatistics}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/Communities/GetCommunitiesICanJoin?includeStatistics={includeStatistics}</h1>
+<div>
+    <p>Returns a list of Communities the Current User is not a member of, but is eligible to join.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">includeStatistics</td>
+                    <td class="parameter-documentation">
+                        <p>Defaults to False. Set True to include counts and other extra statistics about the Communities.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Default value is False</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p></p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=Community">Community</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">AllowMemberCreatedEvents</td>
+                    <td class="parameter-documentation">
+                        <p>Whether or not members of this community can create events</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AllowTickets</td>
+                    <td class="parameter-documentation">
+                        <p>Whether or not the community is set up to send threads to support documentation</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ThreadTypes</td>
+                    <td class="parameter-documentation">
+                        <p>Specifies the types of threads allowed in the community. A community can have no thread types, but can also have multiple.
+            The possible options currently are &quot;Discussion&quot; and &quot;QAndA&quot; with more types possible in the future.
+            Will be empty if no thread types can be created in the community.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of string
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CanMembersInviteOthers</td>
+                    <td class="parameter-documentation">
+                        <p>Whether or not regular community members can invite others on the site</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityKey</td>
+                    <td class="parameter-documentation">
+                        <p>The unique identifier associated to a community throughout the api/site</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LegacyGroupKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Identifier for this Community in the source/ams system.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityName</td>
+                    <td class="parameter-documentation">
+                        <p>The name of the community</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunitySize</td>
+                    <td class="parameter-documentation">
+                        <p>The number of members in the community</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityTypeKey</td>
+                    <td class="parameter-documentation">
+                        <p>The unique identifier of the inherited community type</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityType</td>
+                    <td class="parameter-documentation">
+                        <p>Deprecated: use CommunityTypeName</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityTypeName</td>
+                    <td class="parameter-documentation">
+                        <p>The name of the community type, which this community inherits properties from</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedByContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>The unique identifier of the contact who created the community</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>The date that this community was created</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Description</td>
+                    <td class="parameter-documentation">
+                        <p>The plain text description, which provides context for the purpose of the community</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Html</td>
+                    <td class="parameter-documentation">
+                        <p>The html description, which can provide advanced context for the purpose of the community</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsTopicCommunity</td>
+                    <td class="parameter-documentation">
+                        <p>Whether or not the community is based around specific topics. These topic based communities
+            require topics to be applied to content created within the community. The set of available topics
+            is included in the TopicTagGroups property</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsSubscribedToDiscussion</td>
+                    <td class="parameter-documentation">
+                        <p>Whether or not the user is subscribed to the community/discussion. Being subscribed generally
+            allows the users to participate in the community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsOnCommunitySync</td>
+                    <td class="parameter-documentation">
+                        <p>Whether or not the community is currently being processed through our backend sync.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">JoinPermissionKey</td>
+                    <td class="parameter-documentation">
+                        <p>The unique identifier of the join permissions for the community. Generally the permission possibilities line up with the unique identifier for
+            authenticated, members of the site, or invitation only.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryKey</td>
+                    <td class="parameter-documentation">
+                        <p>The unique identifier for the library whose content is specific to this community. If no library exists,
+            then this will be an empty guid.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LibraryName</td>
+                    <td class="parameter-documentation">
+                        <p>If a library exists for a community, then this is the name specific to the library
+            within the community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToCommunity</td>
+                    <td class="parameter-documentation">
+                        <p>A url that will navigate a user to the community home page on the website</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToCommunityCalendar</td>
+                    <td class="parameter-documentation">
+                        <p>If the community has events specific to it, then this will return a url that allows the user
+            to navigate to the events calendar specific to the community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToDiscussion</td>
+                    <td class="parameter-documentation">
+                        <p>If the community has a discussion, this will return a url that should navigate a user to the
+            list of threads within the community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToLibrary</td>
+                    <td class="parameter-documentation">
+                        <p>If the community has a library, this will return a url that navigates a user to the library
+            specific to this community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToWebsite</td>
+                    <td class="parameter-documentation">
+                        <p>If the community is related to a specific microsite, this will return a url that navigates
+            the user to the microsite associated to this community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DiscussionKey</td>
+                    <td class="parameter-documentation">
+                        <p>The unique identifier of the discussion, which holds both messages on the site as well as Q&amp;A threads depending on which
+            content types the community allows. This unique identifier is also referred to as an eGroupKey or a listKey throughout the documentation.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DiscussionName</td>
+                    <td class="parameter-documentation">
+                        <p>The name of the discussion that holds the message or Q&amp;A thread content on the site. 
+            The community name is more often used than the discussion name.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">MicrositeGroupKey</td>
+                    <td class="parameter-documentation">
+                        <p>If the community is associated to a specific microsite, then this will return a uniqueidentifier that refers to the micrositeGroup,
+            which contains the microsite associated to this community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SiteName</td>
+                    <td class="parameter-documentation">
+                        <p>If the community is associated to a microsite, this refers to the name of the
+            microsite.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ViewPermissionKey</td>
+                    <td class="parameter-documentation">
+                        <p>The unique identifier associated to the grouping of users that can view the community on the site. This generally corresponds to
+            Public, Invitation Only, Site Members, or Public. This doesn&#39;t relate directly to the view permissions
+            of the content within the community, but instead the community itself.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Statistics</td>
+                    <td class="parameter-documentation">
+                        <p>A set of community specific statistics to give more in depth information/reporting for the community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=CommunityStatistics">CommunityStatistics</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedByContact</td>
+                    <td class="parameter-documentation">
+                        <p>The contact information for the user who originally created the community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=ContactConcise">ContactConcise</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IntegrationKey</td>
+                    <td class="parameter-documentation">
+                        <p>Community unique identifier as represented in the ams/source data.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IntegrationTypeKey</td>
+                    <td class="parameter-documentation">
+                        <p>Community Type unique identifier as represented in the ams/source data.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ParentCommunityKey</td>
+                    <td class="parameter-documentation">
+                        <p>If the community is nested with a parent community, this will be the unique identifier of that parent community.
+            Otherwise this will return an empty guid.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">TopicTagGroups</td>
+                    <td class="parameter-documentation">
+                        <p>If this community is a topic community, this provides the set of
+            valid topic tags and their respective unique identifiers. Otherwise this will be empty.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=TopicTagGroup">TopicTagGroup</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CanPostQuestions</td>
+                    <td class="parameter-documentation">
+                        <p>Indicates if the user can post questions in the community. This is generally true if the community allows the Q&amp;A thread type and the user is subscribed to the discussion.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CanPostAnonymously</td>
+                    <td class="parameter-documentation">
+                        <p>Indicates if a user can post anonymously in the community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CanReplyAnonymously</td>
+                    <td class="parameter-documentation">
+                        <p>Indicates if a user can reply anonymously in the community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json, application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+                    <p>Sample not available.</p>
+
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

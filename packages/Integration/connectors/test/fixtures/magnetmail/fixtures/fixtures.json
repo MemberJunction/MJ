@@ -1,0 +1,335 @@
+{
+  "HandAuthored": true,
+  "Transport": "http",
+  "ConfigUrlKey": "Endpoint",
+  "Configuration": {
+    "Endpoint": "http://127.0.0.1:9",
+    "Username": "mock-user@example.com",
+    "Password": "mock-pass",
+    "ApiKey": "mock-token",
+    "Token": "mock-token"
+  },
+  "Routes": [
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<Authenticate ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><AuthenticateResponse xmlns=\"http://www.magnetmail.net/\"><AuthenticateResult><sessionId>mock-session-123</sessionId><user_id>mock-user-1</user_id></AuthenticateResult></AuthenticateResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getErrorDetails ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getErrorDetailsResponse xmlns=\"http://www.magnetmail.net/\"><getErrorDetailsResult><Error><Id>1</Id><errorCode>mock-errorCode-1</errorCode><errorDetails>mock-errorDetails-1</errorDetails><errorMessage>mock-errorMessage-1</errorMessage><errorNumber>mock-errorNumber-1</errorNumber><errorType>mock-errorType-1</errorType></Error><Error><Id>2</Id><errorCode>mock-errorCode-2</errorCode><errorDetails>mock-errorDetails-2</errorDetails><errorMessage>mock-errorMessage-2</errorMessage><errorNumber>mock-errorNumber-2</errorNumber><errorType>mock-errorType-2</errorType></Error><Error><Id>3</Id><errorCode>mock-errorCode-3</errorCode><errorDetails>mock-errorDetails-3</errorDetails><errorMessage>mock-errorMessage-3</errorMessage><errorNumber>mock-errorNumber-3</errorNumber><errorType>mock-errorType-3</errorType></Error></getErrorDetailsResult></getErrorDetailsResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getRecipientHistory ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getRecipientHistoryResponse xmlns=\"http://www.magnetmail.net/\"><getRecipientHistoryResult><recipient_history><Id>1</Id><emailHistory>mock-emailHistory-1</emailHistory><faxHistory>mock-faxHistory-1</faxHistory><formHistory>mock-formHistory-1</formHistory></recipient_history><recipient_history><Id>2</Id><emailHistory>mock-emailHistory-2</emailHistory><faxHistory>mock-faxHistory-2</faxHistory><formHistory>mock-formHistory-2</formHistory></recipient_history><recipient_history><Id>3</Id><emailHistory>mock-emailHistory-3</emailHistory><faxHistory>mock-faxHistory-3</faxHistory><formHistory>mock-formHistory-3</formHistory></recipient_history><email_history><message_id>1</message_id><message_name>mock-message_name-1</message_name><sent_date>mock-sent_date-1</sent_date><open_date>mock-open_date-1</open_date><send_result>mock-send_result-1</send_result></email_history><email_history><message_id>2</message_id><message_name>mock-message_name-2</message_name><sent_date>mock-sent_date-2</sent_date><open_date>mock-open_date-2</open_date><send_result>mock-send_result-2</send_result></email_history><email_history><message_id>3</message_id><message_name>mock-message_name-3</message_name><sent_date>mock-sent_date-3</sent_date><open_date>mock-open_date-3</open_date><send_result>mock-send_result-3</send_result></email_history><link><link_url_id>1</link_url_id><link_url>mock-link_url-1</link_url><website_links>mock-website_links-1</website_links></link><link><link_url_id>2</link_url_id><link_url>mock-link_url-2</link_url><website_links>mock-website_links-2</website_links></link><link><link_url_id>3</link_url_id><link_url>mock-link_url-3</link_url><website_links>mock-website_links-3</website_links></link><website_link><website_link_url_id>1</website_link_url_id><website_link_url>mock-website_link_url-1</website_link_url></website_link><website_link><website_link_url_id>2</website_link_url_id><website_link_url>mock-website_link_url-2</website_link_url></website_link><website_link><website_link_url_id>3</website_link_url_id><website_link_url>mock-website_link_url-3</website_link_url></website_link><fax_history><Id>1</Id><message_name>mock-message_name-1</message_name><sent_date>mock-sent_date-1</sent_date><fax_status>mock-fax_status-1</fax_status><connect_time>mock-connect_time-1</connect_time></fax_history><fax_history><Id>2</Id><message_name>mock-message_name-2</message_name><sent_date>mock-sent_date-2</sent_date><fax_status>mock-fax_status-2</fax_status><connect_time>mock-connect_time-2</connect_time></fax_history><fax_history><Id>3</Id><message_name>mock-message_name-3</message_name><sent_date>mock-sent_date-3</sent_date><fax_status>mock-fax_status-3</fax_status><connect_time>mock-connect_time-3</connect_time></fax_history><form_history><Id>1</Id><form_name>mock-form_name-1</form_name><submit_date>mock-submit_date-1</submit_date></form_history><form_history><Id>2</Id><form_name>mock-form_name-2</form_name><submit_date>mock-submit_date-2</submit_date></form_history><form_history><Id>3</Id><form_name>mock-form_name-3</form_name><submit_date>mock-submit_date-3</submit_date></form_history></getRecipientHistoryResult></getRecipientHistoryResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getUnsubscribes ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getUnsubscribesResponse xmlns=\"http://www.magnetmail.net/\"><getUnsubscribesResult><recp_unsubscribe><Id>1</Id><recipient>mock-recipient-1</recipient><ResultDate>mock-ResultDate-1</ResultDate><message_name>mock-message_name-1</message_name><group_name>mock-group_name-1</group_name><message_CategoryId>mock-message_CategoryId-1</message_CategoryId></recp_unsubscribe><recp_unsubscribe><Id>2</Id><recipient>mock-recipient-2</recipient><ResultDate>mock-ResultDate-2</ResultDate><message_name>mock-message_name-2</message_name><group_name>mock-group_name-2</group_name><message_CategoryId>mock-message_CategoryId-2</message_CategoryId></recp_unsubscribe><recp_unsubscribe><Id>3</Id><recipient>mock-recipient-3</recipient><ResultDate>mock-ResultDate-3</ResultDate><message_name>mock-message_name-3</message_name><group_name>mock-group_name-3</group_name><message_CategoryId>mock-message_CategoryId-3</message_CategoryId></recp_unsubscribe></getUnsubscribesResult></getUnsubscribesResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<searchForRecipients ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><searchForRecipientsResponse xmlns=\"http://www.magnetmail.net/\"><searchForRecipientsResult><Recipient><id>1</id><email>mock-email-1</email><first_name>mock-first_name-1</first_name><last_name>mock-last_name-1</last_name><fax>mock-fax-1</fax></Recipient><Recipient><id>2</id><email>mock-email-2</email><first_name>mock-first_name-2</first_name><last_name>mock-last_name-2</last_name><fax>mock-fax-2</fax></Recipient><Recipient><id>3</id><email>mock-email-3</email><first_name>mock-first_name-3</first_name><last_name>mock-last_name-3</last_name><fax>mock-fax-3</fax></Recipient></searchForRecipientsResult></searchForRecipientsResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getUserDetails ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getUserDetailsResponse xmlns=\"http://www.magnetmail.net/\"><getUserDetailsResult><User><User_Id>1</User_Id><billing_name>mock-billing_name-1</billing_name><User_Nbr>mock-User_Nbr-1</User_Nbr><unsubscribe_type>mock-unsubscribe_type-1</unsubscribe_type><hasCustomId>mock-hasCustomId-1</hasCustomId></User><User><User_Id>2</User_Id><billing_name>mock-billing_name-2</billing_name><User_Nbr>mock-User_Nbr-2</User_Nbr><unsubscribe_type>mock-unsubscribe_type-2</unsubscribe_type><hasCustomId>mock-hasCustomId-2</hasCustomId></User><User><User_Id>3</User_Id><billing_name>mock-billing_name-3</billing_name><User_Nbr>mock-User_Nbr-3</User_Nbr><unsubscribe_type>mock-unsubscribe_type-3</unsubscribe_type><hasCustomId>mock-hasCustomId-3</hasCustomId></User></getUserDetailsResult></getUserDetailsResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getMessages ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getMessagesResponse xmlns=\"http://www.magnetmail.net/\"><getMessagesResult><MessageList><Id>1</Id><message>mock-message-1</message><GroupsEmailSentTo>mock-GroupsEmailSentTo-1</GroupsEmailSentTo><GroupsFaxSentTo>mock-GroupsFaxSentTo-1</GroupsFaxSentTo></MessageList><MessageList><Id>2</Id><message>mock-message-2</message><GroupsEmailSentTo>mock-GroupsEmailSentTo-2</GroupsEmailSentTo><GroupsFaxSentTo>mock-GroupsFaxSentTo-2</GroupsFaxSentTo></MessageList><MessageList><Id>3</Id><message>mock-message-3</message><GroupsEmailSentTo>mock-GroupsEmailSentTo-3</GroupsEmailSentTo><GroupsFaxSentTo>mock-GroupsFaxSentTo-3</GroupsFaxSentTo></MessageList><JobToGroup><group_id>1</group_id><group_name>mock-group_name-1</group_name><sent_date>mock-sent_date-1</sent_date></JobToGroup><JobToGroup><group_id>2</group_id><group_name>mock-group_name-2</group_name><sent_date>mock-sent_date-2</sent_date></JobToGroup><JobToGroup><group_id>3</group_id><group_name>mock-group_name-3</group_name><sent_date>mock-sent_date-3</sent_date></JobToGroup></getMessagesResult></getMessagesResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getMessageList ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getMessageListResponse xmlns=\"http://www.magnetmail.net/\"><getMessageListResult><Message><message_id>1</message_id><loginid>mock-loginid-1</loginid><user_id>mock-user_id-1</user_id><message_name>mock-message_name-1</message_name><createDate>mock-createDate-1</createDate></Message><Message><message_id>2</message_id><loginid>mock-loginid-2</loginid><user_id>mock-user_id-2</user_id><message_name>mock-message_name-2</message_name><createDate>mock-createDate-2</createDate></Message><Message><message_id>3</message_id><loginid>mock-loginid-3</loginid><user_id>mock-user_id-3</user_id><message_name>mock-message_name-3</message_name><createDate>mock-createDate-3</createDate></Message></getMessageListResult></getMessageListResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getLinkURLs ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getLinkURLsResponse xmlns=\"http://www.magnetmail.net/\"><getLinkURLsResult><Links><Id>1</Id><linkid>mock-linkid-1</linkid><link_url>mock-link_url-1</link_url><link_text>mock-link_text-1</link_text><link_clicks>mock-link_clicks-1</link_clicks><link_type>mock-link_type-1</link_type></Links><Links><Id>2</Id><linkid>mock-linkid-2</linkid><link_url>mock-link_url-2</link_url><link_text>mock-link_text-2</link_text><link_clicks>mock-link_clicks-2</link_clicks><link_type>mock-link_type-2</link_type></Links><Links><Id>3</Id><linkid>mock-linkid-3</linkid><link_url>mock-link_url-3</link_url><link_text>mock-link_text-3</link_text><link_clicks>mock-link_clicks-3</link_clicks><link_type>mock-link_type-3</link_type></Links></getLinkURLsResult></getLinkURLsResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getTrackingData ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getTrackingDataResponse xmlns=\"http://www.magnetmail.net/\"><getTrackingDataResult><TrackingData><Id>1</Id><EmailSent>mock-EmailSent-1</EmailSent><EmailDelivered>mock-EmailDelivered-1</EmailDelivered><EmailOpened>mock-EmailOpened-1</EmailOpened><EmailBounced>mock-EmailBounced-1</EmailBounced><EmailLinksClicked>mock-EmailLinksClicked-1</EmailLinksClicked></TrackingData><TrackingData><Id>2</Id><EmailSent>mock-EmailSent-2</EmailSent><EmailDelivered>mock-EmailDelivered-2</EmailDelivered><EmailOpened>mock-EmailOpened-2</EmailOpened><EmailBounced>mock-EmailBounced-2</EmailBounced><EmailLinksClicked>mock-EmailLinksClicked-2</EmailLinksClicked></TrackingData><TrackingData><Id>3</Id><EmailSent>mock-EmailSent-3</EmailSent><EmailDelivered>mock-EmailDelivered-3</EmailDelivered><EmailOpened>mock-EmailOpened-3</EmailOpened><EmailBounced>mock-EmailBounced-3</EmailBounced><EmailLinksClicked>mock-EmailLinksClicked-3</EmailLinksClicked></TrackingData></getTrackingDataResult></getTrackingDataResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getDetailedTracking ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getDetailedTrackingResponse xmlns=\"http://www.magnetmail.net/\"><getDetailedTrackingResult><TrackingDetails><Id>1</Id><totalRecords>mock-totalRecords-1</totalRecords><page>mock-page-1</page><recordsPerPage>mock-recordsPerPage-1</recordsPerPage><RecipientDetails>mock-RecipientDetails-1</RecipientDetails></TrackingDetails><TrackingDetails><Id>2</Id><totalRecords>mock-totalRecords-2</totalRecords><page>mock-page-2</page><recordsPerPage>mock-recordsPerPage-2</recordsPerPage><RecipientDetails>mock-RecipientDetails-2</RecipientDetails></TrackingDetails><TrackingDetails><Id>3</Id><totalRecords>mock-totalRecords-3</totalRecords><page>mock-page-3</page><recordsPerPage>mock-recordsPerPage-3</recordsPerPage><RecipientDetails>mock-RecipientDetails-3</RecipientDetails></TrackingDetails><recp_track><MMId>1</MMId><recipient>mock-recipient-1</recipient><ResultDate>mock-ResultDate-1</ResultDate><remarks>mock-remarks-1</remarks><Status>mock-Status-1</Status><OpenDate>mock-OpenDate-1</OpenDate></recp_track><recp_track><MMId>2</MMId><recipient>mock-recipient-2</recipient><ResultDate>mock-ResultDate-2</ResultDate><remarks>mock-remarks-2</remarks><Status>mock-Status-2</Status><OpenDate>mock-OpenDate-2</OpenDate></recp_track><recp_track><MMId>3</MMId><recipient>mock-recipient-3</recipient><ResultDate>mock-ResultDate-3</ResultDate><remarks>mock-remarks-3</remarks><Status>mock-Status-3</Status><OpenDate>mock-OpenDate-3</OpenDate></recp_track></getDetailedTrackingResult></getDetailedTrackingResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getGroups ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getGroupsResponse xmlns=\"http://www.magnetmail.net/\"><getGroupsResult><group><group_id>1</group_id><group_name>mock-group_name-1</group_name><group_created>mock-group_created-1</group_created><display_status>mock-display_status-1</display_status><subscription_group>mock-subscription_group-1</subscription_group></group><group><group_id>2</group_id><group_name>mock-group_name-2</group_name><group_created>mock-group_created-2</group_created><display_status>mock-display_status-2</display_status><subscription_group>mock-subscription_group-2</subscription_group></group><group><group_id>3</group_id><group_name>mock-group_name-3</group_name><group_created>mock-group_created-3</group_created><display_status>mock-display_status-3</display_status><subscription_group>mock-subscription_group-3</subscription_group></group></getGroupsResult></getGroupsResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getRecipientFields ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getRecipientFieldsResponse xmlns=\"http://www.magnetmail.net/\"><getRecipientFieldsResult><fieldDefn><Id>1</Id><fieldNameText>mock-fieldNameText-1</fieldNameText><fieldNamevalue>mock-fieldNamevalue-1</fieldNamevalue></fieldDefn><fieldDefn><Id>2</Id><fieldNameText>mock-fieldNameText-2</fieldNameText><fieldNamevalue>mock-fieldNamevalue-2</fieldNamevalue></fieldDefn><fieldDefn><Id>3</Id><fieldNameText>mock-fieldNameText-3</fieldNameText><fieldNamevalue>mock-fieldNamevalue-3</fieldNamevalue></fieldDefn></getRecipientFieldsResult></getRecipientFieldsResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<GetMessageDetails ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><GetMessageDetailsResponse xmlns=\"http://www.magnetmail.net/\"><GetMessageDetailsResult><MessageDetails><message_id>1</message_id><loginid>mock-loginid-1</loginid><message_category>mock-message_category-1</message_category><template_id>mock-template_id-1</template_id><user_id>mock-user_id-1</user_id></MessageDetails><MessageDetails><message_id>2</message_id><loginid>mock-loginid-2</loginid><message_category>mock-message_category-2</message_category><template_id>mock-template_id-2</template_id><user_id>mock-user_id-2</user_id></MessageDetails><MessageDetails><message_id>3</message_id><loginid>mock-loginid-3</loginid><message_category>mock-message_category-3</message_category><template_id>mock-template_id-3</template_id><user_id>mock-user_id-3</user_id></MessageDetails></GetMessageDetailsResult></GetMessageDetailsResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getSavedSearches ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getSavedSearchesResponse xmlns=\"http://www.magnetmail.net/\"><getSavedSearchesResult><MagnetMailQueries><Search_Id>1</Search_Id><Search_Name>mock-Search_Name-1</Search_Name><Create_Date>mock-Create_Date-1</Create_Date><LoginId>mock-LoginId-1</LoginId></MagnetMailQueries><MagnetMailQueries><Search_Id>2</Search_Id><Search_Name>mock-Search_Name-2</Search_Name><Create_Date>mock-Create_Date-2</Create_Date><LoginId>mock-LoginId-2</LoginId></MagnetMailQueries><MagnetMailQueries><Search_Id>3</Search_Id><Search_Name>mock-Search_Name-3</Search_Name><Create_Date>mock-Create_Date-3</Create_Date><LoginId>mock-LoginId-3</LoginId></MagnetMailQueries></getSavedSearchesResult></getSavedSearchesResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getSubscribedRecipients ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getSubscribedRecipientsResponse xmlns=\"http://www.magnetmail.net/\"><getSubscribedRecipientsResult><subscription><Id>1</Id><recipient>mock-recipient-1</recipient><add_update_date>mock-add_update_date-1</add_update_date><groups>mock-groups-1</groups></subscription><subscription><Id>2</Id><recipient>mock-recipient-2</recipient><add_update_date>mock-add_update_date-2</add_update_date><groups>mock-groups-2</groups></subscription><subscription><Id>3</Id><recipient>mock-recipient-3</recipient><add_update_date>mock-add_update_date-3</add_update_date><groups>mock-groups-3</groups></subscription></getSubscribedRecipientsResult></getSubscribedRecipientsResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getSuppressedRecipientList ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getSuppressedRecipientListResponse xmlns=\"http://www.magnetmail.net/\"><getSuppressedRecipientListResult><RecipientExtended><Id>1</Id><recipient>mock-recipient-1</recipient><extended_field>mock-extended_field-1</extended_field></RecipientExtended><RecipientExtended><Id>2</Id><recipient>mock-recipient-2</recipient><extended_field>mock-extended_field-2</extended_field></RecipientExtended><RecipientExtended><Id>3</Id><recipient>mock-recipient-3</recipient><extended_field>mock-extended_field-3</extended_field></RecipientExtended><RecipientExtendedField><Id>1</Id><field_name>mock-field_name-1</field_name><field_value>mock-field_value-1</field_value></RecipientExtendedField><RecipientExtendedField><Id>2</Id><field_name>mock-field_name-2</field_name><field_value>mock-field_value-2</field_value></RecipientExtendedField><RecipientExtendedField><Id>3</Id><field_name>mock-field_name-3</field_name><field_value>mock-field_value-3</field_value></RecipientExtendedField></getSuppressedRecipientListResult></getSuppressedRecipientListResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getRecipientGroups ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getRecipientGroupsResponse xmlns=\"http://www.magnetmail.net/\"><getRecipientGroupsResult><RecipientGroup><Id>1</Id><Name>mock-Name-1</Name><Created>mock-Created-1</Created><DisplayStatus>mock-DisplayStatus-1</DisplayStatus><SubscriptionGroup>mock-SubscriptionGroup-1</SubscriptionGroup></RecipientGroup><RecipientGroup><Id>2</Id><Name>mock-Name-2</Name><Created>mock-Created-2</Created><DisplayStatus>mock-DisplayStatus-2</DisplayStatus><SubscriptionGroup>mock-SubscriptionGroup-2</SubscriptionGroup></RecipientGroup><RecipientGroup><Id>3</Id><Name>mock-Name-3</Name><Created>mock-Created-3</Created><DisplayStatus>mock-DisplayStatus-3</DisplayStatus><SubscriptionGroup>mock-SubscriptionGroup-3</SubscriptionGroup></RecipientGroup></getRecipientGroupsResult></getRecipientGroupsResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getGroupDetails ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getGroupDetailsResponse xmlns=\"http://www.magnetmail.net/\"><getGroupDetailsResult><MailRecipientGroup><group_id>1</group_id><group_name>mock-group_name-1</group_name><group_created>mock-group_created-1</group_created><display_status>mock-display_status-1</display_status><subscription_group>mock-subscription_group-1</subscription_group></MailRecipientGroup><MailRecipientGroup><group_id>2</group_id><group_name>mock-group_name-2</group_name><group_created>mock-group_created-2</group_created><display_status>mock-display_status-2</display_status><subscription_group>mock-subscription_group-2</subscription_group></MailRecipientGroup><MailRecipientGroup><group_id>3</group_id><group_name>mock-group_name-3</group_name><group_created>mock-group_created-3</group_created><display_status>mock-display_status-3</display_status><subscription_group>mock-subscription_group-3</subscription_group></MailRecipientGroup></getGroupDetailsResult></getGroupDetailsResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<getGroupRecipients ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><getGroupRecipientsResponse xmlns=\"http://www.magnetmail.net/\"><getGroupRecipientsResult><GroupRecipients><Id>1</Id><recipients>mock-recipients-1</recipients></GroupRecipients><GroupRecipients><Id>2</Id><recipients>mock-recipients-2</recipients></GroupRecipients><GroupRecipients><Id>3</Id><recipients>mock-recipients-3</recipients></GroupRecipients><GroupRecipient><RecipientId>1</RecipientId><EmailId>mock-EmailId-1</EmailId><CustomMemberId>mock-CustomMemberId-1</CustomMemberId></GroupRecipient><GroupRecipient><RecipientId>2</RecipientId><EmailId>mock-EmailId-2</EmailId><CustomMemberId>mock-CustomMemberId-2</CustomMemberId></GroupRecipient><GroupRecipient><RecipientId>3</RecipientId><EmailId>mock-EmailId-3</EmailId><CustomMemberId>mock-CustomMemberId-3</CustomMemberId></GroupRecipient></getGroupRecipientsResult></getGroupRecipientsResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<GetMessageLinkTracking ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><GetMessageLinkTrackingResponse xmlns=\"http://www.magnetmail.net/\"><GetMessageLinkTrackingResult><MessageLinkTrackingData><Id>1</Id><UserId>mock-UserId-1</UserId><MessageId>mock-MessageId-1</MessageId><RecipientId>mock-RecipientId-1</RecipientId><Date>mock-Date-1</Date><Url>mock-Url-1</Url></MessageLinkTrackingData><MessageLinkTrackingData><Id>2</Id><UserId>mock-UserId-2</UserId><MessageId>mock-MessageId-2</MessageId><RecipientId>mock-RecipientId-2</RecipientId><Date>mock-Date-2</Date><Url>mock-Url-2</Url></MessageLinkTrackingData><MessageLinkTrackingData><Id>3</Id><UserId>mock-UserId-3</UserId><MessageId>mock-MessageId-3</MessageId><RecipientId>mock-RecipientId-3</RecipientId><Date>mock-Date-3</Date><Url>mock-Url-3</Url></MessageLinkTrackingData></GetMessageLinkTrackingResult></GetMessageLinkTrackingResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<GetMessageSentTracking ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><GetMessageSentTrackingResponse xmlns=\"http://www.magnetmail.net/\"><GetMessageSentTrackingResult><MessageSentTrackingData><Id>1</Id><UserId>mock-UserId-1</UserId><MessageId>mock-MessageId-1</MessageId><RecipientId>mock-RecipientId-1</RecipientId><Date>mock-Date-1</Date><Type>mock-Type-1</Type></MessageSentTrackingData><MessageSentTrackingData><Id>2</Id><UserId>mock-UserId-2</UserId><MessageId>mock-MessageId-2</MessageId><RecipientId>mock-RecipientId-2</RecipientId><Date>mock-Date-2</Date><Type>mock-Type-2</Type></MessageSentTrackingData><MessageSentTrackingData><Id>3</Id><UserId>mock-UserId-3</UserId><MessageId>mock-MessageId-3</MessageId><RecipientId>mock-RecipientId-3</RecipientId><Date>mock-Date-3</Date><Type>mock-Type-3</Type></MessageSentTrackingData></GetMessageSentTrackingResult></GetMessageSentTrackingResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<GetMessageOpenTracking ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><GetMessageOpenTrackingResponse xmlns=\"http://www.magnetmail.net/\"><GetMessageOpenTrackingResult><MessageTrackingData><Id>1</Id><UserId>mock-UserId-1</UserId><MessageId>mock-MessageId-1</MessageId><RecipientId>mock-RecipientId-1</RecipientId><Date>mock-Date-1</Date><Type>mock-Type-1</Type></MessageTrackingData><MessageTrackingData><Id>2</Id><UserId>mock-UserId-2</UserId><MessageId>mock-MessageId-2</MessageId><RecipientId>mock-RecipientId-2</RecipientId><Date>mock-Date-2</Date><Type>mock-Type-2</Type></MessageTrackingData><MessageTrackingData><Id>3</Id><UserId>mock-UserId-3</UserId><MessageId>mock-MessageId-3</MessageId><RecipientId>mock-RecipientId-3</RecipientId><Date>mock-Date-3</Date><Type>mock-Type-3</Type></MessageTrackingData></GetMessageOpenTrackingResult></GetMessageOpenTrackingResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<GetUnsubscribeTracking ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><GetUnsubscribeTrackingResponse xmlns=\"http://www.magnetmail.net/\"><GetUnsubscribeTrackingResult><UnsubscribeTrackingData><Id>1</Id><UserId>mock-UserId-1</UserId><MessageId>mock-MessageId-1</MessageId><RecipientId>mock-RecipientId-1</RecipientId><Date>mock-Date-1</Date><GroupId>mock-GroupId-1</GroupId></UnsubscribeTrackingData><UnsubscribeTrackingData><Id>2</Id><UserId>mock-UserId-2</UserId><MessageId>mock-MessageId-2</MessageId><RecipientId>mock-RecipientId-2</RecipientId><Date>mock-Date-2</Date><GroupId>mock-GroupId-2</GroupId></UnsubscribeTrackingData><UnsubscribeTrackingData><Id>3</Id><UserId>mock-UserId-3</UserId><MessageId>mock-MessageId-3</MessageId><RecipientId>mock-RecipientId-3</RecipientId><Date>mock-Date-3</Date><GroupId>mock-GroupId-3</GroupId></UnsubscribeTrackingData></GetUnsubscribeTrackingResult></GetUnsubscribeTrackingResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<SearchPersonifySubscriptionMappings ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><SearchPersonifySubscriptionMappingsResponse xmlns=\"http://www.magnetmail.net/\"><SearchPersonifySubscriptionMappingsResult><PersonifySubscriptionMapping><ID>1</ID><MailUserId>mock-MailUserId-1</MailUserId><RealMagnetObjectId>mock-RealMagnetObjectId-1</RealMagnetObjectId><RealMagnetObjectName>mock-RealMagnetObjectName-1</RealMagnetObjectName><RealMagnetType>mock-RealMagnetType-1</RealMagnetType></PersonifySubscriptionMapping><PersonifySubscriptionMapping><ID>2</ID><MailUserId>mock-MailUserId-2</MailUserId><RealMagnetObjectId>mock-RealMagnetObjectId-2</RealMagnetObjectId><RealMagnetObjectName>mock-RealMagnetObjectName-2</RealMagnetObjectName><RealMagnetType>mock-RealMagnetType-2</RealMagnetType></PersonifySubscriptionMapping><PersonifySubscriptionMapping><ID>3</ID><MailUserId>mock-MailUserId-3</MailUserId><RealMagnetObjectId>mock-RealMagnetObjectId-3</RealMagnetObjectId><RealMagnetObjectName>mock-RealMagnetObjectName-3</RealMagnetObjectName><RealMagnetType>mock-RealMagnetType-3</RealMagnetType></PersonifySubscriptionMapping></SearchPersonifySubscriptionMappingsResult></SearchPersonifySubscriptionMappingsResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<GetMessageCategory ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><GetMessageCategoryResponse xmlns=\"http://www.magnetmail.net/\"><GetMessageCategoryResult><MessageCategory><ID>1</ID><Name>mock-Name-1</Name><MailUserId>mock-MailUserId-1</MailUserId><DateCreated>mock-DateCreated-1</DateCreated><LoginId>mock-LoginId-1</LoginId></MessageCategory><MessageCategory><ID>2</ID><Name>mock-Name-2</Name><MailUserId>mock-MailUserId-2</MailUserId><DateCreated>mock-DateCreated-2</DateCreated><LoginId>mock-LoginId-2</LoginId></MessageCategory><MessageCategory><ID>3</ID><Name>mock-Name-3</Name><MailUserId>mock-MailUserId-3</MailUserId><DateCreated>mock-DateCreated-3</DateCreated><LoginId>mock-LoginId-3</LoginId></MessageCategory></GetMessageCategoryResult></GetMessageCategoryResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<GetAllGroupCategories ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><GetAllGroupCategoriesResponse xmlns=\"http://www.magnetmail.net/\"><GetAllGroupCategoriesResult><GroupCategory><ID>1</ID><CategoryName>mock-CategoryName-1</CategoryName><MailUserId>mock-MailUserId-1</MailUserId><LoginId>mock-LoginId-1</LoginId><Status>mock-Status-1</Status></GroupCategory><GroupCategory><ID>2</ID><CategoryName>mock-CategoryName-2</CategoryName><MailUserId>mock-MailUserId-2</MailUserId><LoginId>mock-LoginId-2</LoginId><Status>mock-Status-2</Status></GroupCategory><GroupCategory><ID>3</ID><CategoryName>mock-CategoryName-3</CategoryName><MailUserId>mock-MailUserId-3</MailUserId><LoginId>mock-LoginId-3</LoginId><Status>mock-Status-3</Status></GroupCategory></GetAllGroupCategoriesResult></GetAllGroupCategoriesResponse></soap:Body></soap:Envelope>"
+    },
+    {
+      "Path": "/",
+      "Method": "POST",
+      "Match": "<GetEnhancedPersonalizedFields ",
+      "Status": 200,
+      "Body": "<?xml version=\"1.0\" encoding=\"utf-8\"?><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><GetEnhancedPersonalizedFieldsResponse xmlns=\"http://www.magnetmail.net/\"><GetEnhancedPersonalizedFieldsResult><ExtendedField><fieldId>1</fieldId><fieldName>mock-fieldName-1</fieldName><loginId>mock-loginId-1</loginId><uploadMappingName>mock-uploadMappingName-1</uploadMappingName></ExtendedField><ExtendedField><fieldId>2</fieldId><fieldName>mock-fieldName-2</fieldName><loginId>mock-loginId-2</loginId><uploadMappingName>mock-uploadMappingName-2</uploadMappingName></ExtendedField><ExtendedField><fieldId>3</fieldId><fieldName>mock-fieldName-3</fieldName><loginId>mock-loginId-3</loginId><uploadMappingName>mock-uploadMappingName-3</uploadMappingName></ExtendedField></GetEnhancedPersonalizedFieldsResult></GetEnhancedPersonalizedFieldsResponse></soap:Body></soap:Envelope>"
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "Error"
+    },
+    {
+      "Name": "recipient_history"
+    },
+    {
+      "Name": "email_history"
+    },
+    {
+      "Name": "link"
+    },
+    {
+      "Name": "website_link"
+    },
+    {
+      "Name": "fax_history"
+    },
+    {
+      "Name": "form_history"
+    },
+    {
+      "Name": "recp_unsubscribe"
+    },
+    {
+      "Name": "Recipient"
+    },
+    {
+      "Name": "User"
+    },
+    {
+      "Name": "MessageList"
+    },
+    {
+      "Name": "JobToGroup"
+    },
+    {
+      "Name": "Message"
+    },
+    {
+      "Name": "Links"
+    },
+    {
+      "Name": "TrackingData"
+    },
+    {
+      "Name": "TrackingDetails"
+    },
+    {
+      "Name": "recp_track"
+    },
+    {
+      "Name": "group"
+    },
+    {
+      "Name": "fieldDefn"
+    },
+    {
+      "Name": "MessageDetails"
+    },
+    {
+      "Name": "MagnetMailQueries"
+    },
+    {
+      "Name": "subscription"
+    },
+    {
+      "Name": "RecipientExtended"
+    },
+    {
+      "Name": "RecipientExtendedField"
+    },
+    {
+      "Name": "RecipientGroup"
+    },
+    {
+      "Name": "MailRecipientGroup"
+    },
+    {
+      "Name": "GroupRecipients"
+    },
+    {
+      "Name": "GroupRecipient"
+    },
+    {
+      "Name": "MessageLinkTrackingData"
+    },
+    {
+      "Name": "MessageSentTrackingData"
+    },
+    {
+      "Name": "MessageTrackingData"
+    },
+    {
+      "Name": "UnsubscribeTrackingData"
+    },
+    {
+      "Name": "PersonifySubscriptionMapping"
+    },
+    {
+      "Name": "MessageCategory"
+    },
+    {
+      "Name": "GroupCategory"
+    },
+    {
+      "Name": "ExtendedField"
+    }
+  ],
+  "DeltaPasses": [],
+  "Lifecycle": {
+    "supportsDiscovery": false,
+    "supportsFieldDiscovery": false,
+    "authoritativeDiscovery": false,
+    "supportsCustomColumns": true,
+    "incrementalStrategy": "content-hash",
+    "supportsWrite": false,
+    "writeRoundTrip": null,
+    "writeRoundTrips": [],
+    "supportsScheduling": true,
+    "connectionTestable": true,
+    "derivedFromMetadata": true,
+    "sourceClass": "MagnetMailConnector"
+  }
+}

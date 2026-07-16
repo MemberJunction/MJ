@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/ExternalSearch/AddLibraryItems</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/ExternalSearch/AddLibraryItems</h1>
+<div>
+    <p>Add External Library Items to the Search Results.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p>External Library Items to add.</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=ExternalLibrary">ExternalLibrary</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">ContributorLegacyContactKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Additional</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of string
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Code</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Description</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ID</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsDelete</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Tags</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=TagInfo">TagInfo</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Title</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Url</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ViewSecurityRoles</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of string
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Request Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;ContributorLegacyContactKey&quot;: &quot;sample string 1&quot;,
+    &quot;Additional&quot;: [
+      &quot;sample string 1&quot;,
+      &quot;sample string 2&quot;
+    ],
+    &quot;Code&quot;: &quot;sample string 2&quot;,
+    &quot;CreatedOn&quot;: &quot;2026-07-08T03:13:14.0494932Z&quot;,
+    &quot;Description&quot;: &quot;sample string 4&quot;,
+    &quot;ID&quot;: &quot;sample string 5&quot;,
+    &quot;IsDelete&quot;: true,
+    &quot;Tags&quot;: [
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagGroup&quot;: &quot;sample string 2&quot;
+      },
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagGroup&quot;: &quot;sample string 2&quot;
+      }
+    ],
+    &quot;Title&quot;: &quot;sample string 7&quot;,
+    &quot;Url&quot;: &quot;sample string 8&quot;,
+    &quot;ViewSecurityRoles&quot;: [
+      &quot;sample string 1&quot;,
+      &quot;sample string 2&quot;
+    ]
+  },
+  {
+    &quot;ContributorLegacyContactKey&quot;: &quot;sample string 1&quot;,
+    &quot;Additional&quot;: [
+      &quot;sample string 1&quot;,
+      &quot;sample string 2&quot;
+    ],
+    &quot;Code&quot;: &quot;sample string 2&quot;,
+    &quot;CreatedOn&quot;: &quot;2026-07-08T03:13:14.0494932Z&quot;,
+    &quot;Description&quot;: &quot;sample string 4&quot;,
+    &quot;ID&quot;: &quot;sample string 5&quot;,
+    &quot;IsDelete&quot;: true,
+    &quot;Tags&quot;: [
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagGroup&quot;: &quot;sample string 2&quot;
+      },
+      {
+        &quot;Tag&quot;: &quot;sample string 1&quot;,
+        &quot;TagGroup&quot;: &quot;sample string 2&quot;
+      }
+    ],
+    &quot;Title&quot;: &quot;sample string 7&quot;,
+    &quot;Url&quot;: &quot;sample string 8&quot;,
+    &quot;ViewSecurityRoles&quot;: [
+      &quot;sample string 1&quot;,
+      &quot;sample string 2&quot;
+    ]
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfExternalSearchItem.ExternalLibrary xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.Business.Core&quot;&gt;
+  &lt;ExternalSearchItem.ExternalLibrary&gt;
+    &lt;_x003C_Additional_x003E_k__BackingField xmlns:d3p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+      &lt;d3p1:string&gt;sample string 1&lt;/d3p1:string&gt;
+      &lt;d3p1:string&gt;sample string 2&lt;/d3p1:string&gt;
+    &lt;/_x003C_Additional_x003E_k__BackingField&gt;
+    &lt;_x003C_Code_x003E_k__BackingField&gt;sample string 2&lt;/_x003C_Code_x003E_k__BackingField&gt;
+    &lt;_x003C_ContributorLegacyContactKey_x003E_k__BackingField&gt;sample string 1&lt;/_x003C_ContributorLegacyContactKey_x003E_k__BackingField&gt;
+    &lt;_x003C_CreatedOn_x003E_k__BackingField&gt;2026-07-07T23:13:14.0494932-04:00&lt;/_x003C_CreatedOn_x003E_k__BackingField&gt;
+    &lt;_x003C_Description_x003E_k__BackingField&gt;sample string 4&lt;/_x003C_Description_x003E_k__BackingField&gt;
+    &lt;_x003C_ID_x003E_k__BackingField&gt;sample string 5&lt;/_x003C_ID_x003E_k__BackingField&gt;
+    &lt;_x003C_IsDelete_x003E_k__BackingField&gt;true&lt;/_x003C_IsDelete_x003E_k__BackingField&gt;
+    &lt;_x003C_Tags_x003E_k__BackingField&gt;
+      &lt;ExternalSearchItem.TagInfo&gt;
+        &lt;_x003C_TagGroup_x003E_k__BackingField&gt;sample string 2&lt;/_x003C_TagGroup_x003E_k__BackingField&gt;
+        &lt;_x003C_Tag_x003E_k__BackingField&gt;sample string 1&lt;/_x003C_Tag_x003E_k__BackingField&gt;
+      &lt;/ExternalSearchItem.TagInfo&gt;
+      &lt;ExternalSearchItem.TagInfo&gt;
+        &lt;_x003C_TagGroup_x003E_k__BackingField&gt;sample string 2&lt;/_x003C_TagGroup_x003E_k__BackingField&gt;
+        &lt;_x003C_Tag_x003E_k__BackingField&gt;sample string 1&lt;/_x003C_Tag_x003E_k__BackingField&gt;
+      &lt;/ExternalSearchItem.TagInfo&gt;
+    &lt;/_x003C_Tags_x003E_k__BackingField&gt;
+    &lt;_x003C_Title_x003E_k__BackingField&gt;sample string 7&lt;/_x003C_Title_x003E_k__BackingField&gt;
+    &lt;_x003C_Url_x003E_k__BackingField&gt;sample string 8&lt;/_x003C_Url_x003E_k__BackingField&gt;
+    &lt;_x003C_ViewSecurityRoles_x003E_k__BackingField xmlns:d3p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+      &lt;d3p1:string&gt;sample string 1&lt;/d3p1:string&gt;
+      &lt;d3p1:string&gt;sample string 2&lt;/d3p1:string&gt;
+    &lt;/_x003C_ViewSecurityRoles_x003E_k__BackingField&gt;
+  &lt;/ExternalSearchItem.ExternalLibrary&gt;
+  &lt;ExternalSearchItem.ExternalLibrary&gt;
+    &lt;_x003C_Additional_x003E_k__BackingField xmlns:d3p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+      &lt;d3p1:string&gt;sample string 1&lt;/d3p1:string&gt;
+      &lt;d3p1:string&gt;sample string 2&lt;/d3p1:string&gt;
+    &lt;/_x003C_Additional_x003E_k__BackingField&gt;
+    &lt;_x003C_Code_x003E_k__BackingField&gt;sample string 2&lt;/_x003C_Code_x003E_k__BackingField&gt;
+    &lt;_x003C_ContributorLegacyContactKey_x003E_k__BackingField&gt;sample string 1&lt;/_x003C_ContributorLegacyContactKey_x003E_k__BackingField&gt;
+    &lt;_x003C_CreatedOn_x003E_k__BackingField&gt;2026-07-07T23:13:14.0494932-04:00&lt;/_x003C_CreatedOn_x003E_k__BackingField&gt;
+    &lt;_x003C_Description_x003E_k__BackingField&gt;sample string 4&lt;/_x003C_Description_x003E_k__BackingField&gt;
+    &lt;_x003C_ID_x003E_k__BackingField&gt;sample string 5&lt;/_x003C_ID_x003E_k__BackingField&gt;
+    &lt;_x003C_IsDelete_x003E_k__BackingField&gt;true&lt;/_x003C_IsDelete_x003E_k__BackingField&gt;
+    &lt;_x003C_Tags_x003E_k__BackingField&gt;
+      &lt;ExternalSearchItem.TagInfo&gt;
+        &lt;_x003C_TagGroup_x003E_k__BackingField&gt;sample string 2&lt;/_x003C_TagGroup_x003E_k__BackingField&gt;
+        &lt;_x003C_Tag_x003E_k__BackingField&gt;sample string 1&lt;/_x003C_Tag_x003E_k__BackingField&gt;
+      &lt;/ExternalSearchItem.TagInfo&gt;
+      &lt;ExternalSearchItem.TagInfo&gt;
+        &lt;_x003C_TagGroup_x003E_k__BackingField&gt;sample string 2&lt;/_x003C_TagGroup_x003E_k__BackingField&gt;
+        &lt;_x003C_Tag_x003E_k__BackingField&gt;sample string 1&lt;/_x003C_Tag_x003E_k__BackingField&gt;
+      &lt;/ExternalSearchItem.TagInfo&gt;
+    &lt;/_x003C_Tags_x003E_k__BackingField&gt;
+    &lt;_x003C_Title_x003E_k__BackingField&gt;sample string 7&lt;/_x003C_Title_x003E_k__BackingField&gt;
+    &lt;_x003C_Url_x003E_k__BackingField&gt;sample string 8&lt;/_x003C_Url_x003E_k__BackingField&gt;
+    &lt;_x003C_ViewSecurityRoles_x003E_k__BackingField xmlns:d3p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+      &lt;d3p1:string&gt;sample string 1&lt;/d3p1:string&gt;
+      &lt;d3p1:string&gt;sample string 2&lt;/d3p1:string&gt;
+    &lt;/_x003C_ViewSecurityRoles_x003E_k__BackingField&gt;
+  &lt;/ExternalSearchItem.ExternalLibrary&gt;
+&lt;/ArrayOfExternalSearchItem.ExternalLibrary&gt;
+</pre>
+        </div>
+</div>
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p></p>
+
+<a href="/Help/ResourceModel?modelName=AddItemsResponse">AddItemsResponse</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">QueuedIdList</td>
+                    <td class="parameter-documentation">
+                        <p>List of IDs that have been successfully accepted for index queuing within the Community site.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of string
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Errors</td>
+                    <td class="parameter-documentation">
+                        <p>List of Errors that occurred when attempting to queue the passed in External Search items.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=ItemError">ItemError</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;QueuedIdList&quot;: [
+    &quot;sample string 1&quot;,
+    &quot;sample string 2&quot;
+  ],
+  &quot;Errors&quot;: [
+    {
+      &quot;ErrorMessage&quot;: &quot;sample string 1&quot;,
+      &quot;Item&quot;: &quot;sample string 2&quot;
+    },
+    {
+      &quot;ErrorMessage&quot;: &quot;sample string 1&quot;,
+      &quot;Item&quot;: &quot;sample string 2&quot;
+    }
+  ]
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;AddItemsResponse xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.ExternalSearch&quot;&gt;
+  &lt;Errors&gt;
+    &lt;ItemError&gt;
+      &lt;ErrorMessage&gt;sample string 1&lt;/ErrorMessage&gt;
+      &lt;Item&gt;sample string 2&lt;/Item&gt;
+    &lt;/ItemError&gt;
+    &lt;ItemError&gt;
+      &lt;ErrorMessage&gt;sample string 1&lt;/ErrorMessage&gt;
+      &lt;Item&gt;sample string 2&lt;/Item&gt;
+    &lt;/ItemError&gt;
+  &lt;/Errors&gt;
+  &lt;QueuedIdList xmlns:d2p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+    &lt;d2p1:string&gt;sample string 1&lt;/d2p1:string&gt;
+    &lt;d2p1:string&gt;sample string 2&lt;/d2p1:string&gt;
+  &lt;/QueuedIdList&gt;
+&lt;/AddItemsResponse&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

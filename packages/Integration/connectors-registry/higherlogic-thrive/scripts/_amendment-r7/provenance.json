@@ -1,0 +1,42 @@
+[
+  {
+    "URL": "file://sources/ops/GET-api-v2.0-Events-GetEventTypes.html",
+    "AccessedAt": "2026-07-10T00:44:22.007Z",
+    "UsedFor": "EventTypes.APIPath — corrected to the real list endpoint Events/GetEventTypes",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.EventTypes.APIPath",
+    "Excerpt": "GET api/v2.0/Events/GetEventTypes — the working tenant-wide event-types list endpoint; /v2.0/EventTypes is not a real HelpPage operation."
+  },
+  {
+    "URL": "file://sources/ops/POST-api-v2.0-ResourceLibrary-GetLibraryDocuments.html",
+    "AccessedAt": "2026-07-10T00:44:22.007Z",
+    "UsedFor": "ResourceLibraryDocuments.APIPath — corrected to the tenant-wide documents feed GetLibraryDocuments",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.ResourceLibraryDocuments.APIPath",
+    "Excerpt": "POST api/v2.0/ResourceLibrary/GetLibraryDocuments (DaysBack / LibraryKey / MaxRecords filter) — comprehensive documents feed; GetMyLibraryDocuments is scoped to the calling API user only."
+  },
+  {
+    "URL": "file://sources/ops/GET-api-v2.0-Contacts-GetMyContactsPage_afterContactKey_beforeContactKey_limit.html",
+    "AccessedAt": "2026-07-10T00:44:22.007Z",
+    "UsedFor": "Contacts.Description — corrected (was copy-pasted from AutomationRules/GetContactsByRuleScheduleKey)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Contacts.Description",
+    "Excerpt": "GetMyContactsPage: if no afterContactKey or beforeContactKey is provided, returns the first page of Contacts based on the limit provided, ordered by LastName, FirstName."
+  },
+  {
+    "URL": "file://sources/ops/GET-api-v2.0-Communities-GetMyCommunities_includeStatistics_includeHiddenCommunities.html",
+    "AccessedAt": "2026-07-10T00:44:22.007Z",
+    "UsedFor": "Communities.Description — corrected (was copy-pasted from Communities/Get?communityKey=)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.Communities.Description",
+    "Excerpt": "GetMyCommunities: returns a list of the Current User's joined Communities."
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "Entries": [
+    {
+      "URL": "https://whova.com",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Confirming Whova's public navigation/marketing base URL (NavigationBaseURL). This is the product's public site, not a documented API base URL -- no API base URL exists credential-free (see SOURCE_STUDY.md §0).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "https://whova.com -- Whova's own primary domain, reachable directly (not bot-blocked, unlike whova.zendesk.com)."
+    }
+  ]
+}

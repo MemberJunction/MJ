@@ -199,7 +199,18 @@ function isRunnerResult(obj, expectedRunnerTier) {
 // tier is real and ran, but had nothing to validate (no spec, no API paths, no
 // fixtures). These surface as warnings, never as capability gaps. Any OTHER skip
 // reason is treated as a genuine missing capability.
-const ALLOWED_SKIP_REASONS = ['no-openapi-spec', 'no-api-paths', 'no-fixtures', 'no-public-sandbox', 'no-network-endpoints', 'network-unreachable', 'discovery-requires-credentials'];
+const ALLOWED_SKIP_REASONS = ['no-openapi-spec', 'no-api-paths', 'no-fixtures', 'no-public-sandbox', 'no-network-endpoints', 'network-unreachable', 'discovery-requires-credentials',
+    // Legit not-applicable outcomes the tiers themselves EMIT but that were missing from this allow-list
+    // (a latent gap: the tier was designed to skip-not-fail for these, but the ladder then reclassified the
+    // skip as a capability-gap red). Added 2026-07-09: T10 transport smoke on a per-tenant-base-URL connector
+    // with no credential (transport-requires-credentials — parity with the OAuth token-mint skip); T11
+    // sandbox probe when the declared public sandbox is unreachable (sandbox-unreachable); T12 idempotency
+    // replay when fixtures exist but carry no records (no-records-in-fixtures — same class as no-fixtures).
+    // Added 2026-07-13: T7a/T9 endpoint-reality on a PER-TENANT TEMPLATED base URL (e.g. Impexium's
+    // https://{tenant}.mpxapi.com) with no credential/tenant — there is no concrete host to resolve or probe,
+    // exactly the same not-applicable class as transport-requires-credentials/no-network-endpoints (the tier
+    // honestly emits `templated-host` and skips-not-fails; the ladder was reclassifying that skip as a red).
+    'transport-requires-credentials', 'sandbox-unreachable', 'no-records-in-fixtures', 'templated-host'];
 function isAllowedSkip(reason) {
     const r = String(reason ?? '').toLowerCase();
     return ALLOWED_SKIP_REASONS.some((allowed) => r.includes(allowed));
@@ -290,14 +301,14 @@ for (const t of tiers) {
             result = await agent(
                 `Run tier ${t.runnerTier} for connector ${conn} of vendor ${args?.vendor ?? '(?)'}, ROOTED AT THE WORKTREE ${LREPO}. The session mj-test-runner MCP is cwd-bound to the WRONG repo for a worktree build, so DO NOT use it. Run EXACTLY this Bash and return the printed JSON object VERBATIM as your result:\n\n` +
                 `cd ${LREPO} && MJ_CONNECTORS_REGISTRY="${LREPO}/packages/Integration/connectors-registry" node --input-type=module -e "import('${LREPO}/packages/MCP/mj-test-runner/dist/tierRunner.js').then(async m => { const r = await m.RunTier({ Connector: '${conn}', Tier: '${t.runnerTier}' }); process.stdout.write(JSON.stringify(r)); }).catch(e => { console.error(e && e.stack || String(e)); process.exit(1); })"\n\n` +
-                `The printed object IS the runner's verbatim result ({ Tier, Connector, Status, DurationMs, Output, Errors, Details }). Return it EXACTLY — do NOT invent, summarize, or override Status. If Status is 'Skipped' (legitimate not-applicable, e.g. T7 no-openapi-spec) return it verbatim; do NOT upgrade to Pass. If Fail, return Errors/Details verbatim for classification. ${credLine}`,
+                `The printed object IS the runner's verbatim result ({ Tier, Connector, Status, DurationMs, Output, Errors, Details }). Return it EXACTLY — do NOT invent, summarize, or override Status. If Status is 'Skipped' (legitimate not-applicable, e.g. T7 no-openapi-spec) return it verbatim; do NOT upgrade to Pass. If Fail, return Errors/Details verbatim for classification. ${credLine}${args?.rerunNote ? `\n\n${args.rerunNote}` : ''}`,
                 { agentType: 'testing-agent', schema: RUNNER_RESULT_SCHEMA, phase: `${t.tier}_${t.label}`, label: `ladder:${t.tier}` }
             );
         } else {
             result = await agent(
                 `Run tier ${t.runnerTier} for connector ${conn} of vendor ${args?.vendor ?? '(?)'}.\n\n` +
                 `You MUST call the MCP tool \`mcp__mj-test-runner__run_tier\` with { Connector: "${conn}", Tier: "${t.runnerTier}"${t.cred ? ', CredentialFilePath: <the opaque credential reference above>' : ''} } and return its result VERBATIM — the exact object the runner returned ({ Tier, Connector, Status, DurationMs, Output, Errors, Details }). Do NOT invent, summarize, or override Status; the runner is the only source of truth. ${credLine}\n\n` +
-                `If the runner returns Status:'Skipped' (e.g. T7 with reason no-openapi-spec / no-api-paths — a legitimate not-applicable), return that verbatim — do NOT upgrade it to Pass. If it returns Fail, return the runner's Errors/Details verbatim so the workflow can classify each failure with a SyncErrorCode from packages/Integration/engine/src/types.ts and the fix locus.`,
+                `If the runner returns Status:'Skipped' (e.g. T7 with reason no-openapi-spec / no-api-paths — a legitimate not-applicable), return that verbatim — do NOT upgrade it to Pass. If it returns Fail, return the runner's Errors/Details verbatim so the workflow can classify each failure with a SyncErrorCode from packages/Integration/engine/src/types.ts and the fix locus.${args?.rerunNote ? `\n\n${args.rerunNote}` : ''}`,
                 { agentType: 'testing-agent', schema: RUNNER_RESULT_SCHEMA, phase: `${t.tier}_${t.label}`, label: `ladder:${t.tier}` }
             );
         }

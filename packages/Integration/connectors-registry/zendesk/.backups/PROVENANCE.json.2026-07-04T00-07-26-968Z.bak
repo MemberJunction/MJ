@@ -1,0 +1,24 @@
+{
+  "Entries": [
+    {
+      "URL": "https://developer.zendesk.com/api-reference/introduction/rate-limits/",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Root-level per-app rate-limit count (Team plan, the lowest current non-legacy Support-plan tier)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "Plan Requests per minute Essential (legacy) 10 Team 200 Professional 400 Enterprise 700 High Volume API add-on 2500"
+    },
+    {
+      "URL": "https://developer.zendesk.com/api-reference/introduction/rate-limits/",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Root-level rate-limit window in seconds (Zendesk rate limits are expressed per-minute)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "requests per minute ... X-Rate-Limit: 700 X-Rate-Limit-Remaining: 699"
+    }
+  ]
+}

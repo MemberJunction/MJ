@@ -1,0 +1,30 @@
+[
+  {
+    "io": {
+      "Name": "CommunityMembers",
+      "Configuration": "{\"accessPath\":{\"door\":\"Communities/GetCommunityMembers\",\"path\":\"/v2.0/Communities/GetCommunityMembers\",\"nesting\":[],\"door_args\":[],\"fieldOp\":\"api/v2.0/Communities/GetCommunityMembers\"},\"sourceModel\":\"CommunityMember\",\"paginationDetail\":{\"type\":\"Offset\",\"params\":[\"StartRecord\",\"EndRecord\"]}}"
+    }
+  },
+  {
+    "io": {
+      "Name": "Volunteers",
+      "SupportsWrite": false,
+      "SupportsCreate": false,
+      "CreateAPIPath": null,
+      "CreateMethod": null,
+      "CreateBodyShape": null,
+      "CreateBodyKey": null,
+      "CreateIDLocation": null,
+      "SupportsUpdate": false,
+      "UpdateAPIPath": null,
+      "UpdateMethod": null,
+      "UpdateBodyShape": null,
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": null,
+      "SupportsDelete": false,
+      "DeleteAPIPath": null,
+      "DeleteMethod": null,
+      "DeleteIDLocation": null
+    }
+  }
+]

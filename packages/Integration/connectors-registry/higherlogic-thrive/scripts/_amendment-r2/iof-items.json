@@ -1,0 +1,44 @@
+[
+  {
+    "ioName": "Answers",
+    "iof": {
+      "Name": "ParentKey",
+      "DisplayName": "Parent Key",
+      "Description": "Unique identifier of the answer's parent question.",
+      "Type": "String",
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsPrimaryKey": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 2,
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Questions&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "QuestionKey",
+      "Configuration": {
+        "ReferencedType": "Questions"
+      }
+    }
+  },
+  {
+    "ioName": "DiscussionPosts",
+    "iof": {
+      "Name": "ParentDiscussionPostKey",
+      "DisplayName": "Parent Discussion Post Key",
+      "Description": "Unique Identifier of the Parent Discussion Post. If there is no parent, will return an empty Guid.",
+      "Type": "String",
+      "IsRequired": false,
+      "IsReadOnly": false,
+      "IsPrimaryKey": false,
+      "IsUniqueKey": false,
+      "AllowsNull": true,
+      "Status": "Active",
+      "Sequence": 11,
+      "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=DiscussionPosts&IntegrationID=@parent:IntegrationID",
+      "RelatedIntegrationObjectFieldName": "DiscussionPostKey",
+      "Configuration": {
+        "ReferencedType": "DiscussionPosts"
+      }
+    }
+  }
+]

@@ -1,0 +1,344 @@
+{
+  "Entries": [
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Integration.NavigationBaseURL to the vendor's own public API v2 reference document (verified HTTP 200 via a fresh curl fetch immediately before writing, per the build instruction). This is the credential-free, tenant-agnostic stand-in for a per-record deep link, since Vanilla's real navigation base is per-tenant ({communityUrl}) and cannot be baked into shared metadata.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "Page title confirmed via fresh fetch: 'API V2 Endpoints - The Success Community' (HTTP 200). KB article 40 cross-references this as the vendor's 'full API reference': \"Looking for the API v2 swagger reference? You can find it in your Dashboard ... or in our full API reference.\""
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/44-rate-limits",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Integration.BatchMaxRequestCount to the vendor's documented GET rate limit (the broader/primary limit, per the sibling-connector convention of promoting the less-restrictive vendor-wide count to the root field).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "GET requests: These types of requests are limited to 300 requests per 1 minute, per IP."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/44-rate-limits",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Integration.BatchRequestWaitTime to the 60-second window paired with the GET rate-limit count above.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "GET requests ... are limited to 300 requests per 1 minute, per IP. Exceeding the ... rate limits will result in a temporary block ... The block will lift automatically after 1 minute."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/41-authenticating-apiv2-calls-with-personal-access-tokens",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Classifying Configuration.AuthFlow as 'api-key' -- a static, manually-issued, long-lived Personal Access Token with no OAuth handshake.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "Generate an access token: Currently, you can obtain a personal access token from your user profile. These access tokens are meant for server-to-server integrations, and should not be exposed to HTML pages."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/41-authenticating-apiv2-calls-with-personal-access-tokens",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.AuthHeaderPattern to the vendor-documented, vendor-recommended Bearer header form.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthHeaderPattern",
+      "Excerpt": "To authenticate with the HTTP header, pass the access token in the Authorization field with the bearer scheme. Authorization: Bearer <your_jwt_token> ... This is the preferred way of authenticating against the API because headers are not usually logged on servers."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/41-authenticating-apiv2-calls-with-personal-access-tokens",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Leaving Configuration.TokenRefreshStrategy null: the source describes manual PAT generation from the user profile with no stated expiry, TTL, or refresh grant/endpoint anywhere in the article.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "integration.Configuration.TokenRefreshStrategy",
+      "Excerpt": "To obtain a personal access token: 1. Click the MeBox ... 4. Click Generate New Token. ... Click Generate to generate the token and copy the value into your app. (No expiry, TTL, or refresh flow described anywhere in the article.)"
+    },
+    {
+      "URL": "file:///Users/bcladmin/Projects/MemberJunction/MJ/packages/Integration/connectors-registry/higherlogic-vanilla/sources/contextHLV.md",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Recording OAuth2/SAML/OIDC/jsConnect as documented END-USER SSO flavors for awareness/disambiguation (they play no role in this connector's server-to-server auth). Tier-3 context document, trusted-where-it-speaks for this concrete, non-hard-constraint awareness note -- no independent Tier-1/2 source was needed since no control-flow decision rests on it.",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "integration.Configuration.EndUserSSOMechanisms",
+      "Excerpt": "...OAuth 2.0 addon configuration, SAML configuration, OIDC configuration, jsConnect configuration... (operator-supplied planning document naming these as real Vanilla SSO concepts; independently corroborated as real Vanilla product terms by the JWT-addon KB article's own phrase 'in addition to the normal web SSO flow')."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/40-api-v2-overview",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Confirming the Link-header (RFC 5988) pagination navigation mechanism, the Paging-Next response header, the two pagination styles ('numbered' vs 'more'), and the 'fields' sparse-fieldset query parameter that back Configuration.PaginationDefaults.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "Since the API returns an array of records, the paging information is sent using the Link header. ... The Paging-Next header will always be present when more rows are available. ... The fields property ... can be used with every GET API call."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/44-rate-limits",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Populating Configuration.RateLimitPolicy with the full documented rate-limit shape: GET/write per-minute counts, the 429 status code, the automatic 1-minute lift, and the 250-requests-per-10-seconds hard limit with its manual-unblock consequence.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.RateLimitPolicy",
+      "Excerpt": "POST / PUT / PATCH / DELETE requests ... are limited to 120 requests per 1 minute, per IP. ... If you send more than 250 requests within 10 seconds, your IP may become blocked and require manual intervention by Vanilla Support in order to remove the block."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/262-webhooks",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Corroborating Configuration.DeleteSemantics = 'mixed': the vendor's own webhook-event documentation independently confirms Articles are restorable (soft-deleted) via an 'article_update' event, distinct from a real hard-delete verb.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DeleteSemantics",
+      "Excerpt": "A webhook event fires when an article is: Added / Edited / Deleted / Restored / Marked by a user as helpful/unhelpful. NOTE: When an article is deleted or restored, it fires as an article_update event."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/262-webhooks",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.WebhooksAvailable = true and documenting that the Webhooks addon is per-tenant and requires Vanilla staff to enable it (not guaranteed present on every customer community).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WebhooksAvailable",
+      "Excerpt": "Enable the Webhooks addon: This addon must be enabled by Vanilla staff. Contact Vanilla Support to have it enabled."
+    },
+    {
+      "URL": "https://open.vanillaforums.com/api/v2/openapi/v3",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Confirming the per-tenant base-URL shape ({communityUrl}/api/v2): this build's own two source OpenAPI documents were fetched from exactly this pattern on two DIFFERENT communities (open.vanillaforums.com and success.vanillaforums.com), each declaring its own host in its `servers` array with the identical '/api/v2' path segment.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PerTenantConfig",
+      "Excerpt": "servers: [{\"url\": \"https://open.vanillaforums.com/api/v2\"}] (this community's own OpenAPI document); the success.vanillaforums.com KB-embedded document analogously declares servers: [{\"url\": \"https://success.vanillaforums.com/api/v2\"}] -- same path segment, different host per tenant."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:53:53.379Z",
+      "UsedFor": "BadgeRequest list/create/delete endpoints + composite PK",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.BadgeRequest.APIPath",
+      "Excerpt": "GET /badges/requests; POST /badges/{id}/requests; DELETE /badges/{id}/requests/{userID}; BadgeRequest.badgeID/userID required"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:53:53.379Z",
+      "UsedFor": "DiscussionReaction reaction-event list/create/delete + composite key",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DiscussionReaction.APIPath",
+      "Excerpt": "GET+POST /discussions/{id}/reactions; DELETE /discussions/{id}/reactions/{userID}; items.required=[recordType,recordID,tagID,userID,dateInserted,user,reactionType]"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:53:53.379Z",
+      "UsedFor": "CommentReaction reaction-event list/create/delete + composite key",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CommentReaction.APIPath",
+      "Excerpt": "GET+POST /comments/{id}/reactions; DELETE /comments/{id}/reactions/{userID}; items.required=[recordType,recordID,tagID,userID,dateInserted,user,reactionType]"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:53:53.379Z",
+      "UsedFor": "EscalationLog PK + list/get-by-id + watermark",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.EscalationLog.escalationLogID.IsPrimaryKey",
+      "Excerpt": "GET /escalations/log/{escalationLogID}; EscalationLog.escalationLogID description \"Primary ID of the log.\"; /escalations/log dateInserted date-filter param"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:53:53.379Z",
+      "UsedFor": "EventParticipant create (RSVP) endpoint",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventParticipant.SupportsCreate",
+      "Excerpt": "POST /events/{id}/participants — \"RSVP to an event.\", body {attending,userID}, attending required"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:53:53.379Z",
+      "UsedFor": "GroupMember role-change + single-record delete + composite PK",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.GroupMember.UpdateAPIPath",
+      "Excerpt": "PATCH /groups/{id}/members/{userID} \"Change a user's role within a group\"; DELETE /groups/{id}/members/{userID} \"Remove a user from a group\""
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:53:53.380Z",
+      "UsedFor": "UserBadge grant/revoke + composite PK",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.UserBadge.SupportsCreate",
+      "Excerpt": "POST /badges/{id}/users \"Give a badge to a user.\" (UserBadgePost); DELETE /badges/{id}/users/{userID} \"Remove a badge from a user.\""
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:53:53.380Z",
+      "UsedFor": "GroupApplicant single-record approve/deny + composite PK",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.GroupApplicant.UpdateAPIPath",
+      "Excerpt": "PATCH /groups/{id}/applicants/{userID} \"Approve or deny a group applicant\" vs bulk /groups/{id}/applicants \"...multiple...\""
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:53:53.380Z",
+      "UsedFor": "GroupInvite single-record delete + composite PK",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.GroupInvite.DeleteAPIPath",
+      "Excerpt": "DELETE /groups/{id}/invites/{userID} \"Delete an invite to a user from a group\" vs bulk /groups/{id}/invites \"...multiple...\""
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:53:53.380Z",
+      "UsedFor": "GroupTag composite PK",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.GroupTag.groupID.IsPrimaryKey",
+      "Excerpt": "GET /groups/{id}/tags path param id -> Group; tagID alone not globally unique"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:53:53.380Z",
+      "UsedFor": "Icon delete path template-var alignment",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Icon.DeleteAPIPath",
+      "Excerpt": "DELETE /icons/:iconUUID (param iconUUID) — Icon PK field is iconUUID, not id"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:54:51.333Z",
+      "UsedFor": "BadgeRequest list/create/delete endpoints + composite PK",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.BadgeRequest.APIPath",
+      "Excerpt": "GET /badges/requests; POST /badges/{id}/requests; DELETE /badges/{id}/requests/{userID}; BadgeRequest.badgeID/userID required"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:54:51.334Z",
+      "UsedFor": "DiscussionReaction reaction-event list/create/delete + composite key",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.DiscussionReaction.APIPath",
+      "Excerpt": "GET+POST /discussions/{id}/reactions; DELETE /discussions/{id}/reactions/{userID}; items.required=[recordType,recordID,tagID,userID,dateInserted,user,reactionType]"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:54:51.334Z",
+      "UsedFor": "CommentReaction reaction-event list/create/delete + composite key",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CommentReaction.APIPath",
+      "Excerpt": "GET+POST /comments/{id}/reactions; DELETE /comments/{id}/reactions/{userID}; items.required=[recordType,recordID,tagID,userID,dateInserted,user,reactionType]"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:54:51.334Z",
+      "UsedFor": "EscalationLog PK + list/get-by-id + watermark",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.EscalationLog.escalationLogID.IsPrimaryKey",
+      "Excerpt": "GET /escalations/log/{escalationLogID}; EscalationLog.escalationLogID description \"Primary ID of the log.\"; /escalations/log dateInserted date-filter param"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:54:51.334Z",
+      "UsedFor": "EventParticipant create (RSVP) endpoint",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.EventParticipant.SupportsCreate",
+      "Excerpt": "POST /events/{id}/participants — \"RSVP to an event.\", body {attending,userID}, attending required"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:54:51.334Z",
+      "UsedFor": "GroupMember role-change + single-record delete + composite PK",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.GroupMember.UpdateAPIPath",
+      "Excerpt": "PATCH /groups/{id}/members/{userID} \"Change a user's role within a group\"; DELETE /groups/{id}/members/{userID} \"Remove a user from a group\""
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:54:51.334Z",
+      "UsedFor": "UserBadge grant/revoke + composite PK",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.UserBadge.SupportsCreate",
+      "Excerpt": "POST /badges/{id}/users \"Give a badge to a user.\" (UserBadgePost); DELETE /badges/{id}/users/{userID} \"Remove a badge from a user.\""
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:54:51.334Z",
+      "UsedFor": "GroupApplicant single-record approve/deny + composite PK",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.GroupApplicant.UpdateAPIPath",
+      "Excerpt": "PATCH /groups/{id}/applicants/{userID} \"Approve or deny a group applicant\" vs bulk /groups/{id}/applicants \"...multiple...\""
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:54:51.334Z",
+      "UsedFor": "GroupInvite single-record delete + composite PK",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.GroupInvite.DeleteAPIPath",
+      "Excerpt": "DELETE /groups/{id}/invites/{userID} \"Delete an invite to a user from a group\" vs bulk /groups/{id}/invites \"...multiple...\""
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:54:51.334Z",
+      "UsedFor": "GroupTag composite PK",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.GroupTag.groupID.IsPrimaryKey",
+      "Excerpt": "GET /groups/{id}/tags path param id -> Group; tagID alone not globally unique"
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessedAt": "2026-07-08T23:54:51.334Z",
+      "UsedFor": "Icon delete path template-var alignment",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Icon.DeleteAPIPath",
+      "Excerpt": "DELETE /icons/:iconUUID (param iconUUID) — Icon PK field is iconUUID, not id"
+    }
+  ]
+}

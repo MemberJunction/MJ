@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/ResourceLibrary/GetDocumentAttachments?documentKey={documentKey}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/ResourceLibrary/GetDocumentAttachments?documentKey={documentKey}</h1>
+<div>
+    <p>Returns Document Attachment Details for the specified Document.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">documentKey</td>
+                    <td class="parameter-documentation">
+                        <p>DocumentKey of the Document from which to retrieve the associated Attachments.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>List of Document Attachments.</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=DocumentAttachment">DocumentAttachment</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">DocumentAttachmentKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DocumentKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FileName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UploadedByContact</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=ContactConcise">ContactConcise</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CreatedOn</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FileExtension</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FileSizeInBytes</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Width</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Height</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DurationSeconds</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DownloadUrl</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IconUrl</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Status</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;DocumentAttachmentKey&quot;: &quot;009793e9-1cc7-4216-948e-304d447b56da&quot;,
+    &quot;DocumentKey&quot;: &quot;63650ece-b27e-48cc-8df2-66e56a6f6ce0&quot;,
+    &quot;FileName&quot;: &quot;sample string 3&quot;,
+    &quot;UploadedByContact&quot;: {
+      &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+      &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+      &quot;ContactKey&quot;: &quot;49fa8248-1053-43c1-8799-aa84232e0292&quot;,
+      &quot;FirstName&quot;: &quot;sample string 4&quot;,
+      &quot;LastName&quot;: &quot;sample string 5&quot;,
+      &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+      &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+      &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+      &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+      &quot;UpdatedOn&quot;: &quot;2026-07-08T02:16:10.8430152Z&quot;,
+      &quot;UpdatedByContactKey&quot;: &quot;9024c384-cb6e-4fe7-b014-036ebce6e8ad&quot;,
+      &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+      &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+      &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+      &quot;Designation&quot;: &quot;sample string 15&quot;,
+      &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+      &quot;InformalName&quot;: &quot;sample string 17&quot;,
+      &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+      &quot;IsCompany&quot;: true,
+      &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+      &quot;AMSDirectoryOptOut&quot;: true,
+      &quot;HLDirectoryOptOut&quot;: true,
+      &quot;HLContactMeOptOut&quot;: true,
+      &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+      &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T02:16:10.8430152Z&quot;
+    },
+    &quot;CreatedOn&quot;: &quot;2026-07-08T02:16:10.8430152Z&quot;,
+    &quot;FileExtension&quot;: &quot;sample string 5&quot;,
+    &quot;FileSizeInBytes&quot;: 1,
+    &quot;Width&quot;: 1,
+    &quot;Height&quot;: 1,
+    &quot;DurationSeconds&quot;: 1,
+    &quot;DownloadUrl&quot;: &quot;sample string 6&quot;,
+    &quot;IconUrl&quot;: &quot;sample string 7&quot;,
+    &quot;Status&quot;: &quot;sample string 8&quot;
+  },
+  {
+    &quot;DocumentAttachmentKey&quot;: &quot;009793e9-1cc7-4216-948e-304d447b56da&quot;,
+    &quot;DocumentKey&quot;: &quot;63650ece-b27e-48cc-8df2-66e56a6f6ce0&quot;,
+    &quot;FileName&quot;: &quot;sample string 3&quot;,
+    &quot;UploadedByContact&quot;: {
+      &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+      &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+      &quot;ContactKey&quot;: &quot;49fa8248-1053-43c1-8799-aa84232e0292&quot;,
+      &quot;FirstName&quot;: &quot;sample string 4&quot;,
+      &quot;LastName&quot;: &quot;sample string 5&quot;,
+      &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+      &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+      &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+      &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+      &quot;UpdatedOn&quot;: &quot;2026-07-08T02:16:10.8430152Z&quot;,
+      &quot;UpdatedByContactKey&quot;: &quot;9024c384-cb6e-4fe7-b014-036ebce6e8ad&quot;,
+      &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+      &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+      &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+      &quot;Designation&quot;: &quot;sample string 15&quot;,
+      &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+      &quot;InformalName&quot;: &quot;sample string 17&quot;,
+      &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+      &quot;IsCompany&quot;: true,
+      &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+      &quot;AMSDirectoryOptOut&quot;: true,
+      &quot;HLDirectoryOptOut&quot;: true,
+      &quot;HLContactMeOptOut&quot;: true,
+      &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+      &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T02:16:10.8430152Z&quot;
+    },
+    &quot;CreatedOn&quot;: &quot;2026-07-08T02:16:10.8430152Z&quot;,
+    &quot;FileExtension&quot;: &quot;sample string 5&quot;,
+    &quot;FileSizeInBytes&quot;: 1,
+    &quot;Width&quot;: 1,
+    &quot;Height&quot;: 1,
+    &quot;DurationSeconds&quot;: 1,
+    &quot;DownloadUrl&quot;: &quot;sample string 6&quot;,
+    &quot;IconUrl&quot;: &quot;sample string 7&quot;,
+    &quot;Status&quot;: &quot;sample string 8&quot;
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfDocumentAttachment xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.ResourceLibrary&quot;&gt;
+  &lt;DocumentAttachment&gt;
+    &lt;CreatedOn&gt;2026-07-07T22:16:10.8430152-04:00&lt;/CreatedOn&gt;
+    &lt;DocumentAttachmentKey&gt;009793e9-1cc7-4216-948e-304d447b56da&lt;/DocumentAttachmentKey&gt;
+    &lt;DocumentKey&gt;63650ece-b27e-48cc-8df2-66e56a6f6ce0&lt;/DocumentKey&gt;
+    &lt;DownloadUrl&gt;sample string 6&lt;/DownloadUrl&gt;
+    &lt;DurationSeconds&gt;1&lt;/DurationSeconds&gt;
+    &lt;FileExtension&gt;sample string 5&lt;/FileExtension&gt;
+    &lt;FileName&gt;sample string 3&lt;/FileName&gt;
+    &lt;FileSizeInBytes&gt;1&lt;/FileSizeInBytes&gt;
+    &lt;Height&gt;1&lt;/Height&gt;
+    &lt;IconUrl&gt;sample string 7&lt;/IconUrl&gt;
+    &lt;Status&gt;sample string 8&lt;/Status&gt;
+    &lt;UploadedByContact xmlns:d3p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+      &lt;d3p1:AMSDirectoryOptOut&gt;true&lt;/d3p1:AMSDirectoryOptOut&gt;
+      &lt;d3p1:AgreedToTermsDateTime&gt;2026-07-07T22:16:10.8430152-04:00&lt;/d3p1:AgreedToTermsDateTime&gt;
+      &lt;d3p1:CompanyLegacyContactKey&gt;sample string 20&lt;/d3p1:CompanyLegacyContactKey&gt;
+      &lt;d3p1:CompanyName&gt;sample string 12&lt;/d3p1:CompanyName&gt;
+      &lt;d3p1:CompanyTitle&gt;sample string 13&lt;/d3p1:CompanyTitle&gt;
+      &lt;d3p1:ContactKey&gt;49fa8248-1053-43c1-8799-aa84232e0292&lt;/d3p1:ContactKey&gt;
+      &lt;d3p1:ContactStatusCode&gt;sample string 8&lt;/d3p1:ContactStatusCode&gt;
+      &lt;d3p1:Designation&gt;sample string 15&lt;/d3p1:Designation&gt;
+      &lt;d3p1:DisplayName&gt;sample string 6&lt;/d3p1:DisplayName&gt;
+      &lt;d3p1:EmailAddress&gt;sample string 7&lt;/d3p1:EmailAddress&gt;
+      &lt;d3p1:FirstName&gt;sample string 4&lt;/d3p1:FirstName&gt;
+      &lt;d3p1:HLContactMeOptOut&gt;true&lt;/d3p1:HLContactMeOptOut&gt;
+      &lt;d3p1:HLDirectoryOptOut&gt;true&lt;/d3p1:HLDirectoryOptOut&gt;
+      &lt;d3p1:InformalName&gt;sample string 17&lt;/d3p1:InformalName&gt;
+      &lt;d3p1:IsCompany&gt;true&lt;/d3p1:IsCompany&gt;
+      &lt;d3p1:LargePictureUrl&gt;sample string 24&lt;/d3p1:LargePictureUrl&gt;
+      &lt;d3p1:LastName&gt;sample string 5&lt;/d3p1:LastName&gt;
+      &lt;d3p1:LegacyContactKey&gt;sample string 16&lt;/d3p1:LegacyContactKey&gt;
+      &lt;d3p1:LinkToProfile&gt;sample string 1&lt;/d3p1:LinkToProfile&gt;
+      &lt;d3p1:MiddleName&gt;sample string 18&lt;/d3p1:MiddleName&gt;
+      &lt;d3p1:PictureUrl&gt;sample string 2&lt;/d3p1:PictureUrl&gt;
+      &lt;d3p1:PrefixCode&gt;sample string 9&lt;/d3p1:PrefixCode&gt;
+      &lt;d3p1:SuffixCode&gt;sample string 14&lt;/d3p1:SuffixCode&gt;
+      &lt;d3p1:UpdatedByContactKey&gt;9024c384-cb6e-4fe7-b014-036ebce6e8ad&lt;/d3p1:UpdatedByContactKey&gt;
+      &lt;d3p1:UpdatedOn&gt;2026-07-07T22:16:10.8430152-04:00&lt;/d3p1:UpdatedOn&gt;
+    &lt;/UploadedByContact&gt;
+    &lt;Width&gt;1&lt;/Width&gt;
+  &lt;/DocumentAttachment&gt;
+  &lt;DocumentAttachment&gt;
+    &lt;CreatedOn&gt;2026-07-07T22:16:10.8430152-04:00&lt;/CreatedOn&gt;
+    &lt;DocumentAttachmentKey&gt;009793e9-1cc7-4216-948e-304d447b56da&lt;/DocumentAttachmentKey&gt;
+    &lt;DocumentKey&gt;63650ece-b27e-48cc-8df2-66e56a6f6ce0&lt;/DocumentKey&gt;
+    &lt;DownloadUrl&gt;sample string 6&lt;/DownloadUrl&gt;
+    &lt;DurationSeconds&gt;1&lt;/DurationSeconds&gt;
+    &lt;FileExtension&gt;sample string 5&lt;/FileExtension&gt;
+    &lt;FileName&gt;sample string 3&lt;/FileName&gt;
+    &lt;FileSizeInBytes&gt;1&lt;/FileSizeInBytes&gt;
+    &lt;Height&gt;1&lt;/Height&gt;
+    &lt;IconUrl&gt;sample string 7&lt;/IconUrl&gt;
+    &lt;Status&gt;sample string 8&lt;/Status&gt;
+    &lt;UploadedByContact xmlns:d3p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+      &lt;d3p1:AMSDirectoryOptOut&gt;true&lt;/d3p1:AMSDirectoryOptOut&gt;
+      &lt;d3p1:AgreedToTermsDateTime&gt;2026-07-07T22:16:10.8430152-04:00&lt;/d3p1:AgreedToTermsDateTime&gt;
+      &lt;d3p1:CompanyLegacyContactKey&gt;sample string 20&lt;/d3p1:CompanyLegacyContactKey&gt;
+      &lt;d3p1:CompanyName&gt;sample string 12&lt;/d3p1:CompanyName&gt;
+      &lt;d3p1:CompanyTitle&gt;sample string 13&lt;/d3p1:CompanyTitle&gt;
+      &lt;d3p1:ContactKey&gt;49fa8248-1053-43c1-8799-aa84232e0292&lt;/d3p1:ContactKey&gt;
+      &lt;d3p1:ContactStatusCode&gt;sample string 8&lt;/d3p1:ContactStatusCode&gt;
+      &lt;d3p1:Designation&gt;sample string 15&lt;/d3p1:Designation&gt;
+      &lt;d3p1:DisplayName&gt;sample string 6&lt;/d3p1:DisplayName&gt;
+      &lt;d3p1:EmailAddress&gt;sample string 7&lt;/d3p1:EmailAddress&gt;
+      &lt;d3p1:FirstName&gt;sample string 4&lt;/d3p1:FirstName&gt;
+      &lt;d3p1:HLContactMeOptOut&gt;true&lt;/d3p1:HLContactMeOptOut&gt;
+      &lt;d3p1:HLDirectoryOptOut&gt;true&lt;/d3p1:HLDirectoryOptOut&gt;
+      &lt;d3p1:InformalName&gt;sample string 17&lt;/d3p1:InformalName&gt;
+      &lt;d3p1:IsCompany&gt;true&lt;/d3p1:IsCompany&gt;
+      &lt;d3p1:LargePictureUrl&gt;sample string 24&lt;/d3p1:LargePictureUrl&gt;
+      &lt;d3p1:LastName&gt;sample string 5&lt;/d3p1:LastName&gt;
+      &lt;d3p1:LegacyContactKey&gt;sample string 16&lt;/d3p1:LegacyContactKey&gt;
+      &lt;d3p1:LinkToProfile&gt;sample string 1&lt;/d3p1:LinkToProfile&gt;
+      &lt;d3p1:MiddleName&gt;sample string 18&lt;/d3p1:MiddleName&gt;
+      &lt;d3p1:PictureUrl&gt;sample string 2&lt;/d3p1:PictureUrl&gt;
+      &lt;d3p1:PrefixCode&gt;sample string 9&lt;/d3p1:PrefixCode&gt;
+      &lt;d3p1:SuffixCode&gt;sample string 14&lt;/d3p1:SuffixCode&gt;
+      &lt;d3p1:UpdatedByContactKey&gt;9024c384-cb6e-4fe7-b014-036ebce6e8ad&lt;/d3p1:UpdatedByContactKey&gt;
+      &lt;d3p1:UpdatedOn&gt;2026-07-07T22:16:10.8430152-04:00&lt;/d3p1:UpdatedOn&gt;
+    &lt;/UploadedByContact&gt;
+    &lt;Width&gt;1&lt;/Width&gt;
+  &lt;/DocumentAttachment&gt;
+&lt;/ArrayOfDocumentAttachment&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

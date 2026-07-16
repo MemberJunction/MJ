@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/Discussions/PostToDiscussionAnonymously</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/Discussions/PostToDiscussionAnonymously</h1>
+<div>
+    <p></p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+<a href="/Help/ResourceModel?modelName=PostDiscussionMessageRequest">PostDiscussionMessageRequest</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">DiscussionKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Key of the Discussion to Post to. A discussion and community have a one
+            to one relationship, so either this or the CommunityKey must be provided when posting a discussion message. Both are not needed.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Key of the Community to Post to. A discussion and community have a one
+            to one relationship, so either this or the DiscussionKey must be provided when posting a discussion message. Both are not needed.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DocumentKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Key of Document to attach to the Discussion Post. This field is optional.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">TopicTagKeys</td>
+                    <td class="parameter-documentation">
+                        <p>List of unique keys of Topic tags to apply to Post. Topic tag keys only apply when posting to a topic community and are omitted
+            when posting to a non-topic community. If required, the keys must be valid topic tag keys of the community that you are posting to,
+            and can be found in the Community model for the community that you are posting to.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of globally unique identifier
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Subject</td>
+                    <td class="parameter-documentation">
+                        <p>Subject of the Discussion Post.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                                <p>Max length: 255</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Body</td>
+                    <td class="parameter-documentation">
+                        <p>Body of the Discussion Post.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Request Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;DiscussionKey&quot;: &quot;0198b778-2f0d-47f6-8a3c-05caa30cd3b1&quot;,
+  &quot;CommunityKey&quot;: &quot;218044be-a676-4a1b-acd1-19b4e4e9ccfc&quot;,
+  &quot;DocumentKey&quot;: &quot;5e2e31c5-f2b1-46c1-b030-e45bd65de0df&quot;,
+  &quot;TopicTagKeys&quot;: [
+    &quot;4a000593-66e8-4e6e-91e3-32f210f77e3b&quot;,
+    &quot;10aaedbe-9e7f-47c7-8738-344c8a77e8f1&quot;
+  ],
+  &quot;Subject&quot;: &quot;sample string 1&quot;,
+  &quot;Body&quot;: &quot;sample string 2&quot;
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;PostDiscussionMessageRequest xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Request&quot;&gt;
+  &lt;Body&gt;sample string 2&lt;/Body&gt;
+  &lt;CommunityKey&gt;218044be-a676-4a1b-acd1-19b4e4e9ccfc&lt;/CommunityKey&gt;
+  &lt;DiscussionKey&gt;0198b778-2f0d-47f6-8a3c-05caa30cd3b1&lt;/DiscussionKey&gt;
+  &lt;DocumentKey&gt;5e2e31c5-f2b1-46c1-b030-e45bd65de0df&lt;/DocumentKey&gt;
+  &lt;Subject&gt;sample string 1&lt;/Subject&gt;
+  &lt;TopicTagKeys xmlns:d2p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+    &lt;d2p1:guid&gt;4a000593-66e8-4e6e-91e3-32f210f77e3b&lt;/d2p1:guid&gt;
+    &lt;d2p1:guid&gt;10aaedbe-9e7f-47c7-8738-344c8a77e8f1&lt;/d2p1:guid&gt;
+  &lt;/TopicTagKeys&gt;
+&lt;/PostDiscussionMessageRequest&gt;
+</pre>
+        </div>
+</div>
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p></p>
+
+        Collection of boolean
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  true,
+  true
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfboolean xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+  &lt;boolean&gt;true&lt;/boolean&gt;
+  &lt;boolean&gt;true&lt;/boolean&gt;
+&lt;/ArrayOfboolean&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

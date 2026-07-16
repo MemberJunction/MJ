@@ -1,0 +1,112 @@
+{"ts":"2026-07-02T19:25:33.630Z","server":"mj-metadata","phase":"call","tool":"read_integration","connector":"eventbrite"}
+{"ts":"2026-07-02T19:25:33.631Z","server":"mj-metadata","phase":"result","tool":"read_integration","ok":true,"connector":"eventbrite"}
+{"ts":"2026-07-02T19:25:48.129Z","server":"mj-metadata","phase":"call","tool":"read_integration","connector":"eventbrite"}
+{"ts":"2026-07-02T19:25:48.130Z","server":"mj-metadata","phase":"result","tool":"read_integration","ok":true,"connector":"eventbrite"}
+{"ts":"2026-07-02T19:25:48.133Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_fields","connector":"eventbrite","fieldKeys":["Configuration"]}
+{"ts":"2026-07-02T19:25:48.136Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_fields","ok":true,"connector":"eventbrite","fieldKeys":["Configuration"]}
+{"ts":"2026-07-02T19:25:48.137Z","server":"mj-metadata","phase":"call","tool":"append_provenance","connector":"eventbrite","entryKeys":["URL","AccessedAt","UsedFor","SourceTier","SourceCategory","EvidenceStrength","TargetField","Excerpt"]}
+{"ts":"2026-07-02T19:25:48.138Z","server":"mj-metadata","phase":"result","tool":"append_provenance","ok":true,"connector":"eventbrite","entryKeys":["URL","AccessedAt","UsedFor","SourceTier","SourceCategory","EvidenceStrength","TargetField","Excerpt"]}
+{"ts":"2026-07-02T19:25:48.139Z","server":"mj-metadata","phase":"call","tool":"append_code_evidence","connector":"eventbrite","entryKeys":["ScriptPath","ScriptRunAt","StructuredOutput","SchemaValidationStatus","TargetField"]}
+{"ts":"2026-07-02T19:25:48.140Z","server":"mj-metadata","phase":"result","tool":"append_code_evidence","ok":true,"connector":"eventbrite","entryKeys":["ScriptPath","ScriptRunAt","StructuredOutput","SchemaValidationStatus","TargetField"]}
+{"ts":"2026-07-02T19:25:48.141Z","server":"mj-metadata","phase":"call","tool":"read_integration","connector":"eventbrite"}
+{"ts":"2026-07-02T19:25:48.141Z","server":"mj-metadata","phase":"result","tool":"read_integration","ok":true,"connector":"eventbrite"}
+{"ts":"2026-07-02T20:31:16.977Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object","connector":"eventbrite","io":"Media Upload"}
+{"ts":"2026-07-02T20:31:16.980Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object","ok":true,"connector":"eventbrite","io":"Media Upload"}
+{"ts":"2026-07-02T20:31:16.981Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"eventbrite","ioName":"Media Upload","iof":"upload_token"}
+{"ts":"2026-07-02T20:31:16.983Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"eventbrite","ioName":"Media Upload","iof":"upload_token"}
+{"ts":"2026-07-02T20:31:16.984Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"eventbrite","ioName":"Media Upload","iof":"crop_mask"}
+{"ts":"2026-07-02T20:31:16.985Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"eventbrite","ioName":"Media Upload","iof":"crop_mask"}
+{"ts":"2026-07-02T20:31:16.986Z","server":"mj-metadata","phase":"call","tool":"append_provenance","connector":"eventbrite","entryKeys":["URL","AccessedAt","UsedFor","SourceTier","SourceCategory","EvidenceStrength","TargetField","Excerpt"]}
+{"ts":"2026-07-02T20:31:16.987Z","server":"mj-metadata","phase":"result","tool":"append_provenance","ok":true,"connector":"eventbrite","entryKeys":["URL","AccessedAt","UsedFor","SourceTier","SourceCategory","EvidenceStrength","TargetField","Excerpt"]}
+{"ts":"2026-07-02T20:31:16.987Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"eventbrite","ioName":"Balance","iof":"currency"}
+{"ts":"2026-07-02T20:31:16.989Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"eventbrite","ioName":"Balance","iof":"currency"}
+{"ts":"2026-07-02T20:31:16.989Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"eventbrite","ioName":"Balance","iof":"event_id"}
+{"ts":"2026-07-02T20:31:16.991Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"eventbrite","ioName":"Balance","iof":"event_id"}
+{"ts":"2026-07-02T20:31:16.991Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"eventbrite","ioName":"Balance","iof":"latest_order_id"}
+{"ts":"2026-07-02T20:31:16.993Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"eventbrite","ioName":"Balance","iof":"latest_order_id"}
+{"ts":"2026-07-02T20:31:16.993Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"eventbrite","ioName":"Balance","iof":"latest_timestamp"}
+{"ts":"2026-07-02T20:31:16.995Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"eventbrite","ioName":"Balance","iof":"latest_timestamp"}
+{"ts":"2026-07-02T20:31:16.995Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"eventbrite","ioName":"Balance","iof":"organization_id"}
+{"ts":"2026-07-02T20:31:16.996Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"eventbrite","ioName":"Balance","iof":"organization_id"}
+{"ts":"2026-07-02T20:31:16.997Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"eventbrite","ioName":"Balance","iof":"value"}
+{"ts":"2026-07-02T20:31:16.998Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"eventbrite","ioName":"Balance","iof":"value"}
+{"ts":"2026-07-02T20:31:16.998Z","server":"mj-metadata","phase":"call","tool":"append_provenance","connector":"eventbrite","entryKeys":["URL","AccessedAt","UsedFor","SourceTier","SourceCategory","EvidenceStrength","TargetField","Excerpt"]}
+{"ts":"2026-07-02T20:31:16.999Z","server":"mj-metadata","phase":"result","tool":"append_provenance","ok":true,"connector":"eventbrite","entryKeys":["URL","AccessedAt","UsedFor","SourceTier","SourceCategory","EvidenceStrength","TargetField","Excerpt"]}
+{"ts":"2026-07-02T20:31:16.999Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"eventbrite","ioName":"Event Description","iof":"description"}
+{"ts":"2026-07-02T20:31:17.001Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"eventbrite","ioName":"Event Description","iof":"description"}
+{"ts":"2026-07-02T20:31:17.001Z","server":"mj-metadata","phase":"call","tool":"append_provenance","connector":"eventbrite","entryKeys":["URL","AccessedAt","UsedFor","SourceTier","SourceCategory","EvidenceStrength","TargetField","Excerpt"]}
+{"ts":"2026-07-02T20:31:17.002Z","server":"mj-metadata","phase":"result","tool":"append_provenance","ok":true,"connector":"eventbrite","entryKeys":["URL","AccessedAt","UsedFor","SourceTier","SourceCategory","EvidenceStrength","TargetField","Excerpt"]}
+{"ts":"2026-07-02T20:31:43.764Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object","connector":"eventbrite","io":"Balance"}
+{"ts":"2026-07-02T20:31:43.767Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object","ok":true,"connector":"eventbrite","io":"Balance"}
+{"ts":"2026-07-02T20:32:03.115Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object","connector":"eventbrite","io":"Event Description"}
+{"ts":"2026-07-02T20:32:03.118Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object","ok":true,"connector":"eventbrite","io":"Event Description"}
+{"ts":"2026-07-02T20:32:30.996Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_fields","connector":"eventbrite","fieldKeys":["Configuration"]}
+{"ts":"2026-07-02T20:32:31.004Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_fields","ok":true,"connector":"eventbrite","fieldKeys":["Configuration"]}
+{"ts":"2026-07-04T05:24:52.585Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"JobToGroup","iof":"group_id"}
+{"ts":"2026-07-04T05:24:52.588Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"JobToGroup","iof":"group_id"}
+{"ts":"2026-07-04T05:24:52.589Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"MailRecipientGroup","iof":"group_id"}
+{"ts":"2026-07-04T05:24:52.590Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MailRecipientGroup","iof":"group_id"}
+{"ts":"2026-07-04T05:24:52.590Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"MessageLinkTrackingData","iof":"UserId"}
+{"ts":"2026-07-04T05:24:52.592Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageLinkTrackingData","iof":"UserId"}
+{"ts":"2026-07-04T05:24:52.592Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"MessageLinkTrackingData","iof":"MessageId"}
+{"ts":"2026-07-04T05:24:52.593Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageLinkTrackingData","iof":"MessageId"}
+{"ts":"2026-07-04T05:24:52.594Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"MessageLinkTrackingData","iof":"RecipientId"}
+{"ts":"2026-07-04T05:24:52.595Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageLinkTrackingData","iof":"RecipientId"}
+{"ts":"2026-07-04T05:24:52.595Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"MessageSentTrackingData","iof":"UserId"}
+{"ts":"2026-07-04T05:24:52.597Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageSentTrackingData","iof":"UserId"}
+{"ts":"2026-07-04T05:24:52.597Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"MessageSentTrackingData","iof":"MessageId"}
+{"ts":"2026-07-04T05:24:52.598Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageSentTrackingData","iof":"MessageId"}
+{"ts":"2026-07-04T05:24:52.599Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"MessageSentTrackingData","iof":"RecipientId"}
+{"ts":"2026-07-04T05:24:52.600Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageSentTrackingData","iof":"RecipientId"}
+{"ts":"2026-07-04T05:24:52.600Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"MessageTrackingData","iof":"UserId"}
+{"ts":"2026-07-04T05:24:52.601Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageTrackingData","iof":"UserId"}
+{"ts":"2026-07-04T05:24:52.602Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"MessageTrackingData","iof":"MessageId"}
+{"ts":"2026-07-04T05:24:52.603Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageTrackingData","iof":"MessageId"}
+{"ts":"2026-07-04T05:24:52.603Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"MessageTrackingData","iof":"RecipientId"}
+{"ts":"2026-07-04T05:24:52.605Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageTrackingData","iof":"RecipientId"}
+{"ts":"2026-07-04T05:24:52.605Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"UnsubscribeTrackingData","iof":"UserId"}
+{"ts":"2026-07-04T05:24:52.606Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"UnsubscribeTrackingData","iof":"UserId"}
+{"ts":"2026-07-04T05:24:52.607Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"UnsubscribeTrackingData","iof":"MessageId"}
+{"ts":"2026-07-04T05:24:52.608Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"UnsubscribeTrackingData","iof":"MessageId"}
+{"ts":"2026-07-04T05:24:52.608Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"UnsubscribeTrackingData","iof":"RecipientId"}
+{"ts":"2026-07-04T05:24:52.609Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"UnsubscribeTrackingData","iof":"RecipientId"}
+{"ts":"2026-07-04T05:24:52.609Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"UnsubscribeTrackingData","iof":"GroupId"}
+{"ts":"2026-07-04T05:24:52.611Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"UnsubscribeTrackingData","iof":"GroupId"}
+{"ts":"2026-07-04T05:24:52.611Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"UnsubscribeTrackingData","iof":"GroupCategoryId"}
+{"ts":"2026-07-04T05:24:52.612Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"UnsubscribeTrackingData","iof":"GroupCategoryId"}
+{"ts":"2026-07-04T05:24:52.612Z","server":"mj-metadata","phase":"call","tool":"upsert_integration_object_field","connector":"magnetmail","ioName":"UnsubscribeTrackingData","iof":"MessageCategoryId"}
+{"ts":"2026-07-04T05:24:52.614Z","server":"mj-metadata","phase":"result","tool":"upsert_integration_object_field","ok":true,"connector":"magnetmail","ioName":"UnsubscribeTrackingData","iof":"MessageCategoryId"}
+{"ts":"2026-07-04T05:26:45.209Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"JobToGroup"}
+{"ts":"2026-07-04T05:26:45.211Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"JobToGroup"}
+{"ts":"2026-07-04T05:26:45.212Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"MailRecipientGroup"}
+{"ts":"2026-07-04T05:26:45.214Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MailRecipientGroup"}
+{"ts":"2026-07-04T05:26:45.214Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"MessageLinkTrackingData"}
+{"ts":"2026-07-04T05:26:45.216Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageLinkTrackingData"}
+{"ts":"2026-07-04T05:26:45.216Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"MessageLinkTrackingData"}
+{"ts":"2026-07-04T05:26:45.218Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageLinkTrackingData"}
+{"ts":"2026-07-04T05:26:45.218Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"MessageLinkTrackingData"}
+{"ts":"2026-07-04T05:26:45.220Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageLinkTrackingData"}
+{"ts":"2026-07-04T05:26:45.220Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"MessageSentTrackingData"}
+{"ts":"2026-07-04T05:26:45.222Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageSentTrackingData"}
+{"ts":"2026-07-04T05:26:45.222Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"MessageSentTrackingData"}
+{"ts":"2026-07-04T05:26:45.224Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageSentTrackingData"}
+{"ts":"2026-07-04T05:26:45.224Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"MessageSentTrackingData"}
+{"ts":"2026-07-04T05:26:45.225Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageSentTrackingData"}
+{"ts":"2026-07-04T05:26:45.226Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"MessageTrackingData"}
+{"ts":"2026-07-04T05:26:45.227Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageTrackingData"}
+{"ts":"2026-07-04T05:26:45.228Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"MessageTrackingData"}
+{"ts":"2026-07-04T05:26:45.229Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageTrackingData"}
+{"ts":"2026-07-04T05:26:45.229Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"MessageTrackingData"}
+{"ts":"2026-07-04T05:26:45.231Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"MessageTrackingData"}
+{"ts":"2026-07-04T05:26:45.231Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"UnsubscribeTrackingData"}
+{"ts":"2026-07-04T05:26:45.232Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"UnsubscribeTrackingData"}
+{"ts":"2026-07-04T05:26:45.233Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"UnsubscribeTrackingData"}
+{"ts":"2026-07-04T05:26:45.234Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"UnsubscribeTrackingData"}
+{"ts":"2026-07-04T05:26:45.234Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"UnsubscribeTrackingData"}
+{"ts":"2026-07-04T05:26:45.236Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"UnsubscribeTrackingData"}
+{"ts":"2026-07-04T05:26:45.236Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"UnsubscribeTrackingData"}
+{"ts":"2026-07-04T05:26:45.237Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"UnsubscribeTrackingData"}
+{"ts":"2026-07-04T05:26:45.237Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"UnsubscribeTrackingData"}
+{"ts":"2026-07-04T05:26:45.239Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"UnsubscribeTrackingData"}
+{"ts":"2026-07-04T05:26:45.239Z","server":"mj-metadata","phase":"call","tool":"delete_integration_object_field","connector":"magnetmail","ioName":"UnsubscribeTrackingData"}
+{"ts":"2026-07-04T05:26:45.240Z","server":"mj-metadata","phase":"result","tool":"delete_integration_object_field","ok":true,"connector":"magnetmail","ioName":"UnsubscribeTrackingData"}

@@ -1,0 +1,52 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 59,
+        "fkCount": 7,
+        "msonType": "Event",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Event"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 28,
+        "fkCount": 3,
+        "msonType": "Attendee",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Attendee"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 17,
+        "fkCount": 1,
+        "msonType": "Order",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Order"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T17:59:47.418Z",
+      "StructuredOutput": {
+        "fields": 31,
+        "fkCount": 1,
+        "msonType": "Ticket Class",
+        "msonPresent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Ticket Class"
+    }
+  ]
+}

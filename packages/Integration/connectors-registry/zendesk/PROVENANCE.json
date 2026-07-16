@@ -1,0 +1,314 @@
+{
+  "Entries": [
+    {
+      "URL": "https://developer.zendesk.com/api-reference/introduction/rate-limits/",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Root-level per-app rate-limit count (Team plan, the lowest current non-legacy Support-plan tier)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "Plan Requests per minute Essential (legacy) 10 Team 200 Professional 400 Enterprise 700 High Volume API add-on 2500"
+    },
+    {
+      "URL": "https://developer.zendesk.com/api-reference/introduction/rate-limits/",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Root-level rate-limit window in seconds (Zendesk rate limits are expressed per-minute)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "requests per minute ... X-Rate-Limit: 700 X-Rate-Limit-Remaining: 699"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Per-tenant API base URL template (subdomain + fixed zendesk.com host)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "servers: - url: https://{subdomain}.{domain}.com variables: domain: default: zendesk subdomain: default: example"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Per-tenant API base URL template used to build every request URL",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.APIBaseURLTemplate",
+      "Excerpt": "servers: - url: https://{subdomain}.{domain}.com variables: domain: default: zendesk subdomain: default: example"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the base URL is parameterized per-tenant by a subdomain variable, which the connector must read from a per-connection config value",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.SubdomainConfigKey",
+      "Excerpt": "servers: - url: https://{subdomain}.{domain}.com variables: subdomain: default: example"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms Basic-auth API-token pattern is the documented default auth scheme",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "-v -u {email_address}/token:{api_token}"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the exact Basic-auth credential shape (email/token:api_token)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthHeaderPattern",
+      "Excerpt": "-v -u {email_address}/token:{api_token}"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the OAuth2 token-exchange endpoint + grant types (authorization_code, refresh_token, client_credentials) as the alternate auth flow",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OAuth2Alternate",
+      "Excerpt": "POST https://{subdomain}.zendesk.com/oauth/tokens ... grant_type | \"authorization_code\", \"refresh_token\", or \"client_credentials\""
+    },
+    {
+      "URL": "https://support.zendesk.com/hc/en-us/articles/4408845965210",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the OAuth2 authorize-redirect URL (linked directly from the OAS's own oauth/tokens operation description)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OAuth2Alternate",
+      "Excerpt": "https://{subdomain}.zendesk.com/oauth/authorizations/new where {subdomain} is your Zendesk core subdomain, not a host-mapped subdomain"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the refresh_token grant type + expiry bounds for OAuth2 token rotation",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.TokenRefreshStrategy",
+      "Excerpt": "refresh_token | A valid refresh token ... refresh_token_expires_in | ... Defaults to 2,592,000 seconds (30 days)"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the vendor-wide primary-key convention (id: integer(int64), readOnly) on top-level resources",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.universalPK",
+      "Excerpt": "TicketObject.id: integer(int64) readOnly; UserObject.id: integer(int64); OrganizationObject.id: integer(int64)"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms cursor-based pagination (CBP) request-param shape (page[size]/page[after]/page[before]) and response shape (meta.after_cursor/has_more, links.next/prev)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "page[size] - Number of records per page ... page[after] - Cursor token ... meta: after_cursor, before_cursor, has_more; links: next, prev"
+    },
+    {
+      "URL": "https://developer.zendesk.com/documentation/api-basics/pagination/paginating-through-lists-using-cursor-pagination/",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Cross-reference confirming the cursor pagination mechanics described in the OAS against Zendesk's dedicated pagination guide",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "page[after]/page[before]/page[size] query-param + meta.after_cursor/before_cursor + links.next/previous response shape"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the legacy offset-pagination fallback shape (page=N integer, per_page, response count/next_page/previous_page as full URLs)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "Page: page number for offset-based pagination (non-negative integer) ... OffsetPaginationObject: count, next_page (uri), previous_page (uri)"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms cursor-based incremental-export mechanics: start_time unix-epoch seed (first request only), cursor continuation param, and end_of_stream response flag",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "start_time: The time to start the incremental export from. Must be at least one minute in the past ... Required on the initial export request; not required on subsequent cursor-based pagination requests"
+    },
+    {
+      "URL": "https://developer.zendesk.com/documentation/ticketing/managing-tickets/using-the-incremental-export-api/",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Cross-reference confirming start_time seed + cursor continuation mechanics against Zendesk's dedicated Incremental Export guide",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "start_time seed + opaque cursor continuation for /api/v2/incremental/{tickets,users,organizations,...}/cursor endpoints"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the legacy time-based (non-cursor) incremental variant's end_time/next_page/end_of_stream response shape",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "TimeBasedExportIncrementalTicketsResponse: count, end_of_stream, end_time, next_page, tickets"
+    },
+    {
+      "URL": "https://developer.zendesk.com/documentation/webhooks/verifying/",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms Zendesk Webhooks is a real vendor capability with a documented HMAC-SHA256 signature verification scheme",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WebhooksAvailable",
+      "Excerpt": "X-Zendesk-Webhook-Signature - the main signature ... Sign the body and signature timestamp with the webhook secret key using SHA256, then base64 encoding the resulting digest"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the per-resource '_many' suffix batch-write convention across ~20 resources",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.BulkOperationsAvailable",
+      "Excerpt": "/api/v2/tickets/create_many, /api/v2/tickets/update_many, /api/v2/tickets/destroy_many, /api/v2/tickets/show_many (and equivalents for users, organizations, macros, triggers, automations, views, ...)"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms both the classic {error, description} error body shape and the newer JSON:API-style {errors:[{id,status,code,title,detail}]} shape",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ErrorResponseShape",
+      "Excerpt": "409: {description: 'A conflicting operation is in progress, please try again later', error: 'ContentPinCreationConflict'}; Errors schema: {errors: [Error]} where Error requires code+title"
+    },
+    {
+      "URL": "https://developer.zendesk.com/api-reference/introduction/rate-limits/",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the 429 rate-limit response headers (X-Rate-Limit, X-Rate-Limit-Remaining, Retry-After)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ErrorResponseShape",
+      "Excerpt": "X-Rate-Limit: 700 X-Rate-Limit-Remaining: 699 ... the API responds with a 429 Too Many Requests status code. The response also has a Retry-After header"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the 'removable' boolean flag distinguishes system vs. customer-created ticket fields",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.CustomFieldMarkerPattern",
+      "Excerpt": "removable: If false, this field is a system field that must be present on all tickets"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms Custom Objects are identified by an arbitrary customer-chosen key with no vendor-enforced naming prefix (contrast HubSpot's p_<portalId>_ convention)",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.CustomObjectMarkerPattern",
+      "Excerpt": "CustomObject schema: key -- user-defined identifier for the object type, no format/prefix constraint documented"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms PUT (not PATCH) is the update verb and DELETE is the delete verb across the observed resource set",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WriteCapability",
+      "Excerpt": "PUT /api/v2/tickets/{ticket_id} (Update Ticket); DELETE /api/v2/tickets/{ticket_id} (Delete Ticket); POST /api/v2/tickets (Create Ticket)"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the Tickets-only optimistic-concurrency mechanism (updated_stamp + safe_update) and its absence elsewhere in the spec",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ConcurrencyControl",
+      "Excerpt": "safe_update: ... protects against ticket update collisions ... updated_stamp: Write only. Datetime of last update received from API"
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the soft-then-purge delete model for Tickets (deleted_tickets staging list, restore_many, destroy_many permanent purge) vs. hard delete elsewhere",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DeleteSemantics",
+      "Excerpt": "You can delete 400 tickets every 1 minute ... To delete many tickets, you may use Bulk Delete Tickets; /api/v2/deleted_tickets/restore_many; If the job succeeds, the ticket is permanently deleted. This operation can't be undone."
+    },
+    {
+      "URL": "https://developer.zendesk.com/zendesk/oas.yaml",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the API version is embedded in the URL path (/api/v2/...) with no header-based versioning observed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.APIVersioningStrategy",
+      "Excerpt": "/api/v2/tickets, /api/v2/users, /api/v2/organizations (version embedded in every path)"
+    },
+    {
+      "URL": "https://developer.zendesk.com/api-reference/",
+      "AccessedAt": "2026-07-03T23:30:00.000Z",
+      "UsedFor": "Confirms the full Zendesk API product-family index, used to identify which product surfaces are structurally separate from Support/Guide (Chat, Talk, Sell, Explore, Sunshine Conversations, AI Agents, Webhooks/Apps/Integration Services, Status API)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies",
+      "Excerpt": "API Reference Home ... product index (Ticketing, Help Center, Voice/Talk, Sales CRM/Sell, Live Chat, Conversations/Sunshine, AI Agents, Custom Data, Agent Availability/Omnichannel, Status API)"
+    },
+    {
+      "URL": "https://developer.zendesk.com/api-reference/introduction/security-and-auth/",
+      "AccessedAt": "2026-07-04T04:52:06.111Z",
+      "UsedFor": "Confirming Zendesk API auth scheme is HTTP Basic Auth (email/token + API token), matching the existing Configuration.AuthFlow=\"basic\" value and the pre-existing \"Basic Auth\" MJ: Credential Types row.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CredentialTypeID",
+      "Excerpt": "Basic authentication: You can authenticate a user by combining the email address and password, or the email address and an API token, using HTTP Basic Auth. Authorization: Basic <base64(email/token:apitoken)>"
+    },
+    {
+      "URL": "https://github.com/MemberJunction/MJ/blob/next/metadata/integrations/hubspot/.hubspot.integration.json",
+      "AccessedAt": "2026-07-04T04:52:06.112Z",
+      "UsedFor": "Establishing the ImportPath naming convention (@memberjunction/connector-<slug>) required for the ClassName/ImportPath/package-name four-way invariant, per connector-code-conventions.md.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.ImportPath",
+      "Excerpt": "The shipped Open App carries the package-name key @memberjunction/connector-<slug> (== MJ: Integrations.ClassName == ImportPath == package.json name — the four-way invariant)."
+    },
+    {
+      "URL": "https://developer.zendesk.com/api-reference/introduction/",
+      "AccessedAt": "2026-07-04T04:52:06.113Z",
+      "UsedFor": "Advisory one-line description of the connector scope (Support/Ticketing API + Help Center/Guide API), per SOURCE_STUDY.md §0.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Description",
+      "Excerpt": "Zendesk APIs: Support API (Ticketing system) and Help Center API (Guide) are documented as the two primary REST API surfaces for Zendesk."
+    }
+  ]
+}

@@ -1,0 +1,7822 @@
+{
+  "operations": [
+    {
+      "name": "sendEmailToIndividual",
+      "documentation": "send email to individual",
+      "soapAction": "http://www.magnetmail.net/sendEmailToIndividual",
+      "requestElement": "sendEmailToIndividual",
+      "responseElement": "sendEmailToIndividualResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "message_id",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "html_web_version_link",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "text_web_version_link",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "message_subject",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "message_from",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "billing_code",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "billing_initial",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "recipients",
+          "type": "ArrayOfString",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "recp_type",
+          "type": "recipient_type",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "sendEmailToIndividualResult",
+          "type": "EmailToIndividualResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id",
+        "message_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "sendMessageToGroup",
+      "documentation": "BETA: Send message to a group.",
+      "soapAction": "http://www.magnetmail.net/sendMessageToGroup",
+      "requestElement": "sendMessageToGroup",
+      "responseElement": "sendMessageToGroupResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "loginid",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "message_id",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "scheduledDateTime",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "group_ids",
+          "type": "ArrayOfInt",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "filteredout_groups",
+          "type": "ArrayOfInt",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "test_emails",
+          "type": "ArrayOfString",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "send_type",
+          "type": "sendType",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "faxToFailedEmail_emailToFailedFax",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "html_web_version_link",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "text_web_version_link",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "message_subject",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "message_from",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "billing_code",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "billing_initial",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "sendDespiteArchived",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "sendDespiteBadFrom",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "ignore_dedupe",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "fax_resolution",
+          "type": "faxResolution",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "Newsletter",
+          "type": "newsletter",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "job_notification",
+          "type": "sendNotification",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "rssPublishType",
+          "type": "rssType",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MiscArguments",
+          "type": "string",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "sendMessageToGroupResult",
+          "type": "EmailToGroupResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id",
+        "message_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getRecipientHistory",
+      "documentation": "BETA: Get recipient history based on the recipient_id.",
+      "soapAction": "http://www.magnetmail.net/getRecipientHistory",
+      "requestElement": "getRecipientHistory",
+      "responseElement": "getRecipientHistoryResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "recipient_id",
+          "type": "long",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getRecipientHistoryResult",
+          "type": "recipient_history",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id",
+        "recipient_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getUnsubscribes",
+      "documentation": "Get list of recipients that have unsubscribed from account.",
+      "soapAction": "http://www.magnetmail.net/getUnsubscribes",
+      "requestElement": "getUnsubscribes",
+      "responseElement": "getUnsubscribesResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "fromDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "toDate",
+          "type": "dateTime",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getUnsubscribesResult",
+          "type": "ArrayOfRecp_unsubscribe",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getSpamComplaints",
+      "documentation": "Get list of recipients that have reported a message as spam.",
+      "soapAction": "http://www.magnetmail.net/getSpamComplaints",
+      "requestElement": "getSpamComplaints",
+      "responseElement": "getSpamComplaintsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "fromDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "toDate",
+          "type": "dateTime",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getSpamComplaintsResult",
+          "type": "ArrayOfRecp_unsubscribe",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getRecipientDetails",
+      "documentation": "Get recipient details based on the recipient_id.",
+      "soapAction": "http://www.magnetmail.net/getRecipientDetails",
+      "requestElement": "getRecipientDetails",
+      "responseElement": "getRecipientDetailsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "recipient_id",
+          "type": "long",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getRecipientDetailsResult",
+          "type": "Recipient",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id",
+        "recipient_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getUserDetails",
+      "documentation": "Returns user(also called 'account') options/details",
+      "soapAction": "http://www.magnetmail.net/getUserDetails",
+      "requestElement": "getUserDetails",
+      "responseElement": "getUserDetailsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getUserDetailsResult",
+          "type": "User",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getMessages",
+      "documentation": "Returns a list of messages by different criterion. Messages can be filtered by sent date , create date, archive status, hide status, if it has fax, if it has email.",
+      "soapAction": "http://www.magnetmail.net/getMessages",
+      "requestElement": "getMessages",
+      "responseElement": "getMessagesResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "createStartDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "createEndDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "sentStartDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "sentEndDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "archived",
+          "type": "bool_special",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "hidden",
+          "type": "bool_special",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "hasFax",
+          "type": "bool_special",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "hasEmail",
+          "type": "bool_special",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getMessagesResult",
+          "type": "ArrayOfMessageList",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getMessagesUTC",
+      "documentation": "Returns a list of messages by different criterion. Messages can be filtered by sent date , create date, archive status, hide status, if it has fax, if it has email.  Dates returned in UTC format",
+      "soapAction": "http://www.magnetmail.net/getMessagesUTC",
+      "requestElement": "getMessagesUTC",
+      "responseElement": "getMessagesUTCResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "createStartDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "createEndDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "sentStartDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "sentEndDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "archived",
+          "type": "bool_special",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "hidden",
+          "type": "bool_special",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "hasFax",
+          "type": "bool_special",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "hasEmail",
+          "type": "bool_special",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getMessagesUTCResult",
+          "type": "ArrayOfMessageList",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": true,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getLinkURLs",
+      "documentation": "Return links in a message that were tracked",
+      "soapAction": "http://www.magnetmail.net/getLinkURLs",
+      "requestElement": "getLinkURLs",
+      "responseElement": "getLinkURLsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "message_id",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "group_id",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getLinkURLsResult",
+          "type": "ArrayOfLinks",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id",
+        "message_id",
+        "group_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getOverallTracking",
+      "documentation": "Return overall tracking data for a message",
+      "soapAction": "http://www.magnetmail.net/getOverallTracking",
+      "requestElement": "getOverallTracking",
+      "responseElement": "getOverallTrackingResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "message_id",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "group_id",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getOverallTrackingResult",
+          "type": "TrackingData",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id",
+        "message_id",
+        "group_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getDetailedTracking",
+      "documentation": "Get detailed tracking data for a message.",
+      "soapAction": "http://www.magnetmail.net/getDetailedTracking",
+      "requestElement": "getDetailedTracking",
+      "responseElement": "getDetailedTrackingResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "report_type",
+          "type": "tracking_report_type",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "message_id",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "page",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "recordsPerPage",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "group_id",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "first_name",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "last_name",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "email",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "fax",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "fromDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "toDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "CustomParam1",
+          "type": "string",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getDetailedTrackingResult",
+          "type": "TrackingDetails",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id",
+        "message_id",
+        "group_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getDetailedTrackingUTC",
+      "documentation": "Get detailed tracking data for a message.  UTC Times returned for dates",
+      "soapAction": "http://www.magnetmail.net/getDetailedTrackingUTC",
+      "requestElement": "getDetailedTrackingUTC",
+      "responseElement": "getDetailedTrackingUTCResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "report_type",
+          "type": "tracking_report_type",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "message_id",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "page",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "recordsPerPage",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "group_id",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "first_name",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "last_name",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "email",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "fax",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "fromDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "toDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "CustomParam1",
+          "type": "string",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getDetailedTrackingUTCResult",
+          "type": "TrackingDetails",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": true,
+      "idFields": [
+        "user_id",
+        "message_id",
+        "group_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "addGroup",
+      "documentation": "Add a recipient group to your account.",
+      "soapAction": "http://www.magnetmail.net/addGroup",
+      "requestElement": "addGroup",
+      "responseElement": "addGroupResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "group_name",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "categoryId",
+          "type": "double",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "addGroupResult",
+          "type": "SaveResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getGroups",
+      "documentation": "Takes 3 arguments - user_id, display_status and subscription_groups. Returns an array of 'group' type. (Deprecated, use getGroupsEx instead.)",
+      "soapAction": "http://www.magnetmail.net/getGroups",
+      "requestElement": "getGroups",
+      "responseElement": "getGroupsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "display_status",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "subscription_groups",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getGroupsResult",
+          "type": "ArrayOfGroup",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getGroupsUTC",
+      "documentation": "Takes 3 arguments - user_id, display_status and subscription_groups. Returns an array of 'group' type, UTC formatted dates",
+      "soapAction": "http://www.magnetmail.net/getGroupsUTC",
+      "requestElement": "getGroupsUTC",
+      "responseElement": "getGroupsUTCResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "display_status",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "subscription_groups",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getGroupsUTCResult",
+          "type": "ArrayOfGroup",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": true,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "uploadListQueue",
+      "documentation": "Takes an upload job and queues it for upload. Returns status in a complex type.The argument 'csvData' is your contact data in csv format. 'replace_group' specifies if recipients in group should be replaced with new list. 'update_dups' specifies if existing contact records should be overwritten with new values. 'header_line' specifies if your csvData has a header line. 'mapping_name' is name for the mapping between your headers and magnetMail fields. MM_1 thro MM_42 are names of MagnetMail fields to which your fields in csvData are mapped to. See API documentation for details of these fields.",
+      "soapAction": "http://www.magnetmail.net/uploadListQueue",
+      "requestElement": "uploadListQueue",
+      "responseElement": "uploadListQueueResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "groupid",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "csvData",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "replace_group",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "update_dups",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "header_line",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "mapping_name",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_1",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_2",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_3",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_4",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_5",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_6",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_7",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_8",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_9",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_10",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_11",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_12",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_13",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_14",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_15",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_16",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_17",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_18",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_19",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_20",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_21",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_22",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_23",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_24",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_25",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_26",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_27",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_28",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_29",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_30",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_31",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_32",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_33",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_34",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_35",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_36",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_37",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_38",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_39",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_40",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_41",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_42",
+          "type": "string",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "uploadListQueueResult",
+          "type": "UploadListResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "uploadListQueueTest",
+      "documentation": "Takes an upload job and queues it for upload. Returns status in a complex type.The argument 'csvData' is your contact data in csv format. 'replace_group' specifies if recipients in group should be replaced with new list. 'update_dups' specifies if existing contact records should be overwritten with new values. 'header_line' specifies if your csvData has a header line. 'mapping_name' is name for the mapping between your headers and magnetMail fields. MM_1 thro MM_42 are names of MagnetMail fields to which your fields in csvData are mapped to. See API documentation for details of these fields.",
+      "soapAction": "http://www.magnetmail.net/uploadListQueueTest",
+      "requestElement": "uploadListQueueTest",
+      "responseElement": "uploadListQueueTestResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "groupid",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "csvData",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "replace_group",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "update_dups",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "header_line",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "mapping_name",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_1",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_2",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_3",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_4",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_5",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_6",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_7",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_8",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_9",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_10",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_11",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_12",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_13",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_14",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_15",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_16",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_17",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_18",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_19",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_20",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_21",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_22",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_23",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_24",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_25",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_26",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_27",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_28",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_29",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_30",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_31",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_32",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_33",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_34",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_35",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_36",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_37",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_38",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_39",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_40",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_41",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "MM_42",
+          "type": "string",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "uploadListQueueTestResult",
+          "type": "UploadListResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getUploadJobStatus",
+      "documentation": "Takes a jobid and returns the status of an upload jobid.",
+      "soapAction": "http://www.magnetmail.net/getUploadJobStatus",
+      "requestElement": "getUploadJobStatus",
+      "responseElement": "getUploadJobStatusResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "jobid",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getUploadJobStatusResult",
+          "type": "UploadListResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getUploadJobStatusUTC",
+      "documentation": "Takes a jobid and returns the status of an upload jobid.  Dates returned in UTC",
+      "soapAction": "http://www.magnetmail.net/getUploadJobStatusUTC",
+      "requestElement": "getUploadJobStatusUTC",
+      "responseElement": "getUploadJobStatusUTCResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "jobid",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getUploadJobStatusUTCResult",
+          "type": "UploadListResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": true,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getRecipientFields",
+      "documentation": "Takes a user_id as argument and returns contact fields defined in that account. Returns 2 values for each user1 - fieldNameText and fieldNameValue.",
+      "soapAction": "http://www.magnetmail.net/getRecipientFields",
+      "requestElement": "getRecipientFields",
+      "responseElement": "getRecipientFieldsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getRecipientFieldsResult",
+          "type": "ArrayOfFieldDefn",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "editRecipientGroups",
+      "documentation": "Edit a recipients group",
+      "soapAction": "http://www.magnetmail.net/editRecipientGroups",
+      "requestElement": "editRecipientGroups",
+      "responseElement": "editRecipientGroupsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "recipient_id",
+          "type": "long",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "message_id",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "new_groups",
+          "type": "ArrayOfInt",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "unsubscribed_groups",
+          "type": "ArrayOfInt",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "editRecipientGroupsResult",
+          "type": "boolean",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id",
+        "recipient_id",
+        "message_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "editRecipient",
+      "documentation": "edit a MagnetMail recipient",
+      "soapAction": "http://www.magnetmail.net/editRecipient",
+      "requestElement": "editRecipient",
+      "responseElement": "editRecipientResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "recipient_id",
+          "type": "long",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "email",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "first_name",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "last_name",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "phone",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "fax",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "address_1",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "address_2",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "city",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "state",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "zip",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "company",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "text_only",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom1",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom2",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom3",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom4",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom5",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom6",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom7",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom8",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom9",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom10",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom11",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom12",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom13",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom14",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom15",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom16",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom17",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom18",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom19",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom20",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom21",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom22",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom23",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom24",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom25",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom26",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom27",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom28",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom29",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom30",
+          "type": "string",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "editRecipientResult",
+          "type": "saveResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id",
+        "recipient_id",
+        "custom_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "addRecipient",
+      "documentation": "add a recipient to MagnetMail",
+      "soapAction": "http://www.magnetmail.net/addRecipient",
+      "requestElement": "addRecipient",
+      "responseElement": "addRecipientResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "email",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "first_name",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "last_name",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "phone",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "fax",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "address_1",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "address_2",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "city",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "state",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "zip",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "company",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "text_only",
+          "type": "boolean",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom1",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom2",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom3",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom4",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom5",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom6",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom7",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom8",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom9",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom10",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom11",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom12",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom13",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom14",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom15",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom16",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom17",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom18",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom19",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom20",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom21",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom22",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom23",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom24",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom25",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom26",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom27",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom28",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom29",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "custom30",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "Groups",
+          "type": "ArrayOfInt",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "addRecipientResult",
+          "type": "saveResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id",
+        "custom_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "createMagnetMailMessage",
+      "documentation": "Create a new MagnetMail message",
+      "soapAction": "http://www.magnetmail.net/createMagnetMailMessage",
+      "requestElement": "createMagnetMailMessage",
+      "responseElement": "createMagnetMailMessageResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "message",
+          "type": "MessageDetails",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "createMagnetMailMessageResult",
+          "type": "createEditMessageResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "editMagnetMailMessage",
+      "documentation": "Edit an existing MagnetMail message",
+      "soapAction": "http://www.magnetmail.net/editMagnetMailMessage",
+      "requestElement": "editMagnetMailMessage",
+      "responseElement": "editMagnetMailMessageResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "message",
+          "type": "MessageDetails",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "editMagnetMailMessageResult",
+          "type": "createEditMessageResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "getSavedSearches",
+      "documentation": "Get an array of saved searches in the account.",
+      "soapAction": "http://www.magnetmail.net/getSavedSearches",
+      "requestElement": "getSavedSearches",
+      "responseElement": "getSavedSearchesResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "search_name",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "loginid",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getSavedSearchesResult",
+          "type": "ArrayOfMagnetMailQueries",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "runSavedSearch",
+      "documentation": "Run a saved search in the account.",
+      "soapAction": "http://www.magnetmail.net/runSavedSearch",
+      "requestElement": "runSavedSearch",
+      "responseElement": "runSavedSearchResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "search_name",
+          "type": "string",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "runSavedSearchResult",
+          "type": "ArrayOfRecipient",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getSubscribedRecipients",
+      "documentation": "Returns Array of subscription recipients.",
+      "soapAction": "http://www.magnetmail.net/getSubscribedRecipients",
+      "requestElement": "getSubscribedRecipients",
+      "responseElement": "getSubscribedRecipientsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "startDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "endDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "group_ids",
+          "type": "ArrayOfInt",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "report_type",
+          "type": "string",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getSubscribedRecipientsResult",
+          "type": "ArrayOfSubscription",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getErrorDetails",
+      "documentation": "Takes an error_nbr and returns details on that error.",
+      "soapAction": "http://www.magnetmail.net/getErrorDetails",
+      "requestElement": "getErrorDetails",
+      "responseElement": "getErrorDetailsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "error_nbr",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getErrorDetailsResult",
+          "type": "Error",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "uploadSuppressionList",
+      "documentation": "suppress a list of recipients",
+      "soapAction": "http://www.magnetmail.net/uploadSuppressionList",
+      "requestElement": "uploadSuppressionList",
+      "responseElement": "uploadSuppressionListResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "suppressionlist",
+          "type": "RecipientSuppressionList",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "uploadSuppressionListResult",
+          "type": "RecipientSuppressionResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "getSuppressedRecipientList",
+      "documentation": "Get the list of suppressed recipients based on date range and/or groupId",
+      "soapAction": "http://www.magnetmail.net/getSuppressedRecipientList",
+      "requestElement": "getSuppressedRecipientList",
+      "responseElement": "getSuppressedRecipientListResponse",
+      "requestFields": [
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "group_id",
+          "type": "int",
+          "nillable": true
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "start_date",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "end_date",
+          "type": "dateTime",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getSuppressedRecipientListResult",
+          "type": "ArrayOfRecipientExtended",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "group_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getRecipientGroups",
+      "documentation": "get the groups that a recipient belongs to",
+      "soapAction": "http://www.magnetmail.net/getRecipientGroups",
+      "requestElement": "getRecipientGroups",
+      "responseElement": "getRecipientGroupsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "recipient",
+          "type": "Recipient",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getRecipientGroupsResult",
+          "type": "ArrayOfRecipientGroup",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "searchForRecipients",
+      "documentation": "search for Recipients",
+      "soapAction": "http://www.magnetmail.net/searchForRecipients",
+      "requestElement": "searchForRecipients",
+      "responseElement": "searchForRecipientsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "criteria",
+          "type": "RecipientSearchCriteria",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "searchForRecipientsResult",
+          "type": "RecipientSearchResults",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "Authenticate",
+      "documentation": "Authenticate",
+      "soapAction": "http://www.magnetmail.net/Authenticate",
+      "requestElement": "Authenticate",
+      "responseElement": "AuthenticateResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "username",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "password",
+          "type": "string",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "AuthenticateResult",
+          "type": "AuthenticationResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "getTrackingData",
+      "documentation": "Get Tracking Data",
+      "soapAction": "http://www.magnetmail.net/getTrackingData",
+      "requestElement": "getTrackingData",
+      "responseElement": "getTrackingDataResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "message_id",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "group_id",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getTrackingDataResult",
+          "type": "TrackingData",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id",
+        "message_id",
+        "group_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getMessageList",
+      "documentation": "Get A List Of Messages",
+      "soapAction": "http://www.magnetmail.net/getMessageList",
+      "requestElement": "getMessageList",
+      "responseElement": "getMessageListResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "createStartDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "createEndDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "sentStartDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "sentEndDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "archived",
+          "type": "bool_special",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "hidden",
+          "type": "bool_special",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "hasFax",
+          "type": "bool_special",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "hasEmail",
+          "type": "bool_special",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getMessageListResult",
+          "type": "ArrayOfMessage",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "getMessageListUtc",
+      "documentation": "Get A List Of Messages Using UTC Date Times",
+      "soapAction": "http://www.magnetmail.net/getMessageListUtc",
+      "requestElement": "getMessageListUtc",
+      "responseElement": "getMessageListUtcResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "user_id",
+          "type": "string",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "createStartDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "createEndDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "sentStartDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "sentEndDate",
+          "type": "dateTime",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "archived",
+          "type": "bool_special",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "hidden",
+          "type": "bool_special",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "hasFax",
+          "type": "bool_special",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "hasEmail",
+          "type": "bool_special",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getMessageListUtcResult",
+          "type": "ArrayOfMessage",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": true,
+      "idFields": [
+        "user_id"
+      ],
+      "respIdFields": []
+    },
+    {
+      "name": "unsubscribeRecipients",
+      "documentation": "Unsubscribe Recipients",
+      "soapAction": "http://www.magnetmail.net/unsubscribeRecipients",
+      "requestElement": "unsubscribeRecipients",
+      "responseElement": "unsubscribeRecipientsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "unsubscribes",
+          "type": "ArrayOfUnsubscribe",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "unsubscribeRecipientsResult",
+          "type": "ArrayOfUnsubscribe",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "getGroupDetails",
+      "documentation": "Get Group Details",
+      "soapAction": "http://www.magnetmail.net/getGroupDetails",
+      "requestElement": "getGroupDetails",
+      "responseElement": "getGroupDetailsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "groupId",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getGroupDetailsResult",
+          "type": "MailRecipientGroup",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "getGroupRecipients",
+      "documentation": "Get Group Recipients Details",
+      "soapAction": "http://www.magnetmail.net/getGroupRecipients",
+      "requestElement": "getGroupRecipients",
+      "responseElement": "getGroupRecipientsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "groupId",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "pageNumber",
+          "type": "int",
+          "nillable": false
+        },
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "pageCount",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "getGroupRecipientsResult",
+          "type": "GroupRecipients",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": true,
+      "hasPageCount": true,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "getGroupRecipientsCount",
+      "documentation": "Get Group Recipient Count",
+      "soapAction": "http://www.magnetmail.net/getGroupRecipientsCount",
+      "requestElement": "getGroupRecipientsCount",
+      "responseElement": "getGroupRecipientsCountResponse",
+      "requestFields": [
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "groupId",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "getGroupRecipientsCountResult",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "GetMessageLinkTracking",
+      "documentation": "Get Message Link Tracking.",
+      "soapAction": "http://www.magnetmail.net/GetMessageLinkTracking",
+      "requestElement": "GetMessageLinkTracking",
+      "responseElement": "GetMessageLinkTrackingResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "criteria",
+          "type": "MessageLinkTrackingSearchCriteria",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "GetMessageLinkTrackingResult",
+          "type": "MessageLinkTrackingResults",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "GetMessageSentTracking",
+      "documentation": "Get Message Sent Tracking.",
+      "soapAction": "http://www.magnetmail.net/GetMessageSentTracking",
+      "requestElement": "GetMessageSentTracking",
+      "responseElement": "GetMessageSentTrackingResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "criteria",
+          "type": "MessageTrackingSearchCriteria",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "GetMessageSentTrackingResult",
+          "type": "MessageSentTrackingResults",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "GetMessageOpenTracking",
+      "documentation": "Get Message Open Tracking",
+      "soapAction": "http://www.magnetmail.net/GetMessageOpenTracking",
+      "requestElement": "GetMessageOpenTracking",
+      "responseElement": "GetMessageOpenTrackingResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "criteria",
+          "type": "MessageTrackingSearchCriteria",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "GetMessageOpenTrackingResult",
+          "type": "MessageOpenTrackingResults",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "GetUnsubscribeTracking",
+      "documentation": "Get Unsubscribe Tracking",
+      "soapAction": "http://www.magnetmail.net/GetUnsubscribeTracking",
+      "requestElement": "GetUnsubscribeTracking",
+      "responseElement": "GetUnsubscribeTrackingResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "criteria",
+          "type": "UnsubscribeSearchCriteria",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "GetUnsubscribeTrackingResult",
+          "type": "UnsubscribeTrackingResults",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "GetMessageDetails",
+      "documentation": "Get Message Details",
+      "soapAction": "http://www.magnetmail.net/GetMessageDetails",
+      "requestElement": "GetMessageDetails",
+      "responseElement": "GetMessageDetailsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "MessageId",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "GetMessageDetailsResult",
+          "type": "MessageDetails",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "SearchPersonifySubscriptionMappings",
+      "documentation": "Get Personify Subscription Mappings",
+      "soapAction": "http://www.magnetmail.net/SearchPersonifySubscriptionMappings",
+      "requestElement": "SearchPersonifySubscriptionMappings",
+      "responseElement": "SearchPersonifySubscriptionMappingsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "criteria",
+          "type": "PersonifySubscriptionMappingSearchCriteria",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "SearchPersonifySubscriptionMappingsResult",
+          "type": "PersonifySubscriptionMappingSearchResults",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "GetMessageCategory",
+      "documentation": "Get Message Category",
+      "soapAction": "http://www.magnetmail.net/GetMessageCategory",
+      "requestElement": "GetMessageCategory",
+      "responseElement": "GetMessageCategoryResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "messageCategoryId",
+          "type": "string",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "GetMessageCategoryResult",
+          "type": "ArrayOfMessageCategory",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "GetGroupCategory",
+      "documentation": "Get Group Category",
+      "soapAction": "http://www.magnetmail.net/GetGroupCategory",
+      "requestElement": "GetGroupCategory",
+      "responseElement": "GetGroupCategoryResponse",
+      "requestFields": [
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "groupCategoryId",
+          "type": "int",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "GetGroupCategoryResult",
+          "type": "GroupCategory",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "GetAllGroupCategories",
+      "documentation": "Get Group Categories",
+      "soapAction": "http://www.magnetmail.net/GetAllGroupCategories",
+      "requestElement": "GetAllGroupCategories",
+      "responseElement": "GetAllGroupCategoriesResponse",
+      "requestFields": [],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "GetAllGroupCategoriesResult",
+          "type": "ArrayOfGroupCategory",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "UploadListInitialQueue",
+      "documentation": "Upload List (w/Enhanced Personalization Support) &lt;b&gt;In BETA&lt;/b&gt;",
+      "soapAction": "http://www.magnetmail.net/UploadListInitialQueue",
+      "requestElement": "UploadListInitialQueue",
+      "responseElement": "UploadListInitialQueueResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "Job",
+          "type": "UploadInitialJob",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "UploadListInitialQueueResult",
+          "type": "UploadInitialJob",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "GetEnhancedPersonalizedFields",
+      "documentation": "Enhanced Personalization Field List &lt;b&gt;In BETA&lt;/b&gt;",
+      "soapAction": "http://www.magnetmail.net/GetEnhancedPersonalizedFields",
+      "requestElement": "GetEnhancedPersonalizedFields",
+      "responseElement": "GetEnhancedPersonalizedFieldsResponse",
+      "requestFields": [
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "loginId",
+          "type": "double",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "GetEnhancedPersonalizedFieldsResult",
+          "type": "ArrayOfExtendedField",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "GetUploadInitialQueueJobStatus",
+      "documentation": "Upload Initial Queue Job Status &lt;b&gt;In BETA&lt;/b&gt;",
+      "soapAction": "http://www.magnetmail.net/GetUploadInitialQueueJobStatus",
+      "requestElement": "GetUploadInitialQueueJobStatus",
+      "responseElement": "GetUploadInitialQueueJobStatusResponse",
+      "requestFields": [
+        {
+          "minOccurs": "1",
+          "maxOccurs": "1",
+          "name": "initialQueueId",
+          "type": "double",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "GetUploadInitialQueueJobStatusResult",
+          "type": "UploadInitialQueueStatus",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    },
+    {
+      "name": "CreateEventSignUp",
+      "documentation": "Event Sign Up",
+      "soapAction": "http://www.magnetmail.net/CreateEventSignUp",
+      "requestElement": "CreateEventSignUp",
+      "responseElement": "CreateEventSignUpResponse",
+      "requestFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "SignUp",
+          "type": "EventSignUp",
+          "nillable": false
+        }
+      ],
+      "responseFields": [
+        {
+          "minOccurs": "0",
+          "maxOccurs": "1",
+          "name": "CreateEventSignUpResult",
+          "type": "EventSignupResult",
+          "nillable": false
+        }
+      ],
+      "hasPageNumber": false,
+      "hasPageCount": false,
+      "hasUTC": false,
+      "idFields": [],
+      "respIdFields": []
+    }
+  ],
+  "namedTypes": {
+    "ArrayOfString": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "string",
+        "type": "string",
+        "nillable": true
+      }
+    ],
+    "EmailToIndividualResult": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "emails_sent",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "error",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorObj",
+        "type": "Error",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "msg",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "suppressed_emails",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "Error": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorCode",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorDetails",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorMessage",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "errorNumber",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorType",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "mmAuthHeader": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "sessionId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "user_id",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfInt": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "int",
+        "type": "int",
+        "nillable": false
+      }
+    ],
+    "newsletter": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "newsletter_archive",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "newsletter_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "newsletter_publish_date",
+        "type": "dateTime",
+        "nillable": false
+      }
+    ],
+    "sendNotification": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "send_notification",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "send_notification_from",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "send_notification_to",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "send_notification_when",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "complete_notification",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "send_complete_notification_from",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "send_complete_notification_to",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "send_complete_notification_when",
+        "type": "int",
+        "nillable": false
+      }
+    ],
+    "EmailToGroupResult": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "email_job_ids",
+        "type": "ArrayOfAnyType",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "error",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorObj",
+        "type": "Error",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "fax_job_ids",
+        "type": "ArrayOfAnyType",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "msg",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfAnyType": [],
+    "recipient_history": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "emailHistory",
+        "type": "ArrayOfEmail_history",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "faxHistory",
+        "type": "ArrayOfFax_history",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "formHistory",
+        "type": "ArrayOfForm_history",
+        "nillable": false
+      }
+    ],
+    "ArrayOfEmail_history": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "email_history",
+        "type": "email_history",
+        "nillable": true
+      }
+    ],
+    "email_history": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "message_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "message_id",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "sent_date",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "open_date",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "send_result",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "links",
+        "type": "ArrayOfLink",
+        "nillable": false
+      }
+    ],
+    "ArrayOfLink": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "link",
+        "type": "link",
+        "nillable": true
+      }
+    ],
+    "link": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "link_url",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "link_url_id",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "website_links",
+        "type": "ArrayOfWebsite_link",
+        "nillable": false
+      }
+    ],
+    "ArrayOfWebsite_link": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "website_link",
+        "type": "website_link",
+        "nillable": true
+      }
+    ],
+    "website_link": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "website_link_url",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "website_link_url_id",
+        "type": "int",
+        "nillable": false
+      }
+    ],
+    "ArrayOfFax_history": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "fax_history",
+        "type": "fax_history",
+        "nillable": true
+      }
+    ],
+    "fax_history": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "message_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "sent_date",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "fax_status",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "connect_time",
+        "type": "int",
+        "nillable": false
+      }
+    ],
+    "ArrayOfForm_history": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "form_history",
+        "type": "form_history",
+        "nillable": true
+      }
+    ],
+    "form_history": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "form_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "submit_date",
+        "type": "dateTime",
+        "nillable": false
+      }
+    ],
+    "recp_unsubscribe": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "recipient",
+        "type": "Recipient",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "ResultDate",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "message_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "group_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "message_CategoryId",
+        "type": "long",
+        "nillable": false
+      }
+    ],
+    "Recipient": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "id",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "email",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "first_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "last_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "fax",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Custom_Id",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "phone",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "address",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "address_2",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "city",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "state",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "zip",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "company",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "unsubscribed",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "fax_send_suppress",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "email_send_suppress",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "email_confirm",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "text_only",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom1",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom2",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom3",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom4",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom5",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom6",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom7",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom8",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom9",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom10",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom11",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom12",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom13",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom14",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom15",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom16",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom17",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom18",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom19",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom20",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom21",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom22",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom23",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom24",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom25",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom26",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom27",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom28",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom29",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom30",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "suppressed",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "suppressed_date",
+        "type": "dateTime",
+        "nillable": true
+      }
+    ],
+    "ArrayOfRecp_unsubscribe": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "recp_unsubscribe",
+        "type": "recp_unsubscribe",
+        "nillable": true
+      }
+    ],
+    "User": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "billing_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "User_Id",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "User_Nbr",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "unsubscribe_type",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "hasCustomId",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "hasFax",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "req_billing_code",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "req_billing_initials",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "insertTextUnsubscribe",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "hasForms",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "web_version",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "newsletter_permission",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "CampaignManager_permission",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "dynamic_content_permission",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "rss_permission",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "FilterOutGroupsOnSend",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "event_permission",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "enable_ignore_dedupe",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "messageCategory",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "email_notification_permission",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "hasEmail",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "UploadSystemVersion",
+        "type": "int",
+        "nillable": false
+      }
+    ],
+    "MessageList": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "message",
+        "type": "Message",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "GroupsEmailSentTo",
+        "type": "ArrayOfJobToGroup",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "GroupsFaxSentTo",
+        "type": "ArrayOfJobToGroup",
+        "nillable": false
+      }
+    ],
+    "Message": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "message_id",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "loginid",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "user_id",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "message_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "createDate",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "lastSent",
+        "type": "dateTime",
+        "nillable": false
+      }
+    ],
+    "ArrayOfJobToGroup": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "JobToGroup",
+        "type": "JobToGroup",
+        "nillable": true
+      }
+    ],
+    "JobToGroup": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "group_id",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "group_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "sent_date",
+        "type": "dateTime",
+        "nillable": false
+      }
+    ],
+    "ArrayOfMessageList": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "MessageList",
+        "type": "MessageList",
+        "nillable": true
+      }
+    ],
+    "Links": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "linkid",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "link_url",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "link_text",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "link_clicks",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "link_type",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "link_index",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "link_label",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfLinks": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "Links",
+        "type": "Links",
+        "nillable": true
+      }
+    ],
+    "TrackingData": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "EmailSent",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "EmailDelivered",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "EmailOpened",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "EmailBounced",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "EmailLinksClicked",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "WebLinksClicked",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Unsubscribed",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "FaxSent",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "FaxDelivered",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "FaxFailed",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "FTFNewEmails",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "FTF",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "FTFSubscribers",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "GroupsEmailSentTo",
+        "type": "ArrayOfJobToGroup",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "GroupsFaxSentTo",
+        "type": "ArrayOfJobToGroup",
+        "nillable": false
+      }
+    ],
+    "TrackingDetails": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "totalRecords",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "page",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "recordsPerPage",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "RecipientDetails",
+        "type": "ArrayOfRecp_track",
+        "nillable": false
+      }
+    ],
+    "ArrayOfRecp_track": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "recp_track",
+        "type": "recp_track",
+        "nillable": true
+      }
+    ],
+    "recp_track": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "recipient",
+        "type": "Recipient",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "ResultDate",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "remarks",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Status",
+        "type": "EmailStatus",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "OpenDate",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "MMId",
+        "type": "long",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "faxStatus",
+        "type": "FaxStatus",
+        "nillable": false
+      }
+    ],
+    "SaveResult": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "error",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorObj",
+        "type": "Error",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "id",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "msg",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "group": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "group_id",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "group_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "group_created",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "display_status",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "subscription_group",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "last_updated_date",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "last_updated_loginid",
+        "type": "int",
+        "nillable": false
+      }
+    ],
+    "ArrayOfGroup": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "group",
+        "type": "group",
+        "nillable": true
+      }
+    ],
+    "UploadListResult": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "complete_date",
+        "type": "dateTime",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "error",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorObj",
+        "type": "Error",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "good_records",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "group_count",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "groupid",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "header",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "jobid",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "loginid",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "mm_filename",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "msg",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "new_added",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "old_updated",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "replace_group",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "status",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "total_records",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "update_dups",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "upload_date",
+        "type": "dateTime",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "user_filename",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "user_id",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "fieldDefn": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "fieldNameText",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "fieldNamevalue",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfFieldDefn": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "fieldDefn",
+        "type": "fieldDefn",
+        "nillable": true
+      }
+    ],
+    "saveResult": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "error",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorObj",
+        "type": "error",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "id",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "msg",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "error": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorCode",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorDetails",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorMessage",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "errorNumber",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorType",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "MessageDetails": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "message_id",
+        "type": "int",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "loginid",
+        "type": "int",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "message_category",
+        "type": "int",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "template_id",
+        "type": "int",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "user_id",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "message_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "text_version",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "html_version_block1",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "html_version_block2",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "html_version_block3",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "fax_doc_1",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "fax_doc_2",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "fax_doc_3",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "fax_doc_4",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "fax_doc_5",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "is_fax_merged",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "is_fax_only",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "is_copy_paste_template",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "is_auto_unsubscribe_link",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "SubjectLine",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "FromAddress",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "createDate",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "lastSent",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "characterSet",
+        "type": "CharacterSet",
+        "nillable": false
+      }
+    ],
+    "createEditMessageResult": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "error",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorObj",
+        "type": "error",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "links_already_exists",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "magnetMail_tracking_link_exists",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "message_id",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "message_in_queue",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "msg",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "MagnetMailQueries": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Search_Name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Search_Id",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Create_Date",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "LoginId",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfMagnetMailQueries": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "MagnetMailQueries",
+        "type": "MagnetMailQueries",
+        "nillable": true
+      }
+    ],
+    "ArrayOfRecipient": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "Recipient",
+        "type": "Recipient",
+        "nillable": true
+      }
+    ],
+    "subscription": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "recipient",
+        "type": "Recipient",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "add_update_date",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "groups",
+        "type": "ArrayOfInt",
+        "nillable": false
+      }
+    ],
+    "ArrayOfSubscription": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "subscription",
+        "type": "subscription",
+        "nillable": true
+      }
+    ],
+    "RecipientSuppressionList": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "suppressby",
+        "type": "SuppressionIdentity",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "type",
+        "type": "SuppressionType",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "recipients",
+        "type": "ArrayOfRecipient",
+        "nillable": false
+      }
+    ],
+    "RecipientSuppressionResult": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "new_added",
+        "type": "int",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "total_updated",
+        "type": "int",
+        "nillable": true
+      }
+    ],
+    "RecipientExtended": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "recipient",
+        "type": "Recipient",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "extended_field",
+        "type": "ArrayOfRecipientExtendedField",
+        "nillable": false
+      }
+    ],
+    "ArrayOfRecipientExtendedField": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "RecipientExtendedField",
+        "type": "RecipientExtendedField",
+        "nillable": true
+      }
+    ],
+    "RecipientExtendedField": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "field_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "field_value",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfRecipientExtended": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "RecipientExtended",
+        "type": "RecipientExtended",
+        "nillable": true
+      }
+    ],
+    "ArrayOfRecipientGroup": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "RecipientGroup",
+        "type": "RecipientGroup",
+        "nillable": true
+      }
+    ],
+    "RecipientGroup": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Id",
+        "type": "int",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Created",
+        "type": "dateTime",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "DisplayStatus",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "SubscriptionGroup",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "LastUpdated",
+        "type": "dateTime",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "LastUpdatedLoginId",
+        "type": "int",
+        "nillable": true
+      }
+    ],
+    "RecipientSearchCriteria": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "mail_user_id",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "id",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "email",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "first_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "last_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "fax",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Custom_Id",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "phone",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "address",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "address_2",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "city",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "state",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "zip",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "company",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "unsubscribed",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "fax_send_suppress",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "email_send_suppress",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "email_confirm",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "text_only",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom1",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom2",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom3",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom4",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom5",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom6",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom7",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom8",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom9",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom10",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom11",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom12",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom13",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom14",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom15",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom16",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom17",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom18",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom19",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom20",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom21",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom22",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom23",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom24",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom25",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom26",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom27",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom28",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom29",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "custom30",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "suppressed",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "suppressed_start_date",
+        "type": "dateTime",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "suppressed_end_date",
+        "type": "dateTime",
+        "nillable": true
+      }
+    ],
+    "SearchCriteria": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "pageNo",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "pageSize",
+        "type": "int",
+        "nillable": false
+      }
+    ],
+    "RecipientSearchResults": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "recipients",
+        "type": "ArrayOfRecipient",
+        "nillable": false
+      }
+    ],
+    "AuthenticationResult": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "authenticated",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "sessionId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "loginid",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "login_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "user_nbr",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "partition_id",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "is_parent_mail_user",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "parent_user_id",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "user_id",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfMessage": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "Message",
+        "type": "Message",
+        "nillable": true
+      }
+    ],
+    "ArrayOfUnsubscribe": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "Unsubscribe",
+        "type": "Unsubscribe",
+        "nillable": true
+      }
+    ],
+    "Unsubscribe": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Id",
+        "type": "long",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "UserId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "RecipientId",
+        "type": "long",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "MessageId",
+        "type": "long",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "GroupId",
+        "type": "long",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "MessageCategoryId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "GroupCategoryId",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "MailRecipientGroup": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "group_id",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "group_name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "group_created",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "display_status",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "subscription_group",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "last_updated_date",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "last_updated_loginid",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "TotalInGroup",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "TotalEmailAndFaxSuppressed",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "TotalFaxSuppressed",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "TotalEmailSuppressed",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "TotalUnsubscribed",
+        "type": "int",
+        "nillable": false
+      }
+    ],
+    "GroupRecipients": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "recipients",
+        "type": "ArrayOfGroupRecipient",
+        "nillable": false
+      }
+    ],
+    "ArrayOfGroupRecipient": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "GroupRecipient",
+        "type": "GroupRecipient",
+        "nillable": true
+      }
+    ],
+    "GroupRecipient": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "EmailId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "CustomMemberId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "RecipientId",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "MessageLinkTrackingSearchCriteria": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "MessageId",
+        "type": "long",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "LinkUrl",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "DateRangeSearchCriteria": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "SearchStartDate",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "SearchEndDate",
+        "type": "dateTime",
+        "nillable": false
+      }
+    ],
+    "PagedSearchCriteria": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "PageNo",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "PageSize",
+        "type": "int",
+        "nillable": false
+      }
+    ],
+    "TrackingDataBase": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "UserId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "MessageId",
+        "type": "long",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "RecipientId",
+        "type": "long",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Date",
+        "type": "dateTime",
+        "nillable": false
+      }
+    ],
+    "MessageLinkTrackingData": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Url",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "LinkLabel",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "LinkText",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "PagedSearchResults": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Count",
+        "type": "int",
+        "nillable": false
+      }
+    ],
+    "MessageLinkTrackingResults": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "data",
+        "type": "ArrayOfMessageLinkTrackingData",
+        "nillable": false
+      }
+    ],
+    "ArrayOfMessageLinkTrackingData": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "MessageLinkTrackingData",
+        "type": "MessageLinkTrackingData",
+        "nillable": true
+      }
+    ],
+    "MessageTrackingSearchCriteria": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "ReportType",
+        "type": "MessageTrackingReportType",
+        "nillable": false
+      }
+    ],
+    "ArrayOfMessageSentTrackingData": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "MessageSentTrackingData",
+        "type": "MessageSentTrackingData",
+        "nillable": true
+      }
+    ],
+    "MessageSentTrackingData": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Status",
+        "type": "MessageSentStatus",
+        "nillable": false
+      }
+    ],
+    "MessageTrackingData": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Type",
+        "type": "MessageTrackingReportType",
+        "nillable": false
+      }
+    ],
+    "MessageSentTrackingResults": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "data",
+        "type": "ArrayOfMessageSentTrackingData",
+        "nillable": false
+      }
+    ],
+    "ArrayOfMessageTrackingData": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "MessageTrackingData",
+        "type": "MessageTrackingData",
+        "nillable": true
+      }
+    ],
+    "MessageOpenTrackingResults": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "data",
+        "type": "ArrayOfMessageTrackingData",
+        "nillable": false
+      }
+    ],
+    "UnsubscribeSearchCriteria": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "MessageId",
+        "type": "long",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "GroupId",
+        "type": "long",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "GroupCategoryId",
+        "type": "long",
+        "nillable": false
+      }
+    ],
+    "ArrayOfUnsubscribeTrackingData": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "UnsubscribeTrackingData",
+        "type": "UnsubscribeTrackingData",
+        "nillable": true
+      }
+    ],
+    "UnsubscribeTrackingData": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "GroupId",
+        "type": "long",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "GroupCategoryId",
+        "type": "long",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "MessageCategoryId",
+        "type": "long",
+        "nillable": false
+      }
+    ],
+    "UnsubscribeTrackingResults": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "data",
+        "type": "ArrayOfUnsubscribeTrackingData",
+        "nillable": false
+      }
+    ],
+    "PersonifySubscriptionMappingSearchCriteria": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "ObjectInPersonify",
+        "type": "PersonifyObject",
+        "nillable": false
+      }
+    ],
+    "PersonifyObject": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "ObjectType",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Identifier",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "PersonifySubscriptionMapping": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "ID",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "MailUserId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "RealMagnetObjectId",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "RealMagnetObjectName",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "RealMagnetType",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "PersonifyId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "PersonifyType",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "CreatedBy",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "DateCreated",
+        "type": "dateTime",
+        "nillable": false
+      }
+    ],
+    "ArrayOfPersonifySubscriptionMapping": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "PersonifySubscriptionMapping",
+        "type": "PersonifySubscriptionMapping",
+        "nillable": true
+      }
+    ],
+    "PersonifySubscriptionMappingSearchResults": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "data",
+        "type": "ArrayOfPersonifySubscriptionMapping",
+        "nillable": false
+      }
+    ],
+    "MessageCategory": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "ID",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Name",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "MailUserId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "DateCreated",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "LoginId",
+        "type": "int",
+        "nillable": true
+      }
+    ],
+    "ArrayOfMessageCategory": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "MessageCategory",
+        "type": "MessageCategory",
+        "nillable": true
+      }
+    ],
+    "GroupCategory": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "ID",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "CategoryName",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "MailUserId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "LoginId",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Status",
+        "type": "unsignedByte",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "DateCreated",
+        "type": "dateTime",
+        "nillable": false
+      }
+    ],
+    "ArrayOfGroupCategory": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "GroupCategory",
+        "type": "GroupCategory",
+        "nillable": true
+      }
+    ],
+    "UploadInitialJob": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "InitialQueueId",
+        "type": "double",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "UserId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "LoginId",
+        "type": "double",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "CsvData",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Settings",
+        "type": "UploadJobSettings",
+        "nillable": false
+      }
+    ],
+    "UploadJobSettings": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "HasHeaderRow",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "GroupId",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "ContainsNonWesternCharacters",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "AddReplace",
+        "type": "UploadGroupOption",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "UpdateExistingRecipients",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "ColumnMappings",
+        "type": "ArrayOfUploadColumnMapping",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "MappingName",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfUploadColumnMapping": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "UploadColumnMapping",
+        "type": "UploadColumnMapping",
+        "nillable": true
+      }
+    ],
+    "UploadColumnMapping": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "CsvColumnOrder",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "RMColumnName",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ExtendedField": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "fieldId",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "fieldName",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "loginId",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "uploadMappingName",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfExtendedField": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "ExtendedField",
+        "type": "ExtendedField",
+        "nillable": true
+      }
+    ],
+    "UploadInitialQueueStatus": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "UploadId",
+        "type": "double",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "MailUserId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "UploadDate",
+        "type": "dateTime",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "JobId",
+        "type": "int",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "errorMessage",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "EventSignUp": [
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "EventId",
+        "type": "double",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "IsMultipleRegistration",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "IsSignupModeLive",
+        "type": "boolean",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "LoginId",
+        "type": "double",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "PaidItems",
+        "type": "ArrayOfPaidItem",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "PaymentInfo",
+        "type": "PaymentInfo",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Registrants",
+        "type": "ArrayOfRegistrant",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "UserId",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfPaidItem": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "PaidItem",
+        "type": "PaidItem",
+        "nillable": true
+      }
+    ],
+    "PaidItem": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "ClientReferenceId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Quantity",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "RMPaidItemReferenceId",
+        "type": "double",
+        "nillable": true
+      }
+    ],
+    "PaymentInfo": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "CreditCardInfo",
+        "type": "CreditCardInfo",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Mode",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "CreditCardInfo": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "CardExpiry",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "CardIndentificationNumber",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "CardName",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "CardNumber",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "CardType",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "CreditCardBillingInfo",
+        "type": "CreditCardBillingInfo",
+        "nillable": false
+      }
+    ],
+    "CreditCardBillingInfo": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "BillToAddress",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "BillToCity",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "BillToCountry",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "BillToPhone",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "BillToState",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "BillToZip",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfRegistrant": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "Registrant",
+        "type": "Registrant",
+        "nillable": true
+      }
+    ],
+    "Registrant": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "ClientReferenceId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "EmailAddress",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "FirstName",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "IncludePaymentDetailsInConfirmationEmail",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "LastName",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Payer",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "QuestionItem",
+        "type": "ArrayOfQuestionItem",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "SendConfirmationEmail",
+        "type": "boolean",
+        "nillable": true
+      }
+    ],
+    "ArrayOfQuestionItem": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "QuestionItem",
+        "type": "QuestionItem",
+        "nillable": true
+      }
+    ],
+    "QuestionItem": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "QuestionItemData",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "QuestionItemId",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "QuestionItemOtherOptionData",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "EventSignupResult": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "PaidItemAPISignupValidationStatusResult",
+        "type": "ArrayOfPaidItemAPISignupValidationStatusResult",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "RegistrantSignupResult",
+        "type": "ArrayOfRegistrantSignupResult",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "ResultCode",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "ResultFailureReasonCode",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "ResultFailureReasonText",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfPaidItemAPISignupValidationStatusResult": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "PaidItemAPISignupValidationStatusResult",
+        "type": "PaidItemAPISignupValidationStatusResult",
+        "nillable": true
+      }
+    ],
+    "PaidItemAPISignupValidationStatusResult": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "APISignupFailureReason",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "APISignupStatus",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "PaidItem",
+        "type": "PaidItem",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "Title",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfRegistrantSignupResult": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "RegistrantSignupResult",
+        "type": "RegistrantSignupResult",
+        "nillable": true
+      }
+    ],
+    "RegistrantSignupResult": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "ClientReferenceId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "ConfirmationEmailStatus",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "EmailAddress",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "FirstName",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "LastName",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "PaidItemSignupResult",
+        "type": "ArrayOfPaidItemSignupResult",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "PaymentMode",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "RMRegistrantId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "RMSignupReferenceId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "RegistrantSignupOverallFailureReason",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "RegistrantSignupOverallResult",
+        "type": "boolean",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "TotalAmountCharged",
+        "type": "string",
+        "nillable": false
+      }
+    ],
+    "ArrayOfPaidItemSignupResult": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "unbounded",
+        "name": "PaidItemSignupResult",
+        "type": "PaidItemSignupResult",
+        "nillable": true
+      }
+    ],
+    "PaidItemSignupResult": [
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "AmountCharged",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "ClientReferenceId",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "ItemPrice",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "Quantity",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "RMPaidItemReferenceId",
+        "type": "double",
+        "nillable": true
+      },
+      {
+        "minOccurs": "0",
+        "maxOccurs": "1",
+        "name": "SignupFailureReason",
+        "type": "string",
+        "nillable": false
+      },
+      {
+        "minOccurs": "1",
+        "maxOccurs": "1",
+        "name": "SignupStatus",
+        "type": "boolean",
+        "nillable": true
+      }
+    ]
+  }
+}

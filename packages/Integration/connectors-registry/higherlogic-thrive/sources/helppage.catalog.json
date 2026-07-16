@@ -1,0 +1,1468 @@
+{
+  "Announcements": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/Announcements/GetAnnouncements?announcementTypeFilter={announcementTypeFilter}&communityKey={communityKey}&micrositeGroupTypeRouteDesignKey={micrositeGroupTypeRouteDesignKey}&sortOrder={sortOrder}&maxResults={maxResults}&includeAnnouncementsWithNoType={includeAnnouncementsWithNoType}",
+      "description": "Returns a list of Announcements given the specified criteria.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Announcements-GetAnnouncements_announcementTypeFilter_communityKey_micrositeGroupTypeRouteDesignKey_sortOrder_maxResults_includeAnnouncementsWithNoType"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Announcements/GetAnnouncement?announcementKey={announcementKey}",
+      "description": "Returns the details of the specified Announcement.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Announcements-GetAnnouncement_announcementKey"
+    }
+  ],
+  "Answer": [
+    {
+      "method": "POST",
+      "path": "api/v2.0/Answer/Recommend?answerKey={answerKey}",
+      "description": "Acts as a toggle for recommending an answer. A POST request will recommend while DELETE will remove the recommendation. An answer recommendation refers to the answer being \"Helpful\" in a Q and A thread.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Answer-Recommend_answerKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Answer/Recommend?answerKey={answerKey}",
+      "description": "Acts as a toggle for recommending an answer. A POST request will recommend while DELETE will remove the recommendation. An answer recommendation refers to the answer being \"Helpful\" in a Q and A thread.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Answer-Recommend_answerKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Answer/Get?answerKey={answerKey}",
+      "description": "Returns the details of the specified Answer.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Answer-Get_answerKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Answer/Delete?answerKey={answerKey}",
+      "description": "Administrator-only endpoint to delete the specified answer.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Answer-Delete_answerKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Answer/Edit",
+      "description": "Edit an existing answer",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Answer-Edit"
+    }
+  ],
+  "Authentication": [
+    {
+      "method": "POST",
+      "path": "api/v2.0/Authentication/Login",
+      "description": "Generates a Authentication Token for the user with the specified credentials.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Authentication-Login"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Authentication/GetTenantDetail?communityUrl={communityUrl}",
+      "description": "Returns information about a Tenant for a given Connected Community Site Url.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Authentication-GetTenantDetail_communityUrl"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Authentication/Widget",
+      "description": "Used to Authenticate to the Widgets Platform",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Authentication-Widget"
+    }
+  ],
+  "AutomationRules": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/AutomationRules/GetActiveRulesByType",
+      "description": "Retrieves a list of Automation Rules and associated data. Accessible only by Admin Users.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetActiveRulesByType"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/AutomationRules/GetContactsByRuleScheduleKey?ruleScheduleKey={ruleScheduleKey}&integrationId={integrationId}",
+      "description": "Retrieves a list of Contacts for which the specified RuleSchedule applies. Accessible only by Admin Users.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactsByRuleScheduleKey_ruleScheduleKey_integrationId"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/AutomationRules/GetContactData?ruleScheduleKey={ruleScheduleKey}&maxRecords={maxRecords}&continuationToken={continuationToken}&fieldList={fieldList}",
+      "description": "Returns a page of the requested Contact Data fields.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactData_ruleScheduleKey_maxRecords_continuationToken_fieldList"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/AutomationRules/GetContactDataFields",
+      "description": "Returns a list of field names that can be requested via the GetContactData() Endpoint.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactDataFields"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/AutomationRules/GetContactDataSubsetByRuleScheduleKey?ruleScheduleKey={ruleScheduleKey}&integrationId={integrationId}",
+      "description": "Returns the requested subset of Contact Data.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactDataSubsetByRuleScheduleKey_ruleScheduleKey_integrationId"
+    }
+  ],
+  "Blogs": [
+    {
+      "method": "POST",
+      "path": "api/v2.0/Blogs/GetLatestEntries",
+      "description": "Retrieves the Blog Entries that meet the filter conditions.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-GetLatestEntries"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Blogs/GetBlogEntriesByGrouping?groupingType={groupingType}&maxRecords={maxRecords}",
+      "description": "Retrieves Blog Entries by the specified GroupingType.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Blogs-GetBlogEntriesByGrouping_groupingType_maxRecords"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Blogs/CreateBlog",
+      "description": "Create a new Blog.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-CreateBlog"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Blogs/PublishBlog?blogKey={blogKey}",
+      "description": "Publishes a previously Saved Blog. If the Blog has already been Published, no changes are made.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-PublishBlog_blogKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Blogs/UpdateBlog?blogKey={blogKey}",
+      "description": "Update a Blog's Title, Text, Comment Permissions, View Permissions and Associated Community.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-UpdateBlog_blogKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Blogs/AddRelatedLink?blogKey={blogKey}",
+      "description": "Adds the specified URL as a RelatedLink to the specified Blog.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-AddRelatedLink_blogKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Blogs/GetBlogsByContactKey?contactKey={contactKey}",
+      "description": "Retrieves all Published Blog Entries created by the Member with the specified ContactKey.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Blogs-GetBlogsByContactKey_contactKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Blogs/GetBlog?blogKey={blogKey}",
+      "description": "Retrieves the specified Blog by its key. If the specified key does not match an existing BlogKey, no results will be returned. If the User making the request does not have view permissions for the specified Blog, no results will be returned.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Blogs-GetBlog_blogKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Blogs/RecommendBlog?blogKey={blogKey}",
+      "description": "Adds a recommendation for the specified Blog.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-RecommendBlog_blogKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Blogs/DeleteBlogRecommendation?blogKey={blogKey}",
+      "description": "Removes a previously made recommendation.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Blogs-DeleteBlogRecommendation_blogKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Blogs/DeleteBlog?blogKey={blogKey}",
+      "description": "Deletes a Blog.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Blogs-DeleteBlog_blogKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Blogs/AddComment?blogKey={blogKey}",
+      "description": "Add a new Comment to a Blog.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-AddComment_blogKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Blogs/UpdateComment?blogCommentKey={blogCommentKey}",
+      "description": "Updates the specified Blog Comment with new Comment Text.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-UpdateComment_blogCommentKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Blogs/DeleteRelatedLink?relatedResourceKey={relatedResourceKey}",
+      "description": "Deletes the specified RelatedLink.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Blogs-DeleteRelatedLink_relatedResourceKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Blogs/DeleteComment?blogCommentKey={blogCommentKey}",
+      "description": "Deletes the specified Blog Comment.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Blogs-DeleteComment_blogCommentKey"
+    }
+  ],
+  "Comments": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/Comments/Get?itemKey={itemKey}&limit={limit}",
+      "description": "This will return a collection of comments for a particular item on the site. The content types that can have comments associated to it are Blogs, Documents, and Events",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-Get_itemKey_limit"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Comments/Get?commentKey={commentKey}",
+      "description": "Returns the details of the specified Comment.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-Get_commentKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Comments/GetComments?afterCommentKey={afterCommentKey}&beforeCommentKey={beforeCommentKey}&limit={limit}",
+      "description": "This will retrieve a paginated set of comments based on the commentKey provided. Using the afterCommentKey is recommended when continuing the default order of comments provided by the Get endpoint or other various endpoints. Either the afterCommentKey or the beforeCommentKey must be provided. If both keys are put in the request, the afterAnswerKey will take precedence.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-GetComments_afterCommentKey_beforeCommentKey_limit"
+    }
+  ],
+  "Communities": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/Communities/Get?communityKey={communityKey}",
+      "description": "Given the unique identifier of a specific community, this make sure that the current user can view the community, and return information pertaining to that community.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-Get_communityKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Communities/GetMyCommunities?includeStatistics={includeStatistics}&includeHiddenCommunities={includeHiddenCommunities}",
+      "description": "Returns a list of the Current User's joined Communities.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetMyCommunities_includeStatistics_includeHiddenCommunities"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Communities/GetContactCommunities?contactKey={contactKey}&legacyContactKey={legacyContactKey}",
+      "description": "Returns a list of the specified User's joined Communities that the current user can view. If both a ContactKey and LegacyContactKey are specified, the ContactKey will be used. If neither parameter is specified, an error will be returned.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetContactCommunities_contactKey_legacyContactKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Communities/GetViewableCommunities?includeStatistics={includeStatistics}",
+      "description": "Returns a list of Communities the Current User can see.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetViewableCommunities_includeStatistics"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Communities/GetCommunitiesCanContribute?includeStatistics={includeStatistics}",
+      "description": "Returns a list of Communities where the Current User can contribute discussions/messages.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetCommunitiesCanContribute_includeStatistics"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Communities/GetCommunitiesICanJoin?includeStatistics={includeStatistics}",
+      "description": "Returns a list of Communities the Current User is not a member of, but is eligible to join.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetCommunitiesICanJoin_includeStatistics"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Communities/GetMyCommunityInvitations",
+      "description": "Retrieve all Community Invitations.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetMyCommunityInvitations"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Communities/GetCommunityMembers",
+      "description": "Retrieve a list of Members of the specified Community in LastName, FirstName order.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-GetCommunityMembers"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Communities/InviteToCommunity?contactKey={contactKey}&communityKey={communityKey}",
+      "description": "Allows the Current User to invite a specified Contact to a specified Community.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-InviteToCommunity_contactKey_communityKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Communities/JoinCommunity?communityKey={communityKey}",
+      "description": "Joins the current user to the Community identified by the specified Community Key.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-JoinCommunity_communityKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Communities/AcceptInvitation",
+      "description": "Accept an invitation to a Community.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-AcceptInvitation"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Communities/RejectInvitation?communityInvitationKey={communityInvitationKey}",
+      "description": "Reject an Invite to a Community.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Communities-RejectInvitation_communityInvitationKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Communities/LeaveCommunity?communityKey={communityKey}",
+      "description": "Removes the Current Contact from the specified Community.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Communities-LeaveCommunity_communityKey"
+    }
+  ],
+  "Contacts": [
+    {
+      "method": "POST",
+      "path": "api/v2.0/Contacts/WhoAmI?includeSecurityGroups={includeSecurityGroups}",
+      "description": "Returns information about the Currently Authenticated User.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-WhoAmI_includeSecurityGroups"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Contacts/GetWhoAmI?includeSecurityGroups={includeSecurityGroups}",
+      "description": "Returns information about the Currently Authenticated User.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetWhoAmI_includeSecurityGroups"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Contacts/GetContact?contactKey={contactKey}&includeSecurityGroups={includeSecurityGroups}",
+      "description": "Returns Contact information for the specified contactKey.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetContact_contactKey_includeSecurityGroups"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Contacts/GetContact?legacyContactKey={legacyContactKey}&includeSecurityGroups={includeSecurityGroups}",
+      "description": "Returns Contact information for the specified legacyContactKey.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetContact_legacyContactKey_includeSecurityGroups"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Contacts/GetMyContacts",
+      "description": "Returns a list of Contacts that are Friends of the Current User.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetMyContacts"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Contacts/GetMyContactsPage?afterContactKey={afterContactKey}&beforeContactKey={beforeContactKey}&limit={limit}",
+      "description": "If no afterContactKey or beforeContactKey is provided, then this endpoint will return the first specified set of contacts based on the limit provided. Ordered by LastName, FirstName. To continue a list, using the afterContactKey is recommended to continue to the next page. Using the beforeContactKey will return you the set of contacts in LastName, FirstName order that are prior to the contactKey provided. If both afterContactKey and beforeContactKey are provided, afterContactKey will take precedence.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetMyContactsPage_afterContactKey_beforeContactKey_limit"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Contacts/SearchContactsForMentions?searchText={searchText}&maxCount={maxCount}",
+      "description": "Provides Contact search results to be used for adding @Mention functionality to Content.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-SearchContactsForMentions_searchText_maxCount"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Contacts/GetContactKeyByPrimaryEmail?emailAddress={emailAddress}",
+      "description": "Used to find an active Contact by a primary email address. Can only be accessed by an Admin user.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetContactKeyByPrimaryEmail_emailAddress"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Contacts/GetMyEmailPreferences",
+      "description": "Responds with the Currently Authenticated User's Global Email Opt-in/out settings.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetMyEmailPreferences"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Contacts/UpdateEmailPreferences",
+      "description": "Change Global Email preferences for 1 or more Contacts. * For use by Administrators only *. Individual users can updated their own Email Preferences via the \"UpdateMyEmailPreferences\" endpoint.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-UpdateEmailPreferences"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Contacts/UpdateProfilePicture?contactKey={contactKey}&legacyContactKey={legacyContactKey}",
+      "description": "Accepts a Multipart MIME file via a POST Request. Uploads a profile image for the supplied user. * For use by Administrators only *.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-UpdateProfilePicture_contactKey_legacyContactKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Contacts/UpdateMyProfilePicture",
+      "description": "Accepts a Multipart MIME file via a POST Request. Uploads a profile image for the Currently Authenticated User.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-UpdateMyProfilePicture"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Contacts/UpdateMyEmailPreferences",
+      "description": "Change Global Email preferences for the Currently Authenticated User.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-UpdateMyEmailPreferences"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Contacts/AcceptCodeOfConduct",
+      "description": "Stores the Current Date as the Acceptance Date.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-AcceptCodeOfConduct"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Contacts/SearchContacts?searchTerms={searchTerms}&searchAllAddresses={searchAllAddresses}&memberStatus={memberStatus}&searchOnlyCompanies={searchOnlyCompanies}&overrideOptOut={overrideOptOut}&contactStatusCode={contactStatusCode}&includeMiddleName={includeMiddleName}&limitToAcceptedTerms={limitToAcceptedTerms}&includeCurrentContact={includeCurrentContact}",
+      "description": "Returns Contact data for all Contact Records that match the specified criteria. Searches: City, State/Province, Company Name, Company Title, First Name, Last Name and optionally, Middle Name.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-SearchContacts_searchTerms_searchAllAddresses_memberStatus_searchOnlyCompanies_overrideOptOut_contactStatusCode_includeMiddleName_limitToAcceptedTerms_includeCurrentContact"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Contacts/SearchContactsForMessaging?searchTerms={searchTerms}",
+      "description": "Returns Contact data for all Contact Records that match the specified criteria that the authenticated user has permissions to message. Searches: City, State/Province, Company Name, Company Title, First Name, Last Name, and Middle Name.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-SearchContactsForMessaging_searchTerms"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Contacts/GetContactsByDemographic?demographicText={demographicText}",
+      "description": "Returns Contact data for all Contact Records that with the given demographic",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetContactsByDemographic_demographicText"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Contacts/GetContactContributions",
+      "description": "Returns a list of published items a given Contact has authored. The list includes Announcements, Blogs, Discussion Messages, Library Entries, Questions, and Answers.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-GetContactContributions"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Contacts/GetMyContributions",
+      "description": "Returns a list of all items the authenticated user has authored. The list includes Announcements, Blogs, Discussion Messages, Library Entries, Questions, and Answers.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-GetMyContributions"
+    }
+  ],
+  "DataFeed": [
+    {
+      "method": "POST",
+      "path": "api/v2.0/DataFeed/GetData",
+      "description": "This returns a feed of content published on the site based on the request parameters provided. This endpoint provides content/items in a generic pattern, so that users can display the items in the response as a feed of information pulling from the website. The feed can provide you with several different types of content, which you can filter down to using the request to fit your needs. This endpoint is relatively complex in terms of its capabilities in the request and response.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-DataFeed-GetData"
+    }
+  ],
+  "Demographics": [
+    {
+      "method": "POST",
+      "path": "api/v2.0/Demographics/AddDemographicCategory",
+      "description": "Add a new demographic category. Can only be accessed by an Admin user.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Demographics-AddDemographicCategory"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Demographics/AddDemographicChoice",
+      "description": "Add a new demographic choice. Can only be accessed by an Admin user.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Demographics-AddDemographicChoice"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Demographics/SetContactDemographic?demographicKey={demographicKey}",
+      "description": "Returns a collection of all existing demographic categories",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Demographics-SetContactDemographic_demographicKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Demographics/RemoveContactDemographic?demographicKey={demographicKey}",
+      "description": "Deletes the specified Demographic from the Current User's record.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Demographics-RemoveContactDemographic_demographicKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Demographics/RemoveFreeFormContactDemographic?demographicTypeKey={demographicTypeKey}",
+      "description": "Deletes the specified Free-Form Demographic entry from the Current User's record.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Demographics-RemoveFreeFormContactDemographic_demographicTypeKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Demographics/SetFreeFormContactDemographic?demographicTypeKey={demographicTypeKey}&freeFormText={freeFormText}",
+      "description": "Update an existing Free-Form Demographic entry or add a new one.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Demographics-SetFreeFormContactDemographic_demographicTypeKey_freeFormText"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Demographics/GetDemographicTypes",
+      "description": "Get the available Demographic Types.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicTypes"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Demographics/GetDemographicChoices",
+      "description": "Get the available Demographic choices.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicChoices"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Demographics/GetDemographicChoices?demographicTypeKey={demographicTypeKey}",
+      "description": "Returns a list of all existing demographic choices for a given demographic category",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicChoices_demographicTypeKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Demographics/GetDemographicsVisibleOnMainMicrositeProfile",
+      "description": "Get all demographic types that are visible on the main microsite profile",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicsVisibleOnMainMicrositeProfile"
+    }
+  ],
+  "Discussions": [
+    {
+      "method": "PUT",
+      "path": "api/v2.0/Discussions/Edit",
+      "description": "Edit a current DiscussionPost",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/PUT-api-v2.0-Discussions-Edit"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetDiscussion?discussionKey={discussionKey}",
+      "description": "Get the Discussion by its Unique Key.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussion_discussionKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetDiscussionPost?discussionPostKey={discussionPostKey}",
+      "description": "Get a DiscussionPost by its Unique Key.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPost_discussionPostKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/GetDiscussionThreadUpdates",
+      "description": "Retrieves details about all threads that have been updated since a specified date. Accessible only by Admin users.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-GetDiscussionThreadUpdates"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetSubscribedDiscussions",
+      "description": "Get a list of Discussions to which the Current User is subscribed. Keep in mind that Community membership does not imply Discussion Subscription.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetSubscribedDiscussions"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetLatestDiscussionPosts?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}&sortByScore={sortByScore}&scoreSortDirection={scoreSortDirection}",
+      "description": "Retrieves the latest Discussion Posts for either a single discussion or all viewable discussions.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetLatestDiscussionPosts_discussionKey_maxToRetrieve_sortByScore_scoreSortDirection"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetDiscussionPosts?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}&includeStaff={includeStaff}&sortByScore={sortByScore}&scoreSortDirection={scoreSortDirection}",
+      "description": "Retrieves latest discussion posts for either a single discussion or all viewable discussions. Exposes IncludeStaff parameter.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPosts_discussionKey_maxToRetrieve_includeStaff_sortByScore_scoreSortDirection"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/GetDiscussionPosts",
+      "description": "Returns a list of Discussion Posts for the Current User.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-GetDiscussionPosts"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetDiscussionPosts?discussionThreadKey={discussionThreadKey}",
+      "description": "Returns all Discussion Posts for the specified Discussion Thread.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPosts_discussionThreadKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetDiscussionPostInThread?discussionPostKey={discussionPostKey}&numberOfReplies={numberOfReplies}&maxBreadCrumbs={maxBreadCrumbs}",
+      "description": "This returns information for a specified discussion post, as well as information about its context within the thread. Returning both parent hierarchical information as well as direct children discussion posts.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPostInThread_discussionPostKey_numberOfReplies_maxBreadCrumbs"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetPagedDiscussionPostFields",
+      "description": "Administrator access only. Returns a list of field names that can be requested via the GetPagedDiscussionPosts() Endpoint.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetPagedDiscussionPostFields"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetPagedDiscussionPosts?communityKey={communityKey}&maxRecords={maxRecords}&continuationToken={continuationToken}&fieldList={fieldList}",
+      "description": "Administrator-only endpoint. Provides a customizable and paged list of Discussion Post Properties. The paging mechanism is a 'continuationToken' that is comprised of a DateTime and DiscussionPostId that informs the query engine which DiscussionPost was last retrieved. The Response will include a standard 'Link' Header that will include rel=\"next\" to denote the Uri to be utilized for the next page in the sequence. Paging relies on the continuationToken property to determine the next set of requested DiscussionPosts, as page size may vary depending upon the \"maxRecords\" value requested by the client.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetPagedDiscussionPosts_communityKey_maxRecords_continuationToken_fieldList"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetLatestTopics?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}",
+      "description": "No documentation available.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetLatestTopics_discussionKey_maxToRetrieve"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/SubmitDiscussionPost",
+      "description": "Submit a new DiscussionPost to a Discussion.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-SubmitDiscussionPost"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/PostDiscussionSimple",
+      "description": "Submit a new DiscussionPost to a Discussion and return the created post details. This endpoint is designed for AI Assistant and other integrations that need the full post information.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-PostDiscussionSimple"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/UpdateSubscription",
+      "description": "Update Discussion Subscription.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-UpdateSubscription"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetRecentThreads?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}",
+      "description": "Retrieves Discussion Thread details. The Threads are returned in descending order of the Last Approval Date for Posts within each Thread. So, Threads with more recent activity will be returned first in the list.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetRecentThreads_discussionKey_maxToRetrieve"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetDiscussionPostReplies?afterReplyDiscussionPostKey={afterReplyDiscussionPostKey}&beforeReplyDiscussionPostKey={beforeReplyDiscussionPostKey}&limit={limit}",
+      "description": "Returns a specified number of messages using the afterReplyDiscussionPostKey or beforeReplyDiscussionPostKey as a starting point. If both keys are put in the request, the afterReplyDiscussionPostKey will take precedence.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPostReplies_afterReplyDiscussionPostKey_beforeReplyDiscussionPostKey_limit"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/Follow?discussionThreadKey={discussionThreadKey}",
+      "description": "POST request follows the specified discussion thread - DELETE removes the follow.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-Follow_discussionThreadKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Discussions/Follow?discussionThreadKey={discussionThreadKey}",
+      "description": "POST request follows the specified discussion thread - DELETE removes the follow.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Discussions-Follow_discussionThreadKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetEligibleDiscussions",
+      "description": "Get a List of Discussions to which the Current User is Eligible to subscribe.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetEligibleDiscussions"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/PostToDiscussionWithCrossPost",
+      "description": "No documentation available.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-PostToDiscussionWithCrossPost"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/PostToDiscussionAnonymously",
+      "description": "No documentation available.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-PostToDiscussionAnonymously"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/PostToDiscussion",
+      "description": "Post a Message to the specified Discussion.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-PostToDiscussion"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/ReplyToDiscussion",
+      "description": "Post a reply to the specified Discussion Post.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-ReplyToDiscussion"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/ReplyToDiscussionAnonymously",
+      "description": "Submit a reply to a Discussion Post using the System's Anonymous user. This functionality requires Anonymous Posting to be enabled at the system level.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-ReplyToDiscussionAnonymously"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/SendMessageToDiscussionPostAuthor",
+      "description": "Sends an Inbox Message Reply to a specified Discussion Post's Author.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-SendMessageToDiscussionPostAuthor"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/SearchDiscussionPosts",
+      "description": "Returns Discussion Post information that meet the search criteria.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-SearchDiscussionPosts"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/RecommendDiscussionPost?discussionPostKey={discussionPostKey}",
+      "description": "Adds a recommendation for the specified Discussion Post.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-RecommendDiscussionPost_discussionPostKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Discussions/ToggleBestAnswer?discussionPostKey={discussionPostKey}",
+      "description": "Marks the specified Discussion Post as the best answer. Will replace any previously set best answer for the thread. Can only be called by the creator of the thread, or a site or community admin.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-ToggleBestAnswer_discussionPostKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Discussions/RemovePost?discussionPostKey={discussionPostKey}",
+      "description": "Deletes the specified discussion post. If a message has replies, the body will be updated to: \"This post was removed\" and the message will be anonymized to preserve the thread structure. All documents attached to the message will be deleted. Only administrators can remove/delete messages.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Discussions-RemovePost_discussionPostKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Discussions/DeleteDiscussionPostRecommendation?discussionPostKey={discussionPostKey}",
+      "description": "Removes a previously made recommendation.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Discussions-DeleteDiscussionPostRecommendation_discussionPostKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Discussions/GetThreadTags?discussionThreadKey={discussionThreadKey}",
+      "description": "Get the tags for a thread by discussion thread key",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetThreadTags_discussionThreadKey"
+    }
+  ],
+  "Events": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/GetRegistrantDetails?calendarEventKey={calendarEventKey}&contactKey={contactKey}&emailAddress={emailAddress}&firstName={firstName}&lastName={lastName}&useLeadingWildcardSearch={useLeadingWildcardSearch}",
+      "description": "Administrator-accessible only endpoint. Returns details about a Registrant for a given Calendar Event. The calendarEventKey parameter is required, along with either contactKey, emailAddress, or lastName.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetRegistrantDetails_calendarEventKey_contactKey_emailAddress_firstName_lastName_useLeadingWildcardSearch"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/GetRegistrantsByCalendarEvent?calendarEventKey={calendarEventKey}&modifiedDateTime={modifiedDateTime}",
+      "description": "Administrator-accessible only endpoint. Returns Registrant Data for a given Calendar Event and optionally a modified datetime can be passed in to only get updated registrants.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetRegistrantsByCalendarEvent_calendarEventKey_modifiedDateTime"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/GetEventRegistrants?calendarEventKey={calendarEventKey}&modifiedDateTime={modifiedDateTime}&maxRecords={maxRecords}&continuationToken={continuationToken}",
+      "description": "Administrator-accessible only endpoint. Returns Paged Registrant Data for a given Calendar Event.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventRegistrants_calendarEventKey_modifiedDateTime_maxRecords_continuationToken"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/GetEventType?EventTypeKey={EventTypeKey}",
+      "description": "Returns an Event Type",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventType_EventTypeKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/GetEventTypes",
+      "description": "Returns all Event Types",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventTypes"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/GetEventTypesList",
+      "description": "Get a list of active event types",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventTypesList"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Events/SaveEventType",
+      "description": "Saves an Event Type",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Events-SaveEventType"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Events/DeleteEventType?eventTypeKey={eventTypeKey}",
+      "description": "Deletes an Event Type",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Events-DeleteEventType_eventTypeKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Events/RestoreEventType?eventTypeKey={eventTypeKey}",
+      "description": "Restores a Deleted Event Type",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Events-RestoreEventType_eventTypeKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/GetEvent?eventKey={eventKey}",
+      "description": "Retrieve details about a single Event.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEvent_eventKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/GetUpcoming?maxRecords={maxRecords}",
+      "description": "Returns all Current (beginning today) and Future Events.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetUpcoming_maxRecords"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Events/SearchCurrentAndFutureEvents?includePastEvents={includePastEvents}&maxRecords={maxRecords}",
+      "description": "Returns all Current (beginning today) and Future Events unless otherwise specified.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Events-SearchCurrentAndFutureEvents_includePastEvents_maxRecords"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Events/SearchEvents?maxRecords={maxRecords}",
+      "description": "Get Event details. The retrieved Events can be filtered by the values passed in the eventFilter parameter.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Events-SearchEvents_maxRecords"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/CommunityPastEvents?communityId={communityId}&maxRecords={maxRecords}",
+      "description": "Returns all events that count toward attendance tracking for the given community.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-CommunityPastEvents_communityId_maxRecords"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/ContactEventList?contactId={contactId}&maxRecords={maxRecords}",
+      "description": "Returns all recent events that the contact has attended.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-ContactEventList_contactId_maxRecords"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/CommunityEventAttendance?communityId={communityId}&numberOfMeetings={numberOfMeetings}",
+      "description": "Returns a list of contacts that participated in the last x community events. The event has to be in the 'done state' to count as a recent meeting.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-CommunityEventAttendance_communityId_numberOfMeetings"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/EventAttendance?eventId={eventId}",
+      "description": "Returns a list of contacts that participated in the indicated event. The event has to be in the 'done state' to count as a recent meeting.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-EventAttendance_eventId"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Events/GetEventEnabledCommunityList",
+      "description": "Gets a collection of allowed communities for the current user that has an associated calendar.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventEnabledCommunityList"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Events/RSVPToEvent?eventKey={eventKey}",
+      "description": "RSVPs the current user to the designated event. For events with a registration type of RSVP only, not valid for other registrations. Registering for a parent repeating event also registers you for all following occurrences.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Events-RSVPToEvent_eventKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Events/RSVP?eventKey={eventKey}",
+      "description": "Removes the current user's RSVP to the designated event. For events with a registration type of RSVP only, not valid for other registrations. Removing RSVP for a parent repeating event also removes registration for all following occurrences.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Events-RSVP_eventKey"
+    }
+  ],
+  "EventSessions": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/EventSessions/GetSession?sessionKey={sessionKey}",
+      "description": "No documentation available.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-EventSessions-GetSession_sessionKey"
+    }
+  ],
+  "ExternalActivity": [
+    {
+      "method": "POST",
+      "path": "api/v2.0/ExternalActivity/Create",
+      "description": "Create a new ExternalActivity record.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalActivity-Create"
+    },
+    {
+      "method": "PUT",
+      "path": "api/v2.0/ExternalActivity/Update",
+      "description": "",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/PUT-api-v2.0-ExternalActivity-Update"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/ExternalActivity/Delete?externalActivityKey={externalActivityKey}&legacyActivityKey={legacyActivityKey}",
+      "description": "",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ExternalActivity-Delete_externalActivityKey_legacyActivityKey"
+    }
+  ],
+  "ExternalSearch": [
+    {
+      "method": "POST",
+      "path": "api/v2.0/ExternalSearch/AddAnnouncementItems",
+      "description": "Add External Announcement Items to the Search Results.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddAnnouncementItems"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ExternalSearch/AddLibraryItems",
+      "description": "Add External Library Items to the Search Results.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddLibraryItems"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ExternalSearch/AddLibraryEntryItems",
+      "description": "Add External Library Items to the Search Results.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddLibraryEntryItems"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ExternalSearch/AddCommunityItems",
+      "description": "Add External Communities to the Search Results.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddCommunityItems"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ExternalSearch/AddCourseItems",
+      "description": "Add External Courses/Webinars to the Search Results.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddCourseItems"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ExternalSearch/AddBlogItems",
+      "description": "Add External Blog Items to the Search Results.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddBlogItems"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ExternalSearch/AddEventItems",
+      "description": "Add External Calendar Event Items to the Search Results.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddEventItems"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ExternalSearch/AddPageContent",
+      "description": "Add External Navigation Items to the Search Results.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddPageContent"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ExternalSearch/AddVolunteerOpportunityItems",
+      "description": "Add External Volunteer Opportunity Items to the Search Results.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddVolunteerOpportunityItems"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ExternalSearch/AddGlossaryItems",
+      "description": "Add External Glossary Items to the Search Results.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddGlossaryItems"
+    }
+  ],
+  "Federation": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/Federation/GetTenant?tenantKey={tenantKey}",
+      "description": "No documentation available.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Federation-GetTenant_tenantKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Federation/GetContact?tenantKey={tenantKey}&contactKey={contactKey}",
+      "description": "No documentation available.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Federation-GetContact_tenantKey_contactKey"
+    }
+  ],
+  "Friends": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/Friends/GetPendingReceivedFriendRequests",
+      "description": "Gets a List of FriendModel objects representing the pending Friend Requests that the Current User has RECEIVED.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Friends-GetPendingReceivedFriendRequests"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Friends/GetPendingSentFriendRequests",
+      "description": "Gets a List of FriendModel objects representing the pending Friend Requests that the Current User has SENT.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Friends-GetPendingSentFriendRequests"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Friends/GetAcceptedFriendRequests?daysBack={daysBack}",
+      "description": "Gets a List of FriendModel objects representing the Friend Requests that the Current User has SENT which have been accepted.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Friends-GetAcceptedFriendRequests_daysBack"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Friends/PostFriendRequest?contactKey={contactKey}",
+      "description": "Sends a friend request from the Current User to the specified Contact.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Friends-PostFriendRequest_contactKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Friends/AcceptFriendRequest?friendRequestRecordKey={friendRequestRecordKey}",
+      "description": "Accepts a Friend Request.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Friends-AcceptFriendRequest_friendRequestRecordKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Friends/RejectFriendRequest?friendRequestRecordKey={friendRequestRecordKey}",
+      "description": "Rejects a Friend Request.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Friends-RejectFriendRequest_friendRequestRecordKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Friends/CancelFriendRequest?contactKey={contactKey}",
+      "description": "Cancels a Friend Request. Using the current contact and the contactKey of the person the request was sent to",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Friends-CancelFriendRequest_contactKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Friends/UnFriend?contactKey={contactKey}",
+      "description": "Removes a Friend Relationship from the Current User.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Friends-UnFriend_contactKey"
+    }
+  ],
+  "Ideation": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/Ideation/IdeaDetails?ideationKey={ideationKey}",
+      "description": "Gets the details of an idea.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-IdeaDetails_ideationKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Ideation/Post",
+      "description": "Create a new idea.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Ideation-Post"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Ideation/GetIdeasByStatus?ideationStatusKey={ideationStatusKey}&afterIdeaKey={afterIdeaKey}&beforeIdeaKey={beforeIdeaKey}&numberToReturn={numberToReturn}",
+      "description": "Returns a specified number of ideas in a particular status, optionally using the afterIdeaKey or beforeIdeaKey as a starting point. Ideas are ordered by creation date, most recent to least recent. If both keys are included, afterIdeaKey will take precedence.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeasByStatus_ideationStatusKey_afterIdeaKey_beforeIdeaKey_numberToReturn"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Ideation/GetIdeasByCategory?ideationCategoryKey={ideationCategoryKey}&afterIdeaKey={afterIdeaKey}&beforeIdeaKey={beforeIdeaKey}&numberToReturn={numberToReturn}",
+      "description": "Returns a specified number of ideas in a particular category, optionally using the afterIdeaKey or beforeIdeaKey as a starting point. Ideas are ordered by creation date, most recent to least recent. If both keys are included, afterIdeaKey will take precedence.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeasByCategory_ideationCategoryKey_afterIdeaKey_beforeIdeaKey_numberToReturn"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Ideation/AddIdeaCategories",
+      "description": "Add categories to an idea.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Ideation-AddIdeaCategories"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Ideation/GetIdeaStatuses",
+      "description": "Get active statuses that can be applied to an idea.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeaStatuses"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Ideation/GetIdeaCategories",
+      "description": "Get active categories that an idea can be associated to.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeaCategories"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Ideation/UpdateIdeaStatus",
+      "description": "Update the status of an idea.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Ideation-UpdateIdeaStatus"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Ideation/GetVoters?ideationKey={ideationKey}",
+      "description": "Admin-only endpoint to get all voters on an idea.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetVoters_ideationKey"
+    }
+  ],
+  "Messaging": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/Messaging/GetInboxMessage?messageKey={messageKey}",
+      "description": "Retrieves the specified Mailbox Message",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-GetInboxMessage_messageKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Messaging/GetInboxMessages?firstRecord={firstRecord}&maxRecords={maxRecords}",
+      "description": "Retrieves the most recent Inbox Messages for the Current User.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-GetInboxMessages_firstRecord_maxRecords"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Messaging/GetSentMessages?firstRecord={firstRecord}&maxRecords={maxRecords}",
+      "description": "Retrieves the most recent Mailbox Messages sent by the current user.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-GetSentMessages_firstRecord_maxRecords"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Messaging/SendMessageToContact",
+      "description": "Sends a new Message to the specified Contact.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-SendMessageToContact"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Messaging/ReplyToMessage",
+      "description": "Submits a new reply to a specified Mailbox Message to the original message's author.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-ReplyToMessage"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Messaging/MarkMessageAsRead?messageKey={messageKey}",
+      "description": "Changes the specified Mailbox Message Read Status to True.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-MarkMessageAsRead_messageKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Messaging/MarkMessageAsRead?messageKey={messageKey}",
+      "description": "Changes the specified Mailbox Message Read Status to True.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-MarkMessageAsRead_messageKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Messaging/MarkMessagesAsRead",
+      "description": "Marks the specified Mailbox Messages as 'Read'.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-MarkMessagesAsRead"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Messaging/DeleteMessages",
+      "description": "Deletes Mailbox Messages from the Authenticated User's Inbox.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-DeleteMessages"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Messaging/MarkMessageAsUnRead?messageKey={messageKey}",
+      "description": "Changes the specified Mailbox Message Read Status to False.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-MarkMessageAsUnRead_messageKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Messaging/MarkMessageAsUnRead?messageKey={messageKey}",
+      "description": "Changes the specified Mailbox Message Read Status to False.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-MarkMessageAsUnRead_messageKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Messaging/GetUnreadMessageCounts",
+      "description": "Returns a key-value pair of ContactKey and Unread Message Count. Includes Inbox Messages, Friend Requests and Community Invitations.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-GetUnreadMessageCounts"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Messaging/SendMessageToDiscussionPostAuthor",
+      "description": "Sends a private Mailbox Message to the Author of a DiscussionPost.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-SendMessageToDiscussionPostAuthor"
+    }
+  ],
+  "Question": [
+    {
+      "method": "POST",
+      "path": "api/v2.0/Question/Post",
+      "description": "Submit a new question",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Question-Post"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Question/Answer",
+      "description": "Submit a new answer",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Question-Answer"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Question/GetThread?questionKey={questionKey}&numberOfAnswers={numberOfAnswers}",
+      "description": "Get a question thread, including the root question and it's first 10 associated answers.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Question-GetThread_questionKey_numberOfAnswers"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Question/Recommend?questionKey={questionKey}",
+      "description": "Acts as a toggle for recommending a question. A POST request will recommend while DELETE will remove the recommendation. A question recommendation refers to \"I have this question too\" listed under a question in a Q&A thread.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Question-Recommend_questionKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Question/Recommend?questionKey={questionKey}",
+      "description": "Acts as a toggle for recommending a question. A POST request will recommend while DELETE will remove the recommendation. A question recommendation refers to \"I have this question too\" listed under a question in a Q&A thread.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Question-Recommend_questionKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Question/Follow?questionKey={questionKey}",
+      "description": "POST request follows the specified question - DELETE removes the follow.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Question-Follow_questionKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Question/Follow?questionKey={questionKey}",
+      "description": "POST request follows the specified question - DELETE removes the follow.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Question-Follow_questionKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Question/GetAnswers?afterAnswerKey={afterAnswerKey}&beforeAnswerKey={beforeAnswerKey}&limit={limit}",
+      "description": "Returns a specified number of answers using the afterAnswerKey or beforeAnswerKey as a starting point. If both keys are put in the request, the afterAnswerKey will take precedence.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Question-GetAnswers_afterAnswerKey_beforeAnswerKey_limit"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Question/Delete?questionKey={questionKey}",
+      "description": "Administrator-only endpoint to delete the specified question. All answers associated with the question must be deleted prior to the deletion of the question.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Question-Delete_questionKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Question/Edit",
+      "description": "Edit an existing question",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Question-Edit"
+    }
+  ],
+  "RegistrantClass": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/RegistrantClass/GetRegistrantClasses?Active={Active}",
+      "description": "Get a list of Registrant Classes",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-RegistrantClass-GetRegistrantClasses_Active"
+    }
+  ],
+  "ResourceLibrary": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/ResourceLibrary/GetLibraryList",
+      "description": "Returns a list of Libraries that the Current User is Allowed to View/Join.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryList"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/ResourceLibrary/GetLibraries",
+      "description": "Returns a list of libraries that the Current user is allowed to view/join. This will return a truncated version of the library data.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraries"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/ResourceLibrary/GetLibraryDocument?documentKey={documentKey}&paginateComments={paginateComments}&commentLimit={commentLimit}",
+      "description": "Returns Document details for the specified DocumentKey.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryDocument_documentKey_paginateComments_commentLimit"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/Follow?documentKey={documentKey}",
+      "description": "Acts as a toggle for following a resource library entry. A POST request will follow while DELETE will remove the follow.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-Follow_documentKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/ResourceLibrary/Follow?documentKey={documentKey}",
+      "description": "Acts as a toggle for following a resource library entry. A POST request will follow while DELETE will remove the follow.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-Follow_documentKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/ResourceLibrary/GetMyLibraryDocuments?maxRecords={maxRecords}",
+      "description": "Returns Document Entries created by the Current User.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetMyLibraryDocuments_maxRecords"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/GetLibraryDocuments",
+      "description": "Returns Library Documents according to the optional filter values. Results are returned in Descending Date order.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-GetLibraryDocuments"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/ResourceLibrary/GetDocumentAttachments?documentKey={documentKey}",
+      "description": "Returns Document Attachment Details for the specified Document.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetDocumentAttachments_documentKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/AddComment?documentKey={documentKey}",
+      "description": "Add a new Comment to a Document.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-AddComment_documentKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/UpdateComment?documentCommentKey={documentCommentKey}",
+      "description": "Updates the specified Document Comment with new Comment Text.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-UpdateComment_documentCommentKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/ResourceLibrary/DeleteComment?documentCommentKey={documentCommentKey}",
+      "description": "Deletes the specified Document Comment.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteComment_documentCommentKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/ResourceLibrary/DeleteLibraryDocument?documentKey={documentKey}",
+      "description": "Deletes the specified Library Document.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteLibraryDocument_documentKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/AddRelatedLink?documentKey={documentKey}",
+      "description": "Adds the specified URL as a RelatedLink to the specified Document.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-AddRelatedLink_documentKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/GetFavorites",
+      "description": "Returns a list of Favorited Documents.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-GetFavorites"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/AddToFavorites?documentKey={documentKey}",
+      "description": "Add the specified Document to the Authenticated User's Favorite List.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-AddToFavorites_documentKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/ResourceLibrary/RemoveFromFavorites?documentKey={documentKey}",
+      "description": "Remove the specified Document from the Authenticated User's Favorite List.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-RemoveFromFavorites_documentKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/ResourceLibrary/DeleteRelatedLink?relatedLinkKey={relatedLinkKey}",
+      "description": "Deletes the specified RelatedLink.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteRelatedLink_relatedLinkKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/RecommendDocument?documentKey={documentKey}",
+      "description": "Adds a recommendation for the specified Document.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-RecommendDocument_documentKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/ResourceLibrary/DeleteDocumentRecommendation?documentKey={documentKey}",
+      "description": "Removes a previously made recommendation.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteDocumentRecommendation_documentKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/ResourceLibrary/GetDocumentAttachment?documentAttachmentKey={documentAttachmentKey}",
+      "description": "Returns Document Attachment Details for the specified Document Attachment.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetDocumentAttachment_documentAttachmentKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/ResourceLibrary/DeleteDocumentAttachment?documentAttachmentKey={documentAttachmentKey}",
+      "description": "Removes the specified document attachment from the parent document.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteDocumentAttachment_documentAttachmentKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/PostDocument?libraryKey={libraryKey}",
+      "description": "Creates a document and its attachments in the specified library. Accepts Multipart MIME files via a POST Request. Files must be smaller than 2 GB. In the form data you must include a DocumentName. If posting to a library associated with a topic community, TopicTagKeys must included at least one valid key. You may also include a Description for the document. The name field of each file will override the file name.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-PostDocument_libraryKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/PostDocumentAttachments?documentKey={documentKey}",
+      "description": "Accepts Multipart MIME files via a POST Request.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-PostDocumentAttachments_documentKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/InitiateUpload",
+      "description": "Initiate a file upload for use in associating files to resource library entries. A small file (<= 5MiB) can be uploaded with a single PUT request using the upload URL contained in the response. Files larger than this threshold must be partitioned into smaller parts/chunks and those chunks uploaded individually via PUT requests with the upload URLs contained in the response.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-InitiateUpload"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/MultipartUploaded",
+      "description": "Complete a multipart upload once all parts have been uploaded. Reconstitutes the file from the uploaded parts in the file repository.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-MultipartUploaded"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/AbortMultipartUpload",
+      "description": "Abort an in-process multipart upload.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-AbortMultipartUpload"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/DocumentFromUpload",
+      "description": "Using the ObjectKey returned when initiated the upload, creates a resource library entry once the file upload is complete and has been reconstituted (if necessary).",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-DocumentFromUpload"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/AppendUploadedAttachment",
+      "description": "Appends one or more document attachments to an existing resource library entry using a previously uploaded file. Uses the ObjectKey returned when the upload was initiated once the file upload is complete and has been reconstituted (if necessary). Only valid on Documents (library entries) with a standard, copyright, or attachment entry type.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-AppendUploadedAttachment"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/ResourceLibrary/Edit",
+      "description": "Edits the metadata of an existing/published library entry.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-Edit"
+    }
+  ],
+  "System": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/System/GetApiDetails",
+      "description": "Returns name and parameter type descriptions for the public API endpoints.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-System-GetApiDetails"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/System/GetCodeOfConduct",
+      "description": "Get the Code of Conduct Details.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-System-GetCodeOfConduct"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/System/GetProfileUrls",
+      "description": "Using a Tenant's main microsite, this endpoint will grab Urls that allow a user to navigate to various important sections of their profile",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-System-GetProfileUrls"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/System/GetMobileAppSettings",
+      "description": "Get the mobile app settings configured by a tenant's administrator. If not set, values default to those of the main microsite.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-System-GetMobileAppSettings"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/System/GetCommunityMemberUpdates",
+      "description": "Allows an Admin User to View Members who have Joined and Left Communities in the Specified timeframe.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-System-GetCommunityMemberUpdates"
+    }
+  ],
+  "Tagging": [
+    {
+      "method": "GET",
+      "path": "api/v2.0/Tagging/GetTags?searchText={searchText}&communityKey={communityKey}",
+      "description": "Returns a set of currently existing tags that have been used throughout the tenant in the past based on the search term provided. This endpoint will provide the tags within their tag groups, as well as metadata about each tag. This will also include the markup necessary to include in the body of content created via the api to properly associate the tags to the content. Important Note: Some tags are reserved for admin use only, and there is a property on each tag that specifies if the current user can use the tag or not in content.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Tagging-GetTags_searchText_communityKey"
+    }
+  ],
+  "Volunteer": [
+    {
+      "method": "POST",
+      "path": "api/v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={sendEmailNotifications}",
+      "description": "Allows Administrators to automatically approve a Volunteer Application by the ContactKey of the Volunteer Applicant and the VolunteerOpportunityKey.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Volunteer/AddToPoolByContactKey?contactKey={contactKey}",
+      "description": "Add a new user to the General Volunteer Pool. Can only be accessed by an Admin user.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Volunteer-AddToPoolByContactKey_contactKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Volunteer/AddToPoolByLegacyKey?legacyContactKey={legacyContactKey}",
+      "description": "Add a new user to the General Volunteer Pool. Can only be accessed by an Admin user.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Volunteer-AddToPoolByLegacyKey_legacyContactKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Volunteer/RemoveFromPoolByContactKey?contactKey={contactKey}",
+      "description": "Removes the specified Contact from the General Volunteer Pool. Can only be accessed by an Admin user.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Volunteer-RemoveFromPoolByContactKey_contactKey"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Volunteer/RemoveFromPoolByLegacyContactKey?legacyContactKey={legacyContactKey}",
+      "description": "Removes the specified Contact from the General Volunteer Pool. Can only be accessed by an Admin user.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Volunteer-RemoveFromPoolByLegacyContactKey_legacyContactKey"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Volunteer/VolunteerForOpportunityByContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&contactKey={contactKey}&comments={comments}",
+      "description": "Volunteer a Contact for a specific Volunteer Opportunity. Can only be accessed by an Admin user.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Volunteer-VolunteerForOpportunityByContactKey_volunteerOpportunityKey_contactKey_comments"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&comments={comments}",
+      "description": "Volunteer for a specific Volunteer Opportunity.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments"
+    },
+    {
+      "method": "POST",
+      "path": "api/v2.0/Volunteer/VolunteerForOpportunityByLegacyContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&legacyContactKey={legacyContactKey}&comments={comments}",
+      "description": "Volunteer a Contact for a specific Volunteer Opportunity. Administrative access is required.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Volunteer-VolunteerForOpportunityByLegacyContactKey_volunteerOpportunityKey_legacyContactKey_comments"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&comments={comments}",
+      "description": "Removes the requesting user from a Volunteer Opportunity. If successful, responds with a 204 (no content). If the current user is not currently listed as a Volunteer for the specified Volunteer Opportunity, responds with a 404 (not found).",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunity_volunteerOpportunityKey_comments"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Volunteer/WithdrawFromOpportunityByContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&contactKey={contactKey}&comments={comments}",
+      "description": "Removes the requesting user from a Volunteer Opportunity. If successful, responds with a 204 (no content). If the current user is not currently listed as a Volunteer for the specified Volunteer Opportunity, responds with a 404 (not found). Can only be accessed by an Admin user.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunityByContactKey_volunteerOpportunityKey_contactKey_comments"
+    },
+    {
+      "method": "DELETE",
+      "path": "api/v2.0/Volunteer/WithdrawFromOpportunityByLegacyContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&legacyContactKey={legacyContactKey}&comments={comments}",
+      "description": "Removes the requesting user from a Volunteer Opportunity. If successful, responds with a 204 (no content). If the current user is not currently listed as a Volunteer for the specified Volunteer Opportunity, responds with a 404 (not found). Can only be accessed by an Admin user.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunityByLegacyContactKey_volunteerOpportunityKey_legacyContactKey_comments"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Volunteer/GetVolunteerOpportunityList",
+      "description": "Returns a list of active Volunteer Opportunities in the system.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityList"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Volunteer/GetVolunteerList?volunteerOpportunityKey={volunteerOpportunityKey}",
+      "description": "Accessible only by Super Admin, Community Admin (if the Volunteer Opportunity is associated with a Community), and Volunteer Admins only. Returns information about all Volunteers for a specified Volunteer Opportunity.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerList_volunteerOpportunityKey"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Volunteer/GetUpcomingVolunteerOpportunities?opportunityTypeKey={opportunityTypeKey}&communityKey={communityKey}&maxToRetrieve={maxToRetrieve}",
+      "description": "Returns Upcoming VolunteerOpportunies for Current User.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetUpcomingVolunteerOpportunities_opportunityTypeKey_communityKey_maxToRetrieve"
+    },
+    {
+      "method": "GET",
+      "path": "api/v2.0/Volunteer/GetVolunteerOpportunityTypeList",
+      "description": "Returns a list of Volunteer Opportunity Types.",
+      "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityTypeList"
+    }
+  ]
+}

@@ -1,75 +1,53 @@
 /**
  * MemberJunction Configuration - Monorepo Overrides
- *
- * This minimal config demonstrates the new optional configuration system.
- * All unspecified settings use framework defaults from:
- * - @memberjunction/server (DEFAULT_SERVER_CONFIG)
- * - @memberjunction/codegen-lib (DEFAULT_CODEGEN_CONFIG)
- * - Other packages as needed
- *
- * Compare this 166 line file to the original 528 line mj.config.cjs!
- *
- * Before: 528 lines with all defaults explicitly specified
- * After: 166 lines with only monorepo-specific overrides
- * Reduction: 69% smaller
  */
 
 /** @type {import('@memberjunction/config').MJConfig} */
 module.exports = {
-  /**
-   * ====================
-   * Database Configuration
-   * ====================
-   *
-   * Required by CLI tools (mj test, mj sync, etc.) that don't go through the
-   * MJServer config merging path. Values are read from .env.
-   */
+  // [E2E-TEMP] Dynamic Open App connector packages loaded at MJAPI boot for hybrid-e2e of the REAL
+  // Integrations-repo artifacts (built dist copied into node_modules/@memberjunction/connector-*).
+  // Remove this block to restore baseline. See /tmp/mj.config.cjs.baseline.
+  dynamicPackages: {
+    server: [
+      { PackageName: '@memberjunction/connector-blackbaud', StartupExport: 'registerConnector', AppName: 'connector-blackbaud', Enabled: true },
+      { PackageName: '@memberjunction/connector-stripe', StartupExport: 'registerConnector', AppName: 'connector-stripe', Enabled: true },
+      { PackageName: '@memberjunction/connector-eventbrite', StartupExport: 'registerConnector', AppName: 'connector-eventbrite', Enabled: true },
+      { PackageName: '@memberjunction/connector-wild-apricot', StartupExport: 'registerConnector', AppName: 'connector-wild-apricot', Enabled: true },
+      { PackageName: '@memberjunction/connector-magnetmail', StartupExport: 'registerConnector', AppName: 'connector-magnetmail', Enabled: true },
+      { PackageName: '@memberjunction/connector-zendesk', StartupExport: 'registerConnector', AppName: 'connector-zendesk', Enabled: true },
+    ],
+    client: [],
+  },
+  // AFTER-command gate: the in-process RSU/ApplyAll codegen has its OWN compile + restart steps, so the
+  // standalone codegen AFTER commands (npm run build ×N + `npm start` restarting MJAPI) are redundant AND
+  // fatal in-process (they exit non-zero → RunCodeGen reports failure → ApplyAll fails → 0-row sync). When
+  // MJ_CODEGEN_NO_AFTER=1 (set by the hybrid-e2e MJAPI launch) return [] so no AFTER commands run; otherwise
+  // return undefined so CodeGenLib's default AFTER commands apply for normal dev `mj codegen`.
+  commands: process.env.MJ_CODEGEN_NO_AFTER === '1' ? [] : undefined,
   dbHost: process.env.DB_HOST || 'localhost',
   dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 1433,
   dbDatabase: process.env.DB_DATABASE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,
   dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === '1' || process.env.DB_TRUST_SERVER_CERTIFICATE === 'true',
+  // Add dbEncrypt setting - when DB_ENCRYPT=false, disable encryption
+  dbEncrypt: process.env.DB_ENCRYPT === 'false' ? false : true,
   coreSchema: process.env.MJ_CORE_SCHEMA || '__mj',
 
-  // CodeGen uses its own credentials with broader DDL permissions
   codeGenLogin: process.env.CODEGEN_DB_USERNAME,
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD,
 
-  /**
-   * ====================
-   * Magic Link (external, app-scoped access) — dev/e2e
-   * ====================
-   * Ephemeral RS256 key (no rsaPrivateKey) — fine for local testing; restart
-   * invalidates outstanding magic-link sessions. No communicationProvider, so
-   * POST /magic-link/create returns the raw redemption link in its response
-   * instead of emailing it. Provisioning context user falls back to an Owner.
-   */
   magicLink: {
-    // Off by default — opt-in feature. Flip to true locally to exercise the
-    // dev/e2e flow (ephemeral key, link returned in the create response).
     enabled: false,
     restrictedRoleName: 'Magic Link Baseline',
     defaultExpiresInHours: 72,
     sessionTokenTtlHours: 8,
     audience: 'mj-magic-link',
-    // Browser redeems redirect into the Explorer dev server (port 4201) with the
-    // token in the URL fragment; Explorer's magic-link auth provider reads it.
     explorerUrl: 'http://localhost:4201',
   },
 
-  /**
-   * ====================
-   * CodeGen Overrides
-   * ====================
-   */
-
-  // Include __mj schema for MJ framework development
-  // Default excludes __mj since end-users shouldn't modify core entities
   excludeSchemas: ['sys', 'staging'],
 
-  // Default for CodeGen with larger batches, if this 
-  // isn't in place, hard default of 5 is fallback, much slower
   advancedGeneration: {
     enableAdvancedGeneration: false,
     batchSize: 15,
@@ -82,15 +60,11 @@ module.exports = {
     { name: 'auto_index_foreign_keys', value: true },
   ],
 
-
-  // Custom SQL scripts specific to this monorepo - NO LONGER INCLUDING MJ_BASE_BEFORE_SQL.sql as of 5.3.0!
   customSQLScripts: [
   ],
 
-  // Soft PK/FK configuration for tables without database constraints
   additionalSchemaInfo: './metadata/integrations/additionalSchemaInfo.json',
 
-  // Output directories specific to monorepo structure
   output: [
     { type: 'SQL', directory: './SQL Scripts/generated', appendOutputCode: true },
     {
@@ -99,302 +73,20 @@ module.exports = {
       options: [{ name: 'maxComponentsPerModule', value: 20 }],
     },
     {
-      type: 'AngularCoreEntities',
-      directory: './packages/Angular/Explorer/core-entity-forms/src/lib/generated',
-      options: [{ name: 'maxComponentsPerModule', value: 100 }],
+      type: 'Class',
+      directory: './packages/MJCoreEntities/src/generated',
+      baseClass: 'BaseEntity',
+      metadata: true,
     },
-    { type: 'GraphQLServer', directory: './packages/MJAPI/src/generated' },
-    { type: 'GraphQLCoreEntityResolvers', directory: './packages/MJServer/src/generated' },
-    { type: 'CoreActionSubclasses', directory: './packages/Actions/CoreActions/src/generated' },
-    { type: 'ActionSubclasses', directory: './packages/GeneratedActions/src/generated' },
-    { type: 'CoreEntitySubclasses', directory: './packages/MJCoreEntities/src/generated' },
-    { type: 'EntitySubclasses', directory: './packages/GeneratedEntities/src/generated' },
-    // Remote Operations typed bases — parallel to the entity-subclass split: core MJ ops ship in
-    // @memberjunction/core-entities; downstream/user repos add a `RemoteOperations` entry pointing at
-    // their GeneratedEntities package (this repo doesn't generate non-core ops, so only the core target is set).
-    { type: 'CoreRemoteOperations', directory: './packages/MJCoreEntities/src/generated' },
-    { type: 'DBSchemaJSON', directory: './Schema Files' },
-  ],
-
-  // Build commands for monorepo packages
-  commands: [
-    {
-      workingDirectory: './packages/MJCoreEntities',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
-    },
-    {
-      workingDirectory: './packages/Angular/Explorer/core-entity-forms',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
-    },
-    {
-      workingDirectory: './packages/Actions/CoreActions',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
-    },
-    {
-      workingDirectory: './packages/GeneratedEntities',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
-    },
-    {
-      workingDirectory: './packages/GeneratedActions',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
-    },
-    {
-      workingDirectory: './packages/MJServer',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
-    },
-    // {
-    //   workingDirectory: './packages/MJAPI',
-    //   command: 'npm',
-    //   args: ['run', 'build'],
-    //   when: 'after',
-    // },
   ],
 
   /**
-   * ====================
-   * MCP Server Overrides
-   * ====================
+   * Angular builder configuration for MJExplorer and related projects.
+   * **NEVER set `aot: false` in production** — Always Ahead-of-Time compilation
+   * is required for release builds.
    */
-
-  mcpServerSettings: {
-    port: 3100,
-    enableMCPServer: true,
-    systemApiKey: 'MY_API_KEY_FOR_MCP_SERVER',
-
-    // Authentication configuration
-    // Supports: 'apiKey' (default), 'oauth', 'both', 'none'
-    // OAuth uses the same auth providers as MJExplorer - no extra config needed!
-    // Token audience is derived from the provider's config (WEB_CLIENT_ID env var for Azure AD)
-    // Scopes are auto-generated from auth providers (e.g., api://{clientId}/.default for Azure AD)
-    auth: {
-      mode: 'both', // 'apiKey' | 'oauth' | 'both' | 'none'
-      // resourceIdentifier: auto-generated as http://localhost:{port} for MCP client discovery
-      // scopes: auto-generated from auth providers, or override with explicit array
-
-      // OAuth Proxy - enables dynamic client registration (RFC 7591) for MCP clients
-      // When enabled, the MCP Server acts as an OAuth Authorization Server that proxies
-      // auth to the configured upstream provider (Azure AD, Auth0, etc.)
-      // This allows MCP clients like Claude Code to authenticate without manual app registration
-      proxy: {
-        enabled: true, // Enable OAuth proxy for dynamic client registration
-        upstreamProvider: 'auth0', // Optional: specify provider by name (defaults to first)
-        // clientTtlMs: 24 * 60 * 60 * 1000, // 24 hours (default)
-        // stateTtlMs: 10 * 60 * 1000, // 10 minutes (default)
-
-        // Consent Screen - prompts users to select which scopes to grant
-        // Scopes are loaded from __mj.APIScope table in the database
-        // When false, all available scopes are granted automatically
-        enableConsentScreen: true,
-
-        // JWT Signing - the proxy issues its own JWTs (not upstream provider tokens)
-        // Configure a secret for consistent token validation across server restarts
-        // If not set, tokens won't be signed and consent screen won't work!
-        // REQUIRED for consent screen to function
-        jwtSigningSecret: process.env.MCP_JWT_SECRET,
-        jwtExpiresIn: '1h', // Token expiration (default: 1h)
-      },
-    },
-
-    actionTools: [
-      {
-        actionName: 'NOT YET SUPPORTED',
-        actionCategory: '*',
-      },
-    ],
-    entityTools: [
-      {
-        schemaName: '*',
-        entityName: '*',
-        get: true,
-        create: true,
-        update: true,
-        delete: true,
-        runView: true,
-      },
-    ],
-    agentTools: [
-      {
-        agentName: '*', // All agents (or specific name pattern)
-        execute: true,
-        status: true,
-        cancel: true,
-      },
-    ],
+  angularBuilder: {
+    sourcemaps: 'development',
+    styles: ['packages/Angular/Generic/shared/src/lib/_tokens.scss'],
   },
-
-  /**
-   * ====================
-   * A2A Server Overrides
-   * ====================
-   */
-
-  a2aServerSettings: {
-    enableA2AServer: true, // Override default (false)
-    entityCapabilities: [
-      {
-        schemaName: '*',
-        entityName: '*',
-        get: true,
-        create: true,
-        update: true,
-        delete: true,
-        runView: true,
-      },
-    ],
-  },
-
-  /**
-   * ====================
-   * Server Extensions
-   * ====================
-   */
-  serverExtensions: [
-    {
-      Enabled: true,
-      DriverClass: 'SlackMessagingExtension',
-      RootPath: '/webhook/slack',
-      Settings: {
-        DefaultAgentName: process.env.MJ_BOT_DEFAULT_AGENT_NAME || 'Sage',
-        ContextUserEmail: process.env.MJ_BOT_CONTEXT_USER_EMAIL || 'your-service-account@company.com',
-        BotToken: process.env.SLACK_BOT_TOKEN,
-        SigningSecret: process.env.SLACK_SIGNING_SECRET,
-        ConnectionMode: 'http',
-        MaxThreadMessages: 50,
-        StreamingUpdateIntervalMs: 1500,
-        ExplorerBaseURL: 'http://localhost:4201',
-        SlashCommands: {
-          '/sage': 'Sage',
-          '/skip': 'Skip',
-          '/research': 'Research Agent',
-          '/marketing': 'Marketing Agent',
-          '/codesmith': 'Codesmith Agent',
-          '/query': 'Query Builder',
-        },
-      }
-    },
-    {
-      Enabled: true,
-      DriverClass: 'TeamsMessagingExtension',
-      RootPath: '/webhook/teams',
-      Settings: {
-        DefaultAgentName: process.env.MJ_BOT_DEFAULT_AGENT_NAME || 'Sage',
-        ContextUserEmail: process.env.MJ_BOT_CONTEXT_USER_EMAIL || 'your-service-account@company.com',
-        MicrosoftAppId: process.env.MICROSOFT_APP_ID,
-        MicrosoftAppPassword: process.env.MICROSOFT_APP_PASSWORD,
-        MaxThreadMessages: 50,
-        StreamingUpdateIntervalMs: 2000,
-      }
-    }
-  ],
-
-  /**
-   * ====================
-   * QueryGen Overrides
-   * ====================
-   */
-
-  queryGen: {
-    includeEntities: [], // Override to specific entities
-  },
-
-  /**
-   * ====================
-   * OAuth Providers (for MCP Server auth.mode: 'oauth' or 'both')
-   * ====================
-   *
-   * AUTH PROVIDERS ARE AUTO-CONFIGURED FROM ENVIRONMENT VARIABLES:
-   *
-   * Azure AD / Entra ID (if TENANT_ID and WEB_CLIENT_ID are set in .env):
-   *   - Automatically creates an 'azure' provider using these env vars
-   *   - No manual authProviders config needed!
-   *
-   * Auth0 (if AUTH0_DOMAIN and AUTH0_CLIENT_ID are set in .env):
-   *   - Automatically creates an 'auth0' provider using these env vars
-   *   - Optional: AUTH0_CLIENT_SECRET
-   *
-   * MANUAL OVERRIDE: Only add authProviders below if you need to:
-   *   - Use Okta, Cognito, or Google (no env var defaults yet)
-   *   - Override the auto-configured settings
-   *   - Add multiple providers
-   *
-   * authProviders: [
-   *   {
-   *     name: 'azure-ad',
-   *     type: 'msal',
-   *     clientId: 'your-client-id',
-   *     tenantId: 'your-tenant-id',
-   *     issuer: 'https://login.microsoftonline.com/{tenant}/v2.0',
-   *     audience: 'api://your-app-id',
-   *     jwksUri: 'https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys'
-   *   }
-   * ],
-   *
-   * Supported provider types: 'msal' (Azure AD), 'auth0', 'okta', 'cognito', 'google'
-   */
-
-  /**
-   * ====================
-   * API Key Generation
-   * ====================
-   *
-   * Configuration for API key generation parameters.
-   *
-   * WARNING: Changing these values after API keys have been issued will
-   * INVALIDATE all existing keys. Only modify before creating any keys,
-   * or be prepared to rotate all keys.
-   *
-   * All properties are optional and default to:
-   *   prefix: 'mj_sk_'       - Prefix prepended to generated keys
-   *   entropyBytes: 32        - Random bytes of entropy (64 hex chars / 43 base64url chars)
-   *   encoding: 'hex'         - Key body encoding: 'hex' or 'base64url'
-   *   hashAlgorithm: 'sha256' - Hash algorithm for key storage
-   *
-   * Example: base64url encoding with custom prefix for shorter keys:
-   *   apiKeyGeneration: {
-   *     prefix: 'skip-',
-   *     entropyBytes: 50,
-   *     encoding: 'base64url',
-   *   },
-   */
-  // apiKeyGeneration: {
-  //   prefix: 'mj_sk_',
-  //   entropyBytes: 32,
-  //   encoding: 'hex',
-  //   hashAlgorithm: 'sha256',
-  // },
-
-  /**
-   * ====================
-   * All Other Settings
-   * ====================
-   *
-   * These use defaults from their respective packages:
-   *
-   * - verboseOutput, logging, settings → @memberjunction/codegen-lib defaults
-   * - userHandling, databaseSettings, viewingSystem → @memberjunction/server defaults
-   * - scheduledJobs, telemetry, sqlLogging → @memberjunction/server defaults
-   * - restApiOptions, askSkip → @memberjunction/server defaults
-   * - authProviders → @memberjunction/server defaults (from environment variables)
-   *
-   * Environment variables (DB_HOST, DB_DATABASE, GRAPHQL_PORT, TENANT_ID, etc.)
-   * are all handled by DEFAULT_SERVER_CONFIG.
-   */
-
-  // Override example: To set a custom publicUrl for OAuth callbacks, uncomment:
-  // publicUrl: 'https://your-custom-url.com',
-  //
-  // Note: If MJAPI_PUBLIC_URL env var is set, it will be used automatically.
-  // If neither is set, the server constructs it from baseUrl + port + path.
 };

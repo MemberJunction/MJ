@@ -1,0 +1,570 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "samples": [
+          {
+            "schema": "TicketObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": true
+          },
+          {
+            "schema": "UserObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": true
+          },
+          {
+            "schema": "OrganizationObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": null
+          },
+          {
+            "schema": "GroupObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": true
+          }
+        ],
+        "consistent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.universalPK"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "cursorParamName": "page",
+        "cursorParamStyle": "deepObject",
+        "cursorProperties": [
+          "after",
+          "before",
+          "size"
+        ],
+        "dualParamOneOfCount": 2,
+        "cursorMetaLinksProps": [
+          "next",
+          "prev"
+        ],
+        "cursorMetaMetaProps": [
+          "after_cursor",
+          "before_cursor",
+          "has_more"
+        ],
+        "offsetObjectProps": [
+          "count",
+          "next_page",
+          "previous_page"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PaginationDefaults"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "seedParamName": "start_time",
+        "seedParamDescription": "The time to start the incremental export from. Must be at least one minute in the past. Data isn't provided for the most recent minute. Required on the initial export request; not required on subsequent cursor-based pagination requests",
+        "continuationParamName": "cursor",
+        "cursorResponseProps": [
+          "after_cursor",
+          "after_url",
+          "before_cursor",
+          "before_url",
+          "end_of_stream",
+          "tickets"
+        ],
+        "timeResponseProps": [
+          "count",
+          "end_of_stream",
+          "end_time",
+          "next_page",
+          "tickets"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "errorRequiredFields": [
+          "code",
+          "title"
+        ],
+        "errorsWrapperProps": [
+          "errors"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ErrorResponseShape"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "manyEndpointCount": 46,
+        "sampleManyEndpoints": [
+          "/api/v2/automations/destroy_many",
+          "/api/v2/automations/update_many",
+          "/api/v2/custom_objects/{custom_object_key}/triggers/destroy_many",
+          "/api/v2/custom_objects/{custom_object_key}/triggers/update_many",
+          "/api/v2/deleted_tickets/destroy_many",
+          "/api/v2/deleted_tickets/restore_many",
+          "/api/v2/dynamic_content/items/{dynamic_content_item_id}/variants/create_many",
+          "/api/v2/dynamic_content/items/{dynamic_content_item_id}/variants/update_many",
+          "/api/v2/dynamic_content/items/show_many",
+          "/api/v2/email_notifications/show_many"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.BulkOperationsAvailable"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "ticketFieldRemovableDescription": "If false, this field is a system field that must be present on all tickets"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.CustomFieldMarkerPattern"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.mjs",
+      "ScriptRunAt": "2026-07-04T01:15:38.013Z",
+      "StructuredOutput": {
+        "amendment": "round1",
+        "field": "users.default_group_id",
+        "resolvedFK": "groups",
+        "motif": "desc-motif (self-alias user skipped)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.users.default_group_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "rename",
+        "slot": "IncrementalWatermarkField",
+        "before": "created_at",
+        "after": "time"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.ticket_events.IncrementalWatermarkField",
+      "Excerpt": "sources/ticketing-oas.json: TicketMetricEventBaseObject.properties has {deleted,id,instance_id,metric,ticket_id,time,type} — no created_at; ExportIncrementalTicketEventsResponse.ticket_events wraps this schema; sibling ticket_metric_events already uses 'time'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "rename",
+        "slot": "StableOrderingKey",
+        "before": "id",
+        "after": "key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.custom_objects.StableOrderingKey",
+      "Excerpt": "metadata: custom_objects has no 'id' field; 'key' is IsPrimaryKey=true (Zendesk Custom Objects are keyed by 'key')."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "rename",
+        "slot": "StableOrderingKey",
+        "before": "id",
+        "after": "email_id"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_notifications.StableOrderingKey",
+      "Excerpt": "metadata: email_notifications has no 'id' field; 'email_id' is IsPrimaryKey=true."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "rename",
+        "slot": "StableOrderingKey",
+        "before": "id",
+        "after": "category"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.macro_categories.StableOrderingKey",
+      "Excerpt": "metadata: macro_categories' only field is 'category' (IsPrimaryKey=true); sources/ticketing-oas.json MacroCategoriesResponse.categories is array of type:string (no id)."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "rename",
+        "slot": "StableOrderingKey",
+        "before": "id",
+        "after": "name"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tags.StableOrderingKey",
+      "Excerpt": "metadata: tags' fields are count/name (name IsPrimaryKey=true); sources/ticketing-oas.json TagListTagObject has no id property."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "rename",
+        "slot": "StableOrderingKey",
+        "before": "id",
+        "after": "view_id"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.view_counts.StableOrderingKey",
+      "Excerpt": "metadata: view_counts has no 'id' field; 'view_id' is IsPrimaryKey=true."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedules",
+        "field": "name",
+        "type": "string"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedules.name.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Schedule field 'name'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedules",
+        "field": "time_zone",
+        "type": "string"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedules.time_zone.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Schedule field 'time_zone'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedules",
+        "field": "intervals",
+        "type": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedules.intervals.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Schedule field 'intervals'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedules",
+        "field": "created_at",
+        "type": "datetime"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedules.created_at.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Schedule field 'created_at'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedules",
+        "field": "updated_at",
+        "type": "datetime"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedules.updated_at.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Schedule field 'updated_at'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedule_holidays",
+        "field": "name",
+        "type": "string"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedule_holidays.name.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Holiday field 'name'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedule_holidays",
+        "field": "start_date",
+        "type": "date"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedule_holidays.start_date.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Holiday field 'start_date'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:00:48.394Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedule_holidays",
+        "field": "end_date",
+        "type": "date"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedule_holidays.end_date.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Holiday field 'end_date'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "rename",
+        "slot": "IncrementalWatermarkField",
+        "before": "created_at",
+        "after": "time"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.ticket_events.IncrementalWatermarkField",
+      "Excerpt": "sources/ticketing-oas.json: TicketMetricEventBaseObject.properties has {deleted,id,instance_id,metric,ticket_id,time,type} — no created_at; ExportIncrementalTicketEventsResponse.ticket_events wraps this schema; sibling ticket_metric_events already uses 'time'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "rename",
+        "slot": "StableOrderingKey",
+        "before": "id",
+        "after": "key"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.custom_objects.StableOrderingKey",
+      "Excerpt": "metadata: custom_objects has no 'id' field; 'key' is IsPrimaryKey=true (Zendesk Custom Objects are keyed by 'key')."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "rename",
+        "slot": "StableOrderingKey",
+        "before": "id",
+        "after": "email_id"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_notifications.StableOrderingKey",
+      "Excerpt": "metadata: email_notifications has no 'id' field; 'email_id' is IsPrimaryKey=true."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "rename",
+        "slot": "StableOrderingKey",
+        "before": "id",
+        "after": "category"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.macro_categories.StableOrderingKey",
+      "Excerpt": "metadata: macro_categories' only field is 'category' (IsPrimaryKey=true); sources/ticketing-oas.json MacroCategoriesResponse.categories is array of type:string (no id)."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "rename",
+        "slot": "StableOrderingKey",
+        "before": "id",
+        "after": "name"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tags.StableOrderingKey",
+      "Excerpt": "metadata: tags' fields are count/name (name IsPrimaryKey=true); sources/ticketing-oas.json TagListTagObject has no id property."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "rename",
+        "slot": "StableOrderingKey",
+        "before": "id",
+        "after": "view_id"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.view_counts.StableOrderingKey",
+      "Excerpt": "metadata: view_counts has no 'id' field; 'view_id' is IsPrimaryKey=true."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedules",
+        "field": "name",
+        "type": "string"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedules.name.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Schedule field 'name'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedules",
+        "field": "time_zone",
+        "type": "string"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedules.time_zone.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Schedule field 'time_zone'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedules",
+        "field": "intervals",
+        "type": "json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedules.intervals.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Schedule field 'intervals'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedules",
+        "field": "created_at",
+        "type": "datetime"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedules.created_at.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Schedule field 'created_at'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedules",
+        "field": "updated_at",
+        "type": "datetime"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedules.updated_at.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Schedule field 'updated_at'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedule_holidays",
+        "field": "name",
+        "type": "string"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedule_holidays.name.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Holiday field 'name'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedule_holidays",
+        "field": "start_date",
+        "type": "date"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedule_holidays.start_date.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Holiday field 'start_date'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round3.mjs",
+      "ScriptRunAt": "2026-07-04T04:01:09.890Z",
+      "StructuredOutput": {
+        "operation": "add-field",
+        "object": "schedule_holidays",
+        "field": "end_date",
+        "type": "date"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.schedule_holidays.end_date.Name",
+      "Excerpt": "Tier-1 doc page https://developer.zendesk.com/api-reference/ticketing/ticket-management/schedules/ documents Holiday field 'end_date'."
+    },
+    {
+      "ScriptPath": "scripts/amend-round4.mjs",
+      "ScriptRunAt": "2026-07-04T04:53:55.038Z",
+      "StructuredOutput": {
+        "operation": "pagination-correct",
+        "object": "help_center_categories",
+        "PaginationType": "None",
+        "SupportsPagination": false,
+        "DefaultPageSize": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "io.help_center_categories.PaginationType",
+        "io.help_center_categories.SupportsPagination",
+        "io.help_center_categories.DefaultPageSize"
+      ],
+      "Excerpt": "sources/helpcenter-oas.json: GET /api/v2/help_center/categories has no page/cursor param; true siblings /help_center/sections and /help_center/articles are unpaginated and correctly marked None. Zero evidence for Cursor; contradicted by the same OAS."
+    },
+    {
+      "ScriptPath": "scripts/amend-round4.mjs",
+      "ScriptRunAt": "2026-07-04T04:53:55.038Z",
+      "StructuredOutput": {
+        "operation": "pagination-correct",
+        "object": "article_comments",
+        "PaginationType": "None",
+        "SupportsPagination": false,
+        "DefaultPageSize": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "io.article_comments.PaginationType",
+        "io.article_comments.SupportsPagination",
+        "io.article_comments.DefaultPageSize"
+      ],
+      "Excerpt": "sources/helpcenter-oas.json: GET .../articles/{article_id}/comments has parameters=[] and no pagination response metadata. Same defect class."
+    },
+    {
+      "ScriptPath": "scripts/amend-round4.mjs",
+      "ScriptRunAt": "2026-07-04T04:53:55.038Z",
+      "StructuredOutput": {
+        "operation": "pagination-correct",
+        "object": "post_comments",
+        "PaginationType": "None",
+        "SupportsPagination": false,
+        "DefaultPageSize": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "io.post_comments.PaginationType",
+        "io.post_comments.SupportsPagination",
+        "io.post_comments.DefaultPageSize"
+      ],
+      "Excerpt": "sources/helpcenter-oas.json: GET .../posts/{post_id}/comments has parameters=[] and no pagination response metadata. Same defect class."
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "samples": [
+          {
+            "schema": "TicketObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": true
+          },
+          {
+            "schema": "UserObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": true
+          },
+          {
+            "schema": "OrganizationObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": null
+          },
+          {
+            "schema": "GroupObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": true
+          }
+        ],
+        "consistent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.universalPK"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "cursorParamName": "page",
+        "cursorParamStyle": "deepObject",
+        "cursorProperties": [
+          "after",
+          "before",
+          "size"
+        ],
+        "dualParamOneOfCount": 2,
+        "cursorMetaLinksProps": [
+          "next",
+          "prev"
+        ],
+        "cursorMetaMetaProps": [
+          "after_cursor",
+          "before_cursor",
+          "has_more"
+        ],
+        "offsetObjectProps": [
+          "count",
+          "next_page",
+          "previous_page"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PaginationDefaults"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "seedParamName": "start_time",
+        "seedParamDescription": "The time to start the incremental export from. Must be at least one minute in the past. Data isn't provided for the most recent minute. Required on the initial export request; not required on subsequent cursor-based pagination requests",
+        "continuationParamName": "cursor",
+        "cursorResponseProps": [
+          "after_cursor",
+          "after_url",
+          "before_cursor",
+          "before_url",
+          "end_of_stream",
+          "tickets"
+        ],
+        "timeResponseProps": [
+          "count",
+          "end_of_stream",
+          "end_time",
+          "next_page",
+          "tickets"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "errorRequiredFields": [
+          "code",
+          "title"
+        ],
+        "errorsWrapperProps": [
+          "errors"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ErrorResponseShape"
+    }
+  ]
+}

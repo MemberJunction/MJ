@@ -1,0 +1,39 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-03T23:45:00.000Z",
+      "StructuredOutput": {
+        "samples": [
+          {
+            "schema": "TicketObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": true
+          },
+          {
+            "schema": "UserObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": true
+          },
+          {
+            "schema": "OrganizationObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": null
+          },
+          {
+            "schema": "GroupObject",
+            "idType": "integer",
+            "idFormat": "int64",
+            "readOnly": true
+          }
+        ],
+        "consistent": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.universalPK"
+    }
+  ]
+}

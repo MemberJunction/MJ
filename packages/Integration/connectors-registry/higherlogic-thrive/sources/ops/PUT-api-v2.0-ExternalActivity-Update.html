@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>PUT api/v2.0/ExternalActivity/Update</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>PUT api/v2.0/ExternalActivity/Update</h1>
+<div>
+    <p></p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+<a href="/Help/ResourceModel?modelName=ExternalActivity">ExternalActivity</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">ExternalActivityKey</td>
+                    <td class="parameter-documentation">
+                        <p>The UniqueIdentifier for the External Activity Record.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ExternalActivityTypeKey</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. Uniqueidentifier. Our key to the type. Required unless LegacyActivityTypeKey is supplied.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LegacyActivityTypeKey</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. Nvarchar(100). The caller’s key to the type. Required unless ActivityTypeKey is supplied.  If supplied, used to lookup ActivityTypeKey in ActivityTypeRef.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. Uniqueidentifier. Our key to the contact affected. Required unless LegacyContactKey is supplied.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LegacyContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. Nvarchar(100). The caller’s key to the contact affected. Required unless ContactKey is supplied.  If supplied, used to lookup ContactKey in Contact.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ActivityDateTime</td>
+                    <td class="parameter-documentation">
+                        <p>Required. Datetime.  The date and time the activity occurred.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ActivityTitle</td>
+                    <td class="parameter-documentation">
+                        <p>Required. nvarchar(500). The title of the activity.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ActivityDetails</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. nvarchar(max). Any details the caller wants to include to describe the activity.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ActivityUrl</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. nvarchar(500). An absolute URL linking to the caller’s view of the activity</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LegacyActivityKey</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. nvarchar(100).The caller’s key to the activity.  Used for future updates and deletes.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Date1</td>
+                    <td class="parameter-documentation">
+                        <p>Optional.  Datetime. A date and time that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Date2</td>
+                    <td class="parameter-documentation">
+                        <p>Optional.  Datetime. A date and time that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Date3</td>
+                    <td class="parameter-documentation">
+                        <p>Optional.  Datetime. A date and time that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Number1</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. decimal(12,2). A numeric value that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        decimal number
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Number2</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. decimal(12,2). A numeric value that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        decimal number
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Number3</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. decimal(12,2). A numeric value that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        decimal number
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Text1</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. nvarchar(max). A string value that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Text2</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. nvarchar(max). A string value that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Text3</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. nvarchar(max). A string value that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Request Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;ExternalActivityKey&quot;: &quot;268be9e1-fffc-465f-8722-7819a9929e11&quot;,
+  &quot;ExternalActivityTypeKey&quot;: &quot;71350d75-0fc3-4066-9145-37d16714ab39&quot;,
+  &quot;LegacyActivityTypeKey&quot;: &quot;sample string 3&quot;,
+  &quot;ContactKey&quot;: &quot;6938ebeb-5089-4a5f-b02d-b15f50afff01&quot;,
+  &quot;LegacyContactKey&quot;: &quot;sample string 4&quot;,
+  &quot;ActivityDateTime&quot;: &quot;2026-07-08T17:53:37.449777Z&quot;,
+  &quot;ActivityTitle&quot;: &quot;sample string 6&quot;,
+  &quot;ActivityDetails&quot;: &quot;sample string 7&quot;,
+  &quot;ActivityUrl&quot;: &quot;sample string 8&quot;,
+  &quot;LegacyActivityKey&quot;: &quot;sample string 9&quot;,
+  &quot;Date1&quot;: &quot;2026-07-08T17:53:37.449777Z&quot;,
+  &quot;Date2&quot;: &quot;2026-07-08T17:53:37.449777Z&quot;,
+  &quot;Date3&quot;: &quot;2026-07-08T17:53:37.449777Z&quot;,
+  &quot;Number1&quot;: 1.0,
+  &quot;Number2&quot;: 1.0,
+  &quot;Number3&quot;: 1.0,
+  &quot;Text1&quot;: &quot;sample string 10&quot;,
+  &quot;Text2&quot;: &quot;sample string 11&quot;,
+  &quot;Text3&quot;: &quot;sample string 12&quot;
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ExternalActivity xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.ExternalActivity&quot;&gt;
+  &lt;ActivityDateTime&gt;2026-07-08T13:53:37.449777-04:00&lt;/ActivityDateTime&gt;
+  &lt;ActivityDetails&gt;sample string 7&lt;/ActivityDetails&gt;
+  &lt;ActivityTitle&gt;sample string 6&lt;/ActivityTitle&gt;
+  &lt;ActivityUrl&gt;sample string 8&lt;/ActivityUrl&gt;
+  &lt;ContactKey&gt;6938ebeb-5089-4a5f-b02d-b15f50afff01&lt;/ContactKey&gt;
+  &lt;Date1&gt;2026-07-08T13:53:37.449777-04:00&lt;/Date1&gt;
+  &lt;Date2&gt;2026-07-08T13:53:37.449777-04:00&lt;/Date2&gt;
+  &lt;Date3&gt;2026-07-08T13:53:37.449777-04:00&lt;/Date3&gt;
+  &lt;ExternalActivityKey&gt;268be9e1-fffc-465f-8722-7819a9929e11&lt;/ExternalActivityKey&gt;
+  &lt;ExternalActivityTypeKey&gt;71350d75-0fc3-4066-9145-37d16714ab39&lt;/ExternalActivityTypeKey&gt;
+  &lt;LegacyActivityKey&gt;sample string 9&lt;/LegacyActivityKey&gt;
+  &lt;LegacyActivityTypeKey&gt;sample string 3&lt;/LegacyActivityTypeKey&gt;
+  &lt;LegacyContactKey&gt;sample string 4&lt;/LegacyContactKey&gt;
+  &lt;Number1&gt;1&lt;/Number1&gt;
+  &lt;Number2&gt;1&lt;/Number2&gt;
+  &lt;Number3&gt;1&lt;/Number3&gt;
+  &lt;Text1&gt;sample string 10&lt;/Text1&gt;
+  &lt;Text2&gt;sample string 11&lt;/Text2&gt;
+  &lt;Text3&gt;sample string 12&lt;/Text3&gt;
+&lt;/ExternalActivity&gt;
+</pre>
+        </div>
+</div>
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p></p>
+
+<a href="/Help/ResourceModel?modelName=ExternalActivity">ExternalActivity</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">ExternalActivityKey</td>
+                    <td class="parameter-documentation">
+                        <p>The UniqueIdentifier for the External Activity Record.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ExternalActivityTypeKey</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. Uniqueidentifier. Our key to the type. Required unless LegacyActivityTypeKey is supplied.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LegacyActivityTypeKey</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. Nvarchar(100). The caller’s key to the type. Required unless ActivityTypeKey is supplied.  If supplied, used to lookup ActivityTypeKey in ActivityTypeRef.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. Uniqueidentifier. Our key to the contact affected. Required unless LegacyContactKey is supplied.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LegacyContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. Nvarchar(100). The caller’s key to the contact affected. Required unless ContactKey is supplied.  If supplied, used to lookup ContactKey in Contact.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ActivityDateTime</td>
+                    <td class="parameter-documentation">
+                        <p>Required. Datetime.  The date and time the activity occurred.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ActivityTitle</td>
+                    <td class="parameter-documentation">
+                        <p>Required. nvarchar(500). The title of the activity.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ActivityDetails</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. nvarchar(max). Any details the caller wants to include to describe the activity.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ActivityUrl</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. nvarchar(500). An absolute URL linking to the caller’s view of the activity</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LegacyActivityKey</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. nvarchar(100).The caller’s key to the activity.  Used for future updates and deletes.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Date1</td>
+                    <td class="parameter-documentation">
+                        <p>Optional.  Datetime. A date and time that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Date2</td>
+                    <td class="parameter-documentation">
+                        <p>Optional.  Datetime. A date and time that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Date3</td>
+                    <td class="parameter-documentation">
+                        <p>Optional.  Datetime. A date and time that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Number1</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. decimal(12,2). A numeric value that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        decimal number
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Number2</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. decimal(12,2). A numeric value that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        decimal number
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Number3</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. decimal(12,2). A numeric value that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        decimal number
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Text1</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. nvarchar(max). A string value that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Text2</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. nvarchar(max). A string value that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Text3</td>
+                    <td class="parameter-documentation">
+                        <p>Optional. nvarchar(max). A string value that is associated with the activity and defined by the type.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;ExternalActivityKey&quot;: &quot;92c051bf-9232-4721-a0fa-70379420ee87&quot;,
+  &quot;ExternalActivityTypeKey&quot;: &quot;01723581-8517-42f3-a0fc-81a9a1bdba1b&quot;,
+  &quot;LegacyActivityTypeKey&quot;: &quot;sample string 3&quot;,
+  &quot;ContactKey&quot;: &quot;2b85edc6-5cc4-4659-9718-facef9acaf2f&quot;,
+  &quot;LegacyContactKey&quot;: &quot;sample string 4&quot;,
+  &quot;ActivityDateTime&quot;: &quot;2026-07-08T17:53:37.449777Z&quot;,
+  &quot;ActivityTitle&quot;: &quot;sample string 6&quot;,
+  &quot;ActivityDetails&quot;: &quot;sample string 7&quot;,
+  &quot;ActivityUrl&quot;: &quot;sample string 8&quot;,
+  &quot;LegacyActivityKey&quot;: &quot;sample string 9&quot;,
+  &quot;Date1&quot;: &quot;2026-07-08T17:53:37.449777Z&quot;,
+  &quot;Date2&quot;: &quot;2026-07-08T17:53:37.449777Z&quot;,
+  &quot;Date3&quot;: &quot;2026-07-08T17:53:37.449777Z&quot;,
+  &quot;Number1&quot;: 1.0,
+  &quot;Number2&quot;: 1.0,
+  &quot;Number3&quot;: 1.0,
+  &quot;Text1&quot;: &quot;sample string 10&quot;,
+  &quot;Text2&quot;: &quot;sample string 11&quot;,
+  &quot;Text3&quot;: &quot;sample string 12&quot;
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ExternalActivity xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.ExternalActivity&quot;&gt;
+  &lt;ActivityDateTime&gt;2026-07-08T13:53:37.449777-04:00&lt;/ActivityDateTime&gt;
+  &lt;ActivityDetails&gt;sample string 7&lt;/ActivityDetails&gt;
+  &lt;ActivityTitle&gt;sample string 6&lt;/ActivityTitle&gt;
+  &lt;ActivityUrl&gt;sample string 8&lt;/ActivityUrl&gt;
+  &lt;ContactKey&gt;2b85edc6-5cc4-4659-9718-facef9acaf2f&lt;/ContactKey&gt;
+  &lt;Date1&gt;2026-07-08T13:53:37.449777-04:00&lt;/Date1&gt;
+  &lt;Date2&gt;2026-07-08T13:53:37.449777-04:00&lt;/Date2&gt;
+  &lt;Date3&gt;2026-07-08T13:53:37.449777-04:00&lt;/Date3&gt;
+  &lt;ExternalActivityKey&gt;92c051bf-9232-4721-a0fa-70379420ee87&lt;/ExternalActivityKey&gt;
+  &lt;ExternalActivityTypeKey&gt;01723581-8517-42f3-a0fc-81a9a1bdba1b&lt;/ExternalActivityTypeKey&gt;
+  &lt;LegacyActivityKey&gt;sample string 9&lt;/LegacyActivityKey&gt;
+  &lt;LegacyActivityTypeKey&gt;sample string 3&lt;/LegacyActivityTypeKey&gt;
+  &lt;LegacyContactKey&gt;sample string 4&lt;/LegacyContactKey&gt;
+  &lt;Number1&gt;1&lt;/Number1&gt;
+  &lt;Number2&gt;1&lt;/Number2&gt;
+  &lt;Number3&gt;1&lt;/Number3&gt;
+  &lt;Text1&gt;sample string 10&lt;/Text1&gt;
+  &lt;Text2&gt;sample string 11&lt;/Text2&gt;
+  &lt;Text3&gt;sample string 12&lt;/Text3&gt;
+&lt;/ExternalActivity&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/System/GetCommunityMemberUpdates</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/System/GetCommunityMemberUpdates</h1>
+<div>
+    <p>Allows an Admin User to View Members who have Joined and Left Communities in the Specified timeframe.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+<a href="/Help/ResourceModel?modelName=ContactCommunityRequest">ContactCommunityRequest</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">StartDate</td>
+                    <td class="parameter-documentation">
+                        <p>Earliest date to consider.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EndDate</td>
+                    <td class="parameter-documentation">
+                        <p>Latest date to consider.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Request Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;StartDate&quot;: &quot;2026-07-08T17:53:38.3756337Z&quot;,
+  &quot;EndDate&quot;: &quot;2026-07-08T17:53:38.3756337Z&quot;
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ContactCommunityRequest xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Request&quot;&gt;
+  &lt;EndDate&gt;2026-07-08T13:53:38.3756337-04:00&lt;/EndDate&gt;
+  &lt;StartDate&gt;2026-07-08T13:53:38.3756337-04:00&lt;/StartDate&gt;
+&lt;/ContactCommunityRequest&gt;
+</pre>
+        </div>
+</div>
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p></p>
+
+<a href="/Help/ResourceModel?modelName=ContactCommunityUpdate">ContactCommunityUpdate</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">JoinCount</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RemovalCount</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityJoins</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=CommunityAddition">CommunityAddition</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityRemovals</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=CommunityRemoval">CommunityRemoval</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;JoinCount&quot;: 2,
+  &quot;RemovalCount&quot;: 2,
+  &quot;CommunityJoins&quot;: [
+    {
+      &quot;JoinDate&quot;: &quot;2026-07-08T17:53:38.3756337Z&quot;,
+      &quot;CommunityName&quot;: &quot;sample string 2&quot;,
+      &quot;CompanyName&quot;: &quot;sample string 3&quot;,
+      &quot;Name&quot;: &quot;sample string 4&quot;,
+      &quot;EmailAddress&quot;: &quot;sample string 5&quot;,
+      &quot;IntegrationID&quot;: &quot;sample string 6&quot;,
+      &quot;CommunityIntegrationID&quot;: &quot;sample string 7&quot;
+    },
+    {
+      &quot;JoinDate&quot;: &quot;2026-07-08T17:53:38.3756337Z&quot;,
+      &quot;CommunityName&quot;: &quot;sample string 2&quot;,
+      &quot;CompanyName&quot;: &quot;sample string 3&quot;,
+      &quot;Name&quot;: &quot;sample string 4&quot;,
+      &quot;EmailAddress&quot;: &quot;sample string 5&quot;,
+      &quot;IntegrationID&quot;: &quot;sample string 6&quot;,
+      &quot;CommunityIntegrationID&quot;: &quot;sample string 7&quot;
+    }
+  ],
+  &quot;CommunityRemovals&quot;: [
+    {
+      &quot;RemoveDate&quot;: &quot;2026-07-08T17:53:38.3756337Z&quot;,
+      &quot;CommunityName&quot;: &quot;sample string 2&quot;,
+      &quot;CompanyName&quot;: &quot;sample string 3&quot;,
+      &quot;Name&quot;: &quot;sample string 4&quot;,
+      &quot;EmailAddress&quot;: &quot;sample string 5&quot;,
+      &quot;IntegrationID&quot;: &quot;sample string 6&quot;,
+      &quot;CommunitySiteStatus&quot;: &quot;sample string 7&quot;,
+      &quot;CommunityIntegrationID&quot;: &quot;sample string 8&quot;
+    },
+    {
+      &quot;RemoveDate&quot;: &quot;2026-07-08T17:53:38.3756337Z&quot;,
+      &quot;CommunityName&quot;: &quot;sample string 2&quot;,
+      &quot;CompanyName&quot;: &quot;sample string 3&quot;,
+      &quot;Name&quot;: &quot;sample string 4&quot;,
+      &quot;EmailAddress&quot;: &quot;sample string 5&quot;,
+      &quot;IntegrationID&quot;: &quot;sample string 6&quot;,
+      &quot;CommunitySiteStatus&quot;: &quot;sample string 7&quot;,
+      &quot;CommunityIntegrationID&quot;: &quot;sample string 8&quot;
+    }
+  ]
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ContactCommunityUpdate xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+  &lt;CommunityJoins&gt;
+    &lt;CommunityAddition&gt;
+      &lt;CommunityIntegrationID&gt;sample string 7&lt;/CommunityIntegrationID&gt;
+      &lt;CommunityName&gt;sample string 2&lt;/CommunityName&gt;
+      &lt;CompanyName&gt;sample string 3&lt;/CompanyName&gt;
+      &lt;EmailAddress&gt;sample string 5&lt;/EmailAddress&gt;
+      &lt;IntegrationID&gt;sample string 6&lt;/IntegrationID&gt;
+      &lt;JoinDate&gt;2026-07-08T13:53:38.3756337-04:00&lt;/JoinDate&gt;
+      &lt;Name&gt;sample string 4&lt;/Name&gt;
+    &lt;/CommunityAddition&gt;
+    &lt;CommunityAddition&gt;
+      &lt;CommunityIntegrationID&gt;sample string 7&lt;/CommunityIntegrationID&gt;
+      &lt;CommunityName&gt;sample string 2&lt;/CommunityName&gt;
+      &lt;CompanyName&gt;sample string 3&lt;/CompanyName&gt;
+      &lt;EmailAddress&gt;sample string 5&lt;/EmailAddress&gt;
+      &lt;IntegrationID&gt;sample string 6&lt;/IntegrationID&gt;
+      &lt;JoinDate&gt;2026-07-08T13:53:38.3756337-04:00&lt;/JoinDate&gt;
+      &lt;Name&gt;sample string 4&lt;/Name&gt;
+    &lt;/CommunityAddition&gt;
+  &lt;/CommunityJoins&gt;
+  &lt;CommunityRemovals&gt;
+    &lt;CommunityRemoval&gt;
+      &lt;CommunityIntegrationID&gt;sample string 8&lt;/CommunityIntegrationID&gt;
+      &lt;CommunityName&gt;sample string 2&lt;/CommunityName&gt;
+      &lt;CommunitySiteStatus&gt;sample string 7&lt;/CommunitySiteStatus&gt;
+      &lt;CompanyName&gt;sample string 3&lt;/CompanyName&gt;
+      &lt;EmailAddress&gt;sample string 5&lt;/EmailAddress&gt;
+      &lt;IntegrationID&gt;sample string 6&lt;/IntegrationID&gt;
+      &lt;Name&gt;sample string 4&lt;/Name&gt;
+      &lt;RemoveDate&gt;2026-07-08T13:53:38.3756337-04:00&lt;/RemoveDate&gt;
+    &lt;/CommunityRemoval&gt;
+    &lt;CommunityRemoval&gt;
+      &lt;CommunityIntegrationID&gt;sample string 8&lt;/CommunityIntegrationID&gt;
+      &lt;CommunityName&gt;sample string 2&lt;/CommunityName&gt;
+      &lt;CommunitySiteStatus&gt;sample string 7&lt;/CommunitySiteStatus&gt;
+      &lt;CompanyName&gt;sample string 3&lt;/CompanyName&gt;
+      &lt;EmailAddress&gt;sample string 5&lt;/EmailAddress&gt;
+      &lt;IntegrationID&gt;sample string 6&lt;/IntegrationID&gt;
+      &lt;Name&gt;sample string 4&lt;/Name&gt;
+      &lt;RemoveDate&gt;2026-07-08T13:53:38.3756337-04:00&lt;/RemoveDate&gt;
+    &lt;/CommunityRemoval&gt;
+  &lt;/CommunityRemovals&gt;
+&lt;/ContactCommunityUpdate&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

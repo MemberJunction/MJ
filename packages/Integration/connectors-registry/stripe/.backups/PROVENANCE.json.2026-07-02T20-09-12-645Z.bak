@@ -1,0 +1,84 @@
+{
+  "Entries": [
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming the base URL / resource-oriented path convention (https://api.stripe.com/v1/<resource>) and the global HTTP bearer security scheme used for API-key auth.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "servers: [{url: 'https://api.stripe.com/v1'}]; all 414 paths are relative to this server root (e.g. /customers, /charges, /payment_intents); components.securitySchemes declares an HTTP bearer scheme applied globally."
+    },
+    {
+      "URL": "https://docs.stripe.com/api",
+      "AccessedAt": "2026-07-02T19:00:00.000Z",
+      "UsedFor": "Confirming the Stripe-Version header pins the API version per-request, overriding the key's account-default pinned version.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthAdditionalHeaders",
+      "Excerpt": "Versioning section: requests may pin a specific API version by sending the Stripe-Version header; omitting it uses the version associated with the API key's account settings at request time."
+    },
+    {
+      "URL": "https://docs.stripe.com/api/pagination",
+      "AccessedAt": "2026-07-02T19:00:00.000Z",
+      "UsedFor": "Confirming the cursor pagination contract: list envelope shape, has_more flag, starting_after/ending_before cursor params, limit bound.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "All top-level API resources ... support 'list' API methods ... For instance, you can list charges, list customers, and list invoices. These list API methods share a common structure, taking at least these three parameters: limit, starting_after, and ending_before. ... The response ... object is always list ... has_more attribute ... url attribute."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/stripe-node/master/src/autoPagination.ts",
+      "AccessedAt": "2026-07-02T19:00:00.000Z",
+      "UsedFor": "Independent SDK-level corroboration of the has_more/starting_after/ending_before cursor mechanics, confirming stripe-node's generated auto-pagination loop matches the spec + docs exactly.",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialSDK",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "autoPagination.ts implements iteration by tracking `lastId` from the previous page's final `data[]` element and requesting the next page with `starting_after: lastId`, stopping when `has_more` is false."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming the universal write-body content-type is application/x-www-form-urlencoded across all in-scope Create/Update operations, with zero JSON request bodies (the sole exception being the out-of-scope file-upload endpoint).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WriteBodyEncoding",
+      "Excerpt": "Content-type tally across all POST/PUT/PATCH requestBody definitions in spec3.json: application/x-www-form-urlencoded=292, application/json=0, other=1 (POST /v1/files, multipart/form-data). Nested/array attributes use bracket notation, e.g. address[line1]=123+Main+St, metadata[key]=value."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming Update operations always use POST (never PATCH/PUT) across all 33 in-scope resource schemas, distinguished from Create only by path (collection root vs. /{id}).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.UpdateVerbConvention",
+      "Excerpt": "Per-operation method presence tabulated across all 33 in-scope object paths (e.g. POST /v1/customers = create, POST /v1/customers/{customer} = update): every Update operation across the checked object set uses the POST method; no PATCH or PUT operation is declared anywhere in the spec for these resources."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming the Delete response tombstone shape (deleted_<object> schema) and that the deleted record's id is returned in the response body, not a header.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DeleteResponseShape",
+      "Excerpt": "components.schemas.deleted_customer: {properties: {deleted: {enum:[true]}, id: {type:'string'}, object: {enum:['customer']}}, required: [deleted, id, object]}. DELETE /v1/customers/{customer} responses.200.content.application/json.schema: $ref deleted_customer. Same pattern confirmed for deleted_product, deleted_plan, deleted_subscription, deleted_invoiceitem, deleted_coupon, deleted_account, deleted_person, deleted_invoice, deleted_subscription_item, deleted_invoice."
+    },
+    {
+      "URL": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json",
+      "AccessedAt": "2026-07-02T19:57:32.000Z",
+      "UsedFor": "Confirming the uniform error envelope shape returned on all error responses (components.schemas.api_errors) and the per-status-code meanings.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ErrorResponseShape",
+      "Excerpt": "components.schemas.api_errors: {properties: {error: {type:'object', properties: {type, code, message, param, doc_url, ...}}}}. Confirmed present as the default error response schema referenced from every operation's non-2xx responses across the spec."
+    }
+  ]
+}

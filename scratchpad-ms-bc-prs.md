@@ -1,0 +1,646 @@
+# @MS-BC PR list — 5 repos (generated 2026-07-10)
+
+## MemberJunction/MJ
+- #3112  2026-07-10  OPEN  fix(pg-codegen): flat ParameterRef for all CRUD param names (multi-word PK save fails on Postgres)
+- #3108  2026-07-09  OPEN  fix(ng-shared): re-render dynamically-attached resource components after async load (fixes #3106)
+- #3107  2026-07-09  MERGED  fix(SQLServerDataProvider): scope view-column-order cache per connection pool (fixes #3102)
+- #3078  2026-07-07  MERGED  fix(open-app): address rkihm-BC review — dialect-owned atomic batch, integration suite, reinstall idempotency
+- #3073  2026-07-07  MERGED  mj app idempotency (resumable install/upgrade/uninstall)
+- #3071  2026-07-07  MERGED  feat(eds): structured incrementalSince watermark bound + Mongo date coercion
+- #3070  2026-07-07  MERGED  feat(connectors): EDS-consuming ingestion connector abstractions
+- #3069  2026-07-07  MERGED  fix(open-app): dialect-driven teardown + full PostgreSQL parity (closes out #3053 review)
+- #3061  2026-07-06  MERGED  fix(integration-engine): custom-column promotion lock (U3) + opt-in reclaim planner (U7)
+- #3054  2026-07-06  MERGED  fix(metadata-sync): honor configured requestTimeout on the provider pool
+- #3050  2026-07-06  MERGED  fix(integration-engine): never-shrink catalog width (U2) + evict stale overflow keys (U4/U3)
+- #3049  2026-07-05  MERGED  fix(integration-engine): sample template-var child fields at discovery
+- #3048  2026-07-05  MERGED  fix(integration-engine): quote reserved-word PK in content-hash prefetch (#3047)
+- #3019  2026-07-02  CLOSED  fix(connectors): SoftPK synthetic-key auto-resolution + DB_ENCRYPT override
+- #2999  2026-07-01  CLOSED  fix(open-app): regenerate spCreateOpenApp/spUpdateOpenApp with @Subpath on SQL Server (#2998)
+- #2990  2026-06-30  MERGED  ci(test): run affected packages on PRs, full suite as backstop on merge/nightly
+- #2989  2026-06-30  CLOSED  fix(open-app): never auto-drop a `__`-prefixed schema on install rollback (#2949 hardening)
+- #2988  2026-06-30  MERGED  fix(open-app): mj.config.cjs corruption — comma-terminate preceding property on section insert (#2975)
+- #2955  2026-06-26  CLOSED  perf(integration): cache compiled transform expressions + graceful per-field transform errors
+- #2948  2026-06-25  MERGED  fix(metadata): restore generic oauth2-client-credentials schema (unblocks mj sync push)
+- #2945  2026-06-25  MERGED  chore(integrations): remove leftover integration metadata folders (post-#2942 cleanup)
+- #2944  2026-06-25  MERGED  feat(integration): framework hardening — wide-table guard, multi-level traversal, large-catalog ApplyAll perf
+- #2942  2026-06-25  MERGED  chore(integrations): remove vendor connector metadata from MJ (moved to Integrations repo)
+- #2939  2026-06-24  MERGED  fix(sqlserver-dataprovider): match save-capture @ResultTable to the base view's actual column order
+- #2931  2026-06-23  MERGED  fix(openapp): runtime-load + lifecycle correctness for mj app (server-side, next-applicable)
+- #2930  2026-06-23  MERGED  feat(open-app): reformalize the Open App model
+- #2929  2026-06-22  CLOSED  feat(integration): retire seeded connector catalog from core (release B)
+- #2928  2026-06-22  MERGED  feat(open-app): extract vendor connectors to installable Open Apps (engine + core catalog retirement)
+- #2927  2026-06-22  CLOSED  fix(installer): scaffold a .gitignore protecting .env secrets
+- #2926  2026-06-22  MERGED  fix(openapp): make the `mj app` CLI db-generic (SQL Server + PostgreSQL/Aurora)
+- #2925  2026-06-22  CLOSED  fix(openapp): honor DB_PLATFORM=postgresql in `mj app` CLI + scaffold a .gitignore for .env
+- #2921  2026-06-21  MERGED  fix(connectors): make mj sync push idempotent — fill null batch fields
+- #2920  2026-06-21  CLOSED  feat(integration): rebuild Wild Apricot connector via v2 arc (28 IOs, all-object verified)
+- #2916  2026-06-21  MERGED  fix(integration): clean-deploy NetForum + SharePoint (delete-seeds + baseline primaryKey)
+- #2915  2026-06-21  CLOSED  feat(integration): Eventbrite Platform REST API v3 connector (contract-verified)
+- #2914  2026-06-21  CLOSED  docs: unified external data access strategy (EDS + materialization + integration)
+- #2913  2026-06-21  CLOSED  docs(integration): MJ Integration Framework — data-source connector strategy (relational, semi-structured & non-relational)
+- #2912  2026-06-21  MERGED  feat(integration): MemberSuite (AMS) connector — REST API v2, credential-free verified
+- #2911  2026-06-21  MERGED  feat(integration): netFORUM Enterprise (xWeb SOAP) connector
+- #2909  2026-06-20  CLOSED  docs: per-capability AI vendor-sufficiency plan (ModelResolver extraction + retrofit)
+- #2906  2026-06-20  MERGED  feat(integration): Rhythm Software (Rhythm AMS) connector
+- #2905  2026-06-20  MERGED  fix(actions): export MJLruCache in EntityActionEngine test mock
+- #2902  2026-06-20  MERGED  feat(integration): add Novi AMS connector
+- #2895  2026-06-20  MERGED  fix(sqlserver-dataprovider): order save-capture @ResultTable to match the base view
+- #2892  2026-06-20  CLOSED  WildApricot, YourMembership (improvement)
+- #2891  2026-06-20  MERGED  fix(integration): make mj sync push deploy all 13 connectors cleanly
+- #2888  2026-06-19  MERGED  feat(connectors): SharePoint (Graph v1.0) + Microsoft Dynamics 365 (Dataverse)
+- #2884  2026-06-18  MERGED  fix(pg): SS→PG converter + codegen type-correctness (conversion-pipeline)
+- #2883  2026-06-18  MERGED  fix(pg): runtime SQL dialect correctness — date functions + scheduling heartbeat
+- #2882  2026-06-18  MERGED  feat(pg): app-level PostgreSQL support — OpenApp install + DBAutoDoc write-back
+- #2881  2026-06-18  MERGED  fix(pg): runtime correctness bundle — engine load, uninstall, entity search
+- #2880  2026-06-18  CLOSED  fix(pg): dialect-correct entity-search predicate (no N'' / no ESCAPE)
+- #2879  2026-06-18  CLOSED  fix(open-app): complete + fail-loud entity-metadata removal on uninstall
+- #2878  2026-06-18  CLOSED  fix(pg): clean MJAPI engine load on PostgreSQL (AutoUpdatePath bool + orphan related-name virtual fields)
+- #2869  2026-06-16  CLOSED  fix(scheduling): PostgreSQL-correct heartbeat lease extension
+- #2868  2026-06-16  CLOSED  feat(dbautodoc): dialect-aware description write-back for PostgreSQL
+- #2867  2026-06-16  CLOSED  feat(openapp): PostgreSQL support for app schema install + migrations
+- #2866  2026-06-16  CLOSED  fix(pg): core + codegen type correctness on PostgreSQL (+ SS→PG converter TS-corruption fix)
+- #2865  2026-06-16  CLOSED  fix(pg): translate T-SQL date functions in runtime SQL clauses
+- #2832  2026-06-12  MERGED  [Integration] Unified: consolidated integration core + 14 connectors (PheedLoop, PropFuel, Path LMS, GrowthZone, ORCID, OpenWater, Hivebrite, Fonteva, Cvent, NetSuite, Nimble AMS, iMIS, Salesforce, Neon CRM)
+- #2815  2026-06-11  CLOSED  [New Researcher Identity Identifier Integration] - ORCID
+- #2808  2026-06-09  CLOSED  refactor(open-app): platform-agnostic installer via the data-provider abstraction
+- #2789  2026-06-08  MERGED  fix(scheduling): make lock sproc calls dialect-aware + port atomic sprocs to PostgreSQL
+- #2785  2026-06-06  CLOSED  [New Event System Integration] OpenWater and GrowthZone enhancement
+- #2784  2026-06-06  CLOSED  [New AMS Integration] Fonteva and Salesforce enhancement
+- #2783  2026-06-06  CLOSED  [New LMS Integration] Path LMS and PropFuel enhancement
+- #2767  2026-06-04  CLOSED  fix(postgres): repair template/component accessor corruption from old SQL->PG converter
+- #2766  2026-06-04  CLOSED  fix(codegen): route Smart Field / Form Layout prompts off Gemini Flash-Lite (empty output) to OpenAI
+- #2752  2026-06-03  MERGED  Integration Framework — Major Enhancement: Universal Connector Pipeline, No-Watermark Sync-Efficiency Engine & Dual-Dialect (SQL Server + Postgres) Parity
+- #2751  2026-06-03  CLOSED  fix(cli): baseline cross-db login probe fails to compile on Azure SQL (defer into sp_executesql)
+- #2745  2026-06-02  MERGED  feat(core): EntitySaveOptions.OnValidated hook + optimistic-UI Save design doc (#2671)
+- #2744  2026-06-02  MERGED  fix(agents): watchdog so agent runs never stay stuck 'Running' (heartbeat + boot/periodic sweep + graceful shutdown)
+- #2712  2026-05-29  MERGED  fix(metadata): make .your-membership.json sync idempotent (dedupe shared primary keys)
+- #2703  2026-05-28  MERGED  DBAutoDoc - Organic Key Detection
+- #2702  2026-05-28  MERGED  feat(open-app): transitive dependency graph + cycle detection; forward override flags to dep installs
+- #2694  2026-05-27  CLOSED  feat(dbautodoc): organic-key detection + PR #2193 per-column normalization
+- #2678  2026-05-24  MERGED  fix(core-actions): route adhoc-query row cap through AST path
+- #2651  2026-05-21  MERGED  feat(metadata): UNIQUE constraints on 17 junction tables in __mj
+- #2647  2026-05-21  MERGED  fix(adhoc-query): honor MaxRows + StartRow end-to-end in ExecuteAdhocQuery
+- #2623  2026-05-20  MERGED  feat(integration-connectors): Aptify, Betty, Blackbaud, ConstantContact, GrowthZone, iMIS, MagnetMail, Mailchimp, MJToMJ, NetForum, NetSuite, NimbleAMS, PropFuel, Reach360, SharePoint, WildApricot
+- #2583  2026-05-12  MERGED  fix(codegen): keep caller-supplied PK columns in generated INSERTs
+- #2582  2026-05-12  CLOSED  Plan: Entity Organic Key — DBAutoDoc detection
+- #2553  2026-05-07  MERGED  feat(crud-sprocs): JSON-arg shape for wide PG entities + Bug 5 four-pass + codegen fixes (#2552)
+- #2531  2026-05-04  CLOSED  fix(pg): unblock fresh-DB PostgreSQL end-to-end + codegen idempotency
+- #2524  2026-05-03  CLOSED  feat(ai-agents): lazy-loading mode for AIAgentDataSource (opt-in)
+- #2507  2026-05-02  CLOSED  fix(codegen): include composite-PK columns in spCreate INSERT statements
+- #2485  2026-04-28  MERGED  fix(database-designer): tighten prompts + harden remove-only schema migrations
+- #2479  2026-04-27  MERGED  fix(metadata): replace stale IsForeignKey flag with RelatedIntegrationObjectFieldName in salesforce metadata
+- #2474  2026-04-26  CLOSED  docs(plans): MetaSearchTool<T> — generalize semantic search across MJ surfaces
+- #2472  2026-04-26  MERGED  feat(integration): Salesforce + Sage Intacct sync pipeline hardening
+- #2471  2026-04-26  CLOSED  RFC: standardize AI model/vendor fallback — audit + Phase 1 ModelResolver spec
+- #2470  2026-04-26  CLOSED  feat(agents): semantic action search for large action sets
+- #2469  2026-04-26  MERGED  fix(codegen): exclude virtual fields from native geo detection; relax strictTemplates on generated forms
+- #2442  2026-04-20  MERGED  feat(codegen): add --skipfiles flag for DB-only runs (#2440)
+- #2434  2026-04-19  MERGED  fix(migrations): reorder v5.28 migration to run after v5.27
+- #2433  2026-04-19  CLOSED  Fix/migration timestamp ordering
+- #2429  2026-04-19  MERGED  fix(codegen): whitelist LLM codeType against CK_EntityField_CodeType
+- #2428  2026-04-19  MERGED  feat(home-dashboard): pin Actions as quick-launch cards
+- #2401  2026-04-15  MERGED  Phase 1: Bidirectional sync engine, HubSpot/YM overhaul (44→130/58→228 objects), custom field discovery, RSU improvements, Explorer sync UI
+- #2257  2026-03-27  CLOSED  fix(core): deduplicate RunView params within coalesced mega-batches
+- #2177  2026-03-19  MERGED  feat: HubSpot association v4 fetch, empty-string datetime fix, OpenAI streaming fix
+- #2148  2026-03-16  MERGED  fix(test): update YM connector watermark tests
+- #2136  2026-03-14  MERGED  feat(integration): add rasa.io connector with pagination and composite PK fixes
+- #2105  2026-03-11  MERGED  feat: Integration scheduled job type, pagination threading, YM fixes, and Actions base class
+- #2082  2026-03-06  MERGED  feat: Provider-agnostic OpenApp Engine
+- #2061  2026-03-04  CLOSED  feat: Add YourMembership (YM) data sync integration
+- #2051  2026-03-03  CLOSED  docs: Add comprehensive README for Open Apps package
+- #2050  2026-03-03  MERGED  fix: Grant UI role Create/Update permissions for agent entities
+- #2004  2026-02-20  MERGED  Fix: Escape JSDoc-breaking sequences in CodeGen description output
+- #2003  2026-02-20  MERGED  Fix: Use PascalCase properties in hasSoftPrimaryKeyInConfig()
+- #1965  2026-02-13  MERGED  [5.1] Add Open App system for third-party app lifecycle management
+- #1924  2026-02-08  CLOSED  MJC Notification Type Setup
+- #1883  2026-01-30  MERGED  Fix schema-qualified view matching in entity metadata
+- #1875  2026-01-29  CLOSED  Sensitive Info Removal
+- #1840  2026-01-24  MERGED  Add soft PK/FK support for messy databases / RelatedEntityJoinFields
+- #1828  2026-01-22  MERGED  Dbauto related
+- #1821  2026-01-22  MERGED  Notification Enhancement
+- #1819  2026-01-22  CLOSED  Notification Enhancement
+- #1817  2026-01-21  CLOSED  Notification Enhancement
+- #1811  2026-01-21  MERGED  Notification System Update
+- #1801  2026-01-20  CLOSED  Notification Enhancement
+
+## MJ-Central/platform
+- #1045  2026-07-10  OPEN  fix(skip): install Skip Open App on-save for BYOC (match BI)
+- #1042  2026-07-10  MERGED  fix(skip): install Skip Open App on BYOC too, not just AWS-managed
+- #1040  2026-07-10  MERGED  ci(ops): Azure client-secret expiry alert + 2-year rotate runbook (Option A)
+- #1039  2026-07-10  CLOSED  ci(oidc): passwordless Azure login for API deploy (pilot) — no more expiring deploy secret
+- #1038  2026-07-10  CLOSED  docs(adr): passwordless Azure auth + never-confusing credential failure (follow-up to #1037)
+- #1037  2026-07-10  MERGED  fix(keyvault): passwordless (managed-identity) Key Vault reads — an expired client secret can no longer break every workflow
+- #1035  2026-07-10  MERGED  feat(app-store): persistent, animated open-app install progress everywhere
+- #1034  2026-07-09  MERGED  fix(bi/dbautodoc): reasoning theater on first run + consistent control-bar alignment
+- #1033  2026-07-09  MERGED  fix(templates): race-proof every tenant-repo push against out-of-band RSU
+- #1031  2026-07-09  MERGED  fix(bi): reliably auto-merge RSU integration PRs + race-proof DBAutoDoc push
+- #1029  2026-07-09  MERGED  fix(dbautodoc): tolerate an API that's behind the frontend on new fields
+- #1028  2026-07-09  MERGED  feat(dbautodoc): live reasoning ERD, incremental runs, single-canvas studio + private-connector GH Packages
+- #1026  2026-07-09  MERGED  fix: connector workflow hardening that missed PR #1022's merge window
+- #1024  2026-07-09  MERGED  fix(bi): business-friendly rethink of App Store, DBAutoDoc, Performance
+- #1022  2026-07-09  MERGED  fix: skip mj-setup for private/custom connectors, not just the public catalog
+- #1020  2026-07-09  MERGED  fix(bi): give dbautodoc page more breathing room between items
+- #1018  2026-07-09  MERGED  fix(bi): show schema picker with 1 schema, add Back after a run, fix Stopped color
+- #1016  2026-07-09  MERGED  fix(bi): replace top-nav divider line with a soft shadow
+- #1014  2026-07-09  MERGED  fix(dbautodoc): stop crashing tenant MJAPI with a large RunViews IN-list
+- #1012  2026-07-09  MERGED  fix(bi): correct App Store naming, group features nav, drop beta tags
+- #1011  2026-07-09  MERGED  fix(bi): business-friendly connector view + DBAutoDoc schema detection
+- #1009  2026-07-09  MERGED  fix(ci): export GITHUB_TOKEN for private-connector CLI API calls
+- #1008  2026-07-09  OPEN  fix(aws-account): allow SUSPENDING -> SUSPEND_FAILED transition
+- #1006  2026-07-09  MERGED  fix(mjcentral): kill render "flash" across app store, dev-studio, env-detail, import-wizard
+- #1003  2026-07-09  MERGED  feat(ci): generic, N-capable private-connector credential support
+- #1002  2026-07-09  MERGED  fix(app-store): catalog shows 1.0.0 for every app (background latest-version refresh)
+- #1001  2026-07-09  MERGED  fix(bi-dbautodoc): stop the empty-state flash (Ready → Connect your data)
+- #1000  2026-07-08  OPEN  fix(codegen): self-heal base-field-after-virtual sequence drift (MJC 110)
+- #998  2026-07-08  MERGED  feat(connectors): per-repo custom connector catalog (union with shared manifest)
+- #997  2026-07-08  MERGED  fix(app-store): BI (Postgres) install/connector status never resolves (engine-agnostic entity read + longer settle)
+- #995  2026-07-08  MERGED  fix(mjcentral): kill popup double-load + slow tab switching
+- #994  2026-07-08  MERGED  feat(app-catalog): log-category filter fix, honest memory metric, editable unified upgrade
+- #992  2026-07-08  MERGED  fix(log-viewer): stop forcing scroll-to-bottom when user has scrolled up
+- #991  2026-07-08  MERGED  fix(db-optimizer): send callback key as x-mj-api-key header, not GraphQL variable
+- #990  2026-07-08  MERGED  fix(db-optimizer): report-back mutations rejected by auth middleware
+- #989  2026-07-08  OPEN  MJ 5.45.0 upgrade (MJC 108)
+- #988  2026-07-08  MERGED  feat(app-store): create/upload app flow gaps + contributor-only users
+- #987  2026-07-08  MERGED  feat(skip): auto-install Skip Open App with unattended retry (MJC 109)
+- #986  2026-07-08  MERGED  fix(db-optimizer): install pg/mssql in a scratch dir, not the repo root
+- #985  2026-07-08  MERGED  fix(db-optimizer): report failure even when npm install itself hangs/fails
+- #984  2026-07-08  MERGED  fix(db-optimizer): probe hangs indefinitely with no connection/query timeouts
+- #983  2026-07-08  MERGED  fix(db-optimizer): probe failures never reached MJC, run stuck 'analyzing' forever
+- #982  2026-07-08  MERGED  fix(db-optimizer): getEnvBranch used wrong entity name 'Environments'
+- #981  2026-07-07  MERGED  fix(dbautodoc): don't silently drop a full schema selection to "no filter"
+- #980  2026-07-07  MERGED  fix(dbautodoc): cancel doesn't stop the run, schema selection ignored, ugly tuned-config card
+- #979  2026-07-07  MERGED  fix(dbautodoc): stop pinning the retired gemini-1.5-flash model
+- #977  2026-07-07  MERGED  fix(upgrade): workspace-upgrade concurrency deadlock + cache-empty (review of #976)
+- #976  2026-07-07  MERGED  feat(upgrade): unified stateful workspace upgrade + chassis sync + dbautodoc E2BIG fix
+- #975  2026-07-07  CLOSED  fix(dbautodoc): report-back E2BIG — read big payloads from files, not env
+- #974  2026-07-07  CLOSED  feat(upgrade): unified stateful workspace upgrade + chassis sync (platform half, flag-gated)
+- #973  2026-07-07  MERGED  hotfix(env-detail): fix backticks in comment that broke the stage build
+- #971  2026-07-07  MERGED  combined: db-optimizer schedule + env-detail perf + invitation/dbautodoc/app-manage fixes
+- #970  2026-07-07  CLOSED  fix(mjc): invitation UX + DBAutoDoc heredoc + mj-app-manage list hang
+- #967  2026-07-07  CLOSED  perf(env-detail): render only the active tab panel (~0.5s tab-switch lag)
+- #966  2026-07-07  CLOSED  fix(bi-aws): cold-pod-safe resource resolution in createAdminUser / seed / park
+- #959  2026-07-06  CLOSED  feat(db-optimizer): scheduled auto-apply via MJ Scheduled Job
+- #957  2026-07-06  MERGED  feat(db-optimizer): apply on SQL Server + Postgres, and scheduled auto-apply via MJ Scheduled Job
+- #956  2026-07-06  MERGED  feat(dbautodoc): don't rediscover integration soft keys; preserve the contract on write-back (#955 phase 1)
+- #954  2026-07-06  MERGED  fix(dbautodoc): full relationshipDiscovery config — stop the maxIterations crash (+ seed-from-metadata design)
+- #953  2026-07-06  MERGED  fix(dbautodoc): 'Back to schemas' button on a finished run
+- #952  2026-07-06  MERGED  fix(dbautodoc): schema picker no longer trips the tenant circuit breaker
+- #951  2026-07-06  MERGED  feat(connectors): schema DAG visualization (parity PR2, stacked on #950)
+- #950  2026-07-06  MERGED  feat(connectors): sync-vs-RSU serialization + consolidated Refresh schema (parity PR1)
+- #948  2026-07-05  MERGED  feat: connector setup hardening + Database Optimizer + catalog source-of-truth
+- #947  2026-07-05  CLOSED  fix(connectors): read install catalog from RELEASE branch (main), not next — HOLD until main catalog current
+- #946  2026-07-05  CLOSED  feat(perf): Database Optimizer — DB-level findings + provably-safe apply
+- #945  2026-07-05  CLOSED  feat(integrations): size discovery sample to catalog breadth, floored
+- #944  2026-07-05  MERGED  feat(connectors): turn on sync-engine performance defaults (Part B1)
+- #943  2026-07-05  MERGED  feat(dbautodoc): register-fix + lock-free analysis + cancel + auto-apply + MJ-engine scheduling + resume + BI schema source + light-blue UI
+- #942  2026-07-04  MERGED  fix(wizard): NEVER delete connections after an apply was dispatched
+- #941  2026-07-04  MERGED  fix(connectors): unknown connections ≠ zero; apply hand-off never shows raw aborts
+- #940  2026-07-04  MERGED  chore(connectors): remove the Field Maps tab + Priority editing
+- #939  2026-07-04  MERGED  Connectors, app store, DBAutoDoc: coherent, mutex-guarded, persona-true (BYOC + BI)
+- #938  2026-07-04  CLOSED  fix(app-manage): canonical workflow — tenant-side name resolution + symmetric remove override
+- #937  2026-07-04  MERGED  fix(app-store): remove-dialog buttons never rendered (footer template inside @if)
+- #936  2026-07-04  MERGED  fix(app-store): Failed cards expose full lifecycle (enable/disable/remove) + honest retry
+- #935  2026-07-04  MERGED  fix(app-manage): reconcile matches by normalized name + dedupes phantom RepoApp rows
+- #934  2026-07-04  MERGED  fix(app-manage): tenant name resolution is never silent — retry empty reads, log every outcome
+- #933  2026-07-04  MERGED  fix(connectors): never auto-promote custom columns — suggest only
+- #932  2026-07-04  CLOSED  fix(ci): API deploy — serialize per-branch + retry Azure slot 409 Conflicts
+- #931  2026-07-04  MERGED  feat(connectors): chain refresh→evolution behind Check for Changes (both personas)
+- #929  2026-07-03  MERGED  fix(app-manage): lifecycle commands use the tenant-registered name + install proves registration
+- #926  2026-07-03  MERGED  feat(connectors): hands-off corrections — no PK hint, no field picking, apply hand-off, silent column fold, install auto-flip
+- #925  2026-07-03  MERGED  fix(wizard): unblock stage deploy — missing State in autoSelectConnector (TS2322)
+- #924  2026-07-03  MERGED  fix(dbautodoc): reliable report-back + no phantom runs + resume Failed runs
+- #923  2026-07-03  MERGED  feat(app-store): narrate the workspace-update window after a run completes
+- #922  2026-07-03  MERGED  feat(connectors): one lifecycle truth — IntegrationConnectorStates aggregate
+- #921  2026-07-03  MERGED  fix(app-store): true versions + actionable errors (BYOC + BI)
+- #917  2026-07-03  MERGED  fix(app-store): idempotent enable/disable/uninstall + self-settling install status
+- #916  2026-07-03  MERGED  fix(bi): unblock MJCentral SWA build (TS4104 readonly p-select options)
+- #915  2026-07-02  MERGED  fix(connectors): clean up abandoned BYOC wizard + make add-tables RSU-aware
+- #914  2026-07-02  MERGED  fix(app-store): install targets the active env's branch, not main
+- #913  2026-07-02  MERGED  feat(integrations): full capability parity — BI + BYOC use every MJ endpoint (Pull/Push only)
+- #912  2026-07-02  MERGED  fix(integrations): "Add tables" marked every table as Synced
+- #911  2026-07-02  MERGED  fix(dbautodoc): guarantee dialect-correct write-back SQL (kill the footgun)
+- #910  2026-07-02  MERGED  feat(integrations): close remaining BYOC↔BI integration-detail parity gaps
+- #909  2026-07-02  MERGED  fix(integrations): show "restarting" not "not reachable" during RSU restart
+- #907  2026-07-02  CLOSED  fix(mjc): reload instance config after provisioning completes
+- #906  2026-07-02  MERGED  fix(explorer): stop admin dashboards spinning forever on a hung AWS call
+- #905  2026-07-02  CLOSED  chore(mj-5.44.0): re-apply 5.44.0 platform bump (undo revert #904)
+- #904  2026-07-02  MERGED  revert(platform): back out 5.44.0 bump to unblock stage deploy
+- #903  2026-07-02  MERGED  fix(ci): point server patch KEY to @5.44.0 (complete the botched #902)
+- #902  2026-07-02  MERGED  fix(ci): move @memberjunction/server patch to 5.44.0 (unblock stage deploy)
+- #900  2026-07-02  MERGED  chore(mj-5.44.0): drop dynamicPackages guard + bump catalog to 5.44.0
+- #899  2026-07-02  MERGED  fix(byoc): delete Terraform state blob on env destroy (recreate lease mismatch)
+- #897  2026-07-01  MERGED  fix(byoc): Azure SQL 'Basic' SKU + 10GB max_size mismatch on add-environment
+- #894  2026-07-01  MERGED  fix(mjc): loadInstanceConfig uses Env UUID not route-param name (mj.config.cjs load)
+- #892  2026-07-01  MERGED  fix(byoc): bridge BCSaaS org role → mapped MJ role in UserRoles (the real owner-gate fix)
+- #890  2026-07-01  MERGED  fix(byoc): log + surface owner-gate denial in getInstanceConfig (the silent 'config can't be loaded')
+- #887  2026-07-01  MERGED  fix(ci): restore lockfile parity — unblock stage deploy (drop unregistered sqlserver patch)
+- #886  2026-07-01  MERGED  fix(byoc): SQL Server provisioning — roles seed, owner-gate, MSAL auth, view-cache perf, no-cold-start
+- #884  2026-07-01  MERGED  fix(byoc): Explorer MSAL auth + SQL auto-pause + App-Manager encryption env, user-name, BI-perf, loading-UX
+- #883  2026-06-30  MERGED  feat(bi-connectors): surface PK verdicts, schema-evolution, capabilities (BI + BYOC)
+- #879  2026-06-30  MERGED  fix(bi-connectors): auto-apply columns on add + dismiss banner + de-cramp table cards
+- #878  2026-06-30  MERGED  hotfix(mjapi): fix duplicate createRequire breaking stage API deploy
+- #877  2026-06-30  MERGED  fix(connectors): BI sync-direction validation + boot-loader + idempotent lookups
+- #876  2026-06-29  MERGED  fix(connectors): idempotent connect flow + mj.config.cjs corruption guard
+- #875  2026-06-29  MERGED  chore(ui): hide Performance Optimization beta tab
+- #874  2026-06-29  MERGED  fix(app-manage): kill mj app install CLI on success to skip ~20min idle-pool hang
+- #872  2026-06-29  MERGED  fix(ui): business-friendly install readiness — connectors + App Store
+- #871  2026-06-29  MERGED  feat(mjcentral): perf-optimization beta tab + MJ_API_KEY re-seed + invite/config hardening
+- #870  2026-06-28  MERGED  fix(app-store): version user-context + RepoApp upsert + __-schema flag
+- #868  2026-06-28  MERGED  fix: stage stabilization — instance-version, invite access, instance-call resilience, connector-install secrets
+- #867  2026-06-28  CLOSED  fix(provisioning): set MJC_APP_* secrets on AWS-managed tenant repos (unblocks connector install)
+- #866  2026-06-28  CLOSED  fix(integrations): timeout + circuit breaker so one down instance can't freeze the dashboard
+- #865  2026-06-28  CLOSED  fix(invite): MJCentral first-load access + correct Read Only instance roles
+- #864  2026-06-28  CLOSED  fix(app-store): resolve MJ version from the instance, not the control plane
+- #863  2026-06-28  MERGED  fix: unblock app/integration install, invited-user access, and MJ version preflight
+- #862  2026-06-28  MERGED  fix(app-store): restore API build — type resolveTenantMJVersion Repos as mjcRepoEntity
+- #861  2026-06-28  MERGED  fix(app-store): perf hotfix (kill hot-path GitHub version lookups) + preflight version self-heal + connector icon
+- #860  2026-06-28  CLOSED  fix(app-store): preflight self-heals workspace MJ version + blank connector icon
+- #858  2026-06-28  MERGED  feat(integrations): source connectors from Open Apps; remove stored-migration seeding
+- #856  2026-06-28  MERGED  feat: consolidated app-store + instance-config + platform-ops 
+- #854  2026-06-27  CLOSED  feat(app-store,platform-ops): admin requests+media, open-app scaffolding, AWS pool ops
+- #853  2026-06-27  CLOSED  feat(config): BYOC instance configuration surface (mj.config.cjs read + edit)
+- #852  2026-06-27  CLOSED  feat(bi-app-store): premium redesign — fix instance-as-app, MJ 0.0.0, white-on-white
+- #850  2026-06-27  MERGED  fix(bi): restore post-auth middleware (UI role + contact backfill) lost to BCSaaS 1.5.2 key collision
+- #849  2026-06-26  MERGED  feat(app-store): get-started (create/import) + request→accept + dependency management
+- #848  2026-06-26  MERGED  fix(bcsaas): complete systemUser TenantContext fix for the 1.5.2 / BAC lift
+- #846  2026-06-26  MERGED  chore: upgrade MJ 5.43 + BizApps Commons 5.31.1 + BCSaaS 1.5.2
+- #842  2026-06-26  CLOSED  feat(dbautodoc): config decisioning — preset / fine-tune / AI-propose per run
+- #834  2026-06-24  CLOSED  feat(ops): prod pool recycle (rebake on 5.42.0) + env-aware DDB rebalance
+- #832  2026-06-24  MERGED  fix(dbautodoc): dispatch on the env's branch, never the repo default …
+- #830  2026-06-24  MERGED  fix(dbautodoc): key secrets by branch (mirror mj-setup), not env display Name
+- #829  2026-06-24  MERGED  fix(theme): waiting area unreadable in dark mode (light-on-light)
+- #828  2026-06-24  MERGED  fix(bi): enable client-side BI gate on prod (environment.ts)
+- #825  2026-06-24  MERGED  chore(prod): enable BI server flag (.env.prod MJC_BI_ENABLED=true)
+- #824  2026-06-24  MERGED  fix(usage,version): real usage metrics + correct tenant MJ version
+- #823  2026-06-24  MERGED  fix(ui): close BI/BYOC connector + App Store parity gaps from the audit
+- #822  2026-06-24  MERGED  fix(azure): valid ARM metric names + 429 backoff (env usage metrics)
+- #821  2026-06-24  MERGED  feat(byoc): connector metadata seeding in the BYOC wizard (parity with BI)
+- #820  2026-06-24  MERGED  fix(usage): tolerate a missing activity entity (don't zero all metrics)
+- #819  2026-06-24  MERGED  fix(logs): live log stream as one continuous block, newest at the bottom
+- #818  2026-06-24  MERGED  fix(env+ci): eject/destroy for failed/importing envs, dismissable failure error, tfsec token
+- #817  2026-06-24  MERGED  feat(dbautodoc): urge AI provider keys before running (both surfaces)
+- #816  2026-06-24  MERGED  fix(ui): dbautodoc page chrome + group App Store/Document DB as Features (Beta)
+- #815  2026-06-24  MERGED  feat(ui): BI/BYOC feature parity — App Store + connectors (BYOC unblock)
+- #813  2026-06-23  MERGED  feat(app-store): unblock App Store on stage
+- #812  2026-06-23  MERGED  feat(integrations): TEMPORARY per-connector __mj.Integration seeding (runtime IO/IOF)
+- #810  2026-06-22  MERGED  feat(5.42): connector wizard + ops, App Store over Open Apps, dbautodoc — BI+BYOC, PG+SQL Server
+- #808  2026-06-22  MERGED  fix(db): surrogate ID PK for RepoUpgradePreference — auto-upgrade prefs can finally save
+- #807  2026-06-22  MERGED  fix(bi): auto-upgrade time changes now persist (stop binding to stale/deleted instance)
+- #806  2026-06-22  MERGED  fix(billing): don't strand marketing-flow signup when org name already exists (fixes stuck-at-5%)
+- #804  2026-06-22  MERGED  fix(provisioning): defer ProvisionEnvironment until the org link is stamped (fixes BI baseline stuck at 97%)
+- #803  2026-06-21  CLOSED  fix(reconciler): re-dispatch stuck-pending assign Runs instead of looping forever
+- #799  2026-06-20  MERGED  fix(byoc): MJAPI startup crash — express not resolvable in log-stream route
+- #797  2026-06-20  MERGED  feat(byoc): workspace usage metrics / instance analytics ref MJC-45
+- #795  2026-06-20  MERGED  feat(byoc): live log streaming with MJ motif filtering - ref MJC-40
+- #794  2026-06-19  MERGED  fix(stage): restore frontend biEnabled=true (revert #793) — fixes 'Get Started does nothing'
+- #793  2026-06-19  MERGED  fix(stage): frontend biEnabled=false to match server MJC_BI_ENABLED
+- #786  2026-06-18  MERGED  fix(import): adopt existing App Insights + skip empty explorer_client_id (durable import fixes)
+- #784  2026-06-18  MERGED  fix(github): paginate listAppInstallations (new installs past page 1 were invisible)
+- #782  2026-06-18  MERGED  fix(import): live-resolve GitHub installation id in import/Terraform path
+- #780  2026-06-18  MERGED  fix(github): live-resolve installation id in all token mints (reinstall-proof)
+- #778  2026-06-17  MERGED  fix(import): platform GitHub App creds fallback for imported-repo SWA provisioning
+- #777  2026-06-17  MERGED  fix(billing): uncap all orgs when BI is disabled (MJC_BI_ENABLED=false)
+- #772  2026-06-16  MERGED  fix(bi): provisioning lands user on the subscribed org in BI view (not a random technical org)
+- #771  2026-06-16  MERGED  fix(mjcentral): stop esbuild emitting a 0-byte feature-flags chunk (breaks app boot)
+- #770  2026-06-16  MERGED  revert(stage): roll back #769 codegen resync — broke MJExplorer build
+- #769  2026-06-16  MERGED  fix(stage): resync generated entities to lifted BAC schema
+- #767  2026-06-16  MERGED  merge: bring stage into bi-ga-consolidation (pre-lift sync)
+- #765  2026-06-16  MERGED  fix(import): tolerate empty managed identity in outputs (mirror #764)
+- #764  2026-06-16  MERGED  fix(import): tolerate empty managed identity in outputs (regression from #761)
+- #762  2026-06-16  MERGED  fix(import): preserve live App Service + repo attributes on import (mirror #761)
+- #761  2026-06-16  MERGED  fix(import): preserve live App Service + repo attributes on import (don't change their stuff)
+- #760  2026-06-16  MERGED  fix(invite): scope invitations to the active org (mirror #759)
+- #759  2026-06-16  MERGED  fix(invite): scope invitations to the active org (no more wrong-org invites)
+- #758  2026-06-16  MERGED  fix(env-detail): resolve env slug in loadForEnv (fixes 500 on slugged env links)
+- #756  2026-06-16  MERGED  fix(import): never prompt for SQL admin password — adopt the live env as-is
+- #754  2026-06-16  MERGED  fix(import): self-heal soft-deleted Key Vault secrets (fixes 'deleted but recoverable state' brick)
+- #753  2026-06-16  MERGED  fix(import): never force-replace resources to move regions on import (mirror #752)
+- #752  2026-06-16  MERGED  fix(import): never force-replace live resources to move regions on import
+- #750  2026-06-16  MERGED  fix(import): mirror firewall-validation snake_case + api_url reconcile to bi-ga
+- #749  2026-06-16  MERGED  fix(import): reconcile github_actions_variable.api_url on BYOC re-import (fixes 409 'Variable already exists')
+- #747  2026-06-16  MERGED  fix(import): snake_case firewall keys in the import-VALIDATION path (fixes prod 'start_ip/end_ip required')
+- #746  2026-06-16  MERGED  fix(import): mirror import fixes to bi-ga (validation org-from-repo + tfvars object-array/firewall keys)
+- #744  2026-06-16  MERGED  fix(import): tfvars serializer JSON-encodes object array elements (OpenTofu 'Missing item separator')
+- #742  2026-06-15  MERGED  fix(import): resolve org from repo (not ALS) — fixes validation 'No tenant context'
+- #739  2026-06-15  MERGED  feat(branding): palette colors (Skip teal + Izzy purple) + org logo in BYOC view
+- #738  2026-06-15  MERGED  fix(tenant): DB-backed Owner/Admin gate for eject/destroy (fixes 'No TenantContext set on UserInfo')
+- #735  2026-06-15  MERGED  chore(byoc): managed-workflow template parity with feat/bi-ga
+- #734  2026-06-15  MERGED  fix(byoc): lowercase Azure subscription id — fixes SWA 70118 on stage
+- #732  2026-06-15  MERGED  fix(tenant): make '[TenantGuard] No tenant context' obsolete — resilient guard on ALL resolver sites
+- #730  2026-06-15  MERGED  diag(tenant): TEMP trace to pinpoint '[TenantGuard] No tenant context'
+- #728  2026-06-15  MERGED  fix(tenant): ALS-resilient org guard on env-create (Layer 2)
+- #726  2026-06-15  MERGED  fix(tenant): establish tenant context from DB fallback — fixes '[TenantGuard] No tenant context'
+- #724  2026-06-14  MERGED  fix(prod): hide BI on prod — server kill-switch + UI close-off
+- #723  2026-06-14  MERGED  fix(stage): close off all BI UI paths — BYOC only
+- #722  2026-06-14  MERGED  chore(stage): hide BI via MJC_BI_ENABLED=false
+- #721  2026-06-14  MERGED  fix(byoc): port BYOC fixes onto stage (reinstall-proof GitHub install id, import wizard, Explorer 405)
+- #718  2026-06-11  MERGED  fix(byoc): Phase-1 provisioning unblocks for stage/prod (no BAC)
+- #710  2026-06-07  MERGED  feat(bi): hard server-side kill-switch for all BI endpoints (MJC_BI_ENABLED)
+- #699  2026-06-01  MERGED  feat(bi): GA consolidation — MS-BC PR series + connector connectivity + Centra/AutoDoc cleanup
+- #698  2026-06-01  CLOSED  fix(bi): wire BI instances for central→instance connector access
+- #697  2026-05-31  CLOSED  feat(bi): source connector surfaces from instance MJAPI GraphQL
+- #696  2026-05-31  CLOSED  fix(bi): populate MJ_CENTRAL_URL so back-link deep-links to the instance (not prod)
+- #695  2026-05-31  CLOSED  fix(bi): un-gate AutoDoc + Connectors on instance dashboard
+- #694  2026-05-31  CLOSED  fix(bi): pm2 restart (not reload) so applied AI keys reach the live process
+- #693  2026-05-31  CLOSED  fix(bi): produce MJ_CENTRAL_URL var so back-link deep-links to the instance
+- #692  2026-05-31  CLOSED  fix(onboarding): after API keys, go straight to BI dashboard (drop /ready handoff)
+- #690  2026-05-31  CLOSED  fix(ai): correct AI_VENDOR_API_KEY env var casing so LLM keys actually load
+- #683  2026-05-29  MERGED  fix(ci): claude.yml — checkout PR head so @claude reviews don't crash on PR-only files
+- #681  2026-05-29  CLOSED  feat(support): wire in-app support email send (help@) + fix broken touchpoints
+- #671  2026-05-29  CLOSED  chore: remove the Centra agent from the app
+- #670  2026-05-29  CLOSED  feat(ui): drop "Batteries Included" naming + hide BYO Cloud as a public path
+- #669  2026-05-29  CLOSED  fix(pricing): remove unsupported claims from pricing/signup copy
+- #668  2026-05-29  CLOSED  feat(onboarding): restructure API-keys step (LLM keys vs assistants, top-3 + show-more)
+- #667  2026-05-29  CLOSED  feat(app-store): catalog the MJ Central back-link Open App
+- #666  2026-05-29  CLOSED  feat(open-app): MJ Central back-link Open App (the "MJ Central client app")
+- #665  2026-05-29  MERGED  fix(billing): resub-after-cancel routes through kickOffBIProvisioning (re-derived from #652 onto current stage)
+- #664  2026-05-29  MERGED  feat(bi): BI↔BYOC bridge + post-cancel UX + team display (re-cut of #652 onto current stage)
+- #663  2026-05-29  CLOSED  feat(onboarding): route post-signup to the dashboard, not a forced choice
+- #662  2026-05-29  CLOSED  feat(bi-autodoc): incorporate DB AutoDoc — single fixed config, no picker
+- #661  2026-05-29  CLOSED  feat(bi-upgrade): auto-upgrade safety — never auto-apply major versions
+- #660  2026-05-29  CLOSED  feat(bi): wire connectors into Batteries Included via MJ-native path
+- #653  2026-05-17  MERGED  fix(byoc+bi): wizard env vars reach app_settings/EC2 + GH secrets; admin guard fast-path; AWS coming-soon
+- #652  2026-05-17  CLOSED  fix(bi): backfill BCSaaS row + team display + post-cancel UX + cross-add bridge + resub-after-cancel
+- #649  2026-05-15  CLOSED  fix(bi): backfill BCSaaS row + team display + post-cancel UX + cross-add bridge + resub-after-cancel
+- #648  2026-05-14  MERGED  fix(billing): cancel-plan via Stripe customer-email lookup, no PPC dependency
+- #647  2026-05-14  MERGED  chore(codegen): regenerate SQL outputs against stage post MJ 5.33 self-heal
+- #646  2026-05-14  MERGED  fix(stage): codegen composite-PK self-heal + Stripe ExternalCustomerID lookup
+- #644  2026-05-14  MERGED  feat(bi-keys): rich multi-field providers + coming-soon gating + verbose lifecycle UX
+- #643  2026-05-14  CLOSED  fix(bi-aws): retry ModifyDBCluster on InvalidDBClusterStateFault
+- #641  2026-05-14  MERGED  chore: sync stage to dev (verified BI end-to-end + cognito + cancel-park + invite)
+- #638  2026-05-11  CLOSED  fix(mjcentral): raise anyComponentStyle budget to unblock stage/prod builds
+- #634  2026-05-05  MERGED  Batteries Included — non-WIP slice (no UI, no SQL-temp)
+- #632  2026-05-04  MERGED  Batteries Included
+- #627  2026-04-30  CLOSED  feat(bi): batteries-included AWS-managed onboarding (consolidation)
+- #611  2026-04-29  MERGED  Merge feat/batteries-included-onboarding into dev for testing
+- #610  2026-04-29  CLOSED  feat(bi): batteries-included onboarding funnel + MJ 5.30.1 + cross-device persistence
+- #605  2026-04-28  MERGED  feat(marketing): batteries-included onboarding funnel — landing → pricing → video+provisioning → handoff
+- #583  2026-04-27  MERGED  hotfix(import): RBAC pre-flight + scaffold workflow forwards all secrets/vars
+- #581  2026-04-27  MERGED  hotfix(import): stop auto-writing credentials, AAD apps, and GitHub vars; wire activate UI
+- #579  2026-04-27  MERGED  hotfix(import): reset executionState on revalidation (unblocks Execute Import)
+- #577  2026-04-27  MERGED  hotfix(import): case-insensitive dedupe in addMissingAppSettings
+- #576  2026-04-27  MERGED  fix(import): re-promote re-verify check with validation-snapshot cross-reference
+- #574  2026-04-27  MERGED  hotfix(import): demote pre-apply re-verify to log-only — fixes prod false-positive drift
+- #572  2026-04-27  MERGED  fix(import): honor validation promises end-to-end + surface UI feedback
+- #569  2026-04-27  MERGED  fix(import-wizard): visible progress bar wired to backend stage stream
+- #568  2026-04-27  MERGED  fix(import): listWebhooks URL — colon → slash separator
+- #556  2026-04-26  MERGED  fix(import): pre-import state-rm in repo apply so plan matches validation
+- #555  2026-04-26  MERGED  chore(import): env-level DIAG diagnostic — log canonical fingerprint input on both sides
+- #554  2026-04-26  MERGED  fix(import-wizard): bump poll timeouts + show elapsed time + warn against re-clicking
+- #552  2026-04-26  CLOSED  docs: Bundled AI tier — design note for moving beyond BYOK
+- #551  2026-04-26  MERGED  feat(mjc): seed db_autodoc feature flag enabled
+- #542  2026-04-25  CLOSED  feat(mjc): operator-managed end users via customer's AWS Cognito user pool
+- #538  2026-04-25  MERGED  fix(import): pin github provider to ~> 6.11 — secret import separator regression
+- #536  2026-04-24  MERGED  chore(import): per-import diagnostic — capture exact tofu error on every reconcile attempt
+- #533  2026-04-24  MERGED  chore(import): diagnostic dump of canonical fingerprint input (both sides)
+- #531  2026-04-24  MERGED  fix(import): repo-level validation tfvars must match apply (fingerprint bijection)
+- #529  2026-04-24  MERGED  fix(import): github_actions_secret import uses colon separator (root cause of all Added false positives)
+- #528  2026-04-24  CLOSED  refactor(import): address #525 review nits — better import-error log, flatten block, shared MJC_APP list
+- #525  2026-04-24  MERGED  fix(import): full reconcile coverage — DB_READ_ONLY_PASSWORD, MJC_APP_*, custom[...], import logging
+- #523  2026-04-24  MERGED  fix(import): always-visible Re-validate button + empty state when no results
+- #520  2026-04-24  MERGED  feat(import): import-validation phase rollup — supersedes 13 open PRs
+- #519  2026-04-24  CLOSED  fix(import-validation): sticky top action bar with Execute Import button
+- #518  2026-04-23  CLOSED  feat(import-validation): surface every existing GH variable/secret
+- #517  2026-04-23  CLOSED  fix(import-validation): empty-state fires when results are present but empty
+- #516  2026-04-23  CLOSED  fix(import-validation): restore empty-state + Run Validation button
+- #505  2026-04-23  CLOSED  feat(import-validation): UI contract rebuild — four sections, per-attribute opt-in, category grouping
+- #504  2026-04-23  CLOSED  fix(import): enforce "nothing gets removed" end-to-end
+- #503  2026-04-23  CLOSED  fix(import-validation): show per-resource identifiers and surface secret drift
+- #502  2026-04-23  CLOSED  phase 2: owner perm fix + DBAutoDoc schema picker
+- #501  2026-04-23  MERGED  revert: unwind accidental merges of #485 #493 #494 on stage
+- #500  2026-04-22  CLOSED  feat(aws-tf): provision Cognito user pool + publish customer-repo vars (Phase 3, #475)
+- #499  2026-04-22  CLOSED  fix(import): classify template-unmanaged attributes as minor drift
+- #496  2026-04-22  CLOSED  fix(import): show every attribute change — no silent drops
+- #495  2026-04-22  CLOSED  feat(import): show exactly what changes per resource, for env and repo
+- #494  2026-04-22  MERGED  fix(import): enforce "nothing gets removed" end-to-end
+- #493  2026-04-22  MERGED  fix(import-validation): show per-resource identifiers and surface secret drift
+- #492  2026-04-22  CLOSED  fix(import-validation): copy env TF templates from azure subfolder
+- #489  2026-04-20  CLOSED  fix: remove direct-SQL fallback in createCloudConfigForOnboarding
+- #485  2026-04-17  MERGED  phase 2: owner perm fix + DBAutoDoc schema picker
+- #471  2026-04-13  MERGED  phase 1: fix: redact sensitive credentials from Terraform log viewer
+- #470  2026-04-13  MERGED  fix: codegen regeneration for prod — adds DeletedAt to mjcRepo entity
+- #469  2026-04-13  MERGED  fix: accent tint via CSS variable on surface-ground — definitive approach
+- #468  2026-04-13  MERGED  fix: make surface-ground transparent so html accent tint shows through
+- #467  2026-04-12  MERGED  fix: visible accent tint + loading skeleton prevents org-color flash
+- #466  2026-04-12  MERGED  fix: page background tint via html-level CSS, not overlay div
+- #465  2026-04-12  MERGED  fix: env/repo accent theming — race condition fix, fixed overlay, darker widgets
+- #464  2026-04-12  MERGED  fix: revert lockContextAccent + _destroyed guard for stale ctx accent
+- #463  2026-04-12  MERGED  fix: Create Installation wizard banner + org-accent override prevention
+- #462  2026-04-12  MERGED  feat: complete UI/UX overhaul — regression fixes, branded headers, settings nav, page theming
+- #461  2026-04-12  MERGED  fix: regression fixes — glass cards on gradient backgrounds, banner alignment, accent tinting
+- #460  2026-04-12  MERGED  fix: uniform rounded corners across every page
+- #459  2026-04-12  MERGED  feat: UI/UX consistency overhaul — wizards, accent theming, nav contrast
+- #458  2026-04-12  MERGED  fix: restore always-on drag/resize for dashboard widgets
+- #457  2026-04-12  MERGED  fix: restore catch parameter names broken by ESLint sweep
+- #456  2026-04-12  MERGED  chore: production-readiness sweep across MJCentral Angular app
+- #455  2026-04-12  MERGED  fix: accent flash + transparent text backgrounds in env detail
+- #454  2026-04-12  MERGED  fix: white header line, settings sidebar contrast, nav Resources split
+- #453  2026-04-12  MERGED  feat: navbar accent theming, Operations dropdown, settings banner, dark mode fixes
+- #452  2026-04-12  MERGED  feat: platform stats widget, /operations hub, pinned widget fixes, nav fixes, deploy fix
+- #451  2026-04-12  MERGED  fix: dashboard bg gap, tab-switch grey, customize btn, index.html cache
+- #450  2026-04-11  MERGED  feat: dashboard widget accents, Centra/hierarchy widgets, bg CSS var, RSS proxy fix
+- #449  2026-04-11  MERGED  fix: appearance saves, page header theming, banner headline display
+- #448  2026-04-11  MERGED  fix: dashboard visual overhaul + circular DI fix + news feed + full-bleed background
+- #447  2026-04-11  MERGED  fix: news feed URL, full-bleed dashboard, appearance cache invalidation
+- #446  2026-04-11  MERGED  fix: restore gridstack vertical gap and white dashboard background
+- #445  2026-04-11  MERGED  fix: dashboard UI polish + auto-upgrade recurring job
+- #444  2026-04-11  MERGED  fix: dashboard overhaul, appearance save bugs, auto-upgrade policy
+- #443  2026-04-11  MERGED  feat: dashboard overhaul, 3-level theming, MJ Central branding, NG0203 fix
+- #442  2026-04-11  MERGED  feat: dashboard overhaul — gridstack, 3-level theming, appearance editors
+- #441  2026-04-11  MERGED  fix: break AppearanceService ↔ UserContextService circular DI (NG0200)
+- #440  2026-04-11  MERGED  chore: upgrade MJ to 5.24.0 and BCSaaS to 1.0.4
+- #437  2026-04-10  MERGED  feat: dashboard widgets, notifications, UX fixes, and operational improvements
+- #435  2026-04-10  MERGED  fix: webhook URL filter + eject full MJC cleanup
+- #434  2026-04-10  MERGED  fix: unmapped preservable keys + PrimeNG 21 accordion + unified wizard + full validation UI
+- #432  2026-04-10  MERGED  feat: import flow overhaul — preserve app_settings, unified wizard, full validation report
+- #430  2026-04-10  MERGED  feat: preserve app_settings during import + validation overhaul
+- #428  2026-04-09  MERGED  Fix/sql SKU name discovery
+- #426  2026-04-09  MERGED  fix: SQL SKU discovery — combine ARM sku.name + sku.capacity for Terraform
+- #424  2026-04-08  MERGED  fix: import resilience — all phases aligned, SKU guards, repo signoff, comprehensive ignore_changes
+- #422  2026-04-08  MERGED  fix: complete import drift alignment — all phases, SKU guards, review fixes
+- #420  2026-04-08  MERGED  fix: align all import phases with discovered values and MJC enforcements
+- #418  2026-04-08  MERGED  fix: remove dead interface fields from import drift PR
+- #416  2026-04-08  MERGED  fix: minimize Terraform drift on imported environments
+- #414  2026-04-08  MERGED  fix: ignore source_branch drift on github_branch during import
+- #412  2026-04-08  CLOSED  feat: notification bell — live badge + popover in app header
+- #410  2026-04-08  CLOSED  feat: automated Knowledge Hub vector setup for Orgs, Repos, Connectors
+- #409  2026-04-08  CLOSED  feat: error explanations, notification overhaul, scheduled auto-upgrades
+- #408  2026-04-08  CLOSED  feat: comprehensive onboarding — preflight checks, UI overhaul, GitHub popup fallback
+- #407  2026-04-08  CLOSED  fix: auth guards, tutorials nav, wizard UI regressions, OAuth race
+- #406  2026-04-08  MERGED  fix: discover actual Azure config for imports instead of assuming defaults
+- #405  2026-04-07  CLOSED  feat: automated vector/entity document setup — Knowledge Hub (#358)
+- #404  2026-04-07  CLOSED  feat: scheduled auto-upgrades with user notification (#350)
+- #403  2026-04-07  CLOSED  feat: notification and email system overhaul (#342)
+- #402  2026-04-07  CLOSED  fix: don't re-apply existing Azure credentials after OAuth return
+- #401  2026-04-07  CLOSED  fix: wizard UI regressions — GitHub step layout and import tracker spacing
+- #400  2026-04-07  CLOSED  feat: add Tutorials nav link to sidebar and header
+- #398  2026-04-07  CLOSED  feat: GitHub flow — auto-redirect fallback when popup is blocked
+- #397  2026-04-07  CLOSED  feat: UI overhaul — wizard polish, progress indicators, consistent design tokens
+- #396  2026-04-07  CLOSED  feat: comprehensive Azure preflight — Free Trial warning, SQL Available check, provider registration
+- #390  2026-04-07  CLOSED  fix: discover actual Azure config for imports instead of assuming defaults
+- #386  2026-04-07  MERGED  fix: add timeout to region quota check — unblocks Continue button
+- #384  2026-04-06  MERGED  fix: unblock Continue button on Azure step
+- #383  2026-04-06  MERGED  fix: preflight region validation — auto-find working Azure region before Terraform
+- #380  2026-04-06  MERGED  fix: TS2339 result.resources does not exist on ResourceGroupDiscoveryResult
+- #379  2026-04-06  MERGED  fix: real per-subscription preflight blocks provisioning if App Service or SQL unavailable
+- #377  2026-04-06  CLOSED  feat: LLM-powered error explanations with cached signatures
+- #376  2026-04-06  MERGED  fix: default Azure hosting tier to byoa_oauth
+- #375  2026-04-06  MERGED  fix: persist region when editing Azure cloud config
+- #374  2026-04-06  MERGED  feat: import existing environment into installation
+- #371  2026-04-06  CLOSED  feat: LLM error explanations + fix Azure hosting tier default
+- #369  2026-04-06  MERGED  fix: increase App Service startup timeout to 600s
+- #368  2026-04-05  CLOSED  fix: 12 issue fixes — auth guards, health checks, UI improvements
+- #367  2026-04-05  MERGED  fix: skip Oryx node_modules tarball on App Service startup
+- #365  2026-04-03  MERGED  feat: configurable Azure resource provisioning with smart defaults
+- #363  2026-04-03  MERGED  fix: show Create Org + Refresh List when no GitHub orgs detected
+- #347  2026-03-31  MERGED  fix: batch bug fixes — import limits, RBAC, invite flow, TF locks
+- #316  2026-03-31  CLOSED  fix: repo-level destroy falls back to platform GitHub credentials
+- #314  2026-03-30  MERGED  fix: eject + destroy credential fallback + profile picture
+- #312  2026-03-30  MERGED  fix: verification credentials + GitHub App ID for post-import
+- #310  2026-03-30  MERGED  fix: reconcile all resources during validation + remove hard-failing import blocks
+- #307  2026-03-30  MERGED  fix: GitHub secret import IDs use : not /
+- #305  2026-03-30  MERGED  fix: validation shows accurate status for GitHub secrets and firewall rules
+- #303  2026-03-30  MERGED  fix: reconcile firewall rules + missing GitHub secrets for import
+- #301  2026-03-30  MERGED  fix: plan guard only blocks Azure resource destruction
+- #300  2026-03-30  MERGED  fix: import 409 — preserve Azure RG name set by import wizard
+- #299  2026-03-30  MERGED  fix: clean stale state on import retry + block destructive plans
+- #295  2026-03-30  MERGED  fix: correct Terraform import addresses and drift resolution data flow
+- #287  2026-03-30  MERGED  fix: import wizard cloud config org link + dashboard Import Existing button
+- #285  2026-03-30  MERGED  fix: add Import Existing button to dashboard header
+- #283  2026-03-30  MERGED  fix: 3/31 pre-release polish — security, UX, and correctness
+- #281  2026-03-30  MERGED  fix: repo destroy tfvars + AI vendor keys → GitHub Secrets + Centra user context
+- #280  2026-03-30  MERGED  feat: UX polish launch — 15+ features
+- #278  2026-03-29  MERGED  fix: phase 1 testing — 9 issues
+- #277  2026-03-29  MERGED  chore: regenerate entities after MJ 5.20.0 migration on prod
+- #276  2026-03-29  MERGED  chore: regenerate entities after MJ 5.20.0 migration on stage
+- #274  2026-03-29  MERGED  fix: data connectors reliability, MJ 5.20 upgrade, UI polish
+- #273  2026-03-27  CLOSED  fix: increase container startup timeout to 600s
+- #271  2026-03-27  MERGED  fix: add pull_request event to repo webhook for bot PR auto-merge
+- #269  2026-03-27  MERGED  fix: multi-org isolation — X-Organization-ID header on all requests
+- #267  2026-03-27  MERGED  fix: error.message on unknown type
+- #266  2026-03-27  MERGED  fix: SQL injection + any types + auth guard in UserResolver
+- #265  2026-03-27  MERGED  fix: strict bot check + webhook dedup for RSU auto-merge
+- #264  2026-03-27  MERGED  feat: auto-merge RSU bot PRs via webhook + Explorer deploy
+- #263  2026-03-27  CLOSED  fix: PR merge survives customer restart + bot-only filter
+- #262  2026-03-27  MERGED  fix: mergeRSUPullRequest — bot-only filter + Explorer deploy trigger
+- #261  2026-03-27  MERGED  fix: verifyEnvOwnership field names
+
+## MJ-Central/template
+- #61  2026-07-09  MERGED  fix(deploy): ship apps/MJAPI/mj.config.cjs so installed connectors register
+- #60  2026-07-09  MERGED  fix(ci): secrets context is not valid in step-level if conditions
+- #59  2026-07-09  MERGED  feat(ci): generic, N-capable private-connector credential support
+- #58  2026-07-07  MERGED  chore: bump MemberJunction to 5.45.0
+- #57  2026-07-07  MERGED  fix: mj-upgrade concurrency deadlock when called by mj-workspace-upgrade
+- #56  2026-07-07  MERGED  feat: stateful workspace upgrade + chassis sync (BYOC half)
+- #55  2026-07-04  MERGED  Mirror platform #939: canonical app-manage superset + repo-writer concurrency + system-user role seed
+- #54  2026-07-02  MERGED  fix(deps): complete the 5.44.0 bump across all workspaces (kill dual-version registry split)
+- #53  2026-07-02  MERGED  chore(main): drop @Subpath scaffolding + bump to 5.44.0
+- #52  2026-07-02  MERGED  release(byoc): mj-5.44.0 — bump 5.44.0 + drop @Subpath scaffolding
+- #51  2026-07-02  MERGED  fix(byoc): @Subpath patch gates on sproc param, not the __mj EntityField
+- #50  2026-07-01  MERGED  fix(byoc): Explorer 405 on mj-5.43.0 lineage — bake uses branch_env
+- #49  2026-07-01  MERGED  fix(byoc): Explorer 405 — GraphQL bake uses branch_env not inputs.environment
+- #48  2026-07-01  CLOSED  fix(byoc): seed 4 BCSaaS org-roles via metadata/ (instance owner-gate + config load)
+- #47  2026-07-01  MERGED  TEMPORARY (delete after MJ 5.44.0): @Subpath on __mj.OpenApp sprocs for v5.43.x
+- #46  2026-06-30  MERGED  fix(roles): open-app schemas + objects owned by MJ_CodeGen (fixes codegen on Postgres)
+- #45  2026-06-30  MERGED  fix(roles): open-app schemas owned by MJ_CodeGen (fixes codegen permission-denied)
+- #44  2026-06-29  MERGED  fix(app-manage): kill mj app install CLI on success to skip ~20min idle-pool hang
+- #42  2026-06-18  CLOSED  fix(codemod): fall back to main when mj-<target> tag is missing
+- #41  2026-06-17  MERGED  chore: upgrade MemberJunction to v5.41.0 (BI / main)
+- #38  2026-06-16  CLOSED  fix(sql): create-only logins — never re-password an existing login (import-safe)
+- #35  2026-06-11  MERGED  chore(deps): bump MemberJunction 5.39.0 → 5.40.1
+- #34  2026-06-11  MERGED  ci(migrate): apply MJ migrations remotely, pinned to the installed MJ version
+- #33  2026-06-07  MERGED  fix(deploy): shell-safe current.env writing (unblock all baselines)
+- #32  2026-06-02  MERGED  fix(deploy): write DB_ENGINE into current.env for RSU CodeGen on Postgres
+- #31  2026-06-02  MERGED  fix(rsu): Postgres DDL provider + RSU env (AWS BI connector sync)
+- #30  2026-05-31  MERGED  fix(metadata): rename back-link app file off reserved .mj- prefix so it seeds at provision time
+- #29  2026-05-29  MERGED  feat: expose MJ Central dashboard URL for the back-link Open App
+- #28  2026-05-28  MERGED  feat(mjexplorer): derive deployed API endpoint from window.location (multi-hostname)
+- #27  2026-05-08  MERGED  fix(MJExplorer): optimization: false in angular.json (belt-and-suspenders with NG_BUILD_MANGLE=0)
+- #26  2026-05-08  MERGED  fix(MJExplorer): NG_BUILD_MANGLE=0 + index.html parity with MJ 5.33.0
+- #25  2026-05-08  MERGED  chore: align template with MJ 5.33.0 + Aurora PG provisioning
+- #24  2026-05-06  CLOSED  fix(pg/aurora): cdp_* + master role membership in postgres role script
+- #23  2026-05-03  CLOSED  fix(pg-roles): use set_config/current_setting for password vars in DO blocks
+- #22  2026-05-03  MERGED  fix(db): wire Postgres end-to-end (mssql remains default)
+- #21  2026-05-02  MERGED  fix(deploy-api): set GRAPHQL_ROOT_PATH=/api/ so MJAPI WebSocket binds correctly
+- #20  2026-04-30  MERGED  feat(deploy): Cognito-only AWS deploy workflows (split from #18, no PG, no MJ bump)
+- #19  2026-04-23  CLOSED  chore: upgrade MemberJunction to v5.29.0
+- #18  2026-04-23  MERGED  feat: MJ 5.31 upgrade + DB_ENGINE branching for Postgres support
+- #17  2026-04-22  MERGED  Phase 3: unified AZ/AWS deploy workflows (MSAL + Cognito)
+- #15  2026-02-25  MERGED  Upgrade MemberJunction from 5.2.0 to 5.3.1
+- #14  2026-02-22  MERGED  feat: AST codemod for major upgrades + auto-tag workflow
+- #13  2026-02-20  MERGED  Upgrade MemberJunction Central Template to v5.1.0
+- #12  2026-02-18  CLOSED  Update mj-upgrade.yml
+- #11  2026-02-15  MERGED  Upgrade to 4.4.0 
+
+## MemberJunction/Integrations
+- #72  2026-07-10  MERGED  release: HigherLogicVanilla connector → main
+- #71  2026-07-10  MERGED  release: HubSpot 168-object connector + EDS finalize → main
+- #70  2026-07-10  MERGED  release: EDS connectors (SQL Server/Postgres/Mongo/MySQL/Oracle/Snowflake) → main
+- #69  2026-07-10  MERGED  feat(hubspot): recover 168-object catalog + publish (unset private) + seed
+- #67  2026-07-10  MERGED  release: mj-sync autoCreateMissingRecords (4 connector patches) → main
+- #66  2026-07-10  MERGED  fix(connectors): add push.autoCreateMissingRecords to .mj-sync.json (15 connectors)
+- #65  2026-07-09  MERGED  feat(connector): Higher Logic Vanilla connector v1 — GENUINE-GREEN-MOCK
+- #63  2026-07-07  MERGED  Release: promote next → main (#56 schema-merge PK/width fix)
+- #62  2026-07-07  MERGED  Sync: back-merge main into next (Version Packages release + Blackbaud publish fix)
+- #61  2026-07-07  MERGED  feat(connectors): EDS-backed ingestion connectors for 6 engines (staged for 5.46.0)
+- #60  2026-07-07  MERGED  chore(Blackbaud): publish v1.2.0 (flip private:false)
+- #58  2026-07-07  MERGED  Release: promote next → main (Zendesk, WildApricot, Blackbaud, MagnetMail v2, Stripe FK)
+- #57  2026-07-07  MERGED  fix(Finance/Stripe): declare source_transaction.source parent FK
+- #56  2026-07-06  MERGED  fix(schema-merge): carry sampled PK onto keyless objects (I1) + declared-width headroom (I2)
+- #55  2026-07-05  CLOSED  fix(schema-merge): width headroom so capped samples don't overflow (the 99-skip class)
+- #53  2026-07-05  MERGED  release: promote next→main — fixes catalog (PheedLoop 1.4.0), guards, + connectors
+- #52  2026-07-05  MERGED  Zendesk connector Open App v1.0.0 (Platform/Zendesk)
+- #51  2026-07-05  MERGED  fix(catalog): stop installs pinning stale connector versions (regenerate + guard)
+- #50  2026-07-05  MERGED  feat(Marketing/MagnetMail): connector v2.0.0 — SOAP rebuild + sample-union + seed migration
+- #48  2026-07-05  MERGED  Promote next → main: connector sample-union (all describe-endpoint connectors)
+- #47  2026-07-05  MERGED  feat(connectors): wire MJ's streaming sampler into IntrospectSchema (sample-union)
+- #46  2026-07-04  MERGED  Finance/Stripe: Stripe connector v1 (Open App)
+- #44  2026-07-04  MERGED  release: catalog delta migrations for PheedLoop + GrowthZone (+ metadata-migration CI guard)
+- #43  2026-07-04  MERGED  fix(connectors): ship catalog delta migrations — metadata alone reaches no tenant
+- #41  2026-07-03  MERGED  chore(release): back-merge main + fresh changesets — unblocks the wave-2 promotion (#40)
+- #40  2026-07-03  MERGED  Promote next → main: semantic field-length inference (tool + 177 url/email widenings + CI gate)
+- #39  2026-07-03  MERGED  feat(fleet): semantic field-length inference — tool, 177 applied, CI gate
+- #37  2026-07-03  MERGED  Promote next → main: second-layer parent declarations + fleet prose-field widening + CI guardrails
+- #36  2026-07-03  MERGED  Eventbrite connector v2.0.0 — 33-object rebuild (supersedes 18-object 1.0.0)
+- #35  2026-07-03  MERGED  fix(pheedloop,growthzone): resolve every templated list door + CI guardrail for the silent-second-layer class
+- #34  2026-07-03  MERGED  CRM/Blackbaud: Blackbaud SKY API connector (Raiser's Edge NXT) — HybridE2E green
+- #33  2026-07-02  MERGED  feat(AMS/WildApricot): publish v1.0.0 — Phase-0 redo (25 objects)
+- #32  2026-06-29  MERGED  Sync next with main (post-1.2.0 release)
+- #30  2026-06-29  MERGED  Release: connector CredentialType FK fix (1.2.0)
+- #29  2026-06-29  MERGED  fix(integration): remove stray push artifact (1.2.0 cleanup)
+- #28  2026-06-29  MERGED  fix(integration): seed CredentialType before Integration (1.2.0)
+- #27  2026-06-29  MERGED  Sync next with main (post-Cvent 1.1.0 release)
+- #25  2026-06-29  MERGED  Release: Cvent PostgreSQL migration fix (1.1.0)
+- #24  2026-06-29  MERGED  fix(integration): Cvent PostgreSQL seed migration (1.1.0)
+- #23  2026-06-29  MERGED  Sync next with main (post-release: 1.1.0 versions + consume changeset)
+- #21  2026-06-29  MERGED  Release: connector PG migration fix (1.1.0) + Eventbrite (1.0.0)
+- #20  2026-06-29  MERGED  fix(integration): regenerate PostgreSQL connector seed migrations (1.1.0)
+- #19  2026-06-29  MERGED  feat(connector): Eventbrite Open App — proven green on full e2e matrix
+- #18  2026-06-28  MERGED  Promote to main: publish Cvent (20th connector) + validation guards
+- #17  2026-06-28  MERGED  ci: connector validation red iff real problem — duplicate-seed guard + npm-aware changeset gate
+- #16  2026-06-28  MERGED  fix+publish(cvent): four-way identity, clean names, seed migration → ship as the 20th connector
+- #15  2026-06-28  MERGED  Promote to main: main-source-guard (activate only next → main)
+- #14  2026-06-28  MERGED  ci: enforce only next → main (main-source-guard)
+- #13  2026-06-28  MERGED  Promote to main: connectors-catalog.json (installable-connector browse layer)
+- #12  2026-06-28  MERGED  Connectors catalog — installable-connector browse layer (connectors-catalog.json)
+- #11  2026-06-28  MERGED  release: promote unique-key connectors to main + enable publish (1.0.0)
+- #10  2026-06-28  MERGED  fix(connectors): key 19 connectors by npm package name (prevents stale resolution)
+- #9  2026-06-28  CLOSED  fix(connectors): key 19 connectors by npm package name (pre-publish, prevents stale resolution)
+- #8  2026-06-27  CLOSED  chore(release): enable npm publish — drop empty promote-guard changeset
+- #7  2026-06-27  MERGED  Release promotion: next → main (publish guard, green)
+- #6  2026-06-27  CLOSED  Release promotion: next → main (publish guard — 17 held private)
+- #5  2026-06-27  MERGED  Gate held connectors private (publish only the 19)
+- #3  2026-06-27  MERGED  Next
+- #2  2026-06-27  MERGED  Publish 19 connector Open Apps at 1.0.0
+- #1  2026-06-22  MERGED  feat: MemberJunction Integrations — connectors as installable Open Apps
+
+## BlueCypress/Integrations-ACGI
+- #10  2026-07-10  MERGED  release: ACGI 1.3.0 (generalize base URLs / {dad} template)
+- #9  2026-07-10  MERGED  feat(acgi): generalize base URLs — remove hardcoded tenant DAD from shipped metadata (1.3.0)
+- #7  2026-07-10  MERGED  release: ACGI v1.2.1 (parseConfig wizard fix) → main
+- #6  2026-07-10  MERGED  fix(acgi): parseConfig fallback to Integration products template (wizard connections) — v1.2.1
+- #5  2026-07-09  MERGED  release: next -> main (v1.2.0 - ACGI API credential type)
+- #4  2026-07-09  MERGED  fix: ship the ACGI API credential type (connect wizard shows real fields, not generic API Key)
+- #3  2026-07-09  MERGED  release: next -> main (v1.1.0 fixes)
+- #2  2026-07-09  CLOSED  merge: reconcile next into main (all pending fixes)
+- #1  2026-07-09  MERGED  fix: invalid IsForeignKey field, overlong Description, regenerate PG migration

@@ -1,0 +1,55 @@
+[
+  {
+    "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-remaining-config-facts.mjs",
+    "ScriptRunAt": "2026-07-13T19:58:42.000Z",
+    "StructuredOutput": {
+      "apiVersioningStrategy": {
+        "host": "api.cc.email",
+        "basePath": "/v3",
+        "specDocumentVersion": "3.0.161",
+        "derivedStrategy": "url-path"
+      }
+    },
+    "SchemaValidationStatus": "Passed",
+    "TargetField": "integration.Configuration.APIVersioningStrategy"
+  },
+  {
+    "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-remaining-config-facts.mjs",
+    "ScriptRunAt": "2026-07-13T19:58:42.000Z",
+    "StructuredOutput": {
+      "errorResponseShape": {
+        "statusCodeCountsAcrossAllOperations": {
+          "400": 120,
+          "401": 123,
+          "403": 122,
+          "404": 102,
+          "405": 2,
+          "406": 2,
+          "409": 22,
+          "415": 41,
+          "429": 33,
+          "500": 124,
+          "503": 47
+        },
+        "errorCodesObserved": ["400", "401", "403", "404", "405", "406", "409", "415", "429", "500", "503"],
+        "note": "Full scan of every operation's declared responses keys across all 98 paths in the saved OpenAPI spec -- supersedes the prior partial list (400,401,403,404,415,429,500,503) which omitted 405/406/409, each of which is documented on at least 2 operations."
+      }
+    },
+    "SchemaValidationStatus": "Passed",
+    "TargetField": "integration.Configuration.ErrorResponseShape"
+  },
+  {
+    "ScriptPath": "packages/Integration/connectors-registry/constant-contact/scripts/extract-integration-config-facts.mjs",
+    "ScriptRunAt": "2026-07-11T22:36:27.283Z",
+    "StructuredOutput": {
+      "concurrencyHeaderScan": {
+        "ETag": false,
+        "If-Match": false,
+        "If-Unmodified-Since": false
+      },
+      "note": "Same full-text scan already used to justify integration.Configuration.ConcurrencyControl='none' is the direct causal basis for the DefaultConflictResolution recommendation: with no ETag/If-Match/version mechanism documented anywhere in the V3 spec, a MostRecent timestamp-based conflict resolution cannot be made reliable, so DestWins is recommended instead per the ConcurrencyControl-driven policy rule."
+    },
+    "SchemaValidationStatus": "Passed",
+    "TargetField": "integration.Configuration.DefaultConflictResolution"
+  }
+]

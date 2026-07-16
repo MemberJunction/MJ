@@ -1,0 +1,747 @@
+{
+  "Contact": {
+    "method": "GET",
+    "path": "api/v2.0/Contacts/GetContact?contactKey={contactKey}&includeSecurityGroups={includeSecurityGroups}",
+    "topLevelResponseModel": {
+      "modelName": "Contact",
+      "isCollection": false
+    },
+    "fields": [
+      "LinkToProfile:string",
+      "PictureUrl:string",
+      "LargePictureUrl:string",
+      "ContactKey:globally unique identifier",
+      "FirstName:string",
+      "LastName:string",
+      "DisplayName:string",
+      "EmailAddress:string",
+      "ContactStatusCode:string",
+      "PrefixCode:string",
+      "UpdatedOn:date",
+      "UpdatedByContactKey:globally unique identifier",
+      "CompanyName:string",
+      "CompanyTitle:string",
+      "SuffixCode:string",
+      "Designation:string",
+      "LegacyContactKey:string",
+      "InformalName:string",
+      "Phone1:string",
+      "Phone1Type:string",
+      "Phone2:string",
+      "Phone2Type:string",
+      "Phone3:string",
+      "Phone3Type:string",
+      "Phone4:string",
+      "Phone4Type:string",
+      "WebsiteUrl:string",
+      "MemberAwardKey:globally unique identifier",
+      "IsMember:boolean",
+      "AgreedToTermsDateTime:date",
+      "MemberId:string",
+      "MaidenName:string",
+      "PrimarySecurityGroupKey:globally unique identifier",
+      "MiddleName:string",
+      "IsCompany:boolean",
+      "CompanyLegacyContactKey:string",
+      "AMSDirectoryOptOut:boolean",
+      "HLDirectoryOptOut:boolean",
+      "HLContactMeOptOut:boolean",
+      "IsBlogger:boolean",
+      "EducationEntries:Collection of Education",
+      "WorkHistory:Collection of WorkExperience",
+      "Profile:Profile",
+      "Addresses:Collection of Address",
+      "UnreadMessageCount:integer",
+      "LinkToVolunteerProfile:string",
+      "Demographics:Collection of Demographic",
+      "SecurityGroups:Collection of SecurityGroupConcise"
+    ]
+  },
+  "Community": {
+    "method": "GET",
+    "path": "api/v2.0/Communities/Get?communityKey={communityKey}",
+    "topLevelResponseModel": {
+      "modelName": "Community",
+      "isCollection": false
+    },
+    "fields": [
+      "AllowMemberCreatedEvents:boolean",
+      "AllowTickets:boolean",
+      "ThreadTypes:Collection of string",
+      "CanMembersInviteOthers:boolean",
+      "CommunityKey:globally unique identifier",
+      "LegacyGroupKey:string",
+      "CommunityName:string",
+      "CommunitySize:integer",
+      "CommunityTypeKey:globally unique identifier",
+      "CommunityType:string",
+      "CommunityTypeName:string",
+      "CreatedByContactKey:globally unique identifier",
+      "CreatedOn:date",
+      "Description:string",
+      "Html:string",
+      "IsTopicCommunity:boolean",
+      "IsSubscribedToDiscussion:boolean",
+      "IsOnCommunitySync:boolean",
+      "JoinPermissionKey:globally unique identifier",
+      "LibraryKey:globally unique identifier",
+      "LibraryName:string",
+      "LinkToCommunity:string",
+      "LinkToCommunityCalendar:string",
+      "LinkToDiscussion:string",
+      "LinkToLibrary:string",
+      "LinkToWebsite:string",
+      "DiscussionKey:globally unique identifier",
+      "DiscussionName:string",
+      "MicrositeGroupKey:globally unique identifier",
+      "SiteName:string",
+      "ViewPermissionKey:globally unique identifier",
+      "Statistics:CommunityStatistics",
+      "CreatedByContact:ContactConcise",
+      "IntegrationKey:string",
+      "IntegrationTypeKey:string",
+      "ParentCommunityKey:globally unique identifier",
+      "TopicTagGroups:Collection of TopicTagGroup",
+      "CanPostQuestions:boolean",
+      "CanPostAnonymously:boolean",
+      "CanReplyAnonymously:boolean"
+    ]
+  },
+  "CommunityMember": {
+    "method": "POST",
+    "path": "api/v2.0/Communities/GetCommunityMembers",
+    "topLevelResponseModel": {
+      "modelName": "CommunityMember",
+      "isCollection": true
+    },
+    "fields": [
+      "LinkToProfile:string",
+      "PictureUrl:string",
+      "ContactKey:globally unique identifier",
+      "FirstName:string",
+      "LastName:string",
+      "DisplayName:string",
+      "EmailAddress:string",
+      "ContactStatusCode:string",
+      "PrefixCode:string",
+      "UpdatedOn:date",
+      "UpdatedByContactKey:globally unique identifier",
+      "CompanyName:string",
+      "CompanyTitle:string",
+      "SuffixCode:string",
+      "Designation:string",
+      "LegacyContactKey:string",
+      "InformalName:string",
+      "MiddleName:string",
+      "IsCompany:boolean",
+      "CompanyLegacyContactKey:string",
+      "AMSDirectoryOptOut:boolean",
+      "HLDirectoryOptOut:boolean",
+      "HLContactMeOptOut:boolean",
+      "LargePictureUrl:string",
+      "AgreedToTermsDateTime:date",
+      "AcceptedOn:date",
+      "Community:Community",
+      "CommunityMemberRoles:string",
+      "InvitedByContactKey:globally unique identifier",
+      "InvitedOn:date",
+      "IsActive:boolean",
+      "IsAdmin:boolean",
+      "RemovedOn:date",
+      "StartDate:date",
+      "EndDate:date"
+    ]
+  },
+  "Discussion": {
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetDiscussion?discussionKey={discussionKey}",
+    "topLevelResponseModel": {
+      "modelName": "Discussion",
+      "isCollection": false
+    },
+    "fields": [
+      "DiscussionKey:globally unique identifier",
+      "DiscussionName:string",
+      "LinkToDiscussion:string"
+    ]
+  },
+  "DiscussionThread": {
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetRecentThreads?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}",
+    "topLevelResponseModel": {
+      "modelName": "DiscussionThread",
+      "isCollection": true
+    },
+    "fields": [
+      "MessageCount:integer",
+      "DiscussionThreadKey:globally unique identifier",
+      "Subject:string",
+      "LastPostDate:date",
+      "LinkToViewThread:string",
+      "LastPostAuthor:ContactConcise",
+      "DiscussionKey:globally unique identifier",
+      "CommunityName:string",
+      "CommunityKey:globally unique identifier",
+      "IsFollowing:boolean",
+      "UserPermissions:Collection of string"
+    ]
+  },
+  "DiscussionPost": {
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetDiscussionPost?discussionPostKey={discussionPostKey}",
+    "topLevelResponseModel": {
+      "modelName": "DiscussionPost",
+      "isCollection": false
+    },
+    "fields": [
+      "Author:ContactConcise",
+      "Body:string",
+      "BodyWithoutMarkup:string",
+      "ContactKey:globally unique identifier",
+      "DatePosted:date",
+      "LinkToDiscussion:string",
+      "LinkToMessageInContext:string",
+      "DiscussionName:string",
+      "EmailAddress:string",
+      "LinkToMessage:string",
+      "DiscussionPostKey:globally unique identifier",
+      "ParentDiscussionPostKey:globally unique identifier",
+      "DiscussionThreadKey:globally unique identifier",
+      "CommunityName:string",
+      "CommunityKey:globally unique identifier",
+      "DiscussionKey:globally unique identifier",
+      "MessageStatus:string",
+      "ModerationType:string",
+      "DiscussionPostId:integer",
+      "Pinned:boolean",
+      "Status:MessageStatus",
+      "Subject:string",
+      "Tags:Collection of ItemTagResponse",
+      "HasRecommended:boolean",
+      "RecommendationCount:integer",
+      "Attachments:Collection of DocumentAttachment",
+      "ContactsWhoRecommend:Collection of ContactConcise",
+      "IsAnswer:boolean",
+      "UserPermissions:Collection of string"
+    ]
+  },
+  "Comment": {
+    "method": "GET",
+    "path": "api/v2.0/Comments/GetComments?afterCommentKey={afterCommentKey}&beforeCommentKey={beforeCommentKey}&limit={limit}",
+    "topLevelResponseModel": {
+      "modelName": "PaginatedComments",
+      "isCollection": false
+    },
+    "fields": [
+      "Comments:Collection of Comment",
+      "HasMoreComments:boolean",
+      "Next:string",
+      "Previous:string"
+    ]
+  },
+  "Blog": {
+    "method": "GET",
+    "path": "api/v2.0/Blogs/GetBlog?blogKey={blogKey}",
+    "topLevelResponseModel": {
+      "modelName": "Blog",
+      "isCollection": true
+    },
+    "fields": [
+      "Author:ContactConcise",
+      "BlogKey:globally unique identifier",
+      "Community:Community",
+      "CreatedOn:date",
+      "BlogText:string",
+      "IsPublished:boolean",
+      "LinkToReadBlog:string",
+      "PublishedOn:date",
+      "BlogTitle:string",
+      "UpdatedOn:date",
+      "ViewPermission:string",
+      "CommentPermission:string",
+      "ViewCount:integer",
+      "RatingCount:integer",
+      "CommentCount:integer",
+      "Comments:Collection of Comment",
+      "RelatedLinks:Collection of RelatedLink",
+      "ContactsWhoRecommend:Collection of ContactConcise",
+      "AuthenticatedUserRecommends:boolean",
+      "AuthenticatedUserFavorite:boolean"
+    ]
+  },
+  "Question": {
+    "method": "GET",
+    "path": "api/v2.0/Question/GetThread?questionKey={questionKey}&numberOfAnswers={numberOfAnswers}",
+    "topLevelResponseModel": {
+      "modelName": "QuestionThread",
+      "isCollection": false
+    },
+    "fields": [
+      "AnswerCount:integer",
+      "AnswerContainer:PaginatedAnswers",
+      "QuestionKey:globally unique identifier",
+      "Title:string",
+      "HasBestAnswer:boolean",
+      "HasReplied:boolean",
+      "BestAnswerOn:date",
+      "IsThreadClosed:boolean",
+      "ThreadClosedOn:date",
+      "ThreadClosedBy:ContactConcise",
+      "IsFollowing:boolean",
+      "Content:string",
+      "PublishedOn:date",
+      "Community:Community",
+      "Author:ContactConcise",
+      "Attachments:Collection of DocumentAttachment",
+      "IsAnonymous:boolean",
+      "Creator:ContactConcise",
+      "EditedOn:date",
+      "EditedBy:ContactConcise",
+      "IsModerated:boolean",
+      "RecommendationCount:integer",
+      "HasRecommended:boolean",
+      "Tags:Collection of ItemTagResponse",
+      "UserPermissions:Collection of string"
+    ]
+  },
+  "Answer": {
+    "method": "GET",
+    "path": "api/v2.0/Answer/Get?answerKey={answerKey}",
+    "topLevelResponseModel": {
+      "modelName": "Answer",
+      "isCollection": false
+    },
+    "fields": [
+      "AnswerKey:globally unique identifier",
+      "ParentKey:globally unique identifier",
+      "IsBestAnswer:boolean",
+      "BestAnswerOn:date",
+      "Content:string",
+      "PublishedOn:date",
+      "Community:Community",
+      "Author:ContactConcise",
+      "Attachments:Collection of DocumentAttachment",
+      "IsAnonymous:boolean",
+      "Creator:ContactConcise",
+      "EditedOn:date",
+      "EditedBy:ContactConcise",
+      "IsModerated:boolean",
+      "RecommendationCount:integer",
+      "HasRecommended:boolean",
+      "Tags:Collection of ItemTagResponse",
+      "UserPermissions:Collection of string"
+    ]
+  },
+  "Event": {
+    "method": "GET",
+    "path": "api/v2.0/Events/GetEvent?eventKey={eventKey}",
+    "topLevelResponseModel": {
+      "modelName": "HttpResponseMessage",
+      "isCollection": false
+    },
+    "fields": [
+      "Version:Version",
+      "Content:HttpContent",
+      "StatusCode:HttpStatusCode",
+      "ReasonPhrase:string",
+      "Headers:Collection of Object",
+      "RequestMessage:HttpRequestMessage",
+      "IsSuccessStatusCode:boolean"
+    ]
+  },
+  "EventRegistrant": {
+    "method": "GET",
+    "path": "api/v2.0/Events/GetEventRegistrants?calendarEventKey={calendarEventKey}&modifiedDateTime={modifiedDateTime}&maxRecords={maxRecords}&continuationToken={continuationToken}",
+    "topLevelResponseModel": {
+      "modelName": "EventRegistrantConcise",
+      "isCollection": true
+    },
+    "fields": [
+      "RegistrantKey:globally unique identifier",
+      "BadgeName:string",
+      "FirstName:string",
+      "LastName:string",
+      "Email:string",
+      "CompanyName:string",
+      "CompanyTitle:string",
+      "WebsiteUrl:string",
+      "PictureUrl:string",
+      "LargePictureUrl:string",
+      "DirectoryOptOut:boolean",
+      "ContactMeOptOut:boolean",
+      "RegistrationKey:globally unique identifier",
+      "ContactKey:globally unique identifier",
+      "UpdatedOn:date",
+      "RegistrantClass:string"
+    ]
+  },
+  "EventType": {
+    "method": "GET",
+    "path": "api/v2.0/Events/GetEventTypes",
+    "topLevelResponseModel": {
+      "modelName": "HttpResponseMessage",
+      "isCollection": false
+    },
+    "fields": [
+      "Version:Version",
+      "Content:HttpContent",
+      "StatusCode:HttpStatusCode",
+      "ReasonPhrase:string",
+      "Headers:Collection of Object",
+      "RequestMessage:HttpRequestMessage",
+      "IsSuccessStatusCode:boolean"
+    ]
+  },
+  "EventSession": {
+    "method": "GET",
+    "path": "api/v2.0/EventSessions/GetSession?sessionKey={sessionKey}",
+    "topLevelResponseModel": {
+      "modelName": "EventSession",
+      "isCollection": false
+    },
+    "fields": [
+      "EventSessionCategoryKey:globally unique identifier",
+      "EventSessionKey:globally unique identifier",
+      "Presenters:Collection of EventPresenter",
+      "CategoryKey:globally unique identifier",
+      "CategoryName:string",
+      "CategorySortOrder:integer",
+      "CECredits:decimal number",
+      "CreatedByContactKey:globally unique identifier",
+      "CreatedOn:date",
+      "Description:string",
+      "EarlyRegistrationPrice:decimal number",
+      "EndDateTime:date",
+      "EndDateTimeUTC:date",
+      "ICalendarData:string",
+      "IsActive:boolean",
+      "IsDefault:boolean",
+      "IsDisplayed:boolean",
+      "IsLoggingEnabled:boolean",
+      "IsRequired:boolean",
+      "IsSession:boolean",
+      "LateRegistrationPrice:decimal number",
+      "LegacyOptionKey:string",
+      "Location:string",
+      "MaximumRegistrants:integer",
+      "PriceTypeCode:integer",
+      "RegistrantCount:integer",
+      "RegularRegistrationPrice:decimal number",
+      "SortOrder:integer",
+      "StartDateTime:date",
+      "StartDateTimeUTC:date",
+      "Title:string",
+      "UpdatedByContactKey:globally unique identifier",
+      "UpdatedOn:date"
+    ]
+  },
+  "RegistrantClass": {
+    "method": "GET",
+    "path": "api/v2.0/RegistrantClass/GetRegistrantClasses?Active={Active}",
+    "topLevelResponseModel": {
+      "modelName": "HttpResponseMessage",
+      "isCollection": false
+    },
+    "fields": [
+      "Version:Version",
+      "Content:HttpContent",
+      "StatusCode:HttpStatusCode",
+      "ReasonPhrase:string",
+      "Headers:Collection of Object",
+      "RequestMessage:HttpRequestMessage",
+      "IsSuccessStatusCode:boolean"
+    ]
+  },
+  "DocumentLibrary": {
+    "method": "GET",
+    "path": "api/v2.0/ResourceLibrary/GetLibraryList",
+    "topLevelResponseModel": {
+      "modelName": "DocumentLibrary",
+      "isCollection": true
+    },
+    "fields": [
+      "Community:Community",
+      "EntryCount:integer",
+      "CreatedOn:date",
+      "IsCommunityRelated:boolean",
+      "CanPost:boolean",
+      "CanView:boolean",
+      "LastApprovedDocumentCreatedOn:date",
+      "LastApprovedDocumentOrFileCreatedOn:date",
+      "LastApprovedFileCreatedOn:date",
+      "LibraryDescription:string",
+      "LibraryKey:globally unique identifier",
+      "LibraryName:string",
+      "LibraryUrl:string",
+      "ModerationType:ModerationTypeRef",
+      "NumApprovedEntries:integer",
+      "NumApprovedFiles:integer",
+      "NumApprovedImages:integer",
+      "NumApprovedVideos:integer",
+      "SecurityRolesRequiredView:Collection of string",
+      "SecurityRolesRequiredViewInfo:Collection of string",
+      "SecurityRolesRequiredViewInfoList:string",
+      "SecurityRolesRequiredViewList:string"
+    ]
+  },
+  "Document": {
+    "method": "GET",
+    "path": "api/v2.0/ResourceLibrary/GetLibraryDocument?documentKey={documentKey}&paginateComments={paginateComments}&commentLimit={commentLimit}",
+    "topLevelResponseModel": {
+      "modelName": "Document",
+      "isCollection": false
+    },
+    "fields": [
+      "DocumentKey:globally unique identifier",
+      "DocumentTitle:string",
+      "Description:string",
+      "CreatedByContact:ContactConcise",
+      "CreatedOn:date",
+      "LibraryKey:globally unique identifier",
+      "LegacyDocumentKey:string",
+      "SerializedData:string",
+      "LibraryName:string",
+      "LibraryFolderName:string",
+      "CommunityName:string",
+      "CommunityKey:globally unique identifier",
+      "CommentCount:integer",
+      "ViewCount:integer",
+      "DownloadCount:integer",
+      "RatingCount:integer",
+      "Comments:Collection of Comment",
+      "PaginatedComments:PaginatedComments",
+      "Attachments:Collection of DocumentAttachment",
+      "RelatedLinks:Collection of RelatedLink",
+      "AttachmentCount:integer",
+      "LinkToLibraryDocument:string",
+      "ContactsWhoRecommend:Collection of ContactConcise",
+      "AuthenticatedUserRecommends:boolean",
+      "AuthenticatedUserFavorite:boolean",
+      "UserPermissions:Collection of string",
+      "IsFollowing:boolean",
+      "Tags:Collection of ItemTagResponse"
+    ]
+  },
+  "DocumentAttachment": {
+    "method": "GET",
+    "path": "api/v2.0/ResourceLibrary/GetDocumentAttachments?documentKey={documentKey}",
+    "topLevelResponseModel": {
+      "modelName": "DocumentAttachment",
+      "isCollection": true
+    },
+    "fields": [
+      "DocumentAttachmentKey:globally unique identifier",
+      "DocumentKey:globally unique identifier",
+      "FileName:string",
+      "UploadedByContact:ContactConcise",
+      "CreatedOn:date",
+      "FileExtension:string",
+      "FileSizeInBytes:integer",
+      "Width:integer",
+      "Height:integer",
+      "DurationSeconds:integer",
+      "DownloadUrl:string",
+      "IconUrl:string",
+      "Status:string"
+    ]
+  },
+  "DemographicType": {
+    "method": "GET",
+    "path": "api/v2.0/Demographics/GetDemographicTypes",
+    "topLevelResponseModel": {
+      "modelName": "DemographicType",
+      "isCollection": true
+    },
+    "fields": [
+      "DemographicTypeKey:globally unique identifier",
+      "Name:string",
+      "Description:string",
+      "IsNetwork:boolean",
+      "IsFreeFormAllowed:boolean",
+      "IsMultiSelect:boolean",
+      "IsPerson:boolean",
+      "ShowDescriptionInProfile:boolean"
+    ]
+  },
+  "DemographicChoice": {
+    "method": "GET",
+    "path": "api/v2.0/Demographics/GetDemographicChoices",
+    "topLevelResponseModel": {
+      "modelName": "DemographicChoice",
+      "isCollection": true
+    },
+    "fields": [
+      "DemographicKey:globally unique identifier",
+      "DemographicType:DemographicType",
+      "Name:string",
+      "Description:string"
+    ]
+  },
+  "Announcement": {
+    "method": "GET",
+    "path": "api/v2.0/Announcements/GetAnnouncement?announcementKey={announcementKey}",
+    "topLevelResponseModel": {
+      "modelName": "Announcement",
+      "isCollection": true
+    },
+    "fields": [
+      "AnnouncementKey:globally unique identifier",
+      "AnnouncementText:string",
+      "AnnouncementTitle:string",
+      "AnnouncementType:string",
+      "CommunityKey:globally unique identifier",
+      "CommunityName:string",
+      "CreatedByContactKey:globally unique identifier",
+      "ContactDisplayName:string",
+      "LinkToContactProfile:string",
+      "ContactLargePictureUrl:string",
+      "ContactSmallPictureUrl:string",
+      "CreatedOn:date",
+      "IsLoggingEnabled:boolean",
+      "LinkText:string",
+      "LinkUrl:string",
+      "MicrositeGroupTypeRouteDesignKey:globally unique identifier",
+      "OpenNewWindow:boolean",
+      "Tags:Collection of ItemTagResponse",
+      "UpdatedByContactKey:globally unique identifier",
+      "UpdatedOn:date",
+      "UserPermissions:Collection of string"
+    ]
+  },
+  "IdeaDetails": {
+    "method": "GET",
+    "path": "api/v2.0/Ideation/IdeaDetails?ideationKey={ideationKey}",
+    "topLevelResponseModel": {
+      "modelName": "IdeaDetails",
+      "isCollection": false
+    },
+    "fields": [
+      "IdeationKey:globally unique identifier",
+      "Title:string",
+      "Description:string",
+      "LinkToViewIdea:string",
+      "Status:IdeaStatus",
+      "Community:Community",
+      "Categories:Collection of IdeaCategory",
+      "TotalUpvotes:integer",
+      "TotalDownvotes:integer",
+      "HasOfficialComment:boolean",
+      "Author:ContactConcise",
+      "IsAnonymous:boolean",
+      "CreatedOn:date",
+      "UpdatedOn:date",
+      "AttachmentURLs:Collection of IdeaAttachment"
+    ]
+  },
+  "VolunteerOpportunity": {
+    "method": "GET",
+    "path": "api/v2.0/Volunteer/GetVolunteerOpportunityList",
+    "topLevelResponseModel": {
+      "modelName": "VolunteerOpportunity",
+      "isCollection": true
+    },
+    "fields": [
+      "VolunteerOpportunityKey:globally unique identifier",
+      "Title:string",
+      "Description:string",
+      "Deadline:string",
+      "AdditionalRequirements:string",
+      "Location:string",
+      "VolunteersNeeded:integer",
+      "CreatedOn:date",
+      "CloseDate:date",
+      "UpdatedOn:date",
+      "EstimatedHours:decimal number",
+      "SkillMultiplier:decimal number",
+      "StartDateTime:date",
+      "EndDateTime:date",
+      "Community:Community",
+      "RequiresApproval:boolean",
+      "Status:Status",
+      "StatusText:string",
+      "CanSignUpViaApi:boolean",
+      "ApplicationStatus:VolunteerApplicationStatuses",
+      "ApplicationStatusText:string",
+      "VolunteerOpportunityTypeKey:globally unique identifier",
+      "LinkToListOfOpportunities:string",
+      "PictureUrl:string",
+      "LinkToOpportunity:string",
+      "OpportunityName:string",
+      "OpportunityAddress:string",
+      "VolunteerSpotsAvailable:integer",
+      "Points:integer",
+      "VolunteerOpportunityIntegrationCode:string"
+    ]
+  },
+  "VolunteerOpportunityVolunteer": {
+    "method": "GET",
+    "path": "api/v2.0/Volunteer/GetVolunteerList?volunteerOpportunityKey={volunteerOpportunityKey}",
+    "topLevelResponseModel": {
+      "modelName": "VolunteerOpportunityVolunteer",
+      "isCollection": true
+    },
+    "fields": [
+      "VolunteerOpportunityVolunteerKey:globally unique identifier",
+      "VolunteerContact:Contact",
+      "VolunteerComments:string",
+      "VolunteerAdminComments:string",
+      "CreatedByContactKey:globally unique identifier",
+      "CreatedOn:date",
+      "IsReAppointment:boolean",
+      "IsActive:boolean",
+      "IsComplete:boolean",
+      "ApprovedOn:date",
+      "ApprovedByContactKey:globally unique identifier",
+      "IsPublic:boolean",
+      "RejectedOn:date",
+      "RejectedByContactKey:globally unique identifier",
+      "VolunteerRole:VolunteerRole",
+      "AdjustPoints:decimal number",
+      "AdjustedByContactKey:globally unique identifier",
+      "AdjustedOn:date"
+    ]
+  },
+  "TagGroupModel": {
+    "method": "GET",
+    "path": "api/v2.0/Tagging/GetTags?searchText={searchText}&communityKey={communityKey}",
+    "topLevelResponseModel": {
+      "modelName": "TagGroupModel",
+      "isCollection": true
+    },
+    "fields": [
+      "TagGroupKey:globally unique identifier",
+      "IsTopicTagGroup:boolean",
+      "Tags:Collection of TagDataModel",
+      "Name:string"
+    ]
+  },
+  "ExternalActivity_Create": {
+    "method": "POST",
+    "path": "api/v2.0/ExternalActivity/Create",
+    "topLevelResponseModel": {
+      "modelName": "ExternalActivity",
+      "isCollection": false
+    },
+    "fields": [
+      "ExternalActivityKey:globally unique identifier",
+      "ExternalActivityTypeKey:globally unique identifier",
+      "LegacyActivityTypeKey:string",
+      "ContactKey:globally unique identifier",
+      "LegacyContactKey:string",
+      "ActivityDateTime:date",
+      "ActivityTitle:string",
+      "ActivityDetails:string",
+      "ActivityUrl:string",
+      "LegacyActivityKey:string",
+      "Date1:date",
+      "Date2:date",
+      "Date3:date",
+      "Number1:decimal number",
+      "Number2:decimal number",
+      "Number3:decimal number",
+      "Text1:string",
+      "Text2:string",
+      "Text3:string"
+    ]
+  }
+}

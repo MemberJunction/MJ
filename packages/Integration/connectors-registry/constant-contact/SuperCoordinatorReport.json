@@ -1,0 +1,33 @@
+{
+  "runID": "connector-constant-contact-1783806258859-0be0453e",
+  "workflowRunId": "wf_e42a3ed3-ea3",
+  "vendor": "constant-contact",
+  "mode": "redo",
+  "versionRecord": { "priorVersion": null, "newVersion": "1.0.0" },
+  "reportCeiling": "format-verified-no-creds",
+  "status": "PartialPass",
+  "productionReadiness": "NOT-GENUINE-GREEN (vacuous behavioral e2e — 0 rows landed)",
+  "objectsEmitted": 65,
+  "enumeratedUniverse": 240,
+  "pkDeferRatePct": 42,
+  "solid": {
+    "metadataObjects": 65,
+    "codeBuildClean": true,
+    "connectorFile": "packages/Integration/connectors/src/ConstantContactConnector.ts",
+    "ladderGreenRungs": ["T0", "T1", "T2", "T3", "T4", "T7", "T7a"],
+    "realityProbeScriptCorrect": true
+  },
+  "blockers": [
+    { "gate": "hybrid-e2e-behavioral", "detail": "mock sync ran (65 tables applied) but landed ~0 rows; forward-incomplete, not-idempotent, first-sync-incomplete, capture-not-engaged, 0/65 objects covered, 31/31 writable never exercised", "nature": "engineering (connector<->fixtures contract + DAG + idempotency + capture)" },
+    { "gate": "scope-unjustified-thin", "detail": "65 of 240 enumerated record types (27.1%) with no floor-readable scope justification", "nature": "scope-decision / broader emission" },
+    { "gate": "reality-probe-unshaped", "detail": "reality-probe.mjs emits 65 verdicts but the probe AGENT truncates its return to 1 across 3 runs", "nature": "framework/agent-fidelity (needs primitive to read verdicts.json directly)" }
+  ],
+  "frameworkFindings": [
+    "hybrid-e2e.workflow.js defaults className to the slug -> looks for <slug>.ts instead of <ClassName>.ts; plan must pass className (footgun worth hardening upstream)",
+    "reality-probe agent truncates a 65-element verdicts array; floor-check should read verdicts.json directly",
+    "several floor-check gates fired on valid on-disk files (floor-fetch agent output flakiness)"
+  ],
+  "recommendedNext": "Focused behavioral debugging via /test-connector constant-contact --mode mock until every object lands rows; then re-run FloorCheck. Not more blind resumes.",
+  "publish": false,
+  "commit": false
+}

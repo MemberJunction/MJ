@@ -379,7 +379,14 @@ export async function phaseWatermark({ gql, mock, ciid, maps, cfg }) {
     // `changed_since`). The `_since=` suffix is itself the unambiguous watermark tell, so match ANY
     // `<field>_since=` — this generalizes it so any genuine server-side watermark filter — whatever the
     // field name or query dialect — is recognized. (Same class as the iMIS/OData fix.)
-    const SINCE = /[a-z][a-z_]*_since=|[?&]since=|=gte?[:%]|%24filter=|\$filter=|[?&](modifiedsince|updatedsince|since)=|(modstamp|modifieddate|createddate|lastmodified|systemmodstamp)(%20|\+|\s)*(%3e|>)(%3d|=)?(%20|\+|\s)*\d{4}/i;
+    //   • datetime-EQUALITY watermark (Higher Logic Thrive: `modifiedDateTime=<iso>`) — a "records modified
+    //     at/after this instant" filter expressed as a plain `=<timestamp>` param, NOT a `_since=` suffix nor
+    //     a `>`/`gte` comparison. The original alternation only knew the `>`/`gte` COMPARISON form of a
+    //     `modifieddate*` field, so an EQUALITY-valued `modified|updated|changed*=<iso>` param (a legitimate,
+    //     common incremental convention) was silently mis-failed — same class as the Eventbrite `changed_since`
+    //     fix above. Match any `[?&]<w>modified|updated|changed|lastmod<w>=<ISO year-month>` (the ISO value is
+    //     the unambiguous tell it's a timestamp, not an arbitrary string).
+    const SINCE = /[a-z][a-z_]*_since=|[?&]since=|=gte?[:%]|%24filter=|\$filter=|[?&](modifiedsince|updatedsince|since)=|(?:^|[?&])[a-z_]*(?:modified|updated|changed|lastmod)[a-z_]*=%?\d{4}-\d{2}|(modstamp|modifieddate|createddate|lastmodified|systemmodstamp)(%20|\+|\s)*(%3e|>)(%3d|=)?(%20|\+|\s)*\d{4}/i;
     // Body-based watermark filters: POST /search connectors (e.g. Neon, many CRMs) carry the *_since
     // criterion in the request BODY (a searchFields/criteria operator + date), NOT the query string —
     // the same class as the SOQL-in-`q=` exception above. So inspect r.body too: a Neon-style
@@ -428,7 +435,11 @@ export async function phaseInfinitePagination({ gql, mock, ciid, maps, cfg }) {
         steps.push(step('pagination.unsupported', true, { note: 'needs origin-mock route swap + request capture (live/proxy/file mode skips I3)' }));
         return steps;
     }
-    const target = maps.find(m => /comment/i.test(m.sourceObjectName)) || maps[0];
+    const target = maps.find((m) => m && /comment/i.test(String(m.sourceObjectName ?? ''))) || maps[0];
+    if (!target || !target.sourceObjectName) {
+        steps.push(step('pagination.skipped', true, { skipReason: 'no synced object maps available (setup produced 0 maps) — cannot select a pagination target; upstream setup/forward is the real signal' }));
+        return steps;
+    }
     // CONNECTOR-AGNOSTIC: derive the target object's REAL list route + envelope shape from the loaded
     // fixtures, then make it NON-ADVANCING (a FULL page whose FIRST record is constant across pages → the
     // connector keeps asking for the next page, and its duplicate-first-record / MAX_BATCHES guard must
@@ -910,6 +921,7 @@ export async function phaseDAG({ gql, db, ciid, maps, cfg, integrationID }) {
 export async function phaseMerkle({ gql, ciid, maps, cfg }) {
     const steps = [];
     const target = maps[0];
+    if (!target) { steps.push(step('cell.no-maps-skip', true, { skipReason: 'no synced object maps (setup produced 0 maps) — map-dependent cell skipped; setup/forward is the real signal' })); return steps; }
     if (!target) {
         steps.push(step('merkle.skipped', true, { skipReason: 'no entity maps in the selected set — Merkle cell not exercisable' }));
         return steps;
@@ -970,6 +982,7 @@ export async function phaseAdaptiveRateLimit({ gql, mock, ciid, maps, cfg }) {
     }
     const manifestRoutes = (mock.manifest && Array.isArray(mock.manifest.Routes)) ? mock.manifest.Routes : [];
     const target = maps[0];
+    if (!target) { steps.push(step('cell.no-maps-skip', true, { skipReason: 'no synced object maps (setup produced 0 maps) — map-dependent cell skipped; setup/forward is the real signal' })); return steps; }
     const objName = String(target?.sourceObjectName ?? '');
     // The route to throttle is the connector's actual FETCH route. Prefer a REST collection GET matching
     // the object name, but EXCLUDE single-record detail routes (GET /record/.../<obj>) which aren't the
@@ -1029,31 +1042,24 @@ export async function phaseAdaptiveRateLimit({ gql, mock, ciid, maps, cfg }) {
 /**
  * @param {object} args { gql, mock, verify, ciid, maps, cfg }
  */
-export async function phaseBidirectional({ gql, mock, verify, ciid, maps, cfg }) { // eslint-disable-line no-unused-vars -- verify kept for signature symmetry (sync read-back path)
+// Core single-object write round-trip (create → [update] → [delete]) against the mock origin.
+// `namePrefix` keeps step names stable: 'bidirectional' in single-object mode (back-compat),
+// 'bidirectional.<object>' when looping ALL writable objects (E2E_WRITE_ALL).
+async function writeRoundTripOne(wrt, { gql, mock, ciid, maps, cfg, db }, namePrefix = 'bidirectional') {
     const steps = [];
-    const wrt = cfg.writeRoundTrip ?? null;
-    if (!wrt || cfg.mode !== 'mock' || mock?.kind !== 'origin') {
-        steps.push(step('bidirectional.skipped', true, {
-            skipReason: !wrt
-                ? 'no fixtures WriteRoundTrip spec — the mock origin is route-replay (no stateful vendor store), so a state-reflecting create/update/delete round-trip is not exercisable credential-free. Write correctness is covered by the mocked T4/T5 unit tiers. Supply fixtures WriteRoundTrip (Object + Create/Update/Delete routes returning stateful bodies) to enable.'
-                : (cfg.mode !== 'mock' ? 'live mode — we never mutate the live vendor for a write round-trip' : 'write round-trip requires config-driven origin mode (the connector\'s CRUD paths must target the mock origin)'),
-        }));
-        return steps;
-    }
     const objectName = wrt.Object;
     const entityMap = maps.find((m) => String(m.sourceObjectName).toLowerCase() === String(objectName).toLowerCase());
-    if (/user|owner/i.test(objectName)) { steps.push(step('bidirectional.refused', false, { object: objectName, error: 'refusing to write to a Users/owners object' })); return steps; }
+    if (/user|owner/i.test(objectName)) { steps.push(step(`${namePrefix}.refused`, false, { object: objectName, error: 'refusing to write to a Users/owners object' })); return steps; }
 
     // The fixture's WriteRoundTrip.Routes define the mock's stateful CRUD responses (create echoes a new
-    // id; get-by-id returns it; update echoes the changed field; delete then get-by-id 404s). Swapping
-    // the mock to these makes the round-trip observable WITHOUT a real credential.
+    // id; get-by-id returns it; update echoes the changed field; delete then get-by-id 404s).
     if (Array.isArray(wrt.Routes) && wrt.Routes.length) mock.setRoutes(wrt.Routes);
     mock.clearRequests?.();
 
     // CREATE
     const created = (await gql(E2E_GQL.writeRecord, { ciid, objectName, operation: 'create', externalID: null, attributes: JSON.stringify(wrt.CreateAttributes ?? {}) })).IntegrationWriteRecord;
     const extID = created?.ExternalID;
-    steps.push(step('bidirectional.create', created?.Success === true && !!extID, {
+    steps.push(step(`${namePrefix}.create`, created?.Success === true && !!extID, {
         object: objectName, externalID: extID, statusCode: created?.StatusCode, message: created?.Message,
         note: 'create returns a non-empty ExternalID (BuildCreatedResult invariant: a 2xx with no id is a failure)',
     }));
@@ -1061,49 +1067,161 @@ export async function phaseBidirectional({ gql, mock, verify, ciid, maps, cfg })
     // Verify the create request SHAPE reached the mock (a POST to the create path with the attributes).
     const reqsAfterCreate = mock.getRequests?.() ?? [];
     const createReq = reqsAfterCreate.find((r) => /post/i.test(r.method) && (wrt.CreatePathMatch ? r.path.includes(wrt.CreatePathMatch) : true));
-    steps.push(step('bidirectional.create-shape', !!createReq, {
-        method: createReq?.method, path: createReq?.path, bodyPresent: !!createReq?.body,
+    steps.push(step(`${namePrefix}.create-shape`, !!createReq, {
+        object: objectName, method: createReq?.method, path: createReq?.path, bodyPresent: !!createReq?.body,
         note: 'the connector issued a POST to the create path carrying the attributes body',
     }));
 
     if (!extID) return steps; // cannot read-back/update/delete an unidentifiable record — stop loudly
 
-    // A connector that declares no update/delete capability for this object (create-only — no
-    // Update/DeleteAPIPath) correctly REFUSES the op with "not supported". That is a legitimate SKIP,
-    // not a RED (conventions: phaseBidirectional gates update/delete on the object's capability). We
-    // detect the refusal from the connector's own message rather than re-querying capability here.
     const notSupported = (res) => res?.Success !== true && /not supported/i.test(String(res?.Message ?? res?.ErrorMessage ?? ''));
+
+    // Per-operation IDLocation lookup (IDLocation ∈ {body,header,n/a,path} per connector-code-conventions) —
+    // the shape checks below MUST branch on this, not assume 'path'. A body-IDLocation update (e.g. this
+    // connector's Answers/EventTypes/ExternalActivity/ResourceLibraryDocuments — the vendor's ID travels in
+    // the JSON body, not the URL) would otherwise ALWAYS fail update-shape (extID never appears in the path)
+    // even though the connector did the right thing — a harness false-positive, not a connector defect. A
+    // composite ExternalID (delimiter-joined, e.g. Volunteers' `<opportunityKey>|<ownKey>`) is symmetric: only
+    // a SEGMENT of it appears in a path-IDLocation URL, so a strict full-string match also false-fails.
+    let updateIDLocation = null; let deleteIDLocation = null; let pkFieldName = null;
+    // Fail-open default (matches prior behavior): if the metadata lookup fails, assume delete-capable
+    // (attempt it) rather than silently skipping — a DB error here shouldn't masquerade as "no capability".
+    let objDeleteCapable = true;
+    if (db && cfg.integrationID) {
+        try {
+            const pg = cfg.platform === 'postgresql'; const sch = cfg.mjSchema || '__mj';
+            const esc = String(objectName).replace(/'/g, "''");
+            const q = pg
+                ? `SELECT "DeleteAPIPath" AS d, "DeleteIDLocation" AS dil, "UpdateIDLocation" AS uil FROM "${sch}"."IntegrationObject" WHERE "IntegrationID"='${cfg.integrationID}' AND lower("Name")=lower('${esc}')`
+                : `SELECT DeleteAPIPath AS d, DeleteIDLocation AS dil, UpdateIDLocation AS uil FROM [${sch}].[IntegrationObject] WHERE IntegrationID='${cfg.integrationID}' AND LOWER(Name)=LOWER('${esc}')`;
+            const dr = await db.rows(q);
+            const row = dr && dr[0];
+            updateIDLocation = (row && (row.uil ?? row.UIL)) || null;
+            deleteIDLocation = (row && (row.dil ?? row.DIL)) || null;
+            const dp = row && (row.d ?? row.D);
+            objDeleteCapable = !!(dp && String(dp).trim());
+            // The object's single PK field name — used below to make a body-IDLocation update carry the
+            // record's identity exactly as the REAL sync engine's mapped record does (the PK is always a
+            // mapped field, so a production update body always contains it; the auto-generated synthetic
+            // UpdateAttributes only carries the CHANGED field, so we re-add the identity here).
+            const pkq = pg
+                ? `SELECT "Name" AS n FROM "${sch}"."IntegrationObjectField" WHERE "IntegrationObjectID" IN (SELECT "ID" FROM "${sch}"."IntegrationObject" WHERE "IntegrationID"='${cfg.integrationID}' AND lower("Name")=lower('${esc}')) AND "IsPrimaryKey"=true ORDER BY "Sequence"`
+                : `SELECT Name AS n FROM [${sch}].[IntegrationObjectField] WHERE IntegrationObjectID IN (SELECT ID FROM [${sch}].[IntegrationObject] WHERE IntegrationID='${cfg.integrationID}' AND LOWER(Name)=LOWER('${esc}')) AND IsPrimaryKey=1 ORDER BY Sequence`;
+            const pkr = await db.rows(pkq);
+            pkFieldName = (pkr && pkr[0] && (pkr[0].n ?? pkr[0].N)) || null;
+        } catch { /* location/capability unknown → fall through to the strict path-match + fail-open delete (prior behavior) */ }
+    }
+    // A path segment (before any `|` composite-identity delimiter) — the convention this connector's
+    // Volunteers uses for a synthesized join identity; other connectors' plain (non-composite) IDs are
+    // returned unchanged by this split.
+    const pathSegment = String(extID).split('|')[0];
+    // A `path` IDLocation carries the ID in the URL — but that can be a true path segment OR a QUERY param
+    // (e.g. Volunteers' `…/WithdrawFromOpportunity?volunteerOpportunityKey=<seg>`, the mock strips the query
+    // to a separate rawQuery field). So the non-body shape match must look in BOTH the pathname and the raw
+    // query, for the full extID or its first composite segment.
+    const idInUrl = (r) => {
+        const hay = `${r.path || ''}${r.rawQuery || ''}`;
+        return hay.includes(String(extID)) || hay.includes(pathSegment);
+    };
 
     // UPDATE
     if (wrt.UpdateAttributes) {
-        const upd = (await gql(E2E_GQL.writeRecord, { ciid, objectName, operation: 'update', externalID: extID, attributes: JSON.stringify(wrt.UpdateAttributes) })).IntegrationWriteRecord;
+        // For a body-IDLocation update the identity travels IN the body (as the record's PK field), so mirror
+        // the real sync engine and inject {[pk]: extID} into the attributes when the fixture didn't already.
+        const updateAttrs = (updateIDLocation === 'body' && pkFieldName && !(pkFieldName in wrt.UpdateAttributes))
+            ? { [pkFieldName]: extID, ...wrt.UpdateAttributes }
+            : wrt.UpdateAttributes;
+        const upd = (await gql(E2E_GQL.writeRecord, { ciid, objectName, operation: 'update', externalID: extID, attributes: JSON.stringify(updateAttrs) })).IntegrationWriteRecord;
         if (notSupported(upd)) {
-            steps.push(step('bidirectional.update', true, { externalID: extID, skipReason: `create-only object: connector declares no update capability for "${objectName}" — correctly refused (SKIP, not a defect)` }));
+            steps.push(step(`${namePrefix}.update`, true, { object: objectName, externalID: extID, skipReason: `create-only object: connector declares no update capability for "${objectName}" — correctly refused (SKIP, not a defect)` }));
         } else {
-            steps.push(step('bidirectional.update', upd?.Success === true, { externalID: extID, statusCode: upd?.StatusCode, message: upd?.Message }));
+            steps.push(step(`${namePrefix}.update`, upd?.Success === true, { object: objectName, externalID: extID, statusCode: upd?.StatusCode, message: upd?.Message }));
             const reqs = mock.getRequests?.() ?? [];
-            const updReq = reqs.find((r) => /put|patch|post/i.test(r.method) && r.path.includes(String(extID)));
-            steps.push(step('bidirectional.update-shape', !!updReq, { method: updReq?.method, path: updReq?.path, note: 'update targeted the record path with the new attributes' }));
+            const updReq = updateIDLocation === 'body'
+                ? reqs.find((r) => /put|patch|post/i.test(r.method) && String(r.body ?? '').includes(String(extID)))
+                : reqs.find((r) => /put|patch|post/i.test(r.method) && idInUrl(r));
+            steps.push(step(`${namePrefix}.update-shape`, !!updReq, { object: objectName, method: updReq?.method, path: updReq?.path, updateIDLocation, note: 'update targeted the record (path or body, per the metadata-declared UpdateIDLocation) with the new attributes' }));
         }
     }
 
-    // DELETE
-    const del = (await gql(E2E_GQL.writeRecord, { ciid, objectName, operation: 'delete', externalID: extID, attributes: null })).IntegrationWriteRecord;
-    if (notSupported(del)) {
-        steps.push(step('bidirectional.delete', true, { externalID: extID, skipReason: `create-only object: connector declares no delete capability for "${objectName}" — correctly refused (SKIP, not a defect)` }));
+    // DELETE — gate on the object's DEPLOYED delete capability FIRST (symmetric to UPDATE; objDeleteCapable
+    // + deleteIDLocation were resolved together with updateIDLocation above).
+    if (!objDeleteCapable) {
+        steps.push(step(`${namePrefix}.delete`, true, { object: objectName, externalID: extID, skipReason: `create/read-only object: no DeleteAPIPath deployed for "${objectName}" — connector has no delete capability (SKIP, not a defect)` }));
     } else {
-        steps.push(step('bidirectional.delete', del?.Success === true, { externalID: extID, statusCode: del?.StatusCode, message: del?.Message }));
-        const reqsFinal = mock.getRequests?.() ?? [];
-        const delReq = reqsFinal.find((r) => /delete|post|put/i.test(r.method) && r.path.includes(String(extID)) && (wrt.DeleteMethodMatch ? r.method.toUpperCase() === wrt.DeleteMethodMatch.toUpperCase() : true));
-        steps.push(step('bidirectional.delete-shape', !!delReq, {
-            method: delReq?.method, path: delReq?.path,
-            note: 'delete used the metadata-driven verb against the record path (DeleteMethod is not assumed DELETE)',
-        }));
+        const del = (await gql(E2E_GQL.writeRecord, { ciid, objectName, operation: 'delete', externalID: extID, attributes: null })).IntegrationWriteRecord;
+        if (notSupported(del)) {
+            steps.push(step(`${namePrefix}.delete`, true, { object: objectName, externalID: extID, skipReason: `create-only object: connector declares no delete capability for "${objectName}" — correctly refused (SKIP, not a defect)` }));
+        } else {
+            steps.push(step(`${namePrefix}.delete`, del?.Success === true, { object: objectName, externalID: extID, statusCode: del?.StatusCode, message: del?.Message }));
+            const reqsFinal = mock.getRequests?.() ?? [];
+            const delReq = deleteIDLocation === 'body'
+                ? reqsFinal.find((r) => /delete|post|put/i.test(r.method) && String(r.body ?? '').includes(String(extID)) && (wrt.DeleteMethodMatch ? r.method.toUpperCase() === wrt.DeleteMethodMatch.toUpperCase() : true))
+                : reqsFinal.find((r) => /delete|post|put/i.test(r.method) && idInUrl(r) && (wrt.DeleteMethodMatch ? r.method.toUpperCase() === wrt.DeleteMethodMatch.toUpperCase() : true));
+            steps.push(step(`${namePrefix}.delete-shape`, !!delReq, {
+                object: objectName, method: delReq?.method, path: delReq?.path,
+                note: 'delete used the metadata-driven verb against the record path (DeleteMethod is not assumed DELETE)',
+            }));
+        }
     }
 
-    // entityMap referenced only for symmetry / future read-back-via-sync; kept to avoid a silent drop of the link.
-    if (entityMap) steps.push(step('bidirectional.map-linked', true, { entityMapID: entityMap.entityMapID, note: 'write object maps to a known entity (sync read-back path available)' }));
-    // Restore clean routes.
+    if (entityMap && namePrefix === 'bidirectional') steps.push(step('bidirectional.map-linked', true, { entityMapID: entityMap.entityMapID, note: 'write object maps to a known entity (sync read-back path available)' }));
+    return steps;
+}
+
+export async function phaseBidirectional({ gql, mock, verify, ciid, maps, cfg, db }) { // eslint-disable-line no-unused-vars -- verify kept for signature symmetry (sync read-back path)
+    const steps = [];
+    const single = cfg.writeRoundTrip ?? null;
+    const all = Array.isArray(cfg.writeRoundTrips) ? cfg.writeRoundTrips.filter(Boolean) : [];
+    if ((!single && !all.length) || cfg.mode !== 'mock' || mock?.kind !== 'origin') {
+        steps.push(step('bidirectional.skipped', true, {
+            skipReason: (!single && !all.length)
+                ? 'no fixtures WriteRoundTrip spec — the mock origin is route-replay (no stateful vendor store), so a state-reflecting create/update/delete round-trip is not exercisable credential-free. Write correctness is covered by the mocked T4/T5 unit tiers. Supply fixtures WriteRoundTrip (Object + Create/Update/Delete routes returning stateful bodies) to enable.'
+                : (cfg.mode !== 'mock' ? 'live mode — we never mutate the live vendor for a write round-trip' : 'write round-trip requires config-driven origin mode (the connector\'s CRUD paths must target the mock origin)'),
+        }));
+        return steps;
+    }
+
+    // Default (back-compat): ONE representative writable object. E2E_WRITE_ALL=1 → EVERY writable object.
+    const writeAll = process.env.E2E_WRITE_ALL === '1' && all.length > 0;
+    if (!writeAll) {
+        steps.push(...await writeRoundTripOne(single ?? all[0], { gql, mock, ciid, maps, cfg, db }, 'bidirectional'));
+        mock.setRoutes(mock.manifest?.Routes ?? []);
+        return steps;
+    }
+
+    // ALL writable objects — round-trip each, then a coverage gate over every flat-writable object.
+    const covered = [];
+    for (const wrt of all) {
+        const out = await writeRoundTripOne(wrt, { gql, mock, ciid, maps, cfg, db }, `bidirectional.${wrt.Object}`);
+        steps.push(...out);
+        const createStep = out.find((s) => s.name === `bidirectional.${wrt.Object}.create`);
+        covered.push({ object: String(wrt.Object), ok: !!createStep?.ok });
+    }
+    // Write-coverage gate: denominator = flat-writable specs (round-trippable via the mock). Any
+    // template-path/nested writable object the mock can't flat-round-trip is reported as a structural
+    // skip (not counted against the gate), symmetric to the read-side get-by-id carve-out.
+    const flatWritable = all.map((w) => String(w.Object));
+    const coveredOk = new Set(covered.filter((c) => c.ok).map((c) => c.object.toLowerCase()));
+    const missing = flatWritable.filter((n) => !coveredOk.has(n.toLowerCase()));
+    let nonFlatWritable = [];
+    try {
+        if (db && cfg.integrationID) {
+            const pg = cfg.platform === 'postgresql'; const sch = cfg.mjSchema || '__mj';
+            const q = pg
+                ? `SELECT "Name" AS nm FROM "${sch}"."IntegrationObject" WHERE "IntegrationID"='${cfg.integrationID}' AND "Status"='Active' AND ("SupportsCreate"=true OR "SupportsWrite"=true)`
+                : `SELECT Name AS nm FROM [${sch}].[IntegrationObject] WHERE IntegrationID='${cfg.integrationID}' AND Status='Active' AND (SupportsCreate=1 OR SupportsWrite=1)`;
+            const rows = await db.rows(q);
+            const dbWritable = rows.map((r) => String(r.nm ?? r.NM)).filter((n) => !/user|owner/i.test(n));
+            const flatSet = new Set(flatWritable.map((n) => n.toLowerCase()));
+            nonFlatWritable = dbWritable.filter((n) => !flatSet.has(n.toLowerCase()));
+        }
+    } catch { /* denominator unavailable → gate on the flat-writable specs alone */ }
+    steps.push(step('bidirectional.coverage.all-writable', missing.length === 0 && flatWritable.length > 0, {
+        flatWritableObjects: flatWritable.length, roundTripped: coveredOk.size, missing,
+        nonFlatWritableSkipped: nonFlatWritable,
+        note: 'EVERY flat-writable object completed a create round-trip with a non-empty ExternalID; template-path/nested writable objects are structural skips (not flat-round-trippable via the mock origin).',
+    }));
     mock.setRoutes(mock.manifest?.Routes ?? []);
     return steps;
 }
@@ -1185,6 +1303,7 @@ export async function phaseRetry({ gql, db, mock, ciid, maps, cfg }) {
     }
     const manifestRoutes = (mock.manifest && Array.isArray(mock.manifest.Routes)) ? mock.manifest.Routes : [];
     const target = maps[0];
+    if (!target) { steps.push(step('cell.no-maps-skip', true, { skipReason: 'no synced object maps (setup produced 0 maps) — map-dependent cell skipped; setup/forward is the real signal' })); return steps; }
     const objName = String(target?.sourceObjectName ?? '');
     const listRoute = manifestRoutes.find((r) => (r.Method || 'GET').toUpperCase() === 'GET' && new RegExp('/' + objName + '$', 'i').test(String(r.Path || '')))
         || manifestRoutes.find((r) => (r.Method || 'GET').toUpperCase() === 'GET' && new RegExp(objName + '$', 'i').test(String(r.Path || '')));
@@ -1413,13 +1532,59 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
             // CodeGen doesn't create its entity — so it is EXCLUDED from the must-test denominator, NOT failed.
             const sr = await db.rows(`SELECT COUNT(DISTINCT io.${ioId}) AS c FROM ${IOt} io JOIN ${IOFt} f ON f.${fIoId}=io.${ioId} AND f.${pkC}=${pkTrue} WHERE io.${idC}='${cfg.integrationID}' AND io.${stC}='Active'`);
             syncableObjectCount = Number((sr && sr[0] && (sr[0].c ?? sr[0].C)) || 0);
-            // Detect get-by-id objects from their APIPath (last non-empty segment is a `{var}`).
-            const apRows = await db.rows(`SELECT ${nmC} AS nm, ${apC} AS ap FROM ${IOt} WHERE ${idC}='${cfg.integrationID}' AND ${stC}='Active'`);
+            // Detect get-by-id objects from their APIPath (last non-empty segment is a `{var}`). GUARD against
+            // page-in-path pagination: connectors that carry the page number as the FINAL path segment
+            // (Impexium `/Individuals/{Page Number}`, `/Awards/{id}/Recipients/Individuals/{pageNumber}`) end
+            // in a `{var}` that is a PAGE CURSOR, not a record id — those are LIST objects, not get-by-id. A
+            // real get-by-id single-record fetch never paginates, so exclude any object with a real pagination
+            // type (PageNumber/Offset/Cursor) from the get-by-id classification. Without this, every paginated
+            // list object is wrongly subtracted from the syncable denominator → it collapses to ~0 and the
+            // coverage gate can't tell a thin fixture from a fully-covered one.
+            const pgtC = pg ? '"PaginationType"' : 'PaginationType';
+            const apRows = await db.rows(`SELECT ${nmC} AS nm, ${apC} AS ap, ${pgtC} AS pgt FROM ${IOt} WHERE ${idC}='${cfg.integrationID}' AND ${stC}='Active'`);
             for (const r of (apRows || [])) {
                 const nm = r.nm ?? r.NM, ap = String(r.ap ?? r.AP ?? '');
+                const pgt = String(r.pgt ?? r.PGT ?? 'None');
+                const paginated = pgt && pgt !== 'None' && pgt !== '';
                 const segs = ap.split('/').filter(Boolean);
                 const last = segs[segs.length - 1] || '';
-                if (nm && /^\{[^}]+\}$/.test(last)) { getByIdObjects.add(nm); syncableObjectCount = Math.max(0, syncableObjectCount - 1); }
+                if (nm && !paginated && /^\{[^}]+\}$/.test(last)) { getByIdObjects.add(nm); syncableObjectCount = Math.max(0, syncableObjectCount - 1); }
+            }
+            // SOAP / no-list-operation objects: for a connector that drives reads off Configuration.ListOperation
+            // (SOAP-style — the operation is chosen by the request body, NOT the URL, so APIPath is a single
+            // shared endpoint and the get-by-id URL heuristic above can't fire), an object whose Configuration
+            // declares NO list operation (no ListOperation / SoapListAction) has no way to ENUMERATE records —
+            // it is write-only, a write-input payload type, or a child reachable only nested in a parent's
+            // response. Structurally NOT list-syncable, so a 0-row READ result is legitimate (write-only objects
+            // prove coverage via their write round-trip). GUARDED so it never weakens REST connectors: it only
+            // fires when the connector actually uses ListOperation (≥1 object declares one) — for a REST
+            // connector (no object uses ListOperation) the loop no-ops entirely.
+            const cfgC = pg ? '"Configuration"' : 'Configuration';
+            const cRows = await db.rows(`SELECT ${nmC} AS nm, ${cfgC} AS cfgj FROM ${IOt} WHERE ${idC}='${cfg.integrationID}' AND ${stC}='Active'`);
+            const parsedCfg = (cRows || []).map((r) => {
+                let c = r.cfgj ?? r.CFGJ; if (typeof c === 'string') { try { c = JSON.parse(c); } catch { c = null; } }
+                return { nm: r.nm ?? r.NM, hasListOp: !!(c && (c.ListOperation || c.SoapListAction)) };
+            });
+            if (parsedCfg.some((p) => p.hasListOp)) {
+                for (const p of parsedCfg) {
+                    if (p.nm && !p.hasListOp && !getByIdObjects.has(p.nm)) { getByIdObjects.add(p.nm); syncableObjectCount = Math.max(0, syncableObjectCount - 1); }
+                }
+            }
+            // REST WRITE-ONLY carve-out (parity with the SOAP/ListOperation case above AND the t7OpenApi
+            // APIPath==write-path skip): the deployed IntegrationObject schema requires APIPath NOT NULL, so a
+            // pure write-only REST sub-resource — no independent GET/list endpoint (e.g. POST
+            // /Individuals/{id}/Notes) — uses the established framework pattern APIPath == its own write path
+            // (Create/Update/Delete APIPath). Such an object is structurally NOT list-syncable; a 0-row READ
+            // result is legitimate and its coverage is proven by the write round-trip, not a read. Exempt it
+            // from the read-coverage denominator, exactly like get-by-id / SOAP-no-list. NARROW + honest: fires
+            // ONLY when APIPath byte-equals one of the object's OWN write paths, so it never exempts a genuine
+            // read endpoint (a listable object's APIPath differs from its write paths).
+            const capC = pg ? '"CreateAPIPath"' : 'CreateAPIPath', uapC = pg ? '"UpdateAPIPath"' : 'UpdateAPIPath', dapC = pg ? '"DeleteAPIPath"' : 'DeleteAPIPath';
+            const wRows = await db.rows(`SELECT ${nmC} AS nm, ${apC} AS ap, ${capC} AS cap, ${uapC} AS uap, ${dapC} AS dap FROM ${IOt} WHERE ${idC}='${cfg.integrationID}' AND ${stC}='Active'`);
+            for (const r of (wRows || [])) {
+                const nm = r.nm ?? r.NM, ap = String(r.ap ?? r.AP ?? '');
+                const writes = [r.cap ?? r.CAP, r.uap ?? r.UAP, r.dap ?? r.DAP].filter(Boolean).map(String);
+                if (nm && ap && writes.includes(ap) && !getByIdObjects.has(nm)) { getByIdObjects.add(nm); syncableObjectCount = Math.max(0, syncableObjectCount - 1); }
             }
         } catch { /* count unavailable → gate degrades to the synced-rows check below */ }
 
@@ -1430,6 +1595,11 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
             // FIXTURE gap (missing parent chain), never "legitimately empty". No exemption. This is what
             // forces relationally-coherent fixtures and catches a thin fixture passing as all-objects.
             // LIVE: a real tenant can genuinely have an empty object → ZERO_PARENTS/SECOND_LAYER_EMPTY exempts.
+            // PARENT_UNRESOLVED / ZERO_PARENTS on a template-var CHILD is a CONNECTOR-METADATA GAP that MUST
+            // be fixed (declare the child's parent FK), NOT excused — an object that cannot sync is a real
+            // defect the connector ships. So in MOCK mode we do NOT exempt these: they count as hard failures
+            // so the gate forces the metadata fix. (Live keeps the warning-based exemption only because a real
+            // tenant can be genuinely empty; mock controls the data, so 0 rows = a gap.)
             const legitEmpty = cfg.mode === 'live'
                 ? new Set((run?.warnings || [])
                     .filter(w => w && (w.code === 'ZERO_PARENTS' || w.code === 'SECOND_LAYER_EMPTY'))
@@ -1437,6 +1607,27 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
                 : new Set();
             // Get-by-id objects (no list endpoint) are legitimately un-list-syncable in BOTH modes.
             for (const o of getByIdObjects) legitEmpty.add(o);
+            // PARENT_UNRESOLVED structural exemption (BOTH modes): distinct from ZERO_PARENTS. ZERO_PARENTS
+            // means the parent IS a synced object that happened to have 0 rows (in mock = a fixture gap the
+            // author must fix). PARENT_UNRESOLVED means the template-var child's parent RESOLVES TO NO DEPLOYED
+            // IntegrationObject at all (the preceding path resource segment — e.g. Impexium CourseAttendees'
+            // "Courses", UserTasks' "Users" — is not in the connector's object catalog). There is no list
+            // endpoint to iterate, so the child is structurally un-enumerable — a legitimate skip, NOT a fixture
+            // gap (no fixture can conjure a parent object that doesn't exist). Honest + structural.
+            for (const w of (run?.warnings || [])) {
+                if (w && w.code === 'PARENT_UNRESOLVED' && w.stage) legitEmpty.add(String(w.stage));
+            }
+            // TRANSITIVE structural exemption: a template-var CHILD whose PARENT is itself an un-listable
+            // get-by-id object cannot be enumerated (can't list the parent → can't reach its children).
+            // Honest + structural, and DISTINCT from a child of a LISTABLE parent that failed (that stays a
+            // hard failure). Parse the parent name from the engine's own ZERO_PARENTS/SECOND_LAYER_EMPTY
+            // message and exempt the child ONLY when that named parent is get-by-id. Applies in both modes.
+            for (const w of (run?.warnings || [])) {
+                if (!w || (w.code !== 'ZERO_PARENTS' && w.code !== 'SECOND_LAYER_EMPTY')) continue;
+                const m = String(w.message || '').match(/no "([^"]+)" parent records|depends on (?:\w+ )?[`']?(\w+)[`']?/i);
+                const parent = m && (m[1] || m[2]);
+                if (parent && getByIdObjects.has(parent)) legitEmpty.add(String(w.stage));
+            }
             const covered = comp.filter(c => (c.destRows || 0) > 0).map(c => c.object);
             const zeroReal = comp.filter(c => (c.destRows || 0) === 0 && !legitEmpty.has(c.object)).map(c => c.object);
             const zeroLegit = comp.filter(c => (c.destRows || 0) === 0 && legitEmpty.has(c.object)).map(c => c.object);
@@ -1532,7 +1723,7 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
             // cell 17 — transient 500 retried to clean completion; watermark NOT advanced on persistent failure.
             result.steps.retry = await phaseRetry({ gql, db, mock, ciid: setup.ciid, maps: faultMaps, cfg });
             // capability g — write round-trip against the mock vendor store (REAL with fixtures WriteRoundTrip; else stub).
-            result.steps.bidirectional = await phaseBidirectional({ gql, mock, verify, ciid: setup.ciid, maps: faultMaps, cfg });
+            result.steps.bidirectional = await phaseBidirectional({ gql, mock, verify, ciid: setup.ciid, maps: faultMaps, cfg, db });
         } else {
             result.steps.discoverOverlay = [step('discover-overlay.skipped', true, { skipReason: 'live — overlay deactivation needs mock route-removal (cannot remove objects from a real vendor).' })];
             result.steps.rateLimit = [step('rate-limit.skipped', true, { skipReason: 'live — 429-storm injection needs the programmable mock; cannot force a real vendor to rate-limit on demand.' })];

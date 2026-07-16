@@ -1,0 +1,1 @@
+-- V202607051910__v5.46.x__MagnetMail_Connector_Metadata.sql: regen/reseed-only (mj codegen + mj sync push)

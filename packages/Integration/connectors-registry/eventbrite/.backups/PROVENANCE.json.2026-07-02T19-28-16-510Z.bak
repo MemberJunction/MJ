@@ -1,0 +1,354 @@
+{
+  "Entries": [
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:21.513Z",
+      "UsedFor": "Confirming the v3 API base URL (HOST directive) for Configuration/NavigationBaseURL and the URL-path API versioning strategy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "HOST: https://www.eventbriteapi.com/v3/ (blueprint line 2). \"All URLs referenced in the API documentation have the following base: https://www.eventbrite.com/v3.\" (prose restatement, line 14)."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:21.513Z",
+      "UsedFor": "Establishing Configuration.APIVersioningStrategy=url-path -- the v3 version segment is embedded directly in the HOST base URL, with no separate version header/param used by any of the 102 documented endpoints.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.APIVersioningStrategy",
+      "Excerpt": "HOST: https://www.eventbriteapi.com/v3/"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:21.513Z",
+      "UsedFor": "Confirming the documented hourly rate limit (429 HIT_RATE_LIMIT) used to derive BatchMaxRequestCount/BatchRequestWaitTime and Configuration.RateLimitPolicy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "429 | HIT_RATE_LIMIT | Hourly rate limit has been reached for this token. Default rate limits are 2,000 calls per hour."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:21.513Z",
+      "UsedFor": "Same rate-limit statement supports BatchRequestWaitTime (the 1-hour/3600s window the 2,000-call budget replenishes over) and Configuration.RateLimitPolicy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "429 | HIT_RATE_LIMIT | Hourly rate limit has been reached for this token. Default rate limits are 2,000 calls per hour."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing Configuration.AuthFlow=oauth2-authcode, AuthHeaderPattern, and OAuthEndpoints (authorize + token URLs) -- co-stated in the same Authentication section walkthrough.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "Server-Side Authorization: redirect to https://www.eventbrite.com/oauth/authorize?response_type=code&client_id=YOUR_API_KEY&redirect_uri=YOUR_REDIRECT_URI, then POST https://www.eventbrite.com/oauth/token with grant_type=authorization_code + client_id + client_secret + code + redirect_uri. \"To authenticate API requests... Include the following in your Authorization header: { Authorization: Bearer MYTOKEN }\"."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing Configuration.AuthFlow=oauth2-authcode, AuthHeaderPattern, and OAuthEndpoints (authorize + token URLs) -- co-stated in the same Authentication section walkthrough.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthHeaderPattern",
+      "Excerpt": "Server-Side Authorization: redirect to https://www.eventbrite.com/oauth/authorize?response_type=code&client_id=YOUR_API_KEY&redirect_uri=YOUR_REDIRECT_URI, then POST https://www.eventbrite.com/oauth/token with grant_type=authorization_code + client_id + client_secret + code + redirect_uri. \"To authenticate API requests... Include the following in your Authorization header: { Authorization: Bearer MYTOKEN }\"."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing Configuration.AuthFlow=oauth2-authcode, AuthHeaderPattern, and OAuthEndpoints (authorize + token URLs) -- co-stated in the same Authentication section walkthrough.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OAuthEndpoints",
+      "Excerpt": "Server-Side Authorization: redirect to https://www.eventbrite.com/oauth/authorize?response_type=code&client_id=YOUR_API_KEY&redirect_uri=YOUR_REDIRECT_URI, then POST https://www.eventbrite.com/oauth/token with grant_type=authorization_code + client_id + client_secret + code + redirect_uri. \"To authenticate API requests... Include the following in your Authorization header: { Authorization: Bearer MYTOKEN }\"."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Negative evidence for Configuration.TokenRefreshStrategy -- no refresh_token grant, token TTL, or refresh endpoint is documented anywhere in the Authentication section.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.TokenRefreshStrategy",
+      "Excerpt": "Section \"## Authentication\" (full walkthrough, lines 18-119) documents Private Token acquisition + OAuth2 authorization-code/implicit flows only; no refresh_token grant or token-expiry statement appears anywhere in this section or the rest of the 6,932-line document (confirmed via full-text search)."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing the full pagination envelope shape + continuation-token advance protocol for Configuration.PaginationDefaults and integration-level PaginationType=Cursor.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "{\"pagination\":{\"object_count\":4,\"continuation\":\"AEtFRy...\",\"page_count\":2,\"page_size\":2,\"has_more_items\":true,\"page_number\":1},\"categories\":[...]}. \"continuation: The continuation token you'll use to get to the next set of results by making the same request again but including this token... When all records have been retrieved, the continuation token will return an empty list of objects.\" \"has_more_items: Boolean indicating whether or not there are more items in your response... When all records have been retrieved, this attribute will be 'false'.\""
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Negative evidence for Configuration.IncrementalSyncCapability -- no incremental/delta/updated-since query parameter is documented on any of the 31 coverable list endpoints.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "Full-text search of all 102 documented endpoint + Parameters blocks across the 6,932-line source found no updated_since / changed_after / delta / incremental query parameter on any listing endpoint."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing Configuration.WebhooksAvailable=true and the webhook trigger-action vocabulary, from the dedicated Webhooks resource group (GET/POST /organizations/{organization_id}/webhooks/, DELETE /webhooks/{id}/).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WebhooksAvailable",
+      "Excerpt": "Group Webhooks: GET /organizations/{organization_id}/webhooks/ (list), POST /organizations/{organization_id}/webhooks/ (create, with \"actions\" array param), DELETE /webhooks/{id}/ (delete). Create Webhook MSON (~lines 5696-5711) enumerates the actions vocabulary: event.created, event.published, event.unpublished, event.updated, order.placed, order.refunded, order.updated, organizer.updated, attendee.updated, attendee.checked_in, attendee.checked_out, ticket_class.created, ticket_class.updated, ticket_class.deleted, venue.updated. Legacy non-scoped /webhooks/ (GET/POST) is marked deprecated effective 2020-06-01 via inline \"> Warning:\" blockquote."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Negative evidence for Configuration.BulkOperationsAvailable -- no batch create/update/delete endpoint is documented across the 102 cataloged operations, though a 400 INVALID_BATCH error code exists (suggestive but not conclusive).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.BulkOperationsAvailable",
+      "Excerpt": "Every one of the 102 cataloged endpoint operations (SOURCE_STUDY.md enumeration) is single-record CRUD; no endpoint path or operation title contains \"batch\"/\"bulk\". Common Errors table lists \"400 | INVALID_BATCH | Batched request is missing or invalid.\" with no corresponding documented batch endpoint."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing Configuration.ErrorResponseShape -- the vendor-wide error envelope and the common cross-endpoint error-code table.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ErrorResponseShape",
+      "Excerpt": "\"When an error occurs during an API request, you will receive: An HTTP error status (in the 400-500 range); A JSON response containing more information about the error.\" Example: {\"error\":\"VENUE_AND_ONLINE\",\"error_description\":\"You cannot both specify a venue and set online_event\",\"status_code\":400}. \"This constant value is what you should base your error handling logic on, because this string won't change depending on the locale or as the API changes over time.\""
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Negative evidence for Configuration.CustomObjectMarkerPattern and Configuration.CustomFieldMarkerPattern -- no vendor-documented naming convention for customer-defined custom objects/fields was found anywhere in the source; the only organizer-extensibility surface is the first-class Question/Canned Question resource groups.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.CustomObjectMarkerPattern",
+      "Excerpt": "Full-text search of the 6,932-line source for a custom-object/custom-field naming-prefix convention (comparable to HubSpot's p_<accountID>_<name>) returned no matches. Organizer-authored extensibility is expressed only through the fully-cataloged \"Question\" (custom, event-scoped) and \"Canned Question\" (pre-defined templates) resource groups, each with their own APIPath and CRUD surface -- not a dynamically-named custom-field suffix/prefix mechanism."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Negative evidence for Configuration.CustomObjectMarkerPattern and Configuration.CustomFieldMarkerPattern -- no vendor-documented naming convention for customer-defined custom objects/fields was found anywhere in the source; the only organizer-extensibility surface is the first-class Question/Canned Question resource groups.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.CustomFieldMarkerPattern",
+      "Excerpt": "Full-text search of the 6,932-line source for a custom-object/custom-field naming-prefix convention (comparable to HubSpot's p_<accountID>_<name>) returned no matches. Organizer-authored extensibility is expressed only through the fully-cataloged \"Question\" (custom, event-scoped) and \"Canned Question\" (pre-defined templates) resource groups, each with their own APIPath and CRUD surface -- not a dynamically-named custom-field suffix/prefix mechanism."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Establishing Configuration.WriteCapability -- vendor-wide summary of which of the 31 coverable objects support Create/Update/Delete, cross-referenced against SOURCE_STUDY.md's per-object CRUD table (built from the same source).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WriteCapability",
+      "Excerpt": "Per-object POST (create/update) and DELETE operations are documented for 16 of 31 coverable objects, cataloged individually in SOURCE_STUDY.md's COVERABLE taxonomy table (e.g. \"POST /organizations/{organization_id}/events/\" create + \"POST /events/{event_id}/\" update + \"DELETE /events/{event_id}/\" delete for Event). Attendee and Order have zero documented write operations anywhere in the 102-endpoint catalog."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Negative evidence for Configuration.ConcurrencyControl=none -- no ETag/If-Match/version field is documented on any object or write operation.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ConcurrencyControl",
+      "Excerpt": "Full-text search of the source for \"ETag\", \"If-Match\", \"If-Unmodified-Since\", and \"version\" (as a concurrency field, distinct from the unrelated FORMAT:1A blueprint-format version marker) returned no concurrency-control header or field documented on any of the 31 coverable objects or their write operations."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:50:42.342Z",
+      "UsedFor": "Negative evidence for Configuration.DeleteSemantics=hard -- no soft-delete/archive/tombstone field is documented on any object whose DELETE operation is cataloged.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DeleteSemantics",
+      "Excerpt": "DELETE /events/{event_id}/, DELETE /ticket_groups/{ticket_group_id}/, DELETE /discounts/{discount_id}/, DELETE /events/{event_id}/inventory_tiers/{inventory_tier_id}/, DELETE /event/{event_id}/canned_questions/{question_id}, DELETE /events/{event_id}/questions/{question_id}/, DELETE /webhooks/{id}/ -- none of the corresponding MSON response/object type definitions (Event, Ticket Group, Discount, Inventory Tier, Canned Question, Base Question, Webhook) carries an is_deleted/archived/deleted_at/tombstone field."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:51:35.692Z",
+      "UsedFor": "Establishing Configuration.universalPK (vendor-wide PK convention hint for runtime D4 SoftPKClassifier) -- every one of the 31 SOURCE_STUDY.md COVERABLE leaves has a Get-one APIPath whose trailing path parameter matches the object's own \"id\" MSON field, and the vendor's Basic Types section documents id as string-typed on the wire.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.universalPK",
+      "Excerpt": "GET /events/{event_id}/ <-> Event.id; GET /orders/{order_id}/ <-> Order.id; GET /venues/{venue_id}/ <-> Venue.id; GET /categories/{id}/ <-> Category.id -- pattern confirmed across all 31 coverable leaves (SOURCE_STUDY.md \"Multi-source PK/FK detection inputs\" -- Tier-1 PK signal). Every documented MSON object type also carries its own top-level \"id (string)\" field (e.g. Event MSON: \"id: 3564383166 (string, required) - Event ID\")."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T17:51:35.692Z",
+      "UsedFor": "Establishing Configuration.RateLimitPolicy -- the smoothed per-second derivation (2000 calls / 3600 seconds) of the documented hourly ceiling, used as the connector's token-bucket rate for peak-aware sync throttling.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.RateLimitPolicy",
+      "Excerpt": "429 | HIT_RATE_LIMIT | Hourly rate limit has been reached for this token. Default rate limits are 2,000 calls per hour. (Same underlying statement as BatchMaxRequestCount/BatchRequestWaitTime; RateLimitPolicy additionally derives tokensPerSec = 2000/3600 = 0.5556 for the engine's AIMD token-bucket rate limiter. No Retry-After header format or burst allowance is documented in this source -- flagged as a soft gap in the note field.)"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T18:33:07.461Z",
+      "UsedFor": "Attendee supports incremental sync — vendor blueprint documents changed_since query param on Attendee list endpoints.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Attendee.SupportsIncrementalSync",
+      "Excerpt": "List Attendees by Event/Organization: '+ changed_since (datetime, optional) - Filter Attendees changed on or after the specified time.' (blueprint lines ~925-946). Watermark field = Attendee.changed (datetime, readonly)."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T18:33:07.461Z",
+      "UsedFor": "Order supports incremental sync — changed_since documented on 3 distinct Order list/get endpoints (by-org, by-event, by-user).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Order.SupportsIncrementalSync",
+      "Excerpt": "Orders: '+ changed_since (datetime, optional) - Only return orders changed on or after the time given.' / 'Orders changed on or after this time.' / 'Order changed on or after this time.' (blueprint lines 2804, 2829, 2855). Watermark field = Order.changed."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T18:33:07.461Z",
+      "UsedFor": "Media is an independently-addressable Get-one endpoint with a named MSON response type (Image).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Media.APIPath",
+      "Excerpt": "## Retrieve [/media/] / GET /media/{media_id}/{?width,height} returning Attributes (Image). Image (object): id (string, required), url (string, required). (blueprint lines ~2549-2563, 4841-4843)"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T18:33:07.461Z",
+      "UsedFor": "Media Upload is a documented Get-one endpoint returning the Media Upload MSON type.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Media Upload.APIPath",
+      "Excerpt": "## Retrieve Upload [/media-retrieve-upload/] / GET /media/upload/ returning Attributes (Media Upload). Media Upload (object): type (array[enum[string]], required). (blueprint lines ~2590-2599, 6035-6042)"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T18:33:07.461Z",
+      "UsedFor": "Event Team create body is flat (fields listed directly under + Attributes, no nested named sub-key).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Event Team.CreateBodyShape",
+      "Excerpt": "Create a Team [POST /events/{event_id}/teams/create/]: '+ Request + Attributes + public_event_id ... + name ... + password ... + preferred_start_time ...' — no wrapper object (contrast Event Create: '+ Attributes + event (Event Create)'). (blueprint lines 1655-1671)"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T18:33:07.461Z",
+      "UsedFor": "Seat Map create body is flat (single flat field under Attributes, no wrapper key).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Seat Map.CreateBodyShape",
+      "Excerpt": "Create Seat Map For Event [POST /events/{event_id}/seatmaps/]: '+ Request + Attributes (object) + source_seatmap_id ...' — flat, no wrapper. (blueprint lines 3449-3461)"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T18:33:07.461Z",
+      "UsedFor": "Webhook create body is flat — Attributes (Create Webhook) type-ref means the body IS that type's fields at top level, not {webhook:{...}}.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Webhook.CreateBodyShape",
+      "Excerpt": "Create Webhooks by Organization ID [POST /organizations/{organization_id}/webhooks/]: '+ Request + Attributes (Create Webhook)'. (blueprint lines 4354-4365)"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T18:33:07.461Z",
+      "UsedFor": "7 documented fields dropped from the Ticket Buyer Settings MSON type are added; 1 misattributed field (ticket_class_confirmation_settings, belongs to Event Ticket Buyer Settings) is removed.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Ticket Buyer Settings.fields",
+      "Excerpt": "Ticket Buyer Settings (object) lines 6375-6389: sales_ended_message, allow_attendee_update, survey_name, survey_info, survey_time_limit, survey_respondent (enum ticket_buyer|attendee), survey_ticket_classes. ticket_class_confirmation_settings belongs to a DIFFERENT type: Event Ticket Buyer Settings (object) line 5064."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T19:25:48.136Z",
+      "UsedFor": "Correcting vendor-wide IncrementalSyncCapability claim: a changed_since query param is documented on Attendee and Order list/get endpoints (not on any other of the 31 coverable objects). Supersedes prior false-negative claim of no vendor-documented incremental/delta query parameter.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "changed_since (datetime, optional) - Filter Attendees changed on or after the specified time. [lines 925,946]; changed_since (datetime, optional) - Only return orders changed on or after the time given. [lines 2804,2829,2855]"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T19:28:16.408Z",
+      "UsedFor": "Attendee supports incremental sync — vendor blueprint documents changed_since query param on Attendee list endpoints.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Attendee.SupportsIncrementalSync",
+      "Excerpt": "List Attendees by Event/Organization: '+ changed_since (datetime, optional) - Filter Attendees changed on or after the specified time.' (blueprint lines ~925-946). Watermark field = Attendee.changed (datetime, readonly)."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T19:28:16.408Z",
+      "UsedFor": "Order supports incremental sync — changed_since documented on 3 distinct Order list/get endpoints (by-org, by-event, by-user).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Order.SupportsIncrementalSync",
+      "Excerpt": "Orders: '+ changed_since (datetime, optional) - Only return orders changed on or after the time given.' / 'Orders changed on or after this time.' / 'Order changed on or after this time.' (blueprint lines 2804, 2829, 2855). Watermark field = Order.changed."
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T19:28:16.408Z",
+      "UsedFor": "Media is an independently-addressable Get-one endpoint with a named MSON response type (Image).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Media.APIPath",
+      "Excerpt": "## Retrieve [/media/] / GET /media/{media_id}/{?width,height} returning Attributes (Image). Image (object): id (string, required), url (string, required). (blueprint lines ~2549-2563, 4841-4843)"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T19:28:16.408Z",
+      "UsedFor": "Media Upload is a documented Get-one endpoint returning the Media Upload MSON type.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Media Upload.APIPath",
+      "Excerpt": "## Retrieve Upload [/media-retrieve-upload/] / GET /media/upload/ returning Attributes (Media Upload). Media Upload (object): type (array[enum[string]], required). (blueprint lines ~2590-2599, 6035-6042)"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T19:28:16.408Z",
+      "UsedFor": "Event Team create body is flat (fields listed directly under + Attributes, no nested named sub-key).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Event Team.CreateBodyShape",
+      "Excerpt": "Create a Team [POST /events/{event_id}/teams/create/]: '+ Request + Attributes + public_event_id ... + name ... + password ... + preferred_start_time ...' — no wrapper object (contrast Event Create: '+ Attributes + event (Event Create)'). (blueprint lines 1655-1671)"
+    },
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessedAt": "2026-07-02T19:28:16.408Z",
+      "UsedFor": "Seat Map create body is flat (single flat field under Attributes, no wrapper key).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Seat Map.CreateBodyShape",
+      "Excerpt": "Create Seat Map For Event [POST /events/{event_id}/seatmaps/]: '+ Request + Attributes (object) + source_seatmap_id ...' — flat, no wrapper. (blueprint lines 3449-3461)"
+    }
+  ]
+}

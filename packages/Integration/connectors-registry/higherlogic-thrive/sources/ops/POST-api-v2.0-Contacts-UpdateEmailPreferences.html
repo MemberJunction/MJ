@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/Contacts/UpdateEmailPreferences</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/Contacts/UpdateEmailPreferences</h1>
+<div>
+    <p>Change Global Email preferences for 1 or more Contacts.  * For use by Administrators only *.  Individual users
+            can updated their own Email Preferences via the &quot;UpdateMyEmailPreferences&quot; endpoint.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p>Updates to apply to Email settings.</p>
+
+<a href="/Help/ResourceModel?modelName=EmailPreferenceUpdateByContactRequest">EmailPreferenceUpdateByContactRequest</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">EmailPreferencesByContact</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=EmailPreferenceByContact">EmailPreferenceByContact</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Request Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;EmailPreferencesByContact&quot;: [
+    {
+      &quot;LegacyContactKey&quot;: &quot;sample string 1&quot;,
+      &quot;ContactKey&quot;: &quot;2c690aba-19b6-4e77-aa19-36439e9455fc&quot;,
+      &quot;MessageClass&quot;: 0,
+      &quot;OptOut&quot;: true
+    },
+    {
+      &quot;LegacyContactKey&quot;: &quot;sample string 1&quot;,
+      &quot;ContactKey&quot;: &quot;2c690aba-19b6-4e77-aa19-36439e9455fc&quot;,
+      &quot;MessageClass&quot;: 0,
+      &quot;OptOut&quot;: true
+    }
+  ]
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;EmailPreferenceUpdateByContactRequest xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Request&quot;&gt;
+  &lt;EmailPreferencesByContact&gt;
+    &lt;EmailPreferenceUpdateByContactRequest.EmailPreferenceByContact&gt;
+      &lt;ContactKey&gt;2c690aba-19b6-4e77-aa19-36439e9455fc&lt;/ContactKey&gt;
+      &lt;LegacyContactKey&gt;sample string 1&lt;/LegacyContactKey&gt;
+      &lt;MessageClass&gt;All&lt;/MessageClass&gt;
+      &lt;OptOut&gt;true&lt;/OptOut&gt;
+    &lt;/EmailPreferenceUpdateByContactRequest.EmailPreferenceByContact&gt;
+    &lt;EmailPreferenceUpdateByContactRequest.EmailPreferenceByContact&gt;
+      &lt;ContactKey&gt;2c690aba-19b6-4e77-aa19-36439e9455fc&lt;/ContactKey&gt;
+      &lt;LegacyContactKey&gt;sample string 1&lt;/LegacyContactKey&gt;
+      &lt;MessageClass&gt;All&lt;/MessageClass&gt;
+      &lt;OptOut&gt;true&lt;/OptOut&gt;
+    &lt;/EmailPreferenceUpdateByContactRequest.EmailPreferenceByContact&gt;
+  &lt;/EmailPreferencesByContact&gt;
+&lt;/EmailPreferenceUpdateByContactRequest&gt;
+</pre>
+        </div>
+</div>
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>A list of updated EmailPreference objects corresponding to the updates passed in.</p>
+
+<a href="/Help/ResourceModel?modelName=EmailPreferenceUpdateByContactResponse">EmailPreferenceUpdateByContactResponse</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">SuccessList</td>
+                    <td class="parameter-documentation">
+                        <p>List of Email Preference Updates that succeeded.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=EmailPreferenceByContact">EmailPreferenceByContact</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FailureList</td>
+                    <td class="parameter-documentation">
+                        <p>List of Email Preference Updates that failed.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=EmailPreferenceByContactUpdateFailure">EmailPreferenceByContactUpdateFailure</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;SuccessList&quot;: [
+    {
+      &quot;LegacyContactKey&quot;: &quot;sample string 1&quot;,
+      &quot;ContactKey&quot;: &quot;54fef349-5277-4dac-adda-5f261e250104&quot;,
+      &quot;MessageClass&quot;: 0,
+      &quot;OptOut&quot;: true
+    },
+    {
+      &quot;LegacyContactKey&quot;: &quot;sample string 1&quot;,
+      &quot;ContactKey&quot;: &quot;54fef349-5277-4dac-adda-5f261e250104&quot;,
+      &quot;MessageClass&quot;: 0,
+      &quot;OptOut&quot;: true
+    }
+  ],
+  &quot;FailureList&quot;: [
+    {
+      &quot;RequestData&quot;: {
+        &quot;LegacyContactKey&quot;: &quot;sample string 1&quot;,
+        &quot;ContactKey&quot;: &quot;54fef349-5277-4dac-adda-5f261e250104&quot;,
+        &quot;MessageClass&quot;: 0,
+        &quot;OptOut&quot;: true
+      },
+      &quot;ErrorMessage&quot;: &quot;sample string 1&quot;
+    },
+    {
+      &quot;RequestData&quot;: {
+        &quot;LegacyContactKey&quot;: &quot;sample string 1&quot;,
+        &quot;ContactKey&quot;: &quot;54fef349-5277-4dac-adda-5f261e250104&quot;,
+        &quot;MessageClass&quot;: 0,
+        &quot;OptOut&quot;: true
+      },
+      &quot;ErrorMessage&quot;: &quot;sample string 1&quot;
+    }
+  ]
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;EmailPreferenceUpdateByContactResponse xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+  &lt;FailureList&gt;
+    &lt;EmailPreferenceUpdateByContactResponse.EmailPreferenceByContactUpdateFailure&gt;
+      &lt;ErrorMessage&gt;sample string 1&lt;/ErrorMessage&gt;
+      &lt;RequestData xmlns:d4p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Request&quot;&gt;
+        &lt;d4p1:ContactKey&gt;54fef349-5277-4dac-adda-5f261e250104&lt;/d4p1:ContactKey&gt;
+        &lt;d4p1:LegacyContactKey&gt;sample string 1&lt;/d4p1:LegacyContactKey&gt;
+        &lt;d4p1:MessageClass&gt;All&lt;/d4p1:MessageClass&gt;
+        &lt;d4p1:OptOut&gt;true&lt;/d4p1:OptOut&gt;
+      &lt;/RequestData&gt;
+    &lt;/EmailPreferenceUpdateByContactResponse.EmailPreferenceByContactUpdateFailure&gt;
+    &lt;EmailPreferenceUpdateByContactResponse.EmailPreferenceByContactUpdateFailure&gt;
+      &lt;ErrorMessage&gt;sample string 1&lt;/ErrorMessage&gt;
+      &lt;RequestData xmlns:d4p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Request&quot;&gt;
+        &lt;d4p1:ContactKey&gt;54fef349-5277-4dac-adda-5f261e250104&lt;/d4p1:ContactKey&gt;
+        &lt;d4p1:LegacyContactKey&gt;sample string 1&lt;/d4p1:LegacyContactKey&gt;
+        &lt;d4p1:MessageClass&gt;All&lt;/d4p1:MessageClass&gt;
+        &lt;d4p1:OptOut&gt;true&lt;/d4p1:OptOut&gt;
+      &lt;/RequestData&gt;
+    &lt;/EmailPreferenceUpdateByContactResponse.EmailPreferenceByContactUpdateFailure&gt;
+  &lt;/FailureList&gt;
+  &lt;SuccessList xmlns:d2p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Request&quot;&gt;
+    &lt;d2p1:EmailPreferenceUpdateByContactRequest.EmailPreferenceByContact&gt;
+      &lt;d2p1:ContactKey&gt;54fef349-5277-4dac-adda-5f261e250104&lt;/d2p1:ContactKey&gt;
+      &lt;d2p1:LegacyContactKey&gt;sample string 1&lt;/d2p1:LegacyContactKey&gt;
+      &lt;d2p1:MessageClass&gt;All&lt;/d2p1:MessageClass&gt;
+      &lt;d2p1:OptOut&gt;true&lt;/d2p1:OptOut&gt;
+    &lt;/d2p1:EmailPreferenceUpdateByContactRequest.EmailPreferenceByContact&gt;
+    &lt;d2p1:EmailPreferenceUpdateByContactRequest.EmailPreferenceByContact&gt;
+      &lt;d2p1:ContactKey&gt;54fef349-5277-4dac-adda-5f261e250104&lt;/d2p1:ContactKey&gt;
+      &lt;d2p1:LegacyContactKey&gt;sample string 1&lt;/d2p1:LegacyContactKey&gt;
+      &lt;d2p1:MessageClass&gt;All&lt;/d2p1:MessageClass&gt;
+      &lt;d2p1:OptOut&gt;true&lt;/d2p1:OptOut&gt;
+    &lt;/d2p1:EmailPreferenceUpdateByContactRequest.EmailPreferenceByContact&gt;
+  &lt;/SuccessList&gt;
+&lt;/EmailPreferenceUpdateByContactResponse&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

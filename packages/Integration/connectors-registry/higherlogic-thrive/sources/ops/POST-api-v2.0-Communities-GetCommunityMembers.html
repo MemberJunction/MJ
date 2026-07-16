@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/Communities/GetCommunityMembers</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/Communities/GetCommunityMembers</h1>
+<div>
+    <p>Retrieve a list of Members of the specified Community in LastName, FirstName order.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p>CommunityKey: CommunityKey for the Community to retrieve. Either CommunityKey or LegacyGroupKey must be supplied.
+            If both CommunityKey and LegacyGroupKey are supplied, CommunityKey will take precedence.</p>
+
+<a href="/Help/ResourceModel?modelName=GetCommunityMembersRequest">GetCommunityMembersRequest</a>    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">CommunityKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Identifier for a Community in Higher Logic</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LegacyGroupKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Identifier for a Community in the source system</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">StartRecord</td>
+                    <td class="parameter-documentation">
+                        <p>Index of the first record to retrieve.  Defaults to 1 if not supplied.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EndRecord</td>
+                    <td class="parameter-documentation">
+                        <p>Index of the last record to retrieve.  Defaults to 50 if not supplied.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Request Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+{
+  &quot;CommunityKey&quot;: &quot;cf427ef2-04d2-4fff-89eb-eb1d05a8d6f0&quot;,
+  &quot;LegacyGroupKey&quot;: &quot;sample string 2&quot;,
+  &quot;StartRecord&quot;: 1,
+  &quot;EndRecord&quot;: 1
+}
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;GetCommunityMembersRequest xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.Request&quot;&gt;
+  &lt;CommunityKey&gt;cf427ef2-04d2-4fff-89eb-eb1d05a8d6f0&lt;/CommunityKey&gt;
+  &lt;EndRecord&gt;1&lt;/EndRecord&gt;
+  &lt;LegacyGroupKey&gt;sample string 2&lt;/LegacyGroupKey&gt;
+  &lt;StartRecord&gt;1&lt;/StartRecord&gt;
+&lt;/GetCommunityMembersRequest&gt;
+</pre>
+        </div>
+</div>
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>List of Contact records.</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=CommunityMember">CommunityMember</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">LinkToProfile</td>
+                    <td class="parameter-documentation">
+                        <p>Url link to this Contact&#39;s Profile page in the Community site.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PictureUrl</td>
+                    <td class="parameter-documentation">
+                        <p>Url link to this Contact&#39;s small Profile Picture.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Identifier for this Contact.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FirstName</td>
+                    <td class="parameter-documentation">
+                        <p>Contact&#39;s first name.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LastName</td>
+                    <td class="parameter-documentation">
+                        <p>Contact&#39;s last name.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DisplayName</td>
+                    <td class="parameter-documentation">
+                        <p>Calculated Display name.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EmailAddress</td>
+                    <td class="parameter-documentation">
+                        <p>Contact&#39;s email address.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactStatusCode</td>
+                    <td class="parameter-documentation">
+                        <p>Status code for this contact.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PrefixCode</td>
+                    <td class="parameter-documentation">
+                        <p>Prefix code for this contact.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UpdatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>Last Updated date for this contact.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UpdatedByContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>Last Contact that made an update to this contact&#39;s record.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CompanyName</td>
+                    <td class="parameter-documentation">
+                        <p>Name of this contact&#39;s company.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CompanyTitle</td>
+                    <td class="parameter-documentation">
+                        <p>Title for this contact at their company.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SuffixCode</td>
+                    <td class="parameter-documentation">
+                        <p>Contact&#39;s suffix.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Designation</td>
+                    <td class="parameter-documentation">
+                        <p>Designation.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LegacyContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Identifier for this contact in the source system.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">InformalName</td>
+                    <td class="parameter-documentation">
+                        <p>Informal Name.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">MiddleName</td>
+                    <td class="parameter-documentation">
+                        <p>Contact&#39;s Middle Name.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsCompany</td>
+                    <td class="parameter-documentation">
+                        <p>Is this contact a company.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CompanyLegacyContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Identifier for the Company (if applicable) in the source system.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AMSDirectoryOptOut</td>
+                    <td class="parameter-documentation">
+                        <p>Does this Contact opt-out of being part of the Source System directory?</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">HLDirectoryOptOut</td>
+                    <td class="parameter-documentation">
+                        <p>Does this Contact opt-out of being part of the Higher Logic directory?</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">HLContactMeOptOut</td>
+                    <td class="parameter-documentation">
+                        <p>Does this Contact opt-out of being contacted?</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LargePictureUrl</td>
+                    <td class="parameter-documentation">
+                        <p>Url link to this Contact&#39;s large Profile Picture.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AgreedToTermsDateTime</td>
+                    <td class="parameter-documentation">
+                        <p>Date that this Contact agreed to the site terms (if applicable).</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AcceptedOn</td>
+                    <td class="parameter-documentation">
+                        <p>Date this Contact was added to the Community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Community</td>
+                    <td class="parameter-documentation">
+                        <p>Detail about the Community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=Community">Community</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CommunityMemberRoles</td>
+                    <td class="parameter-documentation">
+                        <p>List of Roles that this Contact holds within the Community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">InvitedByContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>If applicable, the Contact Key of the user that invited this Contact to the Community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">InvitedOn</td>
+                    <td class="parameter-documentation">
+                        <p>If applicable, the date this Contact was invited to join this Community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsActive</td>
+                    <td class="parameter-documentation">
+                        <p>Is this Contact&#39;s membership to the Community active?</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsAdmin</td>
+                    <td class="parameter-documentation">
+                        <p>Is this Contact a Community Admin?</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RemovedOn</td>
+                    <td class="parameter-documentation">
+                        <p>If applicable, the date this Contact was removed from this Community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">StartDate</td>
+                    <td class="parameter-documentation">
+                        <p>If applicable, the date this Contact&#39;s Community Membership began/begins for the Community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EndDate</td>
+                    <td class="parameter-documentation">
+                        <p>If applicable, the date this Contact&#39;s Community Membership ended/ends for the Community.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+    &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+    &quot;ContactKey&quot;: &quot;6ab3c6ad-2288-407c-9cfe-7f9213a8ad6e&quot;,
+    &quot;FirstName&quot;: &quot;sample string 4&quot;,
+    &quot;LastName&quot;: &quot;sample string 5&quot;,
+    &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+    &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+    &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+    &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+    &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;,
+    &quot;UpdatedByContactKey&quot;: &quot;fcf2775c-0b66-4239-80be-063833cc1558&quot;,
+    &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+    &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+    &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+    &quot;Designation&quot;: &quot;sample string 15&quot;,
+    &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+    &quot;InformalName&quot;: &quot;sample string 17&quot;,
+    &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+    &quot;IsCompany&quot;: true,
+    &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+    &quot;AMSDirectoryOptOut&quot;: true,
+    &quot;HLDirectoryOptOut&quot;: true,
+    &quot;HLContactMeOptOut&quot;: true,
+    &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+    &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;,
+    &quot;AcceptedOn&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;,
+    &quot;Community&quot;: null,
+    &quot;CommunityMemberRoles&quot;: &quot;sample string 25&quot;,
+    &quot;InvitedByContactKey&quot;: &quot;3f7e2049-b909-484e-a0d9-95f11ab94630&quot;,
+    &quot;InvitedOn&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;,
+    &quot;IsActive&quot;: true,
+    &quot;IsAdmin&quot;: true,
+    &quot;RemovedOn&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;,
+    &quot;StartDate&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;,
+    &quot;EndDate&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;
+  },
+  {
+    &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+    &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+    &quot;ContactKey&quot;: &quot;6ab3c6ad-2288-407c-9cfe-7f9213a8ad6e&quot;,
+    &quot;FirstName&quot;: &quot;sample string 4&quot;,
+    &quot;LastName&quot;: &quot;sample string 5&quot;,
+    &quot;DisplayName&quot;: &quot;sample string 6&quot;,
+    &quot;EmailAddress&quot;: &quot;sample string 7&quot;,
+    &quot;ContactStatusCode&quot;: &quot;sample string 8&quot;,
+    &quot;PrefixCode&quot;: &quot;sample string 9&quot;,
+    &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;,
+    &quot;UpdatedByContactKey&quot;: &quot;fcf2775c-0b66-4239-80be-063833cc1558&quot;,
+    &quot;CompanyName&quot;: &quot;sample string 12&quot;,
+    &quot;CompanyTitle&quot;: &quot;sample string 13&quot;,
+    &quot;SuffixCode&quot;: &quot;sample string 14&quot;,
+    &quot;Designation&quot;: &quot;sample string 15&quot;,
+    &quot;LegacyContactKey&quot;: &quot;sample string 16&quot;,
+    &quot;InformalName&quot;: &quot;sample string 17&quot;,
+    &quot;MiddleName&quot;: &quot;sample string 18&quot;,
+    &quot;IsCompany&quot;: true,
+    &quot;CompanyLegacyContactKey&quot;: &quot;sample string 20&quot;,
+    &quot;AMSDirectoryOptOut&quot;: true,
+    &quot;HLDirectoryOptOut&quot;: true,
+    &quot;HLContactMeOptOut&quot;: true,
+    &quot;LargePictureUrl&quot;: &quot;sample string 24&quot;,
+    &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;,
+    &quot;AcceptedOn&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;,
+    &quot;Community&quot;: null,
+    &quot;CommunityMemberRoles&quot;: &quot;sample string 25&quot;,
+    &quot;InvitedByContactKey&quot;: &quot;3f7e2049-b909-484e-a0d9-95f11ab94630&quot;,
+    &quot;InvitedOn&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;,
+    &quot;IsActive&quot;: true,
+    &quot;IsAdmin&quot;: true,
+    &quot;RemovedOn&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;,
+    &quot;StartDate&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;,
+    &quot;EndDate&quot;: &quot;2026-07-08T17:53:36.371629Z&quot;
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfCommunityMember xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+  &lt;CommunityMember&gt;
+    &lt;AMSDirectoryOptOut&gt;true&lt;/AMSDirectoryOptOut&gt;
+    &lt;AcceptedOn&gt;2026-07-08T13:53:36.371629-04:00&lt;/AcceptedOn&gt;
+    &lt;AgreedToTermsDateTime&gt;2026-07-08T13:53:36.371629-04:00&lt;/AgreedToTermsDateTime&gt;
+    &lt;Community i:nil=&quot;true&quot; /&gt;
+    &lt;CommunityMemberRoles&gt;sample string 25&lt;/CommunityMemberRoles&gt;
+    &lt;CompanyLegacyContactKey&gt;sample string 20&lt;/CompanyLegacyContactKey&gt;
+    &lt;CompanyName&gt;sample string 12&lt;/CompanyName&gt;
+    &lt;CompanyTitle&gt;sample string 13&lt;/CompanyTitle&gt;
+    &lt;ContactKey&gt;6ab3c6ad-2288-407c-9cfe-7f9213a8ad6e&lt;/ContactKey&gt;
+    &lt;ContactStatusCode&gt;sample string 8&lt;/ContactStatusCode&gt;
+    &lt;Designation&gt;sample string 15&lt;/Designation&gt;
+    &lt;DisplayName&gt;sample string 6&lt;/DisplayName&gt;
+    &lt;EmailAddress&gt;sample string 7&lt;/EmailAddress&gt;
+    &lt;EndDate&gt;2026-07-08T13:53:36.371629-04:00&lt;/EndDate&gt;
+    &lt;FirstName&gt;sample string 4&lt;/FirstName&gt;
+    &lt;HLContactMeOptOut&gt;true&lt;/HLContactMeOptOut&gt;
+    &lt;HLDirectoryOptOut&gt;true&lt;/HLDirectoryOptOut&gt;
+    &lt;InformalName&gt;sample string 17&lt;/InformalName&gt;
+    &lt;InvitedByContactKey&gt;3f7e2049-b909-484e-a0d9-95f11ab94630&lt;/InvitedByContactKey&gt;
+    &lt;InvitedOn&gt;2026-07-08T13:53:36.371629-04:00&lt;/InvitedOn&gt;
+    &lt;IsActive&gt;true&lt;/IsActive&gt;
+    &lt;IsAdmin&gt;true&lt;/IsAdmin&gt;
+    &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+    &lt;LargePictureUrl&gt;sample string 24&lt;/LargePictureUrl&gt;
+    &lt;LastName&gt;sample string 5&lt;/LastName&gt;
+    &lt;LegacyContactKey&gt;sample string 16&lt;/LegacyContactKey&gt;
+    &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+    &lt;MiddleName&gt;sample string 18&lt;/MiddleName&gt;
+    &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+    &lt;PrefixCode&gt;sample string 9&lt;/PrefixCode&gt;
+    &lt;RemovedOn&gt;2026-07-08T13:53:36.371629-04:00&lt;/RemovedOn&gt;
+    &lt;StartDate&gt;2026-07-08T13:53:36.371629-04:00&lt;/StartDate&gt;
+    &lt;SuffixCode&gt;sample string 14&lt;/SuffixCode&gt;
+    &lt;UpdatedByContactKey&gt;fcf2775c-0b66-4239-80be-063833cc1558&lt;/UpdatedByContactKey&gt;
+    &lt;UpdatedOn&gt;2026-07-08T13:53:36.371629-04:00&lt;/UpdatedOn&gt;
+  &lt;/CommunityMember&gt;
+  &lt;CommunityMember&gt;
+    &lt;AMSDirectoryOptOut&gt;true&lt;/AMSDirectoryOptOut&gt;
+    &lt;AcceptedOn&gt;2026-07-08T13:53:36.371629-04:00&lt;/AcceptedOn&gt;
+    &lt;AgreedToTermsDateTime&gt;2026-07-08T13:53:36.371629-04:00&lt;/AgreedToTermsDateTime&gt;
+    &lt;Community i:nil=&quot;true&quot; /&gt;
+    &lt;CommunityMemberRoles&gt;sample string 25&lt;/CommunityMemberRoles&gt;
+    &lt;CompanyLegacyContactKey&gt;sample string 20&lt;/CompanyLegacyContactKey&gt;
+    &lt;CompanyName&gt;sample string 12&lt;/CompanyName&gt;
+    &lt;CompanyTitle&gt;sample string 13&lt;/CompanyTitle&gt;
+    &lt;ContactKey&gt;6ab3c6ad-2288-407c-9cfe-7f9213a8ad6e&lt;/ContactKey&gt;
+    &lt;ContactStatusCode&gt;sample string 8&lt;/ContactStatusCode&gt;
+    &lt;Designation&gt;sample string 15&lt;/Designation&gt;
+    &lt;DisplayName&gt;sample string 6&lt;/DisplayName&gt;
+    &lt;EmailAddress&gt;sample string 7&lt;/EmailAddress&gt;
+    &lt;EndDate&gt;2026-07-08T13:53:36.371629-04:00&lt;/EndDate&gt;
+    &lt;FirstName&gt;sample string 4&lt;/FirstName&gt;
+    &lt;HLContactMeOptOut&gt;true&lt;/HLContactMeOptOut&gt;
+    &lt;HLDirectoryOptOut&gt;true&lt;/HLDirectoryOptOut&gt;
+    &lt;InformalName&gt;sample string 17&lt;/InformalName&gt;
+    &lt;InvitedByContactKey&gt;3f7e2049-b909-484e-a0d9-95f11ab94630&lt;/InvitedByContactKey&gt;
+    &lt;InvitedOn&gt;2026-07-08T13:53:36.371629-04:00&lt;/InvitedOn&gt;
+    &lt;IsActive&gt;true&lt;/IsActive&gt;
+    &lt;IsAdmin&gt;true&lt;/IsAdmin&gt;
+    &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+    &lt;LargePictureUrl&gt;sample string 24&lt;/LargePictureUrl&gt;
+    &lt;LastName&gt;sample string 5&lt;/LastName&gt;
+    &lt;LegacyContactKey&gt;sample string 16&lt;/LegacyContactKey&gt;
+    &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+    &lt;MiddleName&gt;sample string 18&lt;/MiddleName&gt;
+    &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+    &lt;PrefixCode&gt;sample string 9&lt;/PrefixCode&gt;
+    &lt;RemovedOn&gt;2026-07-08T13:53:36.371629-04:00&lt;/RemovedOn&gt;
+    &lt;StartDate&gt;2026-07-08T13:53:36.371629-04:00&lt;/StartDate&gt;
+    &lt;SuffixCode&gt;sample string 14&lt;/SuffixCode&gt;
+    &lt;UpdatedByContactKey&gt;fcf2775c-0b66-4239-80be-063833cc1558&lt;/UpdatedByContactKey&gt;
+    &lt;UpdatedOn&gt;2026-07-08T13:53:36.371629-04:00&lt;/UpdatedOn&gt;
+  &lt;/CommunityMember&gt;
+&lt;/ArrayOfCommunityMember&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

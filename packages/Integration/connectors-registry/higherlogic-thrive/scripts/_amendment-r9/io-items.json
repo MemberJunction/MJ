@@ -1,0 +1,24 @@
+[
+  {
+    "io": {
+      "Name": "Volunteers",
+      "SupportsWrite": false,
+      "SupportsCreate": false,
+      "CreateAPIPath": null,
+      "CreateMethod": null,
+      "CreateBodyShape": null,
+      "CreateBodyKey": null,
+      "CreateIDLocation": null,
+      "SupportsUpdate": false,
+      "UpdateAPIPath": null,
+      "UpdateMethod": null,
+      "UpdateBodyShape": null,
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": null,
+      "SupportsDelete": false,
+      "DeleteAPIPath": null,
+      "DeleteMethod": null,
+      "DeleteIDLocation": null
+    }
+  }
+]

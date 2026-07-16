@@ -1,0 +1,2 @@
+{"ts":"2026-07-04T06:52:30.752Z","server":"mj-metadata","phase":"call","tool":"read_integration","connector":"magnetmail"}
+{"ts":"2026-07-04T06:52:30.754Z","server":"mj-metadata","phase":"result","tool":"read_integration","ok":true,"connector":"magnetmail"}

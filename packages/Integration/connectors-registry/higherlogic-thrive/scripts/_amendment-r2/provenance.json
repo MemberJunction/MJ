@@ -1,0 +1,32 @@
+[
+  {
+    "URL": "file://sources/ops/GET-api-v2.0-Answer-Get_answerKey.html",
+    "AccessedAt": "2026-07-09T19:36:36.432Z",
+    "UsedFor": "Answers.ParentKey FK -> Questions (Tier-1 explicit scalar FK)",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Answers.ParentKey.RelatedIntegrationObjectID",
+    "Excerpt": "ParentKey (guid): Unique identifier of the answer's parent question."
+  },
+  {
+    "URL": "file://sources/ops/GET-api-v2.0-Discussions-GetDiscussionPost_discussionPostKey.html",
+    "AccessedAt": "2026-07-09T19:36:36.432Z",
+    "UsedFor": "DiscussionPosts.ParentDiscussionPostKey self-FK -> DiscussionPosts",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.DiscussionPosts.ParentDiscussionPostKey.RelatedIntegrationObjectID",
+    "Excerpt": "ParentDiscussionPostKey (guid): Unique Identifier of the Parent Discussion Post. If there is no parent, will return an empty Guid."
+  },
+  {
+    "URL": "file://sources/ops/DELETE-api-v2.0-ExternalActivity-Delete_externalActivityKey_legacyActivityKey.html",
+    "AccessedAt": "2026-07-09T19:36:36.432Z",
+    "UsedFor": "ExternalActivity Delete op = query-param path, no body",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.ExternalActivity.DeleteAPIPath",
+    "Excerpt": "DELETE api/v2.0/ExternalActivity/Delete?externalActivityKey={externalActivityKey}&legacyActivityKey={legacyActivityKey}. Body Parameters: None."
+  }
+]

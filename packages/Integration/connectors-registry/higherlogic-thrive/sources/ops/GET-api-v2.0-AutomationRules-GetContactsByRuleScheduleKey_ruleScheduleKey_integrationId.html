@@ -1,0 +1,1768 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/AutomationRules/GetContactsByRuleScheduleKey?ruleScheduleKey={ruleScheduleKey}&amp;integrationId={integrationId}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/AutomationRules/GetContactsByRuleScheduleKey?ruleScheduleKey={ruleScheduleKey}&amp;integrationId={integrationId}</h1>
+<div>
+    <p>Retrieves a list of Contacts for which the specified RuleSchedule applies.  Accessible only by Admin Users.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">ruleScheduleKey</td>
+                    <td class="parameter-documentation">
+                        <p>The Unique Key for a RuleSchedule.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">integrationId</td>
+                    <td class="parameter-documentation">
+                        <p>Contact&#39;s ID in the source database.  This is the AMS Key or ID used by the source organization.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Default value is </p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>List of Contacts</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=Contact">Contact</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">LinkToProfile</td>
+                    <td class="parameter-documentation">
+                        <p>URL for this Contact&#39;s Community Site Profile page.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PictureUrl</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LargePictureUrl</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FirstName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LastName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DisplayName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EmailAddress</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactStatusCode</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PrefixCode</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UpdatedOn</td>
+                    <td class="parameter-documentation">
+                        <p>Last update date for this Contact.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UpdatedByContactKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CompanyName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CompanyTitle</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SuffixCode</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Designation</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LegacyContactKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">InformalName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Phone1</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Phone1Type</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Phone2</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Phone2Type</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Phone3</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Phone3Type</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Phone4</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Phone4Type</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">WebsiteUrl</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">MemberAwardKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsMember</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AgreedToTermsDateTime</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">MemberId</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">MaidenName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PrimarySecurityGroupKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">MiddleName</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsCompany</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">CompanyLegacyContactKey</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AMSDirectoryOptOut</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">HLDirectoryOptOut</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">HLContactMeOptOut</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsBlogger</td>
+                    <td class="parameter-documentation">
+                        <p>Indicates whether the contact is a blogger (HLBlogger security group).</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EducationEntries</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=Education">Education</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">WorkHistory</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=WorkExperience">WorkExperience</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Profile</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        <a href="/Help/ResourceModel?modelName=Profile">Profile</a>
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Addresses</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=Address">Address</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">UnreadMessageCount</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToVolunteerProfile</td>
+                    <td class="parameter-documentation">
+                        <p>URL for this Contact&#39;s Community Site Volunteer Profile page.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">Demographics</td>
+                    <td class="parameter-documentation">
+                        <p></p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=Demographic">Demographic</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">SecurityGroups</td>
+                    <td class="parameter-documentation">
+                        <p>Security groups associated with this contact. Null unless explicitly requested via includeSecurityGroups parameter.
+            Only provided when requesting a single contact record and when includeSecurityGroups is true.</p>
+                    </td>
+                    <td class="parameter-type">
+                                Collection of <a href="/Help/ResourceModel?modelName=SecurityGroupConcise">SecurityGroupConcise</a>
+
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+    &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+    &quot;LargePictureUrl&quot;: &quot;sample string 3&quot;,
+    &quot;ContactKey&quot;: &quot;9752e616-d8ae-4b0a-b295-f584d26d2560&quot;,
+    &quot;FirstName&quot;: &quot;sample string 5&quot;,
+    &quot;LastName&quot;: &quot;sample string 6&quot;,
+    &quot;DisplayName&quot;: &quot;sample string 7&quot;,
+    &quot;EmailAddress&quot;: &quot;sample string 8&quot;,
+    &quot;ContactStatusCode&quot;: &quot;sample string 9&quot;,
+    &quot;PrefixCode&quot;: &quot;sample string 10&quot;,
+    &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+    &quot;UpdatedByContactKey&quot;: &quot;59655191-6c04-4c46-bf8a-d0af607d4a53&quot;,
+    &quot;CompanyName&quot;: &quot;sample string 13&quot;,
+    &quot;CompanyTitle&quot;: &quot;sample string 14&quot;,
+    &quot;SuffixCode&quot;: &quot;sample string 15&quot;,
+    &quot;Designation&quot;: &quot;sample string 16&quot;,
+    &quot;LegacyContactKey&quot;: &quot;sample string 17&quot;,
+    &quot;InformalName&quot;: &quot;sample string 18&quot;,
+    &quot;Phone1&quot;: &quot;sample string 19&quot;,
+    &quot;Phone1Type&quot;: &quot;sample string 20&quot;,
+    &quot;Phone2&quot;: &quot;sample string 21&quot;,
+    &quot;Phone2Type&quot;: &quot;sample string 22&quot;,
+    &quot;Phone3&quot;: &quot;sample string 23&quot;,
+    &quot;Phone3Type&quot;: &quot;sample string 24&quot;,
+    &quot;Phone4&quot;: &quot;sample string 25&quot;,
+    &quot;Phone4Type&quot;: &quot;sample string 26&quot;,
+    &quot;WebsiteUrl&quot;: &quot;sample string 27&quot;,
+    &quot;MemberAwardKey&quot;: &quot;22380980-7d53-44ce-aafc-830ba7699dc6&quot;,
+    &quot;IsMember&quot;: true,
+    &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+    &quot;MemberId&quot;: &quot;sample string 30&quot;,
+    &quot;MaidenName&quot;: &quot;sample string 31&quot;,
+    &quot;PrimarySecurityGroupKey&quot;: &quot;c5837fb5-9a4e-42be-9c2a-b032e240f5bf&quot;,
+    &quot;MiddleName&quot;: &quot;sample string 33&quot;,
+    &quot;IsCompany&quot;: true,
+    &quot;CompanyLegacyContactKey&quot;: &quot;sample string 35&quot;,
+    &quot;AMSDirectoryOptOut&quot;: true,
+    &quot;HLDirectoryOptOut&quot;: true,
+    &quot;HLContactMeOptOut&quot;: true,
+    &quot;IsBlogger&quot;: true,
+    &quot;EducationEntries&quot;: [
+      {
+        &quot;ActivitiesSocieties&quot;: &quot;sample string 1&quot;,
+        &quot;Advisor&quot;: &quot;sample string 2&quot;,
+        &quot;City&quot;: &quot;sample string 3&quot;,
+        &quot;CountryCode&quot;: &quot;sample string 4&quot;,
+        &quot;CountryName&quot;: &quot;sample string 5&quot;,
+        &quot;Degree&quot;: &quot;sample string 6&quot;,
+        &quot;DegreeYear&quot;: 7,
+        &quot;Dissertation&quot;: &quot;sample string 8&quot;,
+        &quot;EducationKey&quot;: &quot;d386b7c6-3f52-49a6-8d01-dda106b4deee&quot;,
+        &quot;FieldOfStudy&quot;: &quot;sample string 10&quot;,
+        &quot;FromYear&quot;: 11,
+        &quot;IsHighestDegreeAttained&quot;: true,
+        &quot;Notes&quot;: &quot;sample string 13&quot;,
+        &quot;SchoolName&quot;: &quot;sample string 14&quot;,
+        &quot;StateCode&quot;: &quot;sample string 15&quot;,
+        &quot;StateName&quot;: &quot;sample string 16&quot;,
+        &quot;ToYear&quot;: 17,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;
+      },
+      {
+        &quot;ActivitiesSocieties&quot;: &quot;sample string 1&quot;,
+        &quot;Advisor&quot;: &quot;sample string 2&quot;,
+        &quot;City&quot;: &quot;sample string 3&quot;,
+        &quot;CountryCode&quot;: &quot;sample string 4&quot;,
+        &quot;CountryName&quot;: &quot;sample string 5&quot;,
+        &quot;Degree&quot;: &quot;sample string 6&quot;,
+        &quot;DegreeYear&quot;: 7,
+        &quot;Dissertation&quot;: &quot;sample string 8&quot;,
+        &quot;EducationKey&quot;: &quot;d386b7c6-3f52-49a6-8d01-dda106b4deee&quot;,
+        &quot;FieldOfStudy&quot;: &quot;sample string 10&quot;,
+        &quot;FromYear&quot;: 11,
+        &quot;IsHighestDegreeAttained&quot;: true,
+        &quot;Notes&quot;: &quot;sample string 13&quot;,
+        &quot;SchoolName&quot;: &quot;sample string 14&quot;,
+        &quot;StateCode&quot;: &quot;sample string 15&quot;,
+        &quot;StateName&quot;: &quot;sample string 16&quot;,
+        &quot;ToYear&quot;: 17,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;
+      }
+    ],
+    &quot;WorkHistory&quot;: [
+      {
+        &quot;Country&quot;: &quot;sample string 1&quot;,
+        &quot;Description&quot;: &quot;sample string 2&quot;,
+        &quot;FromDate&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+        &quot;IsPresent&quot;: true,
+        &quot;IsPrimary&quot;: true,
+        &quot;JobExperienceKey&quot;: &quot;d41357ed-ea74-4ccf-acb3-c1286166b5fb&quot;,
+        &quot;OrganizationName&quot;: &quot;sample string 7&quot;,
+        &quot;OrganizationSize&quot;: 8,
+        &quot;OrganizationUrl&quot;: &quot;sample string 9&quot;,
+        &quot;Place&quot;: &quot;sample string 10&quot;,
+        &quot;State&quot;: &quot;sample string 11&quot;,
+        &quot;Title&quot;: &quot;sample string 12&quot;,
+        &quot;ToDate&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;
+      },
+      {
+        &quot;Country&quot;: &quot;sample string 1&quot;,
+        &quot;Description&quot;: &quot;sample string 2&quot;,
+        &quot;FromDate&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+        &quot;IsPresent&quot;: true,
+        &quot;IsPrimary&quot;: true,
+        &quot;JobExperienceKey&quot;: &quot;d41357ed-ea74-4ccf-acb3-c1286166b5fb&quot;,
+        &quot;OrganizationName&quot;: &quot;sample string 7&quot;,
+        &quot;OrganizationSize&quot;: 8,
+        &quot;OrganizationUrl&quot;: &quot;sample string 9&quot;,
+        &quot;Place&quot;: &quot;sample string 10&quot;,
+        &quot;State&quot;: &quot;sample string 11&quot;,
+        &quot;Title&quot;: &quot;sample string 12&quot;,
+        &quot;ToDate&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;
+      }
+    ],
+    &quot;Profile&quot;: {
+      &quot;Certifications&quot;: &quot;sample string 1&quot;,
+      &quot;Description&quot;: &quot;sample string 2&quot;,
+      &quot;Expertise&quot;: &quot;sample string 3&quot;,
+      &quot;ForwardComments&quot;: true,
+      &quot;ForwardCommunityInvitations&quot;: true,
+      &quot;ForwardContactRequests&quot;: true,
+      &quot;ForwardMessages&quot;: true,
+      &quot;Groups&quot;: &quot;sample string 8&quot;,
+      &quot;ImageHeight&quot;: 9,
+      &quot;ImageWidth&quot;: 10,
+      &quot;Interests&quot;: &quot;sample string 11&quot;,
+      &quot;IsSpeaker&quot;: true,
+      &quot;NotificationEmailAddress&quot;: &quot;sample string 13&quot;
+    },
+    &quot;Addresses&quot;: [
+      {
+        &quot;Address1&quot;: &quot;sample string 1&quot;,
+        &quot;Address2&quot;: &quot;sample string 2&quot;,
+        &quot;Address3&quot;: &quot;sample string 3&quot;,
+        &quot;AddressKey&quot;: &quot;6dd1f3f8-8192-4efd-8230-db8ec6d5afdb&quot;,
+        &quot;AddressType&quot;: &quot;sample string 5&quot;,
+        &quot;City&quot;: &quot;sample string 6&quot;,
+        &quot;CityStateCounty&quot;: &quot;sample string 7&quot;,
+        &quot;CityStateCountyCountry&quot;: &quot;sample string 8&quot;,
+        &quot;ContactKey&quot;: &quot;5be5a1e3-27de-43d9-bbf9-ac0b0e1541a3&quot;,
+        &quot;CountryCode&quot;: &quot;sample string 10&quot;,
+        &quot;CountryName&quot;: &quot;sample string 11&quot;,
+        &quot;County&quot;: &quot;sample string 12&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 13&quot;,
+        &quot;FormattedAddress&quot;: &quot;sample string 14&quot;,
+        &quot;FormattedAddressOneLine&quot;: &quot;sample string 15&quot;,
+        &quot;FormattedAddressText&quot;: &quot;sample string 16&quot;,
+        &quot;IsListCityState&quot;: true,
+        &quot;IsLoggingEnabled&quot;: true,
+        &quot;IsNew&quot;: true,
+        &quot;IsPreferredBill&quot;: true,
+        &quot;IsPreferredList&quot;: true,
+        &quot;IsPreferredMail&quot;: true,
+        &quot;ItemCreatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+        &quot;ItemEntityName&quot;: &quot;sample string 24&quot;,
+        &quot;ItemName&quot;: &quot;sample string 25&quot;,
+        &quot;ItemOwnerContactKey&quot;: &quot;8be55516-58fe-4bbe-8d94-a16c99b0197b&quot;,
+        &quot;Latitude&quot;: 27.0,
+        &quot;LegacyAddressKey&quot;: &quot;sample string 28&quot;,
+        &quot;Longitude&quot;: 29.0,
+        &quot;NearText&quot;: &quot;sample string 30&quot;,
+        &quot;Phone1&quot;: &quot;sample string 31&quot;,
+        &quot;Phone1Type&quot;: &quot;sample string 32&quot;,
+        &quot;Phone2&quot;: &quot;sample string 33&quot;,
+        &quot;Phone2Type&quot;: &quot;sample string 34&quot;,
+        &quot;Phone3&quot;: &quot;sample string 35&quot;,
+        &quot;Phone3Type&quot;: &quot;sample string 36&quot;,
+        &quot;Phone4&quot;: &quot;sample string 37&quot;,
+        &quot;Phone4Type&quot;: &quot;sample string 38&quot;,
+        &quot;PostalCode&quot;: &quot;sample string 39&quot;,
+        &quot;Region&quot;: &quot;sample string 40&quot;,
+        &quot;StateProvinceCode&quot;: &quot;sample string 41&quot;,
+        &quot;TimeZoneKey&quot;: &quot;9815ddf8-9b5a-4989-bbe1-3e65aedc0082&quot;,
+        &quot;Town&quot;: &quot;sample string 43&quot;,
+        &quot;TownOrCity&quot;: &quot;sample string 44&quot;
+      },
+      {
+        &quot;Address1&quot;: &quot;sample string 1&quot;,
+        &quot;Address2&quot;: &quot;sample string 2&quot;,
+        &quot;Address3&quot;: &quot;sample string 3&quot;,
+        &quot;AddressKey&quot;: &quot;6dd1f3f8-8192-4efd-8230-db8ec6d5afdb&quot;,
+        &quot;AddressType&quot;: &quot;sample string 5&quot;,
+        &quot;City&quot;: &quot;sample string 6&quot;,
+        &quot;CityStateCounty&quot;: &quot;sample string 7&quot;,
+        &quot;CityStateCountyCountry&quot;: &quot;sample string 8&quot;,
+        &quot;ContactKey&quot;: &quot;5be5a1e3-27de-43d9-bbf9-ac0b0e1541a3&quot;,
+        &quot;CountryCode&quot;: &quot;sample string 10&quot;,
+        &quot;CountryName&quot;: &quot;sample string 11&quot;,
+        &quot;County&quot;: &quot;sample string 12&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 13&quot;,
+        &quot;FormattedAddress&quot;: &quot;sample string 14&quot;,
+        &quot;FormattedAddressOneLine&quot;: &quot;sample string 15&quot;,
+        &quot;FormattedAddressText&quot;: &quot;sample string 16&quot;,
+        &quot;IsListCityState&quot;: true,
+        &quot;IsLoggingEnabled&quot;: true,
+        &quot;IsNew&quot;: true,
+        &quot;IsPreferredBill&quot;: true,
+        &quot;IsPreferredList&quot;: true,
+        &quot;IsPreferredMail&quot;: true,
+        &quot;ItemCreatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+        &quot;ItemEntityName&quot;: &quot;sample string 24&quot;,
+        &quot;ItemName&quot;: &quot;sample string 25&quot;,
+        &quot;ItemOwnerContactKey&quot;: &quot;8be55516-58fe-4bbe-8d94-a16c99b0197b&quot;,
+        &quot;Latitude&quot;: 27.0,
+        &quot;LegacyAddressKey&quot;: &quot;sample string 28&quot;,
+        &quot;Longitude&quot;: 29.0,
+        &quot;NearText&quot;: &quot;sample string 30&quot;,
+        &quot;Phone1&quot;: &quot;sample string 31&quot;,
+        &quot;Phone1Type&quot;: &quot;sample string 32&quot;,
+        &quot;Phone2&quot;: &quot;sample string 33&quot;,
+        &quot;Phone2Type&quot;: &quot;sample string 34&quot;,
+        &quot;Phone3&quot;: &quot;sample string 35&quot;,
+        &quot;Phone3Type&quot;: &quot;sample string 36&quot;,
+        &quot;Phone4&quot;: &quot;sample string 37&quot;,
+        &quot;Phone4Type&quot;: &quot;sample string 38&quot;,
+        &quot;PostalCode&quot;: &quot;sample string 39&quot;,
+        &quot;Region&quot;: &quot;sample string 40&quot;,
+        &quot;StateProvinceCode&quot;: &quot;sample string 41&quot;,
+        &quot;TimeZoneKey&quot;: &quot;9815ddf8-9b5a-4989-bbe1-3e65aedc0082&quot;,
+        &quot;Town&quot;: &quot;sample string 43&quot;,
+        &quot;TownOrCity&quot;: &quot;sample string 44&quot;
+      }
+    ],
+    &quot;UnreadMessageCount&quot;: 40,
+    &quot;LinkToVolunteerProfile&quot;: &quot;sample string 41&quot;,
+    &quot;Demographics&quot;: [
+      {
+        &quot;DemographicType&quot;: &quot;sample string 1&quot;,
+        &quot;Values&quot;: [
+          &quot;sample string 1&quot;,
+          &quot;sample string 2&quot;
+        ]
+      },
+      {
+        &quot;DemographicType&quot;: &quot;sample string 1&quot;,
+        &quot;Values&quot;: [
+          &quot;sample string 1&quot;,
+          &quot;sample string 2&quot;
+        ]
+      }
+    ],
+    &quot;SecurityGroups&quot;: [
+      {
+        &quot;SecurityGroupKey&quot;: &quot;90bff382-0726-4f2b-97ea-32afa3dd9618&quot;,
+        &quot;SecurityGroupName&quot;: &quot;sample string 2&quot;,
+        &quot;ProvidesMemberBenefits&quot;: true
+      },
+      {
+        &quot;SecurityGroupKey&quot;: &quot;90bff382-0726-4f2b-97ea-32afa3dd9618&quot;,
+        &quot;SecurityGroupName&quot;: &quot;sample string 2&quot;,
+        &quot;ProvidesMemberBenefits&quot;: true
+      }
+    ]
+  },
+  {
+    &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+    &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+    &quot;LargePictureUrl&quot;: &quot;sample string 3&quot;,
+    &quot;ContactKey&quot;: &quot;9752e616-d8ae-4b0a-b295-f584d26d2560&quot;,
+    &quot;FirstName&quot;: &quot;sample string 5&quot;,
+    &quot;LastName&quot;: &quot;sample string 6&quot;,
+    &quot;DisplayName&quot;: &quot;sample string 7&quot;,
+    &quot;EmailAddress&quot;: &quot;sample string 8&quot;,
+    &quot;ContactStatusCode&quot;: &quot;sample string 9&quot;,
+    &quot;PrefixCode&quot;: &quot;sample string 10&quot;,
+    &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+    &quot;UpdatedByContactKey&quot;: &quot;59655191-6c04-4c46-bf8a-d0af607d4a53&quot;,
+    &quot;CompanyName&quot;: &quot;sample string 13&quot;,
+    &quot;CompanyTitle&quot;: &quot;sample string 14&quot;,
+    &quot;SuffixCode&quot;: &quot;sample string 15&quot;,
+    &quot;Designation&quot;: &quot;sample string 16&quot;,
+    &quot;LegacyContactKey&quot;: &quot;sample string 17&quot;,
+    &quot;InformalName&quot;: &quot;sample string 18&quot;,
+    &quot;Phone1&quot;: &quot;sample string 19&quot;,
+    &quot;Phone1Type&quot;: &quot;sample string 20&quot;,
+    &quot;Phone2&quot;: &quot;sample string 21&quot;,
+    &quot;Phone2Type&quot;: &quot;sample string 22&quot;,
+    &quot;Phone3&quot;: &quot;sample string 23&quot;,
+    &quot;Phone3Type&quot;: &quot;sample string 24&quot;,
+    &quot;Phone4&quot;: &quot;sample string 25&quot;,
+    &quot;Phone4Type&quot;: &quot;sample string 26&quot;,
+    &quot;WebsiteUrl&quot;: &quot;sample string 27&quot;,
+    &quot;MemberAwardKey&quot;: &quot;22380980-7d53-44ce-aafc-830ba7699dc6&quot;,
+    &quot;IsMember&quot;: true,
+    &quot;AgreedToTermsDateTime&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+    &quot;MemberId&quot;: &quot;sample string 30&quot;,
+    &quot;MaidenName&quot;: &quot;sample string 31&quot;,
+    &quot;PrimarySecurityGroupKey&quot;: &quot;c5837fb5-9a4e-42be-9c2a-b032e240f5bf&quot;,
+    &quot;MiddleName&quot;: &quot;sample string 33&quot;,
+    &quot;IsCompany&quot;: true,
+    &quot;CompanyLegacyContactKey&quot;: &quot;sample string 35&quot;,
+    &quot;AMSDirectoryOptOut&quot;: true,
+    &quot;HLDirectoryOptOut&quot;: true,
+    &quot;HLContactMeOptOut&quot;: true,
+    &quot;IsBlogger&quot;: true,
+    &quot;EducationEntries&quot;: [
+      {
+        &quot;ActivitiesSocieties&quot;: &quot;sample string 1&quot;,
+        &quot;Advisor&quot;: &quot;sample string 2&quot;,
+        &quot;City&quot;: &quot;sample string 3&quot;,
+        &quot;CountryCode&quot;: &quot;sample string 4&quot;,
+        &quot;CountryName&quot;: &quot;sample string 5&quot;,
+        &quot;Degree&quot;: &quot;sample string 6&quot;,
+        &quot;DegreeYear&quot;: 7,
+        &quot;Dissertation&quot;: &quot;sample string 8&quot;,
+        &quot;EducationKey&quot;: &quot;d386b7c6-3f52-49a6-8d01-dda106b4deee&quot;,
+        &quot;FieldOfStudy&quot;: &quot;sample string 10&quot;,
+        &quot;FromYear&quot;: 11,
+        &quot;IsHighestDegreeAttained&quot;: true,
+        &quot;Notes&quot;: &quot;sample string 13&quot;,
+        &quot;SchoolName&quot;: &quot;sample string 14&quot;,
+        &quot;StateCode&quot;: &quot;sample string 15&quot;,
+        &quot;StateName&quot;: &quot;sample string 16&quot;,
+        &quot;ToYear&quot;: 17,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;
+      },
+      {
+        &quot;ActivitiesSocieties&quot;: &quot;sample string 1&quot;,
+        &quot;Advisor&quot;: &quot;sample string 2&quot;,
+        &quot;City&quot;: &quot;sample string 3&quot;,
+        &quot;CountryCode&quot;: &quot;sample string 4&quot;,
+        &quot;CountryName&quot;: &quot;sample string 5&quot;,
+        &quot;Degree&quot;: &quot;sample string 6&quot;,
+        &quot;DegreeYear&quot;: 7,
+        &quot;Dissertation&quot;: &quot;sample string 8&quot;,
+        &quot;EducationKey&quot;: &quot;d386b7c6-3f52-49a6-8d01-dda106b4deee&quot;,
+        &quot;FieldOfStudy&quot;: &quot;sample string 10&quot;,
+        &quot;FromYear&quot;: 11,
+        &quot;IsHighestDegreeAttained&quot;: true,
+        &quot;Notes&quot;: &quot;sample string 13&quot;,
+        &quot;SchoolName&quot;: &quot;sample string 14&quot;,
+        &quot;StateCode&quot;: &quot;sample string 15&quot;,
+        &quot;StateName&quot;: &quot;sample string 16&quot;,
+        &quot;ToYear&quot;: 17,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;
+      }
+    ],
+    &quot;WorkHistory&quot;: [
+      {
+        &quot;Country&quot;: &quot;sample string 1&quot;,
+        &quot;Description&quot;: &quot;sample string 2&quot;,
+        &quot;FromDate&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+        &quot;IsPresent&quot;: true,
+        &quot;IsPrimary&quot;: true,
+        &quot;JobExperienceKey&quot;: &quot;d41357ed-ea74-4ccf-acb3-c1286166b5fb&quot;,
+        &quot;OrganizationName&quot;: &quot;sample string 7&quot;,
+        &quot;OrganizationSize&quot;: 8,
+        &quot;OrganizationUrl&quot;: &quot;sample string 9&quot;,
+        &quot;Place&quot;: &quot;sample string 10&quot;,
+        &quot;State&quot;: &quot;sample string 11&quot;,
+        &quot;Title&quot;: &quot;sample string 12&quot;,
+        &quot;ToDate&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;
+      },
+      {
+        &quot;Country&quot;: &quot;sample string 1&quot;,
+        &quot;Description&quot;: &quot;sample string 2&quot;,
+        &quot;FromDate&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+        &quot;IsPresent&quot;: true,
+        &quot;IsPrimary&quot;: true,
+        &quot;JobExperienceKey&quot;: &quot;d41357ed-ea74-4ccf-acb3-c1286166b5fb&quot;,
+        &quot;OrganizationName&quot;: &quot;sample string 7&quot;,
+        &quot;OrganizationSize&quot;: 8,
+        &quot;OrganizationUrl&quot;: &quot;sample string 9&quot;,
+        &quot;Place&quot;: &quot;sample string 10&quot;,
+        &quot;State&quot;: &quot;sample string 11&quot;,
+        &quot;Title&quot;: &quot;sample string 12&quot;,
+        &quot;ToDate&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+        &quot;UpdatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;
+      }
+    ],
+    &quot;Profile&quot;: {
+      &quot;Certifications&quot;: &quot;sample string 1&quot;,
+      &quot;Description&quot;: &quot;sample string 2&quot;,
+      &quot;Expertise&quot;: &quot;sample string 3&quot;,
+      &quot;ForwardComments&quot;: true,
+      &quot;ForwardCommunityInvitations&quot;: true,
+      &quot;ForwardContactRequests&quot;: true,
+      &quot;ForwardMessages&quot;: true,
+      &quot;Groups&quot;: &quot;sample string 8&quot;,
+      &quot;ImageHeight&quot;: 9,
+      &quot;ImageWidth&quot;: 10,
+      &quot;Interests&quot;: &quot;sample string 11&quot;,
+      &quot;IsSpeaker&quot;: true,
+      &quot;NotificationEmailAddress&quot;: &quot;sample string 13&quot;
+    },
+    &quot;Addresses&quot;: [
+      {
+        &quot;Address1&quot;: &quot;sample string 1&quot;,
+        &quot;Address2&quot;: &quot;sample string 2&quot;,
+        &quot;Address3&quot;: &quot;sample string 3&quot;,
+        &quot;AddressKey&quot;: &quot;6dd1f3f8-8192-4efd-8230-db8ec6d5afdb&quot;,
+        &quot;AddressType&quot;: &quot;sample string 5&quot;,
+        &quot;City&quot;: &quot;sample string 6&quot;,
+        &quot;CityStateCounty&quot;: &quot;sample string 7&quot;,
+        &quot;CityStateCountyCountry&quot;: &quot;sample string 8&quot;,
+        &quot;ContactKey&quot;: &quot;5be5a1e3-27de-43d9-bbf9-ac0b0e1541a3&quot;,
+        &quot;CountryCode&quot;: &quot;sample string 10&quot;,
+        &quot;CountryName&quot;: &quot;sample string 11&quot;,
+        &quot;County&quot;: &quot;sample string 12&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 13&quot;,
+        &quot;FormattedAddress&quot;: &quot;sample string 14&quot;,
+        &quot;FormattedAddressOneLine&quot;: &quot;sample string 15&quot;,
+        &quot;FormattedAddressText&quot;: &quot;sample string 16&quot;,
+        &quot;IsListCityState&quot;: true,
+        &quot;IsLoggingEnabled&quot;: true,
+        &quot;IsNew&quot;: true,
+        &quot;IsPreferredBill&quot;: true,
+        &quot;IsPreferredList&quot;: true,
+        &quot;IsPreferredMail&quot;: true,
+        &quot;ItemCreatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+        &quot;ItemEntityName&quot;: &quot;sample string 24&quot;,
+        &quot;ItemName&quot;: &quot;sample string 25&quot;,
+        &quot;ItemOwnerContactKey&quot;: &quot;8be55516-58fe-4bbe-8d94-a16c99b0197b&quot;,
+        &quot;Latitude&quot;: 27.0,
+        &quot;LegacyAddressKey&quot;: &quot;sample string 28&quot;,
+        &quot;Longitude&quot;: 29.0,
+        &quot;NearText&quot;: &quot;sample string 30&quot;,
+        &quot;Phone1&quot;: &quot;sample string 31&quot;,
+        &quot;Phone1Type&quot;: &quot;sample string 32&quot;,
+        &quot;Phone2&quot;: &quot;sample string 33&quot;,
+        &quot;Phone2Type&quot;: &quot;sample string 34&quot;,
+        &quot;Phone3&quot;: &quot;sample string 35&quot;,
+        &quot;Phone3Type&quot;: &quot;sample string 36&quot;,
+        &quot;Phone4&quot;: &quot;sample string 37&quot;,
+        &quot;Phone4Type&quot;: &quot;sample string 38&quot;,
+        &quot;PostalCode&quot;: &quot;sample string 39&quot;,
+        &quot;Region&quot;: &quot;sample string 40&quot;,
+        &quot;StateProvinceCode&quot;: &quot;sample string 41&quot;,
+        &quot;TimeZoneKey&quot;: &quot;9815ddf8-9b5a-4989-bbe1-3e65aedc0082&quot;,
+        &quot;Town&quot;: &quot;sample string 43&quot;,
+        &quot;TownOrCity&quot;: &quot;sample string 44&quot;
+      },
+      {
+        &quot;Address1&quot;: &quot;sample string 1&quot;,
+        &quot;Address2&quot;: &quot;sample string 2&quot;,
+        &quot;Address3&quot;: &quot;sample string 3&quot;,
+        &quot;AddressKey&quot;: &quot;6dd1f3f8-8192-4efd-8230-db8ec6d5afdb&quot;,
+        &quot;AddressType&quot;: &quot;sample string 5&quot;,
+        &quot;City&quot;: &quot;sample string 6&quot;,
+        &quot;CityStateCounty&quot;: &quot;sample string 7&quot;,
+        &quot;CityStateCountyCountry&quot;: &quot;sample string 8&quot;,
+        &quot;ContactKey&quot;: &quot;5be5a1e3-27de-43d9-bbf9-ac0b0e1541a3&quot;,
+        &quot;CountryCode&quot;: &quot;sample string 10&quot;,
+        &quot;CountryName&quot;: &quot;sample string 11&quot;,
+        &quot;County&quot;: &quot;sample string 12&quot;,
+        &quot;EmailAddress&quot;: &quot;sample string 13&quot;,
+        &quot;FormattedAddress&quot;: &quot;sample string 14&quot;,
+        &quot;FormattedAddressOneLine&quot;: &quot;sample string 15&quot;,
+        &quot;FormattedAddressText&quot;: &quot;sample string 16&quot;,
+        &quot;IsListCityState&quot;: true,
+        &quot;IsLoggingEnabled&quot;: true,
+        &quot;IsNew&quot;: true,
+        &quot;IsPreferredBill&quot;: true,
+        &quot;IsPreferredList&quot;: true,
+        &quot;IsPreferredMail&quot;: true,
+        &quot;ItemCreatedOn&quot;: &quot;2026-07-08T17:53:36.0952008Z&quot;,
+        &quot;ItemEntityName&quot;: &quot;sample string 24&quot;,
+        &quot;ItemName&quot;: &quot;sample string 25&quot;,
+        &quot;ItemOwnerContactKey&quot;: &quot;8be55516-58fe-4bbe-8d94-a16c99b0197b&quot;,
+        &quot;Latitude&quot;: 27.0,
+        &quot;LegacyAddressKey&quot;: &quot;sample string 28&quot;,
+        &quot;Longitude&quot;: 29.0,
+        &quot;NearText&quot;: &quot;sample string 30&quot;,
+        &quot;Phone1&quot;: &quot;sample string 31&quot;,
+        &quot;Phone1Type&quot;: &quot;sample string 32&quot;,
+        &quot;Phone2&quot;: &quot;sample string 33&quot;,
+        &quot;Phone2Type&quot;: &quot;sample string 34&quot;,
+        &quot;Phone3&quot;: &quot;sample string 35&quot;,
+        &quot;Phone3Type&quot;: &quot;sample string 36&quot;,
+        &quot;Phone4&quot;: &quot;sample string 37&quot;,
+        &quot;Phone4Type&quot;: &quot;sample string 38&quot;,
+        &quot;PostalCode&quot;: &quot;sample string 39&quot;,
+        &quot;Region&quot;: &quot;sample string 40&quot;,
+        &quot;StateProvinceCode&quot;: &quot;sample string 41&quot;,
+        &quot;TimeZoneKey&quot;: &quot;9815ddf8-9b5a-4989-bbe1-3e65aedc0082&quot;,
+        &quot;Town&quot;: &quot;sample string 43&quot;,
+        &quot;TownOrCity&quot;: &quot;sample string 44&quot;
+      }
+    ],
+    &quot;UnreadMessageCount&quot;: 40,
+    &quot;LinkToVolunteerProfile&quot;: &quot;sample string 41&quot;,
+    &quot;Demographics&quot;: [
+      {
+        &quot;DemographicType&quot;: &quot;sample string 1&quot;,
+        &quot;Values&quot;: [
+          &quot;sample string 1&quot;,
+          &quot;sample string 2&quot;
+        ]
+      },
+      {
+        &quot;DemographicType&quot;: &quot;sample string 1&quot;,
+        &quot;Values&quot;: [
+          &quot;sample string 1&quot;,
+          &quot;sample string 2&quot;
+        ]
+      }
+    ],
+    &quot;SecurityGroups&quot;: [
+      {
+        &quot;SecurityGroupKey&quot;: &quot;90bff382-0726-4f2b-97ea-32afa3dd9618&quot;,
+        &quot;SecurityGroupName&quot;: &quot;sample string 2&quot;,
+        &quot;ProvidesMemberBenefits&quot;: true
+      },
+      {
+        &quot;SecurityGroupKey&quot;: &quot;90bff382-0726-4f2b-97ea-32afa3dd9618&quot;,
+        &quot;SecurityGroupName&quot;: &quot;sample string 2&quot;,
+        &quot;ProvidesMemberBenefits&quot;: true
+      }
+    ]
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfContact xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+  &lt;Contact&gt;
+    &lt;AMSDirectoryOptOut&gt;true&lt;/AMSDirectoryOptOut&gt;
+    &lt;Addresses&gt;
+      &lt;Address&gt;
+        &lt;Address1&gt;sample string 1&lt;/Address1&gt;
+        &lt;Address2&gt;sample string 2&lt;/Address2&gt;
+        &lt;Address3&gt;sample string 3&lt;/Address3&gt;
+        &lt;AddressKey&gt;6dd1f3f8-8192-4efd-8230-db8ec6d5afdb&lt;/AddressKey&gt;
+        &lt;AddressType&gt;sample string 5&lt;/AddressType&gt;
+        &lt;City&gt;sample string 6&lt;/City&gt;
+        &lt;CityStateCounty&gt;sample string 7&lt;/CityStateCounty&gt;
+        &lt;CityStateCountyCountry&gt;sample string 8&lt;/CityStateCountyCountry&gt;
+        &lt;ContactKey&gt;5be5a1e3-27de-43d9-bbf9-ac0b0e1541a3&lt;/ContactKey&gt;
+        &lt;CountryCode&gt;sample string 10&lt;/CountryCode&gt;
+        &lt;CountryName&gt;sample string 11&lt;/CountryName&gt;
+        &lt;County&gt;sample string 12&lt;/County&gt;
+        &lt;EmailAddress&gt;sample string 13&lt;/EmailAddress&gt;
+        &lt;FormattedAddress&gt;sample string 14&lt;/FormattedAddress&gt;
+        &lt;FormattedAddressOneLine&gt;sample string 15&lt;/FormattedAddressOneLine&gt;
+        &lt;FormattedAddressText&gt;sample string 16&lt;/FormattedAddressText&gt;
+        &lt;IsListCityState&gt;true&lt;/IsListCityState&gt;
+        &lt;IsLoggingEnabled&gt;true&lt;/IsLoggingEnabled&gt;
+        &lt;IsNew&gt;true&lt;/IsNew&gt;
+        &lt;IsPreferredBill&gt;true&lt;/IsPreferredBill&gt;
+        &lt;IsPreferredList&gt;true&lt;/IsPreferredList&gt;
+        &lt;IsPreferredMail&gt;true&lt;/IsPreferredMail&gt;
+        &lt;ItemCreatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/ItemCreatedOn&gt;
+        &lt;ItemEntityName&gt;sample string 24&lt;/ItemEntityName&gt;
+        &lt;ItemName&gt;sample string 25&lt;/ItemName&gt;
+        &lt;ItemOwnerContactKey&gt;8be55516-58fe-4bbe-8d94-a16c99b0197b&lt;/ItemOwnerContactKey&gt;
+        &lt;Latitude&gt;27&lt;/Latitude&gt;
+        &lt;LegacyAddressKey&gt;sample string 28&lt;/LegacyAddressKey&gt;
+        &lt;Longitude&gt;29&lt;/Longitude&gt;
+        &lt;NearText&gt;sample string 30&lt;/NearText&gt;
+        &lt;Phone1&gt;sample string 31&lt;/Phone1&gt;
+        &lt;Phone1Type&gt;sample string 32&lt;/Phone1Type&gt;
+        &lt;Phone2&gt;sample string 33&lt;/Phone2&gt;
+        &lt;Phone2Type&gt;sample string 34&lt;/Phone2Type&gt;
+        &lt;Phone3&gt;sample string 35&lt;/Phone3&gt;
+        &lt;Phone3Type&gt;sample string 36&lt;/Phone3Type&gt;
+        &lt;Phone4&gt;sample string 37&lt;/Phone4&gt;
+        &lt;Phone4Type&gt;sample string 38&lt;/Phone4Type&gt;
+        &lt;PostalCode&gt;sample string 39&lt;/PostalCode&gt;
+        &lt;Region&gt;sample string 40&lt;/Region&gt;
+        &lt;StateProvinceCode&gt;sample string 41&lt;/StateProvinceCode&gt;
+        &lt;TimeZoneKey&gt;9815ddf8-9b5a-4989-bbe1-3e65aedc0082&lt;/TimeZoneKey&gt;
+        &lt;Town&gt;sample string 43&lt;/Town&gt;
+        &lt;TownOrCity&gt;sample string 44&lt;/TownOrCity&gt;
+      &lt;/Address&gt;
+      &lt;Address&gt;
+        &lt;Address1&gt;sample string 1&lt;/Address1&gt;
+        &lt;Address2&gt;sample string 2&lt;/Address2&gt;
+        &lt;Address3&gt;sample string 3&lt;/Address3&gt;
+        &lt;AddressKey&gt;6dd1f3f8-8192-4efd-8230-db8ec6d5afdb&lt;/AddressKey&gt;
+        &lt;AddressType&gt;sample string 5&lt;/AddressType&gt;
+        &lt;City&gt;sample string 6&lt;/City&gt;
+        &lt;CityStateCounty&gt;sample string 7&lt;/CityStateCounty&gt;
+        &lt;CityStateCountyCountry&gt;sample string 8&lt;/CityStateCountyCountry&gt;
+        &lt;ContactKey&gt;5be5a1e3-27de-43d9-bbf9-ac0b0e1541a3&lt;/ContactKey&gt;
+        &lt;CountryCode&gt;sample string 10&lt;/CountryCode&gt;
+        &lt;CountryName&gt;sample string 11&lt;/CountryName&gt;
+        &lt;County&gt;sample string 12&lt;/County&gt;
+        &lt;EmailAddress&gt;sample string 13&lt;/EmailAddress&gt;
+        &lt;FormattedAddress&gt;sample string 14&lt;/FormattedAddress&gt;
+        &lt;FormattedAddressOneLine&gt;sample string 15&lt;/FormattedAddressOneLine&gt;
+        &lt;FormattedAddressText&gt;sample string 16&lt;/FormattedAddressText&gt;
+        &lt;IsListCityState&gt;true&lt;/IsListCityState&gt;
+        &lt;IsLoggingEnabled&gt;true&lt;/IsLoggingEnabled&gt;
+        &lt;IsNew&gt;true&lt;/IsNew&gt;
+        &lt;IsPreferredBill&gt;true&lt;/IsPreferredBill&gt;
+        &lt;IsPreferredList&gt;true&lt;/IsPreferredList&gt;
+        &lt;IsPreferredMail&gt;true&lt;/IsPreferredMail&gt;
+        &lt;ItemCreatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/ItemCreatedOn&gt;
+        &lt;ItemEntityName&gt;sample string 24&lt;/ItemEntityName&gt;
+        &lt;ItemName&gt;sample string 25&lt;/ItemName&gt;
+        &lt;ItemOwnerContactKey&gt;8be55516-58fe-4bbe-8d94-a16c99b0197b&lt;/ItemOwnerContactKey&gt;
+        &lt;Latitude&gt;27&lt;/Latitude&gt;
+        &lt;LegacyAddressKey&gt;sample string 28&lt;/LegacyAddressKey&gt;
+        &lt;Longitude&gt;29&lt;/Longitude&gt;
+        &lt;NearText&gt;sample string 30&lt;/NearText&gt;
+        &lt;Phone1&gt;sample string 31&lt;/Phone1&gt;
+        &lt;Phone1Type&gt;sample string 32&lt;/Phone1Type&gt;
+        &lt;Phone2&gt;sample string 33&lt;/Phone2&gt;
+        &lt;Phone2Type&gt;sample string 34&lt;/Phone2Type&gt;
+        &lt;Phone3&gt;sample string 35&lt;/Phone3&gt;
+        &lt;Phone3Type&gt;sample string 36&lt;/Phone3Type&gt;
+        &lt;Phone4&gt;sample string 37&lt;/Phone4&gt;
+        &lt;Phone4Type&gt;sample string 38&lt;/Phone4Type&gt;
+        &lt;PostalCode&gt;sample string 39&lt;/PostalCode&gt;
+        &lt;Region&gt;sample string 40&lt;/Region&gt;
+        &lt;StateProvinceCode&gt;sample string 41&lt;/StateProvinceCode&gt;
+        &lt;TimeZoneKey&gt;9815ddf8-9b5a-4989-bbe1-3e65aedc0082&lt;/TimeZoneKey&gt;
+        &lt;Town&gt;sample string 43&lt;/Town&gt;
+        &lt;TownOrCity&gt;sample string 44&lt;/TownOrCity&gt;
+      &lt;/Address&gt;
+    &lt;/Addresses&gt;
+    &lt;AgreedToTermsDateTime&gt;2026-07-08T13:53:36.0952008-04:00&lt;/AgreedToTermsDateTime&gt;
+    &lt;CompanyLegacyContactKey&gt;sample string 35&lt;/CompanyLegacyContactKey&gt;
+    &lt;CompanyName&gt;sample string 13&lt;/CompanyName&gt;
+    &lt;CompanyTitle&gt;sample string 14&lt;/CompanyTitle&gt;
+    &lt;ContactKey&gt;9752e616-d8ae-4b0a-b295-f584d26d2560&lt;/ContactKey&gt;
+    &lt;ContactStatusCode&gt;sample string 9&lt;/ContactStatusCode&gt;
+    &lt;Demographics&gt;
+      &lt;Demographic&gt;
+        &lt;DemographicType&gt;sample string 1&lt;/DemographicType&gt;
+        &lt;Values xmlns:d5p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+          &lt;d5p1:string&gt;sample string 1&lt;/d5p1:string&gt;
+          &lt;d5p1:string&gt;sample string 2&lt;/d5p1:string&gt;
+        &lt;/Values&gt;
+      &lt;/Demographic&gt;
+      &lt;Demographic&gt;
+        &lt;DemographicType&gt;sample string 1&lt;/DemographicType&gt;
+        &lt;Values xmlns:d5p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+          &lt;d5p1:string&gt;sample string 1&lt;/d5p1:string&gt;
+          &lt;d5p1:string&gt;sample string 2&lt;/d5p1:string&gt;
+        &lt;/Values&gt;
+      &lt;/Demographic&gt;
+    &lt;/Demographics&gt;
+    &lt;Designation&gt;sample string 16&lt;/Designation&gt;
+    &lt;DisplayName&gt;sample string 7&lt;/DisplayName&gt;
+    &lt;EducationEntries&gt;
+      &lt;Education&gt;
+        &lt;ActivitiesSocieties&gt;sample string 1&lt;/ActivitiesSocieties&gt;
+        &lt;Advisor&gt;sample string 2&lt;/Advisor&gt;
+        &lt;City&gt;sample string 3&lt;/City&gt;
+        &lt;CountryCode&gt;sample string 4&lt;/CountryCode&gt;
+        &lt;CountryName&gt;sample string 5&lt;/CountryName&gt;
+        &lt;Degree&gt;sample string 6&lt;/Degree&gt;
+        &lt;DegreeYear&gt;7&lt;/DegreeYear&gt;
+        &lt;Dissertation&gt;sample string 8&lt;/Dissertation&gt;
+        &lt;EducationKey&gt;d386b7c6-3f52-49a6-8d01-dda106b4deee&lt;/EducationKey&gt;
+        &lt;FieldOfStudy&gt;sample string 10&lt;/FieldOfStudy&gt;
+        &lt;FromYear&gt;11&lt;/FromYear&gt;
+        &lt;IsHighestDegreeAttained&gt;true&lt;/IsHighestDegreeAttained&gt;
+        &lt;Notes&gt;sample string 13&lt;/Notes&gt;
+        &lt;SchoolName&gt;sample string 14&lt;/SchoolName&gt;
+        &lt;StateCode&gt;sample string 15&lt;/StateCode&gt;
+        &lt;StateName&gt;sample string 16&lt;/StateName&gt;
+        &lt;ToYear&gt;17&lt;/ToYear&gt;
+        &lt;UpdatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/UpdatedOn&gt;
+      &lt;/Education&gt;
+      &lt;Education&gt;
+        &lt;ActivitiesSocieties&gt;sample string 1&lt;/ActivitiesSocieties&gt;
+        &lt;Advisor&gt;sample string 2&lt;/Advisor&gt;
+        &lt;City&gt;sample string 3&lt;/City&gt;
+        &lt;CountryCode&gt;sample string 4&lt;/CountryCode&gt;
+        &lt;CountryName&gt;sample string 5&lt;/CountryName&gt;
+        &lt;Degree&gt;sample string 6&lt;/Degree&gt;
+        &lt;DegreeYear&gt;7&lt;/DegreeYear&gt;
+        &lt;Dissertation&gt;sample string 8&lt;/Dissertation&gt;
+        &lt;EducationKey&gt;d386b7c6-3f52-49a6-8d01-dda106b4deee&lt;/EducationKey&gt;
+        &lt;FieldOfStudy&gt;sample string 10&lt;/FieldOfStudy&gt;
+        &lt;FromYear&gt;11&lt;/FromYear&gt;
+        &lt;IsHighestDegreeAttained&gt;true&lt;/IsHighestDegreeAttained&gt;
+        &lt;Notes&gt;sample string 13&lt;/Notes&gt;
+        &lt;SchoolName&gt;sample string 14&lt;/SchoolName&gt;
+        &lt;StateCode&gt;sample string 15&lt;/StateCode&gt;
+        &lt;StateName&gt;sample string 16&lt;/StateName&gt;
+        &lt;ToYear&gt;17&lt;/ToYear&gt;
+        &lt;UpdatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/UpdatedOn&gt;
+      &lt;/Education&gt;
+    &lt;/EducationEntries&gt;
+    &lt;EmailAddress&gt;sample string 8&lt;/EmailAddress&gt;
+    &lt;FirstName&gt;sample string 5&lt;/FirstName&gt;
+    &lt;HLContactMeOptOut&gt;true&lt;/HLContactMeOptOut&gt;
+    &lt;HLDirectoryOptOut&gt;true&lt;/HLDirectoryOptOut&gt;
+    &lt;InformalName&gt;sample string 18&lt;/InformalName&gt;
+    &lt;IsBlogger&gt;true&lt;/IsBlogger&gt;
+    &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+    &lt;IsMember&gt;true&lt;/IsMember&gt;
+    &lt;LargePictureUrl&gt;sample string 3&lt;/LargePictureUrl&gt;
+    &lt;LastName&gt;sample string 6&lt;/LastName&gt;
+    &lt;LegacyContactKey&gt;sample string 17&lt;/LegacyContactKey&gt;
+    &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+    &lt;LinkToVolunteerProfile&gt;sample string 41&lt;/LinkToVolunteerProfile&gt;
+    &lt;MaidenName&gt;sample string 31&lt;/MaidenName&gt;
+    &lt;MemberAwardKey&gt;22380980-7d53-44ce-aafc-830ba7699dc6&lt;/MemberAwardKey&gt;
+    &lt;MemberId&gt;sample string 30&lt;/MemberId&gt;
+    &lt;MiddleName&gt;sample string 33&lt;/MiddleName&gt;
+    &lt;Phone1&gt;sample string 19&lt;/Phone1&gt;
+    &lt;Phone1Type&gt;sample string 20&lt;/Phone1Type&gt;
+    &lt;Phone2&gt;sample string 21&lt;/Phone2&gt;
+    &lt;Phone2Type&gt;sample string 22&lt;/Phone2Type&gt;
+    &lt;Phone3&gt;sample string 23&lt;/Phone3&gt;
+    &lt;Phone3Type&gt;sample string 24&lt;/Phone3Type&gt;
+    &lt;Phone4&gt;sample string 25&lt;/Phone4&gt;
+    &lt;Phone4Type&gt;sample string 26&lt;/Phone4Type&gt;
+    &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+    &lt;PrefixCode&gt;sample string 10&lt;/PrefixCode&gt;
+    &lt;PrimarySecurityGroupKey&gt;c5837fb5-9a4e-42be-9c2a-b032e240f5bf&lt;/PrimarySecurityGroupKey&gt;
+    &lt;Profile&gt;
+      &lt;Certifications&gt;sample string 1&lt;/Certifications&gt;
+      &lt;Description&gt;sample string 2&lt;/Description&gt;
+      &lt;Expertise&gt;sample string 3&lt;/Expertise&gt;
+      &lt;ForwardComments&gt;true&lt;/ForwardComments&gt;
+      &lt;ForwardCommunityInvitations&gt;true&lt;/ForwardCommunityInvitations&gt;
+      &lt;ForwardContactRequests&gt;true&lt;/ForwardContactRequests&gt;
+      &lt;ForwardMessages&gt;true&lt;/ForwardMessages&gt;
+      &lt;Groups&gt;sample string 8&lt;/Groups&gt;
+      &lt;ImageHeight&gt;9&lt;/ImageHeight&gt;
+      &lt;ImageWidth&gt;10&lt;/ImageWidth&gt;
+      &lt;Interests&gt;sample string 11&lt;/Interests&gt;
+      &lt;IsSpeaker&gt;true&lt;/IsSpeaker&gt;
+      &lt;NotificationEmailAddress&gt;sample string 13&lt;/NotificationEmailAddress&gt;
+    &lt;/Profile&gt;
+    &lt;SecurityGroups xmlns:d3p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.SecurityGroup&quot;&gt;
+      &lt;d3p1:SecurityGroupConcise&gt;
+        &lt;d3p1:ProvidesMemberBenefits&gt;true&lt;/d3p1:ProvidesMemberBenefits&gt;
+        &lt;d3p1:SecurityGroupKey&gt;90bff382-0726-4f2b-97ea-32afa3dd9618&lt;/d3p1:SecurityGroupKey&gt;
+        &lt;d3p1:SecurityGroupName&gt;sample string 2&lt;/d3p1:SecurityGroupName&gt;
+      &lt;/d3p1:SecurityGroupConcise&gt;
+      &lt;d3p1:SecurityGroupConcise&gt;
+        &lt;d3p1:ProvidesMemberBenefits&gt;true&lt;/d3p1:ProvidesMemberBenefits&gt;
+        &lt;d3p1:SecurityGroupKey&gt;90bff382-0726-4f2b-97ea-32afa3dd9618&lt;/d3p1:SecurityGroupKey&gt;
+        &lt;d3p1:SecurityGroupName&gt;sample string 2&lt;/d3p1:SecurityGroupName&gt;
+      &lt;/d3p1:SecurityGroupConcise&gt;
+    &lt;/SecurityGroups&gt;
+    &lt;SuffixCode&gt;sample string 15&lt;/SuffixCode&gt;
+    &lt;UnreadMessageCount&gt;40&lt;/UnreadMessageCount&gt;
+    &lt;UpdatedByContactKey&gt;59655191-6c04-4c46-bf8a-d0af607d4a53&lt;/UpdatedByContactKey&gt;
+    &lt;UpdatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/UpdatedOn&gt;
+    &lt;WebsiteUrl&gt;sample string 27&lt;/WebsiteUrl&gt;
+    &lt;WorkHistory&gt;
+      &lt;WorkExperience&gt;
+        &lt;Country&gt;sample string 1&lt;/Country&gt;
+        &lt;Description&gt;sample string 2&lt;/Description&gt;
+        &lt;FromDate&gt;2026-07-08T13:53:36.0952008-04:00&lt;/FromDate&gt;
+        &lt;IsPresent&gt;true&lt;/IsPresent&gt;
+        &lt;IsPrimary&gt;true&lt;/IsPrimary&gt;
+        &lt;JobExperienceKey&gt;d41357ed-ea74-4ccf-acb3-c1286166b5fb&lt;/JobExperienceKey&gt;
+        &lt;OrganizationName&gt;sample string 7&lt;/OrganizationName&gt;
+        &lt;OrganizationSize&gt;8&lt;/OrganizationSize&gt;
+        &lt;OrganizationUrl&gt;sample string 9&lt;/OrganizationUrl&gt;
+        &lt;Place&gt;sample string 10&lt;/Place&gt;
+        &lt;State&gt;sample string 11&lt;/State&gt;
+        &lt;Title&gt;sample string 12&lt;/Title&gt;
+        &lt;ToDate&gt;2026-07-08T13:53:36.0952008-04:00&lt;/ToDate&gt;
+        &lt;UpdatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/UpdatedOn&gt;
+      &lt;/WorkExperience&gt;
+      &lt;WorkExperience&gt;
+        &lt;Country&gt;sample string 1&lt;/Country&gt;
+        &lt;Description&gt;sample string 2&lt;/Description&gt;
+        &lt;FromDate&gt;2026-07-08T13:53:36.0952008-04:00&lt;/FromDate&gt;
+        &lt;IsPresent&gt;true&lt;/IsPresent&gt;
+        &lt;IsPrimary&gt;true&lt;/IsPrimary&gt;
+        &lt;JobExperienceKey&gt;d41357ed-ea74-4ccf-acb3-c1286166b5fb&lt;/JobExperienceKey&gt;
+        &lt;OrganizationName&gt;sample string 7&lt;/OrganizationName&gt;
+        &lt;OrganizationSize&gt;8&lt;/OrganizationSize&gt;
+        &lt;OrganizationUrl&gt;sample string 9&lt;/OrganizationUrl&gt;
+        &lt;Place&gt;sample string 10&lt;/Place&gt;
+        &lt;State&gt;sample string 11&lt;/State&gt;
+        &lt;Title&gt;sample string 12&lt;/Title&gt;
+        &lt;ToDate&gt;2026-07-08T13:53:36.0952008-04:00&lt;/ToDate&gt;
+        &lt;UpdatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/UpdatedOn&gt;
+      &lt;/WorkExperience&gt;
+    &lt;/WorkHistory&gt;
+  &lt;/Contact&gt;
+  &lt;Contact&gt;
+    &lt;AMSDirectoryOptOut&gt;true&lt;/AMSDirectoryOptOut&gt;
+    &lt;Addresses&gt;
+      &lt;Address&gt;
+        &lt;Address1&gt;sample string 1&lt;/Address1&gt;
+        &lt;Address2&gt;sample string 2&lt;/Address2&gt;
+        &lt;Address3&gt;sample string 3&lt;/Address3&gt;
+        &lt;AddressKey&gt;6dd1f3f8-8192-4efd-8230-db8ec6d5afdb&lt;/AddressKey&gt;
+        &lt;AddressType&gt;sample string 5&lt;/AddressType&gt;
+        &lt;City&gt;sample string 6&lt;/City&gt;
+        &lt;CityStateCounty&gt;sample string 7&lt;/CityStateCounty&gt;
+        &lt;CityStateCountyCountry&gt;sample string 8&lt;/CityStateCountyCountry&gt;
+        &lt;ContactKey&gt;5be5a1e3-27de-43d9-bbf9-ac0b0e1541a3&lt;/ContactKey&gt;
+        &lt;CountryCode&gt;sample string 10&lt;/CountryCode&gt;
+        &lt;CountryName&gt;sample string 11&lt;/CountryName&gt;
+        &lt;County&gt;sample string 12&lt;/County&gt;
+        &lt;EmailAddress&gt;sample string 13&lt;/EmailAddress&gt;
+        &lt;FormattedAddress&gt;sample string 14&lt;/FormattedAddress&gt;
+        &lt;FormattedAddressOneLine&gt;sample string 15&lt;/FormattedAddressOneLine&gt;
+        &lt;FormattedAddressText&gt;sample string 16&lt;/FormattedAddressText&gt;
+        &lt;IsListCityState&gt;true&lt;/IsListCityState&gt;
+        &lt;IsLoggingEnabled&gt;true&lt;/IsLoggingEnabled&gt;
+        &lt;IsNew&gt;true&lt;/IsNew&gt;
+        &lt;IsPreferredBill&gt;true&lt;/IsPreferredBill&gt;
+        &lt;IsPreferredList&gt;true&lt;/IsPreferredList&gt;
+        &lt;IsPreferredMail&gt;true&lt;/IsPreferredMail&gt;
+        &lt;ItemCreatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/ItemCreatedOn&gt;
+        &lt;ItemEntityName&gt;sample string 24&lt;/ItemEntityName&gt;
+        &lt;ItemName&gt;sample string 25&lt;/ItemName&gt;
+        &lt;ItemOwnerContactKey&gt;8be55516-58fe-4bbe-8d94-a16c99b0197b&lt;/ItemOwnerContactKey&gt;
+        &lt;Latitude&gt;27&lt;/Latitude&gt;
+        &lt;LegacyAddressKey&gt;sample string 28&lt;/LegacyAddressKey&gt;
+        &lt;Longitude&gt;29&lt;/Longitude&gt;
+        &lt;NearText&gt;sample string 30&lt;/NearText&gt;
+        &lt;Phone1&gt;sample string 31&lt;/Phone1&gt;
+        &lt;Phone1Type&gt;sample string 32&lt;/Phone1Type&gt;
+        &lt;Phone2&gt;sample string 33&lt;/Phone2&gt;
+        &lt;Phone2Type&gt;sample string 34&lt;/Phone2Type&gt;
+        &lt;Phone3&gt;sample string 35&lt;/Phone3&gt;
+        &lt;Phone3Type&gt;sample string 36&lt;/Phone3Type&gt;
+        &lt;Phone4&gt;sample string 37&lt;/Phone4&gt;
+        &lt;Phone4Type&gt;sample string 38&lt;/Phone4Type&gt;
+        &lt;PostalCode&gt;sample string 39&lt;/PostalCode&gt;
+        &lt;Region&gt;sample string 40&lt;/Region&gt;
+        &lt;StateProvinceCode&gt;sample string 41&lt;/StateProvinceCode&gt;
+        &lt;TimeZoneKey&gt;9815ddf8-9b5a-4989-bbe1-3e65aedc0082&lt;/TimeZoneKey&gt;
+        &lt;Town&gt;sample string 43&lt;/Town&gt;
+        &lt;TownOrCity&gt;sample string 44&lt;/TownOrCity&gt;
+      &lt;/Address&gt;
+      &lt;Address&gt;
+        &lt;Address1&gt;sample string 1&lt;/Address1&gt;
+        &lt;Address2&gt;sample string 2&lt;/Address2&gt;
+        &lt;Address3&gt;sample string 3&lt;/Address3&gt;
+        &lt;AddressKey&gt;6dd1f3f8-8192-4efd-8230-db8ec6d5afdb&lt;/AddressKey&gt;
+        &lt;AddressType&gt;sample string 5&lt;/AddressType&gt;
+        &lt;City&gt;sample string 6&lt;/City&gt;
+        &lt;CityStateCounty&gt;sample string 7&lt;/CityStateCounty&gt;
+        &lt;CityStateCountyCountry&gt;sample string 8&lt;/CityStateCountyCountry&gt;
+        &lt;ContactKey&gt;5be5a1e3-27de-43d9-bbf9-ac0b0e1541a3&lt;/ContactKey&gt;
+        &lt;CountryCode&gt;sample string 10&lt;/CountryCode&gt;
+        &lt;CountryName&gt;sample string 11&lt;/CountryName&gt;
+        &lt;County&gt;sample string 12&lt;/County&gt;
+        &lt;EmailAddress&gt;sample string 13&lt;/EmailAddress&gt;
+        &lt;FormattedAddress&gt;sample string 14&lt;/FormattedAddress&gt;
+        &lt;FormattedAddressOneLine&gt;sample string 15&lt;/FormattedAddressOneLine&gt;
+        &lt;FormattedAddressText&gt;sample string 16&lt;/FormattedAddressText&gt;
+        &lt;IsListCityState&gt;true&lt;/IsListCityState&gt;
+        &lt;IsLoggingEnabled&gt;true&lt;/IsLoggingEnabled&gt;
+        &lt;IsNew&gt;true&lt;/IsNew&gt;
+        &lt;IsPreferredBill&gt;true&lt;/IsPreferredBill&gt;
+        &lt;IsPreferredList&gt;true&lt;/IsPreferredList&gt;
+        &lt;IsPreferredMail&gt;true&lt;/IsPreferredMail&gt;
+        &lt;ItemCreatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/ItemCreatedOn&gt;
+        &lt;ItemEntityName&gt;sample string 24&lt;/ItemEntityName&gt;
+        &lt;ItemName&gt;sample string 25&lt;/ItemName&gt;
+        &lt;ItemOwnerContactKey&gt;8be55516-58fe-4bbe-8d94-a16c99b0197b&lt;/ItemOwnerContactKey&gt;
+        &lt;Latitude&gt;27&lt;/Latitude&gt;
+        &lt;LegacyAddressKey&gt;sample string 28&lt;/LegacyAddressKey&gt;
+        &lt;Longitude&gt;29&lt;/Longitude&gt;
+        &lt;NearText&gt;sample string 30&lt;/NearText&gt;
+        &lt;Phone1&gt;sample string 31&lt;/Phone1&gt;
+        &lt;Phone1Type&gt;sample string 32&lt;/Phone1Type&gt;
+        &lt;Phone2&gt;sample string 33&lt;/Phone2&gt;
+        &lt;Phone2Type&gt;sample string 34&lt;/Phone2Type&gt;
+        &lt;Phone3&gt;sample string 35&lt;/Phone3&gt;
+        &lt;Phone3Type&gt;sample string 36&lt;/Phone3Type&gt;
+        &lt;Phone4&gt;sample string 37&lt;/Phone4&gt;
+        &lt;Phone4Type&gt;sample string 38&lt;/Phone4Type&gt;
+        &lt;PostalCode&gt;sample string 39&lt;/PostalCode&gt;
+        &lt;Region&gt;sample string 40&lt;/Region&gt;
+        &lt;StateProvinceCode&gt;sample string 41&lt;/StateProvinceCode&gt;
+        &lt;TimeZoneKey&gt;9815ddf8-9b5a-4989-bbe1-3e65aedc0082&lt;/TimeZoneKey&gt;
+        &lt;Town&gt;sample string 43&lt;/Town&gt;
+        &lt;TownOrCity&gt;sample string 44&lt;/TownOrCity&gt;
+      &lt;/Address&gt;
+    &lt;/Addresses&gt;
+    &lt;AgreedToTermsDateTime&gt;2026-07-08T13:53:36.0952008-04:00&lt;/AgreedToTermsDateTime&gt;
+    &lt;CompanyLegacyContactKey&gt;sample string 35&lt;/CompanyLegacyContactKey&gt;
+    &lt;CompanyName&gt;sample string 13&lt;/CompanyName&gt;
+    &lt;CompanyTitle&gt;sample string 14&lt;/CompanyTitle&gt;
+    &lt;ContactKey&gt;9752e616-d8ae-4b0a-b295-f584d26d2560&lt;/ContactKey&gt;
+    &lt;ContactStatusCode&gt;sample string 9&lt;/ContactStatusCode&gt;
+    &lt;Demographics&gt;
+      &lt;Demographic&gt;
+        &lt;DemographicType&gt;sample string 1&lt;/DemographicType&gt;
+        &lt;Values xmlns:d5p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+          &lt;d5p1:string&gt;sample string 1&lt;/d5p1:string&gt;
+          &lt;d5p1:string&gt;sample string 2&lt;/d5p1:string&gt;
+        &lt;/Values&gt;
+      &lt;/Demographic&gt;
+      &lt;Demographic&gt;
+        &lt;DemographicType&gt;sample string 1&lt;/DemographicType&gt;
+        &lt;Values xmlns:d5p1=&quot;http://schemas.microsoft.com/2003/10/Serialization/Arrays&quot;&gt;
+          &lt;d5p1:string&gt;sample string 1&lt;/d5p1:string&gt;
+          &lt;d5p1:string&gt;sample string 2&lt;/d5p1:string&gt;
+        &lt;/Values&gt;
+      &lt;/Demographic&gt;
+    &lt;/Demographics&gt;
+    &lt;Designation&gt;sample string 16&lt;/Designation&gt;
+    &lt;DisplayName&gt;sample string 7&lt;/DisplayName&gt;
+    &lt;EducationEntries&gt;
+      &lt;Education&gt;
+        &lt;ActivitiesSocieties&gt;sample string 1&lt;/ActivitiesSocieties&gt;
+        &lt;Advisor&gt;sample string 2&lt;/Advisor&gt;
+        &lt;City&gt;sample string 3&lt;/City&gt;
+        &lt;CountryCode&gt;sample string 4&lt;/CountryCode&gt;
+        &lt;CountryName&gt;sample string 5&lt;/CountryName&gt;
+        &lt;Degree&gt;sample string 6&lt;/Degree&gt;
+        &lt;DegreeYear&gt;7&lt;/DegreeYear&gt;
+        &lt;Dissertation&gt;sample string 8&lt;/Dissertation&gt;
+        &lt;EducationKey&gt;d386b7c6-3f52-49a6-8d01-dda106b4deee&lt;/EducationKey&gt;
+        &lt;FieldOfStudy&gt;sample string 10&lt;/FieldOfStudy&gt;
+        &lt;FromYear&gt;11&lt;/FromYear&gt;
+        &lt;IsHighestDegreeAttained&gt;true&lt;/IsHighestDegreeAttained&gt;
+        &lt;Notes&gt;sample string 13&lt;/Notes&gt;
+        &lt;SchoolName&gt;sample string 14&lt;/SchoolName&gt;
+        &lt;StateCode&gt;sample string 15&lt;/StateCode&gt;
+        &lt;StateName&gt;sample string 16&lt;/StateName&gt;
+        &lt;ToYear&gt;17&lt;/ToYear&gt;
+        &lt;UpdatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/UpdatedOn&gt;
+      &lt;/Education&gt;
+      &lt;Education&gt;
+        &lt;ActivitiesSocieties&gt;sample string 1&lt;/ActivitiesSocieties&gt;
+        &lt;Advisor&gt;sample string 2&lt;/Advisor&gt;
+        &lt;City&gt;sample string 3&lt;/City&gt;
+        &lt;CountryCode&gt;sample string 4&lt;/CountryCode&gt;
+        &lt;CountryName&gt;sample string 5&lt;/CountryName&gt;
+        &lt;Degree&gt;sample string 6&lt;/Degree&gt;
+        &lt;DegreeYear&gt;7&lt;/DegreeYear&gt;
+        &lt;Dissertation&gt;sample string 8&lt;/Dissertation&gt;
+        &lt;EducationKey&gt;d386b7c6-3f52-49a6-8d01-dda106b4deee&lt;/EducationKey&gt;
+        &lt;FieldOfStudy&gt;sample string 10&lt;/FieldOfStudy&gt;
+        &lt;FromYear&gt;11&lt;/FromYear&gt;
+        &lt;IsHighestDegreeAttained&gt;true&lt;/IsHighestDegreeAttained&gt;
+        &lt;Notes&gt;sample string 13&lt;/Notes&gt;
+        &lt;SchoolName&gt;sample string 14&lt;/SchoolName&gt;
+        &lt;StateCode&gt;sample string 15&lt;/StateCode&gt;
+        &lt;StateName&gt;sample string 16&lt;/StateName&gt;
+        &lt;ToYear&gt;17&lt;/ToYear&gt;
+        &lt;UpdatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/UpdatedOn&gt;
+      &lt;/Education&gt;
+    &lt;/EducationEntries&gt;
+    &lt;EmailAddress&gt;sample string 8&lt;/EmailAddress&gt;
+    &lt;FirstName&gt;sample string 5&lt;/FirstName&gt;
+    &lt;HLContactMeOptOut&gt;true&lt;/HLContactMeOptOut&gt;
+    &lt;HLDirectoryOptOut&gt;true&lt;/HLDirectoryOptOut&gt;
+    &lt;InformalName&gt;sample string 18&lt;/InformalName&gt;
+    &lt;IsBlogger&gt;true&lt;/IsBlogger&gt;
+    &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+    &lt;IsMember&gt;true&lt;/IsMember&gt;
+    &lt;LargePictureUrl&gt;sample string 3&lt;/LargePictureUrl&gt;
+    &lt;LastName&gt;sample string 6&lt;/LastName&gt;
+    &lt;LegacyContactKey&gt;sample string 17&lt;/LegacyContactKey&gt;
+    &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+    &lt;LinkToVolunteerProfile&gt;sample string 41&lt;/LinkToVolunteerProfile&gt;
+    &lt;MaidenName&gt;sample string 31&lt;/MaidenName&gt;
+    &lt;MemberAwardKey&gt;22380980-7d53-44ce-aafc-830ba7699dc6&lt;/MemberAwardKey&gt;
+    &lt;MemberId&gt;sample string 30&lt;/MemberId&gt;
+    &lt;MiddleName&gt;sample string 33&lt;/MiddleName&gt;
+    &lt;Phone1&gt;sample string 19&lt;/Phone1&gt;
+    &lt;Phone1Type&gt;sample string 20&lt;/Phone1Type&gt;
+    &lt;Phone2&gt;sample string 21&lt;/Phone2&gt;
+    &lt;Phone2Type&gt;sample string 22&lt;/Phone2Type&gt;
+    &lt;Phone3&gt;sample string 23&lt;/Phone3&gt;
+    &lt;Phone3Type&gt;sample string 24&lt;/Phone3Type&gt;
+    &lt;Phone4&gt;sample string 25&lt;/Phone4&gt;
+    &lt;Phone4Type&gt;sample string 26&lt;/Phone4Type&gt;
+    &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+    &lt;PrefixCode&gt;sample string 10&lt;/PrefixCode&gt;
+    &lt;PrimarySecurityGroupKey&gt;c5837fb5-9a4e-42be-9c2a-b032e240f5bf&lt;/PrimarySecurityGroupKey&gt;
+    &lt;Profile&gt;
+      &lt;Certifications&gt;sample string 1&lt;/Certifications&gt;
+      &lt;Description&gt;sample string 2&lt;/Description&gt;
+      &lt;Expertise&gt;sample string 3&lt;/Expertise&gt;
+      &lt;ForwardComments&gt;true&lt;/ForwardComments&gt;
+      &lt;ForwardCommunityInvitations&gt;true&lt;/ForwardCommunityInvitations&gt;
+      &lt;ForwardContactRequests&gt;true&lt;/ForwardContactRequests&gt;
+      &lt;ForwardMessages&gt;true&lt;/ForwardMessages&gt;
+      &lt;Groups&gt;sample string 8&lt;/Groups&gt;
+      &lt;ImageHeight&gt;9&lt;/ImageHeight&gt;
+      &lt;ImageWidth&gt;10&lt;/ImageWidth&gt;
+      &lt;Interests&gt;sample string 11&lt;/Interests&gt;
+      &lt;IsSpeaker&gt;true&lt;/IsSpeaker&gt;
+      &lt;NotificationEmailAddress&gt;sample string 13&lt;/NotificationEmailAddress&gt;
+    &lt;/Profile&gt;
+    &lt;SecurityGroups xmlns:d3p1=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise.SecurityGroup&quot;&gt;
+      &lt;d3p1:SecurityGroupConcise&gt;
+        &lt;d3p1:ProvidesMemberBenefits&gt;true&lt;/d3p1:ProvidesMemberBenefits&gt;
+        &lt;d3p1:SecurityGroupKey&gt;90bff382-0726-4f2b-97ea-32afa3dd9618&lt;/d3p1:SecurityGroupKey&gt;
+        &lt;d3p1:SecurityGroupName&gt;sample string 2&lt;/d3p1:SecurityGroupName&gt;
+      &lt;/d3p1:SecurityGroupConcise&gt;
+      &lt;d3p1:SecurityGroupConcise&gt;
+        &lt;d3p1:ProvidesMemberBenefits&gt;true&lt;/d3p1:ProvidesMemberBenefits&gt;
+        &lt;d3p1:SecurityGroupKey&gt;90bff382-0726-4f2b-97ea-32afa3dd9618&lt;/d3p1:SecurityGroupKey&gt;
+        &lt;d3p1:SecurityGroupName&gt;sample string 2&lt;/d3p1:SecurityGroupName&gt;
+      &lt;/d3p1:SecurityGroupConcise&gt;
+    &lt;/SecurityGroups&gt;
+    &lt;SuffixCode&gt;sample string 15&lt;/SuffixCode&gt;
+    &lt;UnreadMessageCount&gt;40&lt;/UnreadMessageCount&gt;
+    &lt;UpdatedByContactKey&gt;59655191-6c04-4c46-bf8a-d0af607d4a53&lt;/UpdatedByContactKey&gt;
+    &lt;UpdatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/UpdatedOn&gt;
+    &lt;WebsiteUrl&gt;sample string 27&lt;/WebsiteUrl&gt;
+    &lt;WorkHistory&gt;
+      &lt;WorkExperience&gt;
+        &lt;Country&gt;sample string 1&lt;/Country&gt;
+        &lt;Description&gt;sample string 2&lt;/Description&gt;
+        &lt;FromDate&gt;2026-07-08T13:53:36.0952008-04:00&lt;/FromDate&gt;
+        &lt;IsPresent&gt;true&lt;/IsPresent&gt;
+        &lt;IsPrimary&gt;true&lt;/IsPrimary&gt;
+        &lt;JobExperienceKey&gt;d41357ed-ea74-4ccf-acb3-c1286166b5fb&lt;/JobExperienceKey&gt;
+        &lt;OrganizationName&gt;sample string 7&lt;/OrganizationName&gt;
+        &lt;OrganizationSize&gt;8&lt;/OrganizationSize&gt;
+        &lt;OrganizationUrl&gt;sample string 9&lt;/OrganizationUrl&gt;
+        &lt;Place&gt;sample string 10&lt;/Place&gt;
+        &lt;State&gt;sample string 11&lt;/State&gt;
+        &lt;Title&gt;sample string 12&lt;/Title&gt;
+        &lt;ToDate&gt;2026-07-08T13:53:36.0952008-04:00&lt;/ToDate&gt;
+        &lt;UpdatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/UpdatedOn&gt;
+      &lt;/WorkExperience&gt;
+      &lt;WorkExperience&gt;
+        &lt;Country&gt;sample string 1&lt;/Country&gt;
+        &lt;Description&gt;sample string 2&lt;/Description&gt;
+        &lt;FromDate&gt;2026-07-08T13:53:36.0952008-04:00&lt;/FromDate&gt;
+        &lt;IsPresent&gt;true&lt;/IsPresent&gt;
+        &lt;IsPrimary&gt;true&lt;/IsPrimary&gt;
+        &lt;JobExperienceKey&gt;d41357ed-ea74-4ccf-acb3-c1286166b5fb&lt;/JobExperienceKey&gt;
+        &lt;OrganizationName&gt;sample string 7&lt;/OrganizationName&gt;
+        &lt;OrganizationSize&gt;8&lt;/OrganizationSize&gt;
+        &lt;OrganizationUrl&gt;sample string 9&lt;/OrganizationUrl&gt;
+        &lt;Place&gt;sample string 10&lt;/Place&gt;
+        &lt;State&gt;sample string 11&lt;/State&gt;
+        &lt;Title&gt;sample string 12&lt;/Title&gt;
+        &lt;ToDate&gt;2026-07-08T13:53:36.0952008-04:00&lt;/ToDate&gt;
+        &lt;UpdatedOn&gt;2026-07-08T13:53:36.0952008-04:00&lt;/UpdatedOn&gt;
+      &lt;/WorkExperience&gt;
+    &lt;/WorkHistory&gt;
+  &lt;/Contact&gt;
+&lt;/ArrayOfContact&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

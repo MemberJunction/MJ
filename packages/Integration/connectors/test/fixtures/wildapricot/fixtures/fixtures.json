@@ -6,7 +6,8 @@
   },
   "Configuration": {
     "ApiKey": "mock-admin-api-key-PLACEHOLDER",
-    "ApiVersion": "v2.3"
+    "ApiVersion": "v2.3",
+    "tokenUrl": "http://127.0.0.1:9/oauth/token"
   },
   "Routes": [
     {
@@ -326,8 +327,11 @@
           "productVariants": [],
           "outOfStock": false,
           "totalStock": 355,
-          "digitalProduct": {},
-          "ecourseProduct": {},
+          "digitalProduct": {
+            "productFile": "file.pdf",
+            "productLink": "https://example.com/dl"
+          },
+          "ecourseProduct": null,
           "created": "2026-10-23T23:05:00-05:00"
         },
         {
@@ -351,8 +355,11 @@
           "productVariants": [],
           "outOfStock": true,
           "totalStock": 358,
-          "digitalProduct": {},
-          "ecourseProduct": {},
+          "digitalProduct": {
+            "productFile": "file.pdf",
+            "productLink": "https://example.com/dl"
+          },
+          "ecourseProduct": null,
           "created": "2026-01-03T04:16:00-05:00"
         }
       ]
@@ -536,8 +543,16 @@
           "paymentStatus": "example-paymentstatus-100",
           "internalNote": {},
           "products": [],
-          "shippingAddress": {},
-          "billingPerson": {},
+          "shippingAddress": {
+            "city": "Example",
+            "country": "XX",
+            "postalCode": "00000"
+          },
+          "billingPerson": {
+            "firstName": "<scrubbed>",
+            "lastName": "<scrubbed>",
+            "email": "example+bill@example.com"
+          },
           "comment": "<redacted>",
           "externalNote": {},
           "currency": {},
@@ -558,8 +573,16 @@
           "paymentStatus": "example-paymentstatus-101",
           "internalNote": {},
           "products": [],
-          "shippingAddress": {},
-          "billingPerson": {},
+          "shippingAddress": {
+            "city": "Example",
+            "country": "XX",
+            "postalCode": "00000"
+          },
+          "billingPerson": {
+            "firstName": "<scrubbed>",
+            "lastName": "<scrubbed>",
+            "email": "example+bill@example.com"
+          },
           "comment": "<redacted>",
           "externalNote": {},
           "currency": {},
@@ -777,7 +800,8 @@
                 "SystemCode": "Phone",
                 "Value": "555-0100"
               }
-            ]
+            ],
+            "CustomLoyaltyTier": "Gold"
           },
           {
             "Id": 1001,
@@ -802,7 +826,8 @@
                 "SystemCode": "Phone",
                 "Value": "555-0101"
               }
-            ]
+            ],
+            "CustomLoyaltyTier": "Gold"
           }
         ]
       }
@@ -1069,7 +1094,27 @@
             "Tags": [
               "example-tag"
             ],
-            "Details": [],
+            "Details": {
+              "AccessControl": {
+                "AccessLevel": "Public"
+              },
+              "AttendeesDisplaySettings": {
+                "ShowToPublic": true
+              },
+              "GuestRegistrationSettings": {
+                "Enabled": false
+              },
+              "EventRegistrationFields": [
+                {
+                  "FieldName": "Dietary",
+                  "Value": "None"
+                }
+              ],
+              "WaitlistSettings": {
+                "Enabled": true
+              },
+              "PaymentInstructions": "Pay at door"
+            },
             "Sessions": [],
             "RegistrationsLimit": 205,
             "InviteeStat": {},
@@ -1096,7 +1141,27 @@
             "Tags": [
               "example-tag"
             ],
-            "Details": [],
+            "Details": {
+              "AccessControl": {
+                "AccessLevel": "Public"
+              },
+              "AttendeesDisplaySettings": {
+                "ShowToPublic": true
+              },
+              "GuestRegistrationSettings": {
+                "Enabled": false
+              },
+              "EventRegistrationFields": [
+                {
+                  "FieldName": "Dietary",
+                  "Value": "None"
+                }
+              ],
+              "WaitlistSettings": {
+                "Enabled": true
+              },
+              "PaymentInstructions": "Pay at door"
+            },
             "Sessions": [],
             "RegistrationsLimit": 208,
             "InviteeStat": {},

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>GET api/v2.0/Friends/GetPendingSentFriendRequests</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>GET api/v2.0/Friends/GetPendingSentFriendRequests</h1>
+<div>
+    <p>Gets a List of FriendModel objects representing the pending Friend Requests that the Current User has SENT.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <p>None.</p>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>An array of FriendModel objects.</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=Friend">Friend</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">FirstName</td>
+                    <td class="parameter-documentation">
+                        <p>If the Current Contact is the SENDER of the Friend Request, the RECIPIENT&#39;s first name.
+            If the Current Contact is the RECIPIENT of the Friend Request, the SENDER&#39;s first name.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LastName</td>
+                    <td class="parameter-documentation">
+                        <p>If the Current Contact is the SENDER of the Friend Request, the RECIPIENT&#39;s last name.
+            If the Current Contact is the RECIPIENT of the Friend Request, the SENDER&#39;s last name.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DisplayName</td>
+                    <td class="parameter-documentation">
+                        <p>If the Current Contact is the SENDER of the Friend Request, the RECIPIENT&#39;s display name.
+            If the Current Contact is the RECIPIENT of the Friend Request, the SENDER&#39;s display name.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToProfile</td>
+                    <td class="parameter-documentation">
+                        <p>If the Current Contact is the SENDER of the Friend Request, the link to the RECIPIENT&#39;s profile page.
+            If the Current Contact is the RECIPIENT of the Friend Request, the link to the SENDER&#39;s profile page.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToSmallImage</td>
+                    <td class="parameter-documentation">
+                        <p>If the Current Contact is the SENDER of the Friend Request, the link to the RECIPIENT&#39;s small image.
+            If the Current Contact is the RECIPIENT of the Friend Request, the link to the SENDER&#39;s small image.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">LinkToLargeImage</td>
+                    <td class="parameter-documentation">
+                        <p>If the Current Contact is the SENDER of the Friend Request, the link to the RECIPIENT&#39;s large image.
+            If the Current Contact is the RECIPIENT of the Friend Request, the link to the SENDER&#39;s large image.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsCompany</td>
+                    <td class="parameter-documentation">
+                        <p>If the Current Contact is the SENDER of the Friend Request, if the RECIPIENT is a company.
+            If the Current Contact is the RECIPIENT of the Friend Request, if the SENDER is a company.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">FriendRequestRecordKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Identifier for the friend request.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsActive</td>
+                    <td class="parameter-documentation">
+                        <p>If the friend request is active.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RequestorContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>This field is deprecated, please use RequestedByContactKey instead.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RequestedByContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>Contact key of the user who initiated the friend request.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RequesteeContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>Contact key of the user who received the friend request.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">InvitedOn</td>
+                    <td class="parameter-documentation">
+                        <p>DateTime of when friend invite was sent.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">AcceptedOn</td>
+                    <td class="parameter-documentation">
+                        <p>DateTime of when friend invite was accepted.  Null if not yet accepted</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">RequestedDate</td>
+                    <td class="parameter-documentation">
+                        <p>DateTime of when friend invite was created.  Typically synonymous with InvitedOn.</p>
+                    </td>
+                    <td class="parameter-type">
+                        date
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;FirstName&quot;: &quot;sample string 1&quot;,
+    &quot;LastName&quot;: &quot;sample string 2&quot;,
+    &quot;DisplayName&quot;: &quot;sample string 3&quot;,
+    &quot;LinkToProfile&quot;: &quot;sample string 4&quot;,
+    &quot;LinkToSmallImage&quot;: &quot;sample string 5&quot;,
+    &quot;LinkToLargeImage&quot;: &quot;sample string 6&quot;,
+    &quot;IsCompany&quot;: true,
+    &quot;FriendRequestRecordKey&quot;: &quot;4f0df695-8c72-4de1-8351-f818f5d72f2e&quot;,
+    &quot;IsActive&quot;: true,
+    &quot;RequestorContactKey&quot;: &quot;6373cbfd-60fe-46a9-90e4-546874bef4f9&quot;,
+    &quot;RequestedByContactKey&quot;: &quot;57a37aff-f472-48de-9263-7223ff56c15f&quot;,
+    &quot;RequesteeContactKey&quot;: &quot;f793ff9b-0f41-459a-bfe7-e314d6e7bffc&quot;,
+    &quot;InvitedOn&quot;: &quot;2026-07-08T17:53:37.6018452Z&quot;,
+    &quot;AcceptedOn&quot;: &quot;2026-07-08T17:53:37.6018452Z&quot;,
+    &quot;RequestedDate&quot;: &quot;2026-07-08T17:53:37.6018452Z&quot;
+  },
+  {
+    &quot;FirstName&quot;: &quot;sample string 1&quot;,
+    &quot;LastName&quot;: &quot;sample string 2&quot;,
+    &quot;DisplayName&quot;: &quot;sample string 3&quot;,
+    &quot;LinkToProfile&quot;: &quot;sample string 4&quot;,
+    &quot;LinkToSmallImage&quot;: &quot;sample string 5&quot;,
+    &quot;LinkToLargeImage&quot;: &quot;sample string 6&quot;,
+    &quot;IsCompany&quot;: true,
+    &quot;FriendRequestRecordKey&quot;: &quot;4f0df695-8c72-4de1-8351-f818f5d72f2e&quot;,
+    &quot;IsActive&quot;: true,
+    &quot;RequestorContactKey&quot;: &quot;6373cbfd-60fe-46a9-90e4-546874bef4f9&quot;,
+    &quot;RequestedByContactKey&quot;: &quot;57a37aff-f472-48de-9263-7223ff56c15f&quot;,
+    &quot;RequesteeContactKey&quot;: &quot;f793ff9b-0f41-459a-bfe7-e314d6e7bffc&quot;,
+    &quot;InvitedOn&quot;: &quot;2026-07-08T17:53:37.6018452Z&quot;,
+    &quot;AcceptedOn&quot;: &quot;2026-07-08T17:53:37.6018452Z&quot;,
+    &quot;RequestedDate&quot;: &quot;2026-07-08T17:53:37.6018452Z&quot;
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfFriend xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+  &lt;Friend&gt;
+    &lt;AcceptedOn&gt;2026-07-08T13:53:37.6018452-04:00&lt;/AcceptedOn&gt;
+    &lt;DisplayName&gt;sample string 3&lt;/DisplayName&gt;
+    &lt;FirstName&gt;sample string 1&lt;/FirstName&gt;
+    &lt;FriendRequestRecordKey&gt;4f0df695-8c72-4de1-8351-f818f5d72f2e&lt;/FriendRequestRecordKey&gt;
+    &lt;InvitedOn&gt;2026-07-08T13:53:37.6018452-04:00&lt;/InvitedOn&gt;
+    &lt;IsActive&gt;true&lt;/IsActive&gt;
+    &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+    &lt;LastName&gt;sample string 2&lt;/LastName&gt;
+    &lt;LinkToLargeImage&gt;sample string 6&lt;/LinkToLargeImage&gt;
+    &lt;LinkToProfile&gt;sample string 4&lt;/LinkToProfile&gt;
+    &lt;LinkToSmallImage&gt;sample string 5&lt;/LinkToSmallImage&gt;
+    &lt;RequestedByContactKey&gt;57a37aff-f472-48de-9263-7223ff56c15f&lt;/RequestedByContactKey&gt;
+    &lt;RequestedDate&gt;2026-07-08T13:53:37.6018452-04:00&lt;/RequestedDate&gt;
+    &lt;RequesteeContactKey&gt;f793ff9b-0f41-459a-bfe7-e314d6e7bffc&lt;/RequesteeContactKey&gt;
+    &lt;RequestorContactKey&gt;6373cbfd-60fe-46a9-90e4-546874bef4f9&lt;/RequestorContactKey&gt;
+  &lt;/Friend&gt;
+  &lt;Friend&gt;
+    &lt;AcceptedOn&gt;2026-07-08T13:53:37.6018452-04:00&lt;/AcceptedOn&gt;
+    &lt;DisplayName&gt;sample string 3&lt;/DisplayName&gt;
+    &lt;FirstName&gt;sample string 1&lt;/FirstName&gt;
+    &lt;FriendRequestRecordKey&gt;4f0df695-8c72-4de1-8351-f818f5d72f2e&lt;/FriendRequestRecordKey&gt;
+    &lt;InvitedOn&gt;2026-07-08T13:53:37.6018452-04:00&lt;/InvitedOn&gt;
+    &lt;IsActive&gt;true&lt;/IsActive&gt;
+    &lt;IsCompany&gt;true&lt;/IsCompany&gt;
+    &lt;LastName&gt;sample string 2&lt;/LastName&gt;
+    &lt;LinkToLargeImage&gt;sample string 6&lt;/LinkToLargeImage&gt;
+    &lt;LinkToProfile&gt;sample string 4&lt;/LinkToProfile&gt;
+    &lt;LinkToSmallImage&gt;sample string 5&lt;/LinkToSmallImage&gt;
+    &lt;RequestedByContactKey&gt;57a37aff-f472-48de-9263-7223ff56c15f&lt;/RequestedByContactKey&gt;
+    &lt;RequestedDate&gt;2026-07-08T13:53:37.6018452-04:00&lt;/RequestedDate&gt;
+    &lt;RequesteeContactKey&gt;f793ff9b-0f41-459a-bfe7-e314d6e7bffc&lt;/RequesteeContactKey&gt;
+    &lt;RequestorContactKey&gt;6373cbfd-60fe-46a9-90e4-546874bef4f9&lt;/RequestorContactKey&gt;
+  &lt;/Friend&gt;
+&lt;/ArrayOfFriend&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

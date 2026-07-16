@@ -1,0 +1,1418 @@
+[
+  {
+    "controller": "Announcements",
+    "method": "GET",
+    "path": "api/v2.0/Announcements/GetAnnouncements?announcementTypeFilter={announcementTypeFilter}&communityKey={communityKey}&micrositeGroupTypeRouteDesignKey={micrositeGroupTypeRouteDesignKey}&sortOrder={sortOrder}&maxResults={maxResults}&includeAnnouncementsWithNoType={includeAnnouncementsWithNoType}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Announcements-GetAnnouncements_announcementTypeFilter_communityKey_micrositeGroupTypeRouteDesignKey_sortOrder_maxResults_includeAnnouncementsWithNoType"
+  },
+  {
+    "controller": "Announcements",
+    "method": "GET",
+    "path": "api/v2.0/Announcements/GetAnnouncement?announcementKey={announcementKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Announcements-GetAnnouncement_announcementKey"
+  },
+  {
+    "controller": "Answer",
+    "method": "POST",
+    "path": "api/v2.0/Answer/Recommend?answerKey={answerKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Answer-Recommend_answerKey"
+  },
+  {
+    "controller": "Answer",
+    "method": "DELETE",
+    "path": "api/v2.0/Answer/Recommend?answerKey={answerKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Answer-Recommend_answerKey"
+  },
+  {
+    "controller": "Answer",
+    "method": "GET",
+    "path": "api/v2.0/Answer/Get?answerKey={answerKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Answer-Get_answerKey"
+  },
+  {
+    "controller": "Answer",
+    "method": "DELETE",
+    "path": "api/v2.0/Answer/Delete?answerKey={answerKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Answer-Delete_answerKey"
+  },
+  {
+    "controller": "Answer",
+    "method": "POST",
+    "path": "api/v2.0/Answer/Edit",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Answer-Edit"
+  },
+  {
+    "controller": "Authentication",
+    "method": "POST",
+    "path": "api/v2.0/Authentication/Login",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Authentication-Login"
+  },
+  {
+    "controller": "Authentication",
+    "method": "GET",
+    "path": "api/v2.0/Authentication/GetTenantDetail?communityUrl={communityUrl}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Authentication-GetTenantDetail_communityUrl"
+  },
+  {
+    "controller": "Authentication",
+    "method": "POST",
+    "path": "api/v2.0/Authentication/Widget",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Authentication-Widget"
+  },
+  {
+    "controller": "AutomationRules",
+    "method": "GET",
+    "path": "api/v2.0/AutomationRules/GetActiveRulesByType",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetActiveRulesByType"
+  },
+  {
+    "controller": "AutomationRules",
+    "method": "GET",
+    "path": "api/v2.0/AutomationRules/GetContactsByRuleScheduleKey?ruleScheduleKey={ruleScheduleKey}&integrationId={integrationId}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactsByRuleScheduleKey_ruleScheduleKey_integrationId"
+  },
+  {
+    "controller": "AutomationRules",
+    "method": "GET",
+    "path": "api/v2.0/AutomationRules/GetContactData?ruleScheduleKey={ruleScheduleKey}&maxRecords={maxRecords}&continuationToken={continuationToken}&fieldList={fieldList}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactData_ruleScheduleKey_maxRecords_continuationToken_fieldList"
+  },
+  {
+    "controller": "AutomationRules",
+    "method": "GET",
+    "path": "api/v2.0/AutomationRules/GetContactDataFields",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactDataFields"
+  },
+  {
+    "controller": "AutomationRules",
+    "method": "GET",
+    "path": "api/v2.0/AutomationRules/GetContactDataSubsetByRuleScheduleKey?ruleScheduleKey={ruleScheduleKey}&integrationId={integrationId}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-AutomationRules-GetContactDataSubsetByRuleScheduleKey_ruleScheduleKey_integrationId"
+  },
+  {
+    "controller": "Blogs",
+    "method": "POST",
+    "path": "api/v2.0/Blogs/GetLatestEntries",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-GetLatestEntries"
+  },
+  {
+    "controller": "Blogs",
+    "method": "GET",
+    "path": "api/v2.0/Blogs/GetBlogEntriesByGrouping?groupingType={groupingType}&maxRecords={maxRecords}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Blogs-GetBlogEntriesByGrouping_groupingType_maxRecords"
+  },
+  {
+    "controller": "Blogs",
+    "method": "POST",
+    "path": "api/v2.0/Blogs/CreateBlog",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-CreateBlog"
+  },
+  {
+    "controller": "Blogs",
+    "method": "POST",
+    "path": "api/v2.0/Blogs/PublishBlog?blogKey={blogKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-PublishBlog_blogKey"
+  },
+  {
+    "controller": "Blogs",
+    "method": "POST",
+    "path": "api/v2.0/Blogs/UpdateBlog?blogKey={blogKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-UpdateBlog_blogKey"
+  },
+  {
+    "controller": "Blogs",
+    "method": "POST",
+    "path": "api/v2.0/Blogs/AddRelatedLink?blogKey={blogKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-AddRelatedLink_blogKey"
+  },
+  {
+    "controller": "Blogs",
+    "method": "GET",
+    "path": "api/v2.0/Blogs/GetBlogsByContactKey?contactKey={contactKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Blogs-GetBlogsByContactKey_contactKey"
+  },
+  {
+    "controller": "Blogs",
+    "method": "GET",
+    "path": "api/v2.0/Blogs/GetBlog?blogKey={blogKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Blogs-GetBlog_blogKey"
+  },
+  {
+    "controller": "Blogs",
+    "method": "POST",
+    "path": "api/v2.0/Blogs/RecommendBlog?blogKey={blogKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-RecommendBlog_blogKey"
+  },
+  {
+    "controller": "Blogs",
+    "method": "DELETE",
+    "path": "api/v2.0/Blogs/DeleteBlogRecommendation?blogKey={blogKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Blogs-DeleteBlogRecommendation_blogKey"
+  },
+  {
+    "controller": "Blogs",
+    "method": "DELETE",
+    "path": "api/v2.0/Blogs/DeleteBlog?blogKey={blogKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Blogs-DeleteBlog_blogKey"
+  },
+  {
+    "controller": "Blogs",
+    "method": "POST",
+    "path": "api/v2.0/Blogs/AddComment?blogKey={blogKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-AddComment_blogKey"
+  },
+  {
+    "controller": "Blogs",
+    "method": "POST",
+    "path": "api/v2.0/Blogs/UpdateComment?blogCommentKey={blogCommentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Blogs-UpdateComment_blogCommentKey"
+  },
+  {
+    "controller": "Blogs",
+    "method": "DELETE",
+    "path": "api/v2.0/Blogs/DeleteRelatedLink?relatedResourceKey={relatedResourceKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Blogs-DeleteRelatedLink_relatedResourceKey"
+  },
+  {
+    "controller": "Blogs",
+    "method": "DELETE",
+    "path": "api/v2.0/Blogs/DeleteComment?blogCommentKey={blogCommentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Blogs-DeleteComment_blogCommentKey"
+  },
+  {
+    "controller": "Comments",
+    "method": "GET",
+    "path": "api/v2.0/Comments/Get?itemKey={itemKey}&limit={limit}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-Get_itemKey_limit"
+  },
+  {
+    "controller": "Comments",
+    "method": "GET",
+    "path": "api/v2.0/Comments/Get?commentKey={commentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-Get_commentKey"
+  },
+  {
+    "controller": "Comments",
+    "method": "GET",
+    "path": "api/v2.0/Comments/GetComments?afterCommentKey={afterCommentKey}&beforeCommentKey={beforeCommentKey}&limit={limit}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Comments-GetComments_afterCommentKey_beforeCommentKey_limit"
+  },
+  {
+    "controller": "Communities",
+    "method": "GET",
+    "path": "api/v2.0/Communities/Get?communityKey={communityKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-Get_communityKey"
+  },
+  {
+    "controller": "Communities",
+    "method": "GET",
+    "path": "api/v2.0/Communities/GetMyCommunities?includeStatistics={includeStatistics}&includeHiddenCommunities={includeHiddenCommunities}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetMyCommunities_includeStatistics_includeHiddenCommunities"
+  },
+  {
+    "controller": "Communities",
+    "method": "GET",
+    "path": "api/v2.0/Communities/GetContactCommunities?contactKey={contactKey}&legacyContactKey={legacyContactKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetContactCommunities_contactKey_legacyContactKey"
+  },
+  {
+    "controller": "Communities",
+    "method": "GET",
+    "path": "api/v2.0/Communities/GetViewableCommunities?includeStatistics={includeStatistics}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetViewableCommunities_includeStatistics"
+  },
+  {
+    "controller": "Communities",
+    "method": "GET",
+    "path": "api/v2.0/Communities/GetCommunitiesCanContribute?includeStatistics={includeStatistics}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetCommunitiesCanContribute_includeStatistics"
+  },
+  {
+    "controller": "Communities",
+    "method": "GET",
+    "path": "api/v2.0/Communities/GetCommunitiesICanJoin?includeStatistics={includeStatistics}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetCommunitiesICanJoin_includeStatistics"
+  },
+  {
+    "controller": "Communities",
+    "method": "GET",
+    "path": "api/v2.0/Communities/GetMyCommunityInvitations",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Communities-GetMyCommunityInvitations"
+  },
+  {
+    "controller": "Communities",
+    "method": "POST",
+    "path": "api/v2.0/Communities/GetCommunityMembers",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-GetCommunityMembers"
+  },
+  {
+    "controller": "Communities",
+    "method": "POST",
+    "path": "api/v2.0/Communities/InviteToCommunity?contactKey={contactKey}&communityKey={communityKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-InviteToCommunity_contactKey_communityKey"
+  },
+  {
+    "controller": "Communities",
+    "method": "POST",
+    "path": "api/v2.0/Communities/JoinCommunity?communityKey={communityKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-JoinCommunity_communityKey"
+  },
+  {
+    "controller": "Communities",
+    "method": "POST",
+    "path": "api/v2.0/Communities/AcceptInvitation",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-AcceptInvitation"
+  },
+  {
+    "controller": "Communities",
+    "method": "DELETE",
+    "path": "api/v2.0/Communities/RejectInvitation?communityInvitationKey={communityInvitationKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Communities-RejectInvitation_communityInvitationKey"
+  },
+  {
+    "controller": "Communities",
+    "method": "DELETE",
+    "path": "api/v2.0/Communities/LeaveCommunity?communityKey={communityKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Communities-LeaveCommunity_communityKey"
+  },
+  {
+    "controller": "Contacts",
+    "method": "POST",
+    "path": "api/v2.0/Contacts/WhoAmI?includeSecurityGroups={includeSecurityGroups}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-WhoAmI_includeSecurityGroups"
+  },
+  {
+    "controller": "Contacts",
+    "method": "GET",
+    "path": "api/v2.0/Contacts/GetWhoAmI?includeSecurityGroups={includeSecurityGroups}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetWhoAmI_includeSecurityGroups"
+  },
+  {
+    "controller": "Contacts",
+    "method": "GET",
+    "path": "api/v2.0/Contacts/GetContact?contactKey={contactKey}&includeSecurityGroups={includeSecurityGroups}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetContact_contactKey_includeSecurityGroups"
+  },
+  {
+    "controller": "Contacts",
+    "method": "GET",
+    "path": "api/v2.0/Contacts/GetContact?legacyContactKey={legacyContactKey}&includeSecurityGroups={includeSecurityGroups}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetContact_legacyContactKey_includeSecurityGroups"
+  },
+  {
+    "controller": "Contacts",
+    "method": "GET",
+    "path": "api/v2.0/Contacts/GetMyContacts",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetMyContacts"
+  },
+  {
+    "controller": "Contacts",
+    "method": "GET",
+    "path": "api/v2.0/Contacts/GetMyContactsPage?afterContactKey={afterContactKey}&beforeContactKey={beforeContactKey}&limit={limit}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetMyContactsPage_afterContactKey_beforeContactKey_limit"
+  },
+  {
+    "controller": "Contacts",
+    "method": "POST",
+    "path": "api/v2.0/Contacts/SearchContactsForMentions?searchText={searchText}&maxCount={maxCount}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-SearchContactsForMentions_searchText_maxCount"
+  },
+  {
+    "controller": "Contacts",
+    "method": "GET",
+    "path": "api/v2.0/Contacts/GetContactKeyByPrimaryEmail?emailAddress={emailAddress}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetContactKeyByPrimaryEmail_emailAddress"
+  },
+  {
+    "controller": "Contacts",
+    "method": "GET",
+    "path": "api/v2.0/Contacts/GetMyEmailPreferences",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetMyEmailPreferences"
+  },
+  {
+    "controller": "Contacts",
+    "method": "POST",
+    "path": "api/v2.0/Contacts/UpdateEmailPreferences",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-UpdateEmailPreferences"
+  },
+  {
+    "controller": "Contacts",
+    "method": "POST",
+    "path": "api/v2.0/Contacts/UpdateProfilePicture?contactKey={contactKey}&legacyContactKey={legacyContactKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-UpdateProfilePicture_contactKey_legacyContactKey"
+  },
+  {
+    "controller": "Contacts",
+    "method": "POST",
+    "path": "api/v2.0/Contacts/UpdateMyProfilePicture",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-UpdateMyProfilePicture"
+  },
+  {
+    "controller": "Contacts",
+    "method": "POST",
+    "path": "api/v2.0/Contacts/UpdateMyEmailPreferences",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-UpdateMyEmailPreferences"
+  },
+  {
+    "controller": "Contacts",
+    "method": "POST",
+    "path": "api/v2.0/Contacts/AcceptCodeOfConduct",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-AcceptCodeOfConduct"
+  },
+  {
+    "controller": "Contacts",
+    "method": "GET",
+    "path": "api/v2.0/Contacts/SearchContacts?searchTerms={searchTerms}&searchAllAddresses={searchAllAddresses}&memberStatus={memberStatus}&searchOnlyCompanies={searchOnlyCompanies}&overrideOptOut={overrideOptOut}&contactStatusCode={contactStatusCode}&includeMiddleName={includeMiddleName}&limitToAcceptedTerms={limitToAcceptedTerms}&includeCurrentContact={includeCurrentContact}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-SearchContacts_searchTerms_searchAllAddresses_memberStatus_searchOnlyCompanies_overrideOptOut_contactStatusCode_includeMiddleName_limitToAcceptedTerms_includeCurrentContact"
+  },
+  {
+    "controller": "Contacts",
+    "method": "GET",
+    "path": "api/v2.0/Contacts/SearchContactsForMessaging?searchTerms={searchTerms}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-SearchContactsForMessaging_searchTerms"
+  },
+  {
+    "controller": "Contacts",
+    "method": "GET",
+    "path": "api/v2.0/Contacts/GetContactsByDemographic?demographicText={demographicText}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetContactsByDemographic_demographicText"
+  },
+  {
+    "controller": "Contacts",
+    "method": "POST",
+    "path": "api/v2.0/Contacts/GetContactContributions",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-GetContactContributions"
+  },
+  {
+    "controller": "Contacts",
+    "method": "POST",
+    "path": "api/v2.0/Contacts/GetMyContributions",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Contacts-GetMyContributions"
+  },
+  {
+    "controller": "DataFeed",
+    "method": "POST",
+    "path": "api/v2.0/DataFeed/GetData",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-DataFeed-GetData"
+  },
+  {
+    "controller": "Demographics",
+    "method": "POST",
+    "path": "api/v2.0/Demographics/AddDemographicCategory",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Demographics-AddDemographicCategory"
+  },
+  {
+    "controller": "Demographics",
+    "method": "POST",
+    "path": "api/v2.0/Demographics/AddDemographicChoice",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Demographics-AddDemographicChoice"
+  },
+  {
+    "controller": "Demographics",
+    "method": "POST",
+    "path": "api/v2.0/Demographics/SetContactDemographic?demographicKey={demographicKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Demographics-SetContactDemographic_demographicKey"
+  },
+  {
+    "controller": "Demographics",
+    "method": "DELETE",
+    "path": "api/v2.0/Demographics/RemoveContactDemographic?demographicKey={demographicKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Demographics-RemoveContactDemographic_demographicKey"
+  },
+  {
+    "controller": "Demographics",
+    "method": "DELETE",
+    "path": "api/v2.0/Demographics/RemoveFreeFormContactDemographic?demographicTypeKey={demographicTypeKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Demographics-RemoveFreeFormContactDemographic_demographicTypeKey"
+  },
+  {
+    "controller": "Demographics",
+    "method": "POST",
+    "path": "api/v2.0/Demographics/SetFreeFormContactDemographic?demographicTypeKey={demographicTypeKey}&freeFormText={freeFormText}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Demographics-SetFreeFormContactDemographic_demographicTypeKey_freeFormText"
+  },
+  {
+    "controller": "Demographics",
+    "method": "GET",
+    "path": "api/v2.0/Demographics/GetDemographicTypes",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicTypes"
+  },
+  {
+    "controller": "Demographics",
+    "method": "GET",
+    "path": "api/v2.0/Demographics/GetDemographicChoices",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicChoices"
+  },
+  {
+    "controller": "Demographics",
+    "method": "GET",
+    "path": "api/v2.0/Demographics/GetDemographicChoices?demographicTypeKey={demographicTypeKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicChoices_demographicTypeKey"
+  },
+  {
+    "controller": "Demographics",
+    "method": "GET",
+    "path": "api/v2.0/Demographics/GetDemographicsVisibleOnMainMicrositeProfile",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Demographics-GetDemographicsVisibleOnMainMicrositeProfile"
+  },
+  {
+    "controller": "Discussions",
+    "method": "PUT",
+    "path": "api/v2.0/Discussions/Edit",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/PUT-api-v2.0-Discussions-Edit"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetDiscussion?discussionKey={discussionKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussion_discussionKey"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetDiscussionPost?discussionPostKey={discussionPostKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPost_discussionPostKey"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/GetDiscussionThreadUpdates",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-GetDiscussionThreadUpdates"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetSubscribedDiscussions",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetSubscribedDiscussions"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetLatestDiscussionPosts?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}&sortByScore={sortByScore}&scoreSortDirection={scoreSortDirection}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetLatestDiscussionPosts_discussionKey_maxToRetrieve_sortByScore_scoreSortDirection"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetDiscussionPosts?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}&includeStaff={includeStaff}&sortByScore={sortByScore}&scoreSortDirection={scoreSortDirection}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPosts_discussionKey_maxToRetrieve_includeStaff_sortByScore_scoreSortDirection"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/GetDiscussionPosts",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-GetDiscussionPosts"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetDiscussionPosts?discussionThreadKey={discussionThreadKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPosts_discussionThreadKey"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetDiscussionPostInThread?discussionPostKey={discussionPostKey}&numberOfReplies={numberOfReplies}&maxBreadCrumbs={maxBreadCrumbs}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPostInThread_discussionPostKey_numberOfReplies_maxBreadCrumbs"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetPagedDiscussionPostFields",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetPagedDiscussionPostFields"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetPagedDiscussionPosts?communityKey={communityKey}&maxRecords={maxRecords}&continuationToken={continuationToken}&fieldList={fieldList}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetPagedDiscussionPosts_communityKey_maxRecords_continuationToken_fieldList"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetLatestTopics?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetLatestTopics_discussionKey_maxToRetrieve"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/SubmitDiscussionPost",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-SubmitDiscussionPost"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/PostDiscussionSimple",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-PostDiscussionSimple"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/UpdateSubscription",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-UpdateSubscription"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetRecentThreads?discussionKey={discussionKey}&maxToRetrieve={maxToRetrieve}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetRecentThreads_discussionKey_maxToRetrieve"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetDiscussionPostReplies?afterReplyDiscussionPostKey={afterReplyDiscussionPostKey}&beforeReplyDiscussionPostKey={beforeReplyDiscussionPostKey}&limit={limit}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetDiscussionPostReplies_afterReplyDiscussionPostKey_beforeReplyDiscussionPostKey_limit"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/Follow?discussionThreadKey={discussionThreadKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-Follow_discussionThreadKey"
+  },
+  {
+    "controller": "Discussions",
+    "method": "DELETE",
+    "path": "api/v2.0/Discussions/Follow?discussionThreadKey={discussionThreadKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Discussions-Follow_discussionThreadKey"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetEligibleDiscussions",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetEligibleDiscussions"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/PostToDiscussionWithCrossPost",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-PostToDiscussionWithCrossPost"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/PostToDiscussionAnonymously",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-PostToDiscussionAnonymously"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/PostToDiscussion",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-PostToDiscussion"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/ReplyToDiscussion",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-ReplyToDiscussion"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/ReplyToDiscussionAnonymously",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-ReplyToDiscussionAnonymously"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/SendMessageToDiscussionPostAuthor",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-SendMessageToDiscussionPostAuthor"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/SearchDiscussionPosts",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-SearchDiscussionPosts"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/RecommendDiscussionPost?discussionPostKey={discussionPostKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-RecommendDiscussionPost_discussionPostKey"
+  },
+  {
+    "controller": "Discussions",
+    "method": "POST",
+    "path": "api/v2.0/Discussions/ToggleBestAnswer?discussionPostKey={discussionPostKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Discussions-ToggleBestAnswer_discussionPostKey"
+  },
+  {
+    "controller": "Discussions",
+    "method": "DELETE",
+    "path": "api/v2.0/Discussions/RemovePost?discussionPostKey={discussionPostKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Discussions-RemovePost_discussionPostKey"
+  },
+  {
+    "controller": "Discussions",
+    "method": "DELETE",
+    "path": "api/v2.0/Discussions/DeleteDiscussionPostRecommendation?discussionPostKey={discussionPostKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Discussions-DeleteDiscussionPostRecommendation_discussionPostKey"
+  },
+  {
+    "controller": "Discussions",
+    "method": "GET",
+    "path": "api/v2.0/Discussions/GetThreadTags?discussionThreadKey={discussionThreadKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Discussions-GetThreadTags_discussionThreadKey"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/GetRegistrantDetails?calendarEventKey={calendarEventKey}&contactKey={contactKey}&emailAddress={emailAddress}&firstName={firstName}&lastName={lastName}&useLeadingWildcardSearch={useLeadingWildcardSearch}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetRegistrantDetails_calendarEventKey_contactKey_emailAddress_firstName_lastName_useLeadingWildcardSearch"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/GetRegistrantsByCalendarEvent?calendarEventKey={calendarEventKey}&modifiedDateTime={modifiedDateTime}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetRegistrantsByCalendarEvent_calendarEventKey_modifiedDateTime"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/GetEventRegistrants?calendarEventKey={calendarEventKey}&modifiedDateTime={modifiedDateTime}&maxRecords={maxRecords}&continuationToken={continuationToken}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventRegistrants_calendarEventKey_modifiedDateTime_maxRecords_continuationToken"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/GetEventType?EventTypeKey={EventTypeKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventType_EventTypeKey"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/GetEventTypes",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventTypes"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/GetEventTypesList",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventTypesList"
+  },
+  {
+    "controller": "Events",
+    "method": "POST",
+    "path": "api/v2.0/Events/SaveEventType",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Events-SaveEventType"
+  },
+  {
+    "controller": "Events",
+    "method": "POST",
+    "path": "api/v2.0/Events/DeleteEventType?eventTypeKey={eventTypeKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Events-DeleteEventType_eventTypeKey"
+  },
+  {
+    "controller": "Events",
+    "method": "POST",
+    "path": "api/v2.0/Events/RestoreEventType?eventTypeKey={eventTypeKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Events-RestoreEventType_eventTypeKey"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/GetEvent?eventKey={eventKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEvent_eventKey"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/GetUpcoming?maxRecords={maxRecords}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetUpcoming_maxRecords"
+  },
+  {
+    "controller": "Events",
+    "method": "POST",
+    "path": "api/v2.0/Events/SearchCurrentAndFutureEvents?includePastEvents={includePastEvents}&maxRecords={maxRecords}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Events-SearchCurrentAndFutureEvents_includePastEvents_maxRecords"
+  },
+  {
+    "controller": "Events",
+    "method": "POST",
+    "path": "api/v2.0/Events/SearchEvents?maxRecords={maxRecords}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Events-SearchEvents_maxRecords"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/CommunityPastEvents?communityId={communityId}&maxRecords={maxRecords}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-CommunityPastEvents_communityId_maxRecords"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/ContactEventList?contactId={contactId}&maxRecords={maxRecords}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-ContactEventList_contactId_maxRecords"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/CommunityEventAttendance?communityId={communityId}&numberOfMeetings={numberOfMeetings}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-CommunityEventAttendance_communityId_numberOfMeetings"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/EventAttendance?eventId={eventId}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-EventAttendance_eventId"
+  },
+  {
+    "controller": "Events",
+    "method": "GET",
+    "path": "api/v2.0/Events/GetEventEnabledCommunityList",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventEnabledCommunityList"
+  },
+  {
+    "controller": "Events",
+    "method": "POST",
+    "path": "api/v2.0/Events/RSVPToEvent?eventKey={eventKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Events-RSVPToEvent_eventKey"
+  },
+  {
+    "controller": "Events",
+    "method": "DELETE",
+    "path": "api/v2.0/Events/RSVP?eventKey={eventKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Events-RSVP_eventKey"
+  },
+  {
+    "controller": "EventSessions",
+    "method": "GET",
+    "path": "api/v2.0/EventSessions/GetSession?sessionKey={sessionKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-EventSessions-GetSession_sessionKey"
+  },
+  {
+    "controller": "ExternalActivity",
+    "method": "POST",
+    "path": "api/v2.0/ExternalActivity/Create",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalActivity-Create"
+  },
+  {
+    "controller": "ExternalActivity",
+    "method": "PUT",
+    "path": "api/v2.0/ExternalActivity/Update",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/PUT-api-v2.0-ExternalActivity-Update"
+  },
+  {
+    "controller": "ExternalActivity",
+    "method": "DELETE",
+    "path": "api/v2.0/ExternalActivity/Delete?externalActivityKey={externalActivityKey}&legacyActivityKey={legacyActivityKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ExternalActivity-Delete_externalActivityKey_legacyActivityKey"
+  },
+  {
+    "controller": "ExternalSearch",
+    "method": "POST",
+    "path": "api/v2.0/ExternalSearch/AddAnnouncementItems",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddAnnouncementItems"
+  },
+  {
+    "controller": "ExternalSearch",
+    "method": "POST",
+    "path": "api/v2.0/ExternalSearch/AddLibraryItems",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddLibraryItems"
+  },
+  {
+    "controller": "ExternalSearch",
+    "method": "POST",
+    "path": "api/v2.0/ExternalSearch/AddLibraryEntryItems",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddLibraryEntryItems"
+  },
+  {
+    "controller": "ExternalSearch",
+    "method": "POST",
+    "path": "api/v2.0/ExternalSearch/AddCommunityItems",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddCommunityItems"
+  },
+  {
+    "controller": "ExternalSearch",
+    "method": "POST",
+    "path": "api/v2.0/ExternalSearch/AddCourseItems",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddCourseItems"
+  },
+  {
+    "controller": "ExternalSearch",
+    "method": "POST",
+    "path": "api/v2.0/ExternalSearch/AddBlogItems",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddBlogItems"
+  },
+  {
+    "controller": "ExternalSearch",
+    "method": "POST",
+    "path": "api/v2.0/ExternalSearch/AddEventItems",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddEventItems"
+  },
+  {
+    "controller": "ExternalSearch",
+    "method": "POST",
+    "path": "api/v2.0/ExternalSearch/AddPageContent",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddPageContent"
+  },
+  {
+    "controller": "ExternalSearch",
+    "method": "POST",
+    "path": "api/v2.0/ExternalSearch/AddVolunteerOpportunityItems",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddVolunteerOpportunityItems"
+  },
+  {
+    "controller": "ExternalSearch",
+    "method": "POST",
+    "path": "api/v2.0/ExternalSearch/AddGlossaryItems",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ExternalSearch-AddGlossaryItems"
+  },
+  {
+    "controller": "Federation",
+    "method": "GET",
+    "path": "api/v2.0/Federation/GetTenant?tenantKey={tenantKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Federation-GetTenant_tenantKey"
+  },
+  {
+    "controller": "Federation",
+    "method": "GET",
+    "path": "api/v2.0/Federation/GetContact?tenantKey={tenantKey}&contactKey={contactKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Federation-GetContact_tenantKey_contactKey"
+  },
+  {
+    "controller": "Friends",
+    "method": "GET",
+    "path": "api/v2.0/Friends/GetPendingReceivedFriendRequests",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Friends-GetPendingReceivedFriendRequests"
+  },
+  {
+    "controller": "Friends",
+    "method": "GET",
+    "path": "api/v2.0/Friends/GetPendingSentFriendRequests",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Friends-GetPendingSentFriendRequests"
+  },
+  {
+    "controller": "Friends",
+    "method": "GET",
+    "path": "api/v2.0/Friends/GetAcceptedFriendRequests?daysBack={daysBack}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Friends-GetAcceptedFriendRequests_daysBack"
+  },
+  {
+    "controller": "Friends",
+    "method": "POST",
+    "path": "api/v2.0/Friends/PostFriendRequest?contactKey={contactKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Friends-PostFriendRequest_contactKey"
+  },
+  {
+    "controller": "Friends",
+    "method": "POST",
+    "path": "api/v2.0/Friends/AcceptFriendRequest?friendRequestRecordKey={friendRequestRecordKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Friends-AcceptFriendRequest_friendRequestRecordKey"
+  },
+  {
+    "controller": "Friends",
+    "method": "POST",
+    "path": "api/v2.0/Friends/RejectFriendRequest?friendRequestRecordKey={friendRequestRecordKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Friends-RejectFriendRequest_friendRequestRecordKey"
+  },
+  {
+    "controller": "Friends",
+    "method": "DELETE",
+    "path": "api/v2.0/Friends/CancelFriendRequest?contactKey={contactKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Friends-CancelFriendRequest_contactKey"
+  },
+  {
+    "controller": "Friends",
+    "method": "POST",
+    "path": "api/v2.0/Friends/UnFriend?contactKey={contactKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Friends-UnFriend_contactKey"
+  },
+  {
+    "controller": "Ideation",
+    "method": "GET",
+    "path": "api/v2.0/Ideation/IdeaDetails?ideationKey={ideationKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-IdeaDetails_ideationKey"
+  },
+  {
+    "controller": "Ideation",
+    "method": "POST",
+    "path": "api/v2.0/Ideation/Post",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Ideation-Post"
+  },
+  {
+    "controller": "Ideation",
+    "method": "GET",
+    "path": "api/v2.0/Ideation/GetIdeasByStatus?ideationStatusKey={ideationStatusKey}&afterIdeaKey={afterIdeaKey}&beforeIdeaKey={beforeIdeaKey}&numberToReturn={numberToReturn}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeasByStatus_ideationStatusKey_afterIdeaKey_beforeIdeaKey_numberToReturn"
+  },
+  {
+    "controller": "Ideation",
+    "method": "GET",
+    "path": "api/v2.0/Ideation/GetIdeasByCategory?ideationCategoryKey={ideationCategoryKey}&afterIdeaKey={afterIdeaKey}&beforeIdeaKey={beforeIdeaKey}&numberToReturn={numberToReturn}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeasByCategory_ideationCategoryKey_afterIdeaKey_beforeIdeaKey_numberToReturn"
+  },
+  {
+    "controller": "Ideation",
+    "method": "POST",
+    "path": "api/v2.0/Ideation/AddIdeaCategories",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Ideation-AddIdeaCategories"
+  },
+  {
+    "controller": "Ideation",
+    "method": "GET",
+    "path": "api/v2.0/Ideation/GetIdeaStatuses",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeaStatuses"
+  },
+  {
+    "controller": "Ideation",
+    "method": "GET",
+    "path": "api/v2.0/Ideation/GetIdeaCategories",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetIdeaCategories"
+  },
+  {
+    "controller": "Ideation",
+    "method": "POST",
+    "path": "api/v2.0/Ideation/UpdateIdeaStatus",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Ideation-UpdateIdeaStatus"
+  },
+  {
+    "controller": "Ideation",
+    "method": "GET",
+    "path": "api/v2.0/Ideation/GetVoters?ideationKey={ideationKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Ideation-GetVoters_ideationKey"
+  },
+  {
+    "controller": "Messaging",
+    "method": "GET",
+    "path": "api/v2.0/Messaging/GetInboxMessage?messageKey={messageKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-GetInboxMessage_messageKey"
+  },
+  {
+    "controller": "Messaging",
+    "method": "GET",
+    "path": "api/v2.0/Messaging/GetInboxMessages?firstRecord={firstRecord}&maxRecords={maxRecords}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-GetInboxMessages_firstRecord_maxRecords"
+  },
+  {
+    "controller": "Messaging",
+    "method": "GET",
+    "path": "api/v2.0/Messaging/GetSentMessages?firstRecord={firstRecord}&maxRecords={maxRecords}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-GetSentMessages_firstRecord_maxRecords"
+  },
+  {
+    "controller": "Messaging",
+    "method": "POST",
+    "path": "api/v2.0/Messaging/SendMessageToContact",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-SendMessageToContact"
+  },
+  {
+    "controller": "Messaging",
+    "method": "POST",
+    "path": "api/v2.0/Messaging/ReplyToMessage",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-ReplyToMessage"
+  },
+  {
+    "controller": "Messaging",
+    "method": "POST",
+    "path": "api/v2.0/Messaging/MarkMessageAsRead?messageKey={messageKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-MarkMessageAsRead_messageKey"
+  },
+  {
+    "controller": "Messaging",
+    "method": "GET",
+    "path": "api/v2.0/Messaging/MarkMessageAsRead?messageKey={messageKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-MarkMessageAsRead_messageKey"
+  },
+  {
+    "controller": "Messaging",
+    "method": "POST",
+    "path": "api/v2.0/Messaging/MarkMessagesAsRead",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-MarkMessagesAsRead"
+  },
+  {
+    "controller": "Messaging",
+    "method": "POST",
+    "path": "api/v2.0/Messaging/DeleteMessages",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-DeleteMessages"
+  },
+  {
+    "controller": "Messaging",
+    "method": "POST",
+    "path": "api/v2.0/Messaging/MarkMessageAsUnRead?messageKey={messageKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-MarkMessageAsUnRead_messageKey"
+  },
+  {
+    "controller": "Messaging",
+    "method": "GET",
+    "path": "api/v2.0/Messaging/MarkMessageAsUnRead?messageKey={messageKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-MarkMessageAsUnRead_messageKey"
+  },
+  {
+    "controller": "Messaging",
+    "method": "GET",
+    "path": "api/v2.0/Messaging/GetUnreadMessageCounts",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-GetUnreadMessageCounts"
+  },
+  {
+    "controller": "Messaging",
+    "method": "POST",
+    "path": "api/v2.0/Messaging/SendMessageToDiscussionPostAuthor",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Messaging-SendMessageToDiscussionPostAuthor"
+  },
+  {
+    "controller": "Question",
+    "method": "POST",
+    "path": "api/v2.0/Question/Post",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Question-Post"
+  },
+  {
+    "controller": "Question",
+    "method": "POST",
+    "path": "api/v2.0/Question/Answer",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Question-Answer"
+  },
+  {
+    "controller": "Question",
+    "method": "GET",
+    "path": "api/v2.0/Question/GetThread?questionKey={questionKey}&numberOfAnswers={numberOfAnswers}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Question-GetThread_questionKey_numberOfAnswers"
+  },
+  {
+    "controller": "Question",
+    "method": "POST",
+    "path": "api/v2.0/Question/Recommend?questionKey={questionKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Question-Recommend_questionKey"
+  },
+  {
+    "controller": "Question",
+    "method": "DELETE",
+    "path": "api/v2.0/Question/Recommend?questionKey={questionKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Question-Recommend_questionKey"
+  },
+  {
+    "controller": "Question",
+    "method": "POST",
+    "path": "api/v2.0/Question/Follow?questionKey={questionKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Question-Follow_questionKey"
+  },
+  {
+    "controller": "Question",
+    "method": "DELETE",
+    "path": "api/v2.0/Question/Follow?questionKey={questionKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Question-Follow_questionKey"
+  },
+  {
+    "controller": "Question",
+    "method": "GET",
+    "path": "api/v2.0/Question/GetAnswers?afterAnswerKey={afterAnswerKey}&beforeAnswerKey={beforeAnswerKey}&limit={limit}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Question-GetAnswers_afterAnswerKey_beforeAnswerKey_limit"
+  },
+  {
+    "controller": "Question",
+    "method": "DELETE",
+    "path": "api/v2.0/Question/Delete?questionKey={questionKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Question-Delete_questionKey"
+  },
+  {
+    "controller": "Question",
+    "method": "POST",
+    "path": "api/v2.0/Question/Edit",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Question-Edit"
+  },
+  {
+    "controller": "RegistrantClass",
+    "method": "GET",
+    "path": "api/v2.0/RegistrantClass/GetRegistrantClasses?Active={Active}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-RegistrantClass-GetRegistrantClasses_Active"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "GET",
+    "path": "api/v2.0/ResourceLibrary/GetLibraryList",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryList"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "GET",
+    "path": "api/v2.0/ResourceLibrary/GetLibraries",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraries"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "GET",
+    "path": "api/v2.0/ResourceLibrary/GetLibraryDocument?documentKey={documentKey}&paginateComments={paginateComments}&commentLimit={commentLimit}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetLibraryDocument_documentKey_paginateComments_commentLimit"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/Follow?documentKey={documentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-Follow_documentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "DELETE",
+    "path": "api/v2.0/ResourceLibrary/Follow?documentKey={documentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-Follow_documentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "GET",
+    "path": "api/v2.0/ResourceLibrary/GetMyLibraryDocuments?maxRecords={maxRecords}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetMyLibraryDocuments_maxRecords"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/GetLibraryDocuments",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-GetLibraryDocuments"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "GET",
+    "path": "api/v2.0/ResourceLibrary/GetDocumentAttachments?documentKey={documentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetDocumentAttachments_documentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/AddComment?documentKey={documentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-AddComment_documentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/UpdateComment?documentCommentKey={documentCommentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-UpdateComment_documentCommentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "DELETE",
+    "path": "api/v2.0/ResourceLibrary/DeleteComment?documentCommentKey={documentCommentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteComment_documentCommentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "DELETE",
+    "path": "api/v2.0/ResourceLibrary/DeleteLibraryDocument?documentKey={documentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteLibraryDocument_documentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/AddRelatedLink?documentKey={documentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-AddRelatedLink_documentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/GetFavorites",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-GetFavorites"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/AddToFavorites?documentKey={documentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-AddToFavorites_documentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "DELETE",
+    "path": "api/v2.0/ResourceLibrary/RemoveFromFavorites?documentKey={documentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-RemoveFromFavorites_documentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "DELETE",
+    "path": "api/v2.0/ResourceLibrary/DeleteRelatedLink?relatedLinkKey={relatedLinkKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteRelatedLink_relatedLinkKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/RecommendDocument?documentKey={documentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-RecommendDocument_documentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "DELETE",
+    "path": "api/v2.0/ResourceLibrary/DeleteDocumentRecommendation?documentKey={documentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteDocumentRecommendation_documentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "GET",
+    "path": "api/v2.0/ResourceLibrary/GetDocumentAttachment?documentAttachmentKey={documentAttachmentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-ResourceLibrary-GetDocumentAttachment_documentAttachmentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "DELETE",
+    "path": "api/v2.0/ResourceLibrary/DeleteDocumentAttachment?documentAttachmentKey={documentAttachmentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-ResourceLibrary-DeleteDocumentAttachment_documentAttachmentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/PostDocument?libraryKey={libraryKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-PostDocument_libraryKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/PostDocumentAttachments?documentKey={documentKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-PostDocumentAttachments_documentKey"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/InitiateUpload",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-InitiateUpload"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/MultipartUploaded",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-MultipartUploaded"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/AbortMultipartUpload",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-AbortMultipartUpload"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/DocumentFromUpload",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-DocumentFromUpload"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/AppendUploadedAttachment",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-AppendUploadedAttachment"
+  },
+  {
+    "controller": "ResourceLibrary",
+    "method": "POST",
+    "path": "api/v2.0/ResourceLibrary/Edit",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-Edit"
+  },
+  {
+    "controller": "System",
+    "method": "GET",
+    "path": "api/v2.0/System/GetApiDetails",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-System-GetApiDetails"
+  },
+  {
+    "controller": "System",
+    "method": "GET",
+    "path": "api/v2.0/System/GetCodeOfConduct",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-System-GetCodeOfConduct"
+  },
+  {
+    "controller": "System",
+    "method": "GET",
+    "path": "api/v2.0/System/GetProfileUrls",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-System-GetProfileUrls"
+  },
+  {
+    "controller": "System",
+    "method": "GET",
+    "path": "api/v2.0/System/GetMobileAppSettings",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-System-GetMobileAppSettings"
+  },
+  {
+    "controller": "System",
+    "method": "POST",
+    "path": "api/v2.0/System/GetCommunityMemberUpdates",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-System-GetCommunityMemberUpdates"
+  },
+  {
+    "controller": "Tagging",
+    "method": "GET",
+    "path": "api/v2.0/Tagging/GetTags?searchText={searchText}&communityKey={communityKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Tagging-GetTags_searchText_communityKey"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "POST",
+    "path": "api/v2.0/Volunteer/ApproveVolunteerApplication?sendEmailNotifications={sendEmailNotifications}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Volunteer-ApproveVolunteerApplication_sendEmailNotifications"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "POST",
+    "path": "api/v2.0/Volunteer/AddToPoolByContactKey?contactKey={contactKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Volunteer-AddToPoolByContactKey_contactKey"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "POST",
+    "path": "api/v2.0/Volunteer/AddToPoolByLegacyKey?legacyContactKey={legacyContactKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Volunteer-AddToPoolByLegacyKey_legacyContactKey"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "DELETE",
+    "path": "api/v2.0/Volunteer/RemoveFromPoolByContactKey?contactKey={contactKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Volunteer-RemoveFromPoolByContactKey_contactKey"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "DELETE",
+    "path": "api/v2.0/Volunteer/RemoveFromPoolByLegacyContactKey?legacyContactKey={legacyContactKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Volunteer-RemoveFromPoolByLegacyContactKey_legacyContactKey"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "POST",
+    "path": "api/v2.0/Volunteer/VolunteerForOpportunityByContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&contactKey={contactKey}&comments={comments}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Volunteer-VolunteerForOpportunityByContactKey_volunteerOpportunityKey_contactKey_comments"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "POST",
+    "path": "api/v2.0/Volunteer/VolunteerForOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&comments={comments}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Volunteer-VolunteerForOpportunity_volunteerOpportunityKey_comments"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "POST",
+    "path": "api/v2.0/Volunteer/VolunteerForOpportunityByLegacyContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&legacyContactKey={legacyContactKey}&comments={comments}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Volunteer-VolunteerForOpportunityByLegacyContactKey_volunteerOpportunityKey_legacyContactKey_comments"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "DELETE",
+    "path": "api/v2.0/Volunteer/WithdrawFromOpportunity?volunteerOpportunityKey={volunteerOpportunityKey}&comments={comments}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunity_volunteerOpportunityKey_comments"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "DELETE",
+    "path": "api/v2.0/Volunteer/WithdrawFromOpportunityByContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&contactKey={contactKey}&comments={comments}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunityByContactKey_volunteerOpportunityKey_contactKey_comments"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "DELETE",
+    "path": "api/v2.0/Volunteer/WithdrawFromOpportunityByLegacyContactKey?volunteerOpportunityKey={volunteerOpportunityKey}&legacyContactKey={legacyContactKey}&comments={comments}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Volunteer-WithdrawFromOpportunityByLegacyContactKey_volunteerOpportunityKey_legacyContactKey_comments"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "GET",
+    "path": "api/v2.0/Volunteer/GetVolunteerOpportunityList",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityList"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "GET",
+    "path": "api/v2.0/Volunteer/GetVolunteerList?volunteerOpportunityKey={volunteerOpportunityKey}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerList_volunteerOpportunityKey"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "GET",
+    "path": "api/v2.0/Volunteer/GetUpcomingVolunteerOpportunities?opportunityTypeKey={opportunityTypeKey}&communityKey={communityKey}&maxToRetrieve={maxToRetrieve}",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetUpcomingVolunteerOpportunities_opportunityTypeKey_communityKey_maxToRetrieve"
+  },
+  {
+    "controller": "Volunteer",
+    "method": "GET",
+    "path": "api/v2.0/Volunteer/GetVolunteerOpportunityTypeList",
+    "helpUrl": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Volunteer-GetVolunteerOpportunityTypeList"
+  }
+]

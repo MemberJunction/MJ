@@ -1,0 +1,13 @@
+[
+  {
+    "io": {
+      "Name": "Blogs",
+      "SupportsUpdate": true,
+      "UpdateAPIPath": "/v2.0/Blogs/UpdateBlog?blogKey={id}",
+      "UpdateMethod": "POST",
+      "UpdateBodyShape": "flat",
+      "UpdateBodyKey": null,
+      "UpdateIDLocation": "path"
+    }
+  }
+]

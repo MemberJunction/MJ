@@ -7666,6 +7666,96 @@
       "EvidenceStrength": "ExplicitStatement",
       "TargetField": "iof.associations_tickets_feedback_submissions.fromObjectId.IsPrimaryKey",
       "Excerpt": "Parametric path /crm/v4/objects/tickets/{fromObjectId}/associations/feedback_submissions/{toObjectId} → both ids form the composite association key (each an FK to its parent)."
+    },
+    {
+      "URL": "file://packages/Integration/connectors-registry/hubspot/runs/connector-hubspot-1782844385831-2bfb45ce/output/DEPRECATION_RECORD.md",
+      "AccessedAt": "2026-07-02T08:11:12.048Z",
+      "UsedFor": "FixInstructions apply: setting integration.ImportPath to the per-vendor registry package name, mandated by this connector's own regression baseline (DEPRECATION_RECORD.md breaking-change item #8) to satisfy the ClassName/ImportPath/package.json-name/MJ:Integrations.ClassName four-way invariant.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.ImportPath",
+      "Excerpt": "8. **Import path change**: `ImportPath` on the Integration row changes from `@memberjunction/connectors` to `@memberjunction/connector-hubspot`. Existing `CompanyIntegration` rows are unaffected; only the `MJ: Integrations` metadata row is updated."
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v1/specs",
+      "AccessedAt": "2026-07-02T08:16:42.684Z",
+      "UsedFor": "Marketing AEO prompts record collection + fields",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.marketing_aeo_prompts",
+      "Excerpt": "GET /marketing/aeo/2026-09-beta/prompts -> {results:[{id,prompt,language,buyingJourneyPhase,businessUnitId,aiAssistants,createdAt}]}"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v1/specs",
+      "AccessedAt": "2026-07-02T08:16:42.684Z",
+      "UsedFor": "AEO prompt-runs collection nested under prompt; promptId FK; updatedAt watermark",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.marketing_aeo_prompt_runs",
+      "Excerpt": "GET /marketing/aeo/2026-09-beta/prompts/{promptId}/runs -> {results:[{id,promptId,aiModel,state,totalCitations,ownedMentions,competitorMentions,createdAt,completedAt,updatedAt}]}"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v1/specs",
+      "AccessedAt": "2026-07-02T08:16:42.684Z",
+      "UsedFor": "AEO recommendations record collection + fields",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.marketing_aeo_recommendations",
+      "Excerpt": "GET /marketing/aeo/2026-09-beta/recommendations -> {results:[{id,recommendationType,status,startDate,endDate,createdAt,...}]}"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v1/specs",
+      "AccessedAt": "2026-07-02T08:16:42.684Z",
+      "UsedFor": "Settings user-provisioning teams collection + fields",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.settings_teams",
+      "Excerpt": "GET /settings/users/2026-03/teams -> {results:[{id,name,userIds,secondaryUserIds}]}"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v1/specs",
+      "AccessedAt": "2026-07-02T08:16:42.684Z",
+      "UsedFor": "Webhooks Journal append-only event feed + JournalFetchResponse fields",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.webhooks_journal",
+      "Excerpt": "GET /webhooks-journal/journal/2026-03/latest + batch/read -> JournalFetchResponse{currentOffset(uuid),expiresAt,url}; paged via offset/{offset}/next"
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api-reference/latest/crm/objects",
+      "AccessedAt": "2026-07-02T15:18:33.009Z",
+      "UsedFor": "ProbeAmend correction: pagination param for 'contacts' is the docs-supported cursor token `after` (from paging.next.after), not the probe-default `skip`.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.contacts.Configuration.pagination",
+      "Excerpt": "OpenAPI param `after`: \"The paging cursor token of the last successfully read resource will be returned as the paging.next.after JSON property of a paged response containing more results.\" NextPage schema required:[after]. HubSpot CRM list endpoints do NOT support offset/skip paging."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api-reference/latest/crm/objects",
+      "AccessedAt": "2026-07-02T15:18:33.018Z",
+      "UsedFor": "ProbeAmend correction: pagination param for 'companies' is the docs-supported cursor token `after` (from paging.next.after), not the probe-default `skip`.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.companies.Configuration.pagination",
+      "Excerpt": "OpenAPI param `after`: \"The paging cursor token of the last successfully read resource will be returned as the paging.next.after JSON property of a paged response containing more results.\" NextPage schema required:[after]. HubSpot CRM list endpoints do NOT support offset/skip paging."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api-reference/latest/crm/objects",
+      "AccessedAt": "2026-07-02T15:18:33.026Z",
+      "UsedFor": "ProbeAmend correction: pagination param for 'deals' is the docs-supported cursor token `after` (from paging.next.after), not the probe-default `skip`.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.deals.Configuration.pagination",
+      "Excerpt": "OpenAPI param `after`: \"The paging cursor token of the last successfully read resource will be returned as the paging.next.after JSON property of a paged response containing more results.\" NextPage schema required:[after]. HubSpot CRM list endpoints do NOT support offset/skip paging."
     }
   ]
 }

@@ -1,0 +1,2083 @@
+{
+  "magnetmail": [
+    {
+      "TableName": "email_history",
+      "PrimaryKey": [
+        {
+          "FieldName": "message_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "message_id",
+          "SchemaName": "magnetmail",
+          "RelatedTable": "Message",
+          "RelatedField": "message_id"
+        }
+      ]
+    },
+    {
+      "TableName": "link",
+      "PrimaryKey": [
+        {
+          "FieldName": "link_url_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "website_link",
+      "PrimaryKey": [
+        {
+          "FieldName": "website_link_url_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Recipient",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "User",
+      "PrimaryKey": [
+        {
+          "FieldName": "User_Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Message",
+      "PrimaryKey": [
+        {
+          "FieldName": "message_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "JobToGroup",
+      "PrimaryKey": [
+        {
+          "FieldName": "group_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "group_id",
+          "SchemaName": "magnetmail",
+          "RelatedTable": "group",
+          "RelatedField": "group_id"
+        }
+      ]
+    },
+    {
+      "TableName": "Links",
+      "PrimaryKey": [
+        {
+          "FieldName": "linkid",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "recp_track",
+      "PrimaryKey": [
+        {
+          "FieldName": "MMId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "group",
+      "PrimaryKey": [
+        {
+          "FieldName": "group_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MessageDetails",
+      "PrimaryKey": [
+        {
+          "FieldName": "message_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MagnetMailQueries",
+      "PrimaryKey": [
+        {
+          "FieldName": "Search_Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "RecipientGroup",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Unsubscribe",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "MessageId",
+          "SchemaName": "magnetmail",
+          "RelatedTable": "Message",
+          "RelatedField": "message_id"
+        },
+        {
+          "FieldName": "GroupId",
+          "SchemaName": "magnetmail",
+          "RelatedTable": "group",
+          "RelatedField": "group_id"
+        },
+        {
+          "FieldName": "MessageCategoryId",
+          "SchemaName": "magnetmail",
+          "RelatedTable": "MessageCategory",
+          "RelatedField": "ID"
+        },
+        {
+          "FieldName": "RecipientId",
+          "SchemaName": "magnetmail",
+          "RelatedTable": "Recipient",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "GroupCategoryId",
+          "SchemaName": "magnetmail",
+          "RelatedTable": "GroupCategory",
+          "RelatedField": "ID"
+        }
+      ]
+    },
+    {
+      "TableName": "MailRecipientGroup",
+      "PrimaryKey": [
+        {
+          "FieldName": "group_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "group_id",
+          "SchemaName": "magnetmail",
+          "RelatedTable": "group",
+          "RelatedField": "group_id"
+        }
+      ]
+    },
+    {
+      "TableName": "GroupRecipient",
+      "PrimaryKey": [
+        {
+          "FieldName": "RecipientId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "RecipientId",
+          "SchemaName": "magnetmail",
+          "RelatedTable": "Recipient",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "PersonifySubscriptionMapping",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MessageCategory",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "GroupCategory",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "UploadInitialJob",
+      "PrimaryKey": [
+        {
+          "FieldName": "InitialQueueId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ExtendedField",
+      "PrimaryKey": [
+        {
+          "FieldName": "fieldId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "UploadInitialQueueStatus",
+      "PrimaryKey": [
+        {
+          "FieldName": "UploadId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventSignUp",
+      "PrimaryKey": [
+        {
+          "FieldName": "EventId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "PaidItem",
+      "PrimaryKey": [
+        {
+          "FieldName": "RMPaidItemReferenceId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ClientReferenceId",
+          "SchemaName": "magnetmail",
+          "RelatedTable": "Registrant",
+          "RelatedField": "ClientReferenceId"
+        }
+      ]
+    },
+    {
+      "TableName": "Registrant",
+      "PrimaryKey": [
+        {
+          "FieldName": "ClientReferenceId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "QuestionItem",
+      "PrimaryKey": [
+        {
+          "FieldName": "QuestionItemId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "UploadJobSettings",
+      "PrimaryKey": [
+        {
+          "FieldName": "GroupId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    }
+  ],
+  "acgi": [
+    {
+      "TableName": "CompanyAdmin",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "custId",
+          "SchemaName": "acgi",
+          "RelatedTable": "Customer",
+          "RelatedField": "custId"
+        }
+      ]
+    },
+    {
+      "TableName": "Customer",
+      "PrimaryKey": [
+        {
+          "FieldName": "custId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Employee",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "custId",
+          "SchemaName": "acgi",
+          "RelatedTable": "Customer",
+          "RelatedField": "custId"
+        }
+      ]
+    }
+  ],
+  "higherlogic_vanilla": [
+    {
+      "TableName": "Addon",
+      "PrimaryKey": [
+        {
+          "FieldName": "addonID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Appeal",
+      "PrimaryKey": [
+        {
+          "FieldName": "appealID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "appealingUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "assignedUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "escalationID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Escalation",
+          "RelatedField": "recordID"
+        }
+      ]
+    },
+    {
+      "TableName": "Article",
+      "PrimaryKey": [
+        {
+          "FieldName": "articleID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "articleRevisionID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "ArticleRevision",
+          "RelatedField": "articleRevisionID"
+        },
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "knowledgeCategoryID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "KnowledgeCategory",
+          "RelatedField": "knowledgeCategoryID"
+        }
+      ]
+    },
+    {
+      "TableName": "ArticleRevision",
+      "PrimaryKey": [
+        {
+          "FieldName": "articleRevisionID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "articleID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Article",
+          "RelatedField": "articleID"
+        }
+      ]
+    },
+    {
+      "TableName": "Authenticator",
+      "PrimaryKey": [
+        {
+          "FieldName": "authenticatorID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "AutomationDispatch",
+      "PrimaryKey": [
+        {
+          "FieldName": "automationRuleDispatchUUID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Badge",
+      "PrimaryKey": [
+        {
+          "FieldName": "badgeID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "BadgeRequest",
+      "PrimaryKey": [
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "badgeID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "badgeID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Badge",
+          "RelatedField": "badgeID"
+        }
+      ]
+    },
+    {
+      "TableName": "Category",
+      "PrimaryKey": [
+        {
+          "FieldName": "categoryID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "parentCategoryID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Category",
+          "RelatedField": "categoryID"
+        }
+      ]
+    },
+    {
+      "TableName": "Collection",
+      "PrimaryKey": [
+        {
+          "FieldName": "collectionID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Comment",
+      "PrimaryKey": [
+        {
+          "FieldName": "commentID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "categoryID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Category",
+          "RelatedField": "categoryID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "discussionID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Discussion",
+          "RelatedField": "discussionID"
+        },
+        {
+          "FieldName": "parentCommentID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Comment",
+          "RelatedField": "commentID"
+        },
+        {
+          "FieldName": "groupID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Group",
+          "RelatedField": "groupID"
+        }
+      ]
+    },
+    {
+      "TableName": "CommentReaction",
+      "PrimaryKey": [
+        {
+          "FieldName": "tagID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "recordID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "recordType",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "recordID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Comment",
+          "RelatedField": "commentID"
+        }
+      ]
+    },
+    {
+      "TableName": "Conversation",
+      "PrimaryKey": [
+        {
+          "FieldName": "conversationID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "ConversationParticipant",
+      "PrimaryKey": [
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "conversationID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "conversationID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Conversation",
+          "RelatedField": "conversationID"
+        }
+      ]
+    },
+    {
+      "TableName": "DataSource",
+      "PrimaryKey": [
+        {
+          "FieldName": "dataSourceID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Discussion",
+      "PrimaryKey": [
+        {
+          "FieldName": "discussionID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "groupID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Group",
+          "RelatedField": "groupID"
+        },
+        {
+          "FieldName": "statusID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Status",
+          "RelatedField": "statusID"
+        },
+        {
+          "FieldName": "categoryID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Category",
+          "RelatedField": "categoryID"
+        },
+        {
+          "FieldName": "lastUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "DiscussionReaction",
+      "PrimaryKey": [
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "recordID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "tagID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "recordType",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "recordID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Discussion",
+          "RelatedField": "discussionID"
+        }
+      ]
+    },
+    {
+      "TableName": "Draft",
+      "PrimaryKey": [
+        {
+          "FieldName": "draftID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "EmailTemplate",
+      "PrimaryKey": [
+        {
+          "FieldName": "emailTemplatesID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Escalation",
+      "PrimaryKey": [
+        {
+          "FieldName": "recordID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "assignedUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "lastCommentUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "EscalationLog",
+      "PrimaryKey": [
+        {
+          "FieldName": "escalationLogID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "recordUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Event",
+      "PrimaryKey": [
+        {
+          "FieldName": "eventID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "groupID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Group",
+          "RelatedField": "groupID"
+        },
+        {
+          "FieldName": "lastCommentUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "EventParticipant",
+      "PrimaryKey": [
+        {
+          "FieldName": "eventID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "eventID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Event",
+          "RelatedField": "eventID"
+        },
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Export",
+      "PrimaryKey": [
+        {
+          "FieldName": "exportUUID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Group",
+      "PrimaryKey": [
+        {
+          "FieldName": "groupID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "GroupApplicant",
+      "PrimaryKey": [
+        {
+          "FieldName": "groupID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "groupID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Group",
+          "RelatedField": "groupID"
+        },
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "GroupInvite",
+      "PrimaryKey": [
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "groupID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "groupID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Group",
+          "RelatedField": "groupID"
+        }
+      ]
+    },
+    {
+      "TableName": "GroupMember",
+      "PrimaryKey": [
+        {
+          "FieldName": "groupID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "groupID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Group",
+          "RelatedField": "groupID"
+        },
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "GroupTag",
+      "PrimaryKey": [
+        {
+          "FieldName": "groupID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "tagID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "groupID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Group",
+          "RelatedField": "groupID"
+        },
+        {
+          "FieldName": "tagID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Tag",
+          "RelatedField": "tagID"
+        }
+      ]
+    },
+    {
+      "TableName": "Icon",
+      "PrimaryKey": [
+        {
+          "FieldName": "iconUUID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Keyword",
+      "PrimaryKey": [
+        {
+          "FieldName": "keywordID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "KnowledgeBase",
+      "PrimaryKey": [
+        {
+          "FieldName": "knowledgeBaseID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "KnowledgeCategory",
+      "PrimaryKey": [
+        {
+          "FieldName": "knowledgeCategoryID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "lastUpdatedUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "parentID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "KnowledgeCategory",
+          "RelatedField": "knowledgeCategoryID"
+        },
+        {
+          "FieldName": "knowledgeBaseID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "KnowledgeBase",
+          "RelatedField": "knowledgeBaseID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Locale",
+      "PrimaryKey": [
+        {
+          "FieldName": "localeID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MediaItem",
+      "PrimaryKey": [
+        {
+          "FieldName": "mediaID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Message",
+      "PrimaryKey": [
+        {
+          "FieldName": "messageID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "conversationID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Conversation",
+          "RelatedField": "conversationID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "ModerationMessage",
+      "PrimaryKey": [
+        {
+          "FieldName": "moderationMessageID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Multisite",
+      "PrimaryKey": [
+        {
+          "FieldName": "multisiteID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Notification",
+      "PrimaryKey": [
+        {
+          "FieldName": "notificationID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "discussionID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Discussion",
+          "RelatedField": "discussionID"
+        }
+      ]
+    },
+    {
+      "TableName": "OnlineUser",
+      "PrimaryKey": [
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Poll",
+      "PrimaryKey": [
+        {
+          "FieldName": "pollID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "discussionID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Discussion",
+          "RelatedField": "discussionID"
+        }
+      ]
+    },
+    {
+      "TableName": "PollVote",
+      "PrimaryKey": [
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "pollOptionID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "pollID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "pollID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Poll",
+          "RelatedField": "pollID"
+        }
+      ]
+    },
+    {
+      "TableName": "Product",
+      "PrimaryKey": [
+        {
+          "FieldName": "productID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ProductMessage",
+      "PrimaryKey": [
+        {
+          "FieldName": "productMessageID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "ProfileField",
+      "PrimaryKey": [
+        {
+          "FieldName": "apiName",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Rank",
+      "PrimaryKey": [
+        {
+          "FieldName": "rankID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ReactionType",
+      "PrimaryKey": [
+        {
+          "FieldName": "urlCode",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "tagID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Tag",
+          "RelatedField": "tagID"
+        }
+      ]
+    },
+    {
+      "TableName": "Report",
+      "PrimaryKey": [
+        {
+          "FieldName": "reportID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "recordUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "reportedUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "ReportReason",
+      "PrimaryKey": [
+        {
+          "FieldName": "reportReasonID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Role",
+      "PrimaryKey": [
+        {
+          "FieldName": "roleID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "RoleApplication",
+      "PrimaryKey": [
+        {
+          "FieldName": "roleRequestID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "roleID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Role",
+          "RelatedField": "roleID"
+        },
+        {
+          "FieldName": "statusUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Rule",
+      "PrimaryKey": [
+        {
+          "FieldName": "ruleID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Session",
+      "PrimaryKey": [
+        {
+          "FieldName": "sessionID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Status",
+      "PrimaryKey": [
+        {
+          "FieldName": "statusID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Subcommunity",
+      "PrimaryKey": [
+        {
+          "FieldName": "subcommunityID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "productID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Product",
+          "RelatedField": "productID"
+        }
+      ]
+    },
+    {
+      "TableName": "Tag",
+      "PrimaryKey": [
+        {
+          "FieldName": "tagID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "parentTagID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Tag",
+          "RelatedField": "tagID"
+        }
+      ]
+    },
+    {
+      "TableName": "Theme",
+      "PrimaryKey": [
+        {
+          "FieldName": "themeID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Token",
+      "PrimaryKey": [
+        {
+          "FieldName": "accessTokenID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "User",
+      "PrimaryKey": [
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "rankID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Rank",
+          "RelatedField": "rankID"
+        },
+        {
+          "FieldName": "inviteUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "UserBadge",
+      "PrimaryKey": [
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "badgeID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "badgeID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Badge",
+          "RelatedField": "badgeID"
+        }
+      ]
+    },
+    {
+      "TableName": "UserMention",
+      "PrimaryKey": [
+        {
+          "FieldName": "recordID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "recordType",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "userID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "UserNote",
+      "PrimaryKey": [
+        {
+          "FieldName": "userNoteID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "ruleID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Rule",
+          "RelatedField": "ruleID"
+        },
+        {
+          "FieldName": "userID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "Widget",
+      "PrimaryKey": [
+        {
+          "FieldName": "name",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "widgetID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Widget",
+          "RelatedField": "name"
+        }
+      ]
+    },
+    {
+      "TableName": "Webhook",
+      "PrimaryKey": [
+        {
+          "FieldName": "webhookID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "insertUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        },
+        {
+          "FieldName": "updateUserID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "User",
+          "RelatedField": "userID"
+        }
+      ]
+    },
+    {
+      "TableName": "WebhookDelivery",
+      "PrimaryKey": [
+        {
+          "FieldName": "webhookDeliveryID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "webhookID",
+          "SchemaName": "higherlogic_vanilla",
+          "RelatedTable": "Webhook",
+          "RelatedField": "webhookID"
+        }
+      ]
+    }
+  ],
+  "re_members_ams": [
+    {
+      "TableName": "Individuals",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Organizations",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "parentCompanyId",
+          "SchemaName": "re_members_ams",
+          "RelatedTable": "Organizations",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "Memberships",
+      "PrimaryKey": [
+        {
+          "FieldName": "code",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Events",
+      "PrimaryKey": [
+        {
+          "FieldName": "eventId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventRegistrations",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "individualId",
+          "SchemaName": "re_members_ams",
+          "RelatedTable": "Individuals",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "EventCancellations",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CourseAttendees",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Orders",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "AbandonedCheckouts",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Committees",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "parentCommitteeId",
+          "SchemaName": "re_members_ams",
+          "RelatedTable": "Committees",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "CommitteeMembers",
+      "PrimaryKey": [
+        {
+          "FieldName": "memberRecordNumber",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CommitteePositions",
+      "PrimaryKey": [
+        {
+          "FieldName": "code",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CommitteeNominees",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Awards",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "AwardIndividualRecipients",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "AwardOrganizationRecipients",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Certifications",
+      "PrimaryKey": [
+        {
+          "FieldName": "code",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Licenses",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Exams",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Subscriptions",
+      "PrimaryKey": [
+        {
+          "FieldName": "code",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "UserTasks",
+      "PrimaryKey": [
+        {
+          "FieldName": "taskNumber",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomerRequests",
+      "PrimaryKey": [
+        {
+          "FieldName": "requestNumber",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Exhibits",
+      "PrimaryKey": [
+        {
+          "FieldName": "code",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Countries",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "States",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "RelationshipTypes",
+      "PrimaryKey": [
+        {
+          "FieldName": "name",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "OrganizationServices",
+      "PrimaryKey": [
+        {
+          "FieldName": "code",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomFieldDefinitions",
+      "PrimaryKey": [
+        {
+          "FieldName": "name",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomFieldValues",
+      "PrimaryKey": [
+        {
+          "FieldName": "name",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Tasks",
+      "PrimaryKey": [
+        {
+          "FieldName": "taskNumber",
+          "Description": "Primary key from source system"
+        }
+      ]
+    }
+  ]
+}

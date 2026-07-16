@@ -1,0 +1,52 @@
+[
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/sources/ops/GET-api-v2.0-RegistrantClass-GetRegistrantClasses_Active.html",
+    "AccessedAt": "2026-07-10T04:05:29.501Z",
+    "UsedFor": "RegistrantClasses IO emission — documented in-scope leaf, live controller, emit-with-gap-noted",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "io.RegistrantClasses.APIPath",
+    "Excerpt": "GET RegistrantClass/GetRegistrantClasses (Active bool filter). One of 25 confirmed live controllers (PROVENANCE line 111). SOURCE_STUDY.md line 168 (COVERABLE table) + line 203 (read-only) + §5 scope decision list it as an in-scope taxonomy leaf. Kept alive with gap noted, mirroring EventTypes/Questions/EventSessions."
+  },
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/SOURCE_STUDY.md",
+    "AccessedAt": "2026-07-10T04:05:29.501Z",
+    "UsedFor": "RegistrantClasses PK deferred — field-level GAP, doc-generation bug hides the response model",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ImpliedFromExample",
+    "TargetField": "io.RegistrantClasses.Configuration",
+    "Excerpt": "SOURCE_STUDY.md line 168: PK \"unknown — field-level GAP\". Lines 372-375: RegistrantClasses has NO documented fields at all; the doc-generation bug substitutes HttpResponseMessage. RegistrantClassKey is convention-inferred (vendor-wide <SingularName>Key motif); IsPrimaryKey deferred to runtime D4, not fabricated."
+  },
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/SOURCE_STUDY.md",
+    "AccessedAt": "2026-07-10T04:05:29.501Z",
+    "UsedFor": "BlogComments.ItemKey FK retargeted DataFeed -> Blogs (same-field-name cross-IO collision fix)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.BlogComments.ItemKey.Configuration.ReferencedType",
+    "Excerpt": "SOURCE_STUDY.md line 161 (BlogComments leaf row): itemKey=BlogKey->Blogs. DataFeed was a false match because DataFeed's own PK field is coincidentally also named ItemKey. RelatedIntegrationObjectFieldName corrected to Blogs' real PK (BlogKey)."
+  },
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/SOURCE_STUDY.md",
+    "AccessedAt": "2026-07-10T04:05:29.501Z",
+    "UsedFor": "Comments.ItemKey FK cleared — polymorphic parent, no single resolvable target (access-path only)",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.Comments.ItemKey.Configuration.ReferencedType",
+    "Excerpt": "SOURCE_STUDY.md Patterns §8 / line 160: generic Comments/GetComments itemKey is polymorphic across blogs, library documents, ideas, etc. -> polymorphic parent (access-path). No single resolvable FK target; DataFeed was not even a plausible target. FK reference cleared."
+  },
+  {
+    "URL": "file://packages/Integration/connectors-registry/higherlogic-thrive/SOURCE_STUDY.md",
+    "AccessedAt": "2026-07-10T04:05:29.501Z",
+    "UsedFor": "CommunityMembers.CommunityKey added — restores documented composite PK + Communities FK",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "EvidenceStrength": "ExplicitStatement",
+    "TargetField": "iof.CommunityMembers.CommunityKey.IsPrimaryKey",
+    "Excerpt": "SOURCE_STUDY.md line 155 (CommunityMembers leaf row): PK = (CommunityKey,ContactKey) pair; nested Community->Communities. CommunityKey flattened from the nested Community object per GetCommunityMembers, mirroring DemographicChoices.DemographicTypeKey / Volunteers.VolunteerContactKey. Co-primary with ContactKey; FK -> Communities (PK CommunityKey)."
+  }
+]

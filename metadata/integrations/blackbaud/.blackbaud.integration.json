@@ -1,0 +1,12 @@
+{
+  "fields": {
+    "Name": "Blackbaud",
+    "Description": "Blackbaud integration connector",
+    "ClassName": "BlackbaudConnector",
+    "ImportPath": "@memberjunction/connector-blackbaud",
+    "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Blackbaud"
+  },
+  "relatedEntities": {
+    "MJ: Integration Objects": []
+  }
+}

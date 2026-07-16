@@ -1,0 +1,94 @@
+{
+  "Entries": [
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "Confirming the Integration Description: single shared SOAP endpoint, namespace, operation count, no delete operations.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Description",
+      "Excerpt": "targetNamespace=\"http://www.magnetmail.net/\" ... <soap:address location=\"https://hlma-apie1.magnetmail.net/mmapi.asmx\" /> ... 55 <wsdl:operation> entries in the portType, zero named delete/remove."
+    },
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "NavigationBaseURL -- the mmapi.asmx endpoint (both SOAP 1.1 and SOAP 1.2 bindings resolve to the same address).",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "<soap:address location=\"https://hlma-apie1.magnetmail.net/mmapi.asmx\" />, <soap12:address location=\"https://hlma-apie1.magnetmail.net/mmapi.asmx\" />"
+    },
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "Configuration.AuthFlow / AuthHeaderPattern -- two-step session auth: Authenticate(username,password) -> AuthenticationResult{sessionId,user_id,...}; mmAuthHeader{sessionId,user_id} SOAP header on all subsequent calls.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "<s:element name=\"Authenticate\"><s:complexType><s:sequence><s:element name=\"username\" type=\"s:string\"/><s:element name=\"password\" type=\"s:string\"/></s:sequence></s:complexType></s:element> ... <s:complexType name=\"AuthenticationResult\"><s:sequence>...<s:element name=\"sessionId\" type=\"s:string\"/>...<s:element name=\"user_id\" type=\"s:string\"/></s:sequence></s:complexType> ... <s:complexType name=\"mmAuthHeader\"><s:sequence><s:element name=\"sessionId\" type=\"s:string\"/><s:element name=\"user_id\" type=\"s:string\"/></s:sequence></s:complexType> ... <wsdl:operation name=\"Authenticate\">...(no soap:header)...</wsdl:operation> vs every other operation carrying <soap:header message=\"tns:{op}mmAuthHeader\" part=\"mmAuthHeader\" use=\"literal\" />."
+    },
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "Configuration.PaginationDefaults -- three distinct pagination param-name conventions (pageNumber/pageCount; page/recordsPerPage; pageNo/pageSize and PageNo/PageSize nested in <criteria>), plus operations with none.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "getGroupRecipients request element: groupId/pageNumber/pageCount. getDetailedTracking(UTC) request element: .../page/recordsPerPage/... SearchCriteria complexType (base of RecipientSearchCriteria): pageNo/pageSize. PagedSearchCriteria complexType (base of DateRangeSearchCriteria, extended by the 4 tracking criteria types): PageNo/PageSize. PersonifySubscriptionMappingSearchCriteria extends DomainBase (empty complexType) -- no paging fields."
+    },
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "Configuration.IncrementalWatermark -- getMessagesUTC sentStartDate/sentEndDate (and the wider 5-convention family across other list operations).",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalWatermark",
+      "Excerpt": "getMessagesUTC request element fields: user_id, createStartDate, createEndDate, sentStartDate, sentEndDate, archived, hidden, hasFax, hasEmail."
+    },
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "Configuration.COMPLEX_WRAPPERS -- searchForRecipients (and 5 other operations) wrap filter params in a <criteria> child element rather than flat top-level params.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.COMPLEX_WRAPPERS",
+      "Excerpt": "<s:element name=\"searchForRecipients\"><s:complexType><s:sequence><s:element name=\"criteria\" type=\"tns:RecipientSearchCriteria\" /></s:sequence></s:complexType></s:element> (and the analogous shape on GetMessageLinkTracking / GetMessageSentTracking / GetMessageOpenTracking / GetUnsubscribeTracking / SearchPersonifySubscriptionMappings)."
+    },
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "Configuration.ErrorResponseShape -- in-band error field (error/errorObj/msg) on mutation response wrapper types.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.ErrorResponseShape",
+      "Excerpt": "<s:complexType name=\"SaveResult\"><s:sequence><s:element name=\"error\" type=\"s:double\" nillable=\"true\"/><s:element name=\"errorObj\" type=\"tns:Error\"/><s:element name=\"id\" type=\"s:double\" nillable=\"true\"/><s:element name=\"msg\" type=\"s:string\"/></s:sequence></s:complexType>; tns:Error = {errorCode,errorDetails,errorMessage,errorNumber,errorType}. Same errorObj/error/msg shape repeated on EmailToIndividualResult, EmailToGroupResult, UploadListResult."
+    },
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "Configuration.CustomFieldMarkerPattern -- MM_1..MM_42 (CSV upload column mapping) and custom1..custom30 (search-filter fields), two distinct conventions.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.CustomFieldMarkerPattern",
+      "Excerpt": "uploadListQueue request element carries MM_1 through MM_42 (s:string) fields. RecipientSearchCriteria (base SearchCriteria via extension) carries custom1 through custom30 (s:string) fields."
+    },
+    {
+      "URL": "https://hlma-apie1.magnetmail.net/mmapi.asmx?WSDL",
+      "AccessedAt": "2026-07-04T03:37:24.332Z",
+      "UsedFor": "Configuration.WriteCapability / DeleteSemantics -- confirms addRecipient/editRecipient/addGroup/createMagnetMailMessage/editMagnetMailMessage/CreateEventSignUp/unsubscribeRecipients exist; zero delete/remove operations exist anywhere in the 55-operation surface.",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WriteCapability",
+      "Excerpt": "Full portType operation-name enumeration (55 names) grep-scanned case-insensitively for delete|remove -> zero matches. Mutation-shaped names present: addGroup, addRecipient, createMagnetMailMessage, editMagnetMailMessage, editRecipient, editRecipientGroups, unsubscribeRecipients, CreateEventSignUp, uploadListQueue, uploadListQueueTest, UploadListInitialQueue, uploadSuppressionList."
+    }
+  ]
+}

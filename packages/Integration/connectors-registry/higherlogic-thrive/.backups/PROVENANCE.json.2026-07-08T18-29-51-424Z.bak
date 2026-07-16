@@ -1,0 +1,184 @@
+{
+  "Entries": [
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T18:18:18.000Z",
+      "UsedFor": "Setting Integration.NavigationBaseURL to the vendor's own public Community API v2.0 operation-catalog HelpPage. Independently re-verified HTTP 200 via a fresh fetch (see CODE_EVIDENCE) immediately before writing, per the build instruction.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "Higher Logic API Home / Help Page Home -- index page enumerating 25 controller sections (<h2 id=\"Controller\">) each followed by a <table class=\"help-page-table\"> of operations; HTTP 200 confirmed on this date."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T18:18:18.000Z",
+      "UsedFor": "Setting Configuration.RoutingConvention -- confirming the RPC-verb-in-path routing style (no bare '{Controller}/{id}' REST-collection route exists anywhere in the enumerated catalog).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.RoutingConvention",
+      "Excerpt": "Every operation link is of the form '<a href=\"/Help/Api/{METHOD}-api-v2.0-{Controller}-{Operation}_{params}\">{METHOD} api/v2.0/{Controller}/{Operation}?{querystring}</a>' -- confirmed across all 236 enumerated operations (scripts/enumerate-helppage.mjs, this agent's fresh re-run, see CODE_EVIDENCE)."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Contacts-GetMyContactsPage_afterContactKey_beforeContactKey_limit",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.PaginationConventions.cursorSeekKey + Configuration.PaginationByObject.Contacts -- confirming the after<X>Key/before<X>Key+limit seek-key Cursor param shape.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationByObject",
+      "Excerpt": "URI Parameters: afterContactKey, beforeContactKey, limit (default 100) -- documented on the per-operation sub-page's URI Parameters table (saved raw to sources/ops/GET-api-v2.0-Contacts-GetMyContactsPage_afterContactKey_beforeContactKey_limit.html)."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-Communities-GetCommunityMembers",
+      "AccessedAt": "2026-07-08T18:30:00.000Z",
+      "UsedFor": "Setting Configuration.PaginationConventions.offset + Configuration.PaginationByObject.CommunityMembers -- confirming the actual body param names (StartRecord/EndRecord, defaults 1/50), correcting the build brief's 'firstRecord+maxRecords' paraphrase.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationConventions",
+      "Excerpt": "StartRecord Index of the first record to retrieve. Defaults to 1 if not supplied. integer / EndRecord Index of the last record to retrieve. Defaults to 50 if not supplied. integer -- directly re-fetched from the locally saved raw op page and re-parsed by this agent (see sources/ops/POST-api-v2.0-Communities-GetCommunityMembers.html)."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Messaging-GetInboxMessages_firstRecord_maxRecords",
+      "AccessedAt": "2026-07-08T18:30:00.000Z",
+      "UsedFor": "Confirming that the 'firstRecord+maxRecords' Offset param pair belongs to the OUT-OF-SCOPE Messaging family, not to CommunityMembers -- a correction recorded in Configuration.PaginationConventions.offset.correctionNote.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationConventions",
+      "Excerpt": "GET api/v2.0/Messaging/GetInboxMessages?firstRecord={firstRecord}&maxRecords={maxRecords} -- 'firstRecord ... Default value is 0' / 'maxRecords ... Default value is 50' (Messaging controller, out-of-scope family)."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/GET-api-v2.0-Events-GetEventRegistrants_calendarEventKey_modifiedDateTime_maxRecords_continuationToken",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.IncrementalSyncCapability.perObject.EventRegistrants -- confirming the real modifiedDateTime watermark query parameter.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "URI Parameters include modifiedDateTime (filters registrants updated since a given datetime), continuationToken, maxRecords -- per SOURCE_STUDY.md TaxonomyLeaves table, sourced from scripts/extract-op-details.mjs parsing of this op page."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/POST-api-v2.0-ResourceLibrary-GetLibraryDocuments",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.IncrementalSyncCapability.perObject.ResourceLibraryDocuments -- confirming DaysBack is a rolling window (default 30), not a strict watermark.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "Body parameter DaysBack (default 30) + MaxRecords (default 10) -- per SOURCE_STUDY.md TaxonomyLeaves table."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Discussions-RemovePost_discussionPostKey",
+      "AccessedAt": "2026-07-08T18:40:00.000Z",
+      "UsedFor": "Setting Configuration.DeleteSemantics + DeleteSemanticsDetail -- confirming the conditional soft-tombstone-vs-hard-delete behavior on DiscussionPosts specifically.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DeleteSemantics",
+      "Excerpt": "Deletes the specified discussion post. If a message has replies, the body will be updated to: \"This post was removed\" and the message will be anonymized to preserve the thread structure. All documents attached to the message will be deleted. Only administrators can remove/delete messages. -- directly re-fetched from the locally saved raw op page and re-parsed by this agent."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/Help/Api/DELETE-api-v2.0-Blogs-DeleteBlog_blogKey",
+      "AccessedAt": "2026-07-08T18:40:00.000Z",
+      "UsedFor": "Confirming the GENERAL (non-DiscussionPosts) delete pattern: plain success response, no soft-delete/archive field documented -- supports the DeleteSemantics='hard' vendor-wide default.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DeleteSemantics",
+      "Excerpt": "DELETE api/v2.0/Blogs/DeleteBlog?blogKey={blogKey} ... Response Information Resource Description: None. -- directly re-fetched from the locally saved raw op page and re-parsed by this agent."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.WriteCapability -- the vendor-wide summary of documented Create/Update/Delete operations across the in-scope leaves.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WriteCapability",
+      "Excerpt": "SOURCE_STUDY.md 'Per-operation CRUD (write paths) confirmed for objects that have them' table (derived from scripts/extract-op-details.mjs parsing of all 235 fetched HelpPage op pages)."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T18:18:18.000Z",
+      "UsedFor": "Setting Configuration.WebhooksAvailable=false and Configuration.BulkOperationsAvailable=false -- exhaustive enumeration of all 236 operations across 25 controllers found no Webhook controller and no batch/bulk write endpoint.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WebhooksAvailable",
+      "Excerpt": "Fresh re-run of scripts/enumerate-helppage.mjs (see CODE_EVIDENCE) confirms 25 controllers / 236 operations with no 'Webhook' controller among them: Announcements, Answer, Authentication, AutomationRules, Blogs, Comments, Communities, Contacts, DataFeed, Demographics, Discussions, Events, EventSessions, ExternalActivity, ExternalSearch, Federation, Friends, Ideation, Messaging, Question, RegistrantClass, ResourceLibrary, System, Tagging, Volunteer."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.APIVersioningStrategy='url-path' -- every one of the 236 operation paths is prefixed api/v2.0/....",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.APIVersioningStrategy",
+      "Excerpt": "All enumerated operation hrefs follow /Help/Api/{METHOD}-api-v2.0-{Controller}-{Operation}..., confirming the 'v2.0' version segment is embedded in every path."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/360032691332-Higher-Logic-API",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.RegionalBaseURLs (US/Canada fixed regional hosts) and Configuration.RateLimitGuidance.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.RegionalBaseURLs",
+      "Excerpt": "Confirms base URLs: https://api.connectedcommunity.org/ (US) and https://api.onlinecommunity.ca (Canadian-tier customers) -- both point at the same v2.0/Help catalog structure, differing only by tenant region. States acceptable-use guidance of 180-240 calls/minute (3-4/sec); no hard server-side rate-limit enforcement documented, but excessive usage risks IP blocking."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/360032691332-Higher-Logic-API",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.RateLimitGuidance and the decision to leave Integration.BatchMaxRequestCount/BatchRequestWaitTime NULL (guidance is not a precise stated hard limit).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.RateLimitGuidance",
+      "Excerpt": "180-240 calls/minute (3-4/sec) acceptable-use guidance; no hard server-enforced rate limit documented, but excessive use risks IP blocking (no numeric hard limit + window stated)."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/360052976791-Higher-Logic-Push-API-v2",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.OutOfScopeObjectFamilies entry for Push API v2.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies",
+      "Excerpt": "Push API v2 is a DISTINCT host (https://datapushapi.higherlogic.com/v2 US / https://datapushapi.onlinecommunity.ca/v2 Canada), DISTINCT auth (a 'Key' header carrying an ApiKey value), and a DISTINCT direction (AMS/CRM pushes full-record-replacement contact data INTO Thrive Community via /contactinfo and /list)."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/4402952237844-OAuth-2-0-Code-Flow",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.OutOfScopeObjectFamilies entry for SSO, and Configuration.EndUserSSOMechanisms distinguishing SSO from the connector's server-to-server auth.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.EndUserSSOMechanisms",
+      "Excerpt": "OAuth 2.0 Code Flow at Higher Logic is an SSO/end-user-login mechanism (authorize/token/userinfo endpoints against an external Identity Provider, resolving a 'legacy identifier' claim to log a user into the Community) -- not a route for server-to-server API data sync."
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Setting Configuration.OutOfScopeObjectFamilies entry for ExternalSearch (self-corroborated add-on/separate-IAMKey requirement).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies",
+      "Excerpt": "ExternalSearch controller description: 'POST Endpoints for adding external items to the Higher Logic Search Index results. Note that External Search Endpoints are available as an add-on and they require a separate IAMKey for access.'"
+    },
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T00:00:00.000Z",
+      "UsedFor": "Recording the judgment-call OutOfScopeObjectFamilies entries for Messaging, Friends, and Federation -- each a HelpPage-proven controller excluded by scope decision, not by missing evidence.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies",
+      "Excerpt": "Messaging (13 ops, private inbox/sent messages), Friends (8 ops, friend-request social graph), Federation (2 ops, tenantKey-scoped cross-tenant identity) -- all confirmed real controllers in the 25-controller/236-operation catalog (helppage.catalog.summary.json)."
+    }
+  ]
+}

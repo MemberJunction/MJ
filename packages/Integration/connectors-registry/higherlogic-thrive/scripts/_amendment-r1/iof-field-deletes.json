@@ -1,0 +1,12 @@
+[
+  {
+    "ioName": "Comments",
+    "iofName": "ItemKey",
+    "fieldKey": "RelatedIntegrationObjectID"
+  },
+  {
+    "ioName": "IdeaVoters",
+    "iofName": "IdeationKey",
+    "fieldKey": "RelatedIntegrationObjectID"
+  }
+]

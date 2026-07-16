@@ -1,0 +1,70 @@
+{
+  "Entries": [
+    {
+      "File": "contacts.list.page1.json",
+      "URL": "https://developers.hubspot.com/docs/api-reference/latest/crm/objects",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "HubSpot SimplePublicObject list envelope shape (results[] + paging.next.after) for the GET /crm/objects/{objectType} contacts list endpoint; verified live by the S7 Reality Probe (verdicts.json: contacts path 'HTTP 200, 10 record(s)').",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "Excerpt": "GET /crm/objects/{objectType} returns { results: [SimplePublicObject], paging: { next: { after } } }. The paging cursor token of the last successfully read resource is returned as paging.next.after.",
+      "Scrubbed": "All names → <scrubbed-name-N>; emails → example+N@example.com; only the envelope structure + system ids are real-shape."
+    },
+    {
+      "File": "contacts.list.page2.json",
+      "URL": "https://developers.hubspot.com/docs/api-reference/latest/crm/objects",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Terminal page of the contacts list — paging:null signals exhaustion.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "Excerpt": "When paging.next is absent/null the set is exhausted.",
+      "Scrubbed": "Names/emails scrubbed."
+    },
+    {
+      "File": "contacts.search.page1.json",
+      "URL": "https://developers.hubspot.com/docs/api-reference/latest/crm/search-the-crm",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "CRM Search API response shape (POST /crm/objects/{objectType}/search) with total + results[] + paging.next.after; the incremental mechanism filtered on hs_lastmodifieddate GTE. Watermark param 'hs_lastmodifieddate' confirmed live by the Reality Probe (verdicts.json).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "Excerpt": "The search endpoints return { total, results, paging: { next: { after } } } and are rate limited to five requests per second per account.",
+      "Scrubbed": "Names/emails scrubbed; hs_lastmodifieddate values are epoch-ms placeholders in the 2026 range."
+    },
+    {
+      "File": "contacts.search.page2.json",
+      "URL": "https://developers.hubspot.com/docs/api-reference/latest/crm/search-the-crm",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "Terminal search page — paging:null; used to assert the watermark advances to the max hs_lastmodifieddate only on window drain.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "Excerpt": "paging.next absent → last page of the search window.",
+      "Scrubbed": "Names/emails scrubbed."
+    },
+    {
+      "File": "association.contacts_companies.json",
+      "URL": "https://developers.hubspot.com/docs/api-reference/latest/crm/associations",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "v4 association read shape (GET /crm/v4/objects/{from}/{fromId}/associations/{to}) — results[] of {toObjectId, associationTypes[{category, typeId, label}]}.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "Excerpt": "Association read returns { results: [{ toObjectId, associationTypes: [{ category, typeId, label }] }] }.",
+      "Scrubbed": "Object ids are synthetic; structure is real."
+    },
+    {
+      "File": "contact.created.json",
+      "URL": "https://developers.hubspot.com/docs/api-reference/latest/crm/objects",
+      "AccessedAt": "2026-07-02T00:00:00.000Z",
+      "UsedFor": "POST create response — the created SimplePublicObject with its root id (CreateIDLocation='body'); used to assert BuildCreatedResult extracts the id.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "Excerpt": "POST /crm/objects/{objectType} returns the created SimplePublicObject with its id at the root.",
+      "Scrubbed": "Names/emails scrubbed; the id is synthetic."
+    }
+  ]
+}

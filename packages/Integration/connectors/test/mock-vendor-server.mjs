@@ -39,7 +39,7 @@
  */
 import http from 'node:http';
 import tls from 'node:tls';
-import { readFileSync, existsSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, mkdtempSync, appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -185,30 +185,35 @@ export function matchRoute(routes, urlPath, method, body, query = '') {
             continue;
         }
         
-        // Standard path-based matching (non-GraphQL or no body provided)
-        if (r.Path === urlPath) { exact = r; break; }
+        // Standard path-based matching (non-GraphQL or no body provided). The request `urlPath` is the
+        // PATHNAME only (query stripped by the caller), so match against the route's pathname too — a route
+        // whose Path carries the ID/scope in a QUERY (`/v2.0/Answer/Delete?answerKey={id}`, common for
+        // RPC-style CRUD verbs) must still match the connector's real request (`…/Delete?answerKey=ans-1`,
+        // pathname `…/Delete`). The query is matched separately via the `Match` field, never the Path.
+        const rPath = String(r.Path || '').split('?')[0];
+        if (rPath === urlPath) { exact = r; break; }
         // TEMPLATE-VAR matching: a route Path with `{seg}` segments (`/{iD}/works`,
         // `/contacts/{ContactID}/notes`) wildcard-matches the connector's runtime-substituted
         // request (`/0000-0001-.../works`) segment-for-segment. This is what makes by-iD /
         // template-var connectors (orcid, etc.) testable — gen-fixture now emits these routes.
         // Treated as an exact match (specific templated route), highest priority after a literal.
-        if (r.Path.includes('{')) {
-            const rp = r.Path.split('/'), up = urlPath.split('/');
+        if (rPath.includes('{')) {
+            const rp = rPath.split('/'), up = urlPath.split('/');
             if (rp.length === up.length && rp.every((seg, i) => seg === up[i] || /^\{.*\}$/.test(seg))) {
                 exact = r; break;
             }
         }
-        if (urlPath.startsWith(r.Path)) {
-            if (!prefix || r.Path.length > prefix.Path.length) prefix = r;
+        if (urlPath.startsWith(rPath)) {
+            if (!prefix || rPath.length > prefix.Path.length) prefix = r;
         }
         // SUFFIX fallback: a connector that prepends a fixed base SEGMENT to the deployed APIPath
         // (Hivebrite adds `/api`, others add `/v1`) requests `/api/admin/v2/folders` while the
         // regenerated route is the bare deployed APIPath `/admin/v2/folders`. The route Path begins
-        // with '/', so `urlPath.endsWith(r.Path)` already aligns on a '/' boundary (`/folders` cannot
+        // with '/', so `urlPath.endsWith(rPath)` already aligns on a '/' boundary (`/folders` cannot
         // match `/subfolders`). Longest suffix wins; only used when no exact/prefix match exists.
-        else if (r.Path && r.Path.length > 1 && r.Path.startsWith('/')
-                 && urlPath.length > r.Path.length && urlPath.endsWith(r.Path)) {
-            if (!suffix || r.Path.length > suffix.Path.length) suffix = r;
+        else if (rPath && rPath.length > 1 && rPath.startsWith('/')
+                 && urlPath.length > rPath.length && urlPath.endsWith(rPath)) {
+            if (!suffix || rPath.length > suffix.Path.length) suffix = r;
         }
     }
 
@@ -231,6 +236,7 @@ export function matchRoute(routes, urlPath, method, body, query = '') {
  *  from — without any connector code change. */
 function serveRoute(routes, urlPath, method, res, body, originUrl, query = '', failState = null) {
     const route = matchRoute(routes, urlPath, method, body, query);
+    if (process.env.MOCK_LOG) { try { const b = body == null ? '' : (typeof body === 'string' ? body : JSON.stringify(body)); appendFileSync(process.env.MOCK_LOG, `${method} ${urlPath} -> ${route ? 'MATCH' : '404'} :: ${b.replace(/\s+/g, ' ').slice(0, 200)}\n`); } catch { /* best-effort */ } }
     res.setHeader('content-type', 'application/json');
     if (!route) { res.statusCode = 404; res.end(JSON.stringify({ error: `no fixture for ${urlPath}` })); return; }
 

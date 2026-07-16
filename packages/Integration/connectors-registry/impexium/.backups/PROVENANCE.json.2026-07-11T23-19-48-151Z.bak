@@ -1,0 +1,14 @@
+{
+  "Entries": [
+    {
+      "URL": "https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/certified-connectors/Impexium/apiProperties.json",
+      "AccessedAt": "2026-07-11T23:19:48.080Z",
+      "UsedFor": "Confirming the per-tenant host connection-parameter name and URL shape for Configuration.APIBaseURLTemplate / Configuration.TenantHostConfigKey / NavigationBaseURL.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "\"hostUrl\": {\"type\": \"string\", \"uiDefinition\": {\"constraints\": {\"required\": \"true\"}, \"description\": \"Specify your API Url e.g. https://abc.mpxapi.com\", \"displayName\": \"API URL\", \"tooltip\": \"Specify your API Url e.g. https://abc.mpxapi.com\"}}"
+    }
+  ]
+}

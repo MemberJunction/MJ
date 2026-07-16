@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>POST api/v2.0/Contacts/SearchContactsForMentions?searchText={searchText}&amp;maxCount={maxCount}</title>
+    <link href="/Content/css?v=676blYJd1ap4Yd4pl94_XiWrYCLM2YHS35yRiSeoXNc1" rel="stylesheet"/>
+
+    <script src="/bundles/modernizr?v=inCVuEFe6J4Q07A0AcRsbJic_UE5MwpRMNGcOtk94TE1"></script>
+
+    <style>
+        #bottom {
+            background: #f68026;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-weight: bold;
+            color: #ffffff;
+            padding: 7px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/Home/Index">Higher Logic API</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li><a href="/Home/Index">Home</a></li>
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        
+
+<link type="text/css" href="/Areas/HelpPage/HelpPage.css" rel="stylesheet" />
+<div id="body" class="help-page">
+    <section class="featured">
+        <div class="content-wrapper">
+            <p>
+                <a href="/Help">Help Page Home</a>
+            </p>
+        </div>
+    </section>
+    <section class="content-wrapper main-content clear-fix">
+        
+<h1>POST api/v2.0/Contacts/SearchContactsForMentions?searchText={searchText}&amp;maxCount={maxCount}</h1>
+<div>
+    <p>Provides Contact search results to be used for adding @Mention functionality to Content.</p>
+
+    <h2>Request Information</h2>
+
+    <h3>URI Parameters</h3>
+        <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">searchText</td>
+                    <td class="parameter-documentation">
+                        <p>Requires a minimum of 3 characters to perform a search.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Required</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">maxCount</td>
+                    <td class="parameter-documentation">
+                        <p>Number of results to return.  If not included, will default to 10 results.</p>
+                    </td>
+                    <td class="parameter-type">
+                        integer
+                    </td>
+                    <td class="parameter-annotations">
+                                <p>Default value is 10</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+
+    <h3>Body Parameters</h3>
+
+    <p></p>
+
+        <p>None.</p>
+
+
+    <h2>Response Information</h2>
+
+    <h3>Resource Description</h3>
+
+    <p>Contact search result fields, including the markup necessary to include an @Mention of a given contact.</p>
+
+        Collection of <a href="/Help/ResourceModel?modelName=ContactMentionSearchResult">ContactMentionSearchResult</a>
+    <table class="help-page-table">
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Type</th><th>Additional information</th></tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td class="parameter-name">LinkToProfile</td>
+                    <td class="parameter-documentation">
+                        <p>Url link to this Contact&#39;s Profile page in the Community site.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">PictureUrl</td>
+                    <td class="parameter-documentation">
+                        <p>Url link to this Contact&#39;s small Profile Picture.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactKey</td>
+                    <td class="parameter-documentation">
+                        <p>Unique Identifier for this Contact.</p>
+                    </td>
+                    <td class="parameter-type">
+                        globally unique identifier
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">DisplayName</td>
+                    <td class="parameter-documentation">
+                        <p>Calculated Display name.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">EmailAddress</td>
+                    <td class="parameter-documentation">
+                        <p>Contact&#39;s email address.</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">IsMentionable</td>
+                    <td class="parameter-documentation">
+                        <p>True only if this Contact can be used in an @mention.</p>
+                    </td>
+                    <td class="parameter-type">
+                        boolean
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="parameter-name">ContactMentionMarkup</td>
+                    <td class="parameter-documentation">
+                        <p>Provides the markup that can be added to the text of a Discussion Post to automatically
+            add an @Mention for this Contact.  Will be returned as an empty string if this result
+            cannot be mentioned (IsMentionable will also be false).</p>
+                    </td>
+                    <td class="parameter-type">
+                        string
+                    </td>
+                    <td class="parameter-annotations">
+                            <p>None.</p>
+                    </td>
+                </tr>
+        </tbody>
+    </table>
+
+
+        <h3>Response Formats</h3>
+
+<div>
+        <h4 class="sample-header">application/json, text/json</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+[
+  {
+    &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+    &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+    &quot;ContactKey&quot;: &quot;b44b852c-4946-49de-a933-a282b45a3ece&quot;,
+    &quot;DisplayName&quot;: &quot;sample string 4&quot;,
+    &quot;EmailAddress&quot;: &quot;sample string 5&quot;,
+    &quot;IsMentionable&quot;: true,
+    &quot;ContactMentionMarkup&quot;: &quot;sample string 7&quot;
+  },
+  {
+    &quot;LinkToProfile&quot;: &quot;sample string 1&quot;,
+    &quot;PictureUrl&quot;: &quot;sample string 2&quot;,
+    &quot;ContactKey&quot;: &quot;b44b852c-4946-49de-a933-a282b45a3ece&quot;,
+    &quot;DisplayName&quot;: &quot;sample string 4&quot;,
+    &quot;EmailAddress&quot;: &quot;sample string 5&quot;,
+    &quot;IsMentionable&quot;: true,
+    &quot;ContactMentionMarkup&quot;: &quot;sample string 7&quot;
+  }
+]
+</pre>
+        </div>
+        <h4 class="sample-header">application/xml, text/xml</h4>
+        <div class="sample-content">
+            <span><b>Sample:</b></span>
+<pre class="wrapped">
+&lt;ArrayOfContactMentionSearchResult xmlns:i=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns=&quot;http://schemas.datacontract.org/2004/07/HigherLogic.API.Models.Enterprise&quot;&gt;
+  &lt;ContactMentionSearchResult&gt;
+    &lt;ContactKey&gt;b44b852c-4946-49de-a933-a282b45a3ece&lt;/ContactKey&gt;
+    &lt;ContactMentionMarkup&gt;sample string 7&lt;/ContactMentionMarkup&gt;
+    &lt;DisplayName&gt;sample string 4&lt;/DisplayName&gt;
+    &lt;EmailAddress&gt;sample string 5&lt;/EmailAddress&gt;
+    &lt;IsMentionable&gt;true&lt;/IsMentionable&gt;
+    &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+    &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+  &lt;/ContactMentionSearchResult&gt;
+  &lt;ContactMentionSearchResult&gt;
+    &lt;ContactKey&gt;b44b852c-4946-49de-a933-a282b45a3ece&lt;/ContactKey&gt;
+    &lt;ContactMentionMarkup&gt;sample string 7&lt;/ContactMentionMarkup&gt;
+    &lt;DisplayName&gt;sample string 4&lt;/DisplayName&gt;
+    &lt;EmailAddress&gt;sample string 5&lt;/EmailAddress&gt;
+    &lt;IsMentionable&gt;true&lt;/IsMentionable&gt;
+    &lt;LinkToProfile&gt;sample string 1&lt;/LinkToProfile&gt;
+    &lt;PictureUrl&gt;sample string 2&lt;/PictureUrl&gt;
+  &lt;/ContactMentionSearchResult&gt;
+&lt;/ArrayOfContactMentionSearchResult&gt;
+</pre>
+        </div>
+</div>
+</div>
+    </section>
+</div>
+
+        <hr />
+        <footer>
+            <p>Higher Logic’s APIs are subject to these terms, please review them before using the API: <a href="https://www.higherlogic.com/legal/api-terms-of-use">API Terms of Use</a></p>
+            
+        </footer>
+    </div>
+
+    <script src="/bundles/jquery?v=MRjVrMuK9DXe6nW0tFmw9cj1pT5oo4Jf-eJQmGfwEF01"></script>
+
+    <script src="/bundles/bootstrap?v="></script>
+
+    
+</body>
+</html>

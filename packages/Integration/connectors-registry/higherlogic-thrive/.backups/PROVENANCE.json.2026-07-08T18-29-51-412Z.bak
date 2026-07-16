@@ -1,0 +1,14 @@
+{
+  "Entries": [
+    {
+      "URL": "https://api.connectedcommunity.org/v2.0/Help",
+      "AccessedAt": "2026-07-08T18:18:18.000Z",
+      "UsedFor": "Setting Integration.NavigationBaseURL to the vendor's own public Community API v2.0 operation-catalog HelpPage. Independently re-verified HTTP 200 via a fresh fetch (see CODE_EVIDENCE) immediately before writing, per the build instruction.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "Higher Logic API Home / Help Page Home -- index page enumerating 25 controller sections (<h2 id=\"Controller\">) each followed by a <table class=\"help-page-table\"> of operations; HTTP 200 confirmed on this date."
+    }
+  ]
+}

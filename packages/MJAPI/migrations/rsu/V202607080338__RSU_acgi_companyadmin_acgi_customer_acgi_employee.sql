@@ -1,0 +1,3 @@
+-- RSU Migration: Integration: ACGI — acgi.CompanyAdmin, acgi.Customer, acgi.Employee
+-- Generated: 2026-07-08T03:38:10.991Z
+-- Affected tables: acgi.CompanyAdmin, acgi.Customer, acgi.Employee

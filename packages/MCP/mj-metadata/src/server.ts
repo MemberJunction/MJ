@@ -2,16 +2,19 @@
 /**
  * mj-metadata MCP server.
  *
- * Exposes 8 tools so agents can read/write connector metadata atomically
+ * Exposes 10 tools so agents can read/write connector metadata atomically
  * without raw filesystem access:
  *
- *   read_integration                — returns the integration file shape
- *   upsert_integration_fields       — merge root-level integration fields (hot-path columns)
- *   upsert_integration_object       — upsert an IO row
- *   upsert_integration_object_field — upsert an IOF row
- *   append_provenance               — append a PROVENANCE.json entry
- *   append_code_evidence            — append a CODE_EVIDENCE.json entry
- *   list_connectors                 — list connectors-registry entries
+ *   read_integration                 — returns the integration file shape
+ *   upsert_integration_fields        — merge root-level integration fields (hot-path columns)
+ *   upsert_integration_object        — upsert an IO row
+ *   upsert_integration_object_field  — upsert an IOF row
+ *   delete_integration_object        — remove an IO row (and its IOFs)
+ *   delete_integration_object_key    — remove a single stray key from an IO row
+ *   delete_integration_object_field  — remove a single stray key from an IOF row
+ *   append_provenance                — append a PROVENANCE.json entry
+ *   append_code_evidence             — append a CODE_EVIDENCE.json entry
+ *   list_connectors                  — list connectors-registry entries
  *
  * Invoked via `.mcp.json`:
  *   { "mcpServers": { "mj-metadata": { "command": "mj-metadata-mcp" } } }
@@ -136,6 +139,33 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             },
         },
         {
+            name: 'delete_integration_object_key',
+            description: 'Remove a single stray key from an existing Integration Object row (e.g. an ideal-but-unmigrated field like ParentObjectName/ParentObjectIDFieldName/HierarchyPath that turns out not to be a deployed IntegrationObject column). Match key: ioName (case-insensitive) + fieldKey. Unlike upsert_integration_object (shallow-merge, add/overwrite only), this physically deletes the key — required because mj-sync validation errors on ANY unrecognized key in a fields object regardless of its value (nulling is not sufficient). IO-level counterpart to delete_integration_object_field.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    connector: { type: 'string' },
+                    ioName: { type: 'string' },
+                    fieldKey: { type: 'string' },
+                },
+                required: ['connector', 'ioName', 'fieldKey'],
+            },
+        },
+        {
+            name: 'delete_integration_object_field',
+            description: 'Remove a single stray key from an existing Integration Object Field row (e.g. a discovery-signal field like IsForeignKey that turns out not to be a deployed IntegrationObjectField column). Match key: ioName + iofName (case-insensitive) + fieldKey. Unlike upsert_integration_object_field (shallow-merge, add/overwrite only), this physically deletes the key — required because mj-sync validation errors on ANY unrecognized key in a fields object regardless of its value (nulling is not sufficient).',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    connector: { type: 'string' },
+                    ioName: { type: 'string' },
+                    iofName: { type: 'string' },
+                    fieldKey: { type: 'string' },
+                },
+                required: ['connector', 'ioName', 'iofName', 'fieldKey'],
+            },
+        },
+        {
             name: 'append_provenance',
             description: 'Append a provenance entry to <connector>/PROVENANCE.json. Required for Invariant 1 (no reasoning-only emissions).',
             inputSchema: {
@@ -189,6 +219,14 @@ async function handleTool(name: string, a: Record<string, unknown>): Promise<Too
             case 'delete_integration_object': {
                 const removed = store.DeleteIO(a.connector as string, a.ioName as string);
                 return { content: [{ type: 'text', text: removed ? `Deleted IO '${a.ioName as string}' from ${a.connector as string}` : `No IO '${a.ioName as string}' found for ${a.connector as string}` }] };
+            }
+            case 'delete_integration_object_key': {
+                const removed = store.DeleteIOField(a.connector as string, a.ioName as string, a.fieldKey as string);
+                return { content: [{ type: 'text', text: removed ? `Deleted field '${a.fieldKey as string}' from IO '${a.ioName as string}' for ${a.connector as string}` : `No matching IO/field found to delete for ${a.connector as string}` }] };
+            }
+            case 'delete_integration_object_field': {
+                const removed = store.DeleteIOFField(a.connector as string, a.ioName as string, a.iofName as string, a.fieldKey as string);
+                return { content: [{ type: 'text', text: removed ? `Deleted field '${a.fieldKey as string}' from IOF '${a.ioName as string}.${a.iofName as string}' for ${a.connector as string}` : `No matching IO/IOF/field found to delete for ${a.connector as string}` }] };
             }
             case 'append_provenance': {
                 const entry = ProvenanceEntrySchema.parse(a.entry);
