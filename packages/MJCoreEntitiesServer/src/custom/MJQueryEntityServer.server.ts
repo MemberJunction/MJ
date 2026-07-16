@@ -4,6 +4,7 @@ import {
     IMetadataProvider,
     LogError,
     SimpleEmbeddingResult,
+    DatabasePlatform,
 } from "@memberjunction/core";
 import { MJQuerySQLEntity, MJQueryEntityExtended, MJSQLDialectEntity, QueryEngine } from "@memberjunction/core-entities";
 import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
@@ -14,6 +15,9 @@ import {
     ConvertTSQLToPostgreSQL,
 } from "./query-extraction";
 import type { QuerySyncContext } from "./query-extraction";
+import { SQLParser } from "@memberjunction/sql-parser";
+import { GetDialect } from "@memberjunction/sql-dialect";
+import { resolveDbPlatformFromEnv } from "@memberjunction/generic-database-provider";
 
 /**
  * Server-side query entity with embedding generation, SQL extraction pipeline,
@@ -121,19 +125,94 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     // ─── Pipeline Delegation ─────────────────────────────────────────────────────
 
     /**
+     * Returns the database platform of the connected database.
+     * Uses the DB_PLATFORM env var (same source as MJServer's provider selection).
+     */
+    private get CurrentPlatform(): DatabasePlatform {
+        return resolveDbPlatformFromEnv() ?? 'sqlserver';
+    }
+
+    /**
+     * Resolves the SQL to use for extraction based on the current database platform.
+     *
+     * Resolution order:
+     *   1. MJ: Query SQLs record matching the current platform's dialect → use that SQL
+     *   2. Base Query.SQL field → fall back if no dialect variant exists
+     *
+     * After resolution, validates the SQL is compatible with the current platform's
+     * dialect by attempting a parse. Logs a warning if the SQL appears to be for a
+     * different dialect (e.g., T-SQL bracket identifiers on a PostgreSQL database).
+     */
+    private resolveExtractionSQL(): string {
+        const platform = this.CurrentPlatform;
+
+        // 1. Check for a dialect-specific QuerySQL record
+        const platformSQL = this.GetPlatformSQL(platform);
+
+        // If GetPlatformSQL returned something different from the base SQL, use it
+        const resolvedSQL = platformSQL || this.SQL;
+
+        if (!resolvedSQL || resolvedSQL.trim().length === 0) {
+            return '';
+        }
+
+        // Validate dialect compatibility
+        this.validateDialectCompatibility(resolvedSQL, platform);
+
+        return resolvedSQL;
+    }
+
+    /**
+     * Best-effort dialect validation: attempts to parse the SQL with the current platform's
+     * dialect. If parsing throws, logs a warning — the SQL may be for a different dialect.
+     *
+     * This is a heuristic, not a guarantee: node-sql-parser is permissive on many
+     * dialect-specific functions (ISNULL, GETDATE pass in both dialects), so a passing
+     * parse does not prove the SQL is correct for this dialect. But a failing parse is a
+     * strong signal of incompatibility.
+     */
+    private validateDialectCompatibility(sql: string, platform: DatabasePlatform): void {
+        try {
+            const dialect = GetDialect(platform);
+            // Attempt to parse — will throw on strong dialect markers
+            // (e.g., [bracket] identifiers fail on PG, :: casts fail on T-SQL)
+            SQLParser.ExtractSelectColumns(sql, dialect);
+        } catch {
+            const otherDialect = platform === 'postgresql' ? 'T-SQL (SQL Server)' : 'PostgreSQL';
+            console.warn(
+                `[MJQueryEntityServer] Query "${this.Name}" — SQL may be incompatible with the ` +
+                `current database platform "${platform}". The SQL appears to use ${otherDialect} syntax. ` +
+                `Consider adding a dialect-specific variant via MJ: Query SQLs.`
+            );
+        }
+    }
+
+    /**
      * Builds the QuerySyncContext from this entity instance for use by the extraction pipeline.
+     * Resolves the SQL to the appropriate dialect variant for the connected database.
      */
     private buildSyncContext(): QuerySyncContext {
         return {
             queryID: this.ID,
             queryName: this.Name,
-            sql: this.SQL,
+            sql: this.resolveExtractionSQL(),
             isSaved: this.IsSaved,
             contextUser: this.ContextCurrentUser,
             metadataProvider: this.ProviderToUse as unknown as IMetadataProvider,
             runViewProvider: this.RunViewProviderToUse,
+            platform: this.CurrentPlatform,
             parameterHints: this.ParameterHints,
         };
+    }
+
+    /**
+     * Re-runs the extraction pipeline on this query. Called by MJQuerySQLEntityServer
+     * when a dialect variant matching the current platform is saved — this handles
+     * the timing issue where the parent Query is saved before its QuerySQL children
+     * exist in the cache.
+     */
+    public async RerunExtraction(): Promise<void> {
+        await this.extractAndSyncDataAsync();
     }
 
     /**
