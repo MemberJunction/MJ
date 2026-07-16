@@ -21,6 +21,7 @@ const SCRIPTS = [
     'runquery-cache-tests.ts',
     'record-process-tests.ts',
     'record-process-facade-tests.ts',
+    'lists-tests.ts',
     'rls-isolation-tests.ts',
     'api-keys-tests.ts',
     'scheduled-jobs-tests.ts',

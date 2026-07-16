@@ -739,6 +739,15 @@ The local check requires your changes to be committed (it diffs against `origin/
 
 The two checker scripts live at `.github/scripts/check-css-hex-tokens.sh` and `.github/scripts/check-mj-btn-override.sh`. Both also accept `--file <path>` for single-file checks.
 
+## Native-ESM Import Guard (Local — Mirror of CI Gate)
+
+The unit-test workflow imports every built `"type": "module"` package's entry point in a fresh native-ESM Node process and fails on the extensionless-relative-specifier signature in a package's own `dist/` (the `ERR_MODULE_NOT_FOUND` bug class that `tsc` + bundler builds tolerate but plain Node / Vitest-externalized deps / non-symlinked installs reject). Run it locally before pushing a `type: module` package change:
+
+- `npm run check:esm` — sweep all built `type: module` packages under `packages/` (needs a prior `npm run build`; unbuilt packages classify `NOT_BUILT` and skip)
+- `npm run check:esm:test` — the guard's own vitest suite (entry-point resolution, failure classification, CLI contract)
+
+The guard lives at `.github/scripts/check-esm-imports.mjs`. Only `OWN_DIST_MISSING_EXT` fails the gate; dependency failures, side-effect crashes, and unbuilt packages are reported but non-gating.
+
 ## Code Style Guide
 - Use TypeScript strict mode and explicit typing
 - Always use MemberJunction generated `BaseEntity` sub-classes for all data work for strong typing
@@ -880,11 +889,12 @@ protected generateSingleOperation(operation: Operation): string {
 - **ALWAYS** use `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` to find correct entity names
 - Entity names are in the `@RegisterClass` decorator JSDoc comments
 - Examples:
-  - `AIPromptEntity` → `"AI Prompts"`
-  - `AIAgentEntity` → `"AI Agents"`
-  - `AIModelEntity` → `"AI Models"`
-  - `AIPromptRunEntity` → `"MJ: AI Prompt Runs"` (newer entities use "MJ: " prefix)
-  - `AIAgentRunEntity` → `"MJ: AI Agent Runs"`
+  - `MJAIPromptEntity` → `"MJ: AI Prompts"`
+  - `MJAIAgentEntity` → `"MJ: AI Agents"`
+  - `MJAIModelEntity` → `"MJ: AI Models"`
+  - `MJAIPromptRunEntity` → `"MJ: AI Prompt Runs"`
+  - `MJAIAgentRunEntity` → `"MJ: AI Agent Runs"`
+- **As of v5.0, ALL core entities use the `MJ: ` prefix** (and `MJ*` class names) — an unprefixed name like `'AI Agents'` no longer resolves and throws `Entity AI Agents not found in metadata`
 
 ### Using Metadata Class
 - Create a single instance: `const md = new Metadata()`
@@ -953,9 +963,9 @@ function gateCacheWrite(name: string, provider?: IMetadataProvider) {
 
 ### 🚨 CRITICAL: Entity Naming Convention Warning
 
-**ALWAYS** use the correct entity names with the "MJ: " prefix where required. To prevent naming collisions on client systems, all new core entities use the "MJ: " prefix, while older entities do not.
+**ALWAYS** use the correct entity names with the "MJ: " prefix. To prevent naming collisions on client systems, ALL core entities use the "MJ: " prefix as of v5.0 — pre-v5 unprefixed names (e.g. `'AI Agents'`) no longer resolve in metadata.
 
-#### Core Entities with "MJ: " Prefix (MUST use full name):
+#### Examples of Core Entities with "MJ: " Prefix (MUST use full name):
 - **AI Entities**: `MJ: AI Agent Prompts`, `MJ: AI Agent Run Steps`, `MJ: AI Agent Runs`, `MJ: AI Agent Types`, `MJ: AI Configuration Params`, `MJ: AI Configurations`, `MJ: AI Model Costs`, `MJ: AI Model Price Types`, `MJ: AI Model Price Unit Types`, `MJ: AI Model Vendors`, `MJ: AI Prompt Models`, `MJ: AI Prompt Runs`, `MJ: AI Vendor Type Definitions`, `MJ: AI Vendor Types`, `MJ: AI Vendors`
 - **Artifact Entities**: `MJ: Artifact Types`, `MJ: Conversation Artifact Permissions`, `MJ: Conversation Artifact Versions`, `MJ: Conversation Artifacts`
 - **Dashboard Entities**: `MJ: Dashboard User Preferences`, `MJ: Dashboard User States`
@@ -964,12 +974,12 @@ function gateCacheWrite(name: string, provider?: IMetadataProvider) {
 #### Common Mistakes to Avoid:
 ```typescript
 // ❌ WRONG - Missing "MJ: " prefix
-const agentRun = await md.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', contextUser);
-const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('AI Agent Prompts', contextUser);
+const agentRun = await md.GetEntityObject<MJAIAgentRunEntity>('AI Agent Runs', contextUser);
+const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('AI Agent Prompts', contextUser);
 
 // ✅ CORRECT - Full entity name with "MJ: " prefix
-const agentRun = await md.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
-const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts', contextUser);
+const agentRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
+const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts', contextUser);
 ```
 
 **Always verify entity names** by checking `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` or the `@RegisterClass` decorator JSDoc comments.
@@ -1867,8 +1877,13 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Common scenarios: clearing inputs, focus management, dynamic content updates
 
 ### MJ UI Components (`@memberjunction/ng-ui-components`)
-- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material
-- Available components: `mjButton`, `mj-dialog`, `MJDialogService`, `mj-window`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `mj-progress-bar`, `mj-accordion-panel` (with `mjAccordionTitle` for rich HTML titles)
+- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material. **Never hand-roll a feature-specific equivalent of anything this package already provides** — check the catalog before building any control, layout region, overlay, or pattern.
+- **Canonical catalog with full APIs and usage examples: `packages/Angular/Generic/ui-components/README.md`**
+- Component overview:
+  - **Controls**: `button[mjButton]`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `[mjClickable]`
+  - **Layout & chrome**: `mj-page-layout`, `mj-page-header`, `mj-page-body` (+ `-interior` variants for left-nav shells), `mj-left-nav(-content)`, `mj-tab-nav`, `mj-page-search`, `mj-slide-panel`
+  - **Overlays**: `mj-dialog` + `MJDialogService`, `mj-confirm-dialog` + `MJConfirmService` (Promise-based `Confirm`/`ConfirmDelete`), `mj-window`, `mj-filter-popover`
+  - **Patterns**: `mj-empty-state`, `mj-stat-badge`, `mj-alert`, `mj-progress-bar`, `mj-view-toggle`, `mj-refresh-button`, `mj-filter-chip`, `mj-filter-field`, `mj-filter-panel`, `mj-applied-filters`, `mj-accordion-panel` (with `mjAccordionTitle`/`mjAccordionActions` and lazy `mjAccordionBody`)
 - Splitters: Use `angular-split` (`as-split` + `as-split-area`)
 - Grids: Use AG Grid (`ag-grid-angular`)
 - CSS classes: `.mj-input`, `.mj-textarea`, `.mj-checkbox` for styled native form elements

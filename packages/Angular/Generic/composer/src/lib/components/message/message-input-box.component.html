@@ -19,7 +19,8 @@
       (mentionSelected)="onMentionSelected($event)"
       (attachmentsChanged)="onAttachmentsChanged($event)"
       (attachmentError)="onAttachmentError($event)"
-      (attachmentClicked)="onAttachmentClicked($event)">
+      (attachmentClicked)="onAttachmentClicked($event)"
+      (editorBlurred)="blurred.emit()">
     </mj-mention-editor>
 
     <!-- Attach + voice + plan-mode buttons - Positioned over editor -->

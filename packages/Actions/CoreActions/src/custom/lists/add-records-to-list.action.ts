@@ -84,19 +84,24 @@ export class AddRecordsToListAction extends BaseAction {
         }
       }
 
-      // Add records to list
+      // Add records to list. Writes run with bounded concurrency —
+      // per-record error isolation is preserved (one bad record fails only
+      // itself), but wall clock no longer scales 1:1 with record count.
       let addedCount = 0;
       let skippedCount = 0;
       let failedCount = 0;
       const errors: string[] = [];
 
+      const toAdd: string[] = [];
       for (const recordId of recordIds) {
-        // Skip if already exists
         if (skipDuplicates && existingRecordIds.has(recordId)) {
           skippedCount++;
-          continue;
+        } else {
+          toAdd.push(recordId);
         }
+      }
 
+      await this.forEachConcurrent(toAdd, 10, async (recordId) => {
         try {
           const listDetail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', params.ContextUser);
           listDetail.NewRecord();
@@ -121,7 +126,7 @@ export class AddRecordsToListAction extends BaseAction {
           const errorMessage = error instanceof Error ? error.message : String(error);
           errors.push(`Error adding record '${recordId}': ${errorMessage}`);
         }
-      }
+      });
 
       // Prepare result
       const result = {
@@ -156,6 +161,25 @@ export class AddRecordsToListAction extends BaseAction {
         Message: `Failed to add records to list: ${errorMessage}`
       };
     }
+  }
+
+  /**
+   * Runs `worker` over `items` with at most `limit` operations in flight.
+   */
+  private async forEachConcurrent<T>(
+    items: readonly T[],
+    limit: number,
+    worker: (item: T) => Promise<void>,
+  ): Promise<void> {
+    let next = 0;
+    const lanes = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (true) {
+        const idx = next++;
+        if (idx >= items.length) return;
+        await worker(items[idx]);
+      }
+    });
+    await Promise.all(lanes);
   }
 
   private getStringParam(params: RunActionParams, name: string): string | undefined {
