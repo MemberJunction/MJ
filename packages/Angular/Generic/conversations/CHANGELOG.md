@@ -1,5 +1,54 @@
 # @memberjunction/ng-conversations
 
+## 5.48.0
+
+### Minor Changes
+
+- c20723a: Add a self-hosted **HuggingFace speech-to-speech** realtime (voice) provider, sitting side-by-side with the cloud realtime providers (OpenAI, Gemini, ElevenLabs, AssemblyAI) with no host changes. It treats HuggingFace's open-source VAD → STT → LLM → TTS stack (in its OpenAI-Realtime-compatible `/v1/realtime` mode) as a `Realtime` model — private-by-design (audio never leaves owned infrastructure), cost-free, and component-swappable.
+
+  Because the endpoint is self-hosted, the shipped client-direct audio topology runs through a new provider-agnostic **MJAPI realtime proxy**: the driver mints a one-time ticket into a shared `RealtimeProxyRegistry` (`@memberjunction/ai`) and hands the browser a `wss://<mjapi-public>/realtime-proxy?ticket=…` URL, so the internal endpoint + auth never reach the browser and the box needs no browser-facing ingress. Adds the new `@memberjunction/ai-huggingface` driver package, the `HuggingFaceRealtimeClient` (`@memberjunction/ai-realtime-client`), the `RealtimeProxyServer` + single upgrade-router in `@memberjunction/server`, the class-registration manifest entry (`@memberjunction/server-bootstrap`), and the client-load wiring (`@memberjunction/ng-conversations`), plus the `Hugging Face` vendor + `HuggingFace Speech-to-Speech` model metadata (low PowerRank — opt-in). Additive only; endpoint/auth/sample-rate are deployment config.
+
+- f613d0d: Unified Ctrl+K omnibar command palette + composer draft persistence.
+  - **Omnibar (ng-explorer-core)**: pluggable `OmnibarProvider` ClassFactory registry powering a unified Ctrl+K palette (search, `@agent`, `#entity`, `/skills`, `>commands`, recent searches), gated by a two-layer switch — the `Shell.Omnibar.Enabled` instance config flag is the master availability switch (default ON; OFF = legacy trio for everyone), and each user opts in personally via My Profile → Command Palette (UserInfoEngine setting `mj.shell.omnibar.enabled`, default OFF, cross-device, flips live). Modal palette is summonable from within editable elements (Slack/Linear semantics). `@agent` selection lands in Chat with a one-shot `agent|agentReq` nonce instruction so URL↔tab-config sync echoes can never re-stage the pre-address or wipe an in-progress draft.
+  - **Composer (ng-composer)**: public `InsertMention()` API stages a resolved mention pill programmatically (chip + trailing space + caret focus), `FocusCaretAtEnd()`, blur output, and full serialized-mention rehydration — `writeValue` re-renders `@{...}` tokens as pills via `ParseSerializedMentions`.
+  - **Conversations (ng-conversations)**: `InsertAgentMention()` resolves an agent name to a pill with replace-not-stack semantics and focus re-assertion; new `ComposerDraftStore` persists in-progress drafts per conversation (plus the new-conversation composer) via `UserInfoEngine` under `mj.chat.drafts.v1` — debounced while typing, flushed on blur, cleared on send, restored (pills included) on reload across sessions/devices.
+  - **core-entities**: `UserInfoEngine.SetSetting` recovers when a cached settings row was deleted out-of-band (recreates instead of failing the UPDATE).
+
+### Patch Changes
+
+- 09e1b4b: Fix Apply to my Form (resolve spec code, handle Pending overrides, improve # typeahead), auto-add app schemas to excludeSchemas on OpenApp install/upgrade, surface RenderedSQL through RunQueryResult and TestQuerySQL, strip ORDER BY before outer-wrapping unparseable SQL in MaxRows, fix lazy-config loader variable name collisions in codegen manifest, and add read-only provider support and missing SQL function keywords in PostgreSQL provider
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/ng-artifacts@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/ai-realtime-client@5.48.0
+  - @memberjunction/ng-composer@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ai-agent-client@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/ng-testing@5.48.0
+  - @memberjunction/ng-base-types@5.48.0
+  - @memberjunction/ng-code-editor@5.48.0
+  - @memberjunction/ng-container-directives@5.48.0
+  - @memberjunction/ng-media-player@5.48.0
+  - @memberjunction/ng-notifications@5.48.0
+  - @memberjunction/ng-resource-permissions@5.48.0
+  - @memberjunction/ng-shared-generic@5.48.0
+  - @memberjunction/ng-tasks@5.48.0
+  - @memberjunction/ng-user-routines@5.48.0
+  - @memberjunction/conversations-runtime@5.48.0
+  - @memberjunction/graphql-dataprovider@5.48.0
+  - @memberjunction/interactive-component-types@5.48.0
+  - @memberjunction/ng-markdown@5.48.0
+  - @memberjunction/ng-agent-client@5.48.0
+  - @memberjunction/ng-forms@5.48.0
+  - @memberjunction/ng-whiteboard@5.48.0
+  - @memberjunction/ng-ui-components@5.48.0
+  - @memberjunction/global@5.48.0
+
 ## 5.47.0
 
 ### Patch Changes

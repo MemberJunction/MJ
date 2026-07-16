@@ -1,5 +1,111 @@
 # Change Log - @memberjunction/server
 
+## 5.48.0
+
+### Minor Changes
+
+- c20723a: Add a self-hosted **HuggingFace speech-to-speech** realtime (voice) provider, sitting side-by-side with the cloud realtime providers (OpenAI, Gemini, ElevenLabs, AssemblyAI) with no host changes. It treats HuggingFace's open-source VAD → STT → LLM → TTS stack (in its OpenAI-Realtime-compatible `/v1/realtime` mode) as a `Realtime` model — private-by-design (audio never leaves owned infrastructure), cost-free, and component-swappable.
+
+  Because the endpoint is self-hosted, the shipped client-direct audio topology runs through a new provider-agnostic **MJAPI realtime proxy**: the driver mints a one-time ticket into a shared `RealtimeProxyRegistry` (`@memberjunction/ai`) and hands the browser a `wss://<mjapi-public>/realtime-proxy?ticket=…` URL, so the internal endpoint + auth never reach the browser and the box needs no browser-facing ingress. Adds the new `@memberjunction/ai-huggingface` driver package, the `HuggingFaceRealtimeClient` (`@memberjunction/ai-realtime-client`), the `RealtimeProxyServer` + single upgrade-router in `@memberjunction/server`, the class-registration manifest entry (`@memberjunction/server-bootstrap`), and the client-load wiring (`@memberjunction/ng-conversations`), plus the `Hugging Face` vendor + `HuggingFace Speech-to-Speech` model metadata (low PowerRank — opt-in). Additive only; endpoint/auth/sample-rate are deployment config.
+
+### Patch Changes
+
+- 09e1b4b: Fix Apply to my Form (resolve spec code, handle Pending overrides, improve # typeahead), auto-add app schemas to excludeSchemas on OpenApp install/upgrade, surface RenderedSQL through RunQueryResult and TestQuerySQL, strip ORDER BY before outer-wrapping unparseable SQL in MaxRows, fix lazy-config loader variable name collisions in codegen manifest, and add read-only provider support and missing SQL function keywords in PostgreSQL provider
+- 8a88366: Allowlist two legitimate global-provider references that were tripping the MultiProviderCompliance guard and holding `next` red. Comment-only change (no runtime or type impact): `context.ts`'s read-only-provider bootstrap pool-share (a verbatim twin of the already-blessed line at 746) and the `lists-tests.ts` integration-test harness now carry the documented `// global-provider-ok: <reason>` inline marker instead of being refactored — both are genuine single-provider/bootstrap uses, not per-provider request paths.
+- Updated dependencies [09e1b4b]
+- Updated dependencies [2143b98]
+- Updated dependencies [c20723a]
+- Updated dependencies [a94bd16]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/generic-database-provider@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/codegen-lib@5.48.0
+  - @memberjunction/postgresql-dataprovider@5.48.0
+  - @memberjunction/ai-agents@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/lists@5.48.0
+  - @memberjunction/core-actions@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/core-entities-server@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/ai-agent-manager-actions@5.48.0
+  - @memberjunction/ai-agent-manager@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/clustering-engine@5.48.0
+  - @memberjunction/computer-use@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/tag-engine@5.48.0
+  - @memberjunction/tag-engine-base@5.48.0
+  - @memberjunction/ai-mcp-client@5.48.0
+  - @memberjunction/computer-use-engine@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/ai-bridge-base@5.48.0
+  - @memberjunction/ai-bridge-ringcentral@5.48.0
+  - @memberjunction/ai-bridge-teams@5.48.0
+  - @memberjunction/ai-bridge-twilio@5.48.0
+  - @memberjunction/ai-bridge-vonage@5.48.0
+  - @memberjunction/ai-bridge-server@5.48.0
+  - @memberjunction/remote-browser-base@5.48.0
+  - @memberjunction/remote-browser-cdp@5.48.0
+  - @memberjunction/remote-browser-selfhost@5.48.0
+  - @memberjunction/remote-browser-server@5.48.0
+  - @memberjunction/ai-vectordb@5.48.0
+  - @memberjunction/ai-vectors-pinecone@5.48.0
+  - @memberjunction/ai-vector-sync@5.48.0
+  - @memberjunction/api-keys@5.48.0
+  - @memberjunction/actions-apollo@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/actions-bizapps-accounting@5.48.0
+  - @memberjunction/actions-bizapps-crm@5.48.0
+  - @memberjunction/actions-bizapps-formbuilders@5.48.0
+  - @memberjunction/actions-bizapps-lms@5.48.0
+  - @memberjunction/actions-bizapps-social@5.48.0
+  - @memberjunction/actions@5.48.0
+  - @memberjunction/auth-providers@5.48.0
+  - @memberjunction/communication-types@5.48.0
+  - @memberjunction/communication-engine@5.48.0
+  - @memberjunction/entity-communications-base@5.48.0
+  - @memberjunction/entity-communications-server@5.48.0
+  - @memberjunction/notifications@5.48.0
+  - @memberjunction/communication-ms-graph@5.48.0
+  - @memberjunction/communication-sendgrid@5.48.0
+  - @memberjunction/component-registry-client-sdk@5.48.0
+  - @memberjunction/credentials@5.48.0
+  - @memberjunction/doc-utils@5.48.0
+  - @memberjunction/encryption@5.48.0
+  - @memberjunction/external-change-detection@5.48.0
+  - @memberjunction/graphql-dataprovider@5.48.0
+  - @memberjunction/integration-engine@5.48.0
+  - @memberjunction/integration-schema-builder@5.48.0
+  - @memberjunction/interactive-component-types@5.48.0
+  - @memberjunction/livekit-room-server@5.48.0
+  - @memberjunction/data-context@5.48.0
+  - @memberjunction/data-context-server@5.48.0
+  - @memberjunction/queue@5.48.0
+  - @memberjunction/storage@5.48.0
+  - @memberjunction/record-comparison@5.48.0
+  - @memberjunction/redis-provider@5.48.0
+  - @memberjunction/scheduling-actions@5.48.0
+  - @memberjunction/scheduling-engine-base@5.48.0
+  - @memberjunction/scheduling-engine@5.48.0
+  - @memberjunction/schema-engine@5.48.0
+  - @memberjunction/search-engine@5.48.0
+  - @memberjunction/server-extensions-core@5.48.0
+  - @memberjunction/templates@5.48.0
+  - @memberjunction/testing-engine@5.48.0
+  - @memberjunction/testing-engine-base@5.48.0
+  - @memberjunction/version-history@5.48.0
+  - @memberjunction/esignature@5.48.0
+  - @memberjunction/ai-provider-bundle@5.48.0
+  - @memberjunction/config@5.48.0
+  - @memberjunction/integration-progress-artifacts@5.48.0
+  - @memberjunction/lists-base@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+  - @memberjunction/scheduling-base-types@5.48.0
+
 ## 5.47.0
 
 ### Patch Changes
