@@ -18,7 +18,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from fastapi import FastAPI, HTTPException
 
-from . import algorithms, artifacts, forecast_wrappers, metrics, preprocessing, sequence_wrappers, survival_wrappers
+from . import (algorithms, artifacts, forecast_wrappers, metrics, preprocessing,
+               sequence_wrappers, survival_wrappers, unsupervised_wrappers)
 from .schemas import (
     HealthResponse,
     PredictRequest,
@@ -69,10 +70,13 @@ def train(req: TrainRequest) -> TrainResponse:
             detail="Inline `data` is required (data_ref shared-storage is not "
             "implemented in v1).",
         )
+    is_unsup = unsupervised_wrappers.is_unsupervised(req.algorithm)
     is_sequence = sequence_wrappers.is_sequence(req.algorithm)
     is_forecast = forecast_wrappers.is_forecast(req.algorithm)
     is_survival = survival_wrappers.is_survival(req.algorithm)
-    if is_sequence:
+    if is_unsup:
+        pass  # unsupervised: fits on X, no target/spec required
+    elif is_sequence:
         if req.sequence_spec is None:
             raise HTTPException(status_code=400, detail="Sequence-state algorithms require `sequence_spec` (group_col, order_col).")
     elif is_forecast:
@@ -95,7 +99,8 @@ def train(req: TrainRequest) -> TrainResponse:
 
     started = time.perf_counter()
     try:
-        result = (_run_sequence_training(req) if is_sequence else
+        result = (_run_unsupervised_training(req) if is_unsup else
+                  _run_sequence_training(req) if is_sequence else
                   _run_forecast_training(req) if is_forecast else
                   _run_survival_training(req) if is_survival else _run_training(req))
     except algorithms.AlgorithmNotSupportedError as exc:
@@ -125,6 +130,25 @@ def train(req: TrainRequest) -> TrainResponse:
         duration_sec=round(duration, 4),
         holdout_metrics=result.get("holdout_metrics"),
     )
+
+
+def _run_unsupervised_training(req) -> Dict[str, Any]:
+    """Unsupervised branch (Doc 3 T3): fits a clustering / dim-reduction / anomaly /
+    topic model on the feature matrix (no target), reports an honest fit metric
+    (silhouette / explained-variance / perplexity), and records the per-row output
+    kind so /predict emits the right shape (cluster / vector / anomaly_score)."""
+    feature_cols = [f.Name for f in req.feature_schema] if req.feature_schema else list(req.data.columns)
+    ops_spec = [op.model_dump(exclude_none=True) for op in req.preprocessing]
+    matrix, output_columns, fitted = preprocessing.fit_transform(
+        list(req.data.columns), req.data.rows, ops_spec, feature_cols)
+    est = unsupervised_wrappers.build_unsupervised(req.algorithm, dict(req.hyperparameters))
+    metrics_out = unsupervised_wrappers.fit_and_metric(req.algorithm, est, matrix)
+    fitted = {**fitted, "unsupervised_output": unsupervised_wrappers.output_kind(req.algorithm)}
+    return {
+        "estimator": est, "fitted": fitted,
+        "metrics": metrics_out, "feature_importance": {},
+        "training_row_count": len(req.data.rows),
+    }
 
 
 def _run_sequence_training(req) -> Dict[str, Any]:

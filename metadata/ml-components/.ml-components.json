@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Isolation Forest",
-      "Description": "Unsupervised anomaly detection by random isolation: an ensemble of trees with random feature + random threshold splits on small subsamples. Anomalies are 'few and different', so they separate in FEWER splits — the anomaly score is the normalized average path length to isolation. No labels, no density model, near-linear cost.",
+      "Description": "Unsupervised anomaly detection by random isolation: an ensemble of trees with random feature + random threshold splits on small subsamples. Anomalies are 'few and different', so they separate in FEWER splits \u2014 the anomaly score is the normalized average path length to isolation. No labels, no density model, near-linear cost.",
       "Kind": "Model",
       "Task": "anomaly",
       "LearningType": "Unsupervised",
@@ -13,7 +13,8 @@
       "SupportsFeatureImportance": false,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Isolation Forest"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -81,7 +82,7 @@
   {
     "fields": {
       "Name": "Dummy Classifier",
-      "Description": "The leaderboard FLOOR for classification: predicts from the class marginals of y alone (most-frequent / prior / stratified / uniform / constant) and never reads a single feature. Its entire purpose is to define the score any real model must beat — a candidate that cannot clear this floor has learned nothing from the features.",
+      "Description": "The leaderboard FLOOR for classification: predicts from the class marginals of y alone (most-frequent / prior / stratified / uniform / constant) and never reads a single feature. Its entire purpose is to define the score any real model must beat \u2014 a candidate that cannot clear this floor has learned nothing from the features.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",
@@ -161,7 +162,7 @@
   {
     "fields": {
       "Name": "Dummy Regressor",
-      "Description": "The leaderboard FLOOR for regression: predicts a single constant — the training mean, median, a quantile, or a supplied value — for every row, never reading a feature. Under strategy='mean' it is the R²=0 line by definition: any real regressor must clear it to have learned anything from the features.",
+      "Description": "The leaderboard FLOOR for regression: predicts a single constant \u2014 the training mean, median, a quantile, or a supplied value \u2014 for every row, never reading a feature. Under strategy='mean' it is the R\u00b2=0 line by definition: any real regressor must clear it to have learned anything from the features.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Supervised",
@@ -224,7 +225,7 @@
   {
     "fields": {
       "Name": "Gaussian Process",
-      "Description": "Bayesian nonparametric kernel model: a Gaussian prior over functions, conditioned exactly on the data. Its defining virtue is NATIVE uncertainty — every regression prediction is a full posterior N(μ,σ²), with σ honestly inflating away from the data. Its defining gate is cost: exact inference inverts the n×n kernel matrix, O(n³) time / O(n²) memory, ceiling ≈ 10k rows.",
+      "Description": "Bayesian nonparametric kernel model: a Gaussian prior over functions, conditioned exactly on the data. Its defining virtue is NATIVE uncertainty \u2014 every regression prediction is a full posterior N(\u03bc,\u03c3\u00b2), with \u03c3 honestly inflating away from the data. Its defining gate is cost: exact inference inverts the n\u00d7n kernel matrix, O(n\u00b3) time / O(n\u00b2) memory, ceiling \u2248 10k rows.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Supervised",
@@ -321,7 +322,7 @@
   {
     "fields": {
       "Name": "k-Nearest Neighbors",
-      "Description": "Instance-based lazy learner: prediction is a (distance-weighted) vote or mean over the k closest training rows. There is no real fit — training memorizes the data and builds a spatial index; ALL modeling effort happens at query time in the distance metric.",
+      "Description": "Instance-based lazy learner: prediction is a (distance-weighted) vote or mean over the k closest training rows. There is no real fit \u2014 training memorizes the data and builds a spatial index; ALL modeling effort happens at query time in the distance metric.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",
@@ -515,7 +516,7 @@
   {
     "fields": {
       "Name": "Naive Bayes",
-      "Description": "Closed-form Bayes classifier under the strong assumption that features are conditionally INDEPENDENT given the class. Fits in one pass (per-class moments or counts), works at tiny n, ranks well — and is famously miscalibrated when features correlate, because shared evidence gets multiplied in as if it were new.",
+      "Description": "Closed-form Bayes classifier under the strong assumption that features are conditionally INDEPENDENT given the class. Fits in one pass (per-class moments or counts), works at tiny n, ranks well \u2014 and is famously miscalibrated when features correlate, because shared evidence gets multiplied in as if it were new.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",
@@ -595,7 +596,7 @@
   {
     "fields": {
       "Name": "Support Vector Machine",
-      "Description": "Max-margin kernel machine: solves a dual QP to find the separating surface (or ε-tube, SVR) defined by a subset of support vectors, with the RBF kernel lifting the boundary to be nonlinear. Strong on small-to-medium clean numeric data; fit cost over the n×n kernel matrix is its ceiling.",
+      "Description": "Max-margin kernel machine: solves a dual QP to find the separating surface (or \u03b5-tube, SVR) defined by a subset of support vectors, with the RBF kernel lifting the boundary to be nonlinear. Strong on small-to-medium clean numeric data; fit cost over the n\u00d7n kernel matrix is its ceiling.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",
@@ -692,7 +693,7 @@
   {
     "fields": {
       "Name": "DBSCAN",
-      "Description": "Density-based clusterer: grows clusters from core points (≥ min_samples neighbors within eps), discovering arbitrarily-shaped clusters WITHOUT choosing k, and labeling sparse points as noise (-1). Its defining operational edge: sklearn's DBSCAN has NO predict() for new points — assignment of unseen rows is a wrapper responsibility, which is exactly what makes it a wrapper-needs case study for the family.",
+      "Description": "Density-based clusterer: grows clusters from core points (\u2265 min_samples neighbors within eps), discovering arbitrarily-shaped clusters WITHOUT choosing k, and labeling sparse points as noise (-1). Its defining operational edge: sklearn's DBSCAN has NO predict() for new points \u2014 assignment of unseen rows is a wrapper responsibility, which is exactly what makes it a wrapper-needs case study for the family.",
       "Kind": "Model",
       "Task": "clustering",
       "LearningType": "Unsupervised",
@@ -703,7 +704,8 @@
       "SupportsFeatureImportance": false,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=DBSCAN"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -771,7 +773,7 @@
   {
     "fields": {
       "Name": "Gaussian Mixture Model",
-      "Description": "Probabilistic clusterer: fits a weighted mixture of k Gaussians by EM. Its distinguishing emission is the SOFT assignment — per-row membership probabilities (responsibilities) rather than a hard label — and, because it is a genuine density model, it scores unseen points natively and doubles as an anomaly screen. The price is the elliptical assumption: every cluster is a mean + covariance ellipsoid.",
+      "Description": "Probabilistic clusterer: fits a weighted mixture of k Gaussians by EM. Its distinguishing emission is the SOFT assignment \u2014 per-row membership probabilities (responsibilities) rather than a hard label \u2014 and, because it is a genuine density model, it scores unseen points natively and doubles as an anomaly screen. The price is the elliptical assumption: every cluster is a mean + covariance ellipsoid.",
       "Kind": "Model",
       "Task": "clustering",
       "LearningType": "Unsupervised",
@@ -782,7 +784,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Gaussian Mixture Model"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -867,7 +870,7 @@
   {
     "fields": {
       "Name": "Agglomerative (Hierarchical) Clustering",
-      "Description": "Bottom-up hierarchical clusterer: starts with every row as its own cluster and greedily merges the closest pair under a linkage criterion (ward/complete/average/single), producing a full merge tree — the dendrogram — that can be cut at ANY height, so the segment count is a post-fit choice rather than a pre-fit commitment. Like DBSCAN it has no native predict() for unseen rows (fit_predict only) — new-point assignment is a wrapper responsibility. interpretabilityClass 'Rules' is the nearest 4-way fit for the dendrogram: a human-readable nested merge structure, though not literal decision rules.",
+      "Description": "Bottom-up hierarchical clusterer: starts with every row as its own cluster and greedily merges the closest pair under a linkage criterion (ward/complete/average/single), producing a full merge tree \u2014 the dendrogram \u2014 that can be cut at ANY height, so the segment count is a post-fit choice rather than a pre-fit commitment. Like DBSCAN it has no native predict() for unseen rows (fit_predict only) \u2014 new-point assignment is a wrapper responsibility. interpretabilityClass 'Rules' is the nearest 4-way fit for the dendrogram: a human-readable nested merge structure, though not literal decision rules.",
       "Kind": "Model",
       "Task": "clustering",
       "LearningType": "Unsupervised",
@@ -878,7 +881,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Agglomerative Clustering"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -929,7 +933,7 @@
   {
     "fields": {
       "Name": "K-Means",
-      "Description": "Prototype-based partitioner; the clustering default. Alternates assign-to-nearest-centroid / recompute-centroid steps to minimize within-cluster squared Euclidean distance, yielding k compact spherical segments plus a readable k×p centroid matrix. k is selected by a silhouette sweep, not fixed a priori. Segmentation deliverable first, supervised feature second — see additionalObservations for the demand-gate lesson.",
+      "Description": "Prototype-based partitioner; the clustering default. Alternates assign-to-nearest-centroid / recompute-centroid steps to minimize within-cluster squared Euclidean distance, yielding k compact spherical segments plus a readable k\u00d7p centroid matrix. k is selected by a silhouette sweep, not fixed a priori. Segmentation deliverable first, supervised feature second \u2014 see additionalObservations for the demand-gate lesson.",
       "Kind": "Model",
       "Task": "clustering",
       "LearningType": "Unsupervised",
@@ -940,7 +944,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=K-Means"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -1008,7 +1013,7 @@
   {
     "fields": {
       "Name": "BG/NBD (Beta-Geometric / Negative Binomial)",
-      "Description": "Latent-attrition purchase model for non-contractual settings: Poisson purchasing while alive with Gamma-distributed rates across customers, and Beta-Geometric dropout that can occur only after a purchase. From an RFM summary alone it answers 'is this customer still alive?' (P(alive)) and 'how many purchases in the next t periods?' — without churn ever being observed.",
+      "Description": "Latent-attrition purchase model for non-contractual settings: Poisson purchasing while alive with Gamma-distributed rates across customers, and Beta-Geometric dropout that can occur only after a purchase. From an RFM summary alone it answers 'is this customer still alive?' (P(alive)) and 'how many purchases in the next t periods?' \u2014 without churn ever being observed.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Temporal",
@@ -1121,7 +1126,7 @@
   {
     "fields": {
       "Name": "Gamma-Gamma Monetary Model",
-      "Description": "The monetary companion to the transaction BTYD models: a customer's average transaction value is Gamma-distributed around a latent mean that is itself Gamma-distributed across customers. Produces the conditional expected average profit per transaction (empirical-Bayes shrinkage of the customer's observed average toward the population), and — composed with a fitted BG/NBD or Pareto/NBD — discounted customer lifetime value.",
+      "Description": "The monetary companion to the transaction BTYD models: a customer's average transaction value is Gamma-distributed around a latent mean that is itself Gamma-distributed across customers. Produces the conditional expected average profit per transaction (empirical-Bayes shrinkage of the customer's observed average toward the population), and \u2014 composed with a fitted BG/NBD or Pareto/NBD \u2014 discounted customer lifetime value.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Unsupervised",
@@ -1217,7 +1222,7 @@
   {
     "fields": {
       "Name": "Pareto/NBD",
-      "Description": "The original (1987 Schmittlein-Morrison-Colombo) buy-till-you-die model and BG/NBD's continuous-time sibling: Poisson purchasing while alive with Gamma heterogeneity, and exponentially distributed customer lifetimes with Gamma heterogeneity (Pareto-II dropout). Dropout can occur at any instant — so P(alive) is an exact continuous-time posterior, well-defined and informative even for zero-repeat customers.",
+      "Description": "The original (1987 Schmittlein-Morrison-Colombo) buy-till-you-die model and BG/NBD's continuous-time sibling: Poisson purchasing while alive with Gamma heterogeneity, and exponentially distributed customer lifetimes with Gamma heterogeneity (Pareto-II dropout). Dropout can occur at any instant \u2014 so P(alive) is an exact continuous-time posterior, well-defined and informative even for zero-repeat customers.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Temporal",
@@ -1341,7 +1346,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=PCA"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -1551,7 +1557,7 @@
   {
     "fields": {
       "Name": "Croston (Intermittent Demand)",
-      "Description": "The intermittent-demand specialist: runs two separate exponential smoothers — one on non-zero demand SIZES, one on the INTERVALS between demand events — and forecasts the flat demand rate size/interval. Its niche is sparse series full of zeros (event registrations, per-chapter merch orders, low-volume renewals) where every mainstream forecaster smears the zeros into nonsense.",
+      "Description": "The intermittent-demand specialist: runs two separate exponential smoothers \u2014 one on non-zero demand SIZES, one on the INTERVALS between demand events \u2014 and forecasts the flat demand rate size/interval. Its niche is sparse series full of zeros (event registrations, per-chapter merch orders, low-volume renewals) where every mainstream forecaster smears the zeros into nonsense.",
       "Kind": "Model",
       "Task": "forecasting",
       "LearningType": "Temporal",
@@ -1614,7 +1620,7 @@
   {
     "fields": {
       "Name": "Exponential Smoothing (ETS)",
-      "Description": "Innovations state-space exponential smoothing: recursively weighted level, trend, and seasonal components with exponentially decaying memory. The workhorse mid-tier forecaster — more robust than ARIMA on short business series, strictly stronger than the naive floors when trend or seasonality is real.",
+      "Description": "Innovations state-space exponential smoothing: recursively weighted level, trend, and seasonal components with exponentially decaying memory. The workhorse mid-tier forecaster \u2014 more robust than ARIMA on short business series, strictly stronger than the naive floors when trend or seasonality is real.",
       "Kind": "Model",
       "Task": "forecasting",
       "LearningType": "Temporal",
@@ -1694,7 +1700,7 @@
   {
     "fields": {
       "Name": "Prophet",
-      "Description": "Decomposable curve-fit forecaster: piecewise-linear (or logistic) trend with automatic changepoints + Fourier-series seasonalities + holiday effects, fit as a regression on time via Stan MAP. Regression-on-timestamps rather than lag-recursion — which is why it tolerates gaps and irregular sampling that break ARIMA/ETS.",
+      "Description": "Decomposable curve-fit forecaster: piecewise-linear (or logistic) trend with automatic changepoints + Fourier-series seasonalities + holiday effects, fit as a regression on time via Stan MAP. Regression-on-timestamps rather than lag-recursion \u2014 which is why it tolerates gaps and irregular sampling that break ARIMA/ETS.",
       "Kind": "Model",
       "Task": "forecasting",
       "LearningType": "Temporal",
@@ -1756,7 +1762,7 @@
   {
     "fields": {
       "Name": "Seasonal Naive",
-      "Description": "The family FLOOR: forecast every future period as the value from the same position in the last observed seasonal cycle. Zero parameters, zero fit. It exists to be beaten — MASE is defined against it, so it IS the denominator of the family's honest scoreboard.",
+      "Description": "The family FLOOR: forecast every future period as the value from the same position in the last observed seasonal cycle. Zero parameters, zero fit. It exists to be beaten \u2014 MASE is defined against it, so it IS the denominator of the family's honest scoreboard.",
       "Kind": "Model",
       "Task": "forecasting",
       "LearningType": "Temporal",
@@ -1899,7 +1905,7 @@
   {
     "fields": {
       "Name": "Theta Model",
-      "Description": "Competition-proven simple forecaster (won M3, strong in M4): deseasonalize, then combine a linear-drift theta-line with an SES theta-line — equivalent to SES with drift on the deseasonalized series, reseasonalized. Near-zero tuning surface with accuracy that embarrasses far heavier methods on monthly/quarterly business series.",
+      "Description": "Competition-proven simple forecaster (won M3, strong in M4): deseasonalize, then combine a linear-drift theta-line with an SES theta-line \u2014 equivalent to SES with drift on the deseasonalized series, reseasonalized. Near-zero tuning surface with accuracy that embarrasses far heavier methods on monthly/quarterly business series.",
       "Kind": "Model",
       "Task": "forecasting",
       "LearningType": "Temporal",
@@ -1962,7 +1968,7 @@
   {
     "fields": {
       "Name": "Generalized Additive Model",
-      "Description": "A GLM whose linear terms are replaced by penalized SMOOTHS: y's link-mean = intercept + f1(x1) + ... + fp(xp), each f a spline whose wiggliness is penalty-controlled. Keeps the GLM's per-feature interpretability (each effect is a plottable 1-D curve) while capturing nonlinearity a straight coefficient cannot — the midpoint between GLM and black-box.",
+      "Description": "A GLM whose linear terms are replaced by penalized SMOOTHS: y's link-mean = intercept + f1(x1) + ... + fp(xp), each f a spline whose wiggliness is penalty-controlled. Keeps the GLM's per-feature interpretability (each effect is a plottable 1-D curve) while capturing nonlinearity a straight coefficient cannot \u2014 the midpoint between GLM and black-box.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Supervised",
@@ -2058,7 +2064,7 @@
   {
     "fields": {
       "Name": "Negative Binomial Regression",
-      "Description": "Count regression for OVERDISPERSED data: a Poisson mean with a gamma-mixed rate, adding an estimated dispersion parameter alpha so variance = mean + alpha*mean^2 (NB2). The honest upgrade from Poisson when variance outruns the mean — same log-linear coefficients, correctly-sized standard errors.",
+      "Description": "Count regression for OVERDISPERSED data: a Poisson mean with a gamma-mixed rate, adding an estimated dispersion parameter alpha so variance = mean + alpha*mean^2 (NB2). The honest upgrade from Poisson when variance outruns the mean \u2014 same log-linear coefficients, correctly-sized standard errors.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Supervised",
@@ -2138,7 +2144,7 @@
   {
     "fields": {
       "Name": "Ordinal Regression (Ordered Model)",
-      "Description": "Regression for ORDERED categories (satisfaction tiers, membership levels, risk grades): a single latent index x'B is cut by K-1 estimated thresholds into K ordered classes. One slope vector shared across all cutpoints (proportional odds) — the order in the target is used, not discarded as flat multiclass would.",
+      "Description": "Regression for ORDERED categories (satisfaction tiers, membership levels, risk grades): a single latent index x'B is cut by K-1 estimated thresholds into K ordered classes. One slope vector shared across all cutpoints (proportional odds) \u2014 the order in the target is used, not discarded as flat multiclass would.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",
@@ -2234,7 +2240,7 @@
   {
     "fields": {
       "Name": "Poisson GLM",
-      "Description": "The canonical count regression: models a non-negative integer target as Poisson-distributed with log-linear mean exp(x'B). Coefficients exponentiate to rate ratios; supports offsets/exposure for per-unit-time rates. Its defining commitment is equidispersion — variance EQUALS the mean.",
+      "Description": "The canonical count regression: models a non-negative integer target as Poisson-distributed with log-linear mean exp(x'B). Coefficients exponentiate to rate ratios; supports offsets/exposure for per-unit-time rates. Its defining commitment is equidispersion \u2014 variance EQUALS the mean.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Supervised",
@@ -2314,7 +2320,7 @@
   {
     "fields": {
       "Name": "Quantile Regression",
-      "Description": "Linear regression of a conditional QUANTILE instead of the mean: minimizes the asymmetric pinball (check) loss, so q=0.5 is median regression and tail q's map the outcome's spread. Makes NO distributional assumption on the errors — the family's distribution-free member, robust to outliers and heteroscedasticity.",
+      "Description": "Linear regression of a conditional QUANTILE instead of the mean: minimizes the asymmetric pinball (check) loss, so q=0.5 is median regression and tail q's map the outcome's spread. Makes NO distributional assumption on the errors \u2014 the family's distribution-free member, robust to outliers and heteroscedasticity.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Supervised",
@@ -2394,7 +2400,7 @@
   {
     "fields": {
       "Name": "Tweedie GLM",
-      "Description": "GLM for zero-inflated CONTINUOUS targets: with variance power p in (1,2) the Tweedie family is a compound Poisson-gamma — an exact point mass at zero plus a right-skewed positive tail — modeled in ONE equation. The canonical shape of insurance pure premium, per-member revenue, and claim/donation totals.",
+      "Description": "GLM for zero-inflated CONTINUOUS targets: with variance power p in (1,2) the Tweedie family is a compound Poisson-gamma \u2014 an exact point mass at zero plus a right-skewed positive tail \u2014 modeled in ONE equation. The canonical shape of insurance pure premium, per-member revenue, and claim/donation totals.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Supervised",
@@ -2474,7 +2480,7 @@
   {
     "fields": {
       "Name": "Zero-Inflated Count Model",
-      "Description": "Two-part count mixture: a logit/probit INFLATION submodel decides whether a row is a structural zero (never-participant), and a Poisson/NB COUNT submodel generates counts (including sampling zeros) otherwise. Separates 'won't ever' from 'didn't this time' — two coefficient stories one plain count model conflates.",
+      "Description": "Two-part count mixture: a logit/probit INFLATION submodel decides whether a row is a structural zero (never-participant), and a Poisson/NB COUNT submodel generates counts (including sampling zeros) otherwise. Separates 'won't ever' from 'didn't this time' \u2014 two coefficient stories one plain count model conflates.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Supervised",
@@ -2571,7 +2577,7 @@
   {
     "fields": {
       "Name": "CatBoost",
-      "Description": "Gradient-boosted ensemble of symmetric (oblivious) trees with ordered target statistics + optional ordered boosting (CPU default is Plain) and ordered target statistics — its distinguishing mechanism: raw categorical features are encoded internally without target leakage, so it is the strongest default on categorical-heavy tabular data.",
+      "Description": "Gradient-boosted ensemble of symmetric (oblivious) trees with ordered target statistics + optional ordered boosting (CPU default is Plain) and ordered target statistics \u2014 its distinguishing mechanism: raw categorical features are encoded internally without target leakage, so it is the strongest default on categorical-heavy tabular data.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",
@@ -2684,7 +2690,7 @@
   {
     "fields": {
       "Name": "LightGBM",
-      "Description": "Histogram-based gradient-boosted tree ensemble with leaf-wise (best-first) growth. Bins features into discrete histograms and grows the highest-gain leaf next, making it the fastest strong tabular learner at scale — with native missing-value and native categorical handling.",
+      "Description": "Histogram-based gradient-boosted tree ensemble with leaf-wise (best-first) growth. Bins features into discrete histograms and grows the highest-gain leaf next, making it the fastest strong tabular learner at scale \u2014 with native missing-value and native categorical handling.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",
@@ -2912,7 +2918,7 @@
   {
     "fields": {
       "Name": "Elastic Net",
-      "Description": "Convex blend of L1 and L2 penalties: keeps lasso's exact-zero selection while the L2 component adds the grouping effect — correlated features enter and leave the support TOGETHER instead of lasso's arbitrary single pick. The default when you want sparsity on correlated tabular data.",
+      "Description": "Convex blend of L1 and L2 penalties: keeps lasso's exact-zero selection while the L2 component adds the grouping effect \u2014 correlated features enter and leave the support TOGETHER instead of lasso's arbitrary single pick. The default when you want sparsity on correlated tabular data.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Supervised",
@@ -2992,7 +2998,7 @@
   {
     "fields": {
       "Name": "Lasso",
-      "Description": "L1-penalized least squares: the soft-thresholding geometry of the L1 ball zeroes coefficients exactly, so the fitted model IS a feature selection — the surviving support is the effect story. Fit by cyclic coordinate descent.",
+      "Description": "L1-penalized least squares: the soft-thresholding geometry of the L1 ball zeroes coefficients exactly, so the fitted model IS a feature selection \u2014 the surviving support is the effect story. Fit by cyclic coordinate descent.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Supervised",
@@ -3072,7 +3078,7 @@
   {
     "fields": {
       "Name": "Logistic Regression",
-      "Description": "L2-regularized (by default) linear classifier: models the log-odds as a linear function of features and optimizes penalized log-loss. The transparent classification baseline — every coefficient is a per-unit log-odds effect — and natively near-calibrated because it trains on the proper scoring rule.",
+      "Description": "L2-regularized (by default) linear classifier: models the log-odds as a linear function of features and optimizes penalized log-loss. The transparent classification baseline \u2014 every coefficient is a per-unit log-odds effect \u2014 and natively near-calibrated because it trains on the proper scoring rule.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",
@@ -3169,7 +3175,7 @@
   {
     "fields": {
       "Name": "Multinomial Logit (statsmodels)",
-      "Description": "Unpenalized maximum-likelihood softmax classifier over K unordered categories, fit by Newton's method: (K-1) coefficient equations against a reference category, each with standard errors, z-tests, and confidence intervals. The multiclass inference sibling of ols — choose it to EXPLAIN category choice; choose sklearn's logistic_regression to predict it.",
+      "Description": "Unpenalized maximum-likelihood softmax classifier over K unordered categories, fit by Newton's method: (K-1) coefficient equations against a reference category, each with standard errors, z-tests, and confidence intervals. The multiclass inference sibling of ols \u2014 choose it to EXPLAIN category choice; choose sklearn's logistic_regression to predict it.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",
@@ -3265,7 +3271,7 @@
   {
     "fields": {
       "Name": "OLS (statsmodels)",
-      "Description": "Unpenalized least squares fit with the FULL inference apparatus: coefficients with standard errors, t-statistics, p-values, confidence intervals, and prediction intervals. This is the family's answer-the-why member — where sklearn's linear models predict, OLS testifies. Requires n > p and honest attention to its error assumptions.",
+      "Description": "Unpenalized least squares fit with the FULL inference apparatus: coefficients with standard errors, t-statistics, p-values, confidence intervals, and prediction intervals. This is the family's answer-the-why member \u2014 where sklearn's linear models predict, OLS testifies. Requires n > p and honest attention to its error assumptions.",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Supervised",
@@ -3345,7 +3351,7 @@
   {
     "fields": {
       "Name": "Ridge Regression",
-      "Description": "L2-penalized least squares: shrinks all coefficients toward zero without zeroing any, trading a little bias for a large variance reduction. THE collinearity fixer — the penalty makes X'X + alpha*I invertible, so the solution stays unique and stable where OLS becomes ill-posed (including p > n).",
+      "Description": "L2-penalized least squares: shrinks all coefficients toward zero without zeroing any, trading a little bias for a large variance reduction. THE collinearity fixer \u2014 the penalty makes X'X + alpha*I invertible, so the solution stays unique and stable where OLS becomes ill-posed (including p > n).",
       "Kind": "Model",
       "Task": "regression",
       "LearningType": "Supervised",
@@ -3487,7 +3493,7 @@
   {
     "fields": {
       "Name": "LDA Topic Model",
-      "Description": "Generative probabilistic topic model over count data: documents are mixtures of K latent topics, topics are distributions over the vocabulary, with Dirichlet priors on both simplices and a multinomial word likelihood fit by variational Bayes. Emits a per-row topic mixture. (Latent Dirichlet allocation — NOT LinearDiscriminantAnalysis, which shares the acronym.)",
+      "Description": "Generative probabilistic topic model over count data: documents are mixtures of K latent topics, topics are distributions over the vocabulary, with Dirichlet priors on both simplices and a multinomial word likelihood fit by variational Bayes. Emits a per-row topic mixture. (Latent Dirichlet allocation \u2014 NOT LinearDiscriminantAnalysis, which shares the acronym.)",
       "Kind": "Model",
       "Task": "pattern-mining",
       "LearningType": "Unsupervised",
@@ -3498,7 +3504,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=LDA Topic Model"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -3566,7 +3573,7 @@
   {
     "fields": {
       "Name": "Implicit ALS",
-      "Description": "Alternating-least-squares matrix factorization for IMPLICIT feedback (clicks, plays, purchases — not ratings). Factorizes the user-item interaction matrix into low-rank user and item latent-factor matrices under the Hu-Koren-Volinsky confidence weighting, where unobserved cells are weak negatives, then ranks items per user by latent-factor dot product.",
+      "Description": "Alternating-least-squares matrix factorization for IMPLICIT feedback (clicks, plays, purchases \u2014 not ratings). Factorizes the user-item interaction matrix into low-rank user and item latent-factor matrices under the Hu-Koren-Volinsky confidence weighting, where unobserved cells are weak negatives, then ranks items per user by latent-factor dot product.",
       "Kind": "Model",
       "Task": "recommendation",
       "LearningType": "Unsupervised",
@@ -3662,7 +3669,7 @@
   {
     "fields": {
       "Name": "Rubric (Weighted Scorecard)",
-      "Description": "Glass-box linear scorer: operator-defined factors, each passed through a declared normalizer (percentile/minmax/zscore/logistic/banded/lookup, with a HigherIsBetter direction), combined by hand-set OR fitted weights into a single score, optionally banded into tiers. Every prediction decomposes EXACTLY into per-factor contributions — the weights are the whole story.",
+      "Description": "Glass-box linear scorer: operator-defined factors, each passed through a declared normalizer (percentile/minmax/zscore/logistic/banded/lookup, with a HigherIsBetter direction), combined by hand-set OR fitted weights into a single score, optionally banded into tiers. Every prediction decomposes EXACTLY into per-factor contributions \u2014 the weights are the whole story.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",
@@ -3906,7 +3913,7 @@
   {
     "fields": {
       "Name": "Kalman Filter / Dynamic Linear Model",
-      "Description": "General linear-Gaussian state-space model: latent continuous states evolve linearly with Gaussian noise and are observed through a linear-Gaussian measurement. Exact filtering (real-time state estimate), smoothing (retrospective), and forecasting — with exact, in-model handling of missing observations. Local-level and local-linear-trend DLMs and time-varying-coefficient regression are canonical instances.",
+      "Description": "General linear-Gaussian state-space model: latent continuous states evolve linearly with Gaussian noise and are observed through a linear-Gaussian measurement. Exact filtering (real-time state estimate), smoothing (retrospective), and forecasting \u2014 with exact, in-model handling of missing observations. Local-level and local-linear-trend DLMs and time-varying-coefficient regression are canonical instances.",
       "Kind": "Model",
       "Task": "sequence-state",
       "LearningType": "Temporal",
@@ -4019,7 +4026,7 @@
   {
     "fields": {
       "Name": "Discrete Markov Chain",
-      "Description": "First-order Markov chain over OBSERVED discrete states: estimates the K x K transition-probability matrix by counting state-to-state transitions across sequences. The matrix IS the model — fully inspectable, fit by counting, no latent structure.",
+      "Description": "First-order Markov chain over OBSERVED discrete states: estimates the K x K transition-probability matrix by counting state-to-state transitions across sequences. The matrix IS the model \u2014 fully inspectable, fit by counting, no latent structure.",
       "Kind": "Model",
       "Task": "sequence-state",
       "LearningType": "Unsupervised",
@@ -4115,7 +4122,7 @@
   {
     "fields": {
       "Name": "Markov Switching Regression",
-      "Description": "Regime-switching model over a time series: a hidden first-order Markov chain selects which of k regimes' regression/AR parameters (and optionally variance) generates each observation. The product is the smoothed regime-probability path plus per-regime coefficients — 'which era is this series in, and how do its dynamics differ'.",
+      "Description": "Regime-switching model over a time series: a hidden first-order Markov chain selects which of k regimes' regression/AR parameters (and optionally variance) generates each observation. The product is the smoothed regime-probability path plus per-regime coefficients \u2014 'which era is this series in, and how do its dynamics differ'.",
       "Kind": "Model",
       "Task": "sequence-state",
       "LearningType": "Temporal",
@@ -4245,7 +4252,7 @@
   {
     "fields": {
       "Name": "Structural Time Series (Unobserved Components)",
-      "Description": "Decomposes a series into named latent states — level, trend, seasonal, cycle, AR — each an explicit stochastic component in one linear-Gaussian state space. The product is the interpretable decomposition itself (each state is a nameable curve), fitted by Kalman filtering/smoothing with exact missing-data handling.",
+      "Description": "Decomposes a series into named latent states \u2014 level, trend, seasonal, cycle, AR \u2014 each an explicit stochastic component in one linear-Gaussian state space. The product is the interpretable decomposition itself (each state is a nameable curve), fitted by Kalman filtering/smoothing with exact missing-data handling.",
       "Kind": "Model",
       "Task": "sequence-state",
       "LearningType": "Temporal",
@@ -4358,7 +4365,7 @@
   {
     "fields": {
       "Name": "Vector Autoregression",
-      "Description": "Multivariate linear dynamics over K aligned series: each series is regressed on p lags of ALL series, capturing cross-series lead-lag interdependence (Granger structure, impulse responses). The observed K-vector IS the state; the lag-coefficient matrices are its linear transition law — the fully-observed continuous analog of this family, as the Markov chain is its discrete one.",
+      "Description": "Multivariate linear dynamics over K aligned series: each series is regressed on p lags of ALL series, capturing cross-series lead-lag interdependence (Granger structure, impulse responses). The observed K-vector IS the state; the lag-coefficient matrices are its linear transition law \u2014 the fully-observed continuous analog of this family, as the Markov chain is its discrete one.",
       "Kind": "Model",
       "Task": "sequence-state",
       "LearningType": "Temporal",
@@ -4437,7 +4444,7 @@
   {
     "fields": {
       "Name": "AFT (Log-Normal / Log-Logistic)",
-      "Description": "The generic parametric AFT alternatives to Weibull, covered by ONE driver with a `distribution` hyperparameter. Covariates rescale survival TIME (time-ratio reading, like weibull_aft) but the assumed lifetime distribution admits NON-monotone hazards — the hump-shaped/unimodal hazards Weibull cannot express. Neither distribution satisfies proportional hazards (log-logistic satisfies proportional ODDS instead), so this is the AFT-only branch of the family.",
+      "Description": "The generic parametric AFT alternatives to Weibull, covered by ONE driver with a `distribution` hyperparameter. Covariates rescale survival TIME (time-ratio reading, like weibull_aft) but the assumed lifetime distribution admits NON-monotone hazards \u2014 the hump-shaped/unimodal hazards Weibull cannot express. Neither distribution satisfies proportional hazards (log-logistic satisfies proportional ODDS instead), so this is the AFT-only branch of the family.",
       "Kind": "Model",
       "Task": "survival",
       "LearningType": "Supervised",
@@ -4647,7 +4654,7 @@
   {
     "fields": {
       "Name": "Kaplan-Meier Estimator",
-      "Description": "Nonparametric POPULATION survival curve — the survival floor. Covariate-free: consumes only the (duration, event) pair, no feature matrix at all. Every covariate survival model (Cox, AFT, RSF) is compared against this baseline; if a model cannot beat the KM curve's summary, its covariates are earning nothing.",
+      "Description": "Nonparametric POPULATION survival curve \u2014 the survival floor. Covariate-free: consumes only the (duration, event) pair, no feature matrix at all. Every covariate survival model (Cox, AFT, RSF) is compared against this baseline; if a model cannot beat the KM curve's summary, its covariates are earning nothing.",
       "Kind": "Model",
       "Task": "survival",
       "LearningType": "Supervised",
@@ -4806,7 +4813,7 @@
   {
     "fields": {
       "Name": "Weibull AFT",
-      "Description": "Fully parametric accelerated-failure-time model: covariates multiplicatively rescale survival TIME (exp(coef) is a time ratio — 'members with X last 1.3x longer'), vs Cox's hazard-ratio reading. Buys extrapolation beyond the observed window and absolute time predictions by assuming Weibull-distributed lifetimes.",
+      "Description": "Fully parametric accelerated-failure-time model: covariates multiplicatively rescale survival TIME (exp(coef) is a time ratio \u2014 'members with X last 1.3x longer'), vs Cox's hazard-ratio reading. Buys extrapolation beyond the observed window and absolute time predictions by assuming Weibull-distributed lifetimes.",
       "Kind": "Model",
       "Task": "survival",
       "LearningType": "Supervised",
@@ -4920,7 +4927,7 @@
   {
     "fields": {
       "Name": "Decision Tree",
-      "Description": "A single CART tree: recursive axis-aligned partitioning by impurity-minimizing threshold splits. The glass-box of the family — every prediction is a readable root-to-leaf rule path — at the cost of high variance that the ensemble siblings exist to average away. The value proposition is the explanation, not the accuracy ceiling.",
+      "Description": "A single CART tree: recursive axis-aligned partitioning by impurity-minimizing threshold splits. The glass-box of the family \u2014 every prediction is a readable root-to-leaf rule path \u2014 at the cost of high variance that the ensemble siblings exist to average away. The value proposition is the explanation, not the accuracy ceiling.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",
@@ -5034,7 +5041,7 @@
   {
     "fields": {
       "Name": "Extra Trees",
-      "Description": "Extremely randomized tree ensemble: like a random forest but split thresholds are drawn at RANDOM within each candidate feature's range instead of optimized, and by default each tree sees the full sample (no bootstrap). Trades a little bias for a further variance drop and a much cheaper fit — the smoothing sibling of the forest.",
+      "Description": "Extremely randomized tree ensemble: like a random forest but split thresholds are drawn at RANDOM within each candidate feature's range instead of optimized, and by default each tree sees the full sample (no bootstrap). Trades a little bias for a further variance drop and a much cheaper fit \u2014 the smoothing sibling of the forest.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",
@@ -5148,7 +5155,7 @@
   {
     "fields": {
       "Name": "Random Forest",
-      "Description": "Bagged decision-tree ensemble: each tree is fit on a bootstrap resample with a random feature subset per split, and predictions are averaged. Variance reduction by averaging — not additive error correction like boosting — makes it a robust, low-tuning tabular baseline that rarely embarrasses itself.",
+      "Description": "Bagged decision-tree ensemble: each tree is fit on a bootstrap resample with a random feature subset per split, and predictions are averaged. Variance reduction by averaging \u2014 not additive error correction like boosting \u2014 makes it a robust, low-tuning tabular baseline that rarely embarrasses itself.",
       "Kind": "Model",
       "Task": "classification",
       "LearningType": "Supervised",

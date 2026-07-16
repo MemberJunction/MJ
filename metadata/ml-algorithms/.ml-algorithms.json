@@ -116,7 +116,7 @@
   {
     "fields": {
       "Name": "Extra Trees",
-      "Description": "Extra Trees — T1 sklearn driver.",
+      "Description": "Extra Trees \u2014 T1 sklearn driver.",
       "ProblemTypes": "classification,regression",
       "DriverClass": "extra_trees",
       "DefaultHyperparameters": "{}",
@@ -134,7 +134,7 @@
   {
     "fields": {
       "Name": "Decision Tree",
-      "Description": "Decision Tree — T1 sklearn driver.",
+      "Description": "Decision Tree \u2014 T1 sklearn driver.",
       "ProblemTypes": "classification,regression",
       "DriverClass": "decision_tree",
       "DefaultHyperparameters": "{}",
@@ -152,7 +152,7 @@
   {
     "fields": {
       "Name": "k-Nearest Neighbors",
-      "Description": "k-Nearest Neighbors — T1 sklearn driver.",
+      "Description": "k-Nearest Neighbors \u2014 T1 sklearn driver.",
       "ProblemTypes": "classification,regression",
       "DriverClass": "knn",
       "DefaultHyperparameters": "{}",
@@ -170,7 +170,7 @@
   {
     "fields": {
       "Name": "Naive Bayes",
-      "Description": "Naive Bayes — T1 sklearn driver.",
+      "Description": "Naive Bayes \u2014 T1 sklearn driver.",
       "ProblemTypes": "classification",
       "DriverClass": "naive_bayes",
       "DefaultHyperparameters": "{}",
@@ -188,7 +188,7 @@
   {
     "fields": {
       "Name": "Lasso",
-      "Description": "Lasso — T1 sklearn driver.",
+      "Description": "Lasso \u2014 T1 sklearn driver.",
       "ProblemTypes": "regression",
       "DriverClass": "lasso",
       "DefaultHyperparameters": "{}",
@@ -206,7 +206,7 @@
   {
     "fields": {
       "Name": "Elastic Net",
-      "Description": "Elastic Net — T1 sklearn driver.",
+      "Description": "Elastic Net \u2014 T1 sklearn driver.",
       "ProblemTypes": "regression",
       "DriverClass": "elastic_net",
       "DefaultHyperparameters": "{}",
@@ -224,7 +224,7 @@
   {
     "fields": {
       "Name": "Support Vector Machine",
-      "Description": "Support Vector Machine — T1 sklearn driver.",
+      "Description": "Support Vector Machine \u2014 T1 sklearn driver.",
       "ProblemTypes": "classification,regression",
       "DriverClass": "svm",
       "DefaultHyperparameters": "{}",
@@ -242,7 +242,7 @@
   {
     "fields": {
       "Name": "Gaussian Process",
-      "Description": "Gaussian Process — T1 sklearn driver.",
+      "Description": "Gaussian Process \u2014 T1 sklearn driver.",
       "ProblemTypes": "classification,regression",
       "DriverClass": "gp",
       "DefaultHyperparameters": "{}",
@@ -260,7 +260,7 @@
   {
     "fields": {
       "Name": "Ordinary Least Squares",
-      "Description": "Ordinary Least Squares — T1 sklearn driver.",
+      "Description": "Ordinary Least Squares \u2014 T1 sklearn driver.",
       "ProblemTypes": "regression",
       "DriverClass": "ols",
       "DefaultHyperparameters": "{}",
@@ -278,7 +278,7 @@
   {
     "fields": {
       "Name": "Dummy Classifier",
-      "Description": "Dummy Classifier — T1 sklearn driver.",
+      "Description": "Dummy Classifier \u2014 T1 sklearn driver.",
       "ProblemTypes": "classification",
       "DriverClass": "dummy_classifier",
       "DefaultHyperparameters": "{}",
@@ -296,7 +296,7 @@
   {
     "fields": {
       "Name": "Dummy Regressor",
-      "Description": "Dummy Regressor — T1 sklearn driver.",
+      "Description": "Dummy Regressor \u2014 T1 sklearn driver.",
       "ProblemTypes": "regression",
       "DriverClass": "dummy_regressor",
       "DefaultHyperparameters": "{}",
@@ -314,7 +314,7 @@
   {
     "fields": {
       "Name": "Poisson Regression",
-      "Description": "Poisson Regression — T2 statsmodels GLM (optional extra).",
+      "Description": "Poisson Regression \u2014 T2 statsmodels GLM (optional extra).",
       "ProblemTypes": "regression",
       "DriverClass": "poisson",
       "DefaultHyperparameters": "{}",
@@ -332,7 +332,7 @@
   {
     "fields": {
       "Name": "Negative Binomial Regression",
-      "Description": "Negative Binomial Regression — T2 statsmodels GLM (optional extra).",
+      "Description": "Negative Binomial Regression \u2014 T2 statsmodels GLM (optional extra).",
       "ProblemTypes": "regression",
       "DriverClass": "neg_binomial",
       "DefaultHyperparameters": "{}",
@@ -350,7 +350,7 @@
   {
     "fields": {
       "Name": "Tweedie Regression",
-      "Description": "Tweedie Regression — T2 statsmodels GLM (optional extra).",
+      "Description": "Tweedie Regression \u2014 T2 statsmodels GLM (optional extra).",
       "ProblemTypes": "regression",
       "DriverClass": "tweedie",
       "DefaultHyperparameters": "{}",
@@ -368,7 +368,7 @@
   {
     "fields": {
       "Name": "Quantile Regression",
-      "Description": "Quantile Regression — T2 statsmodels GLM (optional extra).",
+      "Description": "Quantile Regression \u2014 T2 statsmodels GLM (optional extra).",
       "ProblemTypes": "regression",
       "DriverClass": "quantile",
       "DefaultHyperparameters": "{}",
@@ -386,7 +386,7 @@
   {
     "fields": {
       "Name": "Zero-Inflated Poisson",
-      "Description": "Zero-Inflated Poisson — T2 statsmodels (optional extra).",
+      "Description": "Zero-Inflated Poisson \u2014 T2 statsmodels (optional extra).",
       "ProblemTypes": "regression",
       "DriverClass": "zero_inflated",
       "DefaultHyperparameters": "{}",
@@ -404,7 +404,7 @@
   {
     "fields": {
       "Name": "Cox Proportional Hazards",
-      "Description": "Cox Proportional Hazards — T4 survival (lifelines, optional extra).",
+      "Description": "Cox Proportional Hazards \u2014 T4 survival (lifelines, optional extra).",
       "ProblemTypes": "survival",
       "DriverClass": "cox_ph",
       "DefaultHyperparameters": "{}",
@@ -422,7 +422,7 @@
   {
     "fields": {
       "Name": "Weibull AFT",
-      "Description": "Weibull AFT — T4 survival (lifelines, optional extra).",
+      "Description": "Weibull AFT \u2014 T4 survival (lifelines, optional extra).",
       "ProblemTypes": "survival",
       "DriverClass": "weibull_aft",
       "DefaultHyperparameters": "{}",
@@ -440,7 +440,7 @@
   {
     "fields": {
       "Name": "Kaplan-Meier",
-      "Description": "Kaplan-Meier — T4 survival (lifelines, optional extra).",
+      "Description": "Kaplan-Meier \u2014 T4 survival (lifelines, optional extra).",
       "ProblemTypes": "survival",
       "DriverClass": "km",
       "DefaultHyperparameters": "{}",
@@ -458,7 +458,7 @@
   {
     "fields": {
       "Name": "ETS (Exponential Smoothing)",
-      "Description": "ETS (Exponential Smoothing) — T5 forecasting.",
+      "Description": "ETS (Exponential Smoothing) \u2014 T5 forecasting.",
       "ProblemTypes": "forecasting",
       "DriverClass": "ets",
       "DefaultHyperparameters": "{}",
@@ -476,7 +476,7 @@
   {
     "fields": {
       "Name": "ARIMA",
-      "Description": "ARIMA — T5 forecasting.",
+      "Description": "ARIMA \u2014 T5 forecasting.",
       "ProblemTypes": "forecasting",
       "DriverClass": "arima",
       "DefaultHyperparameters": "{}",
@@ -494,7 +494,7 @@
   {
     "fields": {
       "Name": "Seasonal Naive",
-      "Description": "Seasonal Naive — T5 forecasting.",
+      "Description": "Seasonal Naive \u2014 T5 forecasting.",
       "ProblemTypes": "forecasting",
       "DriverClass": "seasonal_naive",
       "DefaultHyperparameters": "{}",
@@ -512,7 +512,7 @@
   {
     "fields": {
       "Name": "Simple Moving Average",
-      "Description": "Simple Moving Average — T5 forecasting.",
+      "Description": "Simple Moving Average \u2014 T5 forecasting.",
       "ProblemTypes": "forecasting",
       "DriverClass": "sma",
       "DefaultHyperparameters": "{}",
@@ -530,7 +530,7 @@
   {
     "fields": {
       "Name": "Theta Method",
-      "Description": "Theta Method — T5 forecasting.",
+      "Description": "Theta Method \u2014 T5 forecasting.",
       "ProblemTypes": "forecasting",
       "DriverClass": "theta",
       "DefaultHyperparameters": "{}",
@@ -548,7 +548,7 @@
   {
     "fields": {
       "Name": "Croston's Method",
-      "Description": "Croston's Method — T5 forecasting.",
+      "Description": "Croston's Method \u2014 T5 forecasting.",
       "ProblemTypes": "forecasting",
       "DriverClass": "croston",
       "DefaultHyperparameters": "{}",
@@ -566,7 +566,7 @@
   {
     "fields": {
       "Name": "HMM (Gaussian)",
-      "Description": "HMM (Gaussian) — T6 sequence-state (hmmlearn, optional extra).",
+      "Description": "HMM (Gaussian) \u2014 T6 sequence-state (hmmlearn, optional extra).",
       "ProblemTypes": "sequence-state",
       "DriverClass": "hmm",
       "DefaultHyperparameters": "{}",
@@ -579,6 +579,83 @@
     "sync": {
       "lastModified": "2026-07-16T08:19:53.863Z",
       "checksum": "7e88821d6bd1b69263e047825b9f50f7785f726c08809b4448bb9df74df11024"
+    }
+  },
+  {
+    "fields": {
+      "Name": "K-Means",
+      "Description": "K-Means \u2014 T3 unsupervised clustering (sklearn); silhouette-scored, emits cluster-id.",
+      "ProblemTypes": "clustering",
+      "DriverClass": "kmeans",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gaussian Mixture Model",
+      "Description": "Gaussian Mixture Model \u2014 T3 soft clustering (sklearn); emits soft-assignment + cluster-id.",
+      "ProblemTypes": "clustering",
+      "DriverClass": "gmm",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DBSCAN",
+      "Description": "DBSCAN \u2014 T3 density clustering (sklearn); discovers cluster count, marks noise.",
+      "ProblemTypes": "clustering",
+      "DriverClass": "dbscan",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Agglomerative Clustering",
+      "Description": "Agglomerative (Hierarchical) Clustering \u2014 T3 (sklearn); bottom-up merge to k clusters.",
+      "ProblemTypes": "clustering",
+      "DriverClass": "hierarchical",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "PCA",
+      "Description": "PCA \u2014 T3 dim-reduction (sklearn); emits an embedding + component loadings, explained-variance metric.",
+      "ProblemTypes": "dim-reduction",
+      "DriverClass": "pca",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Isolation Forest",
+      "Description": "Isolation Forest \u2014 T3 anomaly detection (sklearn); per-row anomaly score.",
+      "ProblemTypes": "anomaly",
+      "DriverClass": "isolation_forest",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LDA Topic Model",
+      "Description": "LDA Topic Model \u2014 T3 topic mixture over tabular counts (sklearn); perplexity-scored.",
+      "ProblemTypes": "pattern-mining",
+      "DriverClass": "lda",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
     }
   }
 ]

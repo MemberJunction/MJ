@@ -225,6 +225,7 @@ from app import glm_wrappers as _glm  # noqa: E402
 from app import survival_wrappers as _surv  # noqa: E402
 from app import forecast_wrappers as _fc  # noqa: E402
 from app import sequence_wrappers as _seq  # noqa: E402
+from app import unsupervised_wrappers as _uns  # noqa: E402
 
 
 def _glm_factory(maker):
@@ -281,6 +282,14 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "theta": _survival_placeholder,
     "croston": _survival_placeholder,
     "hmm": _survival_placeholder,
+    # T3 unsupervised (sklearn, no dep) — handled by the unsupervised branch
+    "kmeans": _survival_placeholder,
+    "dbscan": _survival_placeholder,
+    "gmm": _survival_placeholder,
+    "hierarchical": _survival_placeholder,
+    "pca": _survival_placeholder,
+    "isolation_forest": _survival_placeholder,
+    "lda": _survival_placeholder,
 }
 
 
@@ -312,6 +321,8 @@ _DRIVER_REQUIREMENTS = {
     "theta": _fc._HAVE_STATSMODELS_TS,
     "croston": True,
     "hmm": _seq._HAVE_HMMLEARN,
+    "kmeans": True, "dbscan": True, "gmm": True, "hierarchical": True,
+    "pca": True, "isolation_forest": True, "lda": True,
 }
 
 
