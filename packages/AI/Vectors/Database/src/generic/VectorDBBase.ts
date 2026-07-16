@@ -222,6 +222,35 @@ export abstract class VectorDBBase {
     }
 
     /**
+     * Build per-record routing and operational directives for this provider.
+     *
+     * Called by the generic sync pipeline once per source database row, before the
+     * {@link VectorRecord} is constructed. The returned object is stored on
+     * `VectorRecord.providerDirectives` and passed to {@link CreateRecords} alongside
+     * the stored metadata — but is never itself persisted in the vector index.
+     *
+     * Providers override this to extract whatever routing values they need from
+     * `providerConfig` (the parsed `VectorIndex.ProviderConfig` JSON) and from
+     * `sourceRecord` (the raw database row). Example: the Pinecone driver reads
+     * `providerConfig.namespaceField`, looks up the corresponding value in `sourceRecord`,
+     * and returns `{ namespace: '<orgId>' }` so `CreateRecords` can route each vector
+     * to the correct Pinecone namespace without embedding org data in the stored metadata.
+     *
+     * The default implementation returns an empty object — providers that do not need
+     * per-record routing need not override this method.
+     *
+     * @param _sourceRecord - The raw database row being vectorized.
+     * @param _providerConfig - The parsed `VectorIndex.ProviderConfig` JSON blob.
+     * @returns An opaque key/value map consumed by this provider's `CreateRecord(s)`.
+     */
+    public buildProviderDirectives(
+        _sourceRecord: Record<string, unknown>,
+        _providerConfig: Record<string, unknown>,
+    ): Record<string, unknown> {
+        return {};
+    }
+
+    /**
      * Build a standard SUCCESS {@link BaseResponse}. Shared across all drivers so every
      * provider reports results in a uniform shape.
      *

@@ -65,6 +65,9 @@ class TestVectorDB extends VectorDBBase {
   DeleteAllRecords(indexName: string, namespace?: string): BaseResponse {
     return { success: true, message: 'all records deleted', data: null };
   }
+  async ListVectorIDs(): Promise<{ IDs: string[] }> {
+    return { IDs: [] };
+  }
 
   // Expose ApiKey for testing
   GetApiKeyForTest(): string {
@@ -225,6 +228,24 @@ describe('VectorDBBase', () => {
     it('should delete all records with namespace', () => {
       const result = db.DeleteAllRecords('my-index', 'my-namespace');
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe('buildProviderDirectives', () => {
+    let db: TestVectorDB;
+    beforeEach(() => { db = new TestVectorDB('test-key'); });
+
+    it('default implementation returns an empty object regardless of providerConfig', () => {
+      const directives = db.buildProviderDirectives(
+        { OrganizationID: 'org-123', Name: 'Acme' },
+        { namespaceField: 'OrganizationID' },
+      );
+      expect(directives).toEqual({});
+    });
+
+    it('returns empty object when providerConfig is empty', () => {
+      const directives = db.buildProviderDirectives({ ID: 'rec-1' }, {});
+      expect(directives).toEqual({});
     });
   });
 });

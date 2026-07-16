@@ -510,6 +510,11 @@ export class EntityVectorSyncer extends VectorBase {
     const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityDocument.EntityID));
     const displayFields = this.getDisplayFields(entityInfo, metadataConfig);
 
+    const numericSqlTypes = new Set([
+      'int', 'bigint', 'smallint', 'tinyint',
+      'float', 'real', 'decimal', 'numeric', 'money', 'smallmoney',
+    ]);
+
     const vectorRecords: VectorRecord[] = batch.map((embeddingItem: EmbeddingData) => {
       // Deterministic vector ID: SHA-1 hash of entityDocumentID + compositeKey
       // ensures re-syncing upserts in place (no duplicates) and stays under
@@ -520,7 +525,7 @@ export class EntityVectorSyncer extends VectorBase {
       embeddingItem.VectorID = vectorId;
 
       // Build enriched metadata with display fields from the record
-      const metadata: Record<string, string> = {
+      const metadata: Record<string, string | number | boolean> = {
         RecordID: String(embeddingItem.__mj_compositeKey ?? ''),
         Entity: entityDocument.Entity,
         TemplateID: templateContent.ID,
@@ -537,29 +542,38 @@ export class EntityVectorSyncer extends VectorBase {
         metadata['__mj_UpdatedAt'] = String(record['__mj_UpdatedAt']);
       }
 
-      // Add display fields with appropriate truncation (respects config overrides)
+      // Add display fields with type-aware storage (numeric SQL types stay numeric;
+      // date fields can be converted to epoch seconds via storeAs config).
       for (const field of displayFields) {
         const val = record[field.Name];
-        if (val != null) {
+        if (val == null) continue;
+
+        const fieldCfg = metadataConfig?.fields?.[field.Name];
+        const storeAs  = fieldCfg?.storeAs;
+        const isNumericType = numericSqlTypes.has(field.Type?.toLowerCase() ?? '');
+
+        if (storeAs === 'epochSeconds' || storeAs === 'epochMilliseconds') {
+          const ms = new Date(String(val)).getTime();
+          if (!Number.isNaN(ms)) {
+            metadata[field.Name] = storeAs === 'epochSeconds' ? Math.floor(ms / 1000) : ms;
+          }
+        } else if (storeAs === 'number' || (storeAs == null && isNumericType)) {
+          const n = Number(val);
+          if (!Number.isNaN(n)) metadata[field.Name] = n;
+        } else if (storeAs === 'boolean') {
+          metadata[field.Name] = Boolean(val);
+        } else {
           const strVal = String(val);
-          const limit = this.getFieldTruncationLimit(field, metadataConfig);
+          const limit  = this.getFieldTruncationLimit(field, metadataConfig);
           metadata[field.Name] = strVal.length > limit ? strVal.substring(0, limit) : strVal;
         }
-      }
-
-      // If the provider config specifies a namespaceField, inject that field's value
-      // from the source record into the metadata so the vector DB driver can use it
-      // for namespace routing (e.g. Pinecone groups records by this field).
-      const namespaceField = typeof providerConfig?.['namespaceField'] === 'string'
-          ? providerConfig['namespaceField'] as string : undefined;
-      if (namespaceField && record[namespaceField] != null) {
-        metadata[namespaceField] = String(record[namespaceField]);
       }
 
       return {
         id: vectorId,
         values: embeddingItem.Vector,
-        metadata
+        metadata,
+        providerDirectives: vectorDB.buildProviderDirectives(record, providerConfig ?? {}),
       };
     });
 

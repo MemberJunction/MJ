@@ -158,6 +158,26 @@ export class PineconeDatabase extends VectorDBBase {
         }
     }
 
+    /**
+     * Derives the Pinecone namespace for a source record from VectorIndex.ProviderConfig.
+     *
+     * Reads `providerConfig.namespaceField` — the name of the source-record field whose
+     * value becomes the namespace (e.g. `"OrganizationID"` → namespace `"org-uuid"`).
+     * The resolved namespace is returned as `{ namespace: '<value>' }` so CreateRecords
+     * can route the vector without embedding org data in the stored metadata.
+     */
+    public override buildProviderDirectives(
+        sourceRecord: Record<string, unknown>,
+        providerConfig: Record<string, unknown>,
+    ): Record<string, unknown> {
+        const namespaceField = typeof providerConfig['namespaceField'] === 'string'
+            ? providerConfig['namespaceField'] as string : undefined;
+        if (namespaceField && sourceRecord[namespaceField] != null) {
+            return { namespace: String(sourceRecord[namespaceField]) };
+        }
+        return {};
+    }
+
     public async CreateRecord(params: VectorRecord, indexName?: string, providerConfig?: Record<string, unknown>): Promise<BaseResponse> {
         try{
             let records: VectorRecord[] = [params];
@@ -173,19 +193,20 @@ export class PineconeDatabase extends VectorDBBase {
     public async CreateRecords(records: VectorRecord[], indexName?: string, providerConfig?: Record<string, unknown>): Promise<BaseResponse> {
         try{
             const index: Index = this.GetIndex(indexName ? { id: indexName } : undefined).data;
-            const namespaceField = typeof providerConfig?.['namespaceField'] === 'string'
-                ? providerConfig['namespaceField'] as string : undefined;
 
-            if (namespaceField) {
-                // Group records by the namespace value stored in their metadata, then
-                // upsert each group into its own Pinecone namespace. This is the
-                // multi-tenant ingestion path: one batch may contain vectors for
-                // different organizations, each routed to their own namespace.
+            // Strip providerDirectives before upserting — they are MJ-internal routing
+            // hints that the Pinecone SDK does not accept and must not be stored.
+            const stripped = records.map(({ providerDirectives: _pd, ...r }) => r as VectorRecord);
+
+            // Multi-namespace path: at least one record carries a per-record namespace
+            // set by buildProviderDirectives (e.g. { namespace: '<orgId>' }).
+            const hasPerRecordNamespace = records.some(r => r.providerDirectives?.['namespace'] != null);
+            if (hasPerRecordNamespace) {
                 const groups = new Map<string, VectorRecord[]>();
-                for (const record of records) {
-                    const ns = String((record.metadata as Record<string, unknown>)?.[namespaceField] ?? '');
+                for (let i = 0; i < records.length; i++) {
+                    const ns = String(records[i].providerDirectives?.['namespace'] ?? '');
                     const existing = groups.get(ns);
-                    if (existing) { existing.push(record); } else { groups.set(ns, [record]); }
+                    if (existing) { existing.push(stripped[i]); } else { groups.set(ns, [stripped[i]]); }
                 }
                 for (const [ns, groupRecords] of groups) {
                     const target = ns ? index.namespace(ns) : index;
@@ -194,12 +215,12 @@ export class PineconeDatabase extends VectorDBBase {
                 return this.wrapSuccessResponse(null);
             }
 
-            // Single-namespace path: use an explicit namespace if provided, or
-            // fall back to the index default (no namespace routing).
+            // Single-namespace path: use an explicit namespace from providerConfig,
+            // or fall back to the index default (no namespace routing).
             const directNamespace = typeof providerConfig?.['namespace'] === 'string'
                 ? providerConfig['namespace'] as string : undefined;
             const target = directNamespace ? index.namespace(directNamespace) : index;
-            const result = await target.upsert(records);
+            const result = await target.upsert(stripped);
             return this.wrapSuccessResponse(result);
         }
         catch(ex){

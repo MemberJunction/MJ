@@ -340,4 +340,108 @@ describe('PineconeDatabase', () => {
       expect(idx2).toBe(idx);
     });
   });
+
+  /* ---- buildProviderDirectives ---- */
+  describe('buildProviderDirectives', () => {
+    it('returns namespace from namespaceField in providerConfig', () => {
+      const directives = db.buildProviderDirectives(
+        { OrganizationID: 'org-abc', Name: 'Acme' },
+        { namespaceField: 'OrganizationID' },
+      );
+      expect(directives).toEqual({ namespace: 'org-abc' });
+    });
+
+    it('returns empty object when namespaceField is not in providerConfig', () => {
+      const directives = db.buildProviderDirectives(
+        { OrganizationID: 'org-abc' },
+        {},
+      );
+      expect(directives).toEqual({});
+    });
+
+    it('returns empty object when the named field is absent from the source record', () => {
+      const directives = db.buildProviderDirectives(
+        { Name: 'Acme' },
+        { namespaceField: 'OrganizationID' },
+      );
+      expect(directives).toEqual({});
+    });
+
+    it('coerces non-string namespace values to string', () => {
+      const directives = db.buildProviderDirectives(
+        { TenantID: 42 },
+        { namespaceField: 'TenantID' },
+      );
+      expect(directives).toEqual({ namespace: '42' });
+    });
+  });
+
+  /* ---- CreateRecords — namespace routing via providerDirectives ---- */
+  describe('CreateRecords — per-record namespace via providerDirectives', () => {
+    it('groups records by providerDirectives.namespace and upserts per-namespace', async () => {
+      const mockNsAUpsert = vi.fn().mockResolvedValue(undefined);
+      const mockNsBUpsert = vi.fn().mockResolvedValue(undefined);
+      mockIndexInstance.namespace
+        .mockReturnValueOnce({ upsert: mockNsAUpsert })
+        .mockReturnValueOnce({ upsert: mockNsBUpsert });
+
+      const records = [
+        { id: 'r1', values: [1], providerDirectives: { namespace: 'org-a' } },
+        { id: 'r2', values: [2], providerDirectives: { namespace: 'org-b' } },
+        { id: 'r3', values: [3], providerDirectives: { namespace: 'org-a' } },
+      ] as never;
+
+      const result = await db.CreateRecords(records);
+      expect(result.success).toBe(true);
+      expect(mockIndexInstance.namespace).toHaveBeenCalledWith('org-a');
+      expect(mockIndexInstance.namespace).toHaveBeenCalledWith('org-b');
+      expect(mockNsAUpsert).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'r1' }),
+          expect.objectContaining({ id: 'r3' }),
+        ]),
+      );
+      expect(mockNsBUpsert).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ id: 'r2' })]),
+      );
+    });
+
+    it('strips providerDirectives from records before upsert', async () => {
+      const mockNsUpsert = vi.fn().mockResolvedValue(undefined);
+      mockIndexInstance.namespace.mockReturnValueOnce({ upsert: mockNsUpsert });
+
+      const records = [
+        { id: 'r1', values: [1], metadata: { Entity: 'Contacts' }, providerDirectives: { namespace: 'org-x' } },
+      ] as never;
+
+      await db.CreateRecords(records);
+      const upserted = mockNsUpsert.mock.calls[0][0];
+      expect(upserted[0]).not.toHaveProperty('providerDirectives');
+      expect(upserted[0]).toMatchObject({ id: 'r1', metadata: { Entity: 'Contacts' } });
+    });
+
+    it('falls back to providerConfig.namespace for a homogeneous batch with no providerDirectives', async () => {
+      mockIndexInstance.namespace.mockReturnValueOnce({ upsert: vi.fn().mockResolvedValue(undefined) });
+
+      const records = [{ id: 'r1', values: [1] }] as never;
+      const result = await db.CreateRecords(records, undefined, { namespace: 'org-fallback' });
+
+      expect(result.success).toBe(true);
+      expect(mockIndexInstance.namespace).toHaveBeenCalledWith('org-fallback');
+    });
+
+    it('returns failure when upsert throws in multi-namespace path', async () => {
+      mockIndexInstance.namespace.mockReturnValueOnce({
+        upsert: vi.fn().mockRejectedValue(new Error('dimension mismatch')),
+      });
+
+      const records = [
+        { id: 'r1', values: [1], providerDirectives: { namespace: 'org-a' } },
+      ] as never;
+
+      const result = await db.CreateRecords(records);
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('dimension mismatch');
+    });
+  });
 });
