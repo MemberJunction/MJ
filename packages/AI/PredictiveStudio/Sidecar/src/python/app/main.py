@@ -21,11 +21,14 @@ from fastapi import FastAPI, HTTPException
 from . import (algorithms, artifacts, calibration_wrappers, clv_wrappers, forecast_wrappers,
                metrics, pattern_wrappers, preprocessing, reco_wrappers, sequence_wrappers,
                survival_wrappers, unsupervised_wrappers)
+from . import profiling
 from .schemas import (
     HealthResponse,
     PredictRequest,
     PredictResponse,
     Prediction,
+    ProfileRequest,
+    ProfileResponse,
     TrainRequest,
     TrainResponse,
 )
@@ -45,6 +48,39 @@ def health() -> HealthResponse:
         runnable_algorithms=algorithms.runnable_algorithms(),
         cached_models=len(artifacts.MODEL_CACHE),
     )
+
+
+# ---------------------------------------------------------------------------
+# /profile  (Doc 5 — the Statistician's data-lens endpoint)
+# ---------------------------------------------------------------------------
+
+@app.post("/profile", response_model=ProfileResponse)
+def profile(req: ProfileRequest) -> ProfileResponse:
+    """Compute the requested data-profiling lenses over an assembled matrix.
+
+    The CONTRACT (plan Doc 5): the Statistician LLM chooses which lenses to look
+    through and interprets the numbers; this endpoint COMPUTES them — statistics are
+    never LLM-invented. Returns a flat stats block the agent cites in its triage.
+
+    Raises:
+        HTTPException: 400 for a missing matrix or a column role not in the data.
+    """
+    if req.data is None:
+        raise HTTPException(status_code=400, detail="`data` is required.")
+    cols = list(req.data.columns)
+    for role in (req.target_col, req.event_col, req.duration_col, req.value_col):
+        if role is not None and role not in cols:
+            raise HTTPException(status_code=400, detail=f"Column '{role}' not found in data columns.")
+    feature_cols = [c for c in (req.feature_columns or cols)
+                    if c in cols and c not in (req.target_col, req.event_col, req.duration_col, req.value_col)]
+    try:
+        stats = profiling.profile(
+            cols, req.data.rows, feature_cols,
+            target_col=req.target_col, event_col=req.event_col, duration_col=req.duration_col,
+            value_col=req.value_col, seasonal_period=req.seasonal_period or 12, lenses=req.lenses)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ProfileResponse(stats=stats)
 
 
 # ---------------------------------------------------------------------------

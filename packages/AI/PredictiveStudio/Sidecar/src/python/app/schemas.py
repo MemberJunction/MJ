@@ -226,6 +226,34 @@ class PredictResponse(BaseModel):
     predictions: List[Prediction]
 
 
+class ProfileRequest(BaseModel):
+    """``POST /profile`` request body (Doc 5 — the Statistician's data-lens call).
+
+    The Statistician sub-agent chooses WHICH lenses to look through (``lenses``) and
+    supplies the relevant column roles; the sidecar COMPUTES the statistics (never the
+    LLM). Every column role is optional so a caller profiles only what it has —
+    ``target_col`` unlocks the classification lenses, ``event_col``/``duration_col``
+    the survival lens, ``value_col`` the forecasting lens.
+    """
+
+    data: MatrixData
+    feature_columns: List[str] = Field(default_factory=list)
+    target_col: Optional[str] = None
+    event_col: Optional[str] = None
+    duration_col: Optional[str] = None
+    value_col: Optional[str] = None
+    seasonal_period: Optional[int] = 12
+    # When empty, compute every lens the provided columns support.
+    lenses: Optional[List[str]] = None
+
+
+class ProfileResponse(BaseModel):
+    """``POST /profile`` response body — the flat, code-computed stats block the
+    Statistician cites (each key a lens output; values are numbers or small dicts)."""
+
+    stats: Dict[str, Any]
+
+
 class HealthResponse(BaseModel):
     """``GET /health`` response body — liveness plus introspection.
 

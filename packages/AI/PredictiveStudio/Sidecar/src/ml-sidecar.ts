@@ -8,6 +8,8 @@ import type {
   TrainResponse,
   PredictRequest,
   PredictResponse,
+  ProfileRequest,
+  ProfileResponse,
 } from '@memberjunction/predictive-studio-core';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -319,6 +321,17 @@ export class MLSidecar {
   async predict(req: PredictRequest): Promise<PredictResponse> {
     this.assertRunning();
     return this.httpPost<PredictRequest, PredictResponse>('/predict', req);
+  }
+
+  /**
+   * Compute data-profiling lenses via `POST /profile` (Doc 5 — the Statistician's
+   * backbone). The agent picks the lenses + column roles; the sidecar computes the
+   * statistics (never LLM-invented).
+   * @throws {SidecarError} when the sidecar responds with a non-2xx status
+   */
+  async profile(req: ProfileRequest): Promise<ProfileResponse> {
+    this.assertRunning();
+    return this.httpPost<ProfileRequest, ProfileResponse>('/profile', req);
   }
 
   /**

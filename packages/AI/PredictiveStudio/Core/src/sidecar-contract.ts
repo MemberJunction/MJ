@@ -321,3 +321,39 @@ export interface PredictResponse {
  * (`MLModel.FittedPreprocessing`, plan §4.3) and round-tripped unchanged.
  */
 export type FittedPreprocessing = Record<string, unknown>;
+
+/**
+ * `POST /profile` request (Doc 5 — the Statistician's data-lens call). The
+ * Statistician sub-agent chooses WHICH lenses to look through and supplies the
+ * relevant column roles; the sidecar COMPUTES the statistics (never the LLM). Every
+ * column role is optional so a caller profiles only what it has: `TargetCol` unlocks
+ * the classification lenses, `EventCol`/`DurationCol` the survival lens, `ValueCol`
+ * the forecasting lens.
+ */
+export interface ProfileRequest {
+  /** The assembled feature matrix to profile. */
+  data: MatrixData;
+  /** Numeric feature columns to profile (empty ⇒ all non-role columns). */
+  feature_columns?: string[];
+  /** Supervised target column — unlocks class-balance / univariate-AUC / cv lenses. */
+  target_col?: string;
+  /** Survival event indicator column — unlocks the censoring lens. */
+  event_col?: string;
+  /** Survival duration column (pairs with `event_col`). */
+  duration_col?: string;
+  /** Time-series value column — unlocks the seasonality/trend lens. */
+  value_col?: string;
+  /** Seasonal period for the seasonality lens (default 12). */
+  seasonal_period?: number;
+  /** Named lenses to compute; when omitted, every applicable lens runs. */
+  lenses?: string[];
+}
+
+/**
+ * `POST /profile` response — the flat, code-computed stats block the Statistician
+ * cites in its triage. Each key is a lens output; values are numbers or small
+ * nested objects (e.g. `silhouette_by_k`, `top_univariate_auc`).
+ */
+export interface ProfileResponse {
+  stats: Record<string, unknown>;
+}
