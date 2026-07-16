@@ -140,6 +140,13 @@ jobs:
         run: node packages/MJCLI/bin/run.js migrate
 
       - name: Sync push — reconcile committed metadata (mj sync push --ci)
+        env:
+          # Same headroom the migrate step gets: saving some entities (e.g. MJ: Actions) runs an
+          # on-device embedding (Xenova/all-mpnet-base-v2) that cold-loads the model + blocks the
+          # event loop, so the in-transaction SQL request blows past mssql's 15s default on a cold
+          # runner → the whole push rolls back. This flows through MJCLI config as dbRequestTimeout
+          # → the mssql pool's requestTimeout.
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
         run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
 
       # The RLS security principals (users + scoped role + entity-permission grant) live in a
@@ -149,6 +156,8 @@ jobs:
       # then the users/permissions that reference the role). Without this the RLS8/9/10 checks
       # skip-as-pass, so the gate stays green either way — but pushing here keeps them exercised.
       - name: Sync push — seed the RLS integration fixtures (sibling root)
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'   # same cold-runner headroom as the main push above
         run: node packages/MJCLI/bin/run.js sync push --dir=metadata-integration-fixtures --ci
 
       # Assert the fixtures actually landed. `mj sync push` can, in principle, exit 0 without
