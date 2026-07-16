@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-js/master/packages/api/schema/stryker-core.json",
+  "_comment": "Phase-4 mutation-testing PILOT (tooling-roadmap #5). Run manually: npx stryker run (from this package). Deliberately NOT wired into CI — the pilot measures whether the DOM specs catch real bugs; see plans/testing/angular-dom-testing-rollout.md.",
+  "testRunner": "vitest",
+  "mutate": [
+    "src/**/*.ts",
+    "!src/**/*.test.ts",
+    "!src/**/module.ts",
+    "!src/**/public-api.ts",
+    "!src/**/index.ts"
+  ],
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "_inPlace_comment": "Required in this monorepo: the package vitest config imports ../../../../vitest.(dom.)shared, which cannot resolve from Stryker's copied sandbox. inPlace mutates the real tree and restores on exit — run only on a clean/committed tree.",
+  "inPlace": true,
+  "reporters": ["clear-text", "progress"],
+  "tempDirName": ".stryker-tmp",
+  "timeoutMS": 60000,
+  "concurrency": 2
+}

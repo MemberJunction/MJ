@@ -181,6 +181,10 @@ packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
 
 # Test coverage output
 coverage/
+
+# Stryker mutation-testing scratch (per-package, created by `npx stryker run`)
+.stryker-tmp/
+reports/mutation/
 docker/workbench/workspace/.env.database
 docker/workbench/workspace/screenshots/
 test-run-log.txt

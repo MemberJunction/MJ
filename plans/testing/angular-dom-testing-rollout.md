@@ -237,7 +237,19 @@ The "keep tests honest" half of the tooling gameplan lands here, alongside the c
   (`NO_ERRORS_SCHEMA`/`CUSTOM_ELEMENTS_SCHEMA`), and `any`/`as never` casts. Enabling it required (and
   drove) cleaning the pre-existing offenders across `Generic/**` (7 blanket-schema specs → explicit child
   stubs; 4 `as never` sites → `satisfies Pick<…>` + seam casts).
-- **Mutation testing** (tooling-roadmap #5): verify the tests actually catch bugs, once there's a real body of them.
+- **Mutation testing (tooling-roadmap #5) ✅ PILOT SHIPPED**: Stryker (`@stryker-mutator/core` +
+  `vitest-runner`, root devDeps) piloted on `entity-permissions`
+  ([stryker.config.json](../../packages/Angular/Explorer/entity-permissions/stryker.config.json), run
+  manually with `npx stryker run` from the package — deliberately NOT a CI gate). Monorepo gotcha solved:
+  Stryker's copied sandbox breaks the `../../../../vitest.(dom.)shared` imports, so the config uses
+  `inPlace: true` (mutates the real tree, restores on exit — run only on a committed tree).
+  **Pilot findings (honest):** 2m41s for a 389-line package; score 17.3% total / **48.1% on covered
+  code** (50 killed, 54 survived, 185 no-coverage). Reading: the DOM specs assert *rendering* well but
+  don't exercise mutation-level *behavior* — e.g. `if (!p.Dirty)` → `if (true)` survives because no
+  spec drives the save/dirty path. That's consistent with the unit-DOM scope (save paths need a backend
+  and live in integration/e2e), but the covered-code score is the number to watch and ratchet.
+  **Next**: run the pilot on 2-3 more packages to calibrate a realistic covered-score bar before any
+  CI wiring; too slow for CI on big packages (each mutant re-runs vitest under Angular AOT).
 - Document the live-media e2e suite location/runner for the excluded WebRTC paths. **Status
   (documented, suite not yet built):** no live-media e2e suite exists today. The browser e2e home is
   [`e2e/`](../../e2e/README.md) (Playwright against a running MJExplorer, signed-in persistent
