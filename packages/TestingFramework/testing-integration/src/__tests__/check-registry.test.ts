@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { IntegrationCheckRegistry } from '../check-registry';
-import type { NamedCheck } from '../check';
+import type { NamedCheck, IntegrationCheckContext } from '../check';
 import { ServerCacheChecks } from '../checks/server-cache.checks';
 import { ClientCacheChecks } from '../checks/client-cache.checks';
 import { RunQueryCacheChecks } from '../checks/runquery-cache.checks';
@@ -47,11 +47,30 @@ describe('IntegrationCheckRegistry', () => {
     it('Instance is a stable singleton', () => {
         expect(IntegrationCheckRegistry.Instance).toBe(IntegrationCheckRegistry.Instance);
     });
+
+    it('registers and retrieves a bundle lifecycle by bundle name', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        const calls: string[] = [];
+        reg.RegisterLifecycle('lifecycletest', {
+            Setup: async () => { calls.push('setup'); },
+            Teardown: async () => { calls.push('teardown'); },
+        });
+        const lc = reg.GetLifecycle('lifecycletest');
+        expect(lc).toBeDefined();
+        const ctx = {} as unknown as IntegrationCheckContext; // unused by this lifecycle
+        await lc!.Setup(ctx);
+        await lc!.Teardown(ctx);
+        expect(calls).toEqual(['setup', 'teardown']);
+    });
+
+    it('GetLifecycle returns undefined for a bundle with no registered lifecycle', () => {
+        expect(IntegrationCheckRegistry.Instance.GetLifecycle('no.such.bundle.lifecycle')).toBeUndefined();
+    });
 });
 
 describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
-        ['server-cache', ServerCacheChecks, 31],
+        ['server-cache', ServerCacheChecks, 32],
         ['client-cache', ClientCacheChecks, 13],
         ['runquery-cache', RunQueryCacheChecks, 10],
         ['rls-isolation', RlsIsolationChecks, 9],
@@ -96,9 +115,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         });
     }
 
-    it('server-cache marks exactly S17/S23/S24/S29/S30 as RequiresMutation', () => {
+    it('server-cache marks exactly S17/S23/S24/S29/S30/S31b as RequiresMutation', () => {
         const mutating = ServerCacheChecks.filter(c => c.RequiresMutation).map(c => c.Id);
-        expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30']);
+        expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30', 'server-cache.S31b']);
     });
 
     it('client-cache marks exactly C10 as RequiresMutation', () => {

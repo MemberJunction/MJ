@@ -68,16 +68,20 @@ function skipIfUnusable(fx: RlsFixture | undefined, checkId: string): fx is RlsF
 }
 
 /**
- * Emails of the purpose-built RLS test users seeded via version-controlled metadata
- * (metadata/users/.integration-test-users.json + the "Integration Test: RLS Scoped Reader" role).
- * A/B are each in ONLY that role → genuinely scoped (non-exempt) on SEEDED_RLS_ENTITY; the no-grant
- * user has no roles. Kept in sync with the metadata by convention (change both together).
+ * Emails of the purpose-built RLS test users seeded via version-controlled metadata. These
+ * principals (users + the "Integration Test: RLS Scoped Reader" role + its entity-permission grant)
+ * live in the SIBLING `metadata-integration-fixtures/` root — NOT the default-pushed `metadata/`
+ * tree — so they never land in a production DB that only syncs `metadata/` (R2). A/B are each in
+ * ONLY that role → genuinely scoped (non-exempt) on SEEDED_RLS_ENTITY; the no-grant user has no
+ * roles. Kept in sync with the fixtures by convention (change both together).
  */
 const SEEDED_SCOPED_A_EMAIL = 'it-rls-a@integration.test';
 const SEEDED_SCOPED_B_EMAIL = 'it-rls-b@integration.test';
 const SEEDED_NOGRANT_EMAIL = 'it-nogrant@integration.test';
 /** The entity the seeded scoped role grants read on (with the `{{UserID}}` RLS filter). */
 const SEEDED_RLS_ENTITY = 'MJ: AI Agent Runs';
+/** The exact command that seeds the RLS principals — printed in every skip-as-pass warning below. */
+const SEED_FIXTURES_COMMAND = 'npx mj sync push --dir=metadata-integration-fixtures';
 
 /** Case-insensitive user-by-email lookup for the seeded fixtures. */
 function findUserByEmail(users: UserInfo[], email: string): UserInfo | undefined {
@@ -323,7 +327,7 @@ export async function CheckRls8_SeededScopedDivergence(ctx: IntegrationCheckCont
     const a = ctx.RlsFixture?.SeededScopedA;
     const b = ctx.RlsFixture?.SeededScopedB;
     if (!a || !b) {
-        console.warn(`  ⚠ rls-isolation.RLS8 SKIPPED — seeded scoped users (${SEEDED_SCOPED_A_EMAIL} / ${SEEDED_SCOPED_B_EMAIL}) not in the user cache; push metadata/users to enable.`);
+        console.warn(`  ⚠ rls-isolation.RLS8 SKIPPED — seeded scoped users (${SEEDED_SCOPED_A_EMAIL} / ${SEEDED_SCOPED_B_EMAIL}) not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
         return;
     }
     const entity = ctx.Provider.EntityByName(SEEDED_RLS_ENTITY);
@@ -355,7 +359,7 @@ export async function CheckRls8_SeededScopedDivergence(ctx: IntegrationCheckCont
 export async function CheckRls9_SeededLiveNoLeak(ctx: IntegrationCheckContext): Promise<void> {
     const a = ctx.RlsFixture?.SeededScopedA;
     if (!a) {
-        console.warn(`  ⚠ rls-isolation.RLS9 SKIPPED — seeded scoped user ${SEEDED_SCOPED_A_EMAIL} not in the user cache; push metadata/users to enable.`);
+        console.warn(`  ⚠ rls-isolation.RLS9 SKIPPED — seeded scoped user ${SEEDED_SCOPED_A_EMAIL} not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
         return;
     }
     const result = await new RunView().RunView<{ UserID?: string }>(
@@ -376,7 +380,7 @@ export async function CheckRls9_SeededLiveNoLeak(ctx: IntegrationCheckContext): 
 export async function CheckRls10_NoGrantUserDenied(ctx: IntegrationCheckContext): Promise<void> {
     const nogrant = ctx.RlsFixture?.SeededNoGrant;
     if (!nogrant) {
-        console.warn(`  ⚠ rls-isolation.RLS10 SKIPPED — seeded no-grant user ${SEEDED_NOGRANT_EMAIL} not in the user cache; push metadata/users to enable.`);
+        console.warn(`  ⚠ rls-isolation.RLS10 SKIPPED — seeded no-grant user ${SEEDED_NOGRANT_EMAIL} not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
         return;
     }
     const result = await new RunView().RunView<{ UserID?: string }>(

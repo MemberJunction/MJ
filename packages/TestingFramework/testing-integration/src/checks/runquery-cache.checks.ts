@@ -3,11 +3,11 @@
  *
  * PORTED VERBATIM from packages/MJServer/integration-test-scripts/runquery-cache-tests.ts.
  * Unlike the cache suites, this bundle needs self-contained fixtures: one Query
- * Category and two Queries (TTL-mode + smart-validation-mode). `createRunQueryFixtures`
- * / `teardownRunQueryFixtures` lift the original bootstrap/teardown so BOTH the
- * IntegrationTestDriver (driver-level try/finally) and the tsx script create and
- * tear them down identically. The fixtures are threaded onto ctx.Fixtures; each
- * Q-check reads them from there.
+ * Category and two Queries (TTL-mode + smart-validation-mode), wired through the standard
+ * `BundleLifecycle` (RegisterLifecycle below, backed by `createRunQueryFixtures` /
+ * `teardownRunQueryFixtures`) so BOTH the IntegrationTestDriver and the tsx dispatcher run
+ * Setup + Teardown inside ONE try/finally — Teardown is guaranteed even on a mid-Setup crash.
+ * The fixtures are threaded onto ctx.Fixtures; each Q-check reads them from there.
  *
  * The whole bundle mutates the DB by design (creates/deletes MJ: User Settings rows
  * the fixture queries count), so the Q-checks are NOT RequiresMutation-gated — they
@@ -57,12 +57,19 @@ export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Prom
     const schema = ctx.Schema ?? '__mj';
     const user = ctx.User;
 
+    // Publish the fixture handle on the context UP-FRONT and populate each field as its record
+    // is created — so a mid-Setup crash (e.g. the second query save failing) still leaves teardown a
+    // handle referencing whatever was already created, instead of orphaning it. Consumers only read
+    // the handle after a SUCCESSFUL Setup (all three fields present), so the up-front partial is safe.
+    const fixtures = (ctx.Fixtures = {} as RunQueryFixtures);
+
     const category = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', user);
     category.Name = `Integration Test Queries ${Date.now()}`;
     category.UserID = user.ID;
     if (!await category.Save()) {
         throw new Error(`Fixture category save failed: ${category.LatestResult?.CompleteMessage}`);
     }
+    fixtures.Category = category;
 
     const countSQL = `SELECT COUNT(*) AS SettingCount FROM ${schema}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
 
@@ -74,6 +81,7 @@ export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Prom
     if (!await ttlQuery.Save()) {
         throw new Error(`TTL fixture query save failed: ${ttlQuery.LatestResult?.CompleteMessage}`);
     }
+    fixtures.TtlQuery = ttlQuery;
 
     const validatedQuery = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', user);
     validatedQuery.Name = `CacheTest Validated ${Date.now()}`;
@@ -85,14 +93,19 @@ export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Prom
     if (!await validatedQuery.Save()) {
         throw new Error(`Validated fixture query save failed: ${validatedQuery.LatestResult?.CompleteMessage}`);
     }
+    fixtures.ValidatedQuery = validatedQuery;
 
     // Force the QueryEngine to see the fixtures (resolveQuery reads its cache)
     await QueryEngine.Instance.Config(true, user);
 
-    return { Category: category, TtlQuery: ttlQuery, ValidatedQuery: validatedQuery };
+    return fixtures;
 }
 
-/** Best-effort teardown — sweep leftover settings, then delete queries + category in FK-safe order. */
+/**
+ * Best-effort teardown — sweep leftover settings, then delete whatever queries/category were
+ * created in FK-safe order. Partial-safe (R4): a mid-Setup crash may have created only some of
+ * the fixture records, so each is guarded before delete.
+ */
 export async function teardownRunQueryFixtures(ctx: IntegrationCheckContext, fixtures: RunQueryFixtures): Promise<void> {
     try {
         const rv = new RunView();
@@ -105,9 +118,15 @@ export async function teardownRunQueryFixtures(ctx: IntegrationCheckContext, fix
         for (const row of leftovers.Results) {
             await row.Delete();
         }
-        await fixtures.ValidatedQuery.Delete();
-        await fixtures.TtlQuery.Delete();
-        await fixtures.Category.Delete();
+        if (fixtures?.ValidatedQuery) {
+            await fixtures.ValidatedQuery.Delete();
+        }
+        if (fixtures?.TtlQuery) {
+            await fixtures.TtlQuery.Delete();
+        }
+        if (fixtures?.Category) {
+            await fixtures.Category.Delete();
+        }
     } catch (e) {
         console.error(`Teardown warning: ${e instanceof Error ? e.message : String(e)}`);
     }

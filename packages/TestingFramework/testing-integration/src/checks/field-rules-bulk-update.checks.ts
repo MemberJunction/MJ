@@ -148,8 +148,13 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('field-rules-bulk-update', {
         const user = ctx.User;
         const entityID = ctx.Provider.EntityByName(ENTITY)?.ID ?? (await resolveEntityID(user));
 
-        // --- create 3 throwaway records (Description starts null) ---
+        // Publish the fixture handle (with a shared, still-empty Ids array) BEFORE creating any
+        // records, then push each ID as it is created. A mid-Setup crash then leaves teardown a
+        // handle whose Ids hold exactly the records already created, so nothing is orphaned.
         const ids: string[] = [];
+        ctx.FieldRulesFixture = { EntityID: entityID, Ids: ids };
+
+        // --- create 3 throwaway records (Description starts null) ---
         for (const n of [1, 2, 3]) {
             const cat = await md.GetEntityObject<MJActionCategoryEntity>(ENTITY, user);
             cat.NewRecord();
@@ -158,8 +163,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('field-rules-bulk-update', {
             Assert(await cat.Save(), `creating fixture ${n} failed: ${cat.LatestResult?.CompleteMessage}`);
             ids.push(cat.ID);
         }
-
-        ctx.FieldRulesFixture = { EntityID: entityID, Ids: ids };
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = ctx.FieldRulesFixture;

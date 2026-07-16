@@ -21,10 +21,10 @@ import type { MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entitie
 import type { UserInfo } from '@memberjunction/core';
 
 /** Build a minimal DriverExecutionContext for the fields the driver actually reads. */
-function makeContext(config: object | null): DriverExecutionContext {
+function makeContext(config: object | null, maxExecutionTimeMs: number | null = null): DriverExecutionContext {
     const test = (config === null
         ? {}
-        : { Configuration: JSON.stringify(config), MaxExecutionTimeMS: null }
+        : { Configuration: JSON.stringify(config), MaxExecutionTimeMS: maxExecutionTimeMs }
     ) as Partial<MJTestEntity> as MJTestEntity;
     const testRun = { ID: 'run-1' } as Partial<MJTestRunEntity> as MJTestRunEntity;
     const contextUser = { ID: 'user-1' } as Partial<UserInfo> as UserInfo;
@@ -161,5 +161,51 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         const result = await driver.Execute(makeContext(null));
         expect(result.status).toBe('Error');
         expect(result.oracleResults[0].oracleType).toBe('error');
+    });
+
+    it('a hung check is bounded by the remaining run budget → surfaces as a failed check (C6)', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        // A check that never resolves — before C6 this ran forever (the between-checks timeout can
+        // only fire BETWEEN checks). Now the per-check race rejects at the remaining budget.
+        reg.Register({ Id: 'unithang.A', Name: 'hangA', Fn: () => new Promise<void>(() => { /* never resolves */ }) });
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ checks: [{ type: 'unithang' }] }, 40));
+        const hung = result.oracleResults.find(o => o.oracleType === 'unithang.A');
+        expect(hung?.passed).toBe(false);
+        expect(hung?.message).toMatch(/hung check|remaining run budget/);
+        // Depending on the timer/ race ordering the run ends as Failed (check failed) or Timeout
+        // (between-checks timer also fired) — both are acceptable; the check MUST be recorded failed.
+        expect(['Failed', 'Timeout']).toContain(result.status);
+    });
+
+    it('a lifecycle Setup failure still runs Teardown (R4 guaranteed cleanup) and fails the bundle, never re-throws', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        let teardownRan = false;
+        reg.Register({ Id: 'unitsetupfail.A', Name: 'A', Fn: async () => { /* must NOT run — Setup failed first */ } });
+        reg.RegisterLifecycle('unitsetupfail', {
+            Setup: async () => { throw new Error('setup boom'); },
+            Teardown: async () => { teardownRan = true; },
+        });
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ checks: [{ type: 'unitsetupfail' }] }));
+        expect(teardownRan, 'Teardown must run even when Setup throws').toBe(true);
+        expect(result.oracleResults.some(o => o.oracleType === 'unitsetupfail.A'), 'checks must not run after a Setup failure').toBe(false);
+        const fixtures = result.oracleResults.find(o => o.oracleType === 'unitsetupfail.fixtures');
+        expect(fixtures?.passed).toBe(false);
+        expect(fixtures?.message).toMatch(/setup boom|fixture setup failed/);
+    });
+
+    it('a lifecycle runs Setup then Teardown around passing checks', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        const order: string[] = [];
+        reg.Register({ Id: 'unitlifecycle.A', Name: 'A', Fn: async () => { order.push('check'); } });
+        reg.RegisterLifecycle('unitlifecycle', {
+            Setup: async () => { order.push('setup'); },
+            Teardown: async () => { order.push('teardown'); },
+        });
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ checks: [{ type: 'unitlifecycle' }] }));
+        expect(result.status).toBe('Passed');
+        expect(order).toEqual(['setup', 'check', 'teardown']);
     });
 });

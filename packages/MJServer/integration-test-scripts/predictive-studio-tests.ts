@@ -39,10 +39,10 @@ async function main(): Promise<void> {
     const reg = IntegrationCheckRegistry.Instance;
     const lifecycle = reg.GetLifecycle(BUNDLE);
     let failures = 0;
-    if (lifecycle) {
-        await lifecycle.Setup(ctx);
-    }
     try {
+        if (lifecycle) {
+            await lifecycle.Setup(ctx);
+        }
         const suite = new TestRunner('Predictive Studio live integration (ML CRUD + ML-Model work-type seam + PS Actions)');
         for (const check of reg.GetBundle(BUNDLE)) {
             suite.Test(check.Name, () => check.Fn(ctx));

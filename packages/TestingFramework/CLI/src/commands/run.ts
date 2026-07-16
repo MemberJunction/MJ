@@ -32,8 +32,19 @@ export class RunCommand {
             // Integration tests must install the instrumented cache as the FIRST caller
             // (before any provider setup) or its counters are a silent no-op. Opt-in via
             // MJ_INTEGRATION_TEST=1 so every other test run is byte-for-byte unchanged.
+            // A null return means the cache was ALREADY initialized elsewhere — fail fast with an
+            // actionable message rather than proceeding uninstrumented and failing later with a
+            // confusing "cache not installed first" error (S10).
             if (process.env.MJ_INTEGRATION_TEST === '1') {
-                await installInstrumentedCacheFirst();
+                const installed = await installInstrumentedCacheFirst();
+                if (installed === null) {
+                    console.error(OutputFormatter.formatError(
+                        'MJ_INTEGRATION_TEST=1 but the local cache was already initialized by another component, ' +
+                        'so the instrumented cache could not be installed first. Run integration tests in a dedicated ' +
+                        'process (they cannot run inside a live MJAPI).'
+                    ));
+                    process.exit(2);
+                }
             }
 
             // Initialize MJ provider (database connection and metadata)

@@ -52,6 +52,17 @@ const NON_SUITE_BUNDLES = new Set<string>([
 const ROOT = repoRoot();
 const SCRIPTS_DIR = path.join(ROOT, 'packages/MJServer/integration-test-scripts');
 const META_DIR = path.join(ROOT, 'metadata/tests/integration');
+const SUITE_FILE = path.join(ROOT, 'metadata/test-suites/.integration-suite.json');
+
+/**
+ * `*-tests.ts` dispatchers intentionally NOT wired into the run-all.ts aggregator — special rigs
+ * that need a live MJAPI or a second server, so they can't run in the headless deterministic
+ * aggregator. Keep small + reasoned; each still has its own IT record + (where applicable) sibling.
+ */
+const NOT_IN_AGGREGATOR = new Set<string>([
+    'client-cache-tests.ts',              // client transport — needs a live MJAPI (run standalone)
+    'cross-server-invalidation-tests.ts', // two-server cross-invalidation rig (run standalone)
+]);
 
 /** The bundle each `*-tests.ts` dispatcher points at (`const BUNDLE = '..'` or `GetBundle('..')`). */
 function dispatcherBundles(): Map<string, string> {
@@ -64,6 +75,31 @@ function dispatcherBundles(): Map<string, string> {
         }
     }
     return map;
+}
+
+/** The `*.ts` script filenames referenced by run-all.ts's GROUPS arrays. */
+function aggregatorScripts(): Set<string> {
+    const src = fs.readFileSync(path.join(SCRIPTS_DIR, 'run-all.ts'), 'utf8');
+    // Scripts appear as quoted '<name>.ts' entries; the DIR const + tier labels don't match this shape.
+    return new Set([...src.matchAll(/'([\w-]+\.ts)'/g)].map(m => m[1]));
+}
+
+/** The display Name of every IT metadata record (e.g. "IT01 - Server RunView Cache Integrity"). */
+function itRecordNames(): string[] {
+    const names: string[] = [];
+    for (const file of fs.readdirSync(META_DIR).filter(f => f.endsWith('.json'))) {
+        const rec = JSON.parse(fs.readFileSync(path.join(META_DIR, file), 'utf8'));
+        if (rec?.fields?.Name) {
+            names.push(rec.fields.Name);
+        }
+    }
+    return names;
+}
+
+/** The Test names joined to a suite via `MJ: Test Suite Tests` in the integration suite metadata. */
+function suiteMemberTestNames(): Set<string> {
+    const src = fs.readFileSync(SUITE_FILE, 'utf8');
+    return new Set([...src.matchAll(/@lookup:MJ: Tests\.Name=([^"]+)"/g)].map(m => m[1].trim()));
 }
 
 /** The bundle each IT metadata record selects (`Configuration.checks[].type`). */
@@ -111,5 +147,22 @@ describe('tsx↔metadata sibling parity (drift-check)', () => {
             expect(dispatchers.has(b), `${b} missing tsx dispatcher`).toBe(true);
             expect(metadata.has(b), `${b} missing IT record`).toBe(true);
         }
+    });
+
+    it('every tsx dispatcher is wired into the run-all.ts aggregator (except documented special rigs)', () => {
+        const scripts = aggregatorScripts();
+        const missing = [...dispatchers.values()].filter(f => !NOT_IN_AGGREGATOR.has(f) && !scripts.has(f));
+        expect(missing, `dispatchers not referenced by run-all.ts GROUPS (add them, or to NOT_IN_AGGREGATOR): ${missing.join(', ') || 'none'}`).toEqual([]);
+    });
+
+    it('every script referenced by run-all.ts GROUPS exists on disk', () => {
+        const missing = [...aggregatorScripts()].filter(f => !fs.existsSync(path.join(SCRIPTS_DIR, f)));
+        expect(missing, `run-all.ts references scripts that do not exist: ${missing.join(', ') || 'none'}`).toEqual([]);
+    });
+
+    it('every IT metadata record is joined to the integration suite (MJ: Test Suite Tests)', () => {
+        const members = suiteMemberTestNames();
+        const orphans = itRecordNames().filter(n => !members.has(n));
+        expect(orphans, `IT records not joined to any suite in .integration-suite.json: ${orphans.join(', ') || 'none'}`).toEqual([]);
     });
 });

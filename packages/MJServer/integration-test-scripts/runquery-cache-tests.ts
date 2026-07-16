@@ -23,10 +23,11 @@
  * Exit code: 0 = all passed, 1 = failures, 2 = bootstrap error.
  */
 import {
-    TestRunner, EmitOutcomes, IntegrationCheckRegistry, bootstrapIntegrationServer,
-    createRunQueryFixtures, teardownRunQueryFixtures
+    TestRunner, EmitOutcomes, IntegrationCheckRegistry, bootstrapIntegrationServer
 } from './lib/harness';
 import type { IntegrationCheckContext } from './lib/harness';
+
+const BUNDLE = 'runquery-cache';
 
 async function main(): Promise<void> {
     const ic = await bootstrapIntegrationServer({ ContextUserEmail: process.env.MJ_TEST_USER_EMAIL });
@@ -37,19 +38,30 @@ async function main(): Promise<void> {
         Pool: ic.Pool,
         Schema: ic.Db.Schema
     };
-    ctx.Fixtures = await createRunQueryFixtures(ctx);
 
-    const suite = new TestRunner('RunQuery result caching (server provider, live SQL Server)');
-    for (const check of IntegrationCheckRegistry.Instance.GetBundle('runquery-cache')) {
-        suite.Test(check.Name, () => check.Fn(ctx));
-    }
-
-    const failures = await suite.Run();
-    if (process.env.EMIT_OUTCOMES) {
-        await EmitOutcomes(suite, process.env.EMIT_OUTCOMES);
-    }
-    if (ctx.Fixtures) {
-        await teardownRunQueryFixtures(ctx, ctx.Fixtures);
+    // Aligned with every other dispatcher (R4): resolve the registered BundleLifecycle and run
+    // its Setup INSIDE the try whose finally GUARANTEES Teardown — so a mid-Setup crash (e.g. the
+    // second fixture query save failing) still sweeps whatever the fixture created, instead of the
+    // old create-fixtures-then-run-then-teardown shape that orphaned partial fixtures on a throw.
+    const reg = IntegrationCheckRegistry.Instance;
+    const lifecycle = reg.GetLifecycle(BUNDLE);
+    let failures = 0;
+    try {
+        if (lifecycle) {
+            await lifecycle.Setup(ctx);
+        }
+        const suite = new TestRunner('RunQuery result caching (server provider, live SQL Server)');
+        for (const check of reg.GetBundle(BUNDLE)) {
+            suite.Test(check.Name, () => check.Fn(ctx));
+        }
+        failures = await suite.Run();
+        if (process.env.EMIT_OUTCOMES) {
+            await EmitOutcomes(suite, process.env.EMIT_OUTCOMES);
+        }
+    } finally {
+        if (lifecycle) {
+            await lifecycle.Teardown(ctx);
+        }
     }
     await ic.ClosePool();
     process.exit(failures > 0 ? 1 : 0);

@@ -37,6 +37,7 @@ import { SkillImportExportService, SkillMarkdownConverter } from '@memberjunctio
 import { Assert, AssertEqual } from '../test-runner';
 import { IntegrationCheckRegistry } from '../check-registry';
 import { NamedCheck, IntegrationCheckContext } from '../check';
+import type { AiSkillsFixture } from '../check';
 import type { IMetadataProvider } from '@memberjunction/core';
 
 const TAG = '(mj-integration-test — safe to delete)';
@@ -418,6 +419,21 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('ai-skills', {
         // unshifted to the front so they delete before their parent run).
         const createdRunFixtures: { entity: string; id: string }[] = [];
 
+        // Publish the handle up-front, referencing the (still-empty) accumulator arrays by
+        // reference. Teardown sweeps ONLY those arrays, which every create-helper appends to as it
+        // goes — so a mid-Setup crash still tears down whatever was created. The SkillActive/…/SkillAuto
+        // entity refs (read only by the checks after a successful Setup) are filled in below.
+        const fx = (ctx.AiSkillsFixture = {
+            AnyAction: { ID: anyAction!.ID, Name: anyAction!.Name },
+            BundledSubAgent: { ID: bundledSubAgent.ID, Name: bundledSubAgent.Name ?? '' },
+            GrantTargetAgent: { ID: grantTargetAgent.ID, Name: grantTargetAgent.Name ?? '' },
+            CreatedSkillIds: createdSkillIds,
+            CreatedJunctionRows: createdJunctionRows,
+            CreatedGrantIds: createdGrantIds,
+            CreatedPermissionIds: createdPermissionIds,
+            CreatedRunFixtures: createdRunFixtures,
+        } as AiSkillsFixture);
+
         /** Helper: create an AI Skill fixture. ActivationMode deliberately omitted by default so the
          *  fixture also exercises the column's safe DB default ('RequestedOnly'). */
         const makeSkill = async (
@@ -448,6 +464,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('ai-skills', {
         const skillOpen = await makeSkill(`Open Skill ${TAG}`, 'Active', 'An unrestricted skill anyone can run.');
         // An explicitly self-activatable skill — the skill side of the v5.45 double activation gate.
         const skillAuto = await makeSkill(`Auto Skill ${TAG}`, 'Active', 'A self-activatable skill.', 'Auto');
+        fx.SkillActive = skillActive;
+        fx.SkillDeprecated = skillDeprecated;
+        fx.SkillOpen = skillOpen;
+        fx.SkillAuto = skillAuto;
 
         // Bundle one Action + one sub-agent into skillActive.
         const skAction = await provider.GetEntityObject<MJAISkillActionEntity>('MJ: AI Skill Actions', user);
@@ -475,21 +495,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('ai-skills', {
 
         // Refresh the engine so the new skills/junctions/grants are in cache for GetSkillsForAgent.
         await AIEngine.Instance.Config(true, user);
-
-        ctx.AiSkillsFixture = {
-            SkillActive: skillActive,
-            SkillDeprecated: skillDeprecated,
-            SkillOpen: skillOpen,
-            SkillAuto: skillAuto,
-            AnyAction: { ID: anyAction!.ID, Name: anyAction!.Name },
-            BundledSubAgent: { ID: bundledSubAgent.ID, Name: bundledSubAgent.Name ?? '' },
-            GrantTargetAgent: { ID: grantTargetAgent.ID, Name: grantTargetAgent.Name ?? '' },
-            CreatedSkillIds: createdSkillIds,
-            CreatedJunctionRows: createdJunctionRows,
-            CreatedGrantIds: createdGrantIds,
-            CreatedPermissionIds: createdPermissionIds,
-            CreatedRunFixtures: createdRunFixtures,
-        };
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = ctx.AiSkillsFixture;

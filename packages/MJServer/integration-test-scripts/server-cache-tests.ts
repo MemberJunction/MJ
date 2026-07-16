@@ -3,7 +3,7 @@
  *
  * Bootstraps SQLServerDataProvider against the real dev database exactly the way
  * MJAPI does (an instrumented LocalCacheManager installed as the first caller, then
- * setupSQLServerClient), then runs the 'server-cache' check bundle (S1–S26) from the
+ * setupSQLServerClient), then runs the 'server-cache' check bundle (S1–S31 + S31b) from the
  * shared IntegrationCheckRegistry. The check bodies live ONCE in
  * @memberjunction/testing-integration and are consumed identically by this script
  * and by the IntegrationTestDriver — there is no second copy here.
@@ -16,9 +16,10 @@
  *   npx tsx packages/MJServer/integration-test-scripts/server-cache-tests.ts
  *
  * Optional:
- *   RUN_MUTATION_TESTS=1  — also run the save/delete invalidation checks (S17/S23/S24),
- *                           which create and then delete rows for the context user.
- *                           Off by default (23 checks; 26 with mutation).
+ *   RUN_MUTATION_TESTS=1  — also run the save/delete invalidation + security-pin checks
+ *                           (S17/S23/S24/S29/S30/S31b), which create and then delete rows
+ *                           (or a throwaway saved view) for the context user.
+ *                           Off by default (26 checks; 32 with mutation).
  *   EMIT_OUTCOMES=<path>  — also write a {name,passed,durationMs,error}[] JSON file
  *                           for the golden-equivalence diff.
  *

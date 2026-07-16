@@ -1,5 +1,5 @@
 /**
- * server-cache.checks.ts — the 'server-cache' bundle (S1–S26).
+ * server-cache.checks.ts — the 'server-cache' bundle (S1–S31, plus the security pin S31b).
  *
  * PORTED VERBATIM from packages/MJServer/integration-test-scripts/server-cache-tests.ts.
  * Each check's body, its UniqueFilter tags (S1/S2/S3 share 's1'), and its display
@@ -8,7 +8,7 @@
  * suite.Test). Both the IntegrationTestDriver and the transitional tsx script
  * resolve these from the one registry (single source of truth).
  *
- * The three mutation checks (S17/S23/S24) carry `RequiresMutation: true` instead of
+ * The mutation checks (S17/S23/S24/S29/S30/S31b) carry `RequiresMutation: true` instead of
  * the original `if (process.env.RUN_MUTATION_TESTS === '1')` registration gate; the
  * driver/script filter them out unless the run opts into mutation. Checks are
  * registered in numeric order; order is load-bearing only for the S1→S2→S3 shared
@@ -803,6 +803,68 @@ export const ServerCacheChecks: NamedCheck[] = [
             Assert(!bWarm.Success,
                 `user '${B.Email}' has no read permission on '${E}' yet was served ${bWarm.Results.length} rows via the cache ` +
                 `(cache-hit=${bWarm.ExecutionTime === 0}) after user '${A.Email}' warmed it`);
+        }
+    },
+    {
+        Id: 'server-cache.S31b',
+        Name: 'S31b (security): a read-denied user is never served a cached saved-view (ViewID) result a permitted user warmed',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            // Pins the S31b fix (providerBase.cacheDeniedForViewOnlyRequest). The primary S31 gate
+            // keys off the entity resolved from params.EntityName; a ViewID-only request (the
+            // Explorer-standard saved-view shape) resolves no entity there, so before the fix the
+            // entity-keyed gate was disarmed and a read-denied user hit a slot a permitted user
+            // warmed for the same ViewID. Warm the slot as permitted user A, then request the SAME
+            // ViewID as read-denied user B — B must never be served the cached rows. Creates +
+            // deletes its own throwaway UserView (mutation-gated); skip-passes when no suitable
+            // (A can-read / B cannot-read) pair exists on this DB.
+            const md = new Metadata(); // global-provider-ok: integration test — single-provider process by design
+            const users: UserInfo[] = UserCache.Instance.Users ?? [];
+
+            let chosen: { a: UserInfo; b: UserInfo; e: string } | undefined;
+            for (const entity of md.Entities) {
+                if (chosen) break;
+                if (!entity.AllowCaching || entity.TrustServerCacheCompletely === false) continue;
+                for (const ua of users) {
+                    if (!entity.GetUserPermisions(ua)?.CanRead) continue;
+                    if (entity.GetUserRowLevelSecurityWhereClause(ua, EntityPermissionType.Read, '') !== '') continue;
+                    const ub = users.find(u => u !== ua && !entity.GetUserPermisions(u)?.CanRead &&
+                        entity.GetUserRowLevelSecurityWhereClause(u, EntityPermissionType.Read, '') === '');
+                    if (ub) { chosen = { a: ua, b: ub, e: entity.Name }; break; }
+                }
+            }
+            if (!chosen) {
+                console.warn('  ⚠ S31b SKIPPED — no (A can-read / B cannot-read) pair on a cacheable RLS-free entity on this DB.');
+                return;
+            }
+            const { a: A, b: B, e: E } = chosen;
+            const entityInfo = md.EntityByName(E)!;
+
+            // Create a throwaway saved view owned by A on entity E.
+            const view = await md.GetEntityObject<MJUserViewEntity>('MJ: User Views', A);
+            view.NewRecord();
+            view.Name = `mj-integration-test s31b ${Date.now()} (safe to delete)`;
+            view.EntityID = entityInfo.ID;
+            view.UserID = A.ID;
+            Assert(await view.Save(), `S31b: creating throwaway UserView failed: ${view.LatestResult?.CompleteMessage}`);
+
+            try {
+                const rv = new RunView();
+                // Precondition: B is genuinely denied a direct (uncached) ViewID read.
+                const bCold = await rv.RunView({ ViewID: view.ID, ResultType: 'simple', BypassCache: true }, B);
+                Assert(!bCold.Success, `S31b precondition: user '${B.Email}' must be denied the ViewID read on '${E}' (got Success=${bCold.Success})`);
+
+                // A warms the shared ViewID slot; then B reads the SAME ViewID via the cache path.
+                const aWarm = await rv.RunView({ ViewID: view.ID, ResultType: 'simple' }, A);
+                Assert(aWarm.Success, `S31b: user A warm read failed: ${aWarm.ErrorMessage}`);
+                const bWarm = await rv.RunView({ ViewID: view.ID, ResultType: 'simple' }, B);
+
+                Assert(!bWarm.Success,
+                    `S31b: user '${B.Email}' has no read permission on '${E}' yet was served ${bWarm.Results.length} rows via the ` +
+                    `ViewID cache path (cache-hit=${bWarm.ExecutionTime === 0}) after user '${A.Email}' warmed it`);
+            } finally {
+                await view.Delete().catch(() => undefined);
+            }
         }
     }
 ];

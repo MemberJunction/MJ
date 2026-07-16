@@ -769,7 +769,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             return status == null || status === 'Active';
         });
         if (filteredTests.length !== beforeStatus) {
-            this.log(`Excluded ${beforeStatus - filteredTests.length} test(s) with non-Active suite membership status`, options.verbose);
+            this.log(`Excluded ${beforeStatus - filteredTests.length} test(s) with non-Active suite membership status`);
         }
 
         // Filter by selectedTestIds if provided

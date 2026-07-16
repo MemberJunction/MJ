@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "push": {
+    "autoCreateMissingRecords": true
+  },
+  "directoryOrder": [
+    "roles",
+    "entity-permissions",
+    "users"
+  ],
+  "emitSyncNotes": false
+}

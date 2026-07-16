@@ -43,6 +43,7 @@ import type { PredictRequest, PredictResponse } from '@memberjunction/predictive
 import { Assert, AssertEqual } from '../test-runner';
 import { IntegrationCheckRegistry } from '../check-registry';
 import { NamedCheck, IntegrationCheckContext } from '../check';
+import type { PredictiveStudioFixture } from '../check';
 
 /** Whether the live-sidecar / trained-model legs run (mirrors RUN_AGENT_TESTS on the AI tier). */
 const PS_LIVE = process.env.PS_INTEGRATION === '1';
@@ -261,6 +262,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
         const algorithmID = (await firstID('MJ: ML Algorithms', user));
         Assert(!!algorithmID, 'No MJ: ML Algorithms are seeded — run `mj sync push --include=ml-algorithms` first');
 
+        // Publish the handle up-front and populate each field as its record is created, so a
+        // mid-Setup crash leaves Teardown a handle to sweep whatever part of the lineage exists.
+        const fx = (ctx.PredictiveStudioFixture = { TargetEntityID: targetEntityID!, AlgorithmID: algorithmID! } as PredictiveStudioFixture);
+
         // ── PS1/PS2 fixtures: a Pipeline → Model → Scoring Binding lineage chain. Created up front so the CRUD
         // tests can read them back, deleted in finally (child → parent order: binding → model → pipeline). ──
         const pipeline = await md.GetEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', user);
@@ -273,6 +278,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
         pipeline.ProblemType = 'classification';
         pipeline.AlgorithmID = algorithmID!;
         Assert(await pipeline.Save(), `creating test ML pipeline failed: ${pipeline.LatestResult?.CompleteMessage}`);
+        fx.Pipeline = pipeline;
 
         const model = await md.GetEntityObject<MJMLModelEntity>('MJ: ML Models', user);
         model.NewRecord();
@@ -284,6 +290,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
         model.ProblemType = 'classification';
         model.Status = 'Draft';
         Assert(await model.Save(), `creating test ML model failed: ${model.LatestResult?.CompleteMessage}`);
+        fx.Model = model;
 
         const binding = await md.GetEntityObject<MJMLModelScoringBindingEntity>('MJ: ML Model Scoring Bindings', user);
         binding.NewRecord();
@@ -292,14 +299,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
         binding.TargetColumn = 'RenewalScore';
         binding.Mode = 'OnDemand';
         Assert(await binding.Save(), `creating test scoring binding failed: ${binding.LatestResult?.CompleteMessage}`);
-
-        ctx.PredictiveStudioFixture = {
-            Pipeline: pipeline,
-            Model: model,
-            Binding: binding,
-            TargetEntityID: targetEntityID!,
-            AlgorithmID: algorithmID!,
-        };
+        fx.Binding = binding;
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = ctx.PredictiveStudioFixture;
@@ -307,10 +307,16 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
             return;
         }
         // Cleanup: delete the fixtures child → parent (binding → model → pipeline) so FKs never block a
-        // delete. Each is best-effort so one failure can't strand the others.
-        await f.Binding.Delete().catch(() => undefined);
-        await f.Model.Delete().catch(() => undefined);
-        await f.Pipeline.Delete().catch(() => undefined);
+        // delete. Each is guarded + best-effort — a mid-Setup crash may have created only some (R4).
+        if (f.Binding) {
+            await f.Binding.Delete().catch(() => undefined);
+        }
+        if (f.Model) {
+            await f.Model.Delete().catch(() => undefined);
+        }
+        if (f.Pipeline) {
+            await f.Pipeline.Delete().catch(() => undefined);
+        }
         // Leave the registry registration in place — it's process-wide + idempotent (last-wins).
         ctx.PredictiveStudioFixture = undefined;
     }

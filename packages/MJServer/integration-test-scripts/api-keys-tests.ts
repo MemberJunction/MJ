@@ -37,10 +37,10 @@ async function main(): Promise<void> {
     const reg = IntegrationCheckRegistry.Instance;
     const lifecycle = reg.GetLifecycle(BUNDLE);
     let failures = 0;
-    if (lifecycle) {
-        await lifecycle.Setup(ctx);
-    }
     try {
+        if (lifecycle) {
+            await lifecycle.Setup(ctx);
+        }
         const suite = new TestRunner('API Keys engine live integration (real scopes/apps + end-to-end authorize)');
         for (const check of reg.GetBundle(BUNDLE)) {
             suite.Test(check.Name, () => check.Fn(ctx));

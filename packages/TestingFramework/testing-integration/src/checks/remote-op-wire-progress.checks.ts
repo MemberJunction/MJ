@@ -22,6 +22,7 @@ import {
 import { Assert, AssertEqual } from '../test-runner';
 import { IntegrationCheckRegistry } from '../check-registry';
 import { NamedCheck, IntegrationCheckContext } from '../check';
+import type { RemoteOpWireProgressFixture } from '../check';
 
 const ACT_ENTITY = 'MJ: Action Categories';
 const PREFIX = 'mj-remote-op-wire';
@@ -63,7 +64,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('remote-op-wire-progress', {
         const provider = ctx.Provider;
         const user = ctx.User;
         const entityID = provider.EntityByName(ACT_ENTITY)!.ID;
+        // Publish the handle up-front (shared, still-empty CatIds array), then populate as each
+        // record is created — so a mid-Setup crash leaves Teardown a handle to sweep the partials.
         const catIds: string[] = [];
+        const fx = (ctx.RemoteOpWireProgressFixture = { CatIds: catIds } as RemoteOpWireProgressFixture);
         for (const n of [1, 2]) {
             const cat = await provider.GetEntityObject<MJActionCategoryEntity>(ACT_ENTITY, user);
             cat.NewRecord();
@@ -84,7 +88,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('remote-op-wire-progress', {
         rp.Configuration = JSON.stringify(ruleSet);
         rp.BatchSize = 10;
         Assert(await rp.Save(), `creating the FieldRules Record Process failed: ${rp.LatestResult?.CompleteMessage}`);
-        ctx.RemoteOpWireProgressFixture = { Rp: rp, CatIds: catIds };
+        fx.Rp = rp;
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = ctx.RemoteOpWireProgressFixture;
@@ -93,19 +97,21 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('remote-op-wire-progress', {
         }
         const provider = ctx.Provider;
         const user = ctx.User;
-        const runRes = await new RunView().RunView<MJProcessRunEntity>(
-            { EntityName: 'MJ: Process Runs', ExtraFilter: `RecordProcessID='${f.Rp.ID}'`, ResultType: 'entity_object' }, user,
-        );
-        for (const run of runRes.Results ?? []) {
-            const details = await new RunView().RunView(
-                { EntityName: 'MJ: Process Run Details', ExtraFilter: `ProcessRunID='${run.ID}'`, ResultType: 'entity_object' }, user,
+        if (f.Rp) {
+            const runRes = await new RunView().RunView<MJProcessRunEntity>(
+                { EntityName: 'MJ: Process Runs', ExtraFilter: `RecordProcessID='${f.Rp.ID}'`, ResultType: 'entity_object' }, user,
             );
-            for (const d of details.Results ?? []) {
-                await (d as MJProcessRunEntity).Delete().catch(() => undefined);
+            for (const run of runRes.Results ?? []) {
+                const details = await new RunView().RunView(
+                    { EntityName: 'MJ: Process Run Details', ExtraFilter: `ProcessRunID='${run.ID}'`, ResultType: 'entity_object' }, user,
+                );
+                for (const d of details.Results ?? []) {
+                    await (d as MJProcessRunEntity).Delete().catch(() => undefined);
+                }
+                await run.Delete().catch(() => undefined);
             }
-            await run.Delete().catch(() => undefined);
+            await f.Rp.Delete().catch(() => undefined);
         }
-        await f.Rp.Delete().catch(() => undefined);
         for (const id of f.CatIds) {
             const cat = await provider.GetEntityObject<MJActionCategoryEntity>(ACT_ENTITY, user);
             if (await cat.Load(id)) {

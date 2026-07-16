@@ -177,7 +177,7 @@ its registry index asynchronously in a different category.
 
 ## Test inventory
 
-### Server suite (S1–S26)
+### Server suite (S1–S31, plus the security pin S31b)
 
 | # | Verifies |
 |---|---|

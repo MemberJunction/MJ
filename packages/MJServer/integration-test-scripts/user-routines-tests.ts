@@ -38,10 +38,10 @@ async function main(): Promise<void> {
     const reg = IntegrationCheckRegistry.Instance;
     const lifecycle = reg.GetLifecycle(BUNDLE);
     let failures = 0;
-    if (lifecycle) {
-        await lifecycle.Setup(ctx);
-    }
     try {
+        if (lifecycle) {
+            await lifecycle.Setup(ctx);
+        }
         const suite = new TestRunner('User Routines — entity servers + dispatcher end-to-end');
         for (const check of reg.GetBundle(BUNDLE)) {
             suite.Test(check.Name, () => check.Fn(ctx));

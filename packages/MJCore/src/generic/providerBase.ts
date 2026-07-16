@@ -1221,6 +1221,41 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * SECURITY — decide whether the shared cache must be BYPASSED for a RunView that targets
+     * a saved VIEW rather than a named entity (no `EntityName`), under a context user.
+     *
+     * The cache-hit path returns BEFORE the DB provider's read-permission gate
+     * (`CheckUserReadPermissions`). The primary gate keys off the entity resolved from
+     * `params.EntityName`, so a ViewID-/ViewName-only request (the Explorer-standard shape for a
+     * saved view) yields no entity there and the gate is disarmed — a read-denied user could be
+     * served rows a permitted user warmed for the same ViewID. The `vw:` fingerprint segment makes
+     * the two users' requests collide on exactly one slot, so the leak is clean.
+     *
+     * Returns true when the cache must be skipped for this call (fail-closed):
+     *  - `ViewEntity` supplied and its entity resolves → apply the normal `CanRead` gate on it
+     *    (allow caching for a permitted user; deny for a read-denied one).
+     *  - `ViewEntity` absent/unresolvable but `ViewID`/`ViewName` present → fail closed: the view's
+     *    real entity (hence the user's permission) is only known after the async `MJ: User Views`
+     *    lookup that the cache-hit path deliberately skips, so we cannot safely consult the cache.
+     * Returns false when there is no context user, when `EntityName` is set (the normal gate owns
+     * that path), or when no view identifier is present at all (nothing to gate).
+     */
+    protected cacheDeniedForViewOnlyRequest(params: RunViewParams, contextUser?: UserInfo): boolean {
+        if (!contextUser || params.EntityName) {
+            return false; // EntityName path is handled by the entity-resolved read-permission gate
+        }
+        if (params.ViewEntity) {
+            const entityID = params.ViewEntity.Get('EntityID');
+            const viewEntity = entityID ? this.EntityByID(entityID) : undefined;
+            if (viewEntity) {
+                return !(viewEntity.GetUserPermisions(contextUser)?.CanRead ?? false);
+            }
+            // ViewEntity present but its entity can't be resolved — fall through to fail-closed.
+        }
+        return !!(params.ViewID || params.ViewName || params.ViewEntity);
+    }
+
+    /**
      * Returns the caller's requested fields (lowercased) unioned with the entity's
      * primary key field names. Platform contract: when `Fields` is explicitly
      * specified, results ALWAYS include the primary key(s) — the direct SQL path has
@@ -2077,8 +2112,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // allowed to consult the shared cache — it would leak rows a permitted user warmed. When
         // we can affirmatively determine the user lacks read permission, skip the cache and fall
         // through to the normal path, which denies with the proper error. Unknown user/entity →
-        // unchanged behavior (the DB path handles null-user / view-only semantics).
-        const cacheReadDenied = !!entity && !!contextUser && !(entity.GetUserPermisions(contextUser)?.CanRead ?? false);
+        // unchanged behavior (the DB path handles null-user semantics).
+        // S31b closes the view-only variant: a ViewID/ViewName-only request never resolves an
+        // entity above, so the entity-keyed gate is disarmed — cacheDeniedForViewOnlyRequest
+        // fails closed (or resolves ViewEntity synchronously) to plug that hole.
+        const cacheReadDenied =
+            (!!entity && !!contextUser && !(entity.GetUserPermisions(contextUser)?.CanRead ?? false)) ||
+            this.cacheDeniedForViewOnlyRequest(params, contextUser);
 
         if (willCache && !cacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
             const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
@@ -2218,8 +2258,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // records that were inserted via direct SQL (bypassing BaseEntity.Save())
             // SECURITY (S31): same read-permission gate as the single-RunView path — never serve
             // (or consult) the shared cache for a user who lacks CanRead on the entity; fall
-            // through to the DB path, which denies with the proper error.
-            const batchCacheReadDenied = !!batchEntity && !!contextUser && !(batchEntity.GetUserPermisions(contextUser)?.CanRead ?? false);
+            // through to the DB path, which denies with the proper error. S31b applies the same
+            // view-only fail-closed gate for ViewID/ViewName-only requests (no resolvable entity).
+            const batchCacheReadDenied =
+                (!!batchEntity && !!contextUser && !(batchEntity.GetUserPermisions(contextUser)?.CanRead ?? false)) ||
+                this.cacheDeniedForViewOnlyRequest(param, contextUser);
 
             if (batchWillCache && !batchCacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
                 const rlsWhereClause = this.ComputeRunViewRLSWhereClause(param, contextUser);

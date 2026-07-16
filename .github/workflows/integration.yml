@@ -16,7 +16,10 @@ name: Integration Tier
 #     that the separate "Test metadata sync push" gate exists to catch.)
 #   * AssociationDB is only required by the Predictive Studio tier, which is gated OFF here.
 #   * `mj sync push --dir=metadata` pushes the FULL metadata dir (incl. the test-type / test /
-#     test-suite bundles the graduated suites read).
+#     test-suite bundles the graduated suites read). A SECOND push then seeds the RLS security
+#     principals from the sibling `metadata-integration-fixtures/` root — kept out of `metadata/`
+#     so those synthetic accounts never reach a production DB (R2). Order matters: fixtures after
+#     metadata, so the role's @lookup refs resolve.
 #   * The gated tiers all SKIP cleanly here: Predictive Studio (PS_INTEGRATION unset),
 #     Live Model (RUN_AGENT_TESTS unset), and the client suite (no live MJAPI reachable).
 #
@@ -33,15 +36,29 @@ on:
     paths:
       - 'package-lock.json'
       - 'packages/**'
+      - 'migrations/**'
       - 'metadata/test-types/**'
       - 'metadata/tests/integration/**'
       - 'metadata/test-suites/**'
+      - 'metadata-integration-fixtures/**'
+      - 'mj.config.cjs'
+      - 'tsconfig*'
+      - 'turbo.json'
       - '.github/workflows/integration.yml'
+  # Full backstop: every merge into next runs the gate, so a filter-missed break (paths are a
+  # heuristic; migrations + runtime @RegisterClass wiring can couple files no filter foresees)
+  # can never merge silently and red the next PR (R3, mirrors test.yml).
+  push:
+    branches: [next]
   workflow_dispatch:
 
+# Cancel superseded PR runs for the same ref. EXCEPTION: push (merge to next) events get a
+# per-commit group and are NEVER cancelled — every merge's backstop must run to completion
+# (github.ref is refs/heads/next for every merge, so a shared group would let a later merge
+# kill an earlier one's backstop). Mirrors test.yml.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   integration-sqlserver:
@@ -124,6 +141,15 @@ jobs:
 
       - name: Sync push — reconcile committed metadata (mj sync push --ci)
         run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+
+      # The RLS security principals (users + scoped role + entity-permission grant) live in a
+      # SIBLING root, deliberately kept out of the default-pushed metadata/ tree so they never reach
+      # a production DB (R2). Push them explicitly AFTER the main metadata push so their @lookup refs
+      # resolve in order (the RLS filter comes from the baseline migration; the role from this push;
+      # then the users/permissions that reference the role). Without this the RLS8/9/10 checks
+      # skip-as-pass, so the gate stays green either way — but pushing here keeps them exercised.
+      - name: Sync push — seed the RLS integration fixtures (sibling root)
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata-integration-fixtures --ci
 
       # The deterministic aggregator: run-all.ts spawns each suite via `npx tsx` and gates the
       # job on its 0/1/2 exit contract (0 = all passed/skipped, 1 = failures, 2 = bootstrap

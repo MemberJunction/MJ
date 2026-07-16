@@ -111,6 +111,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('open-app-teardown', {
         const { T, lit, exec } = sqlHelpers(ctx);
         const user = ctx.User;
 
+        // Publish the handle (all IDs are pre-generated above) BEFORE the first INSERT, so a
+        // mid-Setup crash still gives the best-effort, idempotent Teardown every ID to DELETE.
+        ctx.OpenAppTeardownFixture = fixture;
+
         // ── seed a used app: SchemaInfo + Entity + EntityField + a blocking RecordChange + a link-less App ──
         await exec(
             `INSERT INTO ${T('SchemaInfo')} (ID, SchemaName, EntityIDMin, EntityIDMax) ` +
@@ -133,8 +137,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('open-app-teardown', {
             `INSERT INTO ${T('Application')} (ID, Name, Path) ` +
             `VALUES (${lit(fixture.ApplicationID)}, ${lit(`OA Teardown IT ${tag}`)}, '/oa-teardown-it')`,
         );
-
-        ctx.OpenAppTeardownFixture = fixture;
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = ctx.OpenAppTeardownFixture;

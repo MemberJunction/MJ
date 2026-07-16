@@ -33,6 +33,7 @@ import {
 import { Assert, AssertEqual, settle } from '../test-runner';
 import { IntegrationCheckRegistry } from '../check-registry';
 import { NamedCheck, IntegrationCheckContext } from '../check';
+import type { RemoteOpsFixture } from '../check';
 
 const ACT_ENTITY = 'MJ: Action Categories';
 const PREFIX = 'mj-remote-op-test';
@@ -203,6 +204,11 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('remote-operations', {
         const md = ctx.Provider;
         const user = ctx.User;
 
+        // Publish the handle up-front (shared, still-empty CatIds array) and populate each field
+        // as its record is created, so a mid-Setup crash leaves Teardown a handle to sweep partials.
+        const catIds: string[] = [];
+        const fx = (ctx.RemoteOpsFixture = { CatIds: catIds, ActEntity: ACT_ENTITY } as RemoteOpsFixture);
+
         // ── Template.Run fixtures: a throwaway template + Text content that renders "Hello {{ name }}" ──
         const textTypeID = await resolveID('MJ: Template Content Types', "Name='Text'", user);
         const tmpl = await md.GetEntityObject<MJTemplateEntity>('MJ: Templates', user);
@@ -211,6 +217,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('remote-operations', {
         tmpl.UserID = user.ID;
         tmpl.IsActive = true;
         Assert(await tmpl.Save(), `creating test template failed: ${tmpl.LatestResult?.CompleteMessage}`);
+        fx.Tmpl = tmpl;
 
         const content = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents', user);
         content.NewRecord();
@@ -220,10 +227,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('remote-operations', {
         content.Priority = 1;
         content.IsActive = true;
         Assert(await content.Save(), `creating test template content failed: ${content.LatestResult?.CompleteMessage}`);
+        fx.Content = content;
 
         // ── RecordProcess.RunNow fixtures: 2 throwaway Action Categories (Description null) + a FieldRules process ──
         const actEntityID = md.EntityByName(ACT_ENTITY)?.ID ?? (await resolveID('MJ: Entities', `Name='${ACT_ENTITY}'`, user));
-        const catIds: string[] = [];
         for (const n of [1, 2]) {
             const cat = await md.GetEntityObject<MJActionCategoryEntity>(ACT_ENTITY, user);
             cat.NewRecord();
@@ -245,8 +252,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('remote-operations', {
         rp.Configuration = JSON.stringify(ruleSet);
         rp.BatchSize = 10;
         Assert(await rp.Save(), `creating the FieldRules Record Process failed: ${rp.LatestResult?.CompleteMessage}`);
-
-        ctx.RemoteOpsFixture = { Tmpl: tmpl, Content: content, Rp: rp, CatIds: catIds, ActEntity: ACT_ENTITY };
+        fx.Rp = rp;
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = ctx.RemoteOpsFixture;
@@ -257,35 +263,42 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('remote-operations', {
         const user = ctx.User;
         const { Tmpl: tmpl, Content: content, Rp: rp, CatIds: catIds } = f;
         // Cleanup: ProcessRun details (FK) → ProcessRuns (linked to the RP) → Record Process → categories → template content → template.
-        const runRes = await new RunView().RunView<MJProcessRunEntity>(
-            { EntityName: 'MJ: Process Runs', ExtraFilter: `RecordProcessID='${rp.ID}'`, ResultType: 'entity_object' }, user,
-        );
-        for (const run of runRes.Results ?? []) {
-            const details = await new RunView().RunView(
-                { EntityName: 'MJ: Process Run Details', ExtraFilter: `ProcessRunID='${run.ID}'`, ResultType: 'entity_object' }, user,
+        // Each parent is guarded — a mid-Setup crash may have created only some of these (R4).
+        if (rp) {
+            const runRes = await new RunView().RunView<MJProcessRunEntity>(
+                { EntityName: 'MJ: Process Runs', ExtraFilter: `RecordProcessID='${rp.ID}'`, ResultType: 'entity_object' }, user,
             );
-            for (const d of details.Results ?? []) {
-                await (d as MJProcessRunEntity).Delete().catch(() => undefined);
+            for (const run of runRes.Results ?? []) {
+                const details = await new RunView().RunView(
+                    { EntityName: 'MJ: Process Run Details', ExtraFilter: `ProcessRunID='${run.ID}'`, ResultType: 'entity_object' }, user,
+                );
+                for (const d of details.Results ?? []) {
+                    await (d as MJProcessRunEntity).Delete().catch(() => undefined);
+                }
+                await run.Delete().catch(() => undefined);
             }
-            await run.Delete().catch(() => undefined);
+            await rp.Delete().catch(() => undefined);
         }
-        await rp.Delete().catch(() => undefined);
         for (const id of catIds) {
             const cat = await md.GetEntityObject<MJActionCategoryEntity>(ACT_ENTITY, user);
             if (await cat.Load(id)) {
                 await cat.Delete().catch(() => undefined);
             }
         }
-        await content.Delete().catch(() => undefined);
-        // Rendering auto-extracts a TemplateParam for `{{ name }}` — remove it (FK) before the template.
-        // BypassCache: the param is created mid-render through the engine's own path, so a cached read can miss it.
-        const params = await new RunView().RunView<MJTemplateParamEntity>(
-            { EntityName: 'MJ: Template Params', ExtraFilter: `TemplateID='${tmpl.ID}'`, ResultType: 'entity_object', BypassCache: true }, user,
-        );
-        for (const p of params.Results ?? []) {
-            await p.Delete().catch(() => undefined);
+        if (content) {
+            await content.Delete().catch(() => undefined);
         }
-        await tmpl.Delete().catch(() => undefined);
+        if (tmpl) {
+            // Rendering auto-extracts a TemplateParam for `{{ name }}` — remove it (FK) before the template.
+            // BypassCache: the param is created mid-render through the engine's own path, so a cached read can miss it.
+            const params = await new RunView().RunView<MJTemplateParamEntity>(
+                { EntityName: 'MJ: Template Params', ExtraFilter: `TemplateID='${tmpl.ID}'`, ResultType: 'entity_object', BypassCache: true }, user,
+            );
+            for (const p of params.Results ?? []) {
+                await p.Delete().catch(() => undefined);
+            }
+            await tmpl.Delete().catch(() => undefined);
+        }
         ctx.RemoteOpsFixture = undefined;
     }
 });

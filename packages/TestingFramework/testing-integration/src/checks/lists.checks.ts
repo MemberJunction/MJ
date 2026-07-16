@@ -116,6 +116,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('lists', {
         list.UserID = user.ID;
         Assert(await list.Save(), `List fixture save failed: ${list.LatestResult?.CompleteMessage ?? 'unknown error'}`);
 
+        // Publish the handle as soon as the list exists — Teardown sweeps members by ListID, so a
+        // mid-loop crash still cleans up the list and any members already created.
+        ctx.ListsFixture = { ListID: list.ID };
+
         for (let i = 0; i < MEMBER_COUNT; i++) {
             const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', user);
             detail.NewRecord();
@@ -124,8 +128,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('lists', {
             detail.Status = 'Active';
             Assert(await detail.Save(), `ListDetail fixture ${i} save failed: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
-
-        ctx.ListsFixture = { ListID: list.ID };
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const f = ctx.ListsFixture;

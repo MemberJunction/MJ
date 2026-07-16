@@ -13,9 +13,10 @@
  *   4) for each selected bundle, run its registered NamedCheck[] in array order against
  *      ONE shared IntegrationCheckContext — skipping RequiresMutation checks unless the
  *      selector opts in — converting a thrown check into a failing OracleResult (never
- *      re-throwing; a re-throw would leave the TestRun stuck 'Running'). The
- *      runquery-cache bundle gets its Query/Category fixtures created/torn down in a
- *      driver-level try/finally (engine suite hooks don't exist until Phase 4);
+ *      re-throwing; a re-throw would leave the TestRun stuck 'Running'). A bundle that
+ *      registers a BundleLifecycle (e.g. runquery-cache, field-rules-bulk-update) has its
+ *      Setup run and Teardown GUARANTEED inside one try/finally, so a mid-Setup crash still
+ *      tears down whatever the Setup accumulated (R4);
  *   5) map the OracleResult[] onto a DriverExecutionResult (counts computed exactly
  *      like AgentEvalDriver). The engine persists oracleResults verbatim to
  *      TestRun.ResultDetails as a BARE ARRAY. When EMIT_OUTCOMES is set, also write a
@@ -154,9 +155,11 @@ export class IntegrationTestDriver extends BaseTestDriver {
             );
         }
 
-        // 3) Arm a driver-side timeout (the engine never applies one). On fire we abort the
-        //    check loop between checks; partial results become a 'Timeout' result.
+        // 3) Arm a driver-side timeout (the engine never applies one). The timer flips `timedOut`
+        //    to abort the loop BETWEEN checks; the `deadline` additionally bounds EACH check via a
+        //    per-check race (C6), so a single hung check can't run past the budget forever.
         const effectiveTimeout = this.getEffectiveTimeout(context.test);
+        const deadline = Date.now() + effectiveTimeout;
         let timedOut = false;
         const timer = setTimeout(() => { timedOut = true; }, effectiveTimeout);
 
@@ -170,7 +173,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 if (timedOut) {
                     break;
                 }
-                await this.runBundle(context, checkCtx, sel.type, sel.config, oracleResults, outcomes, () => timedOut);
+                await this.runBundle(context, checkCtx, sel.type, sel.config, oracleResults, outcomes, () => timedOut, deadline);
             }
         } catch (bootErr) {
             clearTimeout(timer);
@@ -193,9 +196,10 @@ export class IntegrationTestDriver extends BaseTestDriver {
     }
 
     /**
-     * Resolve a bundle and run its ordered checks. The runquery-cache bundle wraps its
-     * checks in a driver-level fixture try/finally (engine SetupSuite/TeardownSuite hooks
-     * don't exist until Phase 4). Mutation-gated checks run only when `runMutation` is set.
+     * Resolve a bundle and run its ordered checks. A bundle that registers a BundleLifecycle
+     * (runquery-cache, field-rules-bulk-update, …) has its Setup + Teardown wrapped in ONE
+     * try/finally so Teardown is guaranteed even on a mid-Setup crash (R4). Mutation-gated
+     * checks run only when `runMutation` is set.
      */
     private async runBundle(
         context: DriverExecutionContext,
@@ -204,7 +208,8 @@ export class IntegrationTestDriver extends BaseTestDriver {
         selConfig: IntegrationCheckSelectionConfig | undefined,
         oracleResults: OracleResult[],
         outcomes: TestOutcome[],
-        isTimedOut: () => boolean
+        isTimedOut: () => boolean,
+        deadline: number
     ): Promise<void> {
         const bundle = IntegrationCheckRegistry.Instance.GetBundle(bundleType);
         if (bundle.length === 0) {
@@ -228,28 +233,23 @@ export class IntegrationTestDriver extends BaseTestDriver {
 
         const runMutation = selConfig?.runMutationTests === true;
 
-        // A mutating bundle registers a lifecycle (setup creates a shared fixture on the context,
-        // teardown removes it). Run its Setup before the checks; a Setup failure short-circuits the
-        // bundle with one failing 'fixtures' oracle (never re-thrown). Teardown is guaranteed in finally.
-        const lifecycle = IntegrationCheckRegistry.Instance.GetLifecycle(bundleType);
-        if (lifecycle) {
-            try {
-                await lifecycle.Setup(checkCtx);
-            } catch (fxErr) {
-                const message = `${bundleType} fixture setup failed: ${(fxErr as Error).message}`;
-                oracleResults.push({ oracleType: `${bundleType}.fixtures`, passed: false, score: 0, message, details: { DurationMs: 0 } });
-                outcomes.push({ Name: `${bundleType}.fixtures`, Passed: false, DurationMs: 0, Error: message });
-                this.logToTestRun(context, 'error', message);
-                return;
-            }
-        }
-
         // Per-check tier gating routed through the shared IsTierEnabled predicate (the same
         // one the tsx scripts use) so the env gate is honored identically. A selector may also
         // opt mutation checks in explicitly via config.runMutationTests, independent of env.
         const mutationEnabled = IsTierEnabled('mutation') || runMutation;
         const liveModelEnabled = IsTierEnabled('live-model');
+
+        // A mutating bundle registers a lifecycle (setup creates a shared fixture on the context,
+        // teardown removes it). R4: run Setup INSIDE the same try whose finally guarantees Teardown,
+        // so a mid-Setup crash still runs Teardown against whatever the Setup accumulated onto the
+        // context so far (lifecycle Setups publish their fixture handle up-front and append created
+        // IDs as they go). A Setup failure short-circuits the bundle with one failing 'fixtures'
+        // oracle and skips the checks — but never re-throws and never leaves the fixture orphaned.
+        const lifecycle = IntegrationCheckRegistry.Instance.GetLifecycle(bundleType);
         try {
+            if (lifecycle) {
+                await lifecycle.Setup(checkCtx);
+            }
             for (const check of bundle) {
                 if (isTimedOut()) {
                     break;
@@ -260,8 +260,15 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 if (check.RequiresLiveModel && !liveModelEnabled) {
                     continue;
                 }
-                await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes);
+                await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes, deadline);
             }
+        } catch (fxErr) {
+            // The only throw reachable here is from lifecycle.Setup — runCheck swallows per-check
+            // errors into results. Record it as a failing 'fixtures' oracle (never re-thrown).
+            const message = `${bundleType} fixture setup failed: ${(fxErr as Error).message}`;
+            oracleResults.push({ oracleType: `${bundleType}.fixtures`, passed: false, score: 0, message, details: { DurationMs: 0 } });
+            outcomes.push({ Name: `${bundleType}.fixtures`, Passed: false, DurationMs: 0, Error: message });
+            this.logToTestRun(context, 'error', message);
         } finally {
             if (lifecycle) {
                 // Best-effort — a teardown failure must never mask a check result or leave TestRun 'Running'.
@@ -274,6 +281,40 @@ export class IntegrationTestDriver extends BaseTestDriver {
         }
     }
 
+    /**
+     * C6: run a single check but bound it by the remaining run budget. The between-checks `timedOut`
+     * flag can only stop the loop between checks — a check that hangs forever would otherwise run
+     * past the deadline unbounded. Racing the check against a per-check timeout makes a hang surface
+     * as a failed check with a clear message (caught by runCheck's try/catch) instead of a wedged
+     * run. The check's own promise may keep running after we move on, but the process is dedicated
+     * and short-lived (D1), so a dangling promise on the timeout path is harmless.
+     */
+    private async runWithDeadline(
+        id: string,
+        fn: (ctx: IntegrationCheckContext) => Promise<void>,
+        checkCtx: IntegrationCheckContext,
+        deadline: number
+    ): Promise<void> {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+            throw new Error(`integration run budget exhausted before check '${id}' started`);
+        }
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<never>((_, reject) => {
+            timer = setTimeout(
+                () => reject(new Error(`check '${id}' exceeded the ${remaining}ms remaining run budget (hung check)`)),
+                remaining
+            );
+        });
+        try {
+            await Promise.race([fn(checkCtx), timeout]);
+        } finally {
+            if (timer) {
+                clearTimeout(timer);
+            }
+        }
+    }
+
     /** Run one check in try/catch and append one OracleResult + one TestOutcome. */
     private async runCheck(
         context: DriverExecutionContext,
@@ -282,11 +323,12 @@ export class IntegrationTestDriver extends BaseTestDriver {
         name: string,
         fn: (ctx: IntegrationCheckContext) => Promise<void>,
         oracleResults: OracleResult[],
-        outcomes: TestOutcome[]
+        outcomes: TestOutcome[],
+        deadline: number
     ): Promise<void> {
         const checkStart = Date.now();
         try {
-            await fn(checkCtx);
+            await this.runWithDeadline(id, fn, checkCtx, deadline);
             const durationMs = Date.now() - checkStart;
             oracleResults.push({
                 oracleType: id,

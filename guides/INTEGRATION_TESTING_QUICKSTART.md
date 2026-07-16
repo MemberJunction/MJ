@@ -307,10 +307,12 @@ strategies together:
   predicates from the live user cache + provider RLS filters. Nothing is created, so teardown
   is a no-op; on databases with only RLS-exempt admins the dependent checks degrade to
   skip-as-pass with a note.
-- **Seeded, purpose-built users** (pushed via metadata, not migrations):
-  [`metadata/users/.integration-test-users.json`](../metadata/users/.integration-test-users.json),
-  [`metadata/roles/.integration-test-roles.json`](../metadata/roles/.integration-test-roles.json),
-  [`metadata/entity-permissions/.integration-test-permissions.json`](../metadata/entity-permissions/.integration-test-permissions.json).
+- **Seeded, purpose-built users** — these live in the **sibling `metadata-integration-fixtures/`
+  root, NOT the default-pushed `metadata/` tree**, so the synthetic `IsActive` accounts never land
+  in a production DB that only syncs `metadata/`:
+  [`metadata-integration-fixtures/users/.integration-test-users.json`](../metadata-integration-fixtures/users/.integration-test-users.json),
+  [`metadata-integration-fixtures/roles/.integration-test-roles.json`](../metadata-integration-fixtures/roles/.integration-test-roles.json),
+  [`metadata-integration-fixtures/entity-permissions/.integration-test-permissions.json`](../metadata-integration-fixtures/entity-permissions/.integration-test-permissions.json).
   `it-rls-a@integration.test` / `it-rls-b@integration.test` each hold ONLY the
   **`Integration Test: RLS Scoped Reader`** role (read on `MJ: AI Agent Runs`, scoped to the
   caller's own UserID via the `UI: Own AI Agent Runs` RLS filter) — genuinely non-exempt users
@@ -389,7 +391,7 @@ users/roles/permissions):
 
 ```bash
 npx mj sync push --dir=metadata --include=test-types,tests,test-suites
-npx mj sync push --dir=metadata --include=users,roles,entity-permissions   # RLS fixtures
+npx mj sync push --dir=metadata-integration-fixtures                       # RLS fixtures (sibling root)
 ```
 
 **Run** — two things are load-bearing:
@@ -799,7 +801,7 @@ scripts.
 | [`packages/TestingFramework/testing-integration/`](../packages/TestingFramework/testing-integration/) | The library: driver, registry, bundles, bootstrap, tiers, instrumented cache |
 | [`packages/MJServer/integration-test-scripts/`](../packages/MJServer/integration-test-scripts/) | Runnable suites + `run-all.ts` aggregator (+ [README](../packages/MJServer/integration-test-scripts/README.md) deep dive) |
 | [`metadata/test-types/`](../metadata/test-types/) · [`metadata/tests/integration/`](../metadata/tests/integration/) · [`metadata/test-suites/`](../metadata/test-suites/) | The Integration Test type, the IT01–IT19 Tests, the suite hierarchy |
-| [`metadata/users/`](../metadata/users/) · [`metadata/roles/`](../metadata/roles/) · [`metadata/entity-permissions/`](../metadata/entity-permissions/) | Seeded RLS test users/role/permission |
+| [`metadata-integration-fixtures/`](../metadata-integration-fixtures/) | Seeded RLS test users/role/permission — a **sibling root**, kept out of the default-pushed `metadata/` tree so the synthetic accounts never reach production |
 | [`packages/TestingFramework/Engine/`](../packages/TestingFramework/Engine/) | `TestEngine`, `BaseTestDriver`, suite fixture lifecycle |
 | [`packages/TestingFramework/CLI/`](../packages/TestingFramework/CLI/) | `mj test run` / `suite` / `list` / `validate` / `history` |
 | [`.github/workflows/integration.yml`](../.github/workflows/integration.yml) | The CI gate |
