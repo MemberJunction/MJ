@@ -12,12 +12,12 @@ import { RegisterClass } from '@memberjunction/global';
 import { MentionSuggestion, ComposerSuggestionRequest } from '@memberjunction/ng-composer';
 import {
     DiscoverOmnibarProviders, GetOmnibarNavPayload, OmnibarProvider, OMNIBAR_NAV_KEY,
-} from '../omnibar-provider';
-import { OmnibarSearchProvider } from '../providers/omnibar-search.provider';
-import { OmnibarCommandProvider } from '../providers/omnibar-command.provider';
-import { OmnibarAgentProvider } from '../providers/omnibar-agent.provider';
-import { LoadOmnibarProviders } from '../index';
-import { ResolveOmnibarEnabled } from '../omnibar-user-setting';
+} from './omnibar-provider';
+import { OmnibarSearchProvider } from './providers/omnibar-search.provider';
+import { OmnibarCommandProvider } from './providers/omnibar-command.provider';
+import { OmnibarAgentProvider } from './providers/omnibar-agent.provider';
+import { LoadOmnibarProviders } from './index';
+import { ResolveOmnibarEnabled } from './omnibar-user-setting';
 
 const REQ: ComposerSuggestionRequest = { Query: '', MaxResults: 9, ContextUser: null, Provider: null };
 
