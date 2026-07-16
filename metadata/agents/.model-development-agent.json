@@ -204,7 +204,7 @@
                 "fields": {
                   "AgentID": "@parent:ID",
                   "Name": "APPROVED_QUERIES",
-                  "Description": "Approved MJ: Queries — the trusted semantic layer the Data Scout reads feature data from. Only Status='Approved' queries are ground truth.",
+                  "Description": "Approved MJ: Queries \u2014 the trusted semantic layer the Data Scout reads feature data from. Only Status='Approved' queries are ground truth.",
                   "SourceType": "RunView",
                   "EntityName": "MJ: Queries",
                   "ExtraFilter": "Status = 'Approved'",
@@ -236,7 +236,7 @@
                 "fields": {
                   "AgentID": "@parent:ID",
                   "Name": "EXISTING_APPROVED_MODELS",
-                  "Description": "Existing published/validated ML Models — reused to identify proven feature sets and avoid re-discovering known-good signals or repeating known leakage traps.",
+                  "Description": "Existing published/validated ML Models \u2014 reused to identify proven feature sets and avoid re-discovering known-good signals or repeating known leakage traps.",
                   "SourceType": "RunView",
                   "EntityName": "MJ: ML Models",
                   "ExtraFilter": "Status IN ('Published', 'Validated')",
@@ -260,6 +260,31 @@
                 "sync": {
                   "lastModified": "2026-07-01T17:33:47.660Z",
                   "checksum": "213cb6ccb60ecb5130a3051d2a45af5efbb9635d897b081298d0347f6cd1ee1f"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "AVAILABLE_ML_COMPONENTS",
+                  "Description": "The typed ML component catalog (models, preprocessing, calibrators, adapters, and fillable templates) available for composition. Surfaces each component's Kind + Task so the agent can reason about reuse-before-rebuild and legal wiring (the there-is-and-can-be principle) instead of naming an algorithm from memory.",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: ML Components",
+                  "ExtraFilter": "Status = 'Active'",
+                  "OrderBy": "Kind ASC, Name ASC",
+                  "FieldsToRetrieve": [
+                    "ID",
+                    "Name",
+                    "Description",
+                    "Kind",
+                    "Task"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 3,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
                 }
               }
             ],
@@ -294,7 +319,7 @@
             "ParentID": "@parent:ID",
             "Name": "Experiment Designer",
             "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
-            "Description": "Predictive Studio sub-agent that turns the target and candidate data into a ranked, justified set of experiments (features × algorithms × hyperparameters, each with rationale and priority), a sound validation strategy with a locked holdout, and a responsible compute budget. Never includes a feature the Data Scout marked exclude. Writes only the ProposedExperiments, ValidationStrategy, and ProposedBudget slices of the ModelingPlanSpec.",
+            "Description": "Predictive Studio sub-agent that turns the target and candidate data into a ranked, justified set of experiments (features \u00d7 algorithms \u00d7 hyperparameters, each with rationale and priority), a sound validation strategy with a locked holdout, and a responsible compute budget. Never includes a feature the Data Scout marked exclude. Writes only the ProposedExperiments, ValidationStrategy, and ProposedBudget slices of the ModelingPlanSpec.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
             "ExecutionOrder": 3,
