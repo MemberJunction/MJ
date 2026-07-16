@@ -1,0 +1,31 @@
+{
+  "hypothesis": "shipped-class models miscalibrated; proper calibration fixes it",
+  "seeds": [
+    21,
+    22,
+    23,
+    24,
+    25
+  ],
+  "summary": [
+    {
+      "model": "logistic",
+      "raw_ece": 0.023512653771850675,
+      "slice_ece": 0.036803169763286354,
+      "cv_ece": 0.02843650320565445,
+      "auc": 0.8419961666359184,
+      "cv_cut_pct": -20.941274777322683
+    },
+    {
+      "model": "xgboost",
+      "raw_ece": 0.06182301494865679,
+      "slice_ece": 0.04128791233197611,
+      "cv_ece": 0.02292965031224462,
+      "auc": 0.8144498561508241,
+      "cv_cut_pct": 62.9108183557735
+    }
+  ],
+  "verdict": "PASS",
+  "pass_bar": "GBT raw ECE >= 0.05 and CV-isotonic cuts >= 50%",
+  "design_note": "single-slice isotonic risky; ship CalibratedClassifierCV + a helps-or-skip gate"
+}

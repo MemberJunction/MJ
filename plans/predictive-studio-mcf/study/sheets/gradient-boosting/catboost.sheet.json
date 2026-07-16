@@ -1,0 +1,286 @@
+{
+  "identity": {
+    "modelKey": "catboost",
+    "family": "gradient-boosting",
+    "libraryClass": "catboost.CatBoostClassifier / catboost.CatBoostRegressor",
+    "aliases": [
+      "CatBoost",
+      "cat boost",
+      "ordered boosting"
+    ],
+    "displayName": "CatBoost",
+    "description": "Gradient-boosted ensemble of symmetric (oblivious) trees with ordered target statistics + optional ordered boosting (CPU default is Plain) and ordered target statistics \u2014 its distinguishing mechanism: raw categorical features are encoded internally without target leakage, so it is the strongest default on categorical-heavy tabular data."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": [
+      "regression"
+    ],
+    "learningType": "Supervised",
+    "parametric": "No",
+    "ensembleType": "Boosting",
+    "interpretabilityClass": "ImportanceOnly",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    {
+      "portType": "features:tabular",
+      "dataShape": "row-matrix",
+      "dtypes": [
+        "numeric",
+        "categorical"
+      ],
+      "targetSpec": "plain",
+      "required": true
+    }
+  ],
+  "emits": [
+    {
+      "portType": "probability",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "classification; Logloss training yields comparatively well-calibrated probabilities, though calibration still helps under heavy imbalance"
+    },
+    {
+      "portType": "class-label",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none"
+    },
+    {
+      "portType": "score",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "regression mode"
+    },
+    {
+      "portType": "attributions",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "native per-row via get_feature_importance(type='ShapValues') \u2014 exact SHAP on oblivious trees; global importances also native"
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable"
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/catboost.schema.json",
+    "hpMeta": {
+      "iterations": {
+        "default": 1000,
+        "prior": "log-uniform[100,2000]",
+        "searchable": true
+      },
+      "learning_rate": {
+        "default": "auto",
+        "prior": "log-uniform[0.01,0.3]",
+        "searchable": true,
+        "conditionalOn": "iterations",
+        "note": "when unset the library auto-derives it from iterations and dataset size (~0.03 typical)"
+      },
+      "depth": {
+        "default": 6,
+        "prior": "int-uniform[4,10]",
+        "searchable": true
+      },
+      "l2_leaf_reg": {
+        "default": 3.0,
+        "prior": "log-uniform[1,10]",
+        "searchable": true
+      },
+      "random_strength": {
+        "default": 1.0,
+        "prior": "log-uniform[1e-3,10]",
+        "searchable": true
+      },
+      "bagging_temperature": {
+        "default": 1.0,
+        "prior": "uniform[0,1]",
+        "searchable": true,
+        "note": "INERT under CatBoost's real CPU default bootstrap_type='MVS'; only active under Bayesian bootstrap."
+      },
+      "border_count": {
+        "default": 254,
+        "prior": "int-uniform[32,255]",
+        "searchable": true,
+        "note": "CPU default; numeric-feature quantization borders"
+      },
+      "one_hot_max_size": {
+        "default": 2,
+        "prior": "int-uniform[2,25]",
+        "searchable": true,
+        "note": "CPU default; categories at or below this cardinality use one-hot instead of ordered target statistics"
+      },
+      "grow_policy": {
+        "default": "SymmetricTree",
+        "prior": "categorical[SymmetricTree,Depthwise,Lossguide]",
+        "searchable": false
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "numeric splits are threshold comparisons on quantized borders; rescaling a feature moves border values but not the induced row partition"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "border quantization is built from the feature's value ORDER, so monotone transforms preserve bin membership and yield identical trees"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "nan_mode (default Min) maps missing numerics to a value below all observed ones so every split can separate them, and missing categoricals form their own category \u2014 no imputation required"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "THE distinguishing mechanism: ordered target statistics computed over random permutations encode raw categories using only preceding rows' targets, eliminating target leakage/prediction shift by construction"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "a non-parametric ensemble makes no assumption about the marginal or error distribution"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "small-to-large",
+      "basis": "empirical",
+      "why": "ordered boosting was designed to counter prediction shift on modest n, so it degrades more gracefully on small data than peers; training is slower than LightGBM/XGBoost at very large n"
+    },
+    {
+      "flag": "extrapolates",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "tree predictions are piecewise-constant; outside the training range the prediction is clamped to the nearest leaf"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "categorical_cardinality_share",
+        "why": "the fraction of columns that are high-cardinality categoricals is exactly where ordered target statistics beat one-hot/label encodings \u2014 the primary route-to-CatBoost signal"
+      },
+      {
+        "stat": "n_over_p",
+        "why": "boosting still needs enough rows per feature for stable gradient estimates, though ordered boosting lowers the floor relative to siblings"
+      },
+      {
+        "stat": "class_balance",
+        "why": "severe imbalance makes accuracy meaningless, shifts the honest metric to PR-AUC/lift, and suggests auto_class_weights/scale_pos_weight"
+      },
+      {
+        "stat": "missingness_rate",
+        "why": "high missingness is where the built-in Min/Max NaN handling and missing-as-category behavior are an advantage worth citing over impute-then-linear"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "cv_auc_gbt_vs_linear_gap",
+        "why": "if a linear model ties the GBT, the added variance/opacity of boosting is not earning its keep \u2014 a commit-linear signal"
+      },
+      {
+        "metric": "single_feature_importance_share",
+        "why": "one feature owning most importance is the leakage-dominance signature the promotion gate blocks \u2014 doubly relevant here since target-statistic encodings can amplify a leaky categorical"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "string/object categorical column not declared in cat_features",
+      "behavior": "fit raises CatBoostError (cannot interpret strings as numeric)",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "float-typed column declared in cat_features",
+      "behavior": "library rejects it \u2014 categorical features must be int or string",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "n < ~100 with high-cardinality categoricals",
+      "behavior": "ordered target statistics computed from very few preceding rows become noisy encodings",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "severe class imbalance",
+      "behavior": "default Logloss underweights the minority class",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "perfectly separable classes",
+      "behavior": "near-1.0 train score",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "single constant feature",
+      "behavior": "ignored (zero importance)",
+      "mitigation": "gate"
+    }
+  ],
+  "driver": {
+    "constructor": "CatBoostClassifier(**hp) / CatBoostRegressor(**hp), selected by problem_type",
+    "deps": [
+      "catboost>=1.2"
+    ],
+    "wrapperNeeds": "cat_features column list must be forwarded to fit() from the feature-assembly dtype manifest; otherwise sklearn-compatible fit/predict/predict_proba",
+    "serialization": "catboost-cbm",
+    "threadSafety": "thread_count-parallel fit; predict is thread-safe",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [
+    {
+      "template": "Calibrator Template",
+      "slot": "model",
+      "via": "probability"
+    },
+    {
+      "template": "Bagging Template",
+      "slot": "model",
+      "via": "probability"
+    },
+    {
+      "template": "Cluster-then-Classify",
+      "slot": "classifier",
+      "via": "probability"
+    },
+    {
+      "template": "Stacking Template",
+      "slot": "base",
+      "via": "probability\u2192features:tabular adapter"
+    }
+  ],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "irrelevant",
+      "why": "built-in Min/Max NaN mapping and missing-as-category handling make upstream imputation unnecessary and sometimes harmful (destroys the missingness signal)"
+    },
+    {
+      "position": "transform",
+      "verdict": "irrelevant",
+      "why": "monotone-transform-invariant: log/rank/box-cox cannot change border quantization or split structure"
+    },
+    {
+      "position": "scale",
+      "verdict": "irrelevant",
+      "why": "scale-insensitive by mechanism; standardization is wasted compute"
+    },
+    {
+      "position": "encode",
+      "verdict": "harmful",
+      "why": "pre-encoding destroys the ordered-target-statistics mechanism that is CatBoost's whole advantage \u2014 the docs explicitly say to pass raw categorical values via cat_features, never pre-encoded ones"
+    }
+  ]
+}

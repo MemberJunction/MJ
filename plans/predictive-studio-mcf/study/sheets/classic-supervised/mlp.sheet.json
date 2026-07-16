@@ -1,0 +1,89 @@
+{
+  "identity": {
+    "modelKey": "mlp",
+    "family": "classic-supervised",
+    "libraryClass": "sklearn.neural_network.MLPClassifier / sklearn.neural_network.MLPRegressor",
+    "aliases": ["multilayer perceptron", "neural network", "feed-forward network", "ANN", "MLP"],
+    "displayName": "Multi-Layer Perceptron",
+    "description": "Fully-connected feed-forward neural network trained by backprop (Adam/SGD/L-BFGS). A universal approximator whose capacity is set by hidden_layer_sizes; on typical business-tabular data it needs careful scaling, enough rows to feed its weight count, and usually fights gradient-boosting for the same slot rather than beating it."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": ["regression"],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "None",
+    "interpretabilityClass": "BlackBox",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true }
+  ],
+  "emits": [
+    { "portType": "probability", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "softmax outputs — smooth but typically OVERCONFIDENT when the net has capacity to overfit; better-shaped than NB's but still worth external calibration for threshold work" },
+    { "portType": "class-label", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none" },
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "regression mode — identity output layer" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/mlp.schema.json",
+    "hpMeta": {
+      "hidden_layer_sizes": { "default": [100], "prior": "categorical[(50,),(100,),(100,50),(200,100)]", "searchable": true },
+      "activation": { "default": "relu", "prior": "categorical[relu,tanh,logistic]", "searchable": true },
+      "alpha": { "default": 0.0001, "prior": "log-uniform[1e-6,1e-1]", "searchable": true, "note": "L2 penalty — the primary capacity brake" },
+      "solver": { "default": "adam", "prior": "categorical[adam,lbfgs,sgd]", "searchable": true, "note": "lbfgs converges better on small n; adam scales" },
+      "learning_rate_init": { "default": 0.001, "prior": "log-uniform[1e-4,1e-1]", "searchable": true, "conditionalOn": "solver", "note": "adam/sgd only" },
+      "batch_size": { "default": "auto", "prior": "categorical[auto,64,256]", "searchable": false, "conditionalOn": "solver" },
+      "max_iter": { "default": 500, "prior": "int-uniform[200,2000]", "searchable": false, "note": "raised from sklearn's 200 default — the stock value routinely ends in ConvergenceWarning" },
+      "early_stopping": { "default": true, "prior": "categorical[true,false]", "searchable": false, "note": "holds out 10% for validation-loss stopping — the cheap overfit brake" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "gradient descent multiplies each weight's gradient by its input's magnitude — unscaled features give an ill-conditioned loss surface, and the default weight initialization assumes roughly unit-scale inputs; without standardization training is slow, unstable, or fails outright" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "the first layer computes affine combinations of raw values — a log or rank transform changes every pre-activation and hence the fit" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "a NaN input propagates through every affine layer and poisons the loss; sklearn raises on NaN" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "the input layer is a real-valued vector — categoricals must be encoded (no embedding layer in the sklearn implementation)" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "a universal approximator trained on empirical risk — no likelihood assumed on the inputs or errors" },
+    { "flag": "dataSizeTolerance", "value": "medium-to-large", "basis": "empirical", "why": "even the default (100,) architecture carries thousands of weights; on small n it memorizes, and on small-to-mid tabular data it is repeatedly outperformed by gradient boosting — it earns its keep from tens of thousands of rows up" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "a ReLU network is globally piecewise-affine — outside the training hull the active linear piece extends indefinitely, so it extrapolates linearly and with unwarranted confidence, giving no signal that it left the data" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "rows_per_parameter", "why": "n divided by the weight count implied by hidden_layer_sizes is the memorization ratio — below a few rows per weight the net can fit noise exactly, the direct capacity gate" },
+      { "stat": "feature_variance_ratio", "why": "gradient conditioning degrades with the spread of input scales — a large ratio predicts the slow/failed convergence that standardization prevents" },
+      { "stat": "class_balance", "why": "cross-entropy on a skewed problem is minimized by drifting toward the majority prior; flags class weighting/resampling and PR-based metrics" }
+    ],
+    "modelMetrics": [
+      { "metric": "train_val_loss_gap", "why": "a widening train-vs-validation loss gap is the direct overfit signature of a high-capacity net — the signal to raise alpha or shrink the architecture" },
+      { "metric": "loss_curve_final_slope", "why": "a loss_curve_ still descending at max_iter means training was truncated, not converged — the reported score understates the model and the iteration budget is the fix" },
+      { "metric": "seed_to_seed_score_variance", "why": "the loss surface is non-convex and the fit starts from random weights — high variance across seeds means the single reported score is an unreliable draw, an ensembling/restart signal" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "unscaled inputs", "behavior": "ill-conditioned gradients — ConvergenceWarning, plateaued loss, or divergence", "mitigation": "gate", "note": "require scale placement upstream" },
+    { "condition": "n < ~1k rows", "behavior": "weight count exceeds information in the data — memorizes, unstable CV", "mitigation": "gate" },
+    { "condition": "max_iter reached without convergence", "behavior": "silently returns the truncated fit with a warning", "mitigation": "bank-entry", "note": "raise max_iter or enable early_stopping; treat the warning as a red flag, not noise" },
+    { "condition": "learning_rate_init too high (relu)", "behavior": "dead ReLUs — units stuck at zero output, capacity silently lost", "mitigation": "bank-entry", "note": "lower learning_rate_init or switch to tanh" },
+    { "condition": "non-convex loss + random init", "behavior": "different seeds land in different local minima — run-to-run score spread", "mitigation": "bank-entry", "note": "fix random_state for reproducibility; average restarts for robustness" }
+  ],
+  "driver": {
+    "constructor": "MLPClassifier(**hp) / MLPRegressor(**hp), selected by problem_type",
+    "deps": ["scikit-learn>=1.4"],
+    "wrapperNeeds": "none (sklearn-compatible fit/predict/predict_proba)",
+    "serialization": "joblib",
+    "threadSafety": "fit uses BLAS threading internally; predict is thread-safe",
+    "tranche": "T0 (already shipped as 'mlp')"
+  },
+  "canBeSeeds": [
+    { "template": "Calibrator Template", "slot": "model", "via": "probability", "note": "repairs the softmax overconfidence of an overfit net" },
+    { "template": "Bagging Template", "slot": "model", "via": "probability", "note": "a genuinely good bagging citizen — the non-convex, seed-sensitive fit is exactly the instability bagging averages away" },
+    { "template": "Stacking Template", "slot": "base", "via": "probability→features:tabular adapter" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN handling — a missing value poisons every downstream activation" },
+    { "position": "transform", "verdict": "beneficial", "why": "symmetrizing heavy-tailed features keeps extreme values from saturating activations and dominating early gradients" },
+    { "position": "scale", "verdict": "required", "why": "scale-sensitive by mechanism — gradient conditioning and the unit-scale weight-init assumption make standardization a precondition for reliable convergence" },
+    { "position": "encode", "verdict": "required", "why": "the input layer takes real vectors; categoricals must be one-hot/ordinal encoded (no embeddings in sklearn's MLP)" }
+  ]
+}

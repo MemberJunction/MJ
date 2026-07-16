@@ -1,0 +1,84 @@
+{
+  "identity": {
+    "modelKey": "ridge",
+    "family": "linear-glm",
+    "libraryClass": "sklearn.linear_model.Ridge",
+    "aliases": ["ridge regression", "L2 regression", "Tikhonov regularization"],
+    "displayName": "Ridge Regression",
+    "description": "L2-penalized least squares: shrinks all coefficients toward zero without zeroing any, trading a little bias for a large variance reduction. THE collinearity fixer — the penalty makes X'X + alpha*I invertible, so the solution stays unique and stable where OLS becomes ill-posed (including p > n)."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true,
+    "note": "closed-form under the default solvers; only sag/saga are stochastic"
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true }
+  ],
+  "emits": [
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "POINT ESTIMATES ONLY — sklearn computes no SEs, and shrunk coefficients are biased estimators anyway; for inference-grade coefficients use ols" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/ridge.schema.json",
+    "hpMeta": {
+      "alpha": { "default": 1.0, "prior": "log-uniform[0.001,1000]", "searchable": true, "note": "the single knob that matters; the useful range spans decades, hence log prior" },
+      "fit_intercept": { "default": true, "prior": "categorical[true,false]", "searchable": false },
+      "solver": { "default": "auto", "prior": "categorical[auto,cholesky,svd,lsqr,saga]", "searchable": false, "note": "auto picks by data shape; svd is the numerically safest for ill-conditioned X" },
+      "positive": { "default": false, "prior": "categorical[false,true]", "searchable": false, "note": "domain-knowledge constraint (forces lbfgs), not a search dimension" },
+      "tol": { "default": 0.0001, "prior": "log-uniform[1e-6,1e-2]", "searchable": false }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "the L2 penalty sums squared coefficients across features in their raw units — an unscaled feature's shrinkage depends on its units, so standardization is what makes 'equal penalty' mean equal" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "linear in the inputs; any monotone transform of a feature changes the least-squares fit" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the linear-algebra solvers have no missing-value path; NaN raises" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "requires a pre-encoded numeric design matrix" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "squared-error loss presumes a linear mean and is the Gaussian MLE — heavy-tailed noise or y-outliers pull the fit quadratically hard" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "mechanism-derived", "why": "the penalized normal equations are solvable for ANY n, including p > n where OLS is undefined — ridge is the small-n/wide-data workhorse" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the linear predictor extends unboundedly beyond the training range" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "vif_max", "why": "ridge exists to fix what VIF measures — the alpha*I term caps the variance inflation of collinear directions, trading bias for a unique, stable solution" },
+      { "stat": "condition_number", "why": "kappa(X) quantifies how close X'X is to singular; large kappa is the direct commit-ridge-over-OLS signal because the penalty bounds the smallest eigenvalue away from zero" },
+      { "stat": "n_over_p", "why": "p approaching or exceeding n is exactly where least squares becomes ill-posed while ridge remains defined" },
+      { "stat": "target_outlier_share", "why": "squared loss weights residuals quadratically — a few extreme y values can dominate the objective regardless of the penalty" }
+    ],
+    "modelMetrics": [
+      { "metric": "coefficient_path_stability", "why": "coefficients that swing wildly across the alpha path expose the collinear directions the penalty is suppressing — stable paths mean the effect story can be trusted" },
+      { "metric": "cv_r2_linear_vs_gbt_gap", "why": "if boosted trees decisively beat ridge, the linearity assumption is leaving signal on the table — a facet toward non-linear families; a tie is a commit-linear signal" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "perfectly duplicated features", "behavior": "the penalty splits the weight exactly evenly across copies — deterministic, but each per-feature coefficient is halved", "mitigation": "gate" },
+    { "condition": "alpha -> 0 on rank-deficient X", "behavior": "degenerates toward the ill-posed OLS solve; solution numerically unstable", "mitigation": "gate" },
+    { "condition": "extreme y outliers", "behavior": "quadratic loss lets single rows dominate the fit", "mitigation": "bank-entry", "note": "robust/quantile loss is the family exit" },
+    { "condition": "constant (zero-variance) feature", "behavior": "coefficient driven to ~0 by the penalty; harmless but flags a dead column", "mitigation": "gate" }
+  ],
+  "driver": {
+    "constructor": "Ridge(**hp)",
+    "deps": ["scikit-learn>=1.4"],
+    "wrapperNeeds": "none (sklearn-compatible fit/predict)",
+    "serialization": "joblib",
+    "threadSafety": "closed-form solve; predict is thread-safe",
+    "tranche": "T0 (already shipped)"
+  },
+  "canBeSeeds": [
+    { "template": "Stacking Template", "slot": "meta", "via": "score", "note": "the standard regression stacker — convex and shrinkage-protected against overweighting one base model" },
+    { "template": "Bagging Template", "slot": "model", "via": "score" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN path — the solver raises on missing values" },
+    { "position": "transform", "verdict": "beneficial", "why": "linearizing skewed covariates (log/Yeo-Johnson) improves the linear-mean fit and tames leverage points" },
+    { "position": "scale", "verdict": "required", "why": "the L2 penalty is unit-dependent — the textbook rule: standardize before ridge or the shrinkage is arbitrary across features" },
+    { "position": "encode", "verdict": "required", "why": "categoricals must be design-encoded before the linear-algebra solve" }
+  ]
+}

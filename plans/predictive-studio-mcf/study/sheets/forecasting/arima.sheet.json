@@ -1,0 +1,229 @@
+{
+  "identity": {
+    "modelKey": "arima",
+    "family": "forecasting",
+    "libraryClass": "statsmodels.tsa.arima.model.ARIMA / SARIMAX",
+    "aliases": [
+      "ARIMA",
+      "SARIMA",
+      "Box-Jenkins"
+    ],
+    "displayName": "ARIMA",
+    "description": "Autoregressive integrated moving-average forecaster for a single time-indexed series; models autocorrelation and (with seasonal terms) periodicity, producing horizon forecasts with prediction intervals."
+  },
+  "axes": {
+    "task": "forecasting",
+    "secondaryTasks": [],
+    "learningType": "Temporal",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Sequence",
+    "deterministicFit": true
+  },
+  "consumes": [
+    {
+      "portType": "series",
+      "dataShape": "series",
+      "dtypes": [
+        "numeric-time-indexed"
+      ],
+      "targetSpec": "series",
+      "required": true,
+      "note": "targetSpec `series` \u2014 a value indexed by a regular time step, NOT a row-matrix; the regime that proves the template beyond tabular"
+    }
+  ],
+  "emits": [
+    {
+      "portType": "forecast-series",
+      "granularity": "per-series",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "point forecast + prediction intervals over the horizon"
+    },
+    {
+      "portType": "coefficients",
+      "granularity": "per-model",
+      "paramsAsOutput": "coefficients+SE",
+      "probabilistic": "none",
+      "note": "AR/MA terms"
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable"
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/arima.schema.json",
+    "hpMeta": {
+      "p": {
+        "default": 1,
+        "prior": "int-uniform[0,5]",
+        "searchable": true,
+        "note": "AR order"
+      },
+      "d": {
+        "default": 1,
+        "prior": "int-uniform[0,2]",
+        "searchable": true,
+        "note": "differencing"
+      },
+      "q": {
+        "default": 1,
+        "prior": "int-uniform[0,5]",
+        "searchable": true,
+        "note": "MA order"
+      },
+      "seasonal_periods": {
+        "default": null,
+        "prior": "categorical[null,7,12,52]",
+        "searchable": true,
+        "conditionalOn": "seasonal-presence"
+      },
+      "P": {
+        "default": 0,
+        "prior": "int-uniform[0,2]",
+        "searchable": true,
+        "note": "seasonal AR order",
+        "conditionalOn": "seasonal_periods"
+      },
+      "D": {
+        "default": 0,
+        "prior": "int-uniform[0,1]",
+        "searchable": true,
+        "note": "seasonal differencing",
+        "conditionalOn": "seasonal_periods"
+      },
+      "Q": {
+        "default": 0,
+        "prior": "int-uniform[0,2]",
+        "searchable": true,
+        "note": "seasonal MA order",
+        "conditionalOn": "seasonal_periods"
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "a linear time-series model is equivariant to rescaling the series; forecasts rescale with it"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "a log transform changes additive vs multiplicative seasonality \u2014 it is a modeling choice, not a no-op"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "the likelihood needs a regular, gap-free series; missing periods must be interpolated or the frequency re-set"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "operates on a single numeric series; exogenous categoricals only via SARIMAX design columns"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "assumes (weak) STATIONARITY after differencing and roughly Gaussian innovations for valid intervals"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "needs-history",
+      "basis": "empirical",
+      "why": "seasonal orders need multiple full cycles of history; short series flag a fall-back to a naive/ETS floor"
+    },
+    {
+      "flag": "extrapolates",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "the whole purpose is forecasting beyond observed time \u2014 with widening intervals"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "seasonal_strength",
+        "why": "lag-k autocorrelation reveals periodicity the seasonal orders must capture; near-zero flags plain ARIMA over SARIMA"
+      },
+      {
+        "stat": "trend_slope",
+        "why": "a strong trend signals the differencing order d and warns against a stationary-only fit"
+      },
+      {
+        "stat": "n_full_cycles",
+        "why": "too few seasonal cycles means the seasonal orders are unidentifiable \u2014 a gate to a simpler floor"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "mase_vs_seasonal_naive",
+        "why": "MASE against the seasonal-naive floor is the honest forecast scoreboard; MASE>=1 means the model does not beat repeating last season"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "non-stationary after max differencing",
+      "behavior": "unstable/divergent forecast",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "series shorter than 2 seasonal cycles",
+      "behavior": "unidentifiable seasonal terms",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "irregular / gapped timestamps",
+      "behavior": "invalid frequency",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "constant series",
+      "behavior": "degenerate (zero-variance)",
+      "mitigation": "bank-entry",
+      "note": "fall back to naive"
+    }
+  ],
+  "driver": {
+    "constructor": "ARIMA(endog, order=(p,d,q), seasonal_order=(P,D,Q,s)).fit()",
+    "deps": [
+      "statsmodels>=0.14",
+      "scipy"
+    ],
+    "wrapperNeeds": "series adapter: (time_col, value_col, freq, horizon); predict becomes forecast(horizon) not per-row predict",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit",
+    "tranche": "T5 (forecasting)"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "required",
+      "why": "gaps must be filled to a regular series before fitting; but time-aware interpolation, not tabular median"
+    },
+    {
+      "position": "transform",
+      "verdict": "beneficial",
+      "why": "a log transform converts multiplicative seasonality to additive, often improving the fit"
+    },
+    {
+      "position": "scale",
+      "verdict": "irrelevant",
+      "why": "scale-equivariant; standardization changes nothing about the fit"
+    },
+    {
+      "position": "encode",
+      "verdict": "irrelevant",
+      "why": "single numeric series has nothing to encode (exogenous regressors are a SARIMAX concern, not preprocessing)"
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "identity": {
+    "modelKey": "naive_bayes",
+    "family": "classic-supervised",
+    "libraryClass": "sklearn.naive_bayes.GaussianNB / sklearn.naive_bayes.MultinomialNB",
+    "aliases": ["NB", "Gaussian naive Bayes", "multinomial naive Bayes", "naive Bayes classifier"],
+    "displayName": "Naive Bayes",
+    "description": "Closed-form Bayes classifier under the strong assumption that features are conditionally INDEPENDENT given the class. Fits in one pass (per-class moments or counts), works at tiny n, ranks well — and is famously miscalibrated when features correlate, because shared evidence gets multiplied in as if it were new."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "None",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true, "note": "variant-split contract: continuous features → GaussianNB; non-negative count-like features → MultinomialNB (negative values are a hard error there)" }
+  ],
+  "emits": [
+    { "portType": "probability", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "famously MISCALIBRATED: the independence violation multiplies correlated evidence repeatedly, piling posteriors onto 0/1 — ranking is usually decent, but these probabilities must pass through an external calibrator before any thresholded or expected-value use" },
+    { "portType": "class-label", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "argmax survives miscalibration better than the probabilities do" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/naive_bayes.schema.json",
+    "hpMeta": {
+      "var_smoothing": { "default": 1e-9, "prior": "log-uniform[1e-12,1e-6]", "searchable": true, "note": "GaussianNB only — additive variance floor (a fraction of the largest feature variance) against zero-variance collapse" },
+      "alpha": { "default": 1.0, "prior": "log-uniform[0.01,10]", "searchable": true, "note": "MultinomialNB only — Laplace/Lidstone smoothing against zero-count features" },
+      "fit_prior": { "default": true, "prior": "categorical[true,false]", "searchable": false, "note": "MultinomialNB only — learn class priors from data vs uniform" },
+      "priors": { "default": null, "prior": "categorical[null]", "searchable": false, "note": "GaussianNB only — explicit class priors override; leave null" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "GaussianNB posteriors are invariant to per-feature affine rescaling — the Gaussian density's Jacobian factor is identical across classes and cancels in the posterior ratio; the caveat is MultinomialNB, where the absolute count magnitude IS the evidence weight and scaling corrupts it" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "a nonlinear monotone map (log, rank) changes the per-class feature distribution shape, and the Gaussian likelihood fits the actual values — the fit changes" },
+    { "flag": "nativeNaN", "value": false, "basis": "empirical", "why": "the factorized likelihood could in principle skip missing terms, but sklearn's implementations reject NaN input" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "this driver ships Gaussian/Multinomial variants only — raw categoricals must be encoded (sklearn's CategoricalNB exists but is not wired here)" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "two stacked assumptions: conditional independence of features given the class (the 'naive' core), plus a per-feature Gaussian (or multinomial count) likelihood — both are load-bearing and both are commonly violated" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "mechanism-derived", "why": "parameters are closed-form per-class moments/counts — one O(n·p) pass, no optimization, sensible estimates from tens of rows, and streaming via partial_fit" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the class-conditional Gaussians are defined on all of ℝ — far outside the training range the log-likelihood ratio grows quadratically, producing extremely (over)confident posteriors with no warning" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "mean_pairwise_feature_correlation", "why": "the independence assumption is violated in exact proportion to inter-feature correlation — correlated features get their shared evidence multiplied in repeatedly, the mechanism behind the 0/1 posterior pile-up" },
+      { "stat": "per_class_feature_skewness", "why": "GaussianNB fits a symmetric Gaussian per feature per class; heavy skew misfits that likelihood and a symmetrizing transform directly repairs it" },
+      { "stat": "zero_count_feature_class_rate", "why": "MultinomialNB: a feature never seen with a class zeroes the whole posterior product without smoothing — the direct justification for the alpha prior" }
+    ],
+    "modelMetrics": [
+      { "metric": "auc_vs_brier_gap", "why": "NB's trademark failure mode is good ranking with terrible calibration — a large AUC-vs-Brier disparity is the signature, and the signal to wire a calibrator downstream rather than discard the model" },
+      { "metric": "posterior_extremity_rate", "why": "the fraction of predictions with max posterior > 0.99 measures the evidence-double-counting directly — it should track feature correlation, not true class separability" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "strongly correlated / duplicated features", "behavior": "shared evidence counted multiple times — posteriors saturate at 0/1", "mitigation": "bank-entry", "note": "calibrate downstream and/or decorrelate upstream; ranking often survives" },
+    { "condition": "negative values into MultinomialNB", "behavior": "hard ValueError — counts must be non-negative", "mitigation": "reject-input" },
+    { "condition": "zero-variance feature within a class", "behavior": "degenerate Gaussian likelihood", "mitigation": "bank-entry", "note": "var_smoothing absorbs it; note the feature" },
+    { "condition": "class absent or near-absent in training", "behavior": "prior ≈ 0 makes the class unreachable at predict time", "mitigation": "gate" },
+    { "condition": "predict-time values far outside the training range", "behavior": "quadratically growing log-likelihood ratio — meaningless extreme confidence", "mitigation": "bank-entry", "note": "surface a drift/out-of-range warning" }
+  ],
+  "driver": {
+    "constructor": "GaussianNB(**hp) or MultinomialNB(**hp) — variant selected by the input feature profile (continuous → Gaussian; non-negative counts → Multinomial)",
+    "deps": ["scikit-learn>=1.4"],
+    "wrapperNeeds": "variant selection from the input profile; route the probability port through an external calibrator by default",
+    "serialization": "joblib",
+    "threadSafety": "closed-form single-pass fit; predict thread-safe",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [
+    { "template": "Calibrator Template", "slot": "model", "via": "probability", "note": "NB + external calibration is the canonical pairing — it keeps the ranking and repairs the trademark miscalibration" },
+    { "template": "Cluster-then-Classify", "slot": "classifier", "via": "probability" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "sklearn's NB implementations reject NaN — rows must be imputed upstream" },
+    { "position": "transform", "verdict": "beneficial", "why": "symmetrizing skewed features improves the per-feature Gaussian likelihood fit that GaussianNB assumes" },
+    { "position": "scale", "verdict": "harmful", "why": "GaussianNB is affine-invariant per feature (standardization is wasted compute), and for MultinomialNB standardization produces negative values that hard-error — counts must arrive raw" },
+    { "position": "encode", "verdict": "required", "why": "no native categorical variant in this driver; categoricals must be encoded before the likelihood factorizes over them" }
+  ]
+}

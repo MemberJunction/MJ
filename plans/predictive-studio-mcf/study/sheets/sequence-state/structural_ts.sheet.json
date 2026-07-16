@@ -1,0 +1,85 @@
+{
+  "identity": {
+    "modelKey": "structural_ts",
+    "family": "sequence-state",
+    "libraryClass": "statsmodels.tsa.statespace.structural.UnobservedComponents",
+    "aliases": ["structural time series", "STS", "unobserved components", "basic structural model", "BSM"],
+    "displayName": "Structural Time Series (Unobserved Components)",
+    "description": "Decomposes a series into named latent states — level, trend, seasonal, cycle, AR — each an explicit stochastic component in one linear-Gaussian state space. The product is the interpretable decomposition itself (each state is a nameable curve), fitted by Kalman filtering/smoothing with exact missing-data handling."
+  },
+  "axes": {
+    "task": "sequence-state",
+    "secondaryTasks": ["forecasting"],
+    "learningType": "Temporal",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Sequence",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "series", "dataShape": "series", "dtypes": ["numeric-time-indexed"], "targetSpec": "series", "required": true, "note": "regular time index required; NaN values handled exactly by the underlying Kalman machinery" },
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric"], "targetSpec": "none", "required": false, "note": "optional exogenous regressors (intervention/holiday effects) aligned to the series index" }
+  ],
+  "emits": [
+    { "portType": "latent-state", "granularity": "per-row", "paramsAsOutput": "components", "probabilistic": "native", "note": "the named component states — level, trend, seasonal, cycle — as smoothed (and filtered) series with Gaussian uncertainty; the decomposition IS the output" },
+    { "portType": "forecast-series", "granularity": "per-series", "paramsAsOutput": "none", "probabilistic": "native", "note": "component-wise state propagation with intervals" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "component variance parameters + exog coefficients with SEs — which components carry the variation" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/structural_ts.schema.json",
+    "hpMeta": {
+      "level": { "default": "llevel", "prior": "categorical[llevel,lltrend,rwdrift,strend]", "searchable": true, "note": "trend specification — local level vs local linear trend vs random walk with drift vs smooth trend" },
+      "seasonal": { "default": null, "prior": "categorical[null,7,12,52]", "searchable": true, "note": "seasonal period; null omits the seasonal state entirely" },
+      "cycle": { "default": false, "prior": "categorical[true,false]", "searchable": true, "note": "stochastic cycle component for non-seasonal periodicity" },
+      "autoregressive": { "default": null, "prior": "categorical[null,1,2]", "searchable": true, "note": "AR state order for short-run dynamics the named components miss" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "linear-Gaussian components rescale equivariantly with the series; the decomposition is isomorphic under rescaling" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "the components are ADDITIVE — a log transform is precisely the multiplicative-vs-additive decomposition choice, not a no-op" },
+    { "flag": "nativeNaN", "value": true, "basis": "mechanism-derived", "why": "same Kalman machinery as the DLM — missing observations skip the measurement update exactly, and the components interpolate through the gap with honest widening" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "numeric series; interventions/holidays enter as numeric exog design columns" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes the series is an additive sum of linear-Gaussian components with mutually independent innovations" },
+    { "flag": "dataSizeTolerance", "value": "needs-history", "basis": "empirical", "why": "the seasonal state needs multiple full cycles to be identifiable; level-only specs remain usable on short series" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "forecasts propagate each component's state forward — trend continues, seasonal repeats — with widening intervals" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "seasonal_strength", "why": "lag-k autocorrelation says whether a seasonal state is warranted at all; forcing one onto a non-seasonal series adds unidentified variance parameters" },
+      { "stat": "n_full_cycles", "why": "the seasonal state's identifiability requires multiple complete cycles — too few is a gate to a level/trend-only spec" },
+      { "stat": "missingness_rate", "why": "exact in-filter gap handling is the family advantage — high missingness favors this over interpolate-then-decompose (STL)" }
+    ],
+    "modelMetrics": [
+      { "metric": "aic_by_component_spec", "why": "the component-selection lens: each added stochastic component must earn its variance parameter in penalized likelihood, not just absorb residual" },
+      { "metric": "component_variance_share", "why": "a component whose innovation variance estimates near zero is deterministic or absent — the parsimony signal to drop it from the spec" },
+      { "metric": "innovation_ljung_box_p", "why": "whitened one-step innovations mean the named components captured the structure; autocorrelation left over says the spec is incomplete" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "seasonal spec with < 2 full cycles of history", "behavior": "seasonal state unidentifiable", "mitigation": "gate" },
+    { "condition": "component variance estimated at the zero boundary", "behavior": "component collapses to deterministic; boundary SEs invalid", "mitigation": "gate", "note": "refit without the component" },
+    { "condition": "smoothed component states used as as-of features", "behavior": "leakage — smoothing uses the future", "mitigation": "gate", "note": "same filtered-vs-smoothed discipline as kalman_dlm" },
+    { "condition": "irregular / gapped timestamps", "behavior": "invalid frequency", "mitigation": "reject-input" },
+    { "condition": "constant series", "behavior": "degenerate — all variances zero", "mitigation": "bank-entry", "note": "fall back to naive" }
+  ],
+  "driver": {
+    "constructor": "UnobservedComponents(endog, level='llevel'|'lltrend', seasonal=s, cycle=..., autoregressive=..., exog=...).fit() then .smooth()",
+    "deps": ["statsmodels>=0.14", "scipy"],
+    "wrapperNeeds": "series adapter (time_col, value_col, freq — NaN preserved); expose each component (level/trend/seasonal/cycle) as a NAMED latent-state channel, filtered and smoothed separately for the as-of discipline",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit",
+    "tranche": "T6 (sequence-state)"
+  },
+  "canBeSeeds": [
+    { "template": "Decompose-then-Model", "slot": "decomposer", "via": "latent-state -> series adapter (seasonally-adjusted series = observed minus seasonal state, feeding a downstream forecaster)" },
+    { "template": "State-as-Feature Template", "slot": "state-featurizer", "via": "latent-state (FILTERED level/trend) -> features:tabular adapter" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "harmful", "why": "the filter handles gaps exactly and attributes them honest uncertainty; pre-imputation injects fabricated observations the decomposition then treats as real" },
+    { "position": "transform", "verdict": "beneficial", "why": "a log transform converts multiplicative seasonality to the additive form the component sum assumes" },
+    { "position": "scale", "verdict": "irrelevant", "why": "scale-equivariant; the decomposition rescales with the series" },
+    { "position": "encode", "verdict": "irrelevant", "why": "numeric series; intervention dummies are modeling-side exog, not a preprocessing stage" }
+  ]
+}

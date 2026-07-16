@@ -1,0 +1,80 @@
+{
+  "identity": {
+    "modelKey": "rsf",
+    "family": "survival",
+    "libraryClass": "sksurv.ensemble.RandomSurvivalForest",
+    "aliases": ["Random Survival Forest", "RSF", "survival forest"],
+    "displayName": "Random Survival Forest",
+    "description": "Nonparametric ensemble survival model: bagged trees split by the log-rank statistic, with per-leaf Nelson-Aalen estimators aggregated into per-row survival curves. Captures nonlinearities and interactions no (semi)parametric survival model can, at the cost of coefficient-level interpretability (importances only) and a larger data appetite."
+  },
+  "axes": {
+    "task": "survival",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "No",
+    "ensembleType": "Bagging",
+    "interpretabilityClass": "ImportanceOnly",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "duration+event", "required": true, "note": "scikit-survival takes the (duration,event) pair as a structured array target (Surv.from_arrays), not as dataframe columns — a wrapper concern, same logical contract" }
+  ],
+  "emits": [
+    { "portType": "hazard", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "predict() returns the ensemble risk score — the aggregated cumulative hazard — the relative-risk ranking that feeds C-index, analogous to Cox's partial hazard but nonlinear in x" },
+    { "portType": "survival-curve", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "predict_survival_function: a per-row STEP function from aggregated leaf Nelson-Aalen estimators — bounded by observed event times, unlike the smooth AFT curves; paramsAsOutput 'none' because the curve is a prediction of the ensemble, not an inspectable parameter table" },
+    { "portType": "attributions", "granularity": "per-model", "paramsAsOutput": "none", "probabilistic": "none", "note": "permutation feature importances (the ImportanceOnly lens) — computed via sklearn permutation_importance against C-index, not a native fitted attribute; caveat: split/diluted under correlated features" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/rsf.schema.json",
+    "hpMeta": {
+      "n_estimators": { "default": 100, "prior": "int-log-uniform[100,1000]", "searchable": true, "note": "more trees monotonically stabilize the ensemble curve; diminishing returns, never harmful except in fit time" },
+      "min_samples_leaf": { "default": 3, "prior": "int-log-uniform[1,50]", "searchable": true, "note": "sksurv default 3; the leaf must contain enough EVENTS (not just rows) for a stable per-leaf Nelson-Aalen estimate — the survival-specific reason this matters more than in a regression forest" },
+      "max_depth": { "default": null, "prior": "int-uniform[3,20]|none", "searchable": true },
+      "max_features": { "default": "sqrt", "prior": "categorical[sqrt,log2,1.0]", "searchable": true, "note": "per-split feature subsampling — the decorrelation knob of bagging" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "axis-aligned split thresholds depend only on the ORDER of feature values; rescaling changes no split, no tree, no prediction" },
+    { "flag": "monotoneTransformInvariant", "value": true, "basis": "mechanism-derived", "why": "any strictly monotone per-feature transform preserves value order, hence every candidate split partition — the fit is identical" },
+    { "flag": "nativeNaN", "value": false, "basis": "empirical", "why": "scikit-survival's tree implementation rejects missing values (raises on NaN) — unlike modern sklearn trees, there is no surrogate/default-direction path" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "requires pre-encoded numeric design columns" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "fully nonparametric: no proportional-hazards form, no AFT time-rescaling, no assumed lifetime distribution — log-rank splits plus per-leaf Nelson-Aalen make no functional-form claim; this is where PH/AFT violations route" },
+    { "flag": "dataSizeTolerance", "value": "data-hungry", "basis": "empirical", "why": "each leaf needs several EVENTS for a stable Nelson-Aalen estimate and each tree sees a bootstrap subsample — at low event counts trees are shallow and uninformative where a penalized Cox/AFT still estimates" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "piecewise-constant in feature space (predictions clamp beyond the training range) AND the curve is a step function bounded by observed event times — no tail beyond the data, in either dimension" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "censoring_rate", "why": "THE commit-survival stat: the right-censored fraction is what makes a survival model necessary vs a fixed-window classifier" },
+      { "stat": "event_count", "why": "the effective sample size — RSF specifically needs enough events to populate leaves after bootstrapping; few events routes back to penalized Cox/AFT, not deeper trees" },
+      { "stat": "proportional_hazards_test_p", "why": "a FAILED Schoenfeld/PH test on the Cox fit is the evidence that buys RSF's nonparametric flexibility — the routing stat INTO this node from the semiparametric branch" }
+    ],
+    "modelMetrics": [
+      { "metric": "concordance_index", "why": "the survival-native ranking metric (Harrell's C, natively OOB-estimable via oob_score) — with the ceiling caveat: near-deterministic durations inflate C toward 1, so report with the censoring context" },
+      { "metric": "integrated_brier_score", "why": "C-index measures ranking only; IBS scores the CALIBRATION of the predicted curves over time — the honest complement for a model whose whole output is per-row curves" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "zero events (all censored)", "behavior": "the log-rank split criterion has no signal — no valid split exists", "mitigation": "reject-input" },
+    { "condition": "duration <= 0", "behavior": "invalid risk sets in the node estimators", "mitigation": "reject-input" },
+    { "condition": "few events relative to tree capacity", "behavior": "leaves with 0-1 events give degenerate Nelson-Aalen estimates; ensemble curves look confident but are noise", "mitigation": "gate", "note": "raise min_samples_leaf / cap max_depth, or route to penalized Cox/AFT" },
+    { "condition": "highly correlated features", "behavior": "permutation importances split/dilute across the correlated group — attribution misleads even though prediction is fine", "mitigation": "bank-entry", "note": "interpretation caveat, not a fit failure; report grouped importances" }
+  ],
+  "driver": {
+    "constructor": "RandomSurvivalForest(n_estimators=..., min_samples_leaf=..., max_features=..., max_depth=..., n_jobs=-1, random_state=...).fit(X, Surv.from_arrays(event, time))",
+    "deps": ["scikit-survival>=0.23", "scikit-learn>=1.4", "numpy"],
+    "note": "DEP DECISION (tranche-start): scikit-survival is a NEW sidecar dependency, distinct from lifelines which covers the rest of the survival family — flagged for the T4 tranche-start decision (it compiles C extensions and pins a scikit-learn range; the cost is one model's worth unless the ensemble/kernel survival roadmap grows)",
+    "wrapperNeeds": "adapter: build the sksurv structured-array target Surv.from_arrays(event, duration) from the two target columns (NOT the lifelines df+colnames convention); predict maps to predict (risk score) / predict_survival_function; importances via sklearn permutation_importance; seed threading for reproducible fits",
+    "serialization": "joblib",
+    "threadSafety": "n_jobs-parallel fit (joblib); fitted predict is thread-safe, but never fit the same object concurrently",
+    "tranche": "T4 (survival)"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "sksurv trees raise on NaN — there is no native missing path, so unimputed rows are a hard failure, not a silent drop" },
+    { "position": "transform", "verdict": "irrelevant", "why": "monotone-transform invariant by mechanism — split partitions depend only on value order" },
+    { "position": "scale", "verdict": "irrelevant", "why": "scaleSensitive is false by mechanism; scaling changes no split threshold ordering" },
+    { "position": "encode", "verdict": "required", "why": "no native categorical support — categoricals must be numerically encoded before split search" }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "identity": {
+    "modelKey": "isolation_forest",
+    "family": "anomaly",
+    "libraryClass": "sklearn.ensemble.IsolationForest",
+    "aliases": ["iForest", "isolation forest", "isolation trees"],
+    "displayName": "Isolation Forest",
+    "description": "Unsupervised anomaly detection by random isolation: an ensemble of trees with random feature + random threshold splits on small subsamples. Anomalies are 'few and different', so they separate in FEWER splits — the anomaly score is the normalized average path length to isolation. No labels, no density model, near-linear cost."
+  },
+  "axes": {
+    "task": "anomaly",
+    "secondaryTasks": [],
+    "learningType": "Unsupervised",
+    "parametric": "No",
+    "ensembleType": "Bagging",
+    "interpretabilityClass": "BlackBox",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "none", "required": true, "note": "unsupervised — no target; fit on the population, score every row" }
+  ],
+  "emits": [
+    { "portType": "anomaly-score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "normalized average isolation path length; driver flips sklearn's sign so HIGHER = more anomalous (score_samples natively returns lower = more abnormal). Threshold-free — the honest primary output" },
+    { "portType": "class-label", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "predict()'s inlier/outlier label — a POLICY artifact of the contamination threshold applied to the score, not a learned class; prefer consuming the raw anomaly-score downstream" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/isolation_forest.schema.json",
+    "hpMeta": {
+      "n_estimators": { "default": 100, "prior": "int-log-uniform[100,500]", "searchable": true, "note": "scores are averages over random trees — more trees means lower score variance" },
+      "max_samples": { "default": "auto", "prior": "categorical[auto] | int-log-uniform[64,1024]", "searchable": true, "note": "'auto' = min(256, n) — the paper's ψ=256 subsample; small subsamples are a feature (they REDUCE masking/swamping), not a cost cut" },
+      "contamination": { "default": "auto", "prior": "n/a", "searchable": false, "note": "a POLICY choice, not a fit choice: it only sets the label threshold on the already-fitted score function — the trees and scores are identical for any value. Never tune it as a fit hyperparameter; set it (or a downstream threshold) from review capacity / cost of a false alarm" },
+      "max_features": { "default": 1.0, "prior": "uniform[0.5,1.0]", "searchable": true, "note": "per-tree feature subsampling; below 1.0 can help when many features are noise" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "split thresholds are drawn uniformly on each feature's OWN observed range — an affine rescale maps that uniform draw onto the rescaled range, leaving isolation-depth distributions identical" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "unlike gain-optimized trees, thresholds are uniform on VALUE not on order — a nonlinear monotone map (log) re-spreads mass along the range and changes which points isolate quickly" },
+    { "flag": "nativeNaN", "value": false, "basis": "empirical", "why": "the sklearn implementation rejects NaN at fit and score time — no default-direction handling exists for isolation trees" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "the sklearn estimator requires a numeric matrix; categoricals must be pre-encoded" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "no density or distributional form is fit — the only premise is structural: anomalies are FEW and DIFFERENT, hence easier to isolate by random cuts" },
+    { "flag": "dataSizeTolerance", "value": "wide (subsample-based)", "basis": "empirical", "why": "each tree fits on a ~256-row subsample by design, so cost and behavior are nearly flat from small datasets to millions of rows" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "points outside the training range fall past the learned split ranges and isolate in very few steps → maximal scores; extrapolation IS the detection mechanism working as intended" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "marginal_kurtosis", "why": "heavy-tailed marginals produce many legitimately extreme rows with short isolation paths — extremeness gets conflated with anomaly and false positives inflate" },
+      { "stat": "n_features_p", "why": "each split picks ONE random feature, so as p grows with few informative dimensions, splits are wasted on noise and isolation depth loses its signal — the known iForest high-dimension weakness" },
+      { "stat": "duplicate_row_rate", "why": "large exact-duplicate masses (sentinel values, system defaults) deepen paths around them and can mask true anomalies hiding near dense clumps" }
+    ],
+    "modelMetrics": [
+      { "metric": "score_separation", "why": "a distinct high-score tail in the anomaly-score distribution is what makes any threshold defensible; a unimodal blob means no few-and-different structure was found" },
+      { "metric": "score_stability_across_seeds", "why": "scores are means of path lengths over RANDOM trees — per-row instability across seeds means n_estimators is too low for the tree-to-tree variance" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "NaN anywhere in the input", "behavior": "fit/score raise — no missing-value path", "mitigation": "reject-input" },
+    { "condition": "contamination set with no cost/capacity basis", "behavior": "the flagged-outlier COUNT is forced to match the setting regardless of what the data contains", "mitigation": "gate", "note": "surface the score distribution and make the threshold an explicit reviewed policy, not a default" },
+    { "condition": "clustered anomalies (masking)", "behavior": "grouped anomalies form their own dense pocket, isolate slowly, and score near inliers", "mitigation": "gate", "note": "small max_samples mitigates; still flag when score_separation is weak" },
+    { "condition": "all features (near-)constant", "behavior": "no informative splits exist — path lengths are uniform and scores carry no signal", "mitigation": "reject-input" }
+  ],
+  "driver": {
+    "constructor": "IsolationForest(n_estimators=..., max_samples=..., contamination=..., max_features=..., random_state=..., n_jobs=...)",
+    "deps": ["scikit-learn>=1.4"],
+    "wrapperNeeds": "negate score_samples() so higher = more anomalous before emitting anomaly-score (sklearn's convention is lower = more abnormal); pass predict()'s ±1 through as the thresholded label emission",
+    "serialization": "joblib",
+    "threadSafety": "n_jobs-parallel fit and scoring; scoring a fitted model is thread-safe",
+    "tranche": "T3 (anomaly)"
+  },
+  "canBeSeeds": [
+    { "template": "Outlier-Filter-then-Model", "slot": "detector", "via": "anomaly-score" },
+    { "template": "Score-then-Threshold Review Queue", "slot": "scorer", "via": "anomaly-score" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "the sklearn estimator rejects NaN outright — rows must be complete before fit/score" },
+    { "position": "transform", "verdict": "beneficial", "why": "thresholds are uniform on the raw value range, so de-skewing a heavy-tailed feature re-spreads its mass and reduces extremeness-driven false positives (the marginal_kurtosis signal, acted on)" },
+    { "position": "scale", "verdict": "irrelevant", "why": "scale-insensitive by mechanism — affine rescaling leaves isolation structure unchanged, so standardization is wasted compute" },
+    { "position": "encode", "verdict": "required", "why": "numeric-matrix requirement — categoricals must be integer/one-hot encoded before random-threshold splits apply" }
+  ]
+}

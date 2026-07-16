@@ -1,0 +1,252 @@
+{
+  "identity": {
+    "modelKey": "gp",
+    "family": "classic-supervised",
+    "libraryClass": "sklearn.gaussian_process.GaussianProcessRegressor / sklearn.gaussian_process.GaussianProcessClassifier",
+    "aliases": [
+      "Gaussian process",
+      "GP",
+      "GPR",
+      "GPC",
+      "kriging"
+    ],
+    "displayName": "Gaussian Process",
+    "description": "Bayesian nonparametric kernel model: a Gaussian prior over functions, conditioned exactly on the data. Its defining virtue is NATIVE uncertainty \u2014 every regression prediction is a full posterior N(\u03bc,\u03c3\u00b2), with \u03c3 honestly inflating away from the data. Its defining gate is cost: exact inference inverts the n\u00d7n kernel matrix, O(n\u00b3) time / O(n\u00b2) memory, ceiling \u2248 10k rows."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": [
+      "classification"
+    ],
+    "learningType": "Supervised",
+    "parametric": "No",
+    "ensembleType": "None",
+    "interpretabilityClass": "BlackBox",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    {
+      "portType": "features:tabular",
+      "dataShape": "row-matrix",
+      "dtypes": [
+        "numeric",
+        "encoded-categorical"
+      ],
+      "targetSpec": "plain",
+      "required": true
+    }
+  ],
+  "emits": [
+    {
+      "portType": "predictive-distribution",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "regression predict returns the full posterior (mean, std) \u2014 the score port carries only \u03bc and DROPS the native \u03c3; portTypeProposal: 'predictive-distribution' (per-row mean+std/quantiles) so the uncertainty survives composition"
+    },
+    {
+      "portType": "probability",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "classification \u2014 the latent GP is squashed through a Laplace-approximated posterior; probabilities are principled but approximate"
+    },
+    {
+      "portType": "class-label",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none"
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable"
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/gp.schema.json",
+    "hpMeta": {
+      "kernel": {
+        "default": "1.0*RBF(1.0)+WhiteKernel(1.0)",
+        "prior": "categorical[RBF,Matern,RationalQuadratic,RBF+White]",
+        "searchable": true,
+        "note": "kernel FORM is the hyperparameter; the length-scales/amplitudes inside it are optimized by maximizing the log marginal likelihood during fit"
+      },
+      "alpha": {
+        "default": 1e-10,
+        "prior": "log-uniform[1e-12,1e-2]",
+        "searchable": true,
+        "note": "GPR only \u2014 diagonal jitter/noise added to the kernel; doubles as numerical stabilizer and observation-noise floor"
+      },
+      "n_restarts_optimizer": {
+        "default": 2,
+        "prior": "int-uniform[0,10]",
+        "searchable": false,
+        "note": "L-BFGS restarts against multimodal marginal likelihood; more restarts = more robust, linearly more fit cost"
+      },
+      "normalize_y": {
+        "default": true,
+        "prior": "categorical[true,false]",
+        "searchable": false,
+        "note": "GPR only \u2014 centers/scales the target so the zero-mean prior is honest"
+      },
+      "max_iter_predict": {
+        "default": 100,
+        "prior": "int-uniform[50,200]",
+        "searchable": false,
+        "note": "GPC only \u2014 Newton iterations for the Laplace approximation"
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "RBF/Matern kernels are distance-based with learned length-scales; unscaled features force the marginal-likelihood optimization to reconcile incomparable units, and a shared length-scale is dominated by the widest feature"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "kernel distances depend on actual coordinates \u2014 a monotone transform reshapes the kernel matrix and the entire posterior"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "kernel evaluation on a missing coordinate is undefined; sklearn raises on NaN"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "stationary kernels need numeric coordinates; categoricals must be encoded first"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "the model IS its distributional assumption \u2014 a Gaussian prior over functions with Gaussian observation noise; the celebrated \u03c3 is only honest insofar as that prior and noise model hold"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "small-only (n < ~10k)",
+      "basis": "mechanism-derived",
+      "why": "THE defining gate: exact inference requires the Cholesky of the n\u00d7n kernel matrix \u2014 O(n\u00b3) time, O(n\u00b2) memory; beyond ~10k rows fit is impractical and the family must be gated out, not tuned"
+    },
+    {
+      "flag": "extrapolates",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "with stationary kernels the posterior mean reverts to the prior mean away from the data \u2014 but uniquely, the model SAYS so: \u03c3 inflates back to the prior variance, the native out-of-range warning no other family in this tranche emits"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "n_rows",
+        "why": "the O(n\u00b3)/O(n\u00b2) exact-inference wall makes row count the single decisive statistic for this family \u2014 check it before anything else"
+      },
+      {
+        "stat": "feature_variance_ratio",
+        "why": "length-scale optimization conditions badly over incomparable units \u2014 a large variance ratio predicts optimizer failure before it happens"
+      },
+      {
+        "stat": "n_features_effective",
+        "why": "stationary kernels suffer distance concentration in high dimension \u2014 past a few dozen dense features the covariance structure flattens and the GP loses its resolution"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "log_marginal_likelihood",
+        "why": "the native model-evidence scoreboard the kernel search itself maximizes \u2014 directly comparable across kernel forms on the same data, no CV needed"
+      },
+      {
+        "metric": "predictive_interval_coverage_95",
+        "why": "the whole point of a GP is honest \u03c3 \u2014 empirical coverage of the nominal 95% interval is the direct test that the uncertainty is real and not just decorative"
+      },
+      {
+        "metric": "fitted_length_scale_position",
+        "why": "a length-scale pinned at its lower bound means the GP is interpolating noise; pinned at the upper bound means the feature is effectively ignored \u2014 both are misfit signatures read straight off the fitted kernel"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "n > ~10k rows",
+      "behavior": "kernel Cholesky exhausts time/memory (O(n\u00b3)/O(n\u00b2))",
+      "mitigation": "gate",
+      "note": "route to gradient-boosting or linear families; sparse/inducing-point GPs are out of this driver's scope"
+    },
+    {
+      "condition": "duplicate inputs with different targets and alpha\u22480",
+      "behavior": "kernel matrix numerically singular \u2014 Cholesky fails",
+      "mitigation": "bank-entry",
+      "note": "raise alpha or include a WhiteKernel term"
+    },
+    {
+      "condition": "marginal-likelihood optimizer converges to a bound",
+      "behavior": "degenerate kernel (noise-only or ignore-all-features fit)",
+      "mitigation": "bank-entry",
+      "note": "increase n_restarts_optimizer; inspect fitted length-scales"
+    },
+    {
+      "condition": "high-dimensional dense input (p > ~50)",
+      "behavior": "distance concentration flattens the covariance \u2014 posterior reverts to prior almost everywhere",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "near-constant target",
+      "behavior": "amplitude collapses; \u03c3 dominated by noise term",
+      "mitigation": "gate"
+    }
+  ],
+  "driver": {
+    "constructor": "GaussianProcessRegressor(kernel=..., alpha=..., normalize_y=True, n_restarts_optimizer=2) / GaussianProcessClassifier(kernel=...), selected by problem_type",
+    "deps": [
+      "scikit-learn>=1.4",
+      "scipy (L-BFGS-B for marginal-likelihood optimization)"
+    ],
+    "wrapperNeeds": "kernel spec string \u2192 kernel object construction; regression predict called with return_std=True and \u03c3 surfaced alongside \u03bc",
+    "serialization": "joblib",
+    "serializationNote": "artifact embeds the training X plus the Cholesky factor \u2014 size scales O(n\u00b2); acceptable only because the family is gated to small n",
+    "threadSafety": "fit single-threaded; predict thread-safe",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [
+    {
+      "template": "Calibrator Template",
+      "slot": "model",
+      "via": "probability"
+    },
+    {
+      "template": "Stacking Template",
+      "slot": "base",
+      "via": "score\u2192features:tabular adapter",
+      "note": "with a predictive-distribution port, the \u03c3 would be a second, highly informative stacking feature \u2014 today it is dropped"
+    }
+  ],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "required",
+      "why": "no native NaN handling \u2014 kernel evaluation is undefined on missing coordinates"
+    },
+    {
+      "position": "transform",
+      "verdict": "beneficial",
+      "why": "stationary kernels model smooth, roughly homogeneous variation \u2014 symmetrizing skewed inputs (and normalize_y on the target) makes the stationarity assumption more nearly true"
+    },
+    {
+      "position": "scale",
+      "verdict": "required",
+      "why": "scale-sensitive by mechanism \u2014 length-scale optimization over unscaled units is ill-conditioned and a shared length-scale is meaningless across incomparable ranges"
+    },
+    {
+      "position": "encode",
+      "verdict": "required",
+      "why": "categoricals must be numeric before a stationary kernel can measure distance over them"
+    }
+  ]
+}

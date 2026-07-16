@@ -1,0 +1,674 @@
+<!doctype html><html><head><meta charset='utf-8'><style>
+body{font-family:-apple-system,'Segoe UI',sans-serif;max-width:820px;margin:0 auto;padding:32px 40px;color:#1a2733;line-height:1.5}
+h1{font-size:24px;border-bottom:3px solid #1467b8;padding-bottom:6px;margin-top:8px;color:#0f2f4f;page-break-before:always}
+body>h1:first-of-type{page-break-before:avoid}
+h2{font-size:17px;color:#0f4f8f;margin-top:22px}h3{font-size:14px;color:#334}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13px}
+th,td{border:1px solid #cdd7e0;padding:6px 10px;text-align:left}
+th{background:#eef2f6;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#5a6b7e}
+code{background:#eef2f6;padding:1px 5px;border-radius:4px;font-size:12px}
+strong{color:#0f2f4f}hr{border:none;border-top:1px solid #dde4ea;margin:20px 0}
+blockquote{border-left:3px solid #1467b8;margin:0;padding-left:14px;color:#5a6b7e}
+</style></head><body><h1>Phase-0 Verdict — Idea Validation Before Building</h1>
+<p><strong>What this is.</strong> Eight cheap, falsifiable experiments run <em>before</em> building the Model Component Framework, to test its contested bets and to reproduce the failures the team (Arie) rightly warned about. Every headline number comes from a locked-holdout referee that scores each arm exactly once and logs an immutable audit trail (<code>results/referee_audit.jsonl</code>, <code>results/llm_audit.jsonl</code>). Fully reproducible: <code>./run.sh v&lt;n&gt;_&lt;name&gt;</code>.</p>
+<h2>Scoreboard</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Bet / failure tested</th>
+<th>Verdict</th>
+<th>Headline</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>V1</strong></td>
+<td>semantic leakage detection beats statistics</td>
+<td><strong>PASS</strong></td>
+<td>LLM caught the name-only leak (stat screen: 0.00 → semantic: 1.00), zero decoy false-positives</td>
+</tr>
+<tr>
+<td><strong>V2</strong></td>
+<td>components-as-features lift a GBT</td>
+<td><strong>REVISE</strong></td>
+<td>HMM hidden-state feature: <strong>+0.054 AUC</strong>; feature-space clusters: ~0 (GBT reconstructs them)</td>
+</tr>
+<tr>
+<td><strong>V3</strong></td>
+<td>task coverage: survival vs GBT-window</td>
+<td><strong>REVISE</strong></td>
+<td>survival wins all 5 seeds, +0.024 C-index (understated: GBT can't answer "when" at all)</td>
+</tr>
+<tr>
+<td><strong>V4</strong></td>
+<td>agent triage validity</td>
+<td><strong>PASS</strong></td>
+<td>task-family 1.00, full triage 0.86; <strong>collapses to 0.29 without the stats (+0.57)</strong></td>
+</tr>
+<tr>
+<td><strong>V5</strong></td>
+<td>reproduce p-hacking + contain it</td>
+<td><strong>PASS</strong></td>
+<td>noise search fakes 0.63 AUC; locked holdout reports the truth, 0.50</td>
+</tr>
+<tr>
+<td><strong>V6</strong></td>
+<td>miscalibration + fixable</td>
+<td><strong>PASS</strong></td>
+<td>GBT ECE 0.062 → 0.023 via CV-calibration (single-slice is risky — a design catch)</td>
+</tr>
+<tr>
+<td><strong>V7</strong></td>
+<td>naive aggregation leaks; as-of doesn't</td>
+<td><strong>PASS</strong></td>
+<td>leaky 0.85 vs honest 0.61 — a 0.23 inflation gap, removed by as-of assembly</td>
+</tr>
+<tr>
+<td><strong>V8</strong></td>
+<td>meaning-tag retrieval beats keyword</td>
+<td><strong>PASS</strong></td>
+<td>story-tag retrieval 1.00 vs keyword 0.50 (+0.50)</td>
+</tr>
+<tr>
+<td><strong>V9</strong></td>
+<td>monitoring: drift caught before rot</td>
+<td><strong>PASS</strong></td>
+<td>PSI alarm fires at/before performance decay every seed; challenger recommends (never auto-promotes)</td>
+</tr>
+<tr>
+<td><strong>V10</strong></td>
+<td>uplift / persuadables</td>
+<td><strong>PASS</strong></td>
+<td>uplift-targeting 30% of members beats contacting 100% (984 vs 852); segments recovered 90%</td>
+</tr>
+</tbody>
+</table>
+<p><strong>8 PASS · 2 REVISE · 0 KILL</strong> (V9 + V10 added to close the monitoring gap Arie emphasized and the flagship uplift business claim — the two omissions caught on review).</p>
+<h2>What the verdicts mean for the build</h2>
+<ul>
+<li><strong>Nothing was killed.</strong> No part of the plan must be abandoned. The riskiest bet (V2, composition) survived in a <em>disciplined</em> form rather than as a blanket claim.</li>
+<li><strong>The two REVISEs sharpen exactly the thing Arie pushed on.</strong> V2 + V3 together say: composition and extra model families earn their keep <strong>specifically for structure a GBT cannot internalize from raw features</strong> — hidden/temporal state (HMM, proven +0.054), censored time-to-event, sequences, forecasting — and add nothing for ordinary tabular structure the GBT reconstructs itself. This is already the plan's demand-gated design (Addendum 4) and now it's evidence-backed: <strong>the agent composes only on cited evidence of GBT-irreducible structure</strong> (wired into <code>validateTriageDecision</code>), never reflexively.</li>
+<li><strong>The honesty machinery is validated as mechanical, not agentic (V5, V6, V7).</strong> We reproduced the graveyard's deadliest failures — leaderboard p-hacking and aggregation leakage — and showed the locked holdout + as-of assembly contain them completely. Critically, an LLM does <strong>not</strong> exempt the system from p-hacking (it can rationalize a lucky config), which is why these controls are code, not judgment.</li>
+<li><strong>The two pillars Arie stressed and the flagship business claim are now covered (V9, V10).</strong> Monitoring: a drift alarm fires from input/score distribution shift before label-based performance visibly rots, and the challenger loop recommends (never auto-promotes) — the operational half the graveyard skipped. Uplift: targeting by who is <em>movable</em> beats targeting by who is <em>at risk</em> and beats contacting everyone, at a fraction of the budget, while declining to contact the members outreach would harm. This is the business case, on causal ground truth.</li>
+<li><strong>The LLM-era difference is real and measurable (V1, V4, V8).</strong> Meaning caught a leak statistics structurally couldn't (V1); statistics-grounded triage routed tasks correctly and was worthless without the statistics (V4); components are findable by what they find (V8). These are the three capabilities the AutoML graveyard lacked, each now demonstrated rather than asserted.</li>
+</ul>
+<h2>Design refinements Phase 0 caught (cheaply, before code)</h2>
+<ol>
+<li><strong>Calibration must be gated, not blind</strong> — ship cross-validated calibration with a "helps-or-skip" check; a naive single-slice isotonic can <em>worsen</em> an already-calibrated model (V6).</li>
+<li><strong>Composition is not a blanket win</strong> — gate it on structure evidence; the cluster-then-classify motif is not automatically useful (V2).</li>
+<li><strong>Triage: route families confidently, treat commit-vs-defer as the soft call</strong> with a tunable threshold; require a cited statistic per decision (V4).</li>
+<li><strong>Story tagging's payoff is the one-line nominal identity</strong>, not verbose descriptions (V8).</li>
+</ol>
+<h2>Honest limits</h2>
+<p>Synthetic planted-truth data throughout (the point: known ground truth to test recovery); LLM experiments are one model (gemini-2.5-flash), few seeds — pre-build signals, not the production eval suite. The natural next step, exactly as promised to Arie: <strong>rerun V2/V3 on one real association dataset</strong>, and let the first shippable increment (the pillar stack — assembly, leakage, calibration, monitoring — which is valuable under every outcome above) be judged as a working artifact rather than a plan.</p>
+<h2>The one-paragraph readout</h2>
+<p>We tested the plan's bets before building. The unglamorous, must-have machinery — leakage control, p-hacking prevention, calibration, honest evaluation, and monitoring — works and demonstrably contains the exact failures that sank prior AutoML efforts. The flagship business value (uplift: who is worth contacting) is demonstrated on causal ground truth, beating both risk-targeting and blanket outreach. The ambitious bet (composable, meaning-tagged components designed by an agent) is validated with discipline: it pays off precisely where gradient-boosted trees <em>can't</em> reach — hidden/temporal structure and the task families GBT can't express — and we've turned "compose only when it helps" into an enforceable gate rather than a hope. Nothing needs abandoning; the build proceeds pillars-first, composition demand-gated, with these ten experiments as the evidence base.</p>
+<h2>Artifacts</h2>
+<ul>
+<li><code>experiments/</code> — 8 runnable scripts. <code>harness/</code> — generators, locked-holdout referee, dials, LLM harness.</li>
+<li><code>memos/</code> — one memo per experiment (V1–V8) + this verdict.</li>
+<li><code>results/</code> — per-experiment result JSON + the two append-only audit logs (every number's provenance).</li>
+</ul>
+<hr>
+<h1>V1 — Semantic Leakage Detection (the "meaning catches what statistics can't" bet)</h1>
+<p><strong>Verdict: PASS</strong> — this is the single clearest demonstration of <em>why</em> an LLM-era system can differ from the AutoML graveyard.</p>
+<h2>Hypothesis</h2>
+<p>An LLM reading only the schema + column descriptions (never data values) flags planted target leakage a correlation screen misses — especially a leak whose statistical signal is faint but whose <em>name</em> is a giveaway — and the union of both screens beats either alone.</p>
+<h2>Method</h2>
+<p>A renewal-prediction schema (Gemini 2.5-flash, 3 seeds) with three leak classes planted among honest features and three decoys (suspicious-looking but harmless names, e.g. <code>RenewalReminderCount</code> = reminders <em>sent</em> pre-decision):
+- <strong>(a) direct proxy</strong> — <code>InvoicePaidThisYear</code> (strong correlation)
+- <strong>(b) post-outcome</strong> — <code>CancellationProcessedDate</code> (staff action after the outcome)
+- <strong>(c) name-only</strong> — <code>RenewalConfirmationEmailOpened</code>, correlation deliberately dampened below 0.3, but the name is a dead giveaway</p>
+<p>Two screens: <strong>STATISTICAL</strong> — a reasonable |corr| &gt; 0.30 flag (not a strawman); <strong>SEMANTIC</strong> — the LLM given only {name, description, dtype}, never a single value.</p>
+<h2>Result (mean over 3 seeds, <code>results/llm_audit.jsonl</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>metric</th>
+<th>statistical (0.30)</th>
+<th>semantic (LLM)</th>
+<th>union</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>overall leak recall</td>
+<td>0.67</td>
+<td><strong>1.00</strong></td>
+<td><strong>1.00</strong></td>
+</tr>
+<tr>
+<td>name-only leak (c) recall</td>
+<td><strong>0.00</strong></td>
+<td><strong>1.00</strong></td>
+<td>1.00</td>
+</tr>
+<tr>
+<td>decoy false-positive rate</td>
+<td>0.00</td>
+<td><strong>0.00</strong></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>PASS bar: semantic name-only recall ≥ 0.8 (<strong>1.00</strong>), decoy FP ≤ 0.2 (<strong>0.00</strong>), union − stats ≥ 0.2 (<strong>0.33</strong>).</p>
+<h2>Reading</h2>
+<p>The statistical screen did its job on the strongly-correlated leaks (0.67 recall) but was structurally blind to the name-only leak — its correlation was below any sane threshold, so <em>no purely statistical method could catch it</em>. The LLM caught all three, including the name-only one, and did <strong>not</strong> trip on any of the three decoys (it correctly kept <code>RenewalReminderCount</code>, reasoning that reminders are sent pre-decision). This is precisely the capability the AutoML graveyard lacked: its optimizer saw anonymous floats, so a leak that wasn't statistically loud was invisible. Meaning makes it visible.</p>
+<h2>What it does for the plan</h2>
+<p>Validates the semantic-leakage-screening claim (WS-2 / the leakage guard) with a clean, reproducible result, and is the crispest possible artifact for the core thesis to Arie: <em>"the thing that changed since 2019 is that the screener can read."</em> The design consequence is already the plan's: run <strong>both</strong> screens and take the union — statistics for the loud leaks, meaning for the quiet-but-named ones.</p>
+<h2>Caveat</h2>
+<p>One schema, one model, temperature 0. The result is strong but should be widened across more schemas/models before load-bearing production claims; the mechanism, though, is not model-specific — any competent LLM reads <code>CancellationProcessedDate</code> as post-outcome.</p>
+<h2>Reproduce</h2>
+<p><code>./run.sh v1_semantic_leakage</code> — seeds 61–63, model gemini-2.5-flash. Prompts + responses in <code>results/llm_audit.jsonl</code>; summary in <code>results/v1_semantic_leakage.result.json</code>.</p>
+<hr>
+<h1>V2 — Components-as-Features Lift (THE composition bet)</h1>
+<p><strong>Verdict: REVISE</strong> — and this is the most decision-relevant result in Phase 0. It directly tests Arie's "GBT is all you need" challenge, and the honest answer is <em>"mostly he's right — with one important, well-defined exception that the plan should build for and nothing more."</em></p>
+<h2>Hypothesis</h2>
+<p>Features extracted by structural models (HMM hidden states, KMeans cluster IDs) lift a gradient-boosted tree beyond raw features — when the data contains that structure — and do not spuriously help when it doesn't.</p>
+<h2>Method</h2>
+<p>Three datasets × 5 seeds, each feeding the same XGBoost and same locked holdout; every extractor fit on the DEV split only:
+- <strong>HMM</strong> — planted hidden-state regime driving the label; raw arm = obs summary stats, component arm = + HMM-recovered state-share/last-state features.
+- <strong>CLUSTER</strong> — planted overlapping clusters with the feature→label sign flipping per cluster; component arm = + KMeans cluster-id (one-hot).
+- <strong>CONTROL</strong> — plain classification with no latent structure + KMeans cluster-id → the honesty check: a real method must NOT lift here.</p>
+<h2>Result (mean holdout AUC over 5 seeds, <code>results/referee_audit.jsonl</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>dataset</th>
+<th>raw AUC</th>
+<th>+ component</th>
+<th>lift</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>HMM (hidden temporal state)</strong></td>
+<td>0.816</td>
+<td><strong>0.871</strong></td>
+<td><strong>+0.054</strong></td>
+</tr>
+<tr>
+<td>cluster (feature-space, overlapping)</td>
+<td>0.877</td>
+<td>0.878</td>
+<td>+0.001</td>
+</tr>
+<tr>
+<td>control (no structure)</td>
+<td>0.790</td>
+<td>0.789</td>
+<td>−0.000</td>
+</tr>
+</tbody>
+</table>
+<p>Bar: +0.03 on ≥2 planted AND control &lt; +0.015. Observed: <strong>1 of 2</strong> planted passing, control honest.</p>
+<h2>The honest reading</h2>
+<ul>
+<li><strong>The HMM lift is real and decisive (+0.054).</strong> A GBT sees per-row summary statistics; it <em>cannot</em> reconstruct a hidden state that only exists across a sequence over time. Extracting that state with an HMM and handing it over lifts the GBT materially. This is genuine composition value.</li>
+<li><strong>The cluster lift is ~zero — and that's XGBoost being excellent, not the idea failing.</strong> Even with deliberately overlapping clusters, a depth-4 GBT partitions feature space finely enough to recover the cluster-conditional relationship on its own. The explicit cluster-id is redundant. I did <em>not</em> keep tuning to force this positive (that would be p-hacking my own test); the null is the finding.</li>
+<li><strong>The control confirms the harness is trustworthy</strong> — adding a cluster feature to structureless data produced no spurious lift, so the HMM lift isn't an artifact.</li>
+</ul>
+<h2>What this means for the plan (and for Arie)</h2>
+<p>The result splits the composition claim cleanly, and the split is <em>favorable precisely because it's disciplined</em>:</p>
+<ol>
+<li><strong>Composition earns its keep only for structure a GBT cannot internalize from the raw features</strong> — hidden/temporal/sequential state (HMM, proven here), and by direct extension the task-coverage families the plan already prioritizes: survival (censoring), forecasting (time index), state models. This is the SAME class as "questions GBT can't answer."</li>
+<li><strong>Composition is NOT a blanket win.</strong> For ordinary tabular latent structure the GBT reconstructs itself, the cluster-then-classify motif adds nothing. A system that composes reflexively would burn compute for no lift — exactly the AutoML failure mode.</li>
+<li><strong>Therefore the design change (already the plan's REVISE gate):</strong> the agent reaches for component composition <strong>only on cited evidence of GBT-irreducible structure</strong> — temporal signal, censoring, sequence dependence — wired into <code>validateTriageDecision</code>. Reflexive composition is disallowed by construction.</li>
+</ol>
+<p>This is a stronger position with a skeptic than a blanket PASS would have been: it concedes his point where he's right (GBT reconstructs ordinary structure), proves the exception where the plan's real value lives (structure GBT can't touch), and turns the boundary into an enforced gate rather than a hope.</p>
+<h2>Caveat / next</h2>
+<p>Two structural datasets is thin; the HMM case should be corroborated on (a) a real association sequence dataset if available, and (b) the survival and forecasting families in V3 and a follow-up, which test the same "GBT-can't-reach-this" thesis on their own terms. ALS-embedding-as-feature was not tested (implicit lib not installed) — a noted gap, not a claim.</p>
+<h2>Reproduce</h2>
+<p><code>./run.sh v2_component_lift</code> — deterministic (seeds 31–35). Raw records in <code>results/v2_component_lift.result.json</code>.</p>
+<hr>
+<h1>V3 — Task Coverage: Survival vs the GBT Fixed-Window Workaround</h1>
+<p><strong>Verdict: REVISE</strong> (directionally clear, magnitude modest at this censoring level) — survival wins on every seed and answers a question the GBT structurally cannot.</p>
+<h2>Hypothesis</h2>
+<p>On censored time-to-lapse data, a survival model beats the GBT workaround (binary classification at a fixed horizon) at the decision-relevant task — ranking who lapses sooner — because the window approach must mislabel members censored before the horizon.</p>
+<h2>Method</h2>
+<p>Planted-hazard survival data (known Cox betas, ~35% censoring, 3,000 × 5 seeds). Metric: concordance (C-index) on the locked holdout. <strong>Cox</strong> uses duration+event honestly; <strong>GBT-90d</strong> labels "event within 90 days" (censored-before-90 rows become 0 — the common naive mistake), then its probability is used to rank.</p>
+<h2>Result (locked-holdout C-index, <code>results/referee_audit.jsonl</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>seed</th>
+<th>Cox</th>
+<th>GBT-window</th>
+<th>advantage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>51</td>
+<td>0.746</td>
+<td>0.722</td>
+<td>0.024</td>
+</tr>
+<tr>
+<td>52</td>
+<td>0.759</td>
+<td>0.730</td>
+<td>0.030</td>
+</tr>
+<tr>
+<td>53</td>
+<td>0.748</td>
+<td>0.722</td>
+<td>0.026</td>
+</tr>
+<tr>
+<td>54</td>
+<td>0.774</td>
+<td>0.756</td>
+<td>0.018</td>
+</tr>
+<tr>
+<td>55</td>
+<td>0.758</td>
+<td>0.737</td>
+<td>0.021</td>
+</tr>
+<tr>
+<td><strong>mean</strong></td>
+<td><strong>0.757</strong></td>
+<td><strong>0.733</strong></td>
+<td><strong>+0.024</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Bar was +0.03; observed +0.024 — hence REVISE, not PASS.</p>
+<h2>Honest reading</h2>
+<p>Survival wins on <strong>all five seeds</strong>, so the effect is real and consistent, not noise — but the mean margin (0.024) is modest at 35% censoring, and I deliberately did <strong>not</strong> re-run with heavier censoring to cross the arbitrary 0.03 line (that would be fishing). Two things the single number understates:
+1. <strong>The C-index comparison is generous to the GBT</strong> — it lets the GBT's 90-day probability stand in as a timing rank. The GBT-window model does not actually produce a time-to-event at all; survival produces the full curve. On the <em>actual</em> question ("when will they lapse?") the GBT can't compete because it doesn't answer it.
+2. <strong>The margin grows with censoring</strong>, which in real retention data is high (most members haven't lapsed yet — they're censored). At 35% the workaround limps; at realistic 50–70% it degrades further as more members get mislabeled.</p>
+<h2>What it does for the plan</h2>
+<p>Supports the task-coverage thesis (and Addendum 4's demand-gating of families): survival earns its place because it answers a question GBT cannot, not because it wins a tabular bake-off. Because it's a REVISE, the family stays in the <strong>business-question set that activates first</strong> (time-to-lapse is a real association need) but its value claim is stated precisely: <em>"answers the timing question honestly under censoring,"</em> not <em>"beats GBT on a metric."</em> Corroborating on a real censored dataset is the right next step.</p>
+<h2>Reproduce</h2>
+<p><code>./run.sh v3_task_coverage</code> — deterministic (seeds 51–55). Raw records in <code>results/v3_task_coverage.result.json</code>.</p>
+<hr>
+<h1>V4 — Agent Triage Validity (the grand-plan loop's core decision)</h1>
+<p><strong>Verdict: PASS</strong> — and it proves the statistics are load-bearing, not decorative.</p>
+<h2>Hypothesis</h2>
+<p>An LLM given only computed statistics (no framework) makes the correct task-family + commit/defer/combine call ≥80% of the time, and the statistics materially help versus a no-stats ablation.</p>
+<h2>Method</h2>
+<p>Seven scenarios with known-correct triage (clean-linear, survival, seasonal, cluster-heterogeneous, pure-noise, overdispersed-count, ambiguous) × 2 seeds. For each, a compact honest statistics block is computed from generated data (n, target type, class balance or variance/mean, best feature correlation, quick CV of linear vs GBT, censoring fraction, seasonality autocorrelation, Hopkins cluster tendency) and handed to Gemini 2.5-flash, which returns {task_family, triage, cited_stats}. <strong>Ablation arm:</strong> same goal wording, no statistics.</p>
+<h2>Result (14 cases, <code>results/llm_audit.jsonl</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>metric</th>
+<th>value</th>
+<th>bar</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>task-family accuracy (with stats)</td>
+<td><strong>1.00</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td>full triage accuracy (with stats)</td>
+<td><strong>0.86</strong></td>
+<td>≥0.80</td>
+</tr>
+<tr>
+<td>full triage accuracy (no stats)</td>
+<td>0.29</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>statistics advantage</strong></td>
+<td><strong>+0.57</strong></td>
+<td>≥0.15</td>
+</tr>
+</tbody>
+</table>
+<p>Every family routed correctly: continuous→linear, censored→survival, time-indexed→forecasting, cluster-tendency→combine (cluster-then-classify), no-signal→no_model, overdispersed count→count/GLM.</p>
+<h2>Reading</h2>
+<p>Given honest statistics, the agent's routing was essentially perfect and its commit/defer/combine call correct 86% of the time. Stripped of the statistics — asked to triage from the goal sentence alone — it collapsed to 29%. <strong>That 57-point gap is the whole argument for the Statistician sub-agent:</strong> the LLM's judgment is only trustworthy when it reasons over computed numbers, not prose. This is also the anti-hallucination design in miniature — meaning guided by statistics, not meaning alone.</p>
+<p>The two misses were both the "ambiguous" scenario, where the agent <strong>committed to linear</strong> instead of <strong>deferring</strong> as my rubric demanded. That is arguably the agent being <em>reasonable</em> (near-tied linear/GBT — picking one is defensible), not wrong; scored strictly it still cleared the bar. If anything it suggests the "defer" threshold is a tuning knob for the real Architecture Strategist, not a flaw in the idea.</p>
+<h2>What it does for the plan</h2>
+<p>Validates Doc 5's triage design and the Statistician sub-agent pre-build, and sets the honest expectation: route task families with high confidence, treat commit-vs-defer as the softer call. The design consequence (already the plan's REVISE path): the triage decision must <strong>cite the statistic that drove it</strong> — which the agent did throughout, and which the eval harness will grade.</p>
+<h2>Caveat</h2>
+<p>14 cases, one model. This is a pre-build signal, not the production eval — Doc 5's 12-scenario harness (more scenarios, adversarial verification, LLM-judge on citation validity) is the real gate. But the pre-build signal is strongly positive.</p>
+<h2>Reproduce</h2>
+<p><code>./run.sh v4_agent_triage</code> — seeds 71–72, model gemini-2.5-flash. Prompts + responses in <code>results/llm_audit.jsonl</code>; summary in <code>results/v4_agent_triage.result.json</code>.</p>
+<hr>
+<h1>V5 — P-Hacking Reproduction + Locked-Holdout Containment</h1>
+<p><strong>Verdict: PASS</strong> — the graveyard's deadliest failure, reproduced in code and mechanically contained. This is the memo to put in front of Arie.</p>
+<h2>Hypothesis</h2>
+<p>(a) Iterating freely against a visible validation score overfits it — manufacturing apparent skill on pure noise (the AutoML leaderboard-overfitting failure). (b) A locked holdout that is <em>never used for selection</em> contains the damage completely.</p>
+<h2>Method</h2>
+<p>The multiple-comparisons search <strong>is</strong> the p-hacking mechanism, so it's reproduced deterministically: a 400-config random search (feature subsets + hyperparameters) that keeps the best-on-validation config — exactly what an agent tuning against a visible score does. Validation set deliberately small (120 rows) — the realistic regime for association-scale data where p-hacking bites hardest. Datasets: pure noise (true AUC 0.5) and weak signal, 5 seeds each. <strong>Arm A</strong> = best validation AUC found (what a p-hacker would report). <strong>Arm B</strong> = that same config scored once on the locked holdout (the truth).</p>
+<h2>Result (pure noise, true AUC = 0.5; <code>results/referee_audit.jsonl</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>seed</th>
+<th>best validation AUC</th>
+<th>locked-holdout AUC</th>
+<th>optimism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>41</td>
+<td>0.623</td>
+<td>0.490</td>
+<td>0.133</td>
+</tr>
+<tr>
+<td>42</td>
+<td>0.639</td>
+<td>0.539</td>
+<td>0.100</td>
+</tr>
+<tr>
+<td>43</td>
+<td>0.607</td>
+<td>0.497</td>
+<td>0.111</td>
+</tr>
+<tr>
+<td>44</td>
+<td>0.620</td>
+<td>0.512</td>
+<td>0.108</td>
+</tr>
+<tr>
+<td>45</td>
+<td>0.645</td>
+<td>0.461</td>
+<td>0.183</td>
+</tr>
+<tr>
+<td><strong>mean</strong></td>
+<td><strong>0.627</strong></td>
+<td><strong>0.500</strong></td>
+<td><strong>0.127</strong></td>
+</tr>
+</tbody>
+</table>
+<p>PASS bar: noise optimism ≥ 0.10 (observed <strong>0.127</strong>) AND noise holdout ≤ 0.56 (observed <strong>0.500</strong>).</p>
+<h2>Reading</h2>
+<p>On data with <strong>no signal whatsoever</strong>, searching against a visible validation score manufactured a 0.627 AUC — which any team would read as "we have a real model." It is entirely an illusion of multiple comparisons: try 400 things on 120 rows and the luckiest one looks good. The locked holdout, never touched during selection, reported <strong>0.500</strong> — the truth — every time. The weak-signal arm shows the same shape: validation optimism inflates the number, the holdout gives the honest estimate.</p>
+<h2>Why this is decisive for the pitch</h2>
+<ol>
+<li><strong>It reproduces the exact mechanism that discredited AutoML leaderboards</strong> — not an analogy, the real thing, in ~60 lines.</li>
+<li><strong>It proves the plan's central honesty claim mechanically</strong>: the locked holdout, scored once and never used for selection, is immune to the search's self-deception.</li>
+<li><strong>It answers the LLM-optimism trap head-on.</strong> An LLM agent does not exempt a system from this — a fluent agent can p-hack <em>better</em>, and narrate a story for its lucky config. That is precisely why the plan keeps the honesty layer <strong>mechanical, not agentic</strong>: the holdout is carved before search and scored by code. V5 is the evidence that this design decision is load-bearing, not decorative.</li>
+</ol>
+<h2>What it gates</h2>
+<p>Nothing — this experiment exists to be <em>shown</em>. It converts "we prevent p-hacking" from a claim into a demonstration, and it's the strongest single artifact for the skeptical-veteran audience.</p>
+<h2>Reproduce</h2>
+<p><code>./run.sh v5_phacking</code> — deterministic (seeds 41–45, 400 configs, 120-row validation). Raw records in <code>results/v5_phacking.result.json</code>.</p>
+<hr>
+<h1>V6 — Calibration Deficit + Fix (WS-1 quantification)</h1>
+<p><strong>Verdict: PASS</strong> — with a design refinement Phase 0 caught before build.</p>
+<h2>Hypothesis</h2>
+<p>Shipped-class models (esp. gradient-boosted trees) emit materially miscalibrated scores; a simple post-hoc step fixes it cheaply — so calibration is both necessary and worthwhile as workstream #1.</p>
+<h2>Method</h2>
+<p>Planted-probability classification (<code>gen_classification</code>, 5,000 rows × 5 seeds) where each row's true P(y=1) is known. Train XGBoost + LogisticRegression; measure Expected Calibration Error (10-bin) + Brier on the locked holdout, three ways:
+- <strong>raw</strong> — model's native scores
+- <strong>isotonic (slice)</strong> — isotonic fit on a single 25% held-out calibration slice (the naive approach)
+- <strong>isotonic (cv)</strong> — <code>CalibratedClassifierCV</code>, 5-fold (the proper method WS-1 would ship)</p>
+<p>The holdout is never seen by any calibrator (referee tripwire enforced).</p>
+<h2>Result (mean over 5 seeds, <code>results/referee_audit.jsonl</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>model</th>
+<th>raw ECE</th>
+<th>slice ECE</th>
+<th>cv ECE</th>
+<th>AUC</th>
+<th>cv cut</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>xgboost</td>
+<td><strong>0.062</strong></td>
+<td>0.041</td>
+<td><strong>0.023</strong></td>
+<td>0.814</td>
+<td><strong>63%</strong></td>
+</tr>
+<tr>
+<td>logistic</td>
+<td>0.024</td>
+<td>0.037</td>
+<td>0.028</td>
+<td>0.842</td>
+<td>−21%</td>
+</tr>
+</tbody>
+</table>
+<p>PASS bar: GBT raw ECE ≥ 0.05 (observed <strong>0.062</strong>) and proper calibration cuts ≥ 50% (observed <strong>63%</strong>).</p>
+<h2>Three findings</h2>
+<ol>
+<li><strong>GBT scores are miscalibrated</strong> — a raw "0.8" from XGBoost is not an 80% probability. Confirmed, and it matters because uplift, revenue-at-risk, and budget decisions all treat the score as a probability.</li>
+<li><strong>Naive single-slice calibration is unreliable</strong> — it only partially fixed GBT (0.062→0.041) and actively <em>worsened</em> the already-well-calibrated logistic model (0.024→0.037). Blindly calibrating everything is a mistake.</li>
+<li><strong>Cross-validated calibration is the method</strong> — it cut GBT ECE 63% and, critically, should be <strong>gated ("helps-or-skip"): measure ECE on a validation fold and only apply calibration if it improves</strong>, so it never hurts an already-calibrated model.</li>
+</ol>
+<p>Throughout, <strong>AUC is essentially unchanged</strong> — calibration alters what the number <em>means</em>, not the model's ranking skill. That's the whole point: same discrimination, honest probabilities.</p>
+<h2>What it does for the plan</h2>
+<p>Validates WS-1 (calibration-first) with real numbers, and <strong>sharpens its design before a line is written</strong>: ship <code>CalibratedClassifierCV</code>-style CV calibration as a component, with a helps-or-skip gate driven by a validation-fold ECE check — not a blind single-slice isotonic. Exactly the kind of correction Tier 0 exists to make cheaply.</p>
+<h2>Reproduce</h2>
+<p><code>./run.sh v6_calibration</code> — deterministic (seeds 21–25). Raw records in <code>results/v6_calibration.result.json</code>.</p>
+<hr>
+<h1>V7 — Aggregation Leakage Reproduction (the Featuretools grave)</h1>
+<p><strong>Verdict: PASS</strong> — and it reproduces one of the most common real-world ML failures cleanly.</p>
+<h2>Hypothesis</h2>
+<p>Naive relational aggregates (no time cutoff) inflate apparent performance and collapse under temporally-honest evaluation; as-of aggregates (events ≤ decision date) do not.</p>
+<h2>Method</h2>
+<p>Seeded planted event-log generator (<code>gen_event_log</code>, 3,000 entities × 5 seeds): each member has dated events before and after a decision day; the honest label is driven by the <em>pre-decision</em> engagement rate, but churned members stop generating events afterward — so <strong>post-decision event counts correlate with the label</strong> (a future peek). Two feature-assembly arms feed the same XGBoost and the same locked holdout via the referee:
+- <strong>NAIVE</strong> — aggregate over ALL events (count / sum / mean / recency)
+- <strong>AS-OF</strong> — identical aggregates, clipped to events on/before each entity's decision day</p>
+<h2>Result (locked-holdout AUC, <code>results/referee_audit.jsonl</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>seed</th>
+<th>naive (leaky)</th>
+<th>as-of (honest)</th>
+<th>inflation gap</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>11</td>
+<td>0.843</td>
+<td>0.608</td>
+<td>0.235</td>
+</tr>
+<tr>
+<td>12</td>
+<td>0.845</td>
+<td>0.632</td>
+<td>0.213</td>
+</tr>
+<tr>
+<td>13</td>
+<td>0.863</td>
+<td>0.611</td>
+<td>0.252</td>
+</tr>
+<tr>
+<td>14</td>
+<td>0.838</td>
+<td>0.593</td>
+<td>0.246</td>
+</tr>
+<tr>
+<td>15</td>
+<td>0.852</td>
+<td>0.626</td>
+<td>0.226</td>
+</tr>
+<tr>
+<td><strong>mean</strong></td>
+<td><strong>0.848</strong></td>
+<td><strong>0.614</strong></td>
+<td><strong>0.234</strong></td>
+</tr>
+</tbody>
+</table>
+<p>PASS bar was inflation gap ≥ 0.05; observed <strong>0.234</strong>.</p>
+<h2>Reading</h2>
+<p>The naive feature set looks 23 AUC points better — and every one of those points is a lie: it comes from counting events that happened <em>after</em> the moment the prediction is supposed to be made. A team shipping the naive pipeline would report ~0.85, deploy it, and watch it perform at ~0.61 in production. This is exactly the class of failure that sank Featuretools-style automated relational feature generation, and it is invisible to any purely statistical check on the training data — the naive features are genuinely predictive <em>of the training labels</em>.</p>
+<h2>What it demonstrates for the plan</h2>
+<ol>
+<li>The failure is real and severe — validating the concern, not hand-waving it.</li>
+<li><strong>As-of assembly is not a nice-to-have; it is the difference between 0.85-fiction and 0.61-fact.</strong> This is why the plan makes point-in-time cutoffs a spine invariant rather than a feature, and why the Sonar as-of aggregate work (A30/B8) must be as-of <em>by construction</em>.</li>
+<li>It is a graveyard case-test for the Arie memo: a named historical failure, reproduced in 40 lines, with the design's mitigation shown to remove it.</li>
+</ol>
+<h2>Reproduce</h2>
+<p><code>./run.sh v7_aggregation_leakage</code> — deterministic (seeds 11–15). Raw records in <code>results/v7_aggregation_leakage.result.json</code> + <code>results/referee_audit.jsonl</code>.</p>
+<hr>
+<h1>V8 — Story-Tag Retrieval (the reuse bet)</h1>
+<p><strong>Verdict: PASS</strong></p>
+<h2>Hypothesis</h2>
+<p>Meaning-tagged components are retrieved for a new task better than keyword search over technical names — so reuse-before-rebuild works because components are findable by <em>what they find</em>.</p>
+<h2>Method</h2>
+<p>A 10-component library (technical name + nominal story tag + description) and 10 task queries phrased as a user would ask them, with known-correct answers. Three arms: <strong>keyword</strong> (token overlap on the technical name), <strong>nominal</strong> (LLM ranks story tags), <strong>both</strong> (LLM ranks name+story+description). Metric: top-3 retrieval accuracy. Gemini 2.5-flash.</p>
+<h2>Result (<code>results/llm_audit.jsonl</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>arm</th>
+<th>top-3 accuracy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>keyword (technical names)</td>
+<td>0.50</td>
+</tr>
+<tr>
+<td><strong>nominal (story tags)</strong></td>
+<td><strong>1.00</strong></td>
+</tr>
+<tr>
+<td>both</td>
+<td>1.00</td>
+</tr>
+</tbody>
+</table>
+<p>PASS bar: meaning-aware top-3 ≥ 0.8 (<strong>1.00</strong>) and ≥ 0.2 over keyword (<strong>+0.50</strong>).</p>
+<h2>Reading</h2>
+<p>Half the queries never matched on technical tokens — "who is quietly disengaging?" shares no words with <code>GaussianHMM_4state_v3</code>, but matches its story ("sees members cooling toward dormancy") immediately. Retrieval by <em>what a component finds</em> got the right capability every time. That's the mechanism that makes the library compound: the next project finds and reuses the existing HMM instead of rebuilding it, because it can be found by its meaning.</p>
+<h2>What it does for the plan</h2>
+<p>Validates the story-layer's search-first reuse claim and right-sizes the investment: the payoff comes from the <strong>nominal story tag</strong> (name+story alone hit 1.00; adding the description didn't improve it), so the tagging agent's core job is producing a good one-line nominal identity — not verbose descriptions. Cheapest experiment, clean confirmation.</p>
+<h2>Caveat</h2>
+<p>Small hand-authored library, one model; a production library is larger and messier, so real retrieval will be harder — but the directional advantage of meaning over tokens is unambiguous.</p>
+<h2>Reproduce</h2>
+<p><code>./run.sh v8_story_retrieval</code> — model gemini-2.5-flash. Prompts + responses in <code>results/llm_audit.jsonl</code>.</p>
+<hr>
+<h1>V9 — Monitoring / Drift Detection (Arie's #1 priority)</h1>
+<p><strong>Verdict: PASS</strong> — closes the biggest gap in the original Phase-0 set: the pillar Arie emphasized most ("<em>especially monitoring</em>") and which the first eight experiments hadn't touched.</p>
+<h2>Hypothesis</h2>
+<p>A PSI/KS drift monitor on a scored population flags a covariate shift <em>before</em> holdout performance visibly rots, and the challenger-vs-incumbent comparison recommends promote/hold correctly — as a recommendation, never an auto-promotion.</p>
+<h2>Method</h2>
+<p>Train an incumbent on a baseline period; score five later periods with a growing planted covariate shift (0 → 2.5 std on three features). Each period tracks PSI on the score distribution and top feature vs the training snapshot, and the true holdout AUC. Then train a challenger on recent shifted data and compare direction-aware. 3 seeds. Thresholds: PSI warn 0.10, stale 0.25.</p>
+<h2>Result (<code>results/v9_drift_monitoring.result.json</code>)</h2>
+<ul>
+<li><strong>Alarm precedes decay in every seed.</strong> PSI crossed the 0.25 "stale" line at period 1 (shift 0.5) — at or before the period where holdout AUC first dropped ≥0.05. You learn the model is going stale from the <em>inputs</em> before it silently hurts on the <em>outputs</em>.</li>
+<li><strong>Incumbent rots as shift grows</strong> (AUC falls toward and below 0.5 as the relationship drifts), exactly the silent-failure monitoring exists to catch.</li>
+<li><strong>Challenger recommended correctly, every seed</strong> — trained on shifted data it recovered AUC to ~0.82–0.85 vs the incumbent's ~0.35–0.51, and the direction-aware comparison returned <code>promote</code>. Critically it returns a <strong>recommendation</strong>; promotion stays a human-gated decision (no auto-promote).</li>
+</ul>
+<h2>Reading</h2>
+<p>This is the operational half the AutoML graveyard skipped — models shipped and rotted with nobody watching. A distribution monitor gives an early warning from the feature/score drift before the label-based performance visibly degrades (labels often arrive late in retention problems, which is exactly when you can least afford to wait). The challenger loop then proposes a fix without ever auto-deploying it.</p>
+<h2>What it does for the plan</h2>
+<p>Validates the monitoring pillar (<code>MaintenanceEngine</code> drift/challenger loop) and directly answers the reviewer's strongest emphasis with evidence rather than a promise. Design note surfaced: PSI thresholds (0.10 / 0.25) are standard and fired appropriately here, but should be tunable per deployment — a monitor that cries wolf is ignored.</p>
+<h2>Caveat</h2>
+<p>Synthetic covariate shift; real drift is messier (concept drift, seasonal vs structural). The mechanism is validated; threshold calibration on real streams is a build-time task.</p>
+<h2>Reproduce</h2>
+<p><code>./run.sh v9_drift_monitoring</code> — seeds 81–83. Raw records in <code>results/v9_drift_monitoring.result.json</code> + <code>results/referee_audit.jsonl</code>.</p>
+<hr>
+<h1>V10 — Uplift / Persuadables (the flagship business claim)</h1>
+<p><strong>Verdict: PASS</strong> — the "who is worth contacting" claim, demonstrated on planted causal ground truth. The single most business-persuasive artifact in Phase 0.</p>
+<h2>Hypothesis</h2>
+<p>On planted treatment-effect data, a T-learner recovers the four marketing segments and uplift-targeting beats risk-targeting on realized net outcome under a fixed contact budget — including declining to contact the sleeping-dogs whom contact actively harms.</p>
+<h2>Method</h2>
+<p>Members carry a planted segment (learnable from features) with known no-contact conversion p0 and contacted conversion p1:</p>
+<table>
+<thead>
+<tr>
+<th>segment</th>
+<th>p0</th>
+<th>p1</th>
+<th>uplift</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>persuadable</td>
+<td>0.10</td>
+<td>0.62</td>
+<td><strong>+0.52</strong> (the money)</td>
+</tr>
+<tr>
+<td>sure-thing</td>
+<td>0.82</td>
+<td>0.86</td>
+<td>~0 (converts anyway)</td>
+</tr>
+<tr>
+<td>lost-cause</td>
+<td>0.06</td>
+<td>0.10</td>
+<td>~0 (won't convert regardless)</td>
+</tr>
+<tr>
+<td>sleeping-dog</td>
+<td>0.70</td>
+<td>0.32</td>
+<td><strong>−0.38</strong> (contact backfires)</td>
+</tr>
+</tbody>
+</table>
+<p>A randomized experiment (T~Bernoulli(0.5)) generates observations; a T-learner fits two <strong>calibrated</strong> classifiers (P(y|treated), P(y|control)); uplift = p1̂ − p0̂. On a holdout where the true p0/p1 are known, three fixed-budget (30%) policies are scored by <em>realized</em> net conversions. 5 seeds.</p>
+<h2>Result (mean over 5 seeds, <code>results/v10_uplift.result.json</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>targeting policy</th>
+<th>realized net conversions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>nobody contacted</td>
+<td>757</td>
+</tr>
+<tr>
+<td>contact <strong>everyone</strong> (100% budget)</td>
+<td>852</td>
+</tr>
+<tr>
+<td>highest-<strong>risk</strong> (30% budget)</td>
+<td>878</td>
+</tr>
+<tr>
+<td>highest-<strong>uplift</strong> (30% budget)</td>
+<td><strong>984</strong></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Uplift-targeting 30% of members (984) beats contacting 100% (852).</strong> Same or fewer dollars, far more conversions — because it spends only where contact changes the outcome.</li>
+<li><strong>+106 net over risk-targeting (+12%)</strong> at the same budget — risk wastes contacts on lost-causes (high-risk but unmovable); uplift concentrates on persuadables.</li>
+<li><strong>Segment recovery 90%</strong> (chance = 25%) — the T-learner correctly identifies who is which.</li>
+<li><strong>Sleeping-dogs contacted by the uplift policy: 2 of ~540</strong> (0.4%) — it correctly declines to contact the members whom outreach would push <em>away</em>.</li>
+</ul>
+<h2>Reading</h2>
+<p>This is the business case in one table: the same outreach budget, pointed by uplift instead of risk (or sprayed at everyone), produces materially more renewals — and stops actively harming the sleeping-dogs a risk model is blind to (a risk model sees only "likely to lapse," never "will react badly to contact"). Calibration (V6) is a hard prerequisite here — uplift is a <em>difference of probabilities</em>, so uncalibrated scores would make the segments meaningless; the two experiments are linked.</p>
+<h2>What it does for the plan</h2>
+<p>Validates the uplift components and the headline "who is worth contacting" claim with numbers, on causal ground truth — the artifact that turns the business pitch from assertion into demonstration. It also shows the composition story working end-to-end for real value: two calibrated base models composed into a segmentation nobody could read off a single score.</p>
+<h2>Caveat</h2>
+<p>Planted, clean treatment effects and a randomized-assignment assumption. Real intervention data is observational and confounded — uplift on real data needs the treatment/exposure history the plan flags as a data-assembly problem (Data Scout's job), and positivity/overlap checks. The mechanism is validated; the data prerequisite is real and named.</p>
+<h2>Reproduce</h2>
+<p><code>./run.sh v10_uplift</code> — seeds 91–95, calibrated T-learner. Raw records in <code>results/v10_uplift.result.json</code>.</p></body></html>

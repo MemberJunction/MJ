@@ -1,0 +1,87 @@
+{
+  "identity": {
+    "modelKey": "hmm",
+    "family": "sequence-state",
+    "libraryClass": "hmmlearn.hmm.GaussianHMM / CategoricalHMM (né MultinomialHMM pre-0.3)",
+    "aliases": ["HMM", "hidden Markov model", "GaussianHMM", "MultinomialHMM"],
+    "displayName": "Hidden Markov Model",
+    "description": "Latent-regime model over sequences: hidden states follow a Markov chain, each state emits observations from a parametric distribution (Gaussian or categorical). EM (Baum-Welch) fits states + transitions jointly; the validated Predictive Studio use is member activity-cadence regime as a downstream feature via the latent-state adapter."
+  },
+  "axes": {
+    "task": "sequence-state",
+    "secondaryTasks": ["anomaly"],
+    "learningType": "Unsupervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Sequence",
+    "deterministicFit": false
+  },
+  "consumes": [
+    { "portType": "features:sequence", "dataShape": "event-sequence", "dtypes": ["numeric-multichannel", "categorical-token"], "targetSpec": "none", "required": true, "note": "per-entity ordered observation frames; hmmlearn convention is concatenated X + a lengths vector — the adapter owns that packing" },
+    { "portType": "series", "dataShape": "series", "dtypes": ["numeric-time-indexed"], "targetSpec": "none", "required": false, "note": "single-entity regime detection — a lone series is the one-sequence degenerate case; the adapter wraps it" }
+  ],
+  "emits": [
+    { "portType": "latent-state", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "posterior state probabilities (gamma) per observation; argmax gives the pointwise state. THE validated feature emission: activity-cadence state via the latent-state -> features:tabular adapter" },
+    { "portType": "state-sequence", "granularity": "per-series", "paramsAsOutput": "none", "probabilistic": "none", "note": "Viterbi most-likely joint path — NOT the same as pointwise argmax of the posterior" },
+    { "portType": "transition-matrix", "granularity": "per-model", "paramsAsOutput": "transition-matrix", "probabilistic": "none", "note": "fitted transmat_ over the LATENT alphabet; interpretable only after canonical state ordering (label switching)" },
+    { "portType": "score", "granularity": "per-series", "paramsAsOutput": "none", "probabilistic": "none", "note": "per-sequence log-likelihood — low-likelihood paths are the anomaly-flavored secondary use" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/hmm.schema.json",
+    "hpMeta": {
+      "n_components": { "default": 3, "prior": "int-uniform[2,8]", "searchable": true, "note": "state count — selected by BIC/held-out log-likelihood, the family's model-selection lens; NOT by training likelihood, which rises monotonically in K" },
+      "covariance_type": { "default": "diag", "prior": "categorical[diag,full,tied,spherical]", "searchable": true, "note": "Gaussian variant only; full costs O(d^2) params per state" },
+      "n_iter": { "default": 100, "prior": "int-uniform[50,500]", "searchable": false, "note": "EM iteration cap; check monitor_.converged, not just completion" },
+      "n_restarts": { "default": 5, "prior": "int-uniform[1,10]", "searchable": false, "note": "wrapper-level multi-restart, best-of by log-likelihood — the hedge against EM local optima that makes deterministicFit false" },
+      "min_covar": { "default": 0.001, "prior": "log-uniform[1e-5,0.1]", "searchable": false, "conditionalOn": "covariance_type", "note": "covariance floor preventing state collapse onto single points" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "empirical", "why": "diag-covariance emissions (the default) and k-means-style EM initialization both depend on the relative scale of observation dimensions; unstandardized channels dominate the fit" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "Gaussian emission likelihood is not preserved under nonlinear monotone maps — log-transforming an observation channel changes which regimes are separable" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "Baum-Welch needs complete observation vectors at every step; hmmlearn has no missing-observation update" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "CategoricalHMM requires symbols pre-coded to 0..K-1 integers; the Gaussian variant is numeric-only — encoding is still a pipeline concern" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes first-order Markov dynamics on the HIDDEN chain plus a parametric (Gaussian/categorical) emission law per state" },
+    { "flag": "dataSizeTolerance", "value": "needs-total-length", "basis": "empirical", "why": "each state's emission parameters are estimated from the observations it occupies; total corpus length under ~50-100 observations per state leaves states unsupported and EM degenerate" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "out-of-range observations decode to whichever state's emission tail is nearest — mechanically defined but carrying no principled beyond-range structure" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "marginal_multimodality", "why": "mixture structure in the observation marginal is the fingerprint of distinct emission regimes; a unimodal marginal warns that K>1 states may be an EM artifact" },
+      { "stat": "observation_autocorrelation", "why": "temporal persistence is what separates an HMM from a plain mixture — near-zero autocorrelation means a GMM explains the data without the transition machinery" },
+      { "stat": "total_length_per_state", "why": "corpus length divided by candidate K is the effective sample per state; below a floor, emission params are unidentifiable — a gate to smaller K" }
+    ],
+    "modelMetrics": [
+      { "metric": "bic_by_n_components", "why": "training likelihood rises monotonically with K; BIC's penalty on the K^2 transition + emission params is the honest state-count selector" },
+      { "metric": "state_persistence", "why": "mean self-transition probability — regimes that flip every step are label noise, not latent structure; diagonal dominance is what makes the state a usable cadence feature" },
+      { "metric": "restart_loglik_dispersion", "why": "spread of converged log-likelihoods across random restarts measures likelihood multimodality — high dispersion says the chosen fit is one local optimum among many" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "EM fails to converge within n_iter", "behavior": "parameters mid-climb, unstable across runs", "mitigation": "gate", "note": "check monitor_.converged" },
+    { "condition": "label switching across restarts/refits", "behavior": "state indices permute — 'state 2' means different things run to run", "mitigation": "bank-entry", "note": "canonicalize state order (by emission mean, then persistence) before persisting latent-state features" },
+    { "condition": "degenerate state (near-zero occupancy or collapsing covariance)", "behavior": "singular emission, likelihood blow-up", "mitigation": "gate", "note": "min_covar floor + drop-K retry" },
+    { "condition": "sequences concatenated without a lengths vector", "behavior": "silent spurious transitions across entity boundaries", "mitigation": "reject-input" },
+    { "condition": "median sequence length < n_components", "behavior": "paths cannot visit enough states to inform transitions", "mitigation": "gate" }
+  ],
+  "driver": {
+    "constructor": "GaussianHMM(n_components, covariance_type, n_iter, min_covar).fit(X, lengths) / CategoricalHMM(n_components, n_iter).fit(X, lengths); best-of n_restarts by score",
+    "deps": ["hmmlearn>=0.3", "scikit-learn", "numpy"],
+    "wrapperNeeds": "sequence adapter: per-entity ordered frames -> concatenated X + lengths; multi-restart loop with seed control; canonical state reordering for stable labels; latent-state -> features:tabular adapter for the validated activity-cadence-as-feature use",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit per model; run restarts as parallel processes",
+    "tranche": "T6 (sequence-state)"
+  },
+  "canBeSeeds": [
+    { "template": "State-as-Feature Template", "slot": "state-featurizer", "via": "latent-state -> features:tabular adapter (per-entity current-regime + occupancy shares)" },
+    { "template": "Path-Typicality Feature", "slot": "sequence-scorer", "via": "score -> features:tabular adapter (per-entity sequence log-likelihood)" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native missing-observation update — gaps must be filled (time-aware) or sequences segmented before Baum-Welch" },
+    { "position": "transform", "verdict": "beneficial", "why": "log-transforming skewed activity counts makes per-state Gaussian emissions plausible, sharpening regime separation" },
+    { "position": "scale", "verdict": "beneficial", "why": "standardizing observation channels keeps diag-covariance emissions and EM initialization from being dominated by the largest-scale channel" },
+    { "position": "encode", "verdict": "required", "why": "CategoricalHMM needs symbols integer-coded 0..K-1; the Gaussian variant is numeric-only, so categoricals must be encoded or dropped" }
+  ]
+}

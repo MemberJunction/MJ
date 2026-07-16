@@ -1,0 +1,87 @@
+{
+  "identity": {
+    "modelKey": "decision_tree",
+    "family": "tree-ensembles",
+    "libraryClass": "sklearn.tree.DecisionTreeClassifier / sklearn.tree.DecisionTreeRegressor",
+    "aliases": ["CART", "decision tree", "classification tree", "regression tree"],
+    "displayName": "Decision Tree",
+    "description": "A single CART tree: recursive axis-aligned partitioning by impurity-minimizing threshold splits. The glass-box of the family — every prediction is a readable root-to-leaf rule path — at the cost of high variance that the ensemble siblings exist to average away. The value proposition is the explanation, not the accuracy ceiling."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": ["regression"],
+    "learningType": "Supervised",
+    "parametric": "No",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Rules",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true }
+  ],
+  "emits": [
+    { "portType": "probability", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "classification; the class fraction of the landing leaf — piecewise-constant and coarse (few distinct values), so calibrate before trusting the numbers" },
+    { "portType": "class-label", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none" },
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "regression mode; leaf-mean prediction" },
+    { "portType": "rules", "granularity": "per-model", "paramsAsOutput": "rules", "probabilistic": "none", "note": "the fitted partition as readable predicates (export_text / tree_ structure) — the rule paths ARE the explanation; no external explainer needed" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/decision_tree.schema.json",
+    "hpMeta": {
+      "max_depth": { "default": null, "prior": "int-uniform[2,12] or null", "searchable": true, "note": "the interpretability budget — depth d means at most d predicates per explanation; null grows to purity and memorizes" },
+      "min_samples_split": { "default": 2, "prior": "int-uniform[2,40]", "searchable": true },
+      "min_samples_leaf": { "default": 1, "prior": "log-uniform-int[1,50]", "searchable": true },
+      "max_features": { "default": null, "prior": "categorical[null,sqrt,log2]", "searchable": false, "note": "null (all features) is the right default for a single tree — subsampling features only helps when averaging many trees" },
+      "ccp_alpha": { "default": 0.0, "prior": "log-uniform[1e-5,0.1]", "searchable": true, "note": "cost-complexity (minimal cost-complexity) pruning — the principled way to trade leaves for generalization after growing" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "splits are threshold comparisons on single features; any monotone rescale yields the identical tree" },
+    { "flag": "monotoneTransformInvariant", "value": true, "basis": "mechanism-derived", "why": "the best-split search over order statistics depends only on feature ORDER; log/rank/box-cox cannot change the chosen partition" },
+    { "flag": "nativeNaN", "value": true, "basis": "empirical", "why": "sklearn >=1.3 trees route missing values down the lower-impurity child for dense numeric input; a driver pinned below 1.3 must impute — version-gated, hence empirical" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "sklearn trees require numeric input; categoricals must be pre-encoded" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "a non-parametric partition makes no assumption about the marginal or error distribution" },
+    { "flag": "dataSizeTolerance", "value": "small-to-medium", "basis": "empirical", "why": "fits anywhere, but a single tree's variance grows with depth and large n does not buy accuracy past moderate depth — beyond that the family answer is a forest, not a deeper tree" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "piecewise-constant leaves; outside the training range the prediction clamps to the boundary leaf" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "n_over_p", "why": "each split halves the rows available below it; low n relative to p exhausts the sample after a few levels, forcing shallow trees whose rules may be honest but weak" },
+      { "stat": "class_balance", "why": "impurity gains vanish when one class dominates — leaves collapse to the majority label and the rule set reads as vacuously 'predict majority'" },
+      { "stat": "missingness_rate", "why": "learned NaN routing (sklearn >=1.3) keeps rows in the partition, and the missing-direction branch itself becomes a readable rule ('X missing → left')" }
+    ],
+    "modelMetrics": [
+      { "metric": "train_cv_gap", "why": "an unpruned CART drives train error toward zero by construction (memorization); the train-vs-CV gap is the direct overfit read that sets max_depth/ccp_alpha" },
+      { "metric": "leaf_count", "why": "the number of leaves is the size of the rule set — the explanation budget; a 500-leaf tree has forfeited the Rules value proposition and should be a forest instead" },
+      { "metric": "cv_tree_vs_forest_gap", "why": "quantifies the accuracy price paid for readability; a small gap justifies committing to the glass-box, a large one flags variance the single tree cannot shed" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "max_depth=null on noisy data", "behavior": "grows to purity and memorizes the training set (train score ~1.0)", "mitigation": "bank-entry" },
+    { "condition": "small n with deep tree", "behavior": "structurally unstable — perturbing a few rows reshuffles the whole partition, so the 'explanation' is an artifact of the sample", "mitigation": "gate" },
+    { "condition": "signal in a linear combination of features (rotated/oblique boundary)", "behavior": "axis-aligned splits approximate a diagonal with a staircase of many shallow rules", "mitigation": "gate" },
+    { "condition": "severe class imbalance", "behavior": "majority-class leaves everywhere; minority never earns a split", "mitigation": "gate" },
+    { "condition": "single dominant feature (perfect separator)", "behavior": "depth-1 stump with near-perfect score — the leakage signature", "mitigation": "gate" }
+  ],
+  "driver": {
+    "constructor": "DecisionTreeClassifier(**hp) / DecisionTreeRegressor(**hp), selected by problem_type",
+    "deps": ["scikit-learn>=1.3"],
+    "wrapperNeeds": "rules emission: serialize export_text(tree) / tree_ structure alongside predictions",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit; predict is thread-safe",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [
+    { "template": "Bagging Template", "slot": "model", "via": "probability", "note": "the canonical base learner — bagging decision trees with per-split feature subsets recovers the random forest" },
+    { "template": "Calibrator Template", "slot": "model", "via": "probability", "note": "leaf-fraction probabilities are coarse and overconfident at pure leaves" },
+    { "template": "Stacking Template", "slot": "base", "via": "probability→features:tabular adapter" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "irrelevant", "why": "learned NaN routing (driver floor sklearn>=1.3) makes upstream imputation unnecessary, and the missing-branch rule is itself interpretable output" },
+    { "position": "transform", "verdict": "irrelevant", "why": "monotone-transform-invariant: log/Yeo-Johnson cannot change the chosen splits — though raw-unit thresholds read better in the emitted rules, which is a UI concern, not a fit concern" },
+    { "position": "scale", "verdict": "irrelevant", "why": "scale-insensitive by mechanism — the fit is unchanged; note standardization rewrites rule thresholds into z-units ('income > 0.73 SD'), hurting the readability of the emitted rules, so prefer raw units when this model is terminal" },
+    { "position": "encode", "verdict": "required", "why": "sklearn trees need categoricals encoded to numeric before fit" }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "identity": {
+    "modelKey": "tweedie",
+    "family": "glm-counts",
+    "libraryClass": "statsmodels.genmod.generalized_linear_model.GLM (family=sm.families.Tweedie)",
+    "aliases": ["Tweedie GLM", "compound Poisson-gamma regression", "pure premium model"],
+    "displayName": "Tweedie GLM",
+    "description": "GLM for zero-inflated CONTINUOUS targets: with variance power p in (1,2) the Tweedie family is a compound Poisson-gamma — an exact point mass at zero plus a right-skewed positive tail — modeled in ONE equation. The canonical shape of insurance pure premium, per-member revenue, and claim/donation totals."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "None",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true, "note": "non-negative continuous target with (typically) a spike at exactly zero; exposure passthrough supported" }
+  ],
+  "emits": [
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "the expected value (e.g. pure premium) that already integrates zero-probability and positive-severity; the fitted compound distribution is defined, though its density is evaluated by series approximation" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "log-link multiplicative effects on the expected total — the rating-factor story insurance actuaries read directly" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/tweedie.schema.json",
+    "hpMeta": {
+      "var_power": { "default": 1.5, "prior": "uniform[1.05,1.95]", "searchable": true, "note": "the Tweedie p in variance = phi*mu^p; p in (1,2) is compound Poisson-gamma (exact zeros + continuous tail); p->1 approaches Poisson, p->2 approaches gamma" },
+      "link": { "default": "log", "prior": "categorical[log,Power]", "searchable": false },
+      "eql": { "default": true, "prior": "fixed", "searchable": false, "note": "extended quasi-likelihood for loglike-based diagnostics; the true Tweedie density has no closed form" },
+      "alpha": { "default": 0.0, "prior": "log-uniform[1e-4,1.0]", "searchable": true, "note": "fit_regularized elastic-net strength" },
+      "L1_wt": { "default": 1.0, "prior": "uniform[0.0,1.0]", "searchable": true, "conditionalOn": "alpha" },
+      "maxiter": { "default": 100, "prior": "fixed", "searchable": false }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "unpenalized IRLS is scale-equivariant, but the searchable elastic-net penalty is unit-dependent and ill-scaled columns condition the working weighted least squares badly" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "log-linear mean structure — a monotone transform of a covariate changes the fitted mean function" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "IRLS has no missing-value mechanism; rows must be complete" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "requires a pre-encoded design matrix" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes the conditional distribution is Tweedie with variance = phi*mu^p — for p in (1,2) a compound Poisson-gamma whose point mass at zero and right-skewed positive branch must actually match the data's zero-spike-plus-tail shape" },
+    { "flag": "dataSizeTolerance", "value": "small-to-medium", "basis": "empirical", "why": "p+1 mean parameters fit fine at modest n, but var_power selection needs enough rows to resolve the mean-variance power law across the mean's range" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "log-linear mean extends beyond the covariate range with exponential growth" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "zero_fraction", "why": "Tweedie's raison d'etre — a material point mass at EXACTLY zero atop a continuous positive tail is the compound Poisson-gamma signature; near-zero fraction gates to gamma/lognormal, extreme fraction gates to an explicit two-part model" },
+      { "stat": "target_skewness", "why": "the positive branch is gamma-shaped (right-skewed); a symmetric positive target suggests the Tweedie variance law is the wrong power family" },
+      { "stat": "mean_variance_power_slope", "why": "regressing log group-variance on log group-mean estimates the power p directly from data — the slope IS the var_power the fit assumes, checked before it is trusted" }
+    ],
+    "modelMetrics": [
+      { "metric": "tweedie_deviance", "why": "the family-native goodness-of-fit at the chosen p; comparing deviance across candidate var_power values is the standard p-selection scan" },
+      { "metric": "dispersion_phi", "why": "the estimated dispersion in variance = phi*mu^p; a phi far from stable across subgroups says the single power law is misspecified" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "target contains negatives", "behavior": "Tweedie support is [0, inf) for p in (1,2) — likelihood undefined", "mitigation": "reject-input" },
+    { "condition": "no zeros in target", "behavior": "the zero-mass component is vestigial; p drifts toward 2", "mitigation": "gate", "note": "a gamma GLM (p=2) is the simpler honest model" },
+    { "condition": "var_power outside (1,2) requested", "behavior": "p in (0,1) is not a valid Tweedie family; p=1/p=2 change the support semantics", "mitigation": "reject-input" },
+    { "condition": "zero fraction extreme (>~90%)", "behavior": "mean estimate dominated by the zero mass; positive-branch coefficients starved", "mitigation": "gate", "note": "explicit two-part (frequency x severity) or zero_inflated modeling" },
+    { "condition": "collinear design columns", "behavior": "singular IRLS working matrix", "mitigation": "bank-entry", "note": "fit_regularized alpha > 0" }
+  ],
+  "driver": {
+    "constructor": "sm.GLM(y, sm.add_constant(X), family=sm.families.Tweedie(var_power=..., link=..., eql=True), exposure=...).fit() or .fit_regularized(alpha=..., L1_wt=...)",
+    "deps": ["statsmodels>=0.14", "scipy"],
+    "wrapperNeeds": "adapter: add_constant; predict returns the expected value; wrapper scans var_power over a small grid by deviance when not user-fixed",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded IRLS fit; predict is thread-safe",
+    "tranche": "T2"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN handling; dropped rows bias both zero-frequency and severity components" },
+    { "position": "transform", "verdict": "beneficial", "why": "log/Yeo-Johnson of skewed covariates improves the log-linear mean fit; the TARGET must stay untransformed — the zero mass is the signal, not noise" },
+    { "position": "scale", "verdict": "beneficial", "why": "scale-equivariant unpenalized, but standardization conditions IRLS and is needed under the elastic-net penalty" },
+    { "position": "encode", "verdict": "required", "why": "categorical rating factors must be design-encoded before fitting" }
+  ]
+}

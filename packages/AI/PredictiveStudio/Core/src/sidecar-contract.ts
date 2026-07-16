@@ -136,8 +136,13 @@ export interface TrainRequest {
   feature_schema: FeatureSchemaEntry[];
   /** Ordered preprocessing ops to fit + apply at train time. */
   preprocessing: PreprocessingOp[];
-  /** Target/label column name. */
-  target: string;
+  /**
+   * Target/label column name. OPTIONAL: unsupervised task families (clustering,
+   * dim-reduction, anomaly, sequence-state, pattern-mining) train with no target —
+   * omit it. Supervised families (classification, regression, survival — where the
+   * "target" is the (duration,event) pair carried in the matrix — forecasting) set it.
+   */
+  target?: string;
   /** Inline matrix data (mutually exclusive with `data_ref`). */
   data?: MatrixData;
   /** Shared-storage handle to the matrix (Parquet/Arrow), used for very large sets. */
@@ -209,10 +214,24 @@ export interface PredictRequest {
  * the predicted label for classification problems.
  */
 export interface Prediction {
-  /** Numeric model output: probability (classification) or value (regression). */
-  score: number;
+  /**
+   * Numeric model output: probability (classification) or value (regression).
+   * OPTIONAL because unsupervised/structural task families emit a different shape
+   * (a `cluster`, a `vector`, a `curve`, an `anomaly_score`) rather than a scalar score.
+   */
+  score?: number;
   /** Predicted class label, present for classification problems. */
   class?: string;
+  /** Hard cluster assignment per record (clustering task family). */
+  cluster?: number;
+  /** Dense output vector (dim-reduction/embedding task family, or soft-assignment probabilities). */
+  vector?: number[];
+  /** Outlierness score (anomaly task family). */
+  anomaly_score?: number;
+  /** Inferred hidden state at the record's point in time (sequence-state task family). */
+  latent_state?: number;
+  /** Per-record survival curve (survival task family): aligned times[] + survival[]. */
+  curve?: { times: number[]; survival: number[] };
   /**
    * Per-record feature contributions for THIS row (P1-5) — the top signed drivers behind this specific
    * prediction, ranked by magnitude. Present only for models where an honest per-row attribution is cheap

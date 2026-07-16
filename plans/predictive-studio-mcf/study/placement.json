@@ -1,0 +1,206 @@
+{
+ "BANK-ENTRY": [
+  {
+   "item": "Yeo-Johnson transform",
+   "node": "weighted-sum",
+   "position": "transform",
+   "why": "normalizes skew for linear/GLM fit; irrelevant to split-based"
+  },
+  {
+   "item": "median-impute",
+   "node": "*",
+   "position": "impute",
+   "why": "default impute; skipped for native-NaN split-based"
+  },
+  {
+   "item": "standardize (z-score)",
+   "node": "distance-kernel,weighted-sum",
+   "position": "scale",
+   "why": "REQUIRED by mechanism; empty for split-based"
+  },
+  {
+   "item": "target-encode",
+   "node": "split-based",
+   "position": "encode",
+   "why": "high-cardinality categoricals for tree families"
+  },
+  {
+   "item": "one-hot encode",
+   "node": "*",
+   "position": "encode",
+   "why": "default categorical encoding"
+  },
+  {
+   "item": "PCA-whiten (optional)",
+   "node": "distance-kernel",
+   "position": "scale",
+   "why": "decorrelate before distance metrics"
+  },
+  {
+   "item": "sentinel + missingness-indicator",
+   "node": "weighted-sum,distance-kernel",
+   "position": "impute",
+   "why": "RD-MICRO: mask matters for linear/distance, redundant for trees"
+  },
+  {
+   "item": "Sonar normalizers (percentile/minmax/zscore/logistic/banded/lookup + HigherIsBetter)",
+   "node": "weighted-sum",
+   "position": "transform",
+   "why": "scorecard factor normalization; the reference math"
+  },
+  {
+   "item": "log transform (multiplicative\u2192additive)",
+   "node": "recurrence-temporal",
+   "position": "transform",
+   "why": "seasonality handling for forecasters"
+  }
+ ],
+ "FACET-GATE": [
+  {
+   "item": "VIF / collinearity screen",
+   "facet": "linear",
+   "why": "gates weighted-sum node; flags redundant coefficients"
+  },
+  {
+   "item": "class-balance gate \u2192 PR-AUC/lift + class-weight",
+   "facet": "classification",
+   "why": "RD-MICRO: the METRIC is load-bearing, not the weighting"
+  },
+  {
+   "item": "censoring-rate gate",
+   "facet": "survival",
+   "why": "commit-survival signal (high censoring \u21d2 survival family)"
+  },
+  {
+   "item": "seasonality/n-cycles gate",
+   "facet": "forecasting",
+   "why": "gates seasonal orders; falls back to naive floor"
+  },
+  {
+   "item": "Hopkins cluster-tendency (INVESTIGATE-only, NOT commit)",
+   "facet": "clustering",
+   "why": "RD-COMPOSE: tendency \u2260 supervised lift; label-linked evidence required to compose"
+  },
+  {
+   "item": "n-gate (GP n<10k, boosting n>~200)",
+   "facet": "data-size",
+   "why": "prunes leaves before sampling"
+  },
+  {
+   "item": "proportional-hazards test",
+   "facet": "survival",
+   "why": "gates Cox vs AFT/RSF"
+  },
+  {
+   "item": "dispersion (var/mean) gate",
+   "facet": "counts",
+   "why": "Poisson vs NegBinomial"
+  },
+  {
+   "item": "label-linked structure evidence (per-cluster outcome divergence)",
+   "facet": "composition",
+   "why": "RD-COMPOSE hardened gate: compose ONLY on this, not Hopkins"
+  }
+ ],
+ "COMPONENT": [
+  {
+   "item": "Isotonic / Platt calibrator",
+   "kind": "Calibration",
+   "why": "already seeded; V6/RD-CALIBRATE validated helps-or-skip"
+  },
+  {
+   "item": "SHAP explainer",
+   "kind": "Explainer",
+   "why": "attributions port for ImportanceOnly/BlackBox; cheap-first for Coefficients/Rules"
+  },
+  {
+   "item": "Uplift T-learner template",
+   "kind": "Template",
+   "why": "treatment+outcome slots; V10 validated; DEFERs without treatment data"
+  },
+  {
+   "item": "Cluster-then-Classify template",
+   "kind": "Template",
+   "why": "already seeded"
+  },
+  {
+   "item": "as-of window aggregates (Count/Sum/Avg/Min/Max/Recency \u00d7 Rolling/Calendar/SinceEvent/RenewalRelative)",
+   "kind": "Transformation",
+   "why": "Sonar #1 + RD-COMPOSE gbt_core gap (0.08-0.13 AUC) \u2014 highest-leverage"
+  },
+  {
+   "item": "event-log\u2192RFM featurizer",
+   "kind": "Transformation",
+   "why": "required upstream for CLV family"
+  },
+  {
+   "item": "Score-banding (probability\u2192tier)",
+   "kind": "Transformation",
+   "why": "Sonar; reusable-only band-set"
+  },
+  {
+   "item": "PSI/KS drift monitor",
+   "kind": "Transformation",
+   "why": "V9/RD-MONITOR validated; MaintenanceEngine"
+  },
+  {
+   "item": "momentum/trajectory (\u0394/velocity/\u03c3 over score history)",
+   "kind": "Transformation",
+   "why": "Sonar trend + trajectory analytics"
+  },
+  {
+   "item": "HMM cadence-state extractor (latent-state\u2192features:tabular)",
+   "kind": "Adapter+Model",
+   "why": "RD-COMPOSE validated composition"
+  }
+ ],
+ "UI-SURFACE": [
+  {
+   "item": "reliability/calibration diagram",
+   "surface": "Runs/Registry",
+   "why": "calibration transparency"
+  },
+  {
+   "item": "uplift quadrant (persuadable/sure-thing/lost-cause/sleeping-dog)",
+   "surface": "Predictions",
+   "why": "RD/V10 business surface"
+  },
+  {
+   "item": "drift sparkline",
+   "surface": "Production",
+   "why": "monitoring"
+  },
+  {
+   "item": "Atlas & Wiring Bench / Decision Observatory / Story Library",
+   "surface": "3 concepts",
+   "why": "Addendum 3 \u2014 the ontology made visible"
+  },
+  {
+   "item": "can-be affordance panel (findCompatibleSlots)",
+   "surface": "Atlas",
+   "why": "there-is-and-can-be as UI"
+  }
+ ],
+ "REJECTED": [
+  {
+   "item": "Shapiro-gated scaling",
+   "reason": "normality test on n>5k always rejects; scaling decision belongs to mechanism not a p-value"
+  },
+  {
+   "item": "Box-Cox over Yeo-Johnson",
+   "reason": "Box-Cox needs strictly positive; Yeo-Johnson strictly dominates"
+  },
+  {
+   "item": "stepwise feature selection",
+   "reason": "p-hacking generator; use regularization (lasso/elastic-net) instead"
+  },
+  {
+   "item": "auto-promote challenger",
+   "reason": "V9: monitoring RECOMMENDS, never auto-promotes; human gate mandatory"
+  },
+  {
+   "item": "single-slice isotonic calibration (blind)",
+   "reason": "V6: can worsen; use CV-calibration with helps-or-skip gate"
+  }
+ ]
+}

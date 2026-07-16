@@ -1,0 +1,268 @@
+{
+  "identity": {
+    "modelKey": "markov_switching",
+    "family": "sequence-state",
+    "libraryClass": "statsmodels.tsa.regime_switching.markov_regression.MarkovRegression / markov_autoregression.MarkovAutoregression",
+    "aliases": [
+      "Markov switching model",
+      "regime-switching regression",
+      "Hamilton model",
+      "MS-AR"
+    ],
+    "displayName": "Markov Switching Regression",
+    "description": "Regime-switching model over a time series: a hidden first-order Markov chain selects which of k regimes' regression/AR parameters (and optionally variance) generates each observation. The product is the smoothed regime-probability path plus per-regime coefficients \u2014 'which era is this series in, and how do its dynamics differ'."
+  },
+  "axes": {
+    "task": "sequence-state",
+    "secondaryTasks": [],
+    "learningType": "Temporal",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Sequence",
+    "deterministicFit": false
+  },
+  "consumes": [
+    {
+      "portType": "series",
+      "dataShape": "series",
+      "dtypes": [
+        "numeric-time-indexed"
+      ],
+      "targetSpec": "series",
+      "required": true,
+      "note": "a single regular time-indexed series; the regime chain lives over its time steps"
+    },
+    {
+      "portType": "features:tabular",
+      "dataShape": "row-matrix",
+      "dtypes": [
+        "numeric"
+      ],
+      "targetSpec": "none",
+      "required": false,
+      "note": "optional exogenous regressors aligned to the series index (MarkovRegression exog)"
+    }
+  ],
+  "emits": [
+    {
+      "portType": "latent-state",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "smoothed marginal regime probabilities per time step \u2014 the primary product"
+    },
+    {
+      "portType": "state-sequence",
+      "granularity": "per-series",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "most-likely regime path (argmax of smoothed probabilities)"
+    },
+    {
+      "portType": "transition-matrix",
+      "granularity": "per-model",
+      "paramsAsOutput": "transition-matrix",
+      "probabilistic": "none",
+      "note": "k x k regime transition probabilities; expected regime duration = 1/(1-p_ii)"
+    },
+    {
+      "portType": "coefficients",
+      "granularity": "per-model",
+      "paramsAsOutput": "coefficients+SE",
+      "probabilistic": "none",
+      "note": "per-regime regression/AR coefficients (and variances when switching_variance) \u2014 the 'how the eras differ' story"
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable"
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/markov_switching.schema.json",
+    "hpMeta": {
+      "k_regimes": {
+        "default": 2,
+        "prior": "int-uniform[2,4]",
+        "searchable": true,
+        "note": "regime count \u2014 selected by AIC/BIC; identifiability degrades fast beyond 3-4 regimes on business-length series"
+      },
+      "order": {
+        "default": 0,
+        "prior": "int-uniform[0,4]",
+        "searchable": true,
+        "note": "AR order; order>0 selects MarkovAutoregression"
+      },
+      "switching_variance": {
+        "default": false,
+        "prior": "categorical[true,false]",
+        "searchable": true,
+        "note": "let the innovation variance switch with the regime \u2014 the volatility-regime axis"
+      },
+      "trend": {
+        "default": "c",
+        "prior": "categorical[n,c,t,ct]",
+        "searchable": true
+      },
+      "search_reps": {
+        "default": 20,
+        "prior": "int-uniform[0,50]",
+        "searchable": false,
+        "note": "random start-parameter draws \u2014 the hedge against the multimodal likelihood that makes deterministicFit false"
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "a linear-Gaussian model of the series is equivariant to rescaling \u2014 coefficients and variances rescale with it, regime path unchanged"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "a log transform changes which shifts look like mean-regimes vs variance-regimes \u2014 a modeling choice, not a no-op"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "the Hamilton filter requires a regular, gap-free series; missing periods must be interpolated first"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "numeric series + numeric exog design columns only"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "assumes Gaussian innovations within regime, constant within-regime parameters, and first-order Markov regime dynamics"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "needs-history",
+      "basis": "empirical",
+      "why": "each regime's parameters are estimated only from the time spent IN that regime \u2014 a rare regime visited briefly is unidentifiable regardless of total series length"
+    },
+    {
+      "flag": "extrapolates",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "regime-probability-weighted forecasts extend beyond the sample, though the family's product is the regime path, not the forecast"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "structural_break_score",
+        "why": "rolling mean/variance shift statistics are the prior evidence that multiple regimes exist at all; a break-free series makes k_regimes>1 an overfit"
+      },
+      {
+        "stat": "rolling_variance_ratio",
+        "why": "large variance ratios across windows are the specific signal for switching_variance=true rather than mean-switching alone"
+      },
+      {
+        "stat": "obs_per_candidate_regime",
+        "why": "series length divided by k_regimes bounds the per-regime effective sample; too low makes per-regime coefficients unidentifiable \u2014 a gate to k=2"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "aic_bic_by_k_regimes",
+        "why": "likelihood rises with every added regime; the information-criterion penalty on k^2 transition + per-regime params is the honest regime-count selector"
+      },
+      {
+        "metric": "regime_persistence",
+        "why": "expected duration 1/(1-p_ii) \u2014 regimes lasting one or two steps are noise labels, not eras; persistence is what makes the regime path meaningful"
+      },
+      {
+        "metric": "smoothed_probability_confidence",
+        "why": "mean max smoothed probability measures regime separation \u2014 values near 1/k mean the filter cannot tell the regimes apart"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "multimodal likelihood \u2014 different start params reach different fits",
+      "behavior": "run-to-run instability",
+      "mitigation": "bank-entry",
+      "note": "search_reps multi-start, best-of by log-likelihood"
+    },
+    {
+      "condition": "label switching across refits (regime indices permute)",
+      "behavior": "'regime 0' silently changes meaning",
+      "mitigation": "bank-entry",
+      "note": "canonicalize regime order by regime mean (then variance) before persisting"
+    },
+    {
+      "condition": "a regime visited only briefly",
+      "behavior": "its coefficients unidentifiable, SEs explode",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "EM/BFGS non-convergence",
+      "behavior": "boundary or mid-climb parameters",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "k_regimes too high for the series",
+      "behavior": "transition probs pinned to 0/1, degenerate regimes",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "irregular / gapped timestamps",
+      "behavior": "invalid frequency",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "using smoothed regime probabilities as an as-of feature",
+      "behavior": "smoothed probs use the FULL series (future leakage); only filtered_marginal_probabilities are as-of-safe",
+      "mitigation": "gate"
+    }
+  ],
+  "driver": {
+    "constructor": "MarkovRegression(endog, k_regimes, trend, exog, switching_variance).fit(search_reps=...) / MarkovAutoregression(endog, k_regimes, order, ...).fit(search_reps=...)",
+    "deps": [
+      "statsmodels>=0.14",
+      "scipy"
+    ],
+    "wrapperNeeds": "series adapter (time_col, value_col, freq); expose smoothed_marginal_probabilities as latent-state and its argmax as state-sequence; canonical regime reordering for stable labels across refits",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit",
+    "tranche": "T6 (sequence-state)"
+  },
+  "canBeSeeds": [
+    {
+      "template": "State-as-Feature Template",
+      "slot": "state-featurizer",
+      "via": "latent-state -> features:tabular adapter (current-regime probability as a feature)"
+    }
+  ],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "required",
+      "why": "the Hamilton filter needs a gap-free regular series; time-aware interpolation, not tabular median"
+    },
+    {
+      "position": "transform",
+      "verdict": "beneficial",
+      "why": "a log transform stabilizes multiplicative variance so mean-regimes and variance-regimes are not conflated"
+    },
+    {
+      "position": "scale",
+      "verdict": "irrelevant",
+      "why": "scale-equivariant \u2014 standardization changes nothing about the regime path or fit quality"
+    },
+    {
+      "position": "encode",
+      "verdict": "irrelevant",
+      "why": "single numeric series; exogenous design columns are a modeling concern, not preprocessing"
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "identity": {
+    "modelKey": "gamma_gamma",
+    "family": "clv-btyd",
+    "libraryClass": "lifetimes.GammaGammaFitter",
+    "aliases": ["Gamma-Gamma", "GammaGammaFitter", "Fader-Hardie monetary model", "spend model"],
+    "displayName": "Gamma-Gamma Monetary Model",
+    "description": "The monetary companion to the transaction BTYD models: a customer's average transaction value is Gamma-distributed around a latent mean that is itself Gamma-distributed across customers. Produces the conditional expected average profit per transaction (empirical-Bayes shrinkage of the customer's observed average toward the population), and — composed with a fitted BG/NBD or Pareto/NBD — discounted customer lifetime value."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": [],
+    "taskNote": "UNCERTAINTY (U2/U3): same family flag — no `clv` task value exists; `regression` (expected monetary value) is the honest nearest fit here and needs no survival secondary (no dropout submodel in Gamma-Gamma).",
+    "learningType": "Unsupervised",
+    "learningTypeNote": "UNCERTAINTY (judgment call): a hierarchical empirical-Bayes density model of observed spend with no held-out label — Unsupervised chosen; 'Supervised with target = monetary_value' is the defensible alternative reading. Flagged for the family reviewer / U3.",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "EventLog",
+    "deterministicFit": true
+  },
+  "consumes": [
+    {
+      "portType": "event-log",
+      "dataShape": "transactions",
+      "dtypes": ["id", "datetime", "numeric"],
+      "targetSpec": "none",
+      "required": true,
+      "note": "consumed VIA the same Doc-2-placed event-log→RFM featurizer, run with monetary aggregation; the fitter's true input is the (frequency, monetary_value) pairs of REPEAT customers only (frequency > 0 — lifetimes docs are explicit). The numeric dtype (transaction amount) is REQUIRED here, unlike the sibling fitters. portTypeProposal (U2): `rfm-summary`. targetSpec `none` — no label separate from the observed spend the likelihood is over"
+    },
+    {
+      "portType": "trained-model",
+      "dataShape": "n/a",
+      "dtypes": [],
+      "targetSpec": "none",
+      "required": false,
+      "note": "a FITTED bg_nbd/pareto_nbd — lifetimes' customer_lifetime_value(transaction_prediction_model, ...) takes the sibling MODEL OBJECT, not its scores. Optional: unbound, the fitter still emits per-transaction expected spend; bound, it additionally emits discounted CLV. dataShape 'n/a' is deliberate — a model-reference port has no data shape; the template enum has no fitting value (template-fit gap, FLAGGED for U2)"
+    }
+  ],
+  "emits": [
+    {
+      "portType": "score",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "two modes on one port: (1) conditional_expected_average_profit — empirical-Bayes shrinkage of the customer's observed average spend toward the population mean p·v/(q−1); (2) with the optional trained-model input bound, customer_lifetime_value — per-customer discounted CLV over a predict-time horizon + discount_rate. UNCERTAINTY (U2): whether CLV deserves a port distinct from generic `score`"
+    },
+    {
+      "portType": "coefficients",
+      "granularity": "per-model",
+      "paramsAsOutput": "coefficients+SE",
+      "probabilistic": "none",
+      "note": "the fitted (p, q, v) ARE meaningful outputs (family truth: paramsAsOutput): they define the population spend distribution, with E[spend] = p·v/(q−1) — which requires q > 1 to exist"
+    }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/gamma_gamma.schema.json",
+    "hpMeta": {
+      "penalizer_coef": { "default": 0.0, "prior": "log-uniform[1e-6,1.0]", "searchable": true, "note": "L2 penalty on (p, q, v); stabilizes small-cohort fits" },
+      "q_constraint": { "default": false, "prior": "categorical[false,true]", "searchable": false, "note": "constrains q > 1 so the population mean p·v/(q−1) exists; lifetimes fit-time flag — turn on when the unconstrained fit lands q ≤ 1" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "inverse sense, as across this family: monetary_value must stay in raw positive currency units — centering/standardizing produces non-positive values outside the Gamma support; a pure currency-unit rescale is absorbed by v. FLAGGED for U3: the boolean cannot express 'requires raw units'" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "log-transforming spend changes the Gamma-on-raw-spend commitment into a different (log-normal-like) model — the fit is not equivalent" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the likelihood needs an observed (frequency, monetary_value) pair per repeat customer; NaN means the featurizer emitted a non-repeat customer or a defect — reject, don't impute" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "covariate-free — spend heterogeneity enters only through the Gamma prior on latent means" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "three commitments: spend Gamma-distributed around a latent per-customer mean, latent means Gamma-distributed across customers, AND monetary value independent of purchase frequency — the third is the load-bearing, checkable one" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "empirical", "why": "per-customer sample is the handful of repeat purchases (often 1–5); shrinking those noisy averages toward the population is precisely what the hierarchical prior is for" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "assumes the spend process is stationary, so the shrunk per-customer mean extends to FUTURE transactions — that extension is the CLV use case" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "frequency_monetary_correlation", "why": "the model ASSUMES spend is independent of purchase frequency (the Fader-Hardie check); a materially nonzero correlation biases the conditional means — the gate stat for this family member" },
+      { "stat": "repeat_customer_count", "why": "only frequency > 0 customers have an observed average spend and enter the likelihood — this, not the cohort size, is the effective sample size" },
+      { "stat": "monetary_cv", "why": "cross-customer coefficient of variation of average spend; the hierarchical prior exists to shrink noisy small-frequency averages — near-zero CV means the population mean alone would suffice" }
+    ],
+    "modelMetrics": [
+      { "metric": "holdout_spend_mape", "why": "predicted conditional average profit vs realized holdout average spend per customer — the monetary analogue of the calibration/holdout purchase check" },
+      { "metric": "population_mean_gap", "why": "model-implied E[spend] = p·v/(q−1) vs the observed cohort average — a cheap first-order misfit check, and undefined at q ≤ 1, which is itself the signal to constrain q" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "frequency = 0 customers included", "behavior": "monetary_value is undefined (no repeat purchases to average) — invalid likelihood rows", "mitigation": "reject-input", "note": "fit on repeat customers only, per lifetimes documentation" },
+    { "condition": "monetary_value ≤ 0 (refunds, comps, negative totals)", "behavior": "outside the Gamma support — likelihood undefined", "mitigation": "reject-input" },
+    { "condition": "corr(frequency, monetary_value) materially nonzero", "behavior": "the independence assumption is violated; conditional expected spend is biased", "mitigation": "gate" },
+    { "condition": "fitted q ≤ 1", "behavior": "population mean p·v/(q−1) undefined or negative — expected-spend outputs are garbage", "mitigation": "bank-entry", "note": "refit with q_constraint=True" }
+  ],
+  "driver": {
+    "constructor": "GammaGammaFitter(penalizer_coef=...).fit(frequency, monetary_value); CLV via .customer_lifetime_value(transaction_model, frequency, recency, T, monetary_value, time=..., discount_rate=...)",
+    "deps": ["lifetimes>=0.11.3", "autograd", "scipy", "pandas"],
+    "depNote": "UNCERTAINTY (dep choice): lifetimes is in maintenance mode; pymc-marketing's clv.GammaGammaModel is the maintained successor (heavier PyMC dep; MCMC fit non-deterministic). Sheet written against lifetimes; flagged for family-level review",
+    "wrapperNeeds": "the same upstream RFM featurizer with monetary aggregation, PLUS a frequency > 0 filter before fit; the CLV path additionally needs the fitted sibling transaction model bound to the optional trained-model input, and predict-time horizon + discount_rate arguments",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit; predictions are pure functions of (p, q, v) — safe to parallelize after fit",
+    "tranche": "T7 (clv-btyd)"
+  },
+  "canBeSeeds": [
+    { "template": "clv-composite", "slot": "monetary-model", "portType": "score", "note": "composes WITH bg_nbd/pareto_nbd — their trained-model emission feeds this fitter's optional input, and the composite emits discounted CLV on this score port" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "irrelevant", "why": "the RFM featurizer emits complete (frequency, monetary) pairs for repeat customers by construction; missing spend is unobservable, not imputable" },
+    { "position": "transform", "verdict": "harmful", "why": "log/power transforms of spend replace the Gamma-on-raw-spend commitment with a different model — the fitted (p, q, v) no longer mean what the CLV math needs" },
+    { "position": "scale", "verdict": "harmful", "why": "centering makes spend non-positive, outside the Gamma support; pure currency-unit changes are absorbed by v and need no preprocessing" },
+    { "position": "encode", "verdict": "irrelevant", "why": "no categorical covariates exist in the input contract — the model is covariate-free" }
+  ]
+}

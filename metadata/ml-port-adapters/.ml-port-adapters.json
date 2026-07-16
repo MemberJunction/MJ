@@ -1,0 +1,66 @@
+[
+  {
+    "fields": {
+      "Name": "Cluster ID One-Hot",
+      "FromPortTypeID": "@lookup:MJ: ML Port Types.Name=cluster-id",
+      "ToPortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+      "Strategy": "onehot",
+      "IsLossy": false
+    },
+    "primaryKey": {
+      "ID": "DA261E08-E5CD-4194-84D7-38687AAFC53D"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:34.583Z",
+      "checksum": "0e9565a858e265a327f333ba1d28d053c6c06f5e8e73509cb594eebbf0a9437b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Latent State Columns",
+      "FromPortTypeID": "@lookup:MJ: ML Port Types.Name=latent-state",
+      "ToPortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+      "Strategy": "state-onehot-or-posterior",
+      "IsLossy": false
+    },
+    "primaryKey": {
+      "ID": "3FCA156E-9407-427A-8624-FA52894D4FAF"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:34.595Z",
+      "checksum": "d1d314c00d70559557bcf747f57969236744978482ff8bfdded43ceaadbf54f0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Probability Column",
+      "FromPortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+      "ToPortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+      "Strategy": "column",
+      "IsLossy": false
+    },
+    "primaryKey": {
+      "ID": "93B899EC-DF82-412F-A99B-A668F9A32AB4"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:34.605Z",
+      "checksum": "bde35c968295aeb24685b9ccd04b2e689a26a9a140efd4c7b8bc5b28ceb41518"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Event-Log to Transactions",
+      "FromPortTypeID": "@lookup:MJ: ML Port Types.Name=event-log",
+      "ToPortTypeID": "@lookup:MJ: ML Port Types.Name=transactions",
+      "Strategy": "groupby-collapse (drop time, dedup items)",
+      "IsLossy": true
+    },
+    "primaryKey": {
+      "ID": "2B2ADFAE-9F02-4AE5-A949-EC9B16308DDB"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:22:32.955Z",
+      "checksum": "dfb64866dad80d9ae6f0b931917daff0487d02867125e4647527c898fff09ea5"
+    }
+  }
+]

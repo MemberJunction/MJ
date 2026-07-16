@@ -1,0 +1,84 @@
+{
+  "identity": {
+    "modelKey": "lasso",
+    "family": "linear-glm",
+    "libraryClass": "sklearn.linear_model.Lasso",
+    "aliases": ["L1 regression", "LASSO", "sparse linear regression"],
+    "displayName": "Lasso",
+    "description": "L1-penalized least squares: the soft-thresholding geometry of the L1 ball zeroes coefficients exactly, so the fitted model IS a feature selection — the surviving support is the effect story. Fit by cyclic coordinate descent."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true,
+    "note": "cyclic coordinate descent is deterministic; selection='random' is the only stochastic mode"
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true }
+  ],
+  "emits": [
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "POINT ESTIMATES ONLY (no SEs; post-selection inference is a research topic, not a library call). The zero pattern doubles as a feature-selection mask — no dedicated port type exists; portTypeProposal: 'feature-mask' if selection composition becomes a template" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/lasso.schema.json",
+    "hpMeta": {
+      "alpha": { "default": 1.0, "prior": "log-uniform[0.0001,10]", "searchable": true, "note": "controls the sparsity level directly; above a data-dependent alpha_max ALL coefficients are zero" },
+      "fit_intercept": { "default": true, "prior": "categorical[true,false]", "searchable": false },
+      "max_iter": { "default": 1000, "prior": "int-uniform[1000,10000]", "searchable": false, "note": "raise on ConvergenceWarning — common near tiny alpha or with unscaled inputs" },
+      "tol": { "default": 0.0001, "prior": "log-uniform[1e-6,1e-2]", "searchable": false },
+      "selection": { "default": "cyclic", "prior": "categorical[cyclic,random]", "searchable": false, "note": "'random' can converge faster at high tol but makes the fit stochastic" },
+      "positive": { "default": false, "prior": "categorical[false,true]", "searchable": false }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "the L1 threshold is applied in raw coefficient units — WHICH features survive selection depends on their units, so unscaled input makes the selection itself arbitrary, not just the magnitudes" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "linear in the inputs; monotone transforms change both the fit and the selected support" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "coordinate descent has no missing-value path; NaN raises" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "requires a pre-encoded numeric design matrix" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "squared-error loss presumes a linear mean (Gaussian MLE view); additionally the sparsity 'bet' — that the true signal concentrates in few features — is itself an assumption" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "mechanism-derived", "why": "designed for wide data: defined at p >> n, though it can then select at most n features by the KKT conditions" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the (sparse) linear predictor extends unboundedly beyond the training range" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "max_pairwise_correlation", "why": "within a correlated group the L1 geometry picks ONE member near-arbitrarily and zeroes the rest — high correlation means the selected support is unstable (the elastic-net handoff signal)" },
+      { "stat": "n_over_p", "why": "the sparsity prior earns its keep at large p; mechanically, with p > n at most n features can be selected" },
+      { "stat": "signal_sparsity_hint", "why": "the L1 bet pays only if the true signal is concentrated in few features — a dense-signal problem is better served by ridge's shrink-everything geometry" }
+    ],
+    "modelMetrics": [
+      { "metric": "support_stability_jaccard", "why": "Jaccard overlap of the selected support across CV folds — low overlap means the 'selected features' narrative is noise, even if CV error looks fine" },
+      { "metric": "nonzero_coef_count", "why": "the realized sparsity at the tuned alpha; zero survivors means alpha overshot into the intercept-only model and the fit is vacuous" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "correlated feature group", "behavior": "selects one member near-arbitrarily, zeroes the rest; support flips between refits", "mitigation": "bank-entry", "note": "elastic_net is the designed fix (grouping effect)" },
+    { "condition": "alpha >= alpha_max", "behavior": "all coefficients zero — intercept-only model returned silently", "mitigation": "gate" },
+    { "condition": "p > n", "behavior": "at most n features can enter the support (KKT), regardless of how many are truly relevant", "mitigation": "gate" },
+    { "condition": "ConvergenceWarning at max_iter (tiny alpha or unscaled X)", "behavior": "coefficients from an unconverged coordinate-descent pass", "mitigation": "gate" }
+  ],
+  "driver": {
+    "constructor": "Lasso(**hp)",
+    "deps": ["scikit-learn>=1.4"],
+    "wrapperNeeds": "none (sklearn-compatible fit/predict)",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded coordinate descent; predict is thread-safe",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [
+    { "template": "Stacking Template", "slot": "base", "via": "score" },
+    { "template": "Bagging Template", "slot": "model", "via": "score", "note": "bagged lasso (~stability selection) directly attacks the support-instability weakness" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN path — coordinate descent raises on missing values" },
+    { "position": "transform", "verdict": "beneficial", "why": "linearizing skewed covariates improves the linear-mean fit and keeps leverage points from steering the selection" },
+    { "position": "scale", "verdict": "required", "why": "the L1 threshold is unit-dependent — without standardization the SELECTION (not just the magnitudes) is an artifact of units" },
+    { "position": "encode", "verdict": "required", "why": "categoricals must be design-encoded; note one-hot groups are then selected member-wise, not as a group" }
+  ]
+}

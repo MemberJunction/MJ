@@ -1,0 +1,266 @@
+{
+  "identity": {
+    "modelKey": "rubric_weighted_scorecard",
+    "family": "scorecard",
+    "libraryClass": "predictive_studio_sidecar.scorecard.RubricWeightedScorecard (pure Python; fitted mode wraps sklearn.linear_model)",
+    "aliases": [
+      "weighted scorecard",
+      "rubric",
+      "points-based scorecard",
+      "linear scoring model",
+      "credit-style scorecard"
+    ],
+    "displayName": "Rubric (Weighted Scorecard)",
+    "description": "Glass-box linear scorer: operator-defined factors, each passed through a declared normalizer (percentile/minmax/zscore/logistic/banded/lookup, with a HigherIsBetter direction), combined by hand-set OR fitted weights into a single score, optionally banded into tiers. Every prediction decomposes EXACTLY into per-factor contributions \u2014 the weights are the whole story."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": [
+      "regression"
+    ],
+    "learningType": "Supervised",
+    "learningTypeNote": "Supervised applies to the trainable (weight-fitting) mode; the hand-weighted mode learns nothing and never sees a target",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    {
+      "portType": "features:tabular",
+      "dataShape": "row-matrix",
+      "dtypes": [
+        "numeric",
+        "categorical"
+      ],
+      "targetSpec": "plain",
+      "required": true,
+      "note": "target is OPTIONAL \u2014 required only when fit_weights=true (trainable mode); a hand-weighted rubric scores with no target ever seen. Categorical factors are consumed via the lookup/banded normalizers, not one-hot encoding."
+    }
+  ],
+  "emits": [
+    {
+      "portType": "score",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "the weighted composite \u2014 the primary output in both modes"
+    },
+    {
+      "portType": "class-label",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "banded tiers: the score cut at operator-defined band_edges (e.g. Bronze/Silver/Gold, A\u2013F)"
+    },
+    {
+      "portType": "coefficients",
+      "granularity": "per-model",
+      "paramsAsOutput": "coefficients+SE",
+      "probabilistic": "none",
+      "note": "the factor weights themselves; standard errors exist ONLY in fitted mode \u2014 hand-set weights carry no SE"
+    },
+    {
+      "portType": "attributions",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "EXACT: weight \u00d7 normalized factor value reproduces the score identically \u2014 no SHAP approximation needed. This exactness is the family's distinguishing strength over models whose attributions are estimated."
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "both",
+    "why": "THE exerciser of reusable\u2260trainable: a hand-weighted rubric is a REUSABLE-ONLY (untrained) instance \u2014 deployable with zero training rows; setting fit_weights=true turns the SAME component into a trainable one whose weights come from a constrained linear fit. Weight SEARCH (exploring weight vectors against an objective) is a wave-strategist concern layered on top \u2014 noted here, deliberately not modeled as a component behavior."
+  },
+  "hyperparameters": {
+    "schema": "@file:../../../../metadata/ml-algorithms/schemas/rubric_weighted_scorecard.schema.json",
+    "hpMeta": {
+      "factors": {
+        "default": null,
+        "prior": "not-searched (operator-authored structure: per-factor {name, source_column, normalizer \u2208 percentile|minmax|zscore|logistic|banded|lookup, higher_is_better, normalizer_params})",
+        "searchable": false
+      },
+      "weights": {
+        "default": "equal (1/K per factor)",
+        "prior": "not-searched (hand-set by the operator OR fitted; searching the weight vector is a wave-strategist concern, not a per-model HP dimension)",
+        "searchable": false
+      },
+      "fit_weights": {
+        "default": false,
+        "prior": "not-searched (mode switch: false = reusable-only hand-weighted instance, true = trainable constrained-linear fit)",
+        "searchable": false
+      },
+      "non_negative": {
+        "default": true,
+        "prior": "not-searched (constraint honoring the rubric's declared factor directions)",
+        "searchable": false,
+        "conditionalOn": "fit_weights"
+      },
+      "fit_loss": {
+        "default": "logistic",
+        "prior": "categorical[logistic,squared]",
+        "searchable": true,
+        "conditionalOn": "fit_weights"
+      },
+      "l2_penalty": {
+        "default": 0.0,
+        "prior": "log-uniform[1e-4,10]",
+        "searchable": true,
+        "conditionalOn": "fit_weights"
+      },
+      "band_edges": {
+        "default": "quantile terciles of the scored distribution",
+        "prior": "not-searched (operator-defined tier boundaries; presentation, not fit)",
+        "searchable": false
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "a weighted sum changes with any factor rescale \u2014 which is exactly why every factor is REQUIRED to pass through a declared normalizer before combination"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "only the percentile normalizer is rank-based; under minmax/zscore/logistic a monotone transform of a raw factor changes its normalized value and hence the score"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "a missing factor value makes the weighted sum undefined; each factor needs imputation or a declared default sub-score before combination"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "the lookup and banded normalizers map category levels / value ranges directly to factor sub-scores \u2014 the scorecard tradition's binning, no one-hot needed"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "the scorer is a deterministic linear combination with no error model; only the fitted mode's OPTIONAL standard errors lean on linear-model assumptions"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "any-including-zero",
+      "basis": "mechanism-derived",
+      "why": "hand-weighted mode needs ZERO training rows by construction; fitted mode is a low-variance constrained linear fit that stabilizes from tens of rows"
+    },
+    {
+      "flag": "extrapolates",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "the normalizers saturate or clamp outside their calibration range (percentile\u2192[0,1], logistic asymptotes, minmax/banded clamp), so the composite score stays bounded even though the combiner is linear"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "factor_scale_heterogeneity",
+        "why": "unnormalized mixed-scale factors let the largest-scale factor silently dominate the weighted sum \u2014 the signal that triggers the mandatory-normalization bank entry"
+      },
+      {
+        "stat": "factor_pairwise_correlation",
+        "why": "two highly correlated factors double-count one underlying signal in a plain weighted sum, inflating its effective weight beyond what either declared weight says"
+      },
+      {
+        "stat": "missingness_rate",
+        "why": "a missing factor voids the sum (no native NaN), so per-factor missingness drives the impute-or-declared-default policy before any scoring"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "per_factor_contribution_share",
+        "why": "mean |weight \u00d7 normalized value| share per factor IS the exact additive decomposition of the score \u2014 read directly, not approximated \u2014 and one factor owning it flags a degenerate rubric or leakage"
+      },
+      {
+        "metric": "weight_sign_vs_direction_consistency",
+        "why": "a fitted weight whose sign contradicts the factor's declared HigherIsBetter direction means the data disagrees with the rubric's stated semantics \u2014 a promotion gate, not a silent flip"
+      },
+      {
+        "metric": "fitted_vs_hand_weight_divergence",
+        "why": "the distance between fitted weights and the operator's hand weights quantifies how much the data disputes the rubric's priors \u2014 the core trainable-mode diagnostic"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "all weights zero",
+      "behavior": "score identically 0 for every record; ranking undefined",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "unnormalized mixed-scale factors (normalizer omitted/identity on raw inputs)",
+      "behavior": "largest-scale factor dominates the sum regardless of declared weights",
+      "mitigation": "bank-entry"
+    },
+    {
+      "condition": "fitted weight sign conflicts with the factor's declared HigherIsBetter direction",
+      "behavior": "per-factor contributions contradict the rubric's stated semantics",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "unseen category level at score time under a lookup normalizer with no declared default",
+      "behavior": "no mapped sub-score; the record is unscorable",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "a factor with zero variance (constant across records)",
+      "behavior": "burns weight budget with zero discrimination; contributes only a constant offset; may signal leakage or a data-quality issue",
+      "mitigation": "gate"
+    }
+  ],
+  "driver": {
+    "constructor": "RubricWeightedScorecard(factors, weights=None, fit_weights=False, non_negative=True, fit_loss='logistic', l2_penalty=0.0, band_edges=None)",
+    "deps": [
+      "numpy",
+      "scikit-learn>=1.3 (fitted mode only)"
+    ],
+    "wrapperNeeds": "thin custom wrapper \u2014 hand-weighted mode must expose a no-op fit() while keeping sklearn-style predict/score; fitted mode maps the sign/non-negativity constraints onto sklearn.linear_model (positive=True plus direction-flip preprocessing)",
+    "serialization": "joblib",
+    "threadSafety": "predict is a pure vectorized dot product \u2014 fully thread-safe; fit is single-threaded",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [
+    {
+      "template": "Calibrator Template",
+      "slot": "model",
+      "via": "score"
+    },
+    {
+      "template": "Stacking Template",
+      "slot": "base",
+      "via": "score\u2192features:tabular adapter"
+    }
+  ],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "required",
+      "why": "no native NaN: a missing factor voids the weighted sum, so every factor needs imputation or a declared default sub-score upstream"
+    },
+    {
+      "position": "transform",
+      "verdict": "required",
+      "why": "the rubric's non-linear normalizers (percentile, logistic, banded, lookup) LIVE at this position \u2014 this claim references them; the sheet does not duplicate them as model internals"
+    },
+    {
+      "position": "scale",
+      "verdict": "required",
+      "why": "the minmax/zscore normalizers live here; scale-sensitive by mechanism \u2014 a weighted sum over unnormalized mixed-scale factors is dominated by the largest-scale factor"
+    },
+    {
+      "position": "encode",
+      "verdict": "irrelevant",
+      "why": "the lookup/banded normalizers consume category levels directly; one-hot encoding would fracture a single rubric factor into many weight-fragments and break the one-factor-one-weight story"
+    }
+  ]
+}

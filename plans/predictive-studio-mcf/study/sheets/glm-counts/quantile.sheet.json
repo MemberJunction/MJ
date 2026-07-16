@@ -1,0 +1,224 @@
+{
+  "identity": {
+    "modelKey": "quantile",
+    "family": "glm-counts",
+    "libraryClass": "statsmodels.regression.quantile_regression.QuantReg",
+    "aliases": [
+      "quantile regression",
+      "median regression",
+      "LAD regression",
+      "pinball regression"
+    ],
+    "displayName": "Quantile Regression",
+    "description": "Linear regression of a conditional QUANTILE instead of the mean: minimizes the asymmetric pinball (check) loss, so q=0.5 is median regression and tail q's map the outcome's spread. Makes NO distributional assumption on the errors \u2014 the family's distribution-free member, robust to outliers and heteroscedasticity."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "None",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    {
+      "portType": "features:tabular",
+      "dataShape": "row-matrix",
+      "dtypes": [
+        "numeric",
+        "encoded-categorical"
+      ],
+      "targetSpec": "plain",
+      "required": true,
+      "note": "continuous target; counts are tolerated but mass points slow IRLS convergence"
+    }
+  ],
+  "emits": [
+    {
+      "portType": "quantile-band",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "the conditional q-quantile prediction \u2014 a distribution-free point, not a mean; closest existing port. portTypeProposal: a 'quantile-band' port for multi-quantile / interval emissions (fitting several q's yields lower/median/upper bands no current port expresses)"
+    },
+    {
+      "portType": "quantile-band",
+      "granularity": "per-model",
+      "paramsAsOutput": "coefficients+SE",
+      "probabilistic": "none",
+      "note": "per-quantile slopes with kernel-based robust SEs; slopes differing across q IS the heteroscedasticity story"
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable"
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/quantile.schema.json",
+    "hpMeta": {
+      "q": {
+        "default": 0.5,
+        "prior": "uniform[0.05,0.95]",
+        "searchable": true,
+        "note": "the quantile to estimate; usually fixed by the use-case (e.g. 0.9 capacity planning) rather than searched"
+      },
+      "vcov": {
+        "default": "robust",
+        "prior": "categorical[robust,iid]",
+        "searchable": false
+      },
+      "kernel": {
+        "default": "epa",
+        "prior": "categorical[epa,cos,gau,par]",
+        "searchable": false,
+        "note": "kernel for the robust covariance sandwich"
+      },
+      "bandwidth": {
+        "default": "hsheather",
+        "prior": "categorical[hsheather,bofinger,chamberlain]",
+        "searchable": false
+      },
+      "max_iter": {
+        "default": 1000,
+        "prior": "fixed",
+        "searchable": false
+      },
+      "p_tol": {
+        "default": 1e-06,
+        "prior": "fixed",
+        "searchable": false
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "the pinball-loss minimizer is equivariant under affine rescaling of features \u2014 coefficients rescale inversely and predictions are identical; no penalty term exists in this driver to break it"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "the conditional quantile is modeled as LINEAR in x; a monotone transform of an input changes the fit (quantiles ARE equivariant to monotone transforms of the TARGET \u2014 a separate, useful property)"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "the check-loss objective has no missing-value mechanism; rows must be complete"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": false,
+      "basis": "empirical",
+      "why": "requires a pre-encoded design matrix"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "the pinball loss identifies the conditional quantile with NO assumption on the error distribution \u2014 no likelihood, no variance law; the family's distribution-free member"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "medium",
+      "basis": "empirical",
+      "why": "the effective information near quantile q comes from the ~min(q,1-q) fraction of local data \u2014 tail quantiles (0.05/0.95) need substantially more rows than the median for stable slopes"
+    },
+    {
+      "flag": "extrapolates",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "the linear form extends the conditional quantile beyond the observed covariate range"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "target_skewness",
+        "why": "under symmetric errors the median and mean lines coincide and OLS is more efficient \u2014 quantile regression earns its keep exactly when the conditional distribution is asymmetric or heavy-tailed"
+      },
+      {
+        "stat": "heteroscedasticity_signal",
+        "why": "spread that varies with x (e.g. Breusch-Pagan on absolute OLS residuals) means quantile slopes genuinely differ across q \u2014 the single-mean summary is hiding the story quantiles reveal"
+      },
+      {
+        "stat": "target_mass_points",
+        "why": "heavy ties/discrete mass in y (e.g. many exact zeros) make the check-loss surface piecewise-flat, slowing IRLS and blurring the quantile's identification \u2014 a warning toward count/tweedie treatment instead"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "pinball_loss_at_q",
+        "why": "the proper scoring rule for a quantile forecast \u2014 the only honest scoreboard number; MSE would reward reverting to the mean"
+      },
+      {
+        "metric": "quantile_crossing_rate",
+        "why": "independently-fitted q's can produce crossing predictions (the 0.9 line below the 0.5 line) \u2014 a per-row incoherence rate that flags the multi-quantile emission as needing monotone rearrangement"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "extreme q with small n (few tail-side points)",
+      "behavior": "slope estimates dominated by a handful of rows; unstable SEs",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "multiple q's fitted independently",
+      "behavior": "quantile crossing \u2014 non-monotone predicted quantiles per row",
+      "mitigation": "bank-entry",
+      "note": "sort/rearrange predicted quantiles per row"
+    },
+    {
+      "condition": "heavy mass points / discrete target",
+      "behavior": "degenerate flat segments in the objective; IRLS convergence warnings",
+      "mitigation": "bank-entry",
+      "note": "raise max_iter; consider a count family instead"
+    },
+    {
+      "condition": "collinear design columns",
+      "behavior": "non-unique minimizer; arbitrary coefficient split",
+      "mitigation": "bank-entry",
+      "note": "drop or combine collinear columns"
+    }
+  ],
+  "driver": {
+    "constructor": "QuantReg(y, sm.add_constant(X)).fit(q=..., vcov='robust', kernel='epa', bandwidth='hsheather', max_iter=..., p_tol=...)",
+    "deps": [
+      "statsmodels>=0.14",
+      "scipy"
+    ],
+    "wrapperNeeds": "adapter: add_constant; one fit per requested q \u2014 the wrapper loops q's and stacks predictions for band output",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded IRLS fit; predict is thread-safe; independent q-fits are embarrassingly parallel",
+    "tranche": "T2"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "required",
+      "why": "no native NaN handling; incomplete rows must be imputed or dropped"
+    },
+    {
+      "position": "transform",
+      "verdict": "beneficial",
+      "why": "the quantile is linear in x; transforming skewed covariates improves that linearity (and target transforms commute with quantiles, a free lunch OLS lacks)"
+    },
+    {
+      "position": "scale",
+      "verdict": "beneficial",
+      "why": "predictions are scale-invariant (no penalty), but standardization makes per-quantile coefficients comparable across features"
+    },
+    {
+      "position": "encode",
+      "verdict": "required",
+      "why": "categoricals must be design-encoded before the objective sees the matrix"
+    }
+  ]
+}

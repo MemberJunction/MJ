@@ -1,0 +1,79 @@
+{
+  "identity": {
+    "modelKey": "weibull_aft",
+    "family": "survival",
+    "libraryClass": "lifelines.WeibullAFTFitter",
+    "aliases": ["Weibull AFT", "Weibull accelerated failure time", "WeibullAFT"],
+    "displayName": "Weibull AFT",
+    "description": "Fully parametric accelerated-failure-time model: covariates multiplicatively rescale survival TIME (exp(coef) is a time ratio — 'members with X last 1.3x longer'), vs Cox's hazard-ratio reading. Buys extrapolation beyond the observed window and absolute time predictions by assuming Weibull-distributed lifetimes."
+  },
+  "axes": {
+    "task": "survival",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "duration+event", "required": true, "note": "the (duration, event-indicator) pair carried as two columns alongside the covariate matrix — same regime as cox_ph" }
+  ],
+  "emits": [
+    { "portType": "survival-curve", "granularity": "per-row", "paramsAsOutput": "survival-curve", "probabilistic": "native", "note": "closed-form Weibull S(t|x) — smooth, defined for ALL t including beyond the observed window (the extrapolation the assumption buys)" },
+    { "portType": "hazard", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "closed-form ABSOLUTE hazard h(t|x) — a full time-varying hazard, not just Cox's relative-risk ranking against an unspecified baseline" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "log TIME-ratios with CIs: exp(coef) multiplies survival time (acceleration factor) — interpretation and sign convention are the OPPOSITE of Cox's hazard ratios; a positive coef here means LONGER survival" },
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "predicted median/expected survival time per row — the absolute 'when' number Cox's partial hazard cannot give without a baseline estimate" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/weibull_aft.schema.json",
+    "hpMeta": {
+      "penalizer": { "default": 0.0, "prior": "log-uniform[0.0,1.0]", "searchable": true, "note": "elastic-net strength on the regression coefficients; stabilizes under collinearity/few events" },
+      "l1_ratio": { "default": 0.0, "prior": "uniform[0.0,1.0]", "searchable": true, "conditionalOn": "penalizer" },
+      "ancillary": { "default": false, "prior": "categorical[false,true]", "searchable": true, "note": "when true, the Weibull shape parameter rho is ALSO regressed on covariates — heteroskedastic acceleration (covariates change hazard shape, not just scale)" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "coefficients are per-unit log time-ratios in a log-linear location model; unscaled features give incomparable magnitudes and unstable Newton steps" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "log(T) is modeled as linear in covariates; a monotone covariate transform changes the fit" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the parametric likelihood has no missing-value handling — NaN covariate rows are dropped or must be imputed" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "requires pre-encoded design columns" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes WEIBULL lifetimes — the full distribution, a strictly stronger claim than Cox's PH: hazard must be monotone (rising or falling per rho, never bathtub/hump-shaped). Mechanism note: Weibull is the unique family satisfying BOTH AFT (covariates rescale time, S(t|x)=S0(t*exp(-x'b))) and PH — so Cox and Weibull AFT agree in ranking here and diverge only in absolute-time claims" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "empirical", "why": "the full parametric likelihood extracts more per event than Cox's partial likelihood — usable at low event counts IF the Weibull form holds; the assumption is doing the work the data cannot" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the closed parametric form extends S(t|x) beyond the last observed time — the trait KM/Cox lack, and the principal reason to pay the distributional assumption" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "censoring_rate", "why": "THE commit-survival stat: the right-censored fraction is what makes a survival model necessary vs a fixed-window classifier" },
+      { "stat": "event_count", "why": "effective sample size is the number of events; few events flags a penalizer and wide CIs — though the parametric likelihood degrades more gracefully than Cox's partial likelihood" },
+      { "stat": "loglog_survival_linearity", "why": "under Weibull, log(-log S(t)) = rho*log t - rho*log lambda is LINEAR in log t — plot it from the KM curve; curvature is direct evidence against the assumed distribution and routes toward log-normal/log-logistic AFT or RSF" }
+    ],
+    "modelMetrics": [
+      { "metric": "concordance_index", "why": "the survival-native ranking metric (Harrell's C) — with the ceiling caveat: near-deterministic durations inflate C toward 1, so report it alongside the censoring context, not as a lone scoreboard number" },
+      { "metric": "aic", "why": "the full likelihood makes AIC comparable across parametric survival fits — the honest instrument for choosing Weibull vs log-normal vs log-logistic, which pure ranking (C-index) cannot distinguish" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "zero events (all censored)", "behavior": "likelihood carries no event information — scale/shape unidentifiable", "mitigation": "reject-input" },
+    { "condition": "duration <= 0", "behavior": "Weibull support is strictly t > 0; log(t) undefined — fit raises", "mitigation": "reject-input" },
+    { "condition": "non-monotone true hazard (bathtub / hump-shaped)", "behavior": "Weibull cannot represent it — systematically biased curve and time-ratios", "mitigation": "gate", "note": "route to log-normal/log-logistic AFT (hump) or RSF (arbitrary shape); detected via the loglog-linearity stat" },
+    { "condition": "perfect separation by a covariate", "behavior": "coefficient diverges, Newton fails to converge", "mitigation": "bank-entry", "note": "penalizer" }
+  ],
+  "driver": {
+    "constructor": "WeibullAFTFitter(penalizer=..., l1_ratio=...).fit(df, duration_col, event_col, ancillary=...)",
+    "deps": ["lifelines>=0.30", "scipy"],
+    "wrapperNeeds": "adapter: (duration,event) columns split from the matrix; predict maps to predict_survival_function / predict_median / predict_expectation / predict_hazard",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit",
+    "tranche": "T4 (survival)"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN handling; unimputed rows are silently dropped, biasing the likelihood" },
+    { "position": "transform", "verdict": "beneficial", "why": "log/Yeo-Johnson of skewed covariates improves the log-linear location fit" },
+    { "position": "scale", "verdict": "required", "why": "coefficients are per-unit log time-ratios; standardization makes acceleration factors comparable and the Newton solver stable" },
+    { "position": "encode", "verdict": "required", "why": "categoricals must be design-encoded before entering the parametric likelihood" }
+  ]
+}

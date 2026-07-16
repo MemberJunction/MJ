@@ -1,0 +1,80 @@
+{
+  "identity": {
+    "modelKey": "multinomial_logit",
+    "family": "linear-glm",
+    "libraryClass": "statsmodels.discrete.discrete_model.MNLogit",
+    "aliases": ["MNLogit", "multinomial logistic regression", "softmax regression (inference)", "polytomous logit"],
+    "displayName": "Multinomial Logit (statsmodels)",
+    "description": "Unpenalized maximum-likelihood softmax classifier over K unordered categories, fit by Newton's method: (K-1) coefficient equations against a reference category, each with standard errors, z-tests, and confidence intervals. The multiclass inference sibling of ols — choose it to EXPLAIN category choice; choose sklearn's logistic_regression to predict it."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true, "note": "target must be integer-coded 0..K-1; code 0 becomes the reference category all coefficients are relative to" }
+  ],
+  "emits": [
+    { "portType": "probability", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "K-column softmax matrix from predict()" },
+    { "portType": "class-label", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "argmax over the probability matrix — wrapper-derived, not a separate library call" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "a (p+1)x(K-1) matrix of log-odds-vs-reference effects with bse/pvalues/conf_int — the genuine multiclass inference emission" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/multinomial_logit.schema.json",
+    "hpMeta": {
+      "method": { "default": "newton", "prior": "categorical[newton,bfgs,lbfgs]", "searchable": false, "note": "fit() optimizer; newton uses the exact Hessian (also the SE source), bfgs/lbfgs for large p" },
+      "maxiter": { "default": 35, "prior": "int-uniform[35,500]", "searchable": false, "note": "the statsmodels default of 35 is famously low — raise it before diagnosing anything else on non-convergence" },
+      "tol": { "default": 1e-8, "prior": "log-uniform[1e-10,1e-4]", "searchable": false }
+    },
+    "note": "no regularization knob in plain fit() — nothing searchable; fit_regularized(alpha=...) exists as the L1 escape hatch for separation but forfeits the clean SE story"
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "coefficients are per-unit log-odds against the reference category, and Newton's step inverts a Hessian whose conditioning degrades with unscaled features — ill-scaling is a real convergence failure mode, not just cosmetics" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "log-odds are assumed linear in the supplied columns; a monotone transform is a different specification" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the likelihood has no missingness model; NaN raises (or missing='drop' listwise-deletes with the usual bias)" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "the array API needs a pre-encoded design matrix; the target additionally needs integer coding" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes IIA (independence of irrelevant alternatives): the odds between any two categories are unaffected by the others — the red-bus/blue-bus failure; plus linear log-odds per equation" },
+    { "flag": "dataSizeTolerance", "value": "medium", "basis": "mechanism-derived", "why": "fits (K-1)*(p+1) parameters and the effective sample is the SMALLEST category — K inflates the parameter count and rare classes starve their equations" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "each linear log-odds equation extends beyond the training range; probabilities saturate but rankings keep shifting" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "min_class_count", "why": "with (K-1)*(p+1) parameters, the binding sample size is the smallest category — a rare class drives quasi-separation and exploding SEs in its equation" },
+      { "stat": "vif_max", "why": "collinearity inflates SEs simultaneously across ALL K-1 equations, multiplying the interpretability damage relative to the binary case" },
+      { "stat": "separation_flag", "why": "any feature perfectly predicting one category sends its unpenalized MLE coefficient to infinity (Hauck-Donner effect) — plain fit() has no penalty to stop it" }
+    ],
+    "modelMetrics": [
+      { "metric": "mcfadden_pseudo_r2", "why": "1 - llf/llnull is the likelihood-native fit share — the honest scoreboard where R2 has no meaning for a discrete MLE" },
+      { "metric": "hessian_condition", "why": "the SEs ARE the inverse Hessian's diagonal — near-singularity from collinearity or separation makes the entire inference table garbage even if predictions look fine" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "perfect/quasi-separation of any category", "behavior": "coefficient diverges, Hessian goes singular, SEs explode (Hauck-Donner)", "mitigation": "bank-entry", "note": "fit_regularized(alpha) or the penalized sklearn sibling — at the cost of the SE story" },
+    { "condition": "rare category (tiny class count)", "behavior": "that equation's coefficients are estimated from a handful of rows — huge SEs, fragile fit", "mitigation": "gate", "note": "consider collapsing rare categories" },
+    { "condition": "large K x large p", "behavior": "(K-1)*(p+1) parameter blow-up; slow Newton steps and overfit risk", "mitigation": "gate" },
+    { "condition": "IIA violation (near-substitute alternatives)", "behavior": "biased substitution patterns — the red-bus/blue-bus pathology", "mitigation": "gate", "note": "nested/mixed logit is the econometric fix, outside this catalog" },
+    { "condition": "non-convergence at the default maxiter=35", "behavior": "ConvergenceWarning; params from an unfinished Newton run", "mitigation": "gate", "note": "raise maxiter and scale features before any other diagnosis" }
+  ],
+  "driver": {
+    "constructor": "sm.MNLogit(y_codes, sm.add_constant(X)).fit(method=hp.method, maxiter=hp.maxiter)",
+    "deps": ["statsmodels>=0.14", "scipy", "pandas"],
+    "wrapperNeeds": "adapter: add_constant on the design matrix; label-encode target to 0..K-1 and remember the mapping (0 = reference); predict() returns the K-column probability matrix — argmax + decode for class-label; expose params/bse/pvalues/conf_int per equation as the coefficients payload",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded Newton fit; predict on the results object is thread-safe",
+    "tranche": "T2"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no missingness model — NaN raises or is listwise-deleted, biasing the choice shares" },
+    { "position": "transform", "verdict": "beneficial", "why": "linearizing skewed covariates improves the linear-log-odds specification each equation assumes" },
+    { "position": "scale", "verdict": "required", "why": "Newton's Hessian inversion is the SE source AND the optimizer — ill-conditioned unscaled features cause real convergence failures and incomparable per-unit coefficients" },
+    { "position": "encode", "verdict": "required", "why": "features must be design-encoded (reference level dropped to avoid the dummy trap) and the target integer-coded" }
+  ]
+}

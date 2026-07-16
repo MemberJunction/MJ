@@ -1,0 +1,83 @@
+{
+  "identity": {
+    "modelKey": "kalman_dlm",
+    "family": "sequence-state",
+    "libraryClass": "statsmodels.tsa.statespace.mlemodel.MLEModel (custom linear-Gaussian state space; KalmanFilter/KalmanSmoother)",
+    "aliases": ["Kalman filter", "dynamic linear model", "DLM", "linear-Gaussian state space", "local level model"],
+    "displayName": "Kalman Filter / Dynamic Linear Model",
+    "description": "General linear-Gaussian state-space model: latent continuous states evolve linearly with Gaussian noise and are observed through a linear-Gaussian measurement. Exact filtering (real-time state estimate), smoothing (retrospective), and forecasting — with exact, in-model handling of missing observations. Local-level and local-linear-trend DLMs and time-varying-coefficient regression are canonical instances."
+  },
+  "axes": {
+    "task": "sequence-state",
+    "secondaryTasks": ["forecasting"],
+    "learningType": "Temporal",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Sequence",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "series", "dataShape": "series", "dtypes": ["numeric-time-indexed"], "targetSpec": "series", "required": true, "note": "regular time index required, but VALUES may be NaN — the filter skips the measurement update at missing steps, exactly" },
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric"], "targetSpec": "none", "required": false, "note": "optional regressors; with time-varying coefficients they enter the STATE (the TVP-regression instance)" }
+  ],
+  "emits": [
+    { "portType": "latent-state", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "filtered AND smoothed state means with full Gaussian posteriors; filtered = as-of-safe, smoothed = uses the future (see leakage edge case)" },
+    { "portType": "forecast-series", "granularity": "per-series", "paramsAsOutput": "none", "probabilistic": "native", "note": "state-propagated forecasts with widening intervals" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "estimated system/variance parameters (signal-to-noise ratios) with SEs" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/kalman_dlm.schema.json",
+    "hpMeta": {
+      "state_spec": { "default": "local-level", "prior": "categorical[local-level,local-linear-trend,time-varying-regression]", "searchable": true, "note": "which linear-Gaussian structure — the DLM's real hyperparameter is its state design" },
+      "concentrate_scale": { "default": true, "prior": "categorical[true,false]", "searchable": false, "note": "concentrate the observation variance out of the likelihood for a better-conditioned optimization" },
+      "initialization": { "default": "approximate_diffuse", "prior": "categorical[approximate_diffuse,stationary,known]", "searchable": false, "note": "non-stationary states (level/trend) need diffuse initialization or the early likelihood is wrong" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "linear-Gaussian throughout — rescaling the series rescales states and variances equivariantly; the fit is isomorphic" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "linearity and Gaussianity hold in one parameterization only — a log transform changes the model class" },
+    { "flag": "nativeNaN", "value": true, "basis": "mechanism-derived", "why": "the Kalman filter simply skips the measurement update at a missing observation and propagates the state prior — gaps are handled exactly, in-model, with correctly widened uncertainty" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "numeric series and numeric design matrices only" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes linear state dynamics and Gaussian state/observation noise; the filter is only exact/optimal under both" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "empirical", "why": "a local-level model has two variance parameters — usable on short series where ARIMA orders are unidentifiable" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "forecasting is state propagation without measurement updates — principled, with honestly widening intervals" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "missingness_rate", "why": "exact in-filter missing handling is THIS model's edge — high missingness is the commit-Kalman signal over interpolate-then-ARIMA" },
+      { "stat": "signal_to_noise_ratio", "why": "the ratio of state-innovation to observation variance governs how much smoothing helps; near-zero means the series is level + noise and the state adds nothing" },
+      { "stat": "structural_break_score", "why": "a time-invariant DLM averages over abrupt level shifts; strong breaks flag intervention states or the markov_switching sibling" }
+    ],
+    "modelMetrics": [
+      { "metric": "one_step_ahead_mae_vs_naive", "why": "the filter's honest scoreboard is its real-time one-step prediction against the naive floor — smoothed fit quality flatters by using the future" },
+      { "metric": "loglik_aic_by_state_spec", "why": "the state-design selection lens: does a trend state (or TVP coefficients) earn its extra variance parameters" },
+      { "metric": "innovation_ljung_box_p", "why": "a correct state space whitens the innovations; autocorrelated one-step errors mean structure the state design missed" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "smoothed states used as as-of features", "behavior": "leakage — smoothing conditions on the FUTURE of the series", "mitigation": "gate", "note": "feature assembly must consume FILTERED states; smoothed states are for retrospective description only" },
+    { "condition": "state variance estimated at the zero boundary", "behavior": "state degenerates to deterministic; SEs invalid at the boundary", "mitigation": "gate" },
+    { "condition": "very short series with diffuse initialization", "behavior": "early states dominated by the diffuse prior; likelihood uninformative", "mitigation": "gate" },
+    { "condition": "long all-missing stretch", "behavior": "intervals widen without bound across the gap (honest but possibly useless)", "mitigation": "gate" },
+    { "condition": "irregular timestamps", "behavior": "invalid frequency assumption", "mitigation": "reject-input" }
+  ],
+  "driver": {
+    "constructor": "custom MLEModel subclass (design/transition/selection matrices per state_spec).fit() then .smooth(); local-level via UnobservedComponents('llevel') shortcut",
+    "deps": ["statsmodels>=0.14", "scipy"],
+    "wrapperNeeds": "series adapter (time_col, value_col, freq — NaN values preserved, not imputed); expose filtered vs smoothed states as SEPARATE latent-state channels so the as-of/leakage distinction survives into feature assembly",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit",
+    "tranche": "T6 (sequence-state)"
+  },
+  "canBeSeeds": [
+    { "template": "State-as-Feature Template", "slot": "state-featurizer", "via": "latent-state (FILTERED) -> features:tabular adapter (real-time level/trend estimates as as-of-safe features)" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "harmful", "why": "pre-imputing hides missingness the filter handles exactly — it fabricates certainty at the gaps and biases the variance estimates; pass NaN through" },
+    { "position": "transform", "verdict": "beneficial", "why": "a log transform makes multiplicative series linear-Gaussian-plausible — the model-class choice the DLM needs made upstream" },
+    { "position": "scale", "verdict": "irrelevant", "why": "scale-equivariant; standardization changes nothing about the fit" },
+    { "position": "encode", "verdict": "irrelevant", "why": "numeric series; regression states take numeric design columns — nothing categorical reaches the filter" }
+  ]
+}

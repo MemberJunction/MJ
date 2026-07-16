@@ -1,0 +1,80 @@
+{
+  "identity": {
+    "modelKey": "ols",
+    "family": "linear-glm",
+    "libraryClass": "statsmodels.regression.linear_model.OLS",
+    "aliases": ["ordinary least squares", "linear regression (inference)", "classical linear model"],
+    "displayName": "OLS (statsmodels)",
+    "description": "Unpenalized least squares fit with the FULL inference apparatus: coefficients with standard errors, t-statistics, p-values, confidence intervals, and prediction intervals. This is the family's answer-the-why member — where sklearn's linear models predict, OLS testifies. Requires n > p and honest attention to its error assumptions."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true }
+  ],
+  "emits": [
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "get_prediction() yields mean CIs AND per-row prediction intervals under the Gaussian-error assumption" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "the genuine coefficients+SE emission: params/bse/pvalues/conf_int — the inference story the sklearn siblings cannot tell" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/ols.schema.json",
+    "hpMeta": {
+      "cov_type": { "default": "nonrobust", "prior": "categorical[nonrobust,HC0,HC1,HC2,HC3,HAC]", "searchable": false, "note": "an INFERENCE choice, never CV-searched: HC3 when heteroscedasticity is detected, HAC for serial correlation" },
+      "method": { "default": "pinv", "prior": "categorical[pinv,qr]", "searchable": false, "note": "fit() solve method; qr is the numerically safer choice on ill-conditioned X" },
+      "missing": { "default": "none", "prior": "categorical[none,drop,raise]", "searchable": false, "note": "'drop' silently listwise-deletes — biased unless MCAR; the pipeline should impute upstream instead" }
+    },
+    "note": "OLS has NO regularization knob — nothing here is searchable; the model is fully determined by the data. That absence IS the inference guarantee (unbiasedness under Gauss-Markov)."
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "coefficients and SEs are per-unit quantities — magnitudes are incomparable across unscaled features and kappa(X'X) conditioning degrades; NOTE the fit itself is scale-EQUIVARIANT (predictions and p-values unchanged under rescaling), so scaling is comparability + numerics, not identification" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "the conditional mean is assumed linear in the supplied columns; log/rank of a covariate is a different model" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the normal equations have no missingness model; missing='drop' merely listwise-deletes, which biases the sample unless MCAR" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "the array API needs a pre-encoded design matrix (formula API delegates encoding to patsy, outside this driver)" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "the whole inference product rests on Gauss-Markov + Gaussian errors: linear mean, homoscedastic, independent errors — violate them and the SEs/p-values (the reason to choose OLS) are wrong" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "mechanism-derived", "why": "exact small-sample t/F inference is OLS's home turf — but it strictly requires n > p for positive residual degrees of freedom" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the linear predictor extends beyond the training range; prediction intervals widen with leverage but the mean keeps moving linearly" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "vif_max", "why": "VIF_j = 1/(1-R2_j) is EXACTLY the multiplier on coefficient variance — the direct diagnosis of why a CI is wide when features are collinear" },
+      { "stat": "condition_number", "why": "large kappa(X) means the X'X inversion amplifies noise into the coefficients; statsmodels prints this in summary() and warns on it" },
+      { "stat": "heteroscedasticity_bp_p", "why": "Breusch-Pagan rejecting homoscedasticity invalidates nonrobust SEs — the mechanical trigger for cov_type='HC3'" },
+      { "stat": "residual_normality_jb_p", "why": "exact t/F inference leans on Gaussian errors in small samples; a failed Jarque-Bera downgrades CIs to asymptotic-only" }
+    ],
+    "modelMetrics": [
+      { "metric": "adj_r2", "why": "in-sample fit penalized for parameter count — the honest OLS scoreboard, since raw R2 can only rise as p grows" },
+      { "metric": "max_cooks_distance", "why": "under squared loss a single influential row can move the whole coefficient vector; Cook's D localizes exactly which row is doing it" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "rank-deficient X (perfect collinearity)", "behavior": "the default pinv solve SILENTLY returns the minimum-norm solution; SEs on the involved columns are meaningless", "mitigation": "gate", "note": "condition-number check; drop or combine the collinear columns" },
+    { "condition": "p >= n", "behavior": "zero (or negative) residual degrees of freedom — SEs/p-values undefined", "mitigation": "reject-input", "note": "bank-entry route: ridge/lasso for prediction-only on wide data" },
+    { "condition": "heteroscedastic errors", "behavior": "coefficients stay unbiased but nonrobust SEs (and every p-value built on them) are wrong", "mitigation": "bank-entry", "note": "refit inference with cov_type='HC3'" },
+    { "condition": "missing intercept (no constant column)", "behavior": "statsmodels does NOT auto-add a constant — the regression is forced through the origin and R2 is redefined", "mitigation": "gate", "note": "the wrapper must add_constant; this is the classic statsmodels trap" },
+    { "condition": "extreme influential outlier", "behavior": "quadratic loss lets one row steer the fit and shrink apparent SEs", "mitigation": "gate" }
+  ],
+  "driver": {
+    "constructor": "sm.OLS(y, sm.add_constant(X), missing='none').fit(cov_type=hp.cov_type, method=hp.method)",
+    "deps": ["statsmodels>=0.14", "scipy", "pandas"],
+    "wrapperNeeds": "adapter: add_constant on the design matrix; sklearn-style fit(X,y)/predict facade over the results object; expose params/bse/pvalues/conf_int as the coefficients payload and get_prediction() intervals on the score port",
+    "serialization": "joblib",
+    "threadSafety": "closed-form pinv/QR solve; the fitted results object is read-only thread-safe",
+    "tranche": "T2"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no missingness model — NaN either raises or is listwise-deleted, and deletion biases the estimand unless MCAR" },
+    { "position": "transform", "verdict": "beneficial", "why": "transforming skewed covariates/target toward linearity + normal residuals is what makes the Gaussian inference assumptions actually hold" },
+    { "position": "scale", "verdict": "beneficial", "why": "the fit is scale-equivariant (predictions and p-values are unchanged), so scaling is not mechanically required — it buys comparable coefficient magnitudes and better X'X conditioning" },
+    { "position": "encode", "verdict": "required", "why": "categoricals must be design-encoded (with one reference level dropped, or the dummy trap creates exact collinearity)" }
+  ]
+}

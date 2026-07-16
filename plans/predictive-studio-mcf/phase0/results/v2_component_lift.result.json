@@ -1,0 +1,35 @@
+{
+  "hypothesis": "structural component features lift a GBT on structured data only",
+  "seeds": [
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "summary": [
+    {
+      "dataset": "hmm",
+      "raw_auc": 0.8162525431343024,
+      "component_auc": 0.8707031922177902,
+      "lift": 0.054450649083487665
+    },
+    {
+      "dataset": "cluster",
+      "raw_auc": 0.8766179220505605,
+      "component_auc": 0.8776778736495994,
+      "lift": 0.0010599515990387998
+    },
+    {
+      "dataset": "control",
+      "raw_auc": 0.7894898932464642,
+      "component_auc": 0.7893652150995528,
+      "lift": -0.00012467814691135003
+    }
+  ],
+  "hmm_lift": 0.054450649083487665,
+  "cluster_lift": 0.0010599515990387998,
+  "control_lift": -0.00012467814691135003,
+  "verdict": "REVISE",
+  "pass_bar": ">=+0.03 on >=2 planted AND control <+0.015"
+}

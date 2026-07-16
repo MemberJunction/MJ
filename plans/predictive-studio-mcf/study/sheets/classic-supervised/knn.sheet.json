@@ -1,0 +1,86 @@
+{
+  "identity": {
+    "modelKey": "knn",
+    "family": "classic-supervised",
+    "libraryClass": "sklearn.neighbors.KNeighborsClassifier / sklearn.neighbors.KNeighborsRegressor",
+    "aliases": ["k-nearest neighbors", "KNN", "nearest neighbor", "instance-based learner"],
+    "displayName": "k-Nearest Neighbors",
+    "description": "Instance-based lazy learner: prediction is a (distance-weighted) vote or mean over the k closest training rows. There is no real fit — training memorizes the data and builds a spatial index; ALL modeling effort happens at query time in the distance metric."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": ["regression"],
+    "learningType": "Supervised",
+    "parametric": "No",
+    "ensembleType": "None",
+    "interpretabilityClass": "BlackBox",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true, "note": "distances over one-hot categoricals are legal but semantically weak — each category contributes a fixed √2 step regardless of similarity" }
+  ],
+  "emits": [
+    { "portType": "probability", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "neighbor vote fractions — quantized to multiples of 1/k, so the probability surface is coarse and needs external calibration for threshold work" },
+    { "portType": "class-label", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none" },
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "regression mode — (distance-weighted) mean of neighbor targets" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable", "note": "learns in the memorization sense: the 'model' IS the training set plus an index; artifact size scales with n" },
+  "hyperparameters": {
+    "schema": "@file:schemas/knn.schema.json",
+    "hpMeta": {
+      "n_neighbors": { "default": 5, "prior": "int-uniform[1,50]", "searchable": true },
+      "weights": { "default": "uniform", "prior": "categorical[uniform,distance]", "searchable": true },
+      "metric": { "default": "minkowski", "prior": "categorical[minkowski,manhattan,cosine]", "searchable": true },
+      "p": { "default": 2, "prior": "int-uniform[1,2]", "searchable": true, "conditionalOn": "metric" },
+      "leaf_size": { "default": 30, "prior": "int-uniform[10,60]", "searchable": false, "note": "index-build/query tradeoff only; never changes predictions" },
+      "algorithm": { "default": "auto", "prior": "categorical[auto,ball_tree,kd_tree,brute]", "searchable": false }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "Minkowski distance sums per-feature differences in raw units — a feature measured in cents contributes 100x the metric weight of the same feature in dollars, silently owning the neighborhood" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "monotone maps preserve per-feature ORDER but not distances; log-transforming a feature reshapes every neighborhood" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "distance to a missing coordinate is undefined; sklearn raises on NaN input" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "the metric needs numeric coordinates; categoricals must be encoded before distances exist" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "purely nonparametric — the only assumption is LOCALITY: that nearby points share labels" },
+    { "flag": "dataSizeTolerance", "value": "small-to-medium", "basis": "mechanism-derived", "why": "no fit cost, but every prediction pays O(log n)–O(n·p) query cost and the artifact stores the full training set; large n makes serving heavy, and high p degrades the tree indexes toward brute force" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "predictions are votes/means over training targets — outputs can never leave the convex hull of observed target values, and far-away queries just inherit the nearest edge of the data" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "feature_variance_ratio", "why": "the distance metric weights features by raw variance — a max/min variance ratio far from 1 means one feature owns the neighborhood, the mechanism-level signal that scaling is load-bearing here" },
+      { "stat": "n_features_effective", "why": "in high dimension pairwise distances concentrate (nearest ≈ farthest), destroying the locality signal the vote depends on — the curse-of-dimensionality gate" },
+      { "stat": "n_rows", "why": "prediction cost and artifact size are both O(n); a large training set makes a lazy learner expensive exactly where eager models get cheap" }
+    ],
+    "modelMetrics": [
+      { "metric": "mean_kth_neighbor_distance", "why": "if the k-th neighbor is far, 'neighbors' are not local and the vote averages unrelated rows — a direct measurement of whether the locality assumption holds" },
+      { "metric": "cv_score_vs_k_stability", "why": "a CV curve that never plateaus in k means no stable neighborhood structure exists — the signal to commit a global (parametric or tree) family instead" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "unscaled mixed-unit features", "behavior": "highest-variance feature dominates the metric; other features become noise", "mitigation": "gate", "note": "require scale placement upstream" },
+    { "condition": "p large (dense, > ~50)", "behavior": "distance concentration — neighborhoods lose meaning, accuracy collapses toward prior", "mitigation": "gate" },
+    { "condition": "n_neighbors >= n_rows", "behavior": "every prediction is the global majority/mean — model degenerates to a constant", "mitigation": "reject-input" },
+    { "condition": "very large n at serving time", "behavior": "per-query latency and artifact size grow with the training set", "mitigation": "bank-entry", "note": "note the memory/latency cost; prefer an eager family when serving volume is high" },
+    { "condition": "tied vote with even k", "behavior": "tie broken by neighbor order — arbitrary-looking flips near boundaries", "mitigation": "bank-entry", "note": "prefer odd k for binary problems" }
+  ],
+  "driver": {
+    "constructor": "KNeighborsClassifier(**hp) / KNeighborsRegressor(**hp), selected by problem_type",
+    "deps": ["scikit-learn>=1.4"],
+    "wrapperNeeds": "none (sklearn-compatible fit/predict/predict_proba); fit is memorization + index build, near-instant",
+    "serialization": "joblib",
+    "serializationNote": "the pickle embeds the ENTIRE training matrix — artifact size ~ training-set size, unlike every parametric family",
+    "threadSafety": "predict parallel via n_jobs; index is read-only after fit, thread-safe",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [
+    { "template": "Calibrator Template", "slot": "model", "via": "probability", "note": "calibration smooths the 1/k-quantized vote fractions into usable probabilities" },
+    { "template": "Cluster-then-Classify", "slot": "classifier", "via": "probability" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN handling — distance to a missing coordinate is undefined and sklearn raises" },
+    { "position": "transform", "verdict": "beneficial", "why": "not monotone-invariant: symmetrizing heavy-skewed features stops a long tail from stretching one axis of the metric" },
+    { "position": "scale", "verdict": "required", "why": "scale-sensitive by mechanism — the metric IS a unit-weighted sum; without standardization the highest-variance feature decides every neighborhood" },
+    { "position": "encode", "verdict": "required", "why": "categoricals must be numeric before a distance exists at all" }
+  ]
+}

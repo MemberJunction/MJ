@@ -1,0 +1,387 @@
+[
+  {
+    "fields": {
+      "Name": "features:tabular",
+      "Description": "A rectangular feature matrix — one row per record, typed columns. The standard model input."
+    },
+    "primaryKey": {
+      "ID": "F47FBC2B-AD2C-48DB-86E0-C3D4B4291043"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.038Z",
+      "checksum": "2064930d7bbe05b35575a1ebf23e2013053b663d51869f5159309766f39c63a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "features:sequence",
+      "Description": "Ordered per-entity feature sequences (grouped by an entity key, ordered by time/step)."
+    },
+    "primaryKey": {
+      "ID": "BE104ECF-B60F-4E71-A18E-7F36F4F690A4"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.049Z",
+      "checksum": "544f83abbac9399daa732ad4daa3e3c3e2c891df64c7a9df50d187959c8f29e0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "series",
+      "Description": "A single time-indexed value series (regular frequency) for forecasting.",
+      "ShapeSpec": "{\"time\": \"string[]\", \"value\": \"number[]\"}"
+    },
+    "primaryKey": {
+      "ID": "3E4069A3-1555-4119-8F07-010B8B1345FF"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.058Z",
+      "checksum": "229c00526ad12e9e8d0d774702fac5b0ba490d5137d9d8da99762c5002ab72b5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "event-log",
+      "Description": "A raw event/transaction stream: entity key + timestamp + attributes."
+    },
+    "primaryKey": {
+      "ID": "7D10612F-EEB1-4298-BFAC-63836E0A3A94"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.068Z",
+      "checksum": "69003be62926de4b423db159c099830f8f7da59e9027b807b2ba3dfa88e3feb9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "interaction-matrix",
+      "Description": "Sparse user-by-item interaction triples for recommendation.",
+      "ShapeSpec": "{\"user\": \"string\", \"item\": \"string\", \"weight\": \"number\"}"
+    },
+    "primaryKey": {
+      "ID": "3E58C2A0-769A-4286-851D-CDBEA3383F6F"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.077Z",
+      "checksum": "753b74fd73e7c91b433ddf3eab2d8559d3047d8d78bb85be935efc85ecee9529"
+    }
+  },
+  {
+    "fields": {
+      "Name": "score",
+      "Description": "An uncalibrated real-valued model output per record."
+    },
+    "primaryKey": {
+      "ID": "9CDD63ED-4B6F-44BE-B38E-4123E0DC4FF3"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.086Z",
+      "checksum": "87c1198e3f74a383a268e49da6de866fa1f5d02f1df6b8ec689de79c8946e56e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "probability",
+      "Description": "A calibratable probability per record in [0,1]."
+    },
+    "primaryKey": {
+      "ID": "F7550D51-3533-474C-86D6-B2FC289ED57D"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.094Z",
+      "checksum": "39ea3c42320bfea6d66a1ce03bc6effa7c134aca0dcab0b3421ec5589271c843"
+    }
+  },
+  {
+    "fields": {
+      "Name": "class-label",
+      "Description": "A discrete predicted class/tier label per record."
+    },
+    "primaryKey": {
+      "ID": "7F6F9245-D71F-4AF1-AE08-0074053E69D7"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.103Z",
+      "checksum": "a03437a7086f0dbbcee892f880d9590bc8ec9b36fff99cbc005f5a836dfbcad3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "forecast-series",
+      "Description": "A forecast: future time points with predicted values (and optional intervals).",
+      "ShapeSpec": "{\"time\": \"string[]\", \"value\": \"number[]\", \"lower\": \"number[]?\", \"upper\": \"number[]?\"}"
+    },
+    "primaryKey": {
+      "ID": "7222F3D9-6575-4EAF-878D-A5B9D1317DE4"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.111Z",
+      "checksum": "a74efef86aac7254156d6684015d0178b22463b210c1eeb4e18e254cf8f9b10d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "anomaly-score",
+      "Description": "An outlierness score per record (higher = more anomalous)."
+    },
+    "primaryKey": {
+      "ID": "3D5B978A-9EC6-47CE-9855-1BF8BD706784"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.119Z",
+      "checksum": "5d103ee4fa4fee1eb871617a86f4ebefc5ad85b3b4cf97bec50cd6ef79714bc9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "cluster-id",
+      "Description": "A hard cluster assignment per record."
+    },
+    "primaryKey": {
+      "ID": "A4427680-663C-428B-A9B4-D13DD6B274C5"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.131Z",
+      "checksum": "98d95c4c33e79465333a403ad9603d4d8d367290b1761ef122d0840af68b80e2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "soft-assignment",
+      "Description": "Per-record membership probabilities over clusters/components."
+    },
+    "primaryKey": {
+      "ID": "0128F9D2-B9E4-44F2-AB2C-C5E59504428A"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.140Z",
+      "checksum": "6b8ae38341f55ebc6562b3d9d2c09651feb814926a8a5a4857fb51a3c8ab2564"
+    }
+  },
+  {
+    "fields": {
+      "Name": "embedding",
+      "Description": "A dense numeric vector per record."
+    },
+    "primaryKey": {
+      "ID": "83678471-5538-4A74-92C7-517C4C21846D"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.148Z",
+      "checksum": "131bed40cec3528b567274de1cde0679dffad23a4b45ac7a5095159251689fd2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "latent-state",
+      "Description": "The inferred hidden state a record/entity is in at a point in time."
+    },
+    "primaryKey": {
+      "ID": "D5DD99EA-DA05-4642-9A9B-7BA95894EFB7"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.157Z",
+      "checksum": "4a413f5ae21ec36f1a94cd206ce38870f6560977da53683f2a6f0022964e5d2b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "state-sequence",
+      "Description": "The full inferred hidden-state path over an entity's sequence."
+    },
+    "primaryKey": {
+      "ID": "34F1FF31-EDA3-4CAC-8325-1C2701EC714C"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.167Z",
+      "checksum": "15309912908ac815a7ddf9274f305170b9e05b60b88804d5bfb5eb539ec3f2ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "survival-curve",
+      "Description": "Per-record survival probabilities over time.",
+      "ShapeSpec": "{\"times\": \"number[]\", \"survival\": \"number[]\"}"
+    },
+    "primaryKey": {
+      "ID": "74112E99-89AD-47EE-AEE0-37045C3662B6"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.175Z",
+      "checksum": "51f0c41bf91665f1a4575aa9411c6b72506678b7871d4ee94f52c0558beffc55"
+    }
+  },
+  {
+    "fields": {
+      "Name": "hazard",
+      "Description": "Per-record relative hazard/risk from a survival model."
+    },
+    "primaryKey": {
+      "ID": "ED9245E7-258C-46F8-A15C-1210B3EAEE85"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.183Z",
+      "checksum": "265d539d619476df93ed283d4f4a974596d7fff71dfe1951b79200b9e4c4275e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "transition-matrix",
+      "Description": "Fitted state-to-state transition probabilities (parameters-as-output)."
+    },
+    "primaryKey": {
+      "ID": "628623BE-D4A3-469D-847E-4DC67B68BD5A"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.191Z",
+      "checksum": "0409be75f8d6b680263dd9c0a1608502c8262a041d7d231f0f2c5ddfdf0a61c6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "coefficients",
+      "Description": "Fitted per-feature coefficients with signs (parameters-as-output; the effect-size story)."
+    },
+    "primaryKey": {
+      "ID": "75DDACB8-D1F7-423A-93F7-E1B24E8855D1"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.200Z",
+      "checksum": "544654f02796c11b16684d93c33eb834b2e75646cb96c342b31e51ed8fdf8b24"
+    }
+  },
+  {
+    "fields": {
+      "Name": "topic-mixture",
+      "Description": "Per-record mixture weights over discovered topics."
+    },
+    "primaryKey": {
+      "ID": "005D2591-EE40-414B-8524-88C27F770DE6"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.208Z",
+      "checksum": "0865b6fd757c6b68f016b2f44377d1d542635de3b6def18d9582e3f8ffe7dd31"
+    }
+  },
+  {
+    "fields": {
+      "Name": "rules",
+      "Description": "Mined association/decision rules (parameters-as-output artifact)."
+    },
+    "primaryKey": {
+      "ID": "AE98E544-48F7-4831-8D91-3F30A6FF7535"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.218Z",
+      "checksum": "6e880c1d796986ed982ba94439810ecb162c738222228a0ee237dae1593de069"
+    }
+  },
+  {
+    "fields": {
+      "Name": "attributions",
+      "Description": "Per-record, per-feature contribution scores explaining a prediction.",
+      "ShapeSpec": "{\"feature\": \"string\", \"rawValue\": \"any\", \"contribution\": \"number\"}"
+    },
+    "primaryKey": {
+      "ID": "602731A6-F01C-4178-801F-6C1C59F7EF17"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.227Z",
+      "checksum": "92205a68e7b2c165edc719665106659c366ca0524a9e2b8f215df9a59fdbb813"
+    }
+  },
+  {
+    "fields": {
+      "Name": "trained-model",
+      "Description": "A reference to a fitted model artifact (consumed by explainers/calibrators)."
+    },
+    "primaryKey": {
+      "ID": "FC2C9D5C-D84A-4948-A9B8-1F4F1AB74349"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T05:35:16.235Z",
+      "checksum": "b94736239db0b18719cd2af90fb7bc2033d81c7bc705d318416749adab925c67"
+    }
+  },
+  {
+    "fields": {
+      "Name": "dynamics-matrix",
+      "Description": "Unconstrained real-valued linear-dynamics operator (VAR companion / lag-coefficient matrix). DISTINCT from transition-matrix: not row-stochastic; stability governed by eigenvalue modulus."
+    },
+    "primaryKey": {
+      "ID": "CDDCC818-3B79-4901-B0E9-3F514D6C5B10"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:24.411Z",
+      "checksum": "ad6b1985c0d25eaa06ee9f7ecbbd1fb561403e24a20476163d7d42c4aabaa371"
+    }
+  },
+  {
+    "fields": {
+      "Name": "topic-word-dists",
+      "Description": "Per-topic distribution over the vocabulary (K×vocab). DISTINCT from the per-row topic-mixture (docs×K)."
+    },
+    "primaryKey": {
+      "ID": "7517BF29-583E-4CEE-878D-67165E738DFC"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:24.420Z",
+      "checksum": "eaf884ebd4bacfde49a6d58bea1c4451b788965218aedcb196399614567982bc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "transactions",
+      "Description": "An unordered set of items per basket/event (no timestamp ordering). ADAPTER-RELATED to event-log via a lossy groupby-collapse."
+    },
+    "primaryKey": {
+      "ID": "E1C8BDE0-F871-4627-B8DF-4E6FA430820A"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:24.437Z",
+      "checksum": "5464fc508b01222841817913d392673ddbc3a0c0d96d921045ab516177684e60"
+    }
+  },
+  {
+    "fields": {
+      "Name": "predictive-distribution",
+      "Description": "Per-row predictive distribution — mean plus standard deviation (native regression uncertainty).",
+      "ShapeSpec": "{\"mean\":\"number\",\"std\":\"number\"}"
+    },
+    "primaryKey": {
+      "ID": "4EBCE206-C947-47CF-A8E3-022024D398C7"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:24.445Z",
+      "checksum": "0a20bf35136f664a819d5efa50825037900282aa62fd4bcfd95e974bce87f3f5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ranked-list",
+      "Description": "A variable-length ordered list of (item, score) recommendations per query/user.",
+      "ShapeSpec": "{\"item\":\"string\",\"score\":\"number\"}"
+    },
+    "primaryKey": {
+      "ID": "6E010B54-7B0F-4C74-9CDD-3E581C41A00E"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:24.454Z",
+      "checksum": "75f660a828cf065a63dc9ffd23b47027fe2478e0d9c521b89a6b98acd8d5f399"
+    }
+  },
+  {
+    "fields": {
+      "Name": "quantile-band",
+      "Description": "A set of predicted quantiles / a prediction interval per record.",
+      "ShapeSpec": "{\"quantile\":\"number\",\"value\":\"number\"}"
+    },
+    "primaryKey": {
+      "ID": "2EE0B0A4-D52A-4AAC-AB2F-B81BA468D250"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:24.462Z",
+      "checksum": "faf31419b62c5838684649af4df017ed73ab4f195cb453176db35253f639c1e1"
+    }
+  }
+]

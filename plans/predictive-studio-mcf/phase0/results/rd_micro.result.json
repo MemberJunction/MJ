@@ -1,0 +1,32 @@
+{
+  "class_weighting": [
+    {
+      "arm": "class_weighted",
+      "auc": 0.837,
+      "prauc_lapse": 0.25
+    },
+    {
+      "arm": "default",
+      "auc": 0.842,
+      "prauc_lapse": 0.282
+    }
+  ],
+  "missingness": [
+    {
+      "arm": "median",
+      "auc": 0.826,
+      "prauc_lapse": 0.298
+    },
+    {
+      "arm": "median_plus_indicator",
+      "auc": 0.826,
+      "prauc_lapse": 0.298
+    },
+    {
+      "arm": "sentinel",
+      "auc": 0.842,
+      "prauc_lapse": 0.282
+    }
+  ],
+  "note": "report-grade; informs the bank/gate wisdom claim + the hadData presence-mask design"
+}

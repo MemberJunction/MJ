@@ -1,0 +1,85 @@
+{
+  "identity": {
+    "modelKey": "dbscan",
+    "family": "clustering",
+    "libraryClass": "sklearn.cluster.DBSCAN",
+    "aliases": ["density-based clustering", "DBSCAN", "density scan"],
+    "displayName": "DBSCAN",
+    "description": "Density-based clusterer: grows clusters from core points (≥ min_samples neighbors within eps), discovering arbitrarily-shaped clusters WITHOUT choosing k, and labeling sparse points as noise (-1). Its defining operational edge: sklearn's DBSCAN has NO predict() for new points — assignment of unseen rows is a wrapper responsibility, which is exactly what makes it a wrapper-needs case study for the family."
+  },
+  "axes": {
+    "task": "clustering",
+    "secondaryTasks": ["anomaly"],
+    "learningType": "Unsupervised",
+    "parametric": "No",
+    "ensembleType": "None",
+    "interpretabilityClass": "BlackBox",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric"], "targetSpec": "none", "required": true },
+    { "portType": "embedding", "dataShape": "row-matrix", "dtypes": ["numeric"], "targetSpec": "none", "required": false, "note": "the canonical high-dimensional fix: embed first (PCA/UMAP), then density-scan — raw density is meaningless under distance concentration" }
+  ],
+  "emits": [
+    { "portType": "cluster-id", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "labels_ with -1 = noise; no parametric summary exists — clusters ARE their density-connected member sets, hence paramsAsOutput none (contrast kmeans' centroids). The noise flag doubles as a crude anomaly signal (secondaryTasks)" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:../../../../metadata/ml-algorithms/schemas/dbscan.schema.json",
+    "hpMeta": {
+      "eps": { "default": 0.5, "prior": "log-uniform[0.01,5.0]", "searchable": true, "note": "read off the k-distance-plot knee rather than blind-searched; only meaningful AFTER scaling" },
+      "min_samples": { "default": 5, "prior": "int-uniform[3,50]", "searchable": true, "conditionalOn": "eps" },
+      "metric": { "default": "euclidean", "prior": "categorical[euclidean,manhattan,cosine]", "searchable": false },
+      "algorithm": { "default": "auto", "prior": "categorical[auto,ball_tree,kd_tree,brute]", "searchable": false }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "the eps-ball is a fixed-radius Euclidean neighborhood; an unscaled high-variance feature stretches the ball into a sliver along every other axis, destroying the density estimate" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "a monotone feature map changes pairwise distances nonlinearly, so core/border/noise status flips under log or rank transforms" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "neighborhood radius queries are undefined on missing coordinates — imputation is a precondition" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "density in an encoded categorical space is an artifact of the encoding, not the data; distances between one-hot vectors take only a few discrete values, so eps has no meaningful resolution" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "density-reachability imposes NO cluster shape — arbitrary, non-convex clusters are its selling point; the one implicit assumption is a single GLOBAL density level (one eps), which is an edge case, not a distributional form" },
+    { "flag": "dataSizeTolerance", "value": "medium", "basis": "empirical", "why": "tree-indexed neighbor queries give ~O(n log n) to ~10^5 rows, but high dimensions force brute-force pairwise work and memory blowups well before that" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "there is no decision function at all off the training set — the fit is a labeling of the training rows, nothing more" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "k_distance_elbow", "why": "eps is read off the knee of the sorted kth-nearest-neighbor distance curve; a curve with no knee means no density separation exists and DBSCAN will return all-noise or one blob" },
+      { "stat": "dimensionality_p", "why": "distance concentration makes 'dense neighborhood' meaningless as p grows — beyond roughly p>20 the eps-ball contains either everything or nothing, gating toward embed-then-scan" },
+      { "stat": "feature_scale_spread", "why": "a fixed-radius ball only makes sense when features share a scale; large variance spread is a mandatory-scaling flag before eps can be tuned at all" }
+    ],
+    "modelMetrics": [
+      { "metric": "noise_fraction", "why": "the first honesty check for a density fit — near-1 noise means eps too small (nothing is dense), near-0 with one cluster means eps too large (everything is one blob); the useful regime is in between" },
+      { "metric": "silhouette_on_clustered", "why": "silhouette computed on non-noise points measures how separated the recovered dense regions are; there is no holdout AUC for an unlabeled task — this plus stability IS the validation" },
+      { "metric": "cluster_count_vs_eps_stability", "why": "a cluster count that survives an eps-neighborhood sweep indicates real density structure; a knife-edge count that changes with tiny eps perturbations is parameterization artifact" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "clusters of varying density", "behavior": "a single global eps cannot fit both — the loose cluster dissolves into noise or the tight pair merges", "mitigation": "bank-entry" },
+    { "condition": "eps too small for the data's density", "behavior": "everything labeled noise (-1); zero clusters, silently 'successful'", "mitigation": "gate" },
+    { "condition": "eps too large", "behavior": "one giant cluster swallowing all structure", "mitigation": "gate" },
+    { "condition": "high-dimensional input (p >> 20)", "behavior": "distance concentration — the k-distance curve flattens and no eps separates dense from sparse", "mitigation": "gate" },
+    { "condition": "border point reachable from two clusters", "behavior": "assignment depends on row order — the one non-deterministic seam in an otherwise deterministic fit", "mitigation": "bank-entry" },
+    { "condition": "predict requested for unseen rows", "behavior": "no native predict() exists — naive refit-with-new-rows silently relabels everything", "mitigation": "gate" }
+  ],
+  "driver": {
+    "constructor": "DBSCAN(**hp)",
+    "deps": ["scikit-learn>=1.3"],
+    "wrapperNeeds": "REQUIRED for the score path: sklearn DBSCAN exposes fit_predict only — the wrapper must implement new-point assignment as nearest-core-sample-within-eps (label of the nearest core point if within eps, else noise), which in turn requires persisting core_sample_indices_ + components_ alongside the fitted object",
+    "serialization": "joblib",
+    "threadSafety": "neighbor search honors n_jobs; fitted labeling is read-only thereafter",
+    "tranche": "T3"
+  },
+  "canBeSeeds": [
+    { "template": "Cluster-then-Classify", "slot": "clusterer", "via": "cluster-id" },
+    { "template": "Noise-Screen Prefilter", "slot": "screener", "via": "cluster-id (noise flag -1 routes rows out before a downstream fit)" },
+    { "template": "Embed-then-Scan", "slot": "density-scanner", "via": "embedding" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "radius queries are undefined on NaN — no neighborhood, no density" },
+    { "position": "transform", "verdict": "beneficial", "why": "heavy tails create spurious low-density gaps along the tail; symmetrizing transforms make a single global eps more tenable" },
+    { "position": "scale", "verdict": "required", "why": "a fixed-radius Euclidean ball is only meaningful on commensurate axes — unscaled features make eps un-tunable by mechanism" },
+    { "position": "encode", "verdict": "required", "why": "distances must exist before density does; but one-hot geometry quantizes distances so coarsely that heavy-categorical inputs are better routed away from density methods entirely" }
+  ]
+}

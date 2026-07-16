@@ -1,0 +1,249 @@
+{
+  "identity": {
+    "modelKey": "extra_trees",
+    "family": "tree-ensembles",
+    "libraryClass": "sklearn.ensemble.ExtraTreesClassifier / sklearn.ensemble.ExtraTreesRegressor",
+    "aliases": [
+      "extremely randomized trees",
+      "ExtraTrees",
+      "ERT"
+    ],
+    "displayName": "Extra Trees",
+    "description": "Extremely randomized tree ensemble: like a random forest but split thresholds are drawn at RANDOM within each candidate feature's range instead of optimized, and by default each tree sees the full sample (no bootstrap). Trades a little bias for a further variance drop and a much cheaper fit \u2014 the smoothing sibling of the forest."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": [
+      "regression"
+    ],
+    "learningType": "Supervised",
+    "parametric": "No",
+    "ensembleType": "Bagging",
+    "interpretabilityClass": "ImportanceOnly",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    {
+      "portType": "features:tabular",
+      "dataShape": "row-matrix",
+      "dtypes": [
+        "numeric",
+        "encoded-categorical"
+      ],
+      "targetSpec": "plain",
+      "required": true
+    }
+  ],
+  "emits": [
+    {
+      "portType": "probability",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "classification; averaged leaf class fractions \u2014 random thresholds make the averaged surface smoother than RF's, still center-compressed"
+    },
+    {
+      "portType": "class-label",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none"
+    },
+    {
+      "portType": "score",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "regression mode"
+    },
+    {
+      "portType": "attributions",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "via SHAP (TreeExplainer), not native per-row; global impurity/permutation importances are native"
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable"
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/extra_trees.schema.json",
+    "hpMeta": {
+      "n_estimators": {
+        "default": 100,
+        "prior": "log-uniform[100,1000]",
+        "searchable": true
+      },
+      "max_depth": {
+        "default": null,
+        "prior": "int-uniform[4,30] or null",
+        "searchable": true
+      },
+      "min_samples_split": {
+        "default": 2,
+        "prior": "int-uniform[2,20]",
+        "searchable": true
+      },
+      "min_samples_leaf": {
+        "default": 1,
+        "prior": "log-uniform-int[1,20]",
+        "searchable": true
+      },
+      "max_features": {
+        "default": "sqrt",
+        "prior": "categorical[sqrt,log2,null]",
+        "searchable": true
+      },
+      "bootstrap": {
+        "default": false,
+        "prior": "categorical[false,true]",
+        "searchable": true,
+        "note": "library default False \u2014 each tree fits the FULL sample; randomness comes from feature subsets + random thresholds, not resampling. Setting true enables oob_score like RF"
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "random thresholds are drawn uniformly over each feature's observed [min,max]; an affine rescale maps that uniform draw equivariantly, leaving the tree distribution unchanged"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "unlike best-split trees, cut points are drawn uniformly over the feature's RANGE, not its order statistics \u2014 a nonlinear monotone transform (log, rank) changes where random cuts land and thus the fitted ensemble in distribution"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": true,
+      "basis": "empirical",
+      "why": "sklearn >=1.6 extends random missing-value routing to the random splitter; a driver pinned below 1.6 must impute \u2014 version-gated, hence empirical"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": false,
+      "basis": "empirical",
+      "why": "sklearn trees require numeric input; categoricals must be pre-encoded"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "non-parametric partitions; no assumption on marginal or error distribution"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "small-to-large",
+      "basis": "empirical",
+      "why": "the extra randomization decorrelates trees even without bootstrap, holding up at small n; random splits skip the threshold search so large-n fits are cheaper than RF"
+    },
+    {
+      "flag": "extrapolates",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "piecewise-constant leaves; predictions clamp at the training range boundary"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "n_over_p",
+        "why": "random thresholds waste splits when few features are informative; low n/p compounds this because each wasted cut costs scarce rows \u2014 a gate toward RF/linear"
+      },
+      {
+        "stat": "class_balance",
+        "why": "full-sample trees (no bootstrap) all see the same skew; severe imbalance shifts the honest metric to PR-AUC/lift and suggests class_weight='balanced'"
+      },
+      {
+        "stat": "feature_skewness",
+        "why": "uniform random cuts over [min,max] concentrate in empty range when a feature is heavy-tailed \u2014 the one tree family where unskewing an input genuinely changes the fit"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "cv_et_vs_rf_gap",
+        "why": "the direct read on whether the data rewards smoothing (ET wins: random cuts average into a lower-variance surface) or optimized thresholds (RF wins: signal lives at sharp cut points)"
+      },
+      {
+        "metric": "single_feature_importance_share",
+        "why": "one feature owning most importance is the leakage-dominance signature the promotion gate blocks"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "n < ~50",
+      "behavior": "even random-split decorrelation cannot average away variance from so few rows; CV is unstable",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "heavy-tailed feature with extreme outliers",
+      "behavior": "uniform threshold draws over the stretched range land in empty space, producing near-vacuous splits",
+      "mitigation": "bank-entry"
+    },
+    {
+      "condition": "high-cardinality one-hot categorical",
+      "behavior": "random cuts on near-empty dummy columns are almost always uninformative; importance diluted",
+      "mitigation": "bank-entry"
+    },
+    {
+      "condition": "single dominant feature (importance share near 1)",
+      "behavior": "leakage signature; ensemble degenerates toward one variable's rule",
+      "mitigation": "gate"
+    }
+  ],
+  "driver": {
+    "constructor": "ExtraTreesClassifier(**hp) / ExtraTreesRegressor(**hp), selected by problem_type",
+    "deps": [
+      "scikit-learn>=1.6"
+    ],
+    "wrapperNeeds": "none (sklearn-native fit/predict/predict_proba)",
+    "serialization": "joblib",
+    "threadSafety": "n_jobs-parallel fit and predict; fitted estimator is read-only thread-safe",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [
+    {
+      "template": "Calibrator Template",
+      "slot": "model",
+      "via": "probability"
+    },
+    {
+      "template": "Cluster-then-Classify",
+      "slot": "classifier",
+      "via": "probability"
+    },
+    {
+      "template": "Stacking Template",
+      "slot": "base",
+      "via": "probability\u2192features:tabular adapter",
+      "note": "a cheap, differently-biased base that diversifies a stack containing RF/GBT"
+    }
+  ],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "irrelevant",
+      "why": "learned NaN routing (driver floor sklearn>=1.6) makes upstream imputation unnecessary and it can erase the missingness signal"
+    },
+    {
+      "position": "transform",
+      "verdict": "beneficial",
+      "why": "NOT monotone-invariant: random cuts are uniform over the observed range, so unskewing a heavy-tailed feature places candidate thresholds where the data mass lives"
+    },
+    {
+      "position": "scale",
+      "verdict": "irrelevant",
+      "why": "affine rescaling maps the uniform threshold draw equivariantly \u2014 the fit is unchanged in distribution"
+    },
+    {
+      "position": "encode",
+      "verdict": "required",
+      "why": "sklearn trees need categoricals encoded to numeric before fit"
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "identity": {
+    "modelKey": "hierarchical",
+    "family": "clustering",
+    "libraryClass": "sklearn.cluster.AgglomerativeClustering",
+    "aliases": ["agglomerative clustering", "hierarchical clustering", "linkage clustering", "dendrogram clustering"],
+    "displayName": "Agglomerative (Hierarchical) Clustering",
+    "description": "Bottom-up hierarchical clusterer: starts with every row as its own cluster and greedily merges the closest pair under a linkage criterion (ward/complete/average/single), producing a full merge tree — the dendrogram — that can be cut at ANY height, so the segment count is a post-fit choice rather than a pre-fit commitment. Like DBSCAN it has no native predict() for unseen rows (fit_predict only) — new-point assignment is a wrapper responsibility. interpretabilityClass 'Rules' is the nearest 4-way fit for the dendrogram: a human-readable nested merge structure, though not literal decision rules."
+  },
+  "axes": {
+    "task": "clustering",
+    "learningType": "Unsupervised",
+    "parametric": "No",
+    "ensembleType": "None",
+    "interpretabilityClass": "Rules",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric"], "targetSpec": "none", "required": true }
+  ],
+  "emits": [
+    { "portType": "cluster-id", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "labels for the chosen cut (n_clusters or distance_threshold); the REAL fitted knowledge is the merge tree (children_ + distances_) for which no paramsAsOutput enum value exists — see portTypeProposals" }
+  ],
+  "portTypeProposals": [
+    { "name": "linkage-tree", "why": "the dendrogram (children_ + merge distances) is this model's distinguishing artifact — a per-model structure downstream components could consume for multi-resolution cuts, taxonomy displays, and cophenetic analysis; today it has no port NOR a paramsAsOutput enum value, so it rides only in the driver notes" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:../../../../metadata/ml-algorithms/schemas/hierarchical.schema.json",
+    "hpMeta": {
+      "n_clusters": { "default": 4, "prior": "int-uniform[2,20]", "searchable": true, "note": "a CUT of the tree, not a fit parameter — sweepable by silhouette across cut heights without refitting conceptually; mutually exclusive with distance_threshold" },
+      "linkage": { "default": "ward", "prior": "categorical[ward,complete,average,single]", "searchable": true },
+      "metric": { "default": "euclidean", "prior": "categorical[euclidean,manhattan,cosine]", "searchable": false, "conditionalOn": "linkage", "note": "ward REQUIRES euclidean — any other pairing is invalid input" },
+      "distance_threshold": { "default": null, "prior": "log-uniform[0.1,100]", "searchable": false, "conditionalOn": "n_clusters", "note": "alternative cut rule; requires n_clusters=None" },
+      "compute_distances": { "default": true, "prior": "categorical[true,false]", "searchable": false, "note": "must be true to export the dendrogram" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "every merge decision compares metric distances (Euclidean under ward) — an unscaled high-variance feature dictates the entire merge order and thus the whole tree" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "feature-level monotone maps change pairwise distances nonlinearly, reordering merges; (single/complete linkage are invariant to monotone maps of the DISTANCES, but not of the features)" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "pairwise distances are undefined on missing coordinates — the distance matrix cannot be formed" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "merges need a metric space; encoded categoricals distort it (though a precomputed-distance mode exists for genuinely custom metrics, it is outside this driver's default path)" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "no likelihood and no global objective — but note the per-linkage biases: ward shares k-means' compact-spherical preference, single linkage chains, complete linkage favors equal diameters" },
+    { "flag": "dataSizeTolerance", "value": "small-to-medium", "basis": "mechanism-derived", "why": "the algorithm materializes O(n²) pairwise structure — memory and time make ~10⁴-10⁵ rows the practical ceiling, a mechanism-level bound, not a tuning issue" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "there is no decision function for unseen rows at all — the fit is a tree over the training set" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "n_rows", "why": "the O(n²) pairwise cost makes raw sample count itself the gating statistic — beyond ~10⁴-10⁵ rows this family member is mechanically excluded and routed to k-means" },
+      { "stat": "feature_scale_spread", "why": "merge order is a pure function of distances; large variance spread means the tree encodes one feature's units, mandating the scale placement" },
+      { "stat": "hopkins_statistic", "why": "cluster tendency check — a dendrogram is ALWAYS produced, even on uniform noise, so tendency must be established before any cut is read as structure" }
+    ],
+    "modelMetrics": [
+      { "metric": "cophenetic_correlation", "why": "the hierarchical-specific fit measure: how faithfully the tree's merge heights preserve the original pairwise distances — a low value means the dendrogram is a distortion, whatever the silhouette says" },
+      { "metric": "silhouette_vs_cut_height", "why": "the cut (segment count) is a post-fit choice; sweeping silhouette across cut heights is how it is chosen and defended — the family's validation axis, not holdout AUC" },
+      { "metric": "bootstrap_ari_stability", "why": "resample-and-recut agreement separates real hierarchy from merge-order artifacts — the unsupervised stand-in for a holdout" },
+      { "metric": "max_merge_gap", "why": "a large jump between successive merge distances marks a natural cut height; its absence warns that any chosen k is arbitrary" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "n beyond ~20k rows", "behavior": "O(n²) distance structure exhausts memory before any result", "mitigation": "gate" },
+    { "condition": "single linkage on noisy data", "behavior": "chaining — thin bridges of points merge distinct clusters into one serpent", "mitigation": "bank-entry" },
+    { "condition": "linkage=ward with non-euclidean metric", "behavior": "invalid combination; sklearn raises", "mitigation": "reject-input" },
+    { "condition": "n_clusters and distance_threshold both set", "behavior": "sklearn raises — the two cut rules are mutually exclusive", "mitigation": "reject-input" },
+    { "condition": "predict requested for unseen rows", "behavior": "no native predict() — refitting with appended rows rebuilds a different tree and silently relabels everything", "mitigation": "gate" },
+    { "condition": "tied merge distances", "behavior": "merge order (and thus the tree) depends on tie-breaking; rare with continuous features, common with encoded/discrete ones", "mitigation": "bank-entry" }
+  ],
+  "driver": {
+    "constructor": "AgglomerativeClustering(**hp)",
+    "deps": ["scikit-learn>=1.3", "scipy (dendrogram export via scipy.cluster.hierarchy)"],
+    "wrapperNeeds": "REQUIRED for the score path: fit_predict only — the wrapper assigns NEW rows by nearest fitted-cluster centroid (computed and persisted at fit time) or kNN over the labeled training rows; dendrogram export additionally needs compute_distances=True plus a children_/distances_ → scipy linkage-matrix conversion",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit; fitted labels/tree are read-only thereafter",
+    "tranche": "T3"
+  },
+  "canBeSeeds": [
+    { "template": "Cluster-then-Classify", "slot": "clusterer", "via": "cluster-id" },
+    { "template": "Segment Profiler", "slot": "segmenter", "via": "cluster-id" },
+    { "template": "Multi-Resolution Segmentation", "slot": "hierarchy-source", "via": "cluster-id (re-cut at multiple heights from one fit)" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "the pairwise distance matrix cannot be formed with missing coordinates" },
+    { "position": "transform", "verdict": "beneficial", "why": "symmetrizing heavy tails changes distances toward the compact-cluster geometry ward assumes; it also reduces spurious chaining under single linkage" },
+    { "position": "scale", "verdict": "required", "why": "distance-based by mechanism — an unscaled feature's units become the tree's topology" },
+    { "position": "encode", "verdict": "required", "why": "a metric space over numeric vectors is a precondition; discrete encodings also multiply tied merge distances (see edge case), so heavy-categorical inputs deserve a bank-entry caution" }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "hypothesis": "cluster-id + HMM-state components lift a calibrated GBT on real data",
+  "seeds": [
+    201,
+    202,
+    203,
+    204,
+    205
+  ],
+  "per_seed": [
+    {
+      "seed": 201,
+      "k": 5,
+      "silhouette": 0.554,
+      "auc_base": 0.85,
+      "auc_core": 0.737,
+      "auc_composite": 0.851,
+      "lift": 0.001,
+      "prauc_lapse_base": 0.309,
+      "prauc_lapse_composite": 0.296,
+      "ece_composite": 0.01
+    },
+    {
+      "seed": 202,
+      "k": 5,
+      "silhouette": 0.553,
+      "auc_base": 0.798,
+      "auc_core": 0.618,
+      "auc_composite": 0.756,
+      "lift": -0.042,
+      "prauc_lapse_base": 0.228,
+      "prauc_lapse_composite": 0.114,
+      "ece_composite": 0.031
+    },
+    {
+      "seed": 203,
+      "k": 5,
+      "silhouette": 0.548,
+      "auc_base": 0.879,
+      "auc_core": 0.814,
+      "auc_composite": 0.86,
+      "lift": -0.018,
+      "prauc_lapse_base": 0.31,
+      "prauc_lapse_composite": 0.345,
+      "ece_composite": 0.025
+    },
+    {
+      "seed": 204,
+      "k": 6,
+      "silhouette": 0.565,
+      "auc_base": 0.808,
+      "auc_core": 0.665,
+      "auc_composite": 0.779,
+      "lift": -0.029,
+      "prauc_lapse_base": 0.202,
+      "prauc_lapse_composite": 0.18,
+      "ece_composite": 0.025
+    },
+    {
+      "seed": 205,
+      "k": 6,
+      "silhouette": 0.544,
+      "auc_base": 0.848,
+      "auc_core": 0.733,
+      "auc_composite": 0.867,
+      "lift": 0.02,
+      "prauc_lapse_base": 0.404,
+      "prauc_lapse_composite": 0.299,
+      "ece_composite": 0.013
+    }
+  ],
+  "mean_lift": -0.013599999999999998,
+  "verdict": "HONEST-NO-LIFT",
+  "pass_bar": "lift>=+0.01 PASS; -0.02..0.01 HONEST-NO-LIFT (demand-gate); worse RED"
+}

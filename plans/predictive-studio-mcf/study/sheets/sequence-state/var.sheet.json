@@ -1,0 +1,217 @@
+{
+  "identity": {
+    "modelKey": "var",
+    "family": "sequence-state",
+    "libraryClass": "statsmodels.tsa.vector_ar.var_model.VAR",
+    "aliases": [
+      "vector autoregression",
+      "VAR(p)"
+    ],
+    "displayName": "Vector Autoregression",
+    "description": "Multivariate linear dynamics over K aligned series: each series is regressed on p lags of ALL series, capturing cross-series lead-lag interdependence (Granger structure, impulse responses). The observed K-vector IS the state; the lag-coefficient matrices are its linear transition law \u2014 the fully-observed continuous analog of this family, as the Markov chain is its discrete one."
+  },
+  "axes": {
+    "task": "sequence-state",
+    "secondaryTasks": [
+      "forecasting"
+    ],
+    "learningType": "Temporal",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Sequence",
+    "deterministicFit": true
+  },
+  "consumes": [
+    {
+      "portType": "series",
+      "dataShape": "series",
+      "dtypes": [
+        "numeric-time-indexed-multivariate"
+      ],
+      "targetSpec": "series",
+      "required": true,
+      "note": "K ALIGNED series sharing one regular time index, carried as a wide numeric frame \u2014 the interim convention for a multivariate bundle on the singular `series` port",
+      "portTypeProposal": "`series` reads as singular; VAR's true input is an aligned K-variate bundle. Propose for U2 either a `series:multi` (or `panel`) port type, or an explicit arity-K binding rule on `series`. Until decided, the wide-frame-on-`series` convention above is declared here rather than silently assumed."
+    }
+  ],
+  "emits": [
+    {
+      "portType": "forecast-series",
+      "granularity": "per-series",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "joint multivariate forecast \u2014 one forecast-series per input column, intervals from the fitted innovation covariance"
+    },
+    {
+      "portType": "dynamics-matrix",
+      "granularity": "per-model",
+      "paramsAsOutput": "coefficients+SE",
+      "probabilistic": "none",
+      "note": "the p lag-coefficient matrices + innovation covariance \u2014 the Granger/IRF structure; the 'who leads whom' story"
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable"
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/var.schema.json",
+    "hpMeta": {
+      "maxlags": {
+        "default": 1,
+        "prior": "int-uniform[1,8]",
+        "searchable": true,
+        "note": "lag order p \u2014 selected by information criterion; parameters grow as K^2 per added lag"
+      },
+      "trend": {
+        "default": "c",
+        "prior": "categorical[n,c,ct,ctt]",
+        "searchable": true
+      },
+      "ic": {
+        "default": "aic",
+        "prior": "categorical[aic,bic,hqic,fpe]",
+        "searchable": false,
+        "note": "criterion for automatic lag selection within maxlags \u2014 the family's model-selection lens applied to lag depth"
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "per-equation OLS is equivariant under per-series rescaling \u2014 coefficients and forecasts rescale accordingly; the fitted dynamics are isomorphic"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "linearity holds in one parameterization; log-transforming a series changes the joint dynamics being estimated"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "OLS on lagged design matrices needs a complete, aligned, gap-free panel \u2014 a NaN in any series knocks out whole rows across all equations"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "numeric series only"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "assumes joint weak STATIONARITY of the K-vector and Gaussian innovations for valid intervals; nonstationary inputs produce spurious dynamics"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "needs-history",
+      "basis": "mechanism-derived",
+      "why": "K^2\u00b7p + K parameters against T time points \u2014 the parameter count is quadratic in the number of series, so modest K at short T overfits fast"
+    },
+    {
+      "flag": "extrapolates",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "forecasting is iterated application of the fitted linear dynamics \u2014 principled while the system is stable (all companion eigenvalues inside the unit circle)"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "n_params_vs_T",
+        "why": "(K^2\u00b7p + K) against series length T is the overparameterization ratio \u2014 the quadratic-in-K parameter count is THIS model's failure axis and the gate to fewer series or lags"
+      },
+      {
+        "stat": "max_lagged_cross_correlation",
+        "why": "off-diagonal lead-lag correlation is the evidence cross-series dynamics exist; if the structure is diagonal, K univariate ARIMAs match the VAR without the K^2 cost"
+      },
+      {
+        "stat": "adf_stationarity_per_series",
+        "why": "each series must be (difference-)stationary before joint OLS \u2014 regressing nonstationary series on each other manufactures spurious relationships"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "ic_by_lag_order",
+        "why": "likelihood rises with every added lag while parameters grow by K^2 \u2014 the information-criterion curve is the honest lag-depth selector"
+      },
+      {
+        "metric": "oos_mase_vs_univariate",
+        "why": "the joint model must beat the K-univariate-ARIMA floor out of sample, or the cross-series machinery is not earning its parameters"
+      },
+      {
+        "metric": "companion_max_eigenvalue",
+        "why": "the largest companion-matrix eigenvalue is the stability certificate \u2014 modulus >= 1 means the fitted system is explosive and its forecasts diverge"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "nonstationary input series",
+      "behavior": "spurious cross-dynamics; explosive forecasts",
+      "mitigation": "gate",
+      "note": "difference first, or the VECM sibling for cointegrated systems"
+    },
+    {
+      "condition": "T too small for K^2\u00b7p parameters",
+      "behavior": "near-singular design; wild coefficients",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "misaligned or gapped time indexes across series",
+      "behavior": "silent row loss or invalid alignment",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "one series a near-linear combination of others",
+      "behavior": "singular innovation covariance",
+      "mitigation": "bank-entry",
+      "note": "drop the redundant series"
+    },
+    {
+      "condition": "companion eigenvalue modulus >= 1",
+      "behavior": "explosive forecast paths",
+      "mitigation": "gate"
+    }
+  ],
+  "driver": {
+    "constructor": "VAR(endog_frame).fit(maxlags=p, ic='aic', trend='c')",
+    "deps": [
+      "statsmodels>=0.14",
+      "scipy"
+    ],
+    "wrapperNeeds": "multi-series adapter: (time_col, [value_cols...]) -> wide aligned frame; forecast returns a K-column frame \u2014 one forecast-series per input column; must NOT assume a single value_col (the portTypeProposal nuance made operational)",
+    "serialization": "joblib",
+    "threadSafety": "per-equation OLS; fit is single-threaded and deterministic",
+    "tranche": "T6 (sequence-state)"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "required",
+      "why": "a NaN anywhere in the panel drops that time row from every equation; gaps need time-aware interpolation before the lagged design is built"
+    },
+    {
+      "position": "transform",
+      "verdict": "beneficial",
+      "why": "log (and differencing to stationarity) linearizes multiplicative growth and protects against spurious regression \u2014 the stationarity prerequisite made concrete"
+    },
+    {
+      "position": "scale",
+      "verdict": "irrelevant",
+      "why": "per-series rescaling is absorbed equivariantly by the coefficients; standardization changes nothing about fit or forecasts"
+    },
+    {
+      "position": "encode",
+      "verdict": "irrelevant",
+      "why": "numeric series only \u2014 nothing categorical reaches the design matrix"
+    }
+  ]
+}

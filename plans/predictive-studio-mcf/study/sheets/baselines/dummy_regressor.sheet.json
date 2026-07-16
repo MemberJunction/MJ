@@ -1,0 +1,79 @@
+{
+  "identity": {
+    "modelKey": "dummy_regressor",
+    "family": "baselines",
+    "libraryClass": "sklearn.dummy.DummyRegressor",
+    "aliases": ["mean baseline", "median baseline", "constant predictor", "naive regressor"],
+    "displayName": "Dummy Regressor",
+    "description": "The leaderboard FLOOR for regression: predicts a single constant — the training mean, median, a quantile, or a supplied value — for every row, never reading a feature. Under strategy='mean' it is the R²=0 line by definition: any real regressor must clear it to have learned anything from the features."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Rules",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["any"], "targetSpec": "plain", "required": true, "note": "X is accepted for API symmetry and IGNORED — only n_samples is read, values are never inspected; the fit consumes y alone (one location statistic of it)" }
+  ],
+  "emits": [
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "the identical constant for every row — mean, median, quantile of y, or the supplied constant" }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "both",
+    "note": "strategy-dependent, and deliberately so: mean/median/quantile DO fit — they estimate one location statistic of y (the smallest possible fit); constant learns nothing and is fully specified by its hyperparameter. The component therefore serves both as a trainable floor (refit per leaderboard) and as a fixed reusable reference — hence reusability 'both' even with learns:true"
+  },
+  "hyperparameters": {
+    "schema": "@file:../../../../metadata/ml-algorithms/schemas/dummy_regressor.schema.json",
+    "hpMeta": {
+      "strategy": { "default": "mean", "prior": "categorical[mean, median, quantile, constant]", "searchable": false, "note": "NOT searched on principle — the floor must be a fixed reference; tuning the baseline would move the goalpost. mean is the L2 floor (R² denominator), median the L1 floor" },
+      "quantile": { "default": 0.5, "prior": "fixed", "searchable": false, "conditionalOn": "strategy", "note": "the quantile of y to predict when strategy='quantile'" },
+      "constant": { "default": null, "prior": "fixed", "searchable": false, "conditionalOn": "strategy", "note": "the value to always predict when strategy='constant'" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "the prediction is one statistic of y; X never enters the computation, so no rescaling of features can change anything" },
+    { "flag": "monotoneTransformInvariant", "value": true, "basis": "mechanism-derived", "why": "trivially: X is never read, so ANY transform of the features — monotone or not — leaves predictions bit-identical" },
+    { "flag": "nativeNaN", "value": true, "basis": "mechanism-derived", "why": "missing values in X are irrelevant because feature values are never inspected; only the row count is used (NaN in y is a separate reject-input edge case)" },
+    { "flag": "nativeCategorical", "value": true, "basis": "mechanism-derived", "why": "raw string categoricals pass through untouched for the same reason — no encoding is ever consulted" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "no assumption about X (unread) or the target's shape: the mean is the L2-optimal constant under ANY target distribution, the median the L1-optimal — optimality of the constant needs no distributional premise" },
+    { "flag": "dataSizeTolerance", "value": "any", "basis": "mechanism-derived", "why": "the only estimate is a single location statistic of y — the lowest-variance fit possible; a handful of rows suffices and cost is one O(n) pass" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "the output is one constant everywhere; there is no fitted trend to extend beyond the training range — constant, not extrapolated" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "target_variance", "why": "the dummy's MSE IS Var(y) under strategy='mean' — exactly the denominator of every candidate's R², so this stat states the floor in the scoreboard's own units" },
+      { "stat": "target_skewness", "why": "skew is what separates the mean floor from the median floor; a large gap says the loss choice (L2 vs L1) matters before any real model is even fit" }
+    ],
+    "modelMetrics": [
+      { "metric": "floor_mse", "why": "equals Var(y) for strategy='mean' — the single number every candidate's skill is normalized by, since R² = 1 − MSE(candidate)/MSE(this floor)" },
+      { "metric": "candidate_vs_floor_gap", "why": "the whole reason this model exists: every leaderboard entry is read relative to this floor, and a gap near zero means the features carry no usable signal for this target" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "NaN or non-finite values in y", "behavior": "sklearn raises at fit — the target must be finite", "mitigation": "reject-input" },
+    { "condition": "zero-variance (constant) target", "behavior": "floor MSE = 0 and R² is undefined (0/0) for every candidate — the problem itself is degenerate", "mitigation": "reject-input" },
+    { "condition": "strongly trending / temporal target", "behavior": "the unconditional mean is a misleadingly weak floor — a naive last-value baseline is the honest reference", "mitigation": "gate", "note": "route to the forecasting family's naive floor instead" },
+    { "condition": "heavy outliers in y", "behavior": "the mean floor is inflated by outliers and diverges from the median floor", "mitigation": "bank-entry", "note": "prefer strategy='median' with an MAE scoreboard" }
+  ],
+  "driver": {
+    "constructor": "DummyRegressor(strategy=..., quantile=..., constant=...)",
+    "deps": ["scikit-learn>=1.4"],
+    "wrapperNeeds": "none (native sklearn fit/predict)",
+    "serialization": "joblib",
+    "threadSafety": "stateless predict; trivially thread-safe",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "irrelevant", "why": "X is never read; imputation cannot change a prediction that is one statistic of y" },
+    { "position": "transform", "verdict": "irrelevant", "why": "no transform of unread features can alter the output — the fit and predict paths touch only y and n_samples" },
+    { "position": "scale", "verdict": "irrelevant", "why": "the scale of features that never enter the computation is immaterial by construction" },
+    { "position": "encode", "verdict": "irrelevant", "why": "even raw string categoricals pass through — the estimator inspects only the row count, never a feature value" }
+  ]
+}

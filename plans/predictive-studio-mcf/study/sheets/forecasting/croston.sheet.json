@@ -1,0 +1,76 @@
+{
+  "identity": {
+    "modelKey": "croston",
+    "family": "forecasting",
+    "libraryClass": "statsforecast.models.CrostonClassic (or hand-rolled paired-SES, ~40 LOC) — IMPLEMENTATION SOURCE UNRESOLVED",
+    "aliases": ["Croston", "Croston's method", "CrostonClassic", "SBA (bias-corrected variant)"],
+    "displayName": "Croston (Intermittent Demand)",
+    "description": "The intermittent-demand specialist: runs two separate exponential smoothers — one on non-zero demand SIZES, one on the INTERVALS between demand events — and forecasts the flat demand rate size/interval. Its niche is sparse series full of zeros (event registrations, per-chapter merch orders, low-volume renewals) where every mainstream forecaster smears the zeros into nonsense."
+  },
+  "axes": {
+    "task": "forecasting",
+    "secondaryTasks": [],
+    "learningType": "Temporal",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Sequence",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "series", "dataShape": "series", "dtypes": ["numeric-time-indexed"], "targetSpec": "series", "required": true, "note": "non-negative demand series on a regular grid where zeros are DATA (no demand that period), not missing values — the defining input regime" }
+  ],
+  "emits": [
+    { "portType": "forecast-series", "granularity": "per-series", "paramsAsOutput": "none", "probabilistic": "none", "note": "a FLAT mean demand rate over the horizon (size-level / interval-level) — a rate to feed inventory/capacity math, not a varying path; no native intervals" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/croston.schema.json",
+    "hpMeta": {
+      "alpha": { "default": 0.1, "prior": "uniform[0.05,0.3]", "searchable": true, "note": "shared smoothing rate for both the size and interval smoothers; classic Croston fixes it at 0.1, the 'optimized' variant fits it" },
+      "variant": { "default": "classic", "prior": "categorical[classic,sba,optimized]", "searchable": true, "note": "sba applies the Syntetos-Boylan (1 - alpha/2) bias correction; optimized fits alpha per smoother" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "smoothing demand sizes is equivariant to rescaling them; intervals are unitless counts and unaffected" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "any transform that moves zeros (log is undefined at 0) destroys the zero/non-zero partition the method is built on — transforms are actively destructive here" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "needs a regular grid to count inter-demand intervals; a genuinely missing period is ambiguous between 'no demand' (a zero) and 'unobserved' and must be resolved before fitting" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "single numeric demand series; no exogenous pathway" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes demand sizes and inter-demand intervals are independent processes — the known premise whose violation biases classic Croston and motivates the SBA correction" },
+    { "flag": "dataSizeTolerance", "value": "needs-history", "basis": "empirical", "why": "what matters is the COUNT of non-zero demand events, not raw series length — a long series with 4 events still cannot identify two smoothers" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "forecasts beyond observed time, but only as a FLAT demand rate — no trend or seasonal extrapolation exists in the mechanism at all" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "zero_fraction", "why": "the routing stat: high zero share is precisely the regime where mean/recursion forecasters fail and Croston's size/interval split earns its keep" },
+      { "stat": "adi_mean_interdemand_interval", "why": "ADI is one axis of the Syntetos-Boylan quadrant that separates smooth, intermittent, erratic, and lumpy demand — it decides Croston vs a plain smoother" },
+      { "stat": "cv2_demand_size", "why": "the other Syntetos-Boylan axis: high size variability (lumpy demand) is where classic Croston's bias grows and the SBA variant should be preferred" },
+      { "stat": "n_nonzero_events", "why": "the effective sample size — two smoothers are unidentifiable from a handful of demand events regardless of series length" }
+    ],
+    "modelMetrics": [
+      { "metric": "mase_vs_seasonal_naive", "why": "the family scoreboard still applies — MASE's in-sample naive scaling stays defined under many zeros where percentage errors divide by zero and collapse" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "series with no zeros (not intermittent)", "behavior": "degenerates to SES with pointless interval machinery", "mitigation": "gate", "note": "route to ets/sma via the zero_fraction stat" },
+    { "condition": "all-zero series (no demand events)", "behavior": "size and interval smoothers have nothing to fit; rate undefined", "mitigation": "reject-input" },
+    { "condition": "negative values", "behavior": "demand semantics violated (returns/corrections mixed in)", "mitigation": "reject-input" },
+    { "condition": "trending or seasonal demand pattern", "behavior": "flat-rate forecast is systematically wrong — the mechanism cannot represent either", "mitigation": "gate", "note": "seasonal-intermittent series need aggregation or a different method" },
+    { "condition": "fewer than ~5 non-zero events", "behavior": "smoothers pinned to initial values; forecast is folklore", "mitigation": "gate" }
+  ],
+  "driver": {
+    "constructor": "CrostonClassic()/CrostonSBA()/CrostonOptimized().fit(y) via statsforecast — OR hand-rolled paired SES on (sizes, intervals); UNCERTAINTY: statsmodels has no Croston, so the driver either takes the statsforecast dep for one niche method or hand-rolls ~40 LOC — unresolved, flagged for the driver tranche decision",
+    "deps": ["statsforecast>=1.7 (UNCERTAIN — may be dropped in favor of a hand-rolled implementation to avoid a whole dep for one method)", "numpy"],
+    "wrapperNeeds": "series adapter: (time_col, value_col, freq, horizon); missing-period policy resolved to explicit zeros BEFORE fit; flat rate tiled across the horizon",
+    "serialization": "joblib",
+    "threadSafety": "trivially thread-safe (two scalar smoother states)",
+    "tranche": "T5 (forecasting)"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "the grid must be regular, but missing demand periods are filled with ZERO (no demand), never interpolated — interpolation fabricates demand events and corrupts both smoothers" },
+    { "position": "transform", "verdict": "harmful", "why": "log/Box-Cox are undefined or distorting at zero and dissolve the zero/non-zero partition that defines intermittency" },
+    { "position": "scale", "verdict": "irrelevant", "why": "scale-equivariant on sizes; intervals are counts" },
+    { "position": "encode", "verdict": "irrelevant", "why": "single numeric series has nothing to encode" }
+  ]
+}

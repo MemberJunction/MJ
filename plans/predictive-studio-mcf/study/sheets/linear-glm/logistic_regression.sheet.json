@@ -1,0 +1,87 @@
+{
+  "identity": {
+    "modelKey": "logistic_regression",
+    "family": "linear-glm",
+    "libraryClass": "sklearn.linear_model.LogisticRegression",
+    "aliases": ["logit", "LR", "logistic model", "maximum-entropy classifier"],
+    "displayName": "Logistic Regression",
+    "description": "L2-regularized (by default) linear classifier: models the log-odds as a linear function of features and optimizes penalized log-loss. The transparent classification baseline — every coefficient is a per-unit log-odds effect — and natively near-calibrated because it trains on the proper scoring rule."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true,
+    "note": "deterministic under the default lbfgs solver; only saga/liblinear introduce random_state-dependent shuffling"
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true }
+  ],
+  "emits": [
+    { "portType": "probability", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "trained on log-loss, so probabilities are natively near-calibrated (unlike margin/tree models); multiclass handled via softmax under lbfgs" },
+    { "portType": "class-label", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "POINT ESTIMATES ONLY — sklearn computes no standard errors; the enum has no plain 'coefficients' value. For SEs/p-values on a logit, the inference-grade sibling is multinomial_logit (statsmodels)" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/logistic_regression.schema.json",
+    "hpMeta": {
+      "C": { "default": 1.0, "prior": "log-uniform[0.001,100]", "searchable": true, "note": "INVERSE regularization strength — small C = strong shrinkage" },
+      "penalty": { "default": "l2", "prior": "categorical[l2,l1,elasticnet]", "searchable": true, "note": "l1/elasticnet require solver saga (l1 also liblinear)" },
+      "l1_ratio": { "default": 0.5, "prior": "uniform[0.0,1.0]", "searchable": true, "conditionalOn": "penalty=elasticnet" },
+      "class_weight": { "default": null, "prior": "categorical[null,balanced]", "searchable": true },
+      "solver": { "default": "lbfgs", "prior": "categorical[lbfgs,saga,liblinear,newton-cholesky]", "searchable": false, "note": "chosen by penalty compatibility, not searched" },
+      "max_iter": { "default": 100, "prior": "int-uniform[100,2000]", "searchable": false, "note": "raise (not search) on ConvergenceWarning; unscaled inputs are the usual culprit" },
+      "tol": { "default": 0.0001, "prior": "log-uniform[1e-6,1e-2]", "searchable": false }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "the penalty ‖w‖ is unit-dependent: rescaling a feature rescales its coefficient and therefore its effective shrinkage, so unscaled features are unequally regularized; conditioning of the optimization also degrades" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "the model is linear in the inputs on the log-odds scale — log/rank/box-cox of a feature changes the fit" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the penalized-likelihood solvers have no missing-value path; NaN in the design matrix raises" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "sklearn requires a numeric design matrix; categoricals must be pre-encoded" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes the log-odds are LINEAR in the features (Bernoulli likelihood with logit link); a non-linear true boundary is misspecification, not noise" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "empirical", "why": "a penalized convex MLE with O(p) parameters is stable from tens of rows per feature; it is the honest choice exactly where boosting overfits" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the linear log-odds extend beyond the training range (probabilities saturate toward 0/1 but keep moving monotonically)" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "vif_max", "why": "collinearity spreads one signal across correlated coefficients with inflated variance — the per-feature effect story (the Coefficients-class selling point) collapses even when AUC is untouched" },
+      { "stat": "class_balance", "why": "imbalance shifts the intercept and hollows out accuracy; flags class_weight='balanced' and PR-AUC/lift as the honest metric" },
+      { "stat": "separation_flag", "why": "a feature (or combination) that perfectly predicts the class sends the unpenalized MLE coefficient to ±∞ — only the penalty keeps it finite, and its apparent effect size is then set by C, not the data" }
+    ],
+    "modelMetrics": [
+      { "metric": "calibration_slope", "why": "log-loss training makes probabilities natively near-calibrated; a slope far from 1 flags over-regularization (>1) or overfit (<1) before anyone reaches for a calibrator" },
+      { "metric": "max_standardized_coef_share", "why": "one standardized coefficient dwarfing all others is the leakage-dominance signature expressed on the linear scale" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "perfect or quasi-complete separation", "behavior": "unpenalized MLE diverges; penalized coefficients are finite but scale with C", "mitigation": "gate" },
+    { "condition": "duplicated / perfectly collinear features", "behavior": "L2 splits the weight arbitrarily-but-evenly across the copies; per-feature interpretation breaks", "mitigation": "gate" },
+    { "condition": "single-class target", "behavior": "likelihood degenerate — nothing to discriminate", "mitigation": "reject-input" },
+    { "condition": "ConvergenceWarning at max_iter (usually unscaled inputs)", "behavior": "coefficients returned from an unconverged solve", "mitigation": "gate", "note": "mitigate by scaling + raising max_iter, not by ignoring the warning" }
+  ],
+  "driver": {
+    "constructor": "LogisticRegression(**hp)",
+    "deps": ["scikit-learn>=1.4"],
+    "wrapperNeeds": "none (sklearn-compatible fit/predict/predict_proba)",
+    "serialization": "joblib",
+    "threadSafety": "lbfgs fit is single-threaded; predict/predict_proba are thread-safe",
+    "tranche": "T0 (already shipped)"
+  },
+  "canBeSeeds": [
+    { "template": "Stacking Template", "slot": "meta", "via": "probability", "note": "the canonical stacking meta-learner — convex, calibrated, hard to overfit on fold-wise base predictions" },
+    { "template": "Calibrator Template", "slot": "model", "via": "probability" },
+    { "template": "Bagging Template", "slot": "model", "via": "probability" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN path — the solver raises on missing values" },
+    { "position": "transform", "verdict": "beneficial", "why": "log/Yeo-Johnson of skewed covariates improves the linear-in-log-odds fit the mechanism assumes" },
+    { "position": "scale", "verdict": "required", "why": "the penalty is unit-dependent — unscaled features receive unequal shrinkage and the solver conditioning degrades" },
+    { "position": "encode", "verdict": "required", "why": "categoricals must be design-encoded before the numeric solver sees them" }
+  ]
+}

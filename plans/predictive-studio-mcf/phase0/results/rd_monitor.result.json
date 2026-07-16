@@ -1,0 +1,37 @@
+{
+  "per_cohort": [
+    {
+      "cohort": 2024,
+      "n": 227,
+      "labeled_lapse": 18,
+      "psi_score": 3.002,
+      "psi_top_feature": 9.837,
+      "alarm": true,
+      "auc_on_labeled": 0.729
+    },
+    {
+      "cohort": 2025,
+      "n": 253,
+      "labeled_lapse": 29,
+      "psi_score": 3.447,
+      "psi_top_feature": 9.837,
+      "alarm": true,
+      "auc_on_labeled": 0.666
+    }
+  ],
+  "top3_features": [
+    "start_year",
+    "events_before",
+    "auto_renew"
+  ],
+  "challenger": {
+    "auc_incumbent": 0.6655634236453202,
+    "auc_challenger": 0.6974291871921182,
+    "improvement": 0.03186576354679804,
+    "recommendation": "promote"
+  },
+  "psi_warn": 0.1,
+  "psi_stale": 0.25,
+  "verdict": "PASS",
+  "pass_bar": "monitor measures real cohort shift; challenger recommendation direction-correct; no auto-promotion"
+}

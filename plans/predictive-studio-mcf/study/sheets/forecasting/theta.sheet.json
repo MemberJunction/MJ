@@ -1,0 +1,77 @@
+{
+  "identity": {
+    "modelKey": "theta",
+    "family": "forecasting",
+    "libraryClass": "statsmodels.tsa.forecasting.theta.ThetaModel",
+    "aliases": ["Theta", "Theta method", "Assimakopoulos-Nikolopoulos theta"],
+    "displayName": "Theta Model",
+    "description": "Competition-proven simple forecaster (won M3, strong in M4): deseasonalize, then combine a linear-drift theta-line with an SES theta-line — equivalent to SES with drift on the deseasonalized series, reseasonalized. Near-zero tuning surface with accuracy that embarrasses far heavier methods on monthly/quarterly business series."
+  },
+  "axes": {
+    "task": "forecasting",
+    "secondaryTasks": [],
+    "learningType": "Temporal",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Sequence",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "series", "dataShape": "series", "dtypes": ["numeric-time-indexed"], "targetSpec": "series", "required": true, "note": "regular time-indexed numeric series; default multiplicative deseasonalization additionally wants strictly positive values" }
+  ],
+  "emits": [
+    { "portType": "forecast-series", "granularity": "per-series", "paramsAsOutput": "none", "probabilistic": "native", "note": "point forecast + prediction_intervals() from the SES-with-drift form; the fitted alpha and drift are retrievable but carry no SEs, so no coefficients emit is claimed" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/theta.schema.json",
+    "hpMeta": {
+      "period": { "default": null, "prior": "categorical[null,7,12,52]", "searchable": true, "note": "seasonal cycle length s; inferred from the index frequency when null" },
+      "deseasonalize": { "default": true, "prior": "categorical[true,false]", "searchable": true, "note": "classical multiplicative decomposition before the theta lines; the seasonality test (use_test) can veto it" },
+      "use_test": { "default": true, "prior": "categorical[true,false]", "searchable": false, "note": "autocorrelation-based seasonality test that disables deseasonalization when seasonality is not significant — leave on" },
+      "method": { "default": "auto", "prior": "categorical[auto,additive,multiplicative]", "searchable": true, "note": "deseasonalization form; 'auto' picks multiplicative only for strictly positive series" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "SES-with-drift on a (de)seasonalized series is equivariant to rescaling; forecasts rescale with the input" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "a log transform swaps multiplicative for additive seasonal structure and changes what the linear drift means — a modeling choice" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "classical decomposition and the SES recursion both need a regular gap-free grid" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "single numeric series; no exogenous pathway of any kind" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "prediction intervals assume Gaussian SES innovations, and multiplicative deseasonalization presumes stable positive seasonal ratios" },
+    { "flag": "dataSizeTolerance", "value": "needs-history", "basis": "empirical", "why": "the seasonality test and classical decomposition need >=2 full cycles; below that theta silently degrades to plain SES-with-drift — acceptable but no longer seasonal" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the drift term extends the fitted linear trend of the deseasonalized series indefinitely — theta's whole edge over pure SES, and its long-horizon risk" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "seasonal_strength", "why": "feeds the built-in seasonality test that decides whether deseasonalization runs at all; borderline strength is where theta's auto-test flips behavior" },
+      { "stat": "trend_slope", "why": "the drift theta-line is half the method — a real slope is where theta beats SES/naive, no slope means the drift term just adds variance" },
+      { "stat": "n_full_cycles", "why": "family gate: the seasonality test is unreliable under 2 complete cycles, so seasonal handling must be forced off rather than trusted" },
+      { "stat": "min_value_positive", "why": "multiplicative deseasonalization (the default) is undefined at non-positive values — this stat forces method='additive' or disables deseasonalization" }
+    ],
+    "modelMetrics": [
+      { "metric": "mase_vs_seasonal_naive", "why": "the family's honest scoreboard, and theta's historical claim to fame — it won M3 on exactly this kind of relative-accuracy ranking against far more complex entrants" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "non-positive values with multiplicative deseasonalization", "behavior": "decomposition raises or produces invalid seasonal factors", "mitigation": "gate", "note": "force method='additive' or deseasonalize=false" },
+    { "condition": "series shorter than 2 full seasonal cycles", "behavior": "seasonality test unreliable; spurious deseasonalization", "mitigation": "gate", "note": "run with deseasonalize=false (plain SES+drift)" },
+    { "condition": "irregular / gapped timestamps", "behavior": "invalid frequency for decomposition and recursion", "mitigation": "reject-input" },
+    { "condition": "constant series", "behavior": "degenerate zero-variance fit", "mitigation": "bank-entry", "note": "fall back to naive" }
+  ],
+  "driver": {
+    "constructor": "ThetaModel(endog, period=s, deseasonalize=True, use_test=True).fit(); forecast(horizon) / prediction_intervals(horizon)",
+    "deps": ["statsmodels>=0.14", "scipy"],
+    "wrapperNeeds": "series adapter: (time_col, value_col, freq, horizon); positivity check to pick deseasonalization method; forecast + prediction_intervals merged into one frame",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit",
+    "tranche": "T5 (forecasting)"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "decomposition and SES recursion need a gap-free regular grid; time-aware interpolation, never tabular median" },
+    { "position": "transform", "verdict": "beneficial", "why": "log transform turns multiplicative seasonality additive and makes the drift a growth rate — often the better-behaved space for business series" },
+    { "position": "scale", "verdict": "irrelevant", "why": "scale-equivariant; standardization changes nothing" },
+    { "position": "encode", "verdict": "irrelevant", "why": "single numeric series has nothing to encode" }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "identity": {
+    "modelKey": "neg_binomial",
+    "family": "glm-counts",
+    "libraryClass": "statsmodels.discrete.discrete_model.NegativeBinomial",
+    "aliases": ["negative binomial regression", "NB2", "NB regression", "overdispersed Poisson"],
+    "displayName": "Negative Binomial Regression",
+    "description": "Count regression for OVERDISPERSED data: a Poisson mean with a gamma-mixed rate, adding an estimated dispersion parameter alpha so variance = mean + alpha*mean^2 (NB2). The honest upgrade from Poisson when variance outruns the mean — same log-linear coefficients, correctly-sized standard errors."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "None",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true, "note": "target must be a non-negative integer count" }
+  ],
+  "emits": [
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "predicted mean count; the fitted NB family plus estimated alpha defines a full predictive count distribution" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "log rate ratios with SEs plus the estimated dispersion alpha (reported with its own SE)" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/neg_binomial.schema.json",
+    "hpMeta": {
+      "loglike_method": { "default": "nb2", "prior": "categorical[nb2,nb1,geometric]", "searchable": true, "note": "nb2: variance = mu + alpha*mu^2 (standard); nb1: variance = mu + alpha*mu; geometric: alpha fixed at 1" },
+      "alpha": { "default": 0.0, "prior": "log-uniform[1e-4,1.0]", "searchable": true, "note": "fit_regularized L1 penalty strength (NOT the dispersion parameter, which is estimated by MLE); 0.0 = plain fit" },
+      "method": { "default": "bfgs", "prior": "categorical[bfgs,newton,nm,lbfgs]", "searchable": false },
+      "maxiter": { "default": 35, "prior": "fixed", "searchable": false, "note": "statsmodels discrete-model default; raise on non-convergence" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "unpenalized MLE is scale-equivariant, but the searchable L1 penalty (fit_regularized) is unit-dependent, and poorly-scaled columns condition the BFGS Hessian badly enough to stall convergence" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "log-linear mean structure: a monotone transform of a covariate changes the fitted mean function" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the likelihood has no missing-value mechanism; rows must be imputed or are dropped" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "requires a pre-encoded design matrix" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes the conditional distribution is Negative Binomial (gamma-mixed Poisson): variance = mean + alpha*mean^2 under NB2 — overdispersion is modeled explicitly, but a variance that grows on a different power law is still misspecified" },
+    { "flag": "dataSizeTolerance", "value": "small-to-medium", "basis": "empirical", "why": "the extra dispersion parameter is weakly identified at very small n — alpha's MLE needs a few hundred rows to stabilize; coefficient estimates remain usable earlier with wide CIs" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "log-linear form extends the mean beyond the observed covariate range, with the same exponential-growth caution as Poisson" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "dispersion_ratio", "why": "variance/mean of the target is the reason to be at this node at all — a ratio near 1 means Poisson suffices (alpha would sit at its zero boundary); well above 1 is NB's home turf" },
+      { "stat": "zero_fraction", "why": "NB's fatter tail absorbs more zeros than Poisson for the same mean, but an observed zero share still exceeding the NB-implied one indicates a second structural-zero mechanism — the commit-zero-inflated signal" },
+      { "stat": "target_is_count", "why": "the NB likelihood is defined only on non-negative integers; anything else is a reject-input, not a modeling choice" }
+    ],
+    "modelMetrics": [
+      { "metric": "alpha_dispersion_lr_pvalue", "why": "the boundary likelihood-ratio test of alpha=0 vs Poisson — if alpha is not significantly above zero, the extra parameter buys nothing and the honest commit is back to Poisson" },
+      { "metric": "pearson_chi2_over_df", "why": "residual dispersion AFTER modeling overdispersion — still >> 1 means the NB2 variance law itself is wrong (try nb1, or the mechanism is zero-inflation)" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "target contains negatives or non-integers", "behavior": "likelihood undefined", "mitigation": "reject-input" },
+    { "condition": "equidispersed data (alpha -> 0 boundary)", "behavior": "dispersion estimate pins to the boundary; its SE and Wald test are invalid there", "mitigation": "gate", "note": "commit back to poisson" },
+    { "condition": "BFGS non-convergence at default maxiter=35", "behavior": "ConvergenceWarning; params at last iterate", "mitigation": "bank-entry", "note": "raise maxiter, use Poisson fit as start_params" },
+    { "condition": "excess structural zeros", "behavior": "alpha inflates to absorb the zero mass, distorting the variance law", "mitigation": "gate", "note": "route to zero_inflated" },
+    { "condition": "collinear design columns", "behavior": "singular Hessian; SEs blow up", "mitigation": "bank-entry", "note": "fit_regularized L1 or drop columns" }
+  ],
+  "driver": {
+    "constructor": "NegativeBinomial(y, sm.add_constant(X), loglike_method='nb2').fit(method='bfgs', maxiter=...) or .fit_regularized(alpha=...)",
+    "deps": ["statsmodels>=0.14", "scipy"],
+    "wrapperNeeds": "adapter: add_constant; predict returns the mean count; surface the fitted dispersion alpha alongside coefficients",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit; predict is thread-safe",
+    "tranche": "T2"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN handling; incomplete rows are dropped, biasing both mean and dispersion estimates" },
+    { "position": "transform", "verdict": "beneficial", "why": "log/Yeo-Johnson of skewed covariates improves the log-linear mean fit" },
+    { "position": "scale", "verdict": "beneficial", "why": "MLE is scale-equivariant unpenalized, but standardization conditions BFGS and is needed whenever the L1 penalty is active" },
+    { "position": "encode", "verdict": "required", "why": "categoricals must be design-encoded before fitting" }
+  ]
+}

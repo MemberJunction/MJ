@@ -1,0 +1,223 @@
+{
+  "hypothesis": "real post-outcome traps inflate; semantic screen catches them by meaning; as-of assembly is honest; dominance gate blocks the leaky model",
+  "seeds": [
+    201,
+    202,
+    203
+  ],
+  "per_seed": [
+    {
+      "seed": 201,
+      "auc_asof": 0.85,
+      "auc_naive": 1.0,
+      "inflation": 0.15
+    },
+    {
+      "seed": 202,
+      "auc_asof": 0.798,
+      "auc_naive": 1.0,
+      "inflation": 0.202
+    },
+    {
+      "seed": 203,
+      "auc_asof": 0.879,
+      "auc_naive": 1.0,
+      "inflation": 0.121
+    }
+  ],
+  "mean_inflation": 0.15766666666666665,
+  "stat_screen": {
+    "recall": 0.6,
+    "fpr": 0.0,
+    "per_trap": {
+      "Status": true,
+      "CancellationDate": true,
+      "CancellationReason": true,
+      "RenewalDate": false,
+      "EndDate": false
+    }
+  },
+  "semantic_screen": {
+    "recall": 0.8,
+    "fpr": 0.0,
+    "per_trap": {
+      "Status": true,
+      "CancellationDate": true,
+      "CancellationReason": true,
+      "RenewalDate": true,
+      "EndDate": false
+    },
+    "raw": {
+      "flags": [
+        {
+          "column": "AutoRenew",
+          "leaky": false,
+          "reason": "Known at the moment the membership period starts."
+        },
+        {
+          "column": "CancellationDate",
+          "leaky": true,
+          "reason": "Recorded after the period starts and directly indicates a lapse."
+        },
+        {
+          "column": "CancellationReason",
+          "leaky": true,
+          "reason": "Recorded after the period starts and directly indicates a lapse."
+        },
+        {
+          "column": "DuesAmount",
+          "leaky": false,
+          "reason": "Known at the moment the membership period starts."
+        },
+        {
+          "column": "EndDate",
+          "leaky": false,
+          "reason": "Known at the moment the membership period starts."
+        },
+        {
+          "column": "MembershipTier",
+          "leaky": false,
+          "reason": "Known at the moment the membership period starts."
+        },
+        {
+          "column": "Region",
+          "leaky": false,
+          "reason": "Known at the moment the membership period starts."
+        },
+        {
+          "column": "RenewalDate",
+          "leaky": true,
+          "reason": "Recorded after the period starts and directly indicates a renewal."
+        },
+        {
+          "column": "Segment",
+          "leaky": false,
+          "reason": "Known at the moment the membership period starts."
+        },
+        {
+          "column": "Status",
+          "leaky": true,
+          "reason": "Reflects the outcome (Renewed/Lapsed) which is determined after the period starts."
+        },
+        {
+          "column": "attend_rate",
+          "leaky": false,
+          "reason": "Explicitly stated as 'before the period start'."
+        },
+        {
+          "column": "auto_renew",
+          "leaky": false,
+          "reason": "Known at the moment the membership period starts."
+        },
+        {
+          "column": "complete_rate",
+          "leaky": false,
+          "reason": "Explicitly stated as 'before the period start'."
+        },
+        {
+          "column": "courses_before",
+          "leaky": false,
+          "reason": "Explicitly stated as 'before the period start'."
+        },
+        {
+          "column": "courses_completed",
+          "leaky": false,
+          "reason": "Explicitly stated as 'before the period start'."
+        },
+        {
+          "column": "dues_amount",
+          "leaky": false,
+          "reason": "Known at the moment the membership period starts."
+        },
+        {
+          "column": "event_recency_days",
+          "leaky": false,
+          "reason": "Calculated as of the period start."
+        },
+        {
+          "column": "events_attended",
+          "leaky": false,
+          "reason": "Explicitly stated as 'before the period start'."
+        },
+        {
+          "column": "events_before",
+          "leaky": false,
+          "reason": "Explicitly stated as 'before the period start'."
+        },
+        {
+          "column": "order_recency_days",
+          "leaky": false,
+          "reason": "Calculated as of the period start."
+        },
+        {
+          "column": "orders_before",
+          "leaky": false,
+          "reason": "Explicitly stated as 'before the period start'."
+        },
+        {
+          "column": "payments_before",
+          "leaky": false,
+          "reason": "Explicitly stated as 'before the period start'."
+        },
+        {
+          "column": "prior_lapses",
+          "leaky": false,
+          "reason": "Refers to earlier periods, known at the start of the current period."
+        },
+        {
+          "column": "prior_periods",
+          "leaky": false,
+          "reason": "Refers to earlier periods, known at the start of the current period."
+        },
+        {
+          "column": "region",
+          "leaky": false,
+          "reason": "Known at the moment the membership period starts."
+        },
+        {
+          "column": "segment",
+          "leaky": false,
+          "reason": "Known at the moment the membership period starts."
+        },
+        {
+          "column": "start_year",
+          "leaky": false,
+          "reason": "Known at the moment the membership period starts."
+        },
+        {
+          "column": "tenure_days",
+          "leaky": false,
+          "reason": "Calculated as of the period start."
+        },
+        {
+          "column": "tier",
+          "leaky": false,
+          "reason": "Known at the moment the membership period starts."
+        }
+      ]
+    }
+  },
+  "dominance": [
+    {
+      "seed": 201,
+      "top_feature": "cancel_days_after_start",
+      "top_share": "1.0",
+      "promotion_blocked": "True"
+    },
+    {
+      "seed": 202,
+      "top_feature": "cancel_days_after_start",
+      "top_share": "0.997",
+      "promotion_blocked": "True"
+    },
+    {
+      "seed": 203,
+      "top_feature": "cancel_days_after_start",
+      "top_share": "0.998",
+      "promotion_blocked": "True"
+    }
+  ],
+  "gate_blocked_all": true,
+  "verdict": "PASS",
+  "pass_bar": "inflation>=0.10 AND sem recall>=0.8 AND sem FPR<=0.2 AND gate blocks all seeds"
+}

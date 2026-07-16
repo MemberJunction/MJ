@@ -1,0 +1,99 @@
+{
+ "name": "estimator-mechanism",
+ "assertion": "is a fitted or fixed estimator producing a typed output",
+ "children": [
+  {
+   "name": "split-based",
+   "assertion": "partitions feature space by threshold comparisons; scale-insensitive by mechanism",
+   "members": [
+    "decision_tree",
+    "random_forest",
+    "extra_trees",
+    "xgboost",
+    "lightgbm",
+    "catboost",
+    "isolation_forest",
+    "rsf"
+   ]
+  },
+  {
+   "name": "weighted-sum",
+   "assertion": "forms a (possibly link-transformed) linear/additive combination of features; scale-sensitive; coefficient-interpretable",
+   "members": [
+    "logistic_regression",
+    "ridge",
+    "lasso",
+    "elastic_net",
+    "ols",
+    "multinomial_logit",
+    "poisson",
+    "neg_binomial",
+    "quantile",
+    "tweedie",
+    "zero_inflated",
+    "ordinal",
+    "gam",
+    "cox_ph",
+    "weibull_aft",
+    "aft",
+    "rubric_weighted_scorecard",
+    "mlp"
+   ]
+  },
+  {
+   "name": "distance-kernel",
+   "assertion": "decisions depend on geometric distances/similarities in feature space; scale-sensitive",
+   "members": [
+    "knn",
+    "svm",
+    "kmeans",
+    "dbscan",
+    "hierarchical",
+    "pca",
+    "umap",
+    "gp"
+   ]
+  },
+  {
+   "name": "probabilistic-generative",
+   "assertion": "fits a probability model of the data (likelihood/density) and infers latent structure",
+   "members": [
+    "naive_bayes",
+    "gmm",
+    "hmm",
+    "lda",
+    "bg_nbd",
+    "pareto_nbd",
+    "gamma_gamma",
+    "markov_switching",
+    "kalman_dlm",
+    "structural_ts",
+    "km"
+   ]
+  },
+  {
+   "name": "recurrence-temporal",
+   "assertion": "models a value as a function of its own past / time index (autoregression, smoothing, counting)",
+   "members": [
+    "markov_chain",
+    "var",
+    "arima",
+    "ets",
+    "theta",
+    "croston",
+    "seasonal_naive",
+    "sma",
+    "implicit_als",
+    "prophet"
+   ]
+  }
+ ],
+ "nonMechanisticFacet": {
+  "note": "do not learn an estimator mechanism; handled by facet, not tree leaf",
+  "members": [
+   "dummy_classifier",
+   "dummy_regressor",
+   "association_rules"
+  ]
+ }
+}

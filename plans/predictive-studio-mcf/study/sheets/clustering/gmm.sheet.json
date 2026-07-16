@@ -1,0 +1,265 @@
+{
+  "identity": {
+    "modelKey": "gmm",
+    "family": "clustering",
+    "libraryClass": "sklearn.mixture.GaussianMixture",
+    "aliases": [
+      "Gaussian mixture",
+      "GMM",
+      "mixture of Gaussians",
+      "EM clustering"
+    ],
+    "displayName": "Gaussian Mixture Model",
+    "description": "Probabilistic clusterer: fits a weighted mixture of k Gaussians by EM. Its distinguishing emission is the SOFT assignment \u2014 per-row membership probabilities (responsibilities) rather than a hard label \u2014 and, because it is a genuine density model, it scores unseen points natively and doubles as an anomaly screen. The price is the elliptical assumption: every cluster is a mean + covariance ellipsoid."
+  },
+  "axes": {
+    "task": "clustering",
+    "secondaryTasks": [
+      "anomaly"
+    ],
+    "learningType": "Unsupervised",
+    "parametric": "Yes",
+    "ensembleType": "None",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    {
+      "portType": "features:tabular",
+      "dataShape": "row-matrix",
+      "dtypes": [
+        "numeric"
+      ],
+      "targetSpec": "none",
+      "required": true
+    }
+  ],
+  "emits": [
+    {
+      "portType": "soft-assignment",
+      "granularity": "per-row",
+      "paramsAsOutput": "components",
+      "probabilistic": "native",
+      "note": "the distinguishing output: predict_proba responsibilities \u2014 a full membership distribution per row, not a hard label; the fitted params-as-output are the mixture components (weights, means, covariances), each directly readable as a segment profile"
+    },
+    {
+      "portType": "cluster-id",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "argmax of responsibilities (predict); lossy relative to soft-assignment \u2014 prefer the soft port downstream whenever the consumer accepts it (an argmax adapter covers the rest)"
+    },
+    {
+      "portType": "anomaly-score",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "negative per-sample log-likelihood via score_samples \u2014 the density-model dividend: points off the training support score low naturally, no wrapper needed"
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable"
+  },
+  "hyperparameters": {
+    "schema": "@file:../../../../metadata/ml-algorithms/schemas/gmm.schema.json",
+    "hpMeta": {
+      "n_components": {
+        "default": 4,
+        "prior": "int-uniform[2,15]",
+        "searchable": true,
+        "note": "unlike k-means, a likelihood exists \u2014 BIC/AIC across k is the principled selector, cross-checked by silhouette on the hard labels"
+      },
+      "covariance_type": {
+        "default": "full",
+        "prior": "categorical[full,tied,diag,spherical]",
+        "searchable": true
+      },
+      "reg_covar": {
+        "default": 1e-06,
+        "prior": "log-uniform[1e-8,1e-3]",
+        "searchable": true,
+        "conditionalOn": "covariance_type"
+      },
+      "n_init": {
+        "default": 1,
+        "prior": "int-uniform[1,10]",
+        "searchable": false
+      },
+      "max_iter": {
+        "default": 100,
+        "prior": "int-uniform[50,500]",
+        "searchable": false
+      },
+      "init_params": {
+        "default": "kmeans",
+        "prior": "categorical[kmeans,k-means++,random]",
+        "searchable": false
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": true,
+      "basis": "empirical",
+      "why": "full-covariance EM is affine-equivariant in principle (the covariance absorbs rescaling), but the k-means initialization, the reg_covar floor, and the diag/spherical covariance options are all scale-dependent \u2014 unscaled features destabilize the fit in practice"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "a nonlinear monotone map changes the density's shape \u2014 a Gaussian stops being Gaussian under log, so the likelihood surface and the fit both change"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "the multivariate Gaussian density is undefined on incomplete vectors; sklearn's EM has no missing-data E-step \u2014 impute first"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "a continuous density on one-hot vertices concentrates mass where no data can lie; categorical structure needs encoding, and heavy-categorical inputs mis-suit a Gaussian likelihood altogether"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "each component IS a Gaussian: clusters are assumed elliptical (mean + covariance); a skewed or heavy-tailed segment gets split across multiple Gaussians to soak up the mis-fit"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "medium",
+      "basis": "mechanism-derived",
+      "why": "a full covariance costs p(p+1)/2 parameters PER component \u2014 each component needs n >> p rows or its covariance goes singular; diag/spherical trade that floor against the elliptical expressiveness"
+    },
+    {
+      "flag": "extrapolates",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "off the training support the likelihood decays to zero \u2014 assignments out there are driven by the nearest component's tail, and the honest reading is the anomaly-score port, not the cluster-id"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "n_per_component_over_p",
+        "why": "rows-per-component divided by dimensionality bounds covariance estimability \u2014 below ~5-10 the full-covariance fit will hit singularities and lean on reg_covar"
+      },
+      {
+        "stat": "feature_skewness_kurtosis",
+        "why": "the elliptical assumption is exactly what skew/heavy tails violate \u2014 high values predict component-splitting artifacts and argue for the transform placement"
+      },
+      {
+        "stat": "feature_scale_spread",
+        "why": "flags the initialization/regularization scale-dependence \u2014 large spread means the k-means init lands badly and reg_covar floors the wrong axes"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "bic_vs_k_curve",
+        "why": "GMM's unique privilege in this family: a real likelihood means BIC gives a principled component-count selection unavailable to distance-only clusterers"
+      },
+      {
+        "metric": "silhouette_on_hard_labels",
+        "why": "keeps GMM comparable to its siblings on the family's shared validation axis \u2014 cohesion/separation plus stability, never a holdout AUC"
+      },
+      {
+        "metric": "bootstrap_ari_stability",
+        "why": "EM is multi-modal \u2014 a partition that shifts across reseeds/resamples is a local-optimum artifact, not structure"
+      },
+      {
+        "metric": "min_component_weight",
+        "why": "a mixture weight collapsing toward zero is the overfitted-k signature: the model is paying BIC for a component that owns no data"
+      },
+      {
+        "metric": "mean_max_responsibility",
+        "why": "how 'hard' the soft assignment really is \u2014 near 1.0 means k-means would do; near 1/k means the components overlap so much the segmentation may be vacuous"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "singular covariance (component captures < p rows or duplicated points)",
+      "behavior": "likelihood diverges as a component collapses onto points; fit aborts or degenerates despite reg_covar",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "component weight \u2192 0 during EM",
+      "behavior": "an empty/vestigial component survives in the params with no members",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "skewed / heavy-tailed segments",
+      "behavior": "one real segment is modeled as 2-3 stacked Gaussians \u2014 the component count stops meaning 'number of segments'",
+      "mitigation": "bank-entry"
+    },
+    {
+      "condition": "label switching across refits",
+      "behavior": "component indices are arbitrary \u2014 cluster 2 today is cluster 0 tomorrow; any downstream that persists raw ids across refits silently corrupts",
+      "mitigation": "bank-entry"
+    },
+    {
+      "condition": "n_components = 1",
+      "behavior": "degenerates to a single multivariate Gaussian \u2014 a density estimator, not a segmentation",
+      "mitigation": "gate"
+    }
+  ],
+  "driver": {
+    "constructor": "GaussianMixture(**hp)",
+    "deps": [
+      "scikit-learn>=1.3"
+    ],
+    "wrapperNeeds": "none (fit/predict/predict_proba/score_samples native; as a density model it scores NEW points without any assignment wrapper \u2014 the family's exception alongside k-means)",
+    "serialization": "joblib",
+    "threadSafety": "EM fit is single-threaded; predict/predict_proba/score_samples are thread-safe",
+    "tranche": "T3"
+  },
+  "canBeSeeds": [
+    {
+      "template": "Cluster-then-Classify",
+      "slot": "clusterer",
+      "via": "cluster-id"
+    },
+    {
+      "template": "Soft-Segment Feature Augmenter",
+      "slot": "featurizer",
+      "via": "soft-assignment\u2192features:tabular adapter (responsibilities as k numeric columns)"
+    },
+    {
+      "template": "Density Anomaly Screen",
+      "slot": "scorer",
+      "via": "anomaly-score"
+    },
+    {
+      "template": "Segment Profiler",
+      "slot": "segmenter",
+      "via": "soft-assignment"
+    }
+  ],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "required",
+      "why": "the Gaussian density is undefined on incomplete rows \u2014 EM cannot start"
+    },
+    {
+      "position": "transform",
+      "verdict": "beneficial",
+      "why": "Yeo-Johnson/log directly services the distributional assumption: the closer the marginals are to Gaussian, the fewer components get burned modeling skew"
+    },
+    {
+      "position": "scale",
+      "verdict": "beneficial",
+      "why": "full-covariance EM is affine-equivariant in principle, so scaling is not REQUIRED by the math \u2014 but it stabilizes the k-means init and makes reg_covar act uniformly, and it becomes effectively mandatory under diag/spherical covariance"
+    },
+    {
+      "position": "encode",
+      "verdict": "required",
+      "why": "the likelihood needs numeric vectors; but a Gaussian on one-hot columns is a shape mismatch \u2014 heavy-categorical inputs belong to mixture-of-categoricals territory, not this sheet"
+    }
+  ]
+}

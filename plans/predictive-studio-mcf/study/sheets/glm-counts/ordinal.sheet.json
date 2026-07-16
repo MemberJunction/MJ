@@ -1,0 +1,79 @@
+{
+  "identity": {
+    "modelKey": "ordinal",
+    "family": "glm-counts",
+    "libraryClass": "statsmodels.miscmodels.ordinal_model.OrderedModel",
+    "aliases": ["ordinal regression", "ordered logit", "ordered probit", "proportional odds model", "cumulative link model"],
+    "displayName": "Ordinal Regression (Ordered Model)",
+    "description": "Regression for ORDERED categories (satisfaction tiers, membership levels, risk grades): a single latent index x'B is cut by K-1 estimated thresholds into K ordered classes. One slope vector shared across all cutpoints (proportional odds) — the order in the target is used, not discarded as flat multiclass would."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "None",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true, "note": "target must be an ORDERED categorical (pandas ordered Categorical or monotone integer codes) — the order is a modeling input, not a labeling convenience; exog must NOT contain a constant (absorbed by the thresholds)" }
+  ],
+  "emits": [
+    { "portType": "probability", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "the full K-vector of ordered-category probabilities from the cumulative link — natively calibrated by MLE" },
+    { "portType": "class-label", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "argmax category; downstream may prefer expected level sum(k*p_k) for ordinal loss" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "one shared slope vector plus K-1 monotone thresholds with SEs — exp(B) are cumulative odds ratios under the logit link" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/ordinal.schema.json",
+    "hpMeta": {
+      "distr": { "default": "logit", "prior": "categorical[logit,probit]", "searchable": true, "note": "latent-error distribution: logistic (proportional odds) vs normal (ordered probit); statsmodels also accepts a scipy distribution object" },
+      "method": { "default": "bfgs", "prior": "categorical[bfgs,newton,nm,lbfgs]", "searchable": false },
+      "maxiter": { "default": 100, "prior": "fixed", "searchable": false }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "unpenalized MLE of a link-linear latent index is equivariant under affine feature rescaling — slopes rescale inversely, thresholds and predicted probabilities are identical; no penalty exists in this driver" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "the latent index is linear in x; a monotone transform of a covariate changes the fitted index and hence the category probabilities" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the cumulative-link likelihood has no missing-value mechanism; rows must be complete" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "feature categoricals need design encoding; only the TARGET's ordered-categorical structure is native" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes a latent variable y* = x'B + e with e logistic (logit) or standard normal (probit), plus the parallel-lines/proportional-odds restriction — ONE slope vector across all K-1 cutpoints; a covariate whose effect differs by cutpoint violates it" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "empirical", "why": "p slopes + K-1 thresholds is a small parameter budget, but every category needs occupants — the binding constraint is the rarest level's count, not total n" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the linear latent index extends beyond the covariate range; extreme x saturates probability into the boundary categories" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "target_order_evidence", "why": "the whole point of being at this node: a monotone trend of feature means (or of any strong feature) across the K levels is the signal that the categories carry real order — absent it, flat multiclass loses nothing and this model's constraint buys nothing" },
+      { "stat": "category_occupancy", "why": "each threshold is identified only by data on both of its sides; an empty or near-empty level makes its adjacent cutpoints unidentifiable — merge levels or gate" },
+      { "stat": "class_balance", "why": "extreme imbalance across ordered levels shifts the honest metric from accuracy to ranked-probability / MAE-in-levels and warns that boundary categories will dominate the likelihood" }
+    ],
+    "modelMetrics": [
+      { "metric": "parallel_lines_test_p", "why": "the Brant-style test of the proportional-odds restriction — per-covariate slopes re-fitted per cutpoint should match the shared slope; failure means the model's single-index story is wrong and gates toward multinomial or partial-proportional models" },
+      { "metric": "ranked_probability_score", "why": "the ordinal-native proper score — unlike log-loss it charges MORE for predictions further from the true level in the ORDER, which is exactly the structure this model exists to exploit" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "target has no defensible order (nominal labels)", "behavior": "the monotone-threshold constraint is a fiction; fit is misspecified", "mitigation": "reject-input", "note": "route to flat multiclass" },
+    { "condition": "constant column included in exog", "behavior": "unidentified against the thresholds — singular Hessian", "mitigation": "reject-input", "note": "OrderedModel requires NO intercept in exog" },
+    { "condition": "empty or near-empty category level", "behavior": "adjacent thresholds unidentifiable; SEs blow up", "mitigation": "bank-entry", "note": "merge adjacent levels" },
+    { "condition": "complete separation by a covariate", "behavior": "slope diverges; non-convergence", "mitigation": "bank-entry", "note": "drop/coarsen the separating covariate" },
+    { "condition": "K = 2 levels", "behavior": "collapses to plain binary logit/probit", "mitigation": "gate", "note": "commit to logistic regression — same fit, simpler story" }
+  ],
+  "driver": {
+    "constructor": "OrderedModel(y_ordered_categorical, X_no_constant, distr='logit').fit(method='bfgs', maxiter=...)",
+    "deps": ["statsmodels>=0.14", "scipy", "pandas"],
+    "wrapperNeeds": "adapter: coerce target to pandas ordered Categorical (level order from metadata); STRIP any constant column from exog; predict returns the K-column probability matrix — argmax for class-label",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit; predict is thread-safe",
+    "tranche": "T2"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN handling; incomplete rows are lost from the likelihood" },
+    { "position": "transform", "verdict": "beneficial", "why": "the latent index is linear in x; unskewing covariates improves that linearity" },
+    { "position": "scale", "verdict": "beneficial", "why": "probabilities are scale-invariant (no penalty), but standardized slopes are comparable across features and BFGS conditions better" },
+    { "position": "encode", "verdict": "required", "why": "feature categoricals must be design-encoded (the ordered TARGET, by contrast, stays categorical — encoding it to one-hot would destroy the order this model exists to use)" }
+  ]
+}

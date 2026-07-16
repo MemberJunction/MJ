@@ -1,0 +1,90 @@
+{
+  "hypothesis": "free search overfits validation; locked holdout contains it",
+  "seeds": [
+    41,
+    42,
+    43,
+    44,
+    45
+  ],
+  "noise": [
+    {
+      "seed": 41,
+      "best_val_auc": 0.6234285714285716,
+      "holdout_auc": 0.49021651093419727,
+      "optimism": 0.13321206049437428,
+      "cfgs>=0.60": 3
+    },
+    {
+      "seed": 42,
+      "best_val_auc": 0.6388192703982177,
+      "holdout_auc": 0.5392444444444445,
+      "optimism": 0.0995748259537732,
+      "cfgs>=0.60": 5
+    },
+    {
+      "seed": 43,
+      "best_val_auc": 0.6073909419283134,
+      "holdout_auc": 0.4969179623922153,
+      "optimism": 0.11047297953609814,
+      "cfgs>=0.60": 1
+    },
+    {
+      "seed": 44,
+      "best_val_auc": 0.6194986884290294,
+      "holdout_auc": 0.5114753044922492,
+      "optimism": 0.10802338393678024,
+      "cfgs>=0.60": 6
+    },
+    {
+      "seed": 45,
+      "best_val_auc": 0.6445005611672278,
+      "holdout_auc": 0.46139811317023005,
+      "optimism": 0.1831024479969977,
+      "cfgs>=0.60": 11
+    }
+  ],
+  "weak": [
+    {
+      "seed": 41,
+      "best_val_auc": 0.6469444444444444,
+      "holdout_auc": 0.5962956738373932,
+      "optimism": 0.0506487706070512,
+      "cfgs>=0.60": 27
+    },
+    {
+      "seed": 42,
+      "best_val_auc": 0.6425714285714286,
+      "holdout_auc": 0.5600542415829041,
+      "optimism": 0.0825171869885245,
+      "cfgs>=0.60": 22
+    },
+    {
+      "seed": 43,
+      "best_val_auc": 0.7042648709315376,
+      "holdout_auc": 0.5819271275860025,
+      "optimism": 0.12233774334553504,
+      "cfgs>=0.60": 143
+    },
+    {
+      "seed": 44,
+      "best_val_auc": 0.6688256829062237,
+      "holdout_auc": 0.5317753725397038,
+      "optimism": 0.13705031036651993,
+      "cfgs>=0.60": 25
+    },
+    {
+      "seed": 45,
+      "best_val_auc": 0.6870133481646273,
+      "holdout_auc": 0.5723299172737375,
+      "optimism": 0.11468343089088984,
+      "cfgs>=0.60": 146
+    }
+  ],
+  "noise_best_val_mean": 0.6267276066702719,
+  "noise_holdout_mean": 0.4998504670866673,
+  "noise_optimism_mean": 0.12687713958360472,
+  "configs_crossing_0.60_mean": 5.2,
+  "verdict": "PASS",
+  "pass_bar": "noise optimism>=0.10 AND noise holdout<=0.56"
+}

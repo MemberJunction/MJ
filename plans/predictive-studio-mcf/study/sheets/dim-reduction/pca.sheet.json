@@ -1,0 +1,80 @@
+{
+  "identity": {
+    "modelKey": "pca",
+    "family": "dim-reduction",
+    "libraryClass": "sklearn.decomposition.PCA",
+    "aliases": ["principal component analysis", "principal components", "Karhunen-Loeve transform", "truncated SVD projection"],
+    "displayName": "PCA",
+    "description": "Linear dimensionality reduction via SVD of the (centered) data matrix: finds the orthogonal directions of maximum variance and projects rows onto the top k. Captures second-order (linear/covariance) structure only; the fitted linear map is reusable on new rows and the loadings are directly inspectable."
+  },
+  "axes": {
+    "task": "dim-reduction",
+    "secondaryTasks": [],
+    "learningType": "Unsupervised",
+    "parametric": "Yes",
+    "ensembleType": "None",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric"], "targetSpec": "none", "required": true, "note": "unsupervised — no target; strictly numeric matrix (linear algebra on the centered data)" }
+  ],
+  "emits": [
+    { "portType": "embedding", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "the projected component scores (n_rows × k); the standard reduce-then-model handoff. Inverse transform (reconstruction back to feature space) is exact-on-the-subspace and native" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "loadings", "probabilistic": "none", "note": "components_ — the (k × features) loadings matrix, i.e. the fitted linear map's weights; plus explained_variance_ratio_ per component. portTypeProposal: loadings ride the 'coefficients' port as the nearest existing per-model parameter-block port; if U2 splits parameter blocks by shape, a dedicated 'loadings' port would be the cleaner name" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/pca.schema.json",
+    "hpMeta": {
+      "n_components": { "default": 0.95, "prior": "uniform[0.7,0.99] (variance-retained mode) | int-uniform[2,50] (fixed-k mode)", "searchable": true, "note": "int = fixed component count; float in (0,1) = retain that fraction of variance (k chosen at fit); the variance-retained form is the safer pipeline default" },
+      "whiten": { "default": false, "prior": "categorical[false,true]", "searchable": true, "note": "rescales scores to unit component variance — matters when a scale-sensitive model consumes the embedding" },
+      "svd_solver": { "default": "auto", "prior": "categorical[auto,full,randomized]", "searchable": false, "note": "a compute choice, not a fit choice; 'randomized' is seeded (random_state) so fits stay reproducible — sign of each component is made deterministic by svd_flip either way" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "the objective is variance maximization — a feature's raw variance directly sets its pull on the components, so unstandardized units let the biggest-unit feature own PC1" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "covariance is not preserved under nonlinear monotone maps — log/rank a feature and the eigenstructure changes" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the SVD of the centered data matrix is undefined with missing entries — fit raises on NaN" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "eigen-decomposition needs a numeric matrix; categorical levels have no covariance until encoded" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "the SVD is distribution-free; Gaussianity only matters for probabilistic add-ons (PPCA likelihoods), not the decomposition itself — the real assumption is that LINEAR structure is the structure worth keeping" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "empirical", "why": "closed-form fit with no optimization loop; usable from tens of rows, though component directions are noisy when n is small relative to p (at most min(n,p) components exist)" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the fitted projection is a linear map defined on all of feature space — out-of-range rows project cleanly (their reconstruction error just grows off-subspace)" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "correlation_spectrum_decay", "why": "PCA's compression payoff is exactly the eigenvalue decay of the correlation matrix — fast decay means few components carry most variance; a flat spectrum means there is nothing linear to compress" },
+      { "stat": "feature_scale_disparity", "why": "the ratio of largest to smallest feature variance is the scale-sensitivity trap made measurable — high disparity without upstream standardization means PC1 is just the biggest-unit column" },
+      { "stat": "mean_absolute_correlation", "why": "components only merge information features share; near-orthogonal features give an identity-like rotation and dimensionality reduction discards signal instead of redundancy" }
+    ],
+    "modelMetrics": [
+      { "metric": "cumulative_explained_variance_at_k", "why": "the direct scoreboard of the variance-maximization objective — how much second-order structure the kept subspace preserves at the chosen k" },
+      { "metric": "reconstruction_error", "why": "mean squared error of inverse-transformed rows is the complementary view: high error at the chosen k means the linear-subspace assumption is dropping real signal" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "NaN anywhere in the input matrix", "behavior": "fit raises — SVD undefined on missing entries", "mitigation": "reject-input" },
+    { "condition": "n_components exceeds min(n_samples, n_features)", "behavior": "sklearn raises ValueError — no such subspace exists", "mitigation": "reject-input" },
+    { "condition": "zero-variance (constant) features", "behavior": "get zero loading weight; upstream standardization of them divides by zero first", "mitigation": "gate" },
+    { "condition": "heavy-tailed features / extreme outlier rows", "behavior": "variance is outlier-dominated, so components rotate to chase a handful of rows", "mitigation": "bank-entry", "note": "robust-scale or de-skew upstream before trusting the directions" }
+  ],
+  "driver": {
+    "constructor": "PCA(n_components=..., whiten=..., svd_solver=..., random_state=...)",
+    "deps": ["scikit-learn>=1.4"],
+    "wrapperNeeds": "none (fit/transform/inverse_transform; components_ + explained_variance_ratio_ exposed post-fit for the loadings emission)",
+    "serialization": "joblib",
+    "threadSafety": "fit runs on BLAS threads; transform is thread-safe",
+    "tranche": "T3 (dim-reduction)"
+  },
+  "canBeSeeds": [
+    { "template": "Reduce-then-Model", "slot": "reducer", "via": "embedding" },
+    { "template": "Reduce-then-Cluster", "slot": "reducer", "via": "embedding" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN path — the SVD needs a complete matrix" },
+    { "position": "transform", "verdict": "beneficial", "why": "de-skewing heavy-tailed features reduces outlier leverage on the variance directions (variance is a squared-error quantity)" },
+    { "position": "scale", "verdict": "required", "why": "variance-based objective: without standardization the components track raw measurement units, not shared structure" },
+    { "position": "encode", "verdict": "required", "why": "strictly numeric linear algebra — categoricals must be encoded before covariance means anything" }
+  ]
+}

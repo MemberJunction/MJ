@@ -1,0 +1,77 @@
+{
+  "identity": {
+    "modelKey": "seasonal_naive",
+    "family": "forecasting",
+    "libraryClass": "hand-rolled indexing (forecast[t+h] = y[t+h-s*ceil(h/s)]); statsforecast.models.SeasonalNaive is the library equivalent",
+    "aliases": ["seasonal naive", "snaive", "repeat last season", "seasonal random walk"],
+    "displayName": "Seasonal Naive",
+    "description": "The family FLOOR: forecast every future period as the value from the same position in the last observed seasonal cycle. Zero parameters, zero fit. It exists to be beaten — MASE is defined against it, so it IS the denominator of the family's honest scoreboard."
+  },
+  "axes": {
+    "task": "forecasting",
+    "secondaryTasks": [],
+    "learningType": "Temporal",
+    "parametric": "No",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Rules",
+    "dataShape": "Sequence",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "series", "dataShape": "series", "dtypes": ["numeric-time-indexed"], "targetSpec": "series", "required": true, "note": "regular time-indexed numeric series with at least one complete seasonal cycle of trailing history" }
+  ],
+  "emits": [
+    { "portType": "forecast-series", "granularity": "per-series", "paramsAsOutput": "none", "probabilistic": "none", "note": "the last observed cycle tiled across the horizon; intervals only via an in-sample-residual wrapper, which is a generic calibration add-on, not the method — so 'none'" }
+  ],
+  "learnsVsFixed": {
+    "learns": false,
+    "reusability": "reusable-only",
+    "note": "the family's untrainable member: nothing is estimated — 'fit' merely stores the last observed cycle, and seasonal_periods is supplied configuration, not a learned quantity. Reusable as a fixed reference on any series with a known cadence."
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/seasonal_naive.schema.json",
+    "hpMeta": {
+      "seasonal_periods": { "default": null, "prior": "categorical[7,12,52]", "searchable": false, "note": "a structural CONFIG set from the known cadence of the series, never searched — tuning the floor would move the goalpost the whole family is scored against" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "the forecast is a copy of observed values; rescaling the series rescales the copies identically" },
+    { "flag": "monotoneTransformInvariant", "value": true, "basis": "mechanism-derived", "why": "copying commutes with ANY pointwise transform: f(y[t-s]) is exactly the seasonal-naive forecast of the transformed series — the family's only transform-invariant member" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "a NaN anywhere in the last cycle is copied verbatim into the forecast — the mechanism propagates gaps rather than tolerating them" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "the series port contract is numeric; copying is dtype-agnostic in principle, but the family's port carries numeric-time-indexed values only" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "no likelihood, no stationarity, no error model — nothing is assumed because nothing is estimated" },
+    { "flag": "dataSizeTolerance", "value": "needs-history", "basis": "mechanism-derived", "why": "needs exactly one complete seasonal cycle — the smallest seasonal history requirement in the family; with less it cannot index y[t-s] at all" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "covers any horizon by tiling the last cycle — it never extrapolates a trend, which is precisely the blind spot trend-capable members exploit to beat it" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "seasonal_strength", "why": "high seasonal strength is exactly when this floor is STRONG — candidates must beat it precisely where seasonality dominates, which is what makes MASE honest" },
+      { "stat": "trend_slope", "why": "trend is the floor's blind spot: last season's values are systematically off by one season of drift, quantifying how much headroom trend-capable models have" },
+      { "stat": "n_full_cycles", "why": "the existence gate — below 1 complete cycle the method is undefined and the floor degrades to last-value naive" }
+    ],
+    "modelMetrics": [
+      { "metric": "mase_vs_seasonal_naive", "why": "this model IS the MASE denominator — its own score is 1.0 by construction; it is in the catalog so every other family member has a fixed, untunable reference to beat on a time-ordered holdout" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "history shorter than one full seasonal cycle", "behavior": "y[t-s] does not exist; method undefined", "mitigation": "gate", "note": "fall back to last-value naive" },
+    { "condition": "NaN inside the last observed cycle", "behavior": "NaN copied directly into the forecast", "mitigation": "reject-input", "note": "time-aware imputation must run first" },
+    { "condition": "wrong seasonal_periods configuration", "behavior": "systematically phase-misaligned forecast that looks plausible", "mitigation": "gate", "note": "cross-check the configured s against the ACF peak / seasonal_strength stat" },
+    { "condition": "constant series", "behavior": "perfect forecast — the floor is unbeatable and every candidate's MASE is undefined-ish (0/0 flavor)", "mitigation": "bank-entry", "note": "flag the series as degenerate for the whole family, not just this member" }
+  ],
+  "driver": {
+    "constructor": "no fit — store the trailing s values; forecast[t+h] = stored_cycle[(h-1) mod s]",
+    "deps": ["numpy"],
+    "wrapperNeeds": "series adapter: (time_col, value_col, freq, horizon) + seasonal_periods config; 'fit' is a no-op that stores the last cycle buffer",
+    "serialization": "joblib",
+    "threadSafety": "trivially thread-safe (immutable stored cycle)",
+    "tranche": "T5 (forecasting)"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "gaps in the last cycle propagate verbatim into the forecast; time-aware fill must run first" },
+    { "position": "transform", "verdict": "irrelevant", "why": "copying commutes with any pointwise transform (monotoneTransformInvariant true) — transforming before or after yields the identical forecast" },
+    { "position": "scale", "verdict": "irrelevant", "why": "scale-equivariant copying; standardization changes nothing" },
+    { "position": "encode", "verdict": "irrelevant", "why": "single numeric series has nothing to encode" }
+  ]
+}

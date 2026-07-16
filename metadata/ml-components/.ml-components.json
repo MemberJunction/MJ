@@ -1,0 +1,5491 @@
+[
+  {
+    "fields": {
+      "Name": "Isolation Forest",
+      "Description": "Unsupervised anomaly detection by random isolation: an ensemble of trees with random feature + random threshold splits on small subsamples. Anomalies are 'few and different', so they separate in FEWER splits — the anomaly score is the normalized average path length to isolation. No labels, no density model, near-linear cost.",
+      "Kind": "Model",
+      "Task": "anomaly",
+      "LearningType": "Unsupervised",
+      "Parametric": "No",
+      "EnsembleType": "Bagging",
+      "InterpretabilityClass": "BlackBox",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": false,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "6A152132-589D-4E40-8EB4-84C73086E7F2"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.651Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=anomaly-score",
+            "Direction": "Output",
+            "Name": "anomaly-score",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "695B5224-DBE1-47A3-B488-FE4F763BAE88"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.661Z",
+            "checksum": "64e0f2e0641b2652a23f191b7039535b302d730431963a14121b48a4410fe10a"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "11D41946-C657-46C7-8749-78362D53824C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.671Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F7D13532-862D-4E7C-BF9F-48DB3143C31C"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.754Z",
+      "checksum": "b767212a2fada0463417b467c6cff4210c0f05a0ba51c226be7cc04bb20f26b8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dummy Classifier",
+      "Description": "The leaderboard FLOOR for classification: predicts from the class marginals of y alone (most-frequent / prior / stratified / uniform / constant) and never reads a single feature. Its entire purpose is to define the score any real model must beat — a candidate that cannot clear this floor has learned nothing from the features.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Rules",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "511690A6-D024-4EB5-8268-C4817A5FF010"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.681Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "ACDD47AC-1742-44DD-8677-F2A9F451EE19"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.691Z",
+            "checksum": "26780aa7fdf2876f13d3790a84a9e97e7b6caddde85734e1f615c29515c3122e"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "32571711-09BA-4204-88BA-861E5A734D2D"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.703Z",
+            "checksum": "f712a3aec3163c9aa59849b7824a17595847b9f476e2266e79f706337d91cc99"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "08063332-44F4-4CC4-B949-B81F1277B4CB"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.768Z",
+      "checksum": "5da40ca387cc8d6da332544a31c82ed2ebb2d02b43e316bc4a57a6c1b04c6c0f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dummy Regressor",
+      "Description": "The leaderboard FLOOR for regression: predicts a single constant — the training mean, median, a quantile, or a supplied value — for every row, never reading a feature. Under strategy='mean' it is the R²=0 line by definition: any real regressor must clear it to have learned anything from the features.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Rules",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "EDEEC839-699C-4AD7-A232-50779033C601"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.714Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "C15E0BD2-96C2-43CD-A2CD-22C673BB18AE"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.728Z",
+            "checksum": "b17b3017b7470e73dfce668ee41d21200b56507fdf9c761b8278be74e78bc938"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "46EF2ED0-73BA-469A-8629-F7FB3FB42849"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.782Z",
+      "checksum": "7a061d1fc1f72c238f60dae33634b69f5170527f5f55c0c72e3b9c88128563b5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gaussian Process",
+      "Description": "Bayesian nonparametric kernel model: a Gaussian prior over functions, conditioned exactly on the data. Its defining virtue is NATIVE uncertainty — every regression prediction is a full posterior N(μ,σ²), with σ honestly inflating away from the data. Its defining gate is cost: exact inference inverts the n×n kernel matrix, O(n³) time / O(n²) memory, ceiling ≈ 10k rows.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Supervised",
+      "Parametric": "No",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "BlackBox",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": false,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "C27129CA-87CC-4D6E-B670-EEDBE35968A5"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.739Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=predictive-distribution",
+            "Direction": "Output",
+            "Name": "predictive-distribution",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "0677A2C9-C1E6-4B33-81B3-0077FF406961"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.747Z",
+            "checksum": "e06e1aafecf581377bd95eea997d6ebd199c2a12ba0ec4b7a451d8b9346cb178"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "539EBBE4-FD3E-4775-B866-09CF0CE01AF0"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.768Z",
+            "checksum": "f712a3aec3163c9aa59849b7824a17595847b9f476e2266e79f706337d91cc99"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "A26A296F-66B5-432A-9858-5380A491FF25"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.778Z",
+            "checksum": "566dc4ce2311b8fa3b6ebb22d521497d51eef4a82a070ea140b840af37b3d667"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "ABF9370E-BA5B-4170-B4D5-C99F3481A9CF"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.795Z",
+      "checksum": "0b8e36b2c073fd8ce9ed3b879beb26a47021effe7fc099dc381a3b860972b1ef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "k-Nearest Neighbors",
+      "Description": "Instance-based lazy learner: prediction is a (distance-weighted) vote or mean over the k closest training rows. There is no real fit — training memorizes the data and builds a spatial index; ALL modeling effort happens at query time in the distance metric.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "No",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "BlackBox",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": false,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "195E90D0-008B-4E27-BB4D-A33D0338049B"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.789Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "8E45B112-1686-457A-8EB3-DEED3C5F64CB"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.800Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "317C1306-3DDE-4627-8124-3C3F7F4EB4F2"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.811Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "E7A13FB6-19E9-4CDD-AA75-4EFCF3D5DB5C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.821Z",
+            "checksum": "acc37684bcd05337714121e7e314b8c6e10f6905eddad1dbc1cd42378a2f6d73"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2FE58451-E3F4-4BB9-A7A3-DF7956322D08"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.807Z",
+      "checksum": "188dd05e4339e3a84d03a1201daaa428b61f48ccd10b45a6bf0a6dc997ea7fc5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Multi-Layer Perceptron",
+      "Description": "Fully-connected feed-forward neural network trained by backprop (Adam/SGD/L-BFGS). A universal approximator whose capacity is set by hidden_layer_sizes; on typical business-tabular data it needs careful scaling, enough rows to feed its weight count, and usually fights gradient-boosting for the same slot rather than beating it.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "BlackBox",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": false,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Multilayer Perceptron"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "18B9F9AB-3D9F-4A57-8AD2-693B9054A92D"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.832Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "D1AF2407-39DD-4C4B-83B1-8C5BFECB38A8"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.844Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "78E2F4AC-9DDE-4F5A-AC10-B2A938F75D6A"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.855Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "9FF79D3D-2BF1-4AF4-96EA-78D8F432B066"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.864Z",
+            "checksum": "acc37684bcd05337714121e7e314b8c6e10f6905eddad1dbc1cd42378a2f6d73"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4B415486-F5F3-4F92-B0B1-2DCCE3EC9CBE"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.871Z",
+      "checksum": "637d7f574c61bc6ad22b2b67f7bd507fa271a8d0eeed27982945c638d8a9a28b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Naive Bayes",
+      "Description": "Closed-form Bayes classifier under the strong assumption that features are conditionally INDEPENDENT given the class. Fits in one pass (per-class moments or counts), works at tiny n, ranks well — and is famously miscalibrated when features correlate, because shared evidence gets multiplied in as if it were new.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "7953378F-FBAD-4682-BEE5-C23745292C8D"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.887Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "670E29C0-786A-443A-A78C-1D8A9CD30D82"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.902Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "E90812C4-D2A9-4CB6-B224-96AB60B0A73E"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.914Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "737694A5-B468-4F27-847D-4B8CD12E6653"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.820Z",
+      "checksum": "a804ced7fa49acdee7b8b64ba68a6e618dd37ceaf52d3fe4271dd1927ac62ece"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Support Vector Machine",
+      "Description": "Max-margin kernel machine: solves a dual QP to find the separating surface (or ε-tube, SVR) defined by a subset of support vectors, with the RBF kernel lifting the boundary to be nonlinear. Strong on small-to-medium clean numeric data; fit cost over the n×n kernel matrix is its ceiling.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "No",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "BlackBox",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": false,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "944ADECD-D560-4A1F-854D-D01616364EFF"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.925Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "C47F4FFD-6CCE-4F87-9808-14D4C843A972"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.936Z",
+            "checksum": "26780aa7fdf2876f13d3790a84a9e97e7b6caddde85734e1f615c29515c3122e"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "89AD3774-A6E6-4531-ABDA-0A1EF3BD4D9D"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.948Z",
+            "checksum": "d9c010bd3080a880274cd02453562a85643165f71417c4ad78ef4792ca1b1b57"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "26FCF05D-5DB4-4A45-A78D-5245B35888C3"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.960Z",
+            "checksum": "7407d769f16c0505b0401f9c9477fc5a67751fa3bc373ba44bd2c8ac539e97c4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D13019FF-0173-4732-8C15-8DF5C53F7F30"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.832Z",
+      "checksum": "88a813c2253392f61b32615d534ac4deadb1441f819ae07d643436e785c3e35e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DBSCAN",
+      "Description": "Density-based clusterer: grows clusters from core points (≥ min_samples neighbors within eps), discovering arbitrarily-shaped clusters WITHOUT choosing k, and labeling sparse points as noise (-1). Its defining operational edge: sklearn's DBSCAN has NO predict() for new points — assignment of unseen rows is a wrapper responsibility, which is exactly what makes it a wrapper-needs case study for the family.",
+      "Kind": "Model",
+      "Task": "clustering",
+      "LearningType": "Unsupervised",
+      "Parametric": "No",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "BlackBox",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": false,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "D086F97F-6FDA-4390-9269-16A1B70B9BB2"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.969Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=embedding",
+            "Direction": "Input",
+            "Name": "embedding",
+            "IsRequired": false,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "5E9D46E5-BE21-4A6D-A543-1595C8DB535C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.990Z",
+            "checksum": "67ed0c3fe1a6791310592b0c3aedd0fd5efdb3e288e8d4445cf53a9da1928877"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=cluster-id",
+            "Direction": "Output",
+            "Name": "cluster-id",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "25A6645A-CF41-43FC-9F38-545404D41310"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:33.999Z",
+            "checksum": "5de998409987cd1a96fe2a370f29b3cbce7ebdea897213f4b5d27607fe93d970"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2EBC085B-1F91-4A49-AD99-AB03C813AB04"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.843Z",
+      "checksum": "7dd25971c16a00d97bf29ab870d69b680921fa0369b2b7a5579e247b04c69b8f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gaussian Mixture Model",
+      "Description": "Probabilistic clusterer: fits a weighted mixture of k Gaussians by EM. Its distinguishing emission is the SOFT assignment — per-row membership probabilities (responsibilities) rather than a hard label — and, because it is a genuine density model, it scores unseen points natively and doubles as an anomaly screen. The price is the elliptical assumption: every cluster is a mean + covariance ellipsoid.",
+      "Kind": "Model",
+      "Task": "clustering",
+      "LearningType": "Unsupervised",
+      "Parametric": "Yes",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "23DFE070-3417-474D-A406-7015D491748F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.020Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=soft-assignment",
+            "Direction": "Output",
+            "Name": "soft-assignment",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "8AAAC408-C413-431F-AC6B-3C101B53105C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.124Z",
+            "checksum": "bcc2d024d7ed38ff6c674a6d73c371cf9c3bc6df93007956680efe889b2d9ecc"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=cluster-id",
+            "Direction": "Output",
+            "Name": "cluster-id",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "9B7F3502-8C45-4A6A-B107-140CDB4DA5EA"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.036Z",
+            "checksum": "5de998409987cd1a96fe2a370f29b3cbce7ebdea897213f4b5d27607fe93d970"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=anomaly-score",
+            "Direction": "Output",
+            "Name": "anomaly-score",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "9B39402A-1607-460F-B926-1D6EFE6F311F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.047Z",
+            "checksum": "771e45f43d7ae875bd63fc944b2cee11e5cdfca09a642b476082a5c03bd74aeb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F5DA998A-CB94-4FC8-8350-7321619290FA"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.860Z",
+      "checksum": "09b882c3fb7a3ebb510d05bb6a3ab0759df7b661cb529d4f279cf7af338b5754"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Agglomerative (Hierarchical) Clustering",
+      "Description": "Bottom-up hierarchical clusterer: starts with every row as its own cluster and greedily merges the closest pair under a linkage criterion (ward/complete/average/single), producing a full merge tree — the dendrogram — that can be cut at ANY height, so the segment count is a post-fit choice rather than a pre-fit commitment. Like DBSCAN it has no native predict() for unseen rows (fit_predict only) — new-point assignment is a wrapper responsibility. interpretabilityClass 'Rules' is the nearest 4-way fit for the dendrogram: a human-readable nested merge structure, though not literal decision rules.",
+      "Kind": "Model",
+      "Task": "clustering",
+      "LearningType": "Unsupervised",
+      "Parametric": "No",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "Rules",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "7072F02A-73B1-46C8-823B-BB9284BF2AD7"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.058Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=cluster-id",
+            "Direction": "Output",
+            "Name": "cluster-id",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "137EF336-450E-4E13-A2CF-DB9576956793"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.069Z",
+            "checksum": "f81da84efa8660813bea5d50c4849a7f4b23c2582d6df4d050fe1707ade71f92"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A1E36E24-8B1C-4732-8F6B-4131F95A8D9D"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.891Z",
+      "checksum": "95b297f1f5ad340cf7e2e890548b6f063b745046e7858ecb3991c5b34b6c8135"
+    }
+  },
+  {
+    "fields": {
+      "Name": "K-Means",
+      "Description": "Prototype-based partitioner; the clustering default. Alternates assign-to-nearest-centroid / recompute-centroid steps to minimize within-cluster squared Euclidean distance, yielding k compact spherical segments plus a readable k×p centroid matrix. k is selected by a silhouette sweep, not fixed a priori. Segmentation deliverable first, supervised feature second — see additionalObservations for the demand-gate lesson.",
+      "Kind": "Model",
+      "Task": "clustering",
+      "LearningType": "Unsupervised",
+      "Parametric": "Yes",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "29DB9BE0-6D6B-42D1-8A21-31FA88222C2D"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.081Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=cluster-id",
+            "Direction": "Output",
+            "Name": "cluster-id",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "70CC3C37-59D5-4C1B-94D7-2F2C43696D10"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.095Z",
+            "checksum": "f81da84efa8660813bea5d50c4849a7f4b23c2582d6df4d050fe1707ade71f92"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=embedding",
+            "Direction": "Output",
+            "Name": "embedding",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "58FC1AFB-3C34-448D-B0B9-500A1A5D0784"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.104Z",
+            "checksum": "ee9884d4387bd8634082a7a4aaceab69d38d02d5048c4a0ec2e83af3fac79f83"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D4316E24-4209-4DEF-A205-52724A4BEDA0"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.903Z",
+      "checksum": "87a8b4f48c91959774655661e8bfa81065dcb87e2490cf8ba2537550a878ab01"
+    }
+  },
+  {
+    "fields": {
+      "Name": "BG/NBD (Beta-Geometric / Negative Binomial)",
+      "Description": "Latent-attrition purchase model for non-contractual settings: Poisson purchasing while alive with Gamma-distributed rates across customers, and Beta-Geometric dropout that can occur only after a purchase. From an RFM summary alone it answers 'is this customer still alive?' (P(alive)) and 'how many purchases in the next t periods?' — without churn ever being observed.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Temporal",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "EventLog",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=event-log",
+            "Direction": "Input",
+            "Name": "event-log",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "4D089E36-E78E-430C-851F-0E27031F80EF"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.134Z",
+            "checksum": "60bf34fcce608bdf533a1b40371525404f3d3beaa4a929656f5f3a0105dfa1c6"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "2603CB65-5967-4B3F-BB32-CE097DA45BBD"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.161Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "D98DB987-1626-4E24-8B14-D0DA3141501D"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.171Z",
+            "checksum": "d9c010bd3080a880274cd02453562a85643165f71417c4ad78ef4792ca1b1b57"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "9AAA4561-ECD7-49C2-BE63-D90E514FFD3C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.249Z",
+            "checksum": "743c24f13abde5835995b631ec66ec1c5d48814208ff6ff58cd9a32f844a3038"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=trained-model",
+            "Direction": "Output",
+            "Name": "trained-model",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "90D9BCC0-8678-40C8-AC55-9A0F2B640882"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.262Z",
+            "checksum": "384359908da81f452dcb4b9186b1e8ed77cd6bac281cddfba13bd299fedc4a3b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7DEED949-055B-4DBB-8EEA-6F8A6355D148"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.915Z",
+      "checksum": "215d8111d55266f53f367d523048ebb17c416153e4ea3d1e89c6e9fe9e7552e0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gamma-Gamma Monetary Model",
+      "Description": "The monetary companion to the transaction BTYD models: a customer's average transaction value is Gamma-distributed around a latent mean that is itself Gamma-distributed across customers. Produces the conditional expected average profit per transaction (empirical-Bayes shrinkage of the customer's observed average toward the population), and — composed with a fitted BG/NBD or Pareto/NBD — discounted customer lifetime value.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Unsupervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "EventLog",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=event-log",
+            "Direction": "Input",
+            "Name": "event-log",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "0D539877-EA7D-4513-B344-DF40B284E904"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.185Z",
+            "checksum": "60bf34fcce608bdf533a1b40371525404f3d3beaa4a929656f5f3a0105dfa1c6"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=trained-model",
+            "Direction": "Input",
+            "Name": "trained-model",
+            "IsRequired": false,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "D1A37401-708E-4DCC-A793-5C23F2F5D66C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.275Z",
+            "checksum": "6e42ec51c0a031ce6235307580c73a027b207bded82139de0a9b30ee9a097b1a"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "43D15C96-AC78-4104-AFE6-112D0C884D8F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.200Z",
+            "checksum": "d9c010bd3080a880274cd02453562a85643165f71417c4ad78ef4792ca1b1b57"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "5666B66F-9106-4BA2-B184-C9CF1E410C7B"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.284Z",
+            "checksum": "743c24f13abde5835995b631ec66ec1c5d48814208ff6ff58cd9a32f844a3038"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "848A8906-DED0-47CC-BD70-DED14388C18F"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.926Z",
+      "checksum": "e271af5bc0d36e3e985521910bc4a0ecdd8626c1b16467b95db011c40b02ed27"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pareto/NBD",
+      "Description": "The original (1987 Schmittlein-Morrison-Colombo) buy-till-you-die model and BG/NBD's continuous-time sibling: Poisson purchasing while alive with Gamma heterogeneity, and exponentially distributed customer lifetimes with Gamma heterogeneity (Pareto-II dropout). Dropout can occur at any instant — so P(alive) is an exact continuous-time posterior, well-defined and informative even for zero-repeat customers.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Temporal",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "EventLog",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=event-log",
+            "Direction": "Input",
+            "Name": "event-log",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "0E152270-15F5-4EB9-BECB-77D55D8E3956"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.217Z",
+            "checksum": "60bf34fcce608bdf533a1b40371525404f3d3beaa4a929656f5f3a0105dfa1c6"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "1D5156EA-CA97-451C-B5E8-5E61C5451E3F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.227Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "AA6888B5-0CBB-47AD-BC2A-E987CD0EB03C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.311Z",
+            "checksum": "d9c010bd3080a880274cd02453562a85643165f71417c4ad78ef4792ca1b1b57"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "C8C9A2D5-BC6F-4F96-ADCC-15FA8F79FC65"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.324Z",
+            "checksum": "743c24f13abde5835995b631ec66ec1c5d48814208ff6ff58cd9a32f844a3038"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=trained-model",
+            "Direction": "Output",
+            "Name": "trained-model",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "3DB68B12-BECF-4BA6-8A84-57E87CA5CA50"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.336Z",
+            "checksum": "384359908da81f452dcb4b9186b1e8ed77cd6bac281cddfba13bd299fedc4a3b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DFCCB692-3BD4-4565-A879-C4CA68F4429D"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.938Z",
+      "checksum": "34241470199e46bf2bb2a2efdce365662422473a9a5a335d43f6866c7de3c500"
+    }
+  },
+  {
+    "fields": {
+      "Name": "PCA",
+      "Description": "Linear dimensionality reduction via SVD of the (centered) data matrix: finds the orthogonal directions of maximum variance and projects rows onto the top k. Captures second-order (linear/covariance) structure only; the fitted linear map is reusable on new rows and the loadings are directly inspectable.",
+      "Kind": "Model",
+      "Task": "dim-reduction",
+      "LearningType": "Unsupervised",
+      "Parametric": "Yes",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "8F8B5258-2825-428A-8C59-8C4884363DD4"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.348Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=embedding",
+            "Direction": "Output",
+            "Name": "embedding",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "E2936666-B0D6-4ACD-8079-D1F095FC1FE4"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.359Z",
+            "checksum": "25c54ac4071234ca7e3175db43ff53b4b6eecfe2cd92c7a2ca4766539bc89dbc"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "396ED5DF-385F-4AF6-B952-23B01978F278"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.373Z",
+            "checksum": "485924a53e73e77a515437f73bf4d63906cdb64f1c8c2466ffeb503d57a781eb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F3983C7E-1513-4C9F-8CB3-88947427B6A8"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.949Z",
+      "checksum": "ad90ae032690cffd3b56d4808c9c839d1bc733dc17cd7b8d5f896ee60e3ce54f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "UMAP",
+      "Description": "Nonlinear manifold learning: builds a fuzzy k-NN topology of the data and optimizes a low-dimensional layout that preserves LOCAL neighborhood structure. Unrolls curved structure PCA cannot; the price is stochastic fits, unreliable global distances, and no meaningful inverse back to feature space.",
+      "Kind": "Model",
+      "Task": "dim-reduction",
+      "LearningType": "Unsupervised",
+      "Parametric": "No",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "BlackBox",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": false,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "6594B0FE-5779-4EF2-B587-69754C1DE87A"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.385Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=embedding",
+            "Direction": "Output",
+            "Name": "embedding",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "6BA04B41-437D-4ADB-8ADE-EE1605BFEE24"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.396Z",
+            "checksum": "25c54ac4071234ca7e3175db43ff53b4b6eecfe2cd92c7a2ca4766539bc89dbc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "98BE4C2A-C840-45A1-8276-0EECE73C06B3"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.960Z",
+      "checksum": "b9b0ceb480809d4e73ee669656041c71b512bb676a170040b18f0feb9e1f9bda"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ARIMA",
+      "Description": "Autoregressive integrated moving-average forecaster for a single time-indexed series; models autocorrelation and (with seasonal terms) periodicity, producing horizon forecasts with prediction intervals.",
+      "Kind": "Model",
+      "Task": "forecasting",
+      "LearningType": "Temporal",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Input",
+            "Name": "series",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "63E280B3-9E02-4066-80D8-8E721424E745"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.421Z",
+            "checksum": "701c2f83db904af007f29dda9cb935bd131f2659cd43294f8020852b94456253"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=forecast-series",
+            "Direction": "Output",
+            "Name": "forecast-series",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "998D492A-C451-4EA1-8D6C-A0CDBB6636D3"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.433Z",
+            "checksum": "1df55359dbae0bc4c0b378d7be18e6c1745f9d86a4380574af8f94e51eb8b412"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "61120D44-FF12-45D6-B4AB-4FABD2D96115"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.460Z",
+            "checksum": "485924a53e73e77a515437f73bf4d63906cdb64f1c8c2466ffeb503d57a781eb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B6B1A11C-7309-4BA2-BB2F-EBF1C79B3020"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.971Z",
+      "checksum": "6210c5d3f2d5cabc5391741bf8961c52964ca885354a4f49df36bbec9a9ba7bf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Croston (Intermittent Demand)",
+      "Description": "The intermittent-demand specialist: runs two separate exponential smoothers — one on non-zero demand SIZES, one on the INTERVALS between demand events — and forecasts the flat demand rate size/interval. Its niche is sparse series full of zeros (event registrations, per-chapter merch orders, low-volume renewals) where every mainstream forecaster smears the zeros into nonsense.",
+      "Kind": "Model",
+      "Task": "forecasting",
+      "LearningType": "Temporal",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Input",
+            "Name": "series",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "B4ACA3A5-19D2-46C8-94A3-B3BC5042FAE3"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.471Z",
+            "checksum": "701c2f83db904af007f29dda9cb935bd131f2659cd43294f8020852b94456253"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=forecast-series",
+            "Direction": "Output",
+            "Name": "forecast-series",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "DC74EAA8-711F-447D-A46F-9A10E6395F46"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.483Z",
+            "checksum": "1df55359dbae0bc4c0b378d7be18e6c1745f9d86a4380574af8f94e51eb8b412"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8D0FFDD6-02D6-4473-A6C6-B3CDD81B5F81"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.983Z",
+      "checksum": "5edcd7e5e21390c4f5cc14da999f0139367919d3d4ca2acf724a8dffbbe157bb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Exponential Smoothing (ETS)",
+      "Description": "Innovations state-space exponential smoothing: recursively weighted level, trend, and seasonal components with exponentially decaying memory. The workhorse mid-tier forecaster — more robust than ARIMA on short business series, strictly stronger than the naive floors when trend or seasonality is real.",
+      "Kind": "Model",
+      "Task": "forecasting",
+      "LearningType": "Temporal",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Input",
+            "Name": "series",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "7ABE2E50-571D-4CC7-B8A0-F2D99AD3D7DF"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.493Z",
+            "checksum": "701c2f83db904af007f29dda9cb935bd131f2659cd43294f8020852b94456253"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=forecast-series",
+            "Direction": "Output",
+            "Name": "forecast-series",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "C21B29D1-DD36-4232-B59D-AB1C3406B18A"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.506Z",
+            "checksum": "1df55359dbae0bc4c0b378d7be18e6c1745f9d86a4380574af8f94e51eb8b412"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "9B059D4D-E0AD-40BB-9686-488EC5C3F7BD"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.520Z",
+            "checksum": "485924a53e73e77a515437f73bf4d63906cdb64f1c8c2466ffeb503d57a781eb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D4D09C8E-0E13-4ED8-BDFA-C15C916BCEB7"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:32.992Z",
+      "checksum": "8fdafdb985218a4f713e0a76f0faf75772f0f493e3afc79272123150932cb48d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Prophet",
+      "Description": "Decomposable curve-fit forecaster: piecewise-linear (or logistic) trend with automatic changepoints + Fourier-series seasonalities + holiday effects, fit as a regression on time via Stan MAP. Regression-on-timestamps rather than lag-recursion — which is why it tolerates gaps and irregular sampling that break ARIMA/ETS.",
+      "Kind": "Model",
+      "Task": "forecasting",
+      "LearningType": "Temporal",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Input",
+            "Name": "series",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "A65F3118-E77E-4580-ABF5-6B3E88331387"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.532Z",
+            "checksum": "701c2f83db904af007f29dda9cb935bd131f2659cd43294f8020852b94456253"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=forecast-series",
+            "Direction": "Output",
+            "Name": "forecast-series",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "45C53338-C866-4A9A-B635-BB8B384A72F9"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.544Z",
+            "checksum": "1df55359dbae0bc4c0b378d7be18e6c1745f9d86a4380574af8f94e51eb8b412"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0ABE27D2-EFE8-414C-83B7-DD290CE48FF7"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.014Z",
+      "checksum": "0b0936f63e71b52a1a65443a3626f1dc015a9c90e5f6d36533f976b308982696"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Seasonal Naive",
+      "Description": "The family FLOOR: forecast every future period as the value from the same position in the last observed seasonal cycle. Zero parameters, zero fit. It exists to be beaten — MASE is defined against it, so it IS the denominator of the family's honest scoreboard.",
+      "Kind": "Model",
+      "Task": "forecasting",
+      "LearningType": "Temporal",
+      "Parametric": "No",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Rules",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Input",
+            "Name": "series",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "B4802B4D-4EB7-4D88-9396-91317F1A27AD"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.555Z",
+            "checksum": "701c2f83db904af007f29dda9cb935bd131f2659cd43294f8020852b94456253"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=forecast-series",
+            "Direction": "Output",
+            "Name": "forecast-series",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "F393E9B4-AD89-4DCC-9A8D-BE6BE0339B5A"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.565Z",
+            "checksum": "1df55359dbae0bc4c0b378d7be18e6c1745f9d86a4380574af8f94e51eb8b412"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0E1E7D3B-B6F0-47AD-964D-06AF06E3E3F1"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.026Z",
+      "checksum": "8768f7013c6362fafd3ef5fbe29f50f607e680de6591d0dd5040809325dd683c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Simple Moving Average",
+      "Description": "Mean of the last k observations, held flat over the horizon. The family's second floor and its resident SMOOTHER: as a forecaster it is the level-only reference for non-seasonal series; as a preprocessor it emits the rolling-mean series itself for a downstream forecaster to consume.",
+      "Kind": "Model",
+      "Task": "forecasting",
+      "LearningType": "Temporal",
+      "Parametric": "No",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Rules",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Input",
+            "Name": "series",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "333681A1-0F48-4D56-BAD7-1CB6CA2CD8EE"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.590Z",
+            "checksum": "701c2f83db904af007f29dda9cb935bd131f2659cd43294f8020852b94456253"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=forecast-series",
+            "Direction": "Output",
+            "Name": "forecast-series",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "1D4956E0-3FE6-405C-A5F8-F6D9AF441716"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.601Z",
+            "checksum": "1df55359dbae0bc4c0b378d7be18e6c1745f9d86a4380574af8f94e51eb8b412"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Output",
+            "Name": "series",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "13AEA8C8-0125-4F6F-88F1-DE0B282F6B78"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.612Z",
+            "checksum": "079057e12d3366b3fb0f6607a4669898f2038b86fdb015285653f4ebeff9bf1c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6184CEA8-1866-45F3-ABED-A8F2A2ECFF4E"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.037Z",
+      "checksum": "5e46d6af4fde67a22b075d72c532028484dad94a6cc6f432d3c6bb053503439e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Theta Model",
+      "Description": "Competition-proven simple forecaster (won M3, strong in M4): deseasonalize, then combine a linear-drift theta-line with an SES theta-line — equivalent to SES with drift on the deseasonalized series, reseasonalized. Near-zero tuning surface with accuracy that embarrasses far heavier methods on monthly/quarterly business series.",
+      "Kind": "Model",
+      "Task": "forecasting",
+      "LearningType": "Temporal",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Input",
+            "Name": "series",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "9F5F7F19-4F23-4F65-B175-525627BBF64D"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.623Z",
+            "checksum": "701c2f83db904af007f29dda9cb935bd131f2659cd43294f8020852b94456253"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=forecast-series",
+            "Direction": "Output",
+            "Name": "forecast-series",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "B6EEE645-24D0-4BED-A348-CCAD72ECC98B"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.634Z",
+            "checksum": "1df55359dbae0bc4c0b378d7be18e6c1745f9d86a4380574af8f94e51eb8b412"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6E3430BB-E397-4906-9D0A-0E399F3CBDF9"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.047Z",
+      "checksum": "22734701db0152408ff478d53106a1d5e0e7274ad282dacab90343719c60ee80"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Generalized Additive Model",
+      "Description": "A GLM whose linear terms are replaced by penalized SMOOTHS: y's link-mean = intercept + f1(x1) + ... + fp(xp), each f a spline whose wiggliness is penalty-controlled. Keeps the GLM's per-feature interpretability (each effect is a plottable 1-D curve) while capturing nonlinearity a straight coefficient cannot — the midpoint between GLM and black-box.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Supervised",
+      "Parametric": "Semi",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "8E7E87F3-64BC-4ABA-A05C-E19C9D730D60"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.645Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "0F7D4FC6-AF33-4B2C-A02D-5D03404F7E17"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.656Z",
+            "checksum": "b17b3017b7470e73dfce668ee41d21200b56507fdf9c761b8278be74e78bc938"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "7E1A1DA8-EC66-4B99-AC17-F3DE1D3583D5"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.668Z",
+            "checksum": "f712a3aec3163c9aa59849b7824a17595847b9f476e2266e79f706337d91cc99"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "2685AAE8-33D8-4CA0-98BF-CDA86E88EC32"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.681Z",
+            "checksum": "743c24f13abde5835995b631ec66ec1c5d48814208ff6ff58cd9a32f844a3038"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6704EEDC-7DA2-40F1-A0FE-F2B91EFB0C8A"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.058Z",
+      "checksum": "feb6c671d83611e915b00a368d89b87ff191003b2b5ee3f4765390d12629a9db"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Negative Binomial Regression",
+      "Description": "Count regression for OVERDISPERSED data: a Poisson mean with a gamma-mixed rate, adding an estimated dispersion parameter alpha so variance = mean + alpha*mean^2 (NB2). The honest upgrade from Poisson when variance outruns the mean — same log-linear coefficients, correctly-sized standard errors.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "4CCE483D-F5AA-449E-B934-19FC5478AA6F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.690Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "9F87BDFB-940D-4048-A5F5-2A30FD5E26CA"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.715Z",
+            "checksum": "b17b3017b7470e73dfce668ee41d21200b56507fdf9c761b8278be74e78bc938"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "1D1C1318-97D5-4CAB-9EE7-20A0BA557FDC"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.727Z",
+            "checksum": "485924a53e73e77a515437f73bf4d63906cdb64f1c8c2466ffeb503d57a781eb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "35DC8A4B-FF55-48CD-8488-798E92AB5711"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.068Z",
+      "checksum": "d0674692cf28e652a7bebf93309b6d760cd9e2f2163d71a21a1116633ae7120c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ordinal Regression (Ordered Model)",
+      "Description": "Regression for ORDERED categories (satisfaction tiers, membership levels, risk grades): a single latent index x'B is cut by K-1 estimated thresholds into K ordered classes. One slope vector shared across all cutpoints (proportional odds) — the order in the target is used, not discarded as flat multiclass would.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "D0CC5045-3FDB-4F5E-954F-D9C314177E39"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.739Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "29C01C82-5039-4D96-B0BB-B4550950E2C1"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.750Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "7C3F279D-2469-4B4B-A7C9-E4355E98D74D"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.762Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "52636B86-A5B1-466B-9BCC-D9DF49A8E054"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.775Z",
+            "checksum": "743c24f13abde5835995b631ec66ec1c5d48814208ff6ff58cd9a32f844a3038"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7179216E-4FEC-4F06-BD6E-96324CE9F49C"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.080Z",
+      "checksum": "37ec8c7ed0ba2ecbd10126958221390d34d64d7214008861845f7a1b9a0a8c0a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Poisson GLM",
+      "Description": "The canonical count regression: models a non-negative integer target as Poisson-distributed with log-linear mean exp(x'B). Coefficients exponentiate to rate ratios; supports offsets/exposure for per-unit-time rates. Its defining commitment is equidispersion — variance EQUALS the mean.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "5157C3D8-A250-45D2-AF83-426908F2A962"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.787Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "C7EC882B-E1A7-472F-A83D-E83AC8DB627F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.800Z",
+            "checksum": "b17b3017b7470e73dfce668ee41d21200b56507fdf9c761b8278be74e78bc938"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "942D15B4-DFF9-4065-9BF2-3B9C6DF6900C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.812Z",
+            "checksum": "485924a53e73e77a515437f73bf4d63906cdb64f1c8c2466ffeb503d57a781eb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "87579B82-EC65-46F8-A1F8-28F088BE3AA4"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.091Z",
+      "checksum": "568e31387b990caa2beba130dd3312c1c0ed82e33987e48bd389406cf61602b0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quantile Regression",
+      "Description": "Linear regression of a conditional QUANTILE instead of the mean: minimizes the asymmetric pinball (check) loss, so q=0.5 is median regression and tail q's map the outcome's spread. Makes NO distributional assumption on the errors — the family's distribution-free member, robust to outliers and heteroscedasticity.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "B239790E-301A-4716-9653-78FF1AEDFAA1"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.821Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=quantile-band",
+            "Direction": "Output",
+            "Name": "quantile-band",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "9E90D160-116D-4220-8C27-29383C7754A4"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.947Z",
+            "checksum": "b038e0e468534113dd7bd32f14eff372d848b7151c66791377ad548cc445e250"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=quantile-band",
+            "Direction": "Output",
+            "Name": "quantile-band:per-model",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "E51BB723-4FE2-4D82-A6D4-9CD288F578B0"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.956Z",
+            "checksum": "97b3ba0bc7cde8d7c3ec6704e146d69bbfe1fb9bd1400ac70c898289c72a27f2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "10B5735A-5952-43B8-A061-C8B10F3F4B35"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.101Z",
+      "checksum": "5479e152bf632a87349ed9bd093796fc1bef23616099c8534a78e13620dc52b8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tweedie GLM",
+      "Description": "GLM for zero-inflated CONTINUOUS targets: with variance power p in (1,2) the Tweedie family is a compound Poisson-gamma — an exact point mass at zero plus a right-skewed positive tail — modeled in ONE equation. The canonical shape of insurance pure premium, per-member revenue, and claim/donation totals.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "002EE8E6-8E75-433C-8BC7-D7BF5C8CD4E0"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.846Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "1C94A669-57A8-41E3-9079-A2EE1FFE67DE"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.858Z",
+            "checksum": "b17b3017b7470e73dfce668ee41d21200b56507fdf9c761b8278be74e78bc938"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "19F65DAA-483C-48D5-A86A-EF4F1FD22C1C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.870Z",
+            "checksum": "485924a53e73e77a515437f73bf4d63906cdb64f1c8c2466ffeb503d57a781eb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "56613CCA-A1B2-4BF7-B39C-5884C375624A"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.111Z",
+      "checksum": "d797718492f4f004b6ef15fc2ec23f54aaf41cb69aed08862d208cebc767d592"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zero-Inflated Count Model",
+      "Description": "Two-part count mixture: a logit/probit INFLATION submodel decides whether a row is a structural zero (never-participant), and a Poisson/NB COUNT submodel generates counts (including sampling zeros) otherwise. Separates 'won't ever' from 'didn't this time' — two coefficient stories one plain count model conflates.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "None",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "CC14809B-23DD-4016-B4A5-9A33822EB664"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.882Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "D943AA86-151F-4A49-94AE-986C7C8863FA"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.893Z",
+            "checksum": "b17b3017b7470e73dfce668ee41d21200b56507fdf9c761b8278be74e78bc938"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "23E7ADC0-19E3-4BCD-B447-6B0A0E63D89A"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.907Z",
+            "checksum": "f712a3aec3163c9aa59849b7824a17595847b9f476e2266e79f706337d91cc99"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "93C65F91-6EEF-4B47-BC0F-72209B7FB88E"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.918Z",
+            "checksum": "743c24f13abde5835995b631ec66ec1c5d48814208ff6ff58cd9a32f844a3038"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8E5010D7-F3FC-4C39-A859-182C72D6F5CC"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.137Z",
+      "checksum": "1acbd1cec0efc4c258524a2cb5f53c9f119bdd678264fd791ec9b7d5ddded15c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "CatBoost",
+      "Description": "Gradient-boosted ensemble of symmetric (oblivious) trees with ordered target statistics + optional ordered boosting (CPU default is Plain) and ordered target statistics — its distinguishing mechanism: raw categorical features are encoded internally without target leakage, so it is the strongest default on categorical-heavy tabular data.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "No",
+      "EnsembleType": "Boosting",
+      "InterpretabilityClass": "ImportanceOnly",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "72A63D41-4359-4BE1-B7DE-20DFA3C5B672"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.928Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "981A9D8B-39CE-4327-BAF6-27F29EFF2F38"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.980Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "451E20AD-BD3D-47C4-AE19-084F1E5B39B3"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:34.991Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "E83B9B50-7DF7-4490-B872-34A52B363E85"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.000Z",
+            "checksum": "acc37684bcd05337714121e7e314b8c6e10f6905eddad1dbc1cd42378a2f6d73"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=attributions",
+            "Direction": "Output",
+            "Name": "attributions",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "39A4FD71-4DD7-4ED6-AD8A-D4A4D9D001A2"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.073Z",
+            "checksum": "127306a643b6be80080aef6eb5340189284bfb69b192c2900f02da5f3bcba7d6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F506E84B-6708-4FDC-80E4-022AB692A46E"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.146Z",
+      "checksum": "7a62cf5f211bf8ca9f7b27cfad73e51b107a88ffa4082a905da33be21460940a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LightGBM",
+      "Description": "Histogram-based gradient-boosted tree ensemble with leaf-wise (best-first) growth. Bins features into discrete histograms and grows the highest-gain leaf next, making it the fastest strong tabular learner at scale — with native missing-value and native categorical handling.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "No",
+      "EnsembleType": "Boosting",
+      "InterpretabilityClass": "ImportanceOnly",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=LightGBM"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "65CF0598-4CDB-4B47-91D7-F65F43E9E7FC"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.016Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "FB11CF8D-FB48-476C-81CE-4C30537F5618"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.026Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "B8A8BC05-9034-46FD-B7B8-EE29C00502D9"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.036Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "C232F78F-F65E-4B00-8F69-2BA0A460794F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.045Z",
+            "checksum": "acc37684bcd05337714121e7e314b8c6e10f6905eddad1dbc1cd42378a2f6d73"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=attributions",
+            "Direction": "Output",
+            "Name": "attributions",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "B8B481EE-5E9F-498C-BC4F-C09A28BC9EBF"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.085Z",
+            "checksum": "127306a643b6be80080aef6eb5340189284bfb69b192c2900f02da5f3bcba7d6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A463974B-16F7-4711-981D-B10072246BE6"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.226Z",
+      "checksum": "9d89b0186c796da719df5e3a6d6fc2fdaca0b47871ccf1169472fe413e3e5468"
+    }
+  },
+  {
+    "fields": {
+      "Name": "XGBoost",
+      "Description": "Gradient-boosted decision-tree ensemble; the strong tabular default. Additively fits shallow trees to the gradient of the loss, capturing non-linearities and interactions with minimal preprocessing.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "No",
+      "EnsembleType": "Boosting",
+      "InterpretabilityClass": "ImportanceOnly",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=XGBoost"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "4A725391-389B-4A50-988F-01F623F03C3C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.057Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "8BC8CD9D-654A-4486-A999-17CAF629E118"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.105Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "985D1240-B412-47AF-8A4A-56674E011DB1"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.116Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "D19F3195-0484-4DA0-821C-F2A394E5B448"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.127Z",
+            "checksum": "acc37684bcd05337714121e7e314b8c6e10f6905eddad1dbc1cd42378a2f6d73"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=attributions",
+            "Direction": "Output",
+            "Name": "attributions",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "78101A6A-12D4-4D15-9869-F313B974A326"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.137Z",
+            "checksum": "127306a643b6be80080aef6eb5340189284bfb69b192c2900f02da5f3bcba7d6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "85C99F03-9F87-4480-9231-B008C2EAAD0D"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.243Z",
+      "checksum": "fa7efe32414bce835654e865a48279f86df8025470797fb495fdbbda52c6939a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Elastic Net",
+      "Description": "Convex blend of L1 and L2 penalties: keeps lasso's exact-zero selection while the L2 component adds the grouping effect — correlated features enter and leave the support TOGETHER instead of lasso's arbitrary single pick. The default when you want sparsity on correlated tabular data.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "57910CDA-91F2-4BEF-BBC5-8C5C541D87A6"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.148Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "BC44D46A-D957-411F-9948-391A0C29C05E"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.158Z",
+            "checksum": "b17b3017b7470e73dfce668ee41d21200b56507fdf9c761b8278be74e78bc938"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "CF0C3EF9-0D5E-417F-9447-A41A1404311C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.170Z",
+            "checksum": "485924a53e73e77a515437f73bf4d63906cdb64f1c8c2466ffeb503d57a781eb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FCB5BA68-392C-480E-9BE6-CA1BAD13FFDB"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.162Z",
+      "checksum": "e06cf7276b8c51757e178522805e875ed1a58718f9a548f95f8f73cd28b89978"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lasso",
+      "Description": "L1-penalized least squares: the soft-thresholding geometry of the L1 ball zeroes coefficients exactly, so the fitted model IS a feature selection — the surviving support is the effect story. Fit by cyclic coordinate descent.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "B88E5BDA-4E73-4A5E-A68A-1741BE24F1D5"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.181Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "DD134390-12CF-4199-A62B-0ED43D5B9E65"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.191Z",
+            "checksum": "b17b3017b7470e73dfce668ee41d21200b56507fdf9c761b8278be74e78bc938"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "B7F2FBFD-FF75-42E2-A26C-5F8D83EBBCC2"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.200Z",
+            "checksum": "485924a53e73e77a515437f73bf4d63906cdb64f1c8c2466ffeb503d57a781eb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C5DBAE57-B120-4369-BE97-611479E9DC40"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.172Z",
+      "checksum": "47a85f7130beeea9731445ed38502cfc6c1f4d6328bf6d5051b8c2f8539143f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Logistic Regression",
+      "Description": "L2-regularized (by default) linear classifier: models the log-odds as a linear function of features and optimizes penalized log-loss. The transparent classification baseline — every coefficient is a per-unit log-odds effect — and natively near-calibrated because it trains on the proper scoring rule.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Logistic Regression"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "FDED76E0-BDFA-4F53-9D7E-91D9869388AE"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.222Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "9F54D251-838C-4351-8AD6-7FCFF35785E3"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.233Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "FF27EC25-02DE-4292-93A1-03B319E4ADE3"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.244Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "B336834D-5E9C-4967-A88D-F1E48E59695B"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.259Z",
+            "checksum": "743c24f13abde5835995b631ec66ec1c5d48814208ff6ff58cd9a32f844a3038"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "45D942CF-36A7-4439-8D9C-073718983CB8"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.258Z",
+      "checksum": "ad8c53356a9835253375d6dede831da3230954eb2f0f46ffeb77c691f7b9618b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Multinomial Logit (statsmodels)",
+      "Description": "Unpenalized maximum-likelihood softmax classifier over K unordered categories, fit by Newton's method: (K-1) coefficient equations against a reference category, each with standard errors, z-tests, and confidence intervals. The multiclass inference sibling of ols — choose it to EXPLAIN category choice; choose sklearn's logistic_regression to predict it.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "E54CAF27-B3C0-47EF-BEA4-2C796DB491ED"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.271Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "DAC1CF32-D91D-45EB-8601-937AEF6ED72B"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.282Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "35B81F51-8D18-4A30-B1AE-BD5C4440E554"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.292Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "F7432F91-2717-4741-9FFA-EE824650DF51"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.306Z",
+            "checksum": "743c24f13abde5835995b631ec66ec1c5d48814208ff6ff58cd9a32f844a3038"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C9CF56AF-B6BF-4CDA-ACA5-712FE27929ED"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.192Z",
+      "checksum": "c25a38e1546009d1df51688438c63be2a8682a74a65f0396fbfd1fa0da70d0c9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OLS (statsmodels)",
+      "Description": "Unpenalized least squares fit with the FULL inference apparatus: coefficients with standard errors, t-statistics, p-values, confidence intervals, and prediction intervals. This is the family's answer-the-why member — where sklearn's linear models predict, OLS testifies. Requires n > p and honest attention to its error assumptions.",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "3A64B157-1670-4B43-B2E6-55670B53B43A"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.319Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "CFE5E4A6-CD33-486C-992A-0B89A5B258D9"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.328Z",
+            "checksum": "b17b3017b7470e73dfce668ee41d21200b56507fdf9c761b8278be74e78bc938"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "D79DD717-8751-457E-BF9E-DB4029A5B7FA"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.353Z",
+            "checksum": "485924a53e73e77a515437f73bf4d63906cdb64f1c8c2466ffeb503d57a781eb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6114783C-1360-492B-A4DA-08D2B6BAEAE5"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.202Z",
+      "checksum": "996a310cce73eac818178e5040dc979b91de02ffe37a56b895ae02236fe16285"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ridge Regression",
+      "Description": "L2-penalized least squares: shrinks all coefficients toward zero without zeroing any, trading a little bias for a large variance reduction. THE collinearity fixer — the penalty makes X'X + alpha*I invertible, so the solution stays unique and stable where OLS becomes ill-posed (including p > n).",
+      "Kind": "Model",
+      "Task": "regression",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Ridge Regression"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "8F498EAB-4C15-492F-863C-80E8161795B8"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.366Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "4BB8CD70-0CF4-4CA1-AE3E-C5CA2100EF44"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.378Z",
+            "checksum": "b17b3017b7470e73dfce668ee41d21200b56507fdf9c761b8278be74e78bc938"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "22C7547F-D031-4552-AA2A-3ABC7ACD547E"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.388Z",
+            "checksum": "485924a53e73e77a515437f73bf4d63906cdb64f1c8c2466ffeb503d57a781eb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "408C9007-76A2-4314-9AFB-D202BDB9BA2F"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.268Z",
+      "checksum": "4d38c6b18c74d193421e04baeefc627c21ccb2dbeb525abdec716ddfe11f1c72"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Association Rules",
+      "Description": "Frequent-itemset mining plus rule induction over transaction baskets: finds itemsets whose co-occurrence support clears a floor, then derives antecedent->consequent rules scored by support, confidence, and lift. Emits a per-model RULES table; there is deliberately NO per-row scoring operation.",
+      "Kind": "Model",
+      "Task": "pattern-mining",
+      "LearningType": "Unsupervised",
+      "Parametric": "No",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Rules",
+      "DataShape": "EventLog",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=transactions",
+            "Direction": "Input",
+            "Name": "transactions",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "98DA23FC-EAD9-4EF5-A793-023EAA9E3B01"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.440Z",
+            "checksum": "ad3ede61de82a8274dec715659ba9080377ddbe5cd6db29c494ec573bdfe3e63"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=rules",
+            "Direction": "Output",
+            "Name": "rules",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "64A3D1EF-3D4F-4CB2-841C-6BBDF63F0692"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.451Z",
+            "checksum": "3cfe640d47d872f454a56a1b7577c5ba43c08cc895de419b88ec2752d57337f5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0351E5F4-DF5A-4AFF-8E5F-B715783D4E86"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.292Z",
+      "checksum": "6e8b6982a6e1d7a29b96c5f1356e437772aa42243a0f48b3b6dcbba664887895"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LDA Topic Model",
+      "Description": "Generative probabilistic topic model over count data: documents are mixtures of K latent topics, topics are distributions over the vocabulary, with Dirichlet priors on both simplices and a multinomial word likelihood fit by variational Bayes. Emits a per-row topic mixture. (Latent Dirichlet allocation — NOT LinearDiscriminantAnalysis, which shares the acronym.)",
+      "Kind": "Model",
+      "Task": "pattern-mining",
+      "LearningType": "Unsupervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "F1C6C70B-0986-43FF-8AD6-05D0501A52CE"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.406Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=topic-mixture",
+            "Direction": "Output",
+            "Name": "topic-mixture",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "700334DB-1822-4E39-A74C-4C15EA506002"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.465Z",
+            "checksum": "5e715394f529848d4e8a04c6eddadb75dd229170fde8c97eff2754843a96de9a"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=topic-word-dists",
+            "Direction": "Output",
+            "Name": "topic-word-dists",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "130341D0-E27C-4325-B2C8-1743D50A251F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.478Z",
+            "checksum": "5ae7e073b9652d99234ad8b8cc56a6315ec59adea744cb2bb9161d4cc19d4c9d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "885458A4-1428-4251-A027-D5C3659D7F8E"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.305Z",
+      "checksum": "3623b4c4bcb0f37912d5f6af4ff8dde1123f64ccbc2dae0a424ca740badc25b9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Implicit ALS",
+      "Description": "Alternating-least-squares matrix factorization for IMPLICIT feedback (clicks, plays, purchases — not ratings). Factorizes the user-item interaction matrix into low-rank user and item latent-factor matrices under the Hu-Koren-Volinsky confidence weighting, where unobserved cells are weak negatives, then ranks items per user by latent-factor dot product.",
+      "Kind": "Model",
+      "Task": "recommendation",
+      "LearningType": "Unsupervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "BlackBox",
+      "DataShape": "InteractionMatrix",
+      "SupportsFeatureImportance": false,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=interaction-matrix",
+            "Direction": "Input",
+            "Name": "interaction-matrix",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "C0D8D383-EF22-460C-AAE7-954A90D6C761"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.488Z",
+            "checksum": "ff8f1162fec18654e0e77b013f2285961a252649418ff89d52205a89ebff3973"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=embedding",
+            "Direction": "Output",
+            "Name": "embedding",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "26460BE0-2F30-47AF-A8BE-D72C41F24635"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.515Z",
+            "checksum": "25c54ac4071234ca7e3175db43ff53b4b6eecfe2cd92c7a2ca4766539bc89dbc"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=embedding",
+            "Direction": "Output",
+            "Name": "embedding:per-model",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "B1F5FB20-6F1A-4C90-B174-F296A2D0B8CE"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.524Z",
+            "checksum": "b2c293a7ede273420b1a9dc7d8d89aecf3937aac9c8c3bebfa1c0dd5a9b84c45"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=ranked-list",
+            "Direction": "Output",
+            "Name": "ranked-list",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "BDCBF42A-3F57-4AE8-8996-DF0D161E2814"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.619Z",
+            "checksum": "3d2cdcfe2effe3460a24e4550b714d4c2247a9012f7b4bfead64ff7d715e4cc8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6FB89DF2-A197-42DD-B021-C5CB48F18C14"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.319Z",
+      "checksum": "5a7922b98c4497a3793ac4ca2a9a8eb0e37634562bace2b2a6e989aa9cb92c81"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric (Weighted Scorecard)",
+      "Description": "Glass-box linear scorer: operator-defined factors, each passed through a declared normalizer (percentile/minmax/zscore/logistic/banded/lookup, with a HigherIsBetter direction), combined by hand-set OR fitted weights into a single score, optionally banded into tiers. Every prediction decomposes EXACTLY into per-factor contributions — the weights are the whole story.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "70F22626-6B23-4BA8-8399-EEA6D8598DE0"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.541Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "29E1C50B-4EA1-402E-844A-13421A9A8AD4"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.552Z",
+            "checksum": "b17b3017b7470e73dfce668ee41d21200b56507fdf9c761b8278be74e78bc938"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "84DA9DBE-A995-4633-9628-927C22AF06F2"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.563Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "FE9D2FDA-6EAF-4FAE-A222-4B198BF2B099"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.574Z",
+            "checksum": "743c24f13abde5835995b631ec66ec1c5d48814208ff6ff58cd9a32f844a3038"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=attributions",
+            "Direction": "Output",
+            "Name": "attributions",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "ECAF9A7F-73CC-4D55-A8EF-6A8EA86536BA"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.584Z",
+            "checksum": "127306a643b6be80080aef6eb5340189284bfb69b192c2900f02da5f3bcba7d6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0C4A17E2-DD61-407B-A876-39282F45BCDF"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.333Z",
+      "checksum": "66bfa71cc5655ca8f07f0a07756408d62e289634a3122e329bc1e1a96f80f600"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hidden Markov Model",
+      "Description": "Latent-regime model over sequences: hidden states follow a Markov chain, each state emits observations from a parametric distribution (Gaussian or categorical). EM (Baum-Welch) fits states + transitions jointly; the validated Predictive Studio use is member activity-cadence regime as a downstream feature via the latent-state adapter.",
+      "Kind": "Model",
+      "Task": "sequence-state",
+      "LearningType": "Unsupervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:sequence",
+            "Direction": "Input",
+            "Name": "features:sequence",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "CDAE1EC4-A2ED-41BD-80B0-DC649892758F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.629Z",
+            "checksum": "9dc01e273009b765bb2410990f9bd8a248a25f228985e350fe97111028b485df"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Input",
+            "Name": "series",
+            "IsRequired": false,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "E12F96AB-92CB-489B-A694-285B20E05D85"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.598Z",
+            "checksum": "8356d67c42afa52bb56fed307f3ac174ed3aedd395d9056516415ea931fb03ee"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=latent-state",
+            "Direction": "Output",
+            "Name": "latent-state",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "C48DB793-5B3D-4C91-B8EC-16DC2C2A175D"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.734Z",
+            "checksum": "6f35fb7b745a4ff5b03faae4e904e3db33c480452e498dd014c54007ac692c28"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=state-sequence",
+            "Direction": "Output",
+            "Name": "state-sequence",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "0D7CA800-B0C4-46D3-9102-4E2FDDA77172"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.746Z",
+            "checksum": "d0d94890ddc79fd879b7a4ca587e8d851e4ae32eb3fbf43fef10cbf08253d7a9"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=transition-matrix",
+            "Direction": "Output",
+            "Name": "transition-matrix",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "34B3F3E5-270A-4BFC-9A5D-9307880484D7"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.757Z",
+            "checksum": "659fd3dcbc9c634383195d11540cc7dc9cc180bd60206045e7cc4cdcaf7f5da4"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 5
+          },
+          "primaryKey": {
+            "ID": "B3235D60-F374-42BC-9251-931191CDB39F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.657Z",
+            "checksum": "49d864b892be8e444da6b221b0870a0bb60ec145c7e9118d5aa82f42e0cddbdb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "440BF844-933C-43C0-946A-1796D1536978"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.347Z",
+      "checksum": "0fe2359e37b9c83d14d7fae93981474b8b367c7a7f8b4f5ea5642fe986dc9bc1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kalman Filter / Dynamic Linear Model",
+      "Description": "General linear-Gaussian state-space model: latent continuous states evolve linearly with Gaussian noise and are observed through a linear-Gaussian measurement. Exact filtering (real-time state estimate), smoothing (retrospective), and forecasting — with exact, in-model handling of missing observations. Local-level and local-linear-trend DLMs and time-varying-coefficient regression are canonical instances.",
+      "Kind": "Model",
+      "Task": "sequence-state",
+      "LearningType": "Temporal",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Input",
+            "Name": "series",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "BB13BA4D-5DD4-42D3-AE7D-52D171D9DCC6"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.670Z",
+            "checksum": "701c2f83db904af007f29dda9cb935bd131f2659cd43294f8020852b94456253"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": false,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "5CF1BE29-87BF-48FE-9F40-36FB0FEC090A"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.680Z",
+            "checksum": "cba99bac267f07bbccb19b89ff03b149c5fe5f420466fd0cb475bc1dfa7286fd"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=latent-state",
+            "Direction": "Output",
+            "Name": "latent-state",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "FCC9A8AD-C535-4747-851D-13708C946B6C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.766Z",
+            "checksum": "6f35fb7b745a4ff5b03faae4e904e3db33c480452e498dd014c54007ac692c28"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=forecast-series",
+            "Direction": "Output",
+            "Name": "forecast-series",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "D6E02E0D-2F22-417D-AC9E-D5AA99DC89DC"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.694Z",
+            "checksum": "47f04d53059b6127e76411650326c8a1a3eb68d572c742a61e7238216191f345"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "10D31359-056F-4DD1-A1EE-78B9D276EF18"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.705Z",
+            "checksum": "10ecdf405e68574ad40164cab08d537cb6d45380290cd8fcf627e002fdecc3e4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "94F6676F-4DF6-4FDF-B42C-B5508A598C32"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.363Z",
+      "checksum": "2708ff2d4a37b5c9cdaee8861426e372fc007703bae245bd632e95e4636b247a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Discrete Markov Chain",
+      "Description": "First-order Markov chain over OBSERVED discrete states: estimates the K x K transition-probability matrix by counting state-to-state transitions across sequences. The matrix IS the model — fully inspectable, fit by counting, no latent structure.",
+      "Kind": "Model",
+      "Task": "sequence-state",
+      "LearningType": "Unsupervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:sequence",
+            "Direction": "Input",
+            "Name": "features:sequence",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "FCD4C946-4675-497D-BD61-CD2BBCC13C86"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.714Z",
+            "checksum": "9dc01e273009b765bb2410990f9bd8a248a25f228985e350fe97111028b485df"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=state-sequence",
+            "Direction": "Input",
+            "Name": "state-sequence",
+            "IsRequired": false,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "297D22DC-6423-483A-9C4F-06AF88EC4F3E"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.787Z",
+            "checksum": "68f9e37990c229183d580aa4096e680c428c508d7777af98bbd1fc4f70531fd8"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=transition-matrix",
+            "Direction": "Output",
+            "Name": "transition-matrix",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "D1A5AC4E-9CA2-4FE2-8078-FA4252178FF8"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.798Z",
+            "checksum": "cef88a3ffbd3c7aff34388a94d5d89030796f7ba03a0c71502add0921d6188c4"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "930854A8-D067-423F-B511-A3F9B9C284BA"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.809Z",
+            "checksum": "acc37684bcd05337714121e7e314b8c6e10f6905eddad1dbc1cd42378a2f6d73"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "352EBD25-84DA-4C5E-8989-51353CFDFCF9"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.378Z",
+      "checksum": "bd009571b892bb5e8de755258095db776ff939e3e952f38d37d0bc8ac361534d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Markov Switching Regression",
+      "Description": "Regime-switching model over a time series: a hidden first-order Markov chain selects which of k regimes' regression/AR parameters (and optionally variance) generates each observation. The product is the smoothed regime-probability path plus per-regime coefficients — 'which era is this series in, and how do its dynamics differ'.",
+      "Kind": "Model",
+      "Task": "sequence-state",
+      "LearningType": "Temporal",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Input",
+            "Name": "series",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "2798345A-8933-4C80-B71C-24185BFC8A12"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.819Z",
+            "checksum": "701c2f83db904af007f29dda9cb935bd131f2659cd43294f8020852b94456253"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": false,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "302239AA-26E1-463D-9A5F-3DA91D0503D6"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.830Z",
+            "checksum": "cba99bac267f07bbccb19b89ff03b149c5fe5f420466fd0cb475bc1dfa7286fd"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=latent-state",
+            "Direction": "Output",
+            "Name": "latent-state",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "82246EAF-FFE0-49D8-9071-06E507E69E34"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.844Z",
+            "checksum": "6f35fb7b745a4ff5b03faae4e904e3db33c480452e498dd014c54007ac692c28"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=state-sequence",
+            "Direction": "Output",
+            "Name": "state-sequence",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "6C50532A-1F69-4698-9088-0E8052AEC7EB"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.855Z",
+            "checksum": "d0d94890ddc79fd879b7a4ca587e8d851e4ae32eb3fbf43fef10cbf08253d7a9"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=transition-matrix",
+            "Direction": "Output",
+            "Name": "transition-matrix",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "081918E9-E140-4B2C-96C2-AC5B3B7B5937"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.865Z",
+            "checksum": "659fd3dcbc9c634383195d11540cc7dc9cc180bd60206045e7cc4cdcaf7f5da4"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 5
+          },
+          "primaryKey": {
+            "ID": "81B653BB-08AF-47F5-B533-2E05B0D12F9E"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.876Z",
+            "checksum": "f2214c8b62e651fa974e57e3e8e3cc73465ccf862701681dd667edfc258a494b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "64F518B6-C2BC-487A-AA00-0567452AEF9B"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.393Z",
+      "checksum": "eea57630689a5cae731a353979682a66046d41428704c768e832864fb0d5e5b5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Structural Time Series (Unobserved Components)",
+      "Description": "Decomposes a series into named latent states — level, trend, seasonal, cycle, AR — each an explicit stochastic component in one linear-Gaussian state space. The product is the interpretable decomposition itself (each state is a nameable curve), fitted by Kalman filtering/smoothing with exact missing-data handling.",
+      "Kind": "Model",
+      "Task": "sequence-state",
+      "LearningType": "Temporal",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Input",
+            "Name": "series",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "07716B29-D1F6-482C-ACB6-65B756B62683"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.884Z",
+            "checksum": "701c2f83db904af007f29dda9cb935bd131f2659cd43294f8020852b94456253"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": false,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "7FDF35CB-EB19-4736-930B-9F914618D775"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.904Z",
+            "checksum": "cba99bac267f07bbccb19b89ff03b149c5fe5f420466fd0cb475bc1dfa7286fd"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=latent-state",
+            "Direction": "Output",
+            "Name": "latent-state",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "836BEA19-4F48-4B8A-9D47-0C4EBC21F224"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.914Z",
+            "checksum": "6f35fb7b745a4ff5b03faae4e904e3db33c480452e498dd014c54007ac692c28"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=forecast-series",
+            "Direction": "Output",
+            "Name": "forecast-series",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "7CACC16D-D605-4C53-9CD3-67AFA7858EFA"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.925Z",
+            "checksum": "47f04d53059b6127e76411650326c8a1a3eb68d572c742a61e7238216191f345"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "52E02772-26CF-4B8E-9DAB-88EE7D32050C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.935Z",
+            "checksum": "10ecdf405e68574ad40164cab08d537cb6d45380290cd8fcf627e002fdecc3e4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "162A1168-EE07-4A31-ACAB-B17223761AE0"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.411Z",
+      "checksum": "8cef031e3f7c961b14769f94f644f4c8f4c3fa94d4666b8041c697a7dc43f215"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vector Autoregression",
+      "Description": "Multivariate linear dynamics over K aligned series: each series is regressed on p lags of ALL series, capturing cross-series lead-lag interdependence (Granger structure, impulse responses). The observed K-vector IS the state; the lag-coefficient matrices are its linear transition law — the fully-observed continuous analog of this family, as the Markov chain is its discrete one.",
+      "Kind": "Model",
+      "Task": "sequence-state",
+      "LearningType": "Temporal",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Sequence",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=series",
+            "Direction": "Input",
+            "Name": "series",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "7C4BEEAF-226A-4770-83EA-90696203CCAF"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.945Z",
+            "checksum": "701c2f83db904af007f29dda9cb935bd131f2659cd43294f8020852b94456253"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=forecast-series",
+            "Direction": "Output",
+            "Name": "forecast-series",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "6ABF20C8-064F-49CF-AA04-BE7D0EE6B480"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.955Z",
+            "checksum": "1df55359dbae0bc4c0b378d7be18e6c1745f9d86a4380574af8f94e51eb8b412"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=dynamics-matrix",
+            "Direction": "Output",
+            "Name": "dynamics-matrix",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "81E1056E-3BE5-4B9A-9352-176B7E6057BA"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.992Z",
+            "checksum": "c9847b9ce94f127514cc2acc6a3dd1cbb92860346a92bf1c0a5a9309e755d9d4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4FE3FCF5-8CDA-40C3-AE3A-885C71588B24"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.421Z",
+      "checksum": "45f93f2868998a92d8f3d98a1fc52a2f3127167a981c70bae605bd4b297ea43e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AFT (Log-Normal / Log-Logistic)",
+      "Description": "The generic parametric AFT alternatives to Weibull, covered by ONE driver with a `distribution` hyperparameter. Covariates rescale survival TIME (time-ratio reading, like weibull_aft) but the assumed lifetime distribution admits NON-monotone hazards — the hump-shaped/unimodal hazards Weibull cannot express. Neither distribution satisfies proportional hazards (log-logistic satisfies proportional ODDS instead), so this is the AFT-only branch of the family.",
+      "Kind": "Model",
+      "Task": "survival",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "D71237A0-0EFE-47FA-A68A-5732EE6DCC37"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:35.969Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=survival-curve",
+            "Direction": "Output",
+            "Name": "survival-curve",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "99C0A140-C8F0-45A3-BA77-3F28526B0917"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.004Z",
+            "checksum": "1741b0bc78169355dddf00b84bd28d8a614ace5ffd6f898fd1963121ee55542c"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=hazard",
+            "Direction": "Output",
+            "Name": "hazard",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "636899D1-DD5C-40DA-86AF-C795ADDF9610"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.013Z",
+            "checksum": "cf819dfbfaa9d27b79ae88d576384b600e36eaf6d2942504990301801032f74b"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "91F3ED28-D25C-47C9-9E68-3D47DD1DAEE8"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.040Z",
+            "checksum": "743c24f13abde5835995b631ec66ec1c5d48814208ff6ff58cd9a32f844a3038"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "2945AF62-FE1B-40BE-A604-483201FD5918"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.050Z",
+            "checksum": "4e656dcc11efad31ea284df3f4a7bc4d0a057bd3ac5dfd1999c9584169833796"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7F8224B7-FE13-4E19-97C9-5359A181A597"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.448Z",
+      "checksum": "86204e57be3d28b708eff8f06612930c17dc2ad844bdbfc2c5d19319fedabd51"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cox Proportional Hazards",
+      "Description": "Semiparametric survival model: estimates per-feature hazard ratios against an unspecified baseline hazard, handling right-censored time-to-event data natively. Answers WHEN (and relative risk), not just IF.",
+      "Kind": "Model",
+      "Task": "survival",
+      "LearningType": "Supervised",
+      "Parametric": "Semi",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "693D7655-958F-47E9-A3FD-D0D3BD1AE0C8"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.060Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=hazard",
+            "Direction": "Output",
+            "Name": "hazard",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "0C434DFA-69CB-4F75-B0DE-71FA72B7F114"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.071Z",
+            "checksum": "03cf307e6e7c5c9c813d1b7897e084b998f60459c09847bb560b089f6cc52b84"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=survival-curve",
+            "Direction": "Output",
+            "Name": "survival-curve",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "FA8208EA-E6C4-4C50-A89F-0E60CB076A4F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.081Z",
+            "checksum": "f498b005255316cbc72235664f86766711d221d2bba3c48272aa3e8f15b756b6"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "29F40B79-83D7-4FCC-A9C4-13F767BEE7F3"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.092Z",
+            "checksum": "743c24f13abde5835995b631ec66ec1c5d48814208ff6ff58cd9a32f844a3038"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D56BCAAB-D0F8-48C2-8D7E-CE9A14AC3652"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.461Z",
+      "checksum": "3396f9f28ed0ce677e5fafedd3dd3979b1f7fffbab20cde9fadda29c615acd31"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kaplan-Meier Estimator",
+      "Description": "Nonparametric POPULATION survival curve — the survival floor. Covariate-free: consumes only the (duration, event) pair, no feature matrix at all. Every covariate survival model (Cox, AFT, RSF) is compared against this baseline; if a model cannot beat the KM curve's summary, its covariates are earning nothing.",
+      "Kind": "Model",
+      "Task": "survival",
+      "LearningType": "Supervised",
+      "Parametric": "No",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": false,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "5DB55150-2104-4B32-867D-32BB7BEE0A4D"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.105Z",
+            "checksum": "da41fca2554b84ea34f56c4f732d8435ecf1766bb65d59516aaa79162ecc7856"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=survival-curve",
+            "Direction": "Output",
+            "Name": "survival-curve",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "134B436F-6A7E-4A15-98B2-781179FC0772"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.117Z",
+            "checksum": "1741b0bc78169355dddf00b84bd28d8a614ace5ffd6f898fd1963121ee55542c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4DA63B99-0572-4085-9989-BCD799C72375"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.475Z",
+      "checksum": "ad23cd345be5e7732843270a42284790614a0a36d3e8ba7109bdebb53bc45016"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Random Survival Forest",
+      "Description": "Nonparametric ensemble survival model: bagged trees split by the log-rank statistic, with per-leaf Nelson-Aalen estimators aggregated into per-row survival curves. Captures nonlinearities and interactions no (semi)parametric survival model can, at the cost of coefficient-level interpretability (importances only) and a larger data appetite.",
+      "Kind": "Model",
+      "Task": "survival",
+      "LearningType": "Supervised",
+      "Parametric": "No",
+      "EnsembleType": "Bagging",
+      "InterpretabilityClass": "ImportanceOnly",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "53F65E58-60CC-4E8C-A542-111C75B3AF01"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.129Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=hazard",
+            "Direction": "Output",
+            "Name": "hazard",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "761E12D6-3238-49A6-9896-3A0B3ABD90A4"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.138Z",
+            "checksum": "03cf307e6e7c5c9c813d1b7897e084b998f60459c09847bb560b089f6cc52b84"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=survival-curve",
+            "Direction": "Output",
+            "Name": "survival-curve",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "46407A81-CFC6-41AB-9476-8B5DDEBBB593"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.162Z",
+            "checksum": "f498b005255316cbc72235664f86766711d221d2bba3c48272aa3e8f15b756b6"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=attributions",
+            "Direction": "Output",
+            "Name": "attributions",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "4F0AA204-496B-428D-8CD7-BB4B7A9A342B"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.173Z",
+            "checksum": "b130e9f8b92ade182bc0557635139085e1262be4a851d74e5bfa288fc2be66c8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "161BD59D-25C2-4802-8ABA-2F0C3250D37E"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.495Z",
+      "checksum": "f0073442ac9b6f6d683389dee8f71c6cc238a7304fb1a58bd9171f70dde5ca93"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Weibull AFT",
+      "Description": "Fully parametric accelerated-failure-time model: covariates multiplicatively rescale survival TIME (exp(coef) is a time ratio — 'members with X last 1.3x longer'), vs Cox's hazard-ratio reading. Buys extrapolation beyond the observed window and absolute time predictions by assuming Weibull-distributed lifetimes.",
+      "Kind": "Model",
+      "Task": "survival",
+      "LearningType": "Supervised",
+      "Parametric": "Yes",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "4BF6F1C6-9323-472B-A894-76456ABC823F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.183Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=survival-curve",
+            "Direction": "Output",
+            "Name": "survival-curve",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "E9EA583B-3514-4984-ADB8-A1288A03EB69"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.195Z",
+            "checksum": "1741b0bc78169355dddf00b84bd28d8a614ace5ffd6f898fd1963121ee55542c"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=hazard",
+            "Direction": "Output",
+            "Name": "hazard",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "D66D674B-6C1A-4F33-A7E6-33BE12449BB8"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.206Z",
+            "checksum": "cf819dfbfaa9d27b79ae88d576384b600e36eaf6d2942504990301801032f74b"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=coefficients",
+            "Direction": "Output",
+            "Name": "coefficients",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "13D7CDB6-C0E8-467A-A7FF-73796C0DAB66"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.221Z",
+            "checksum": "743c24f13abde5835995b631ec66ec1c5d48814208ff6ff58cd9a32f844a3038"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "88D4BE82-5F9F-4EAE-BC1C-76C57E18283B"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.232Z",
+            "checksum": "4e656dcc11efad31ea284df3f4a7bc4d0a057bd3ac5dfd1999c9584169833796"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AEC80FE8-C77B-4FF2-BD70-F8FE61C567F3"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.511Z",
+      "checksum": "f2dfe206888699b9f79c45267d6b43945d7de87a372e363109a267bc33f918c6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Decision Tree",
+      "Description": "A single CART tree: recursive axis-aligned partitioning by impurity-minimizing threshold splits. The glass-box of the family — every prediction is a readable root-to-leaf rule path — at the cost of high variance that the ensemble siblings exist to average away. The value proposition is the explanation, not the accuracy ceiling.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "No",
+      "EnsembleType": "Single",
+      "InterpretabilityClass": "Rules",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "DB84723B-A595-4F21-BBB8-1C4B965D01FB"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.243Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "23BEF39D-9995-4DB5-AFB4-E61410D5D6F0"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.254Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "F24AA544-F3E1-4775-B9FA-3546960D07B0"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.263Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "BE095549-6A7E-4989-B544-C82B4BB101A5"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.286Z",
+            "checksum": "acc37684bcd05337714121e7e314b8c6e10f6905eddad1dbc1cd42378a2f6d73"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=rules",
+            "Direction": "Output",
+            "Name": "rules",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "2FB0E9BF-01F8-4C6C-A8B2-7909C4B430BC"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.297Z",
+            "checksum": "d73d5cacf566550841c99097bf825d131b4c02df38ddb9e957ea4e73d4d8937f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5041F2B7-AECE-4AF6-817A-9C501167159B"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.526Z",
+      "checksum": "cb5b50beb21bc7ea8fe1b694114b2ca962ebc324f75c12c3dcca87e149d78883"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Extra Trees",
+      "Description": "Extremely randomized tree ensemble: like a random forest but split thresholds are drawn at RANDOM within each candidate feature's range instead of optimized, and by default each tree sees the full sample (no bootstrap). Trades a little bias for a further variance drop and a much cheaper fit — the smoothing sibling of the forest.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "No",
+      "EnsembleType": "Bagging",
+      "InterpretabilityClass": "ImportanceOnly",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "F9E066AE-CAB3-4C75-BDCA-D57119BF7E22"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.308Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "619B0C6C-8FF5-4B69-8F95-A42808DCFAEA"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.318Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "941ECF8B-E7DC-483F-9546-4976A366AD46"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.329Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "F57D20E1-AE57-4880-BB2C-F09574739D96"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.340Z",
+            "checksum": "acc37684bcd05337714121e7e314b8c6e10f6905eddad1dbc1cd42378a2f6d73"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=attributions",
+            "Direction": "Output",
+            "Name": "attributions",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "F70B849A-3E0E-4054-914A-DE1DCB31C76C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.351Z",
+            "checksum": "127306a643b6be80080aef6eb5340189284bfb69b192c2900f02da5f3bcba7d6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "02CE0192-B966-4E09-8CC7-39368CD2E913"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.536Z",
+      "checksum": "2eceb64a280b26388da41ba0709c3fc2ab6009aae19ce52e5b0df791db116657"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Random Forest",
+      "Description": "Bagged decision-tree ensemble: each tree is fit on a bootstrap resample with a random feature subset per split, and predictions are averaged. Variance reduction by averaging — not additive error correction like boosting — makes it a robust, low-tuning tabular baseline that rarely embarrasses itself.",
+      "Kind": "Model",
+      "Task": "classification",
+      "LearningType": "Supervised",
+      "Parametric": "No",
+      "EnsembleType": "Bagging",
+      "InterpretabilityClass": "ImportanceOnly",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": true,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Random Forest"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=features:tabular",
+            "Direction": "Input",
+            "Name": "features:tabular",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "CB91A14B-5E3D-4D05-9C79-96BD2250937C"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.363Z",
+            "checksum": "c19a34282f6fcb1725b24bb29a818bb7eb1383322c8a91ab22c77d946056ae04"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "88A8BDBC-41E7-487B-B26F-5DF6F4BE31D3"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.375Z",
+            "checksum": "a4101b5426ce725017b56f540a1fdfd2b222fd1479ff7b30b3d445547b66f7fe"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=class-label",
+            "Direction": "Output",
+            "Name": "class-label",
+            "IsRequired": true,
+            "Ordinal": 2
+          },
+          "primaryKey": {
+            "ID": "05ADE6C8-A823-45F1-B1FD-95DC89072F4B"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.384Z",
+            "checksum": "e8ee449c558d452bae40946e847a1771e4d928439d1e5d35fc329403bccb1080"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=score",
+            "Direction": "Output",
+            "Name": "score",
+            "IsRequired": true,
+            "Ordinal": 3
+          },
+          "primaryKey": {
+            "ID": "E42DAE9C-F10D-4C5E-9600-DE1A6F199890"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.411Z",
+            "checksum": "acc37684bcd05337714121e7e314b8c6e10f6905eddad1dbc1cd42378a2f6d73"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=attributions",
+            "Direction": "Output",
+            "Name": "attributions",
+            "IsRequired": true,
+            "Ordinal": 4
+          },
+          "primaryKey": {
+            "ID": "16499773-6C88-433E-B4DA-8DC6A01524D0"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.422Z",
+            "checksum": "127306a643b6be80080aef6eb5340189284bfb69b192c2900f02da5f3bcba7d6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "EB6E8DD4-1B6F-41AF-B376-860A0CDB2D0F"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.583Z",
+      "checksum": "7d5335e8ad9eba480361bc6c0847a70fba58e94356190797bd07645c1c643bcd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Isotonic Calibrator",
+      "Description": "Monotone probability recalibration. Fit on rows the base model never fit on (CV form preferred).",
+      "Kind": "Calibration",
+      "Task": "classification",
+      "InterpretabilityClass": "Rules",
+      "DataShape": "Any",
+      "SupportsFeatureImportance": false,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Input",
+            "Name": "p_in",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "6D593EE2-5012-439D-9D48-B54552F9642F"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.432Z",
+            "checksum": "16e1fa044da856029785db53237b302bba9c900e51412b7ad52c9360a22546f0"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "p_out",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "60FFE8A0-3D46-402A-8DD3-A6677DE462A8"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.444Z",
+            "checksum": "c5903e725d25d77838f89f1808110467e6a0f284a80bb8048febf0b8135da8a8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CDE51952-66D9-445A-A50C-8B780CA016C6"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.555Z",
+      "checksum": "d73c633900bae1e2705099ac779eb1fe1a82f8ce016498295d7c99610a2d1c22"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Platt Calibrator",
+      "Description": "Sigmoid probability recalibration; safe at low event counts.",
+      "Kind": "Calibration",
+      "Task": "classification",
+      "InterpretabilityClass": "Coefficients",
+      "DataShape": "Any",
+      "SupportsFeatureImportance": false,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Planned"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Input",
+            "Name": "p_in",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "A5DD80A8-9DC1-4F33-A360-1AD2A9D7E4D5"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.456Z",
+            "checksum": "16e1fa044da856029785db53237b302bba9c900e51412b7ad52c9360a22546f0"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "p_out",
+            "IsRequired": true,
+            "Ordinal": 1
+          },
+          "primaryKey": {
+            "ID": "E060F608-F6C7-4062-AE28-B5EDABE0365B"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.468Z",
+            "checksum": "c5903e725d25d77838f89f1808110467e6a0f284a80bb8048febf0b8135da8a8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8B500DED-BCAD-4E96-8432-56C43C944988"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.564Z",
+      "checksum": "107a6813b8136b18141270e6ba414bbb0402c7ef195f8a4d981ae193732be36a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Calibrator Template",
+      "Description": "Calibrator(model __): wraps any probability-emitting model with post-hoc calibration.",
+      "Kind": "Template",
+      "Task": "classification",
+      "DataShape": "Any",
+      "SupportsFeatureImportance": false,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "C2AF1A5F-5A12-405F-88BC-11427662F5B5"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.480Z",
+            "checksum": "6e763e80064f6d3b0c889c37731ae9c5bae94f9178e44c8b8c58b636b188f0ba"
+          }
+        }
+      ],
+      "MJ: ML Component Slots": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "Name": "model",
+            "Description": "The probability-emitting model to calibrate",
+            "RequiredPortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "MinCount": 1,
+            "MaxCount": 1
+          },
+          "primaryKey": {
+            "ID": "49E6586B-8CF4-4555-92A9-904BCFFD94A4"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.507Z",
+            "checksum": "0b30bc4c3c164030ddad445d95fb87905a6c4f916d643fe22f5a00d51dab4fcb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3FEFD14B-0D87-4A76-9F81-51A635BCCB4A"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.606Z",
+      "checksum": "c5c12dde5e4548763b027b4633f19d465140a984c934c8e2f3aa70d88e4b04bb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cluster-then-Classify",
+      "Description": "Composes a clusterer's segment feature into a downstream classifier (via the cluster-id adapter).",
+      "Kind": "Template",
+      "Task": "classification",
+      "DataShape": "Tabular",
+      "SupportsFeatureImportance": false,
+      "Source": "System",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: ML Component Ports": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "PortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "Direction": "Output",
+            "Name": "probability",
+            "IsRequired": true,
+            "Ordinal": 0
+          },
+          "primaryKey": {
+            "ID": "64EF666A-6F2C-4E14-8DFA-1AB62BB22002"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.518Z",
+            "checksum": "6e763e80064f6d3b0c889c37731ae9c5bae94f9178e44c8b8c58b636b188f0ba"
+          }
+        }
+      ],
+      "MJ: ML Component Slots": [
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "Name": "cluster",
+            "Description": "The clustering component whose segment id feeds the classifier",
+            "RequiredPortTypeID": "@lookup:MJ: ML Port Types.Name=cluster-id",
+            "MinCount": 1,
+            "MaxCount": 1
+          },
+          "primaryKey": {
+            "ID": "6BA05AF0-51F0-46A3-9BF4-B56D060C4D2A"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.527Z",
+            "checksum": "2d9554b5b62215b26334460555ac15e845d45b7bbdfcc1e3374922b9e5e58b41"
+          }
+        },
+        {
+          "fields": {
+            "ComponentID": "@parent:ID",
+            "Name": "classifier",
+            "Description": "The downstream probability-emitting classifier",
+            "RequiredPortTypeID": "@lookup:MJ: ML Port Types.Name=probability",
+            "MinCount": 1,
+            "MaxCount": 1
+          },
+          "primaryKey": {
+            "ID": "2F75A032-B97C-4436-955E-0B4425BE93F0"
+          },
+          "sync": {
+            "lastModified": "2026-07-16T07:21:36.540Z",
+            "checksum": "9a394983abd2913ebeae4caef0e7e72ed5267c9763f2926ae4ad174fd2cc0e4b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9BD2A293-6BD2-4DAF-8AF7-2E7DAD3A109B"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:21:33.617Z",
+      "checksum": "397783c3ad659bd9cacd6b3d7c1c46d858106183db23d923e114cc1ea73f7c5f"
+    }
+  }
+]

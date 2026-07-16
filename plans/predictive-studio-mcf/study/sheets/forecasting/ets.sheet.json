@@ -1,0 +1,80 @@
+{
+  "identity": {
+    "modelKey": "ets",
+    "family": "forecasting",
+    "libraryClass": "statsmodels.tsa.exponential_smoothing.ets.ETSModel / statsmodels.tsa.holtwinters.ExponentialSmoothing",
+    "aliases": ["ETS", "Holt-Winters", "Exponential Smoothing", "triple exponential smoothing"],
+    "displayName": "Exponential Smoothing (ETS)",
+    "description": "Innovations state-space exponential smoothing: recursively weighted level, trend, and seasonal components with exponentially decaying memory. The workhorse mid-tier forecaster — more robust than ARIMA on short business series, strictly stronger than the naive floors when trend or seasonality is real."
+  },
+  "axes": {
+    "task": "forecasting",
+    "secondaryTasks": [],
+    "learningType": "Temporal",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Sequence",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "series", "dataShape": "series", "dtypes": ["numeric-time-indexed"], "targetSpec": "series", "required": true, "note": "single regular time-indexed numeric series; multiplicative trend/seasonal variants additionally require strictly positive values" }
+  ],
+  "emits": [
+    { "portType": "forecast-series", "granularity": "per-series", "paramsAsOutput": "none", "probabilistic": "native", "note": "point forecast over the horizon; prediction intervals are native in the state-space ETSModel form — the legacy holtwinters.ExponentialSmoothing is point-only (simulate() for intervals). Driver targets ETSModel for this reason." },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "smoothing parameters (alpha/beta/gamma), damping phi, and initial states; standard errors only in the ETSModel state-space form" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/ets.schema.json",
+    "hpMeta": {
+      "trend": { "default": null, "prior": "categorical[null,add,mul]", "searchable": true, "note": "trend component form; 'mul' requires a strictly positive series" },
+      "damped_trend": { "default": false, "prior": "categorical[false,true]", "searchable": true, "conditionalOn": "trend", "note": "damping flattens long-horizon trend extrapolation — usually the safer choice for business series" },
+      "seasonal": { "default": null, "prior": "categorical[null,add,mul]", "searchable": true, "note": "seasonal component form; 'mul' requires positivity" },
+      "seasonal_periods": { "default": null, "prior": "categorical[null,7,12,52]", "searchable": true, "conditionalOn": "seasonal", "note": "the cycle length s; gated by n_full_cycles like every seasonal order in this family" },
+      "smoothing_level": { "default": null, "prior": "uniform[0.01,0.99]", "searchable": false, "note": "alpha — normally left null so the optimizer fits it by max likelihood; exposed for pinning only" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "level/trend/seasonal recursions are equivariant to rescaling the series; forecasts and intervals rescale with it" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "a log transform converts multiplicative structure to additive — it changes WHICH ETS variant is correct, so it is a modeling choice, not a no-op" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the smoothing recursion consumes every consecutive step; gaps break the state update and must be interpolated to a regular grid first" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "operates on a single numeric series; there is no exogenous-regressor pathway at all (unlike SARIMAX)" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "the innovations state-space form assumes Gaussian single-source-of-error innovations for valid prediction intervals; point forecasts need much less" },
+    { "flag": "dataSizeTolerance", "value": "needs-history", "basis": "empirical", "why": "seasonal ETS needs >=2 full cycles to identify the seasonal states, but tolerates shorter history than ARIMA at equal orders — validated on real dues data where ETS reached MASE 1.84 vs seasonal-naive 2.08" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "trend extrapolation is explicit and linear (or damped) in the state equations — damping exists precisely because undamped trend extrapolation overshoots long horizons" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "seasonal_strength", "why": "decides whether the seasonal component (gamma recursion) is warranted; near-zero strength means seasonal ETS just fits noise into the seasonal states" },
+      { "stat": "trend_slope", "why": "a persistent trend selects the beta recursion and flags damped vs undamped — the single biggest driver of long-horizon ETS error" },
+      { "stat": "n_full_cycles", "why": "family gate: fewer than 2 complete cycles makes the seasonal states unidentifiable — drop to non-seasonal ETS or the naive floor" },
+      { "stat": "min_value_positive", "why": "multiplicative trend/seasonal variants are only defined on strictly positive series — this stat prunes half the ETS variant space up front" }
+    ],
+    "modelMetrics": [
+      { "metric": "mase_vs_seasonal_naive", "why": "the family's honest scoreboard; empirical anchor: on real association dues data ETS scored MASE 1.84 against the seasonal-naive floor's 2.08 — a genuine, modest beat, which is what real membership series look like" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "non-positive values with multiplicative trend or seasonal", "behavior": "fit raises or produces NaN states", "mitigation": "gate", "note": "restrict to additive variants or log-shift first" },
+    { "condition": "series shorter than 2 seasonal cycles", "behavior": "seasonal states unidentifiable; optimizer wanders", "mitigation": "gate" },
+    { "condition": "irregular / gapped timestamps", "behavior": "recursion state update invalid", "mitigation": "reject-input" },
+    { "condition": "constant series", "behavior": "degenerate zero-variance fit; optimizer may not converge", "mitigation": "bank-entry", "note": "fall back to naive" },
+    { "condition": "optimizer non-convergence on flat noisy series", "behavior": "smoothing params pinned at bounds (alpha near 0 or 1)", "mitigation": "gate", "note": "bound-pinned alpha is a diagnosable symptom — refit simpler variant" }
+  ],
+  "driver": {
+    "constructor": "ETSModel(endog, error='add', trend=, damped_trend=, seasonal=, seasonal_periods=).fit()",
+    "deps": ["statsmodels>=0.14", "scipy"],
+    "wrapperNeeds": "series adapter: (time_col, value_col, freq, horizon); predict becomes get_prediction(horizon) for intervals; variant pruning by positivity check",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit",
+    "tranche": "T5 (forecasting)"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "the recursion needs a gap-free regular grid; time-aware interpolation, never tabular median" },
+    { "position": "transform", "verdict": "beneficial", "why": "log transform converts multiplicative seasonality to additive, collapsing the variant search and stabilizing variance" },
+    { "position": "scale", "verdict": "irrelevant", "why": "scale-equivariant recursions; standardization changes nothing about the fit" },
+    { "position": "encode", "verdict": "irrelevant", "why": "single numeric series — nothing to encode and no exogenous pathway" }
+  ]
+}

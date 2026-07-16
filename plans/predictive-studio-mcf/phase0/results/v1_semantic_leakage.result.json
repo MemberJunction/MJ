@@ -1,0 +1,46 @@
+{
+  "hypothesis": "semantic screen catches name-only leaks statistics miss; union wins",
+  "seeds": [
+    61,
+    62,
+    63
+  ],
+  "per_seed": [
+    {
+      "seed": 61,
+      "stat_recall_all": 0.6666666666666666,
+      "sem_recall_all": 1.0,
+      "union_recall_all": 1.0,
+      "sem_decoy_fp": 0.0,
+      "stat_decoy_fp": 0.0,
+      "sem_c_nameonly": 1.0,
+      "stat_c_nameonly": 0.0
+    },
+    {
+      "seed": 62,
+      "stat_recall_all": 0.6666666666666666,
+      "sem_recall_all": 1.0,
+      "union_recall_all": 1.0,
+      "sem_decoy_fp": 0.0,
+      "stat_decoy_fp": 0.0,
+      "sem_c_nameonly": 1.0,
+      "stat_c_nameonly": 0.0
+    },
+    {
+      "seed": 63,
+      "stat_recall_all": 0.6666666666666666,
+      "sem_recall_all": 1.0,
+      "union_recall_all": 1.0,
+      "sem_decoy_fp": 0.0,
+      "stat_decoy_fp": 0.0,
+      "sem_c_nameonly": 1.0,
+      "stat_c_nameonly": 0.0
+    }
+  ],
+  "sem_nameonly_recall": 1.0,
+  "sem_decoy_fp": 0.0,
+  "stat_recall_all": 0.6666666666666666,
+  "union_recall_all": 1.0,
+  "verdict": "PASS",
+  "pass_bar": "sem name-only recall>=0.8, decoy FP<=0.2, union-stats>=0.2"
+}

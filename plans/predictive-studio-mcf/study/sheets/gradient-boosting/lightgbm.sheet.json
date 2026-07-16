@@ -1,0 +1,96 @@
+{
+  "identity": {
+    "modelKey": "lightgbm",
+    "family": "gradient-boosting",
+    "libraryClass": "lightgbm.LGBMClassifier / lightgbm.LGBMRegressor",
+    "aliases": ["LGBM", "LightGBM", "light gradient boosting machine"],
+    "displayName": "LightGBM",
+    "description": "Histogram-based gradient-boosted tree ensemble with leaf-wise (best-first) growth. Bins features into discrete histograms and grows the highest-gain leaf next, making it the fastest strong tabular learner at scale — with native missing-value and native categorical handling."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": ["regression"],
+    "learningType": "Supervised",
+    "parametric": "No",
+    "ensembleType": "Boosting",
+    "interpretabilityClass": "ImportanceOnly",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "categorical", "encoded-categorical"], "targetSpec": "plain", "required": true }
+  ],
+  "emits": [
+    { "portType": "probability", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "classification; well-ranked but often miscalibrated — see calibration placement" },
+    { "portType": "class-label", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none" },
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "regression mode" },
+    { "portType": "attributions", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "native per-row via predict(pred_contrib=True) (SHAP-style feature contributions); global importances also native" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/lightgbm.schema.json",
+    "hpMeta": {
+      "n_estimators": { "default": 100, "prior": "log-uniform[100,1000]", "searchable": true },
+      "num_leaves": { "default": 31, "prior": "int-log-uniform[15,255]", "searchable": true },
+      "learning_rate": { "default": 0.1, "prior": "log-uniform[0.01,0.3]", "searchable": true, "conditionalOn": "n_estimators" },
+      "max_depth": { "default": -1, "prior": "int-uniform[3,12]", "searchable": true, "note": "-1 = unconstrained; capping it is the standard small-n guard against leaf-wise overfit" },
+      "min_child_samples": { "default": 20, "prior": "int-log-uniform[5,100]", "searchable": true },
+      "subsample": { "default": 1.0, "prior": "uniform[0.6,1.0]", "searchable": true, "conditionalOn": "subsample_freq", "note": "silently inactive unless subsample_freq > 0" },
+      "subsample_freq": { "default": 0, "prior": "int-uniform[0,5]", "searchable": true },
+      "colsample_bytree": { "default": 1.0, "prior": "uniform[0.6,1.0]", "searchable": true },
+      "reg_alpha": { "default": 0.0, "prior": "log-uniform[1e-8,10]", "searchable": true },
+      "reg_lambda": { "default": 0.0, "prior": "log-uniform[1e-8,10]", "searchable": true }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "splits are threshold comparisons on histogram bins; rescaling a feature relabels bin boundaries but yields the identical partition of rows" },
+    { "flag": "monotoneTransformInvariant", "value": true, "basis": "mechanism-derived", "why": "histogram bins are built from the feature's value ORDER (quantile-style binning), so any monotone transform produces the same bin membership and hence the same trees" },
+    { "flag": "nativeNaN", "value": true, "basis": "mechanism-derived", "why": "use_missing is on by default — at each split NaNs are routed to whichever side maximizes gain, so no imputation is required" },
+    { "flag": "nativeCategorical", "value": true, "basis": "mechanism-derived", "why": "categorical splits use Fisher's optimal-grouping — categories sorted by gradient statistics then split as if ordered — provided columns are declared via category dtype or categorical_feature" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "a non-parametric ensemble makes no assumption about the marginal or error distribution" },
+    { "flag": "dataSizeTolerance", "value": "medium-to-very-large", "basis": "empirical", "why": "histogram binning + GOSS/EFB were designed for large n and dominate there; leaf-wise growth at default num_leaves=31 overfits sharply on small datasets" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "tree predictions are piecewise-constant; outside the training range the prediction is clamped to the nearest leaf" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "n_over_p", "why": "leaf-wise growth fits the highest-gain leaf regardless of depth, so low n/p lets single leaves memorize noise — a gate signal toward simpler families or hard num_leaves/max_depth caps" },
+      { "stat": "class_balance", "why": "severe imbalance makes accuracy meaningless, shifts the honest metric to PR-AUC/lift, and suggests is_unbalance/scale_pos_weight" },
+      { "stat": "missingness_rate", "why": "high missingness is where the learned per-split NaN routing is an advantage worth citing over impute-then-linear" },
+      { "stat": "categorical_cardinality", "why": "Fisher-grouped categorical splits can overfit very-high-cardinality columns (docs recommend min_data_per_group/cat_smooth) — cardinality decides native-categorical vs alternative encodings" }
+    ],
+    "modelMetrics": [
+      { "metric": "cv_auc_gbt_vs_linear_gap", "why": "if a linear model ties the GBT, the added variance/opacity of boosting is not earning its keep — a commit-linear signal" },
+      { "metric": "single_feature_importance_share", "why": "one feature owning most importance is the leakage-dominance signature the promotion gate blocks" },
+      { "metric": "train_valid_metric_gap", "why": "leaf-wise growth's variance surfaces directly as train-vs-valid divergence — the knob-level signal that num_leaves/min_child_samples need tightening" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "n < ~200", "behavior": "leaf-wise growth at default num_leaves memorizes rows; unstable CV", "mitigation": "gate" },
+    { "condition": "string/object dtype column not declared as category", "behavior": "fit raises ValueError (only numeric or category dtypes accepted)", "mitigation": "reject-input" },
+    { "condition": "very-high-cardinality categorical declared native", "behavior": "per-category gradient groups become tiny and overfit", "mitigation": "bank-entry" },
+    { "condition": "subsample < 1.0 with subsample_freq = 0", "behavior": "row bagging silently disabled (docs-documented interaction)", "mitigation": "gate" },
+    { "condition": "num_leaves > 2^max_depth when both set", "behavior": "library warning; leaf budget can never be reached", "mitigation": "gate" },
+    { "condition": "perfectly separable classes", "behavior": "near-1.0 train score", "mitigation": "gate" },
+    { "condition": "single constant feature", "behavior": "ignored (zero importance)", "mitigation": "gate" }
+  ],
+  "driver": {
+    "constructor": "LGBMClassifier(**hp) / LGBMRegressor(**hp), selected by problem_type",
+    "deps": ["lightgbm>=4.0", "OpenMP (libomp) at runtime"],
+    "wrapperNeeds": "none (sklearn-compatible fit/predict/predict_proba); categorical columns must arrive as pandas category dtype or be named via categorical_feature",
+    "serialization": "lightgbm-text",
+    "threadSafety": "n_jobs-parallel fit; predict is thread-safe",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [
+    { "template": "Calibrator Template", "slot": "model", "via": "probability" },
+    { "template": "Bagging Template", "slot": "model", "via": "probability" },
+    { "template": "Cluster-then-Classify", "slot": "classifier", "via": "probability" },
+    { "template": "Stacking Template", "slot": "base", "via": "probability→features:tabular adapter" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "irrelevant", "why": "per-split learned NaN routing makes upstream imputation unnecessary and sometimes harmful (destroys the missingness signal)" },
+    { "position": "transform", "verdict": "irrelevant", "why": "monotone-transform-invariant: log/rank/box-cox cannot change bin membership or split structure" },
+    { "position": "scale", "verdict": "irrelevant", "why": "scale-insensitive by mechanism; standardization is wasted compute" },
+    { "position": "encode", "verdict": "harmful", "why": "one-hot defeats the native Fisher-grouped categorical splits and fragments high-cardinality columns into weak sparse binary splits (docs explicitly recommend raw categories over one-hot)" }
+  ]
+}

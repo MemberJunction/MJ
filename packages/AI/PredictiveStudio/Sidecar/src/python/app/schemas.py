@@ -13,7 +13,7 @@ entry (``Name`` / ``Kind``) and **snake_case** for everything else (``problem_ty
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -22,6 +22,25 @@ Cell = Union[str, float, int, bool, None]
 
 FeatureKind = str  # 'numeric' | 'categorical' | 'embedding' | 'llm-derived'
 ProblemType = str  # 'classification' | 'regression'
+
+# The 10-value Task union — the catalog-level task-family vocabulary. Mirrors, and
+# is held in three-way lockstep with (contract-tested from the TS side):
+#   1. TypeScript ALL_TASKS in Core/src/tasks.ts, and
+#   2. the ML_Component_Framework migration's CHECK constraints.
+# ProblemType above remains the narrow binary alias today's train/predict path uses;
+# new task families activate per driver tranche.
+Task = Literal[
+    "classification",
+    "regression",
+    "clustering",
+    "dim-reduction",
+    "anomaly",
+    "survival",
+    "forecasting",
+    "sequence-state",
+    "recommendation",
+    "pattern-mining",
+]
 
 
 class FeatureSchemaEntry(BaseModel):
@@ -75,7 +94,10 @@ class TrainRequest(BaseModel):
     validation: ValidationConfig = Field(default_factory=ValidationConfig)
     feature_schema: List[FeatureSchemaEntry] = Field(default_factory=list)
     preprocessing: List[PreprocessingOp] = Field(default_factory=list)
-    target: str
+    # OPTIONAL: unsupervised task families (clustering/dim-reduction/anomaly/
+    # sequence-state/pattern-mining) train with no target. Mirrors the TS contract's
+    # `target?`. Supervised families still set it.
+    target: Optional[str] = None
     data: Optional[MatrixData] = None
     data_ref: Optional[str] = None  # shared-storage handle (not implemented in v1)
     # The locked holdout (plan §8.2): rows carved off by the orchestrator BEFORE
@@ -127,10 +149,20 @@ class PredictionContribution(BaseModel):
 
 
 class Prediction(BaseModel):
-    """A single prediction for one input row."""
+    """A single prediction for one input row.
 
-    score: float
+    ``score``/``class`` cover supervised outputs; the remaining optional fields
+    carry the structural task families' shapes (mirrors the TS ``Prediction``).
+    """
+
+    # OPTIONAL: unsupervised/structural families emit cluster/vector/curve/... instead.
+    score: Optional[float] = None
     class_: Optional[str] = Field(default=None, alias="class")
+    cluster: Optional[int] = None  # clustering
+    vector: Optional[List[float]] = None  # dim-reduction/embedding/soft-assignment
+    anomaly_score: Optional[float] = None  # anomaly
+    latent_state: Optional[int] = None  # sequence-state
+    curve: Optional[Dict[str, List[float]]] = None  # survival: {"times":[...], "survival":[...]}
     # Top signed drivers behind THIS row's prediction (linear models only; None otherwise — callers
     # fall back to global feature importance). See app/main.py::_row_contributions.
     contributions: Optional[List[PredictionContribution]] = None
@@ -152,4 +184,7 @@ class HealthResponse(BaseModel):
 
     status: str
     algorithms: List[str]
+    # Subset of `algorithms` whose optional native deps are importable HERE — i.e.
+    # actually runnable. Drivers absent from this list are cataloged-but-Planned.
+    runnable_algorithms: List[str] = Field(default_factory=list)
     cached_models: int

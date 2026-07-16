@@ -1,0 +1,112 @@
+{
+  "identity": {
+    "modelKey": "bg_nbd",
+    "family": "clv-btyd",
+    "libraryClass": "lifetimes.BetaGeoFitter",
+    "aliases": ["BG/NBD", "Beta-Geometric/NBD", "BetaGeoFitter", "buy-till-you-die"],
+    "displayName": "BG/NBD (Beta-Geometric / Negative Binomial)",
+    "description": "Latent-attrition purchase model for non-contractual settings: Poisson purchasing while alive with Gamma-distributed rates across customers, and Beta-Geometric dropout that can occur only after a purchase. From an RFM summary alone it answers 'is this customer still alive?' (P(alive)) and 'how many purchases in the next t periods?' — without churn ever being observed."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": ["survival"],
+    "taskNote": "UNCERTAINTY (U2/U3): no `clv` value exists in the 10-task union and BTYD is not `recommendation`. `regression` (expected future purchase count) is the honest nearest fit, with `survival` secondary because the latent dropout process is literally a survival mechanism. Proposal on the U2 agenda: a dedicated `clv` (or `latent-attrition`) task value for this family.",
+    "learningType": "Temporal",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "EventLog",
+    "deterministicFit": true
+  },
+  "consumes": [
+    {
+      "portType": "event-log",
+      "dataShape": "transactions",
+      "dtypes": ["id", "datetime"],
+      "targetSpec": "none",
+      "required": true,
+      "note": "consumed VIA the event-log→RFM summary transformation, which is a SEPARATE Doc-2-placed component this family depends on (lifetimes.utils.summary_data_from_transaction_data). The fitter's true input is the per-customer (frequency, recency, T) triple — a tiny tabular summary, not the raw log. portTypeProposal (U2): an `rfm-summary` port type (specialized features:tabular) so the featurizer→fitter edge is typed honestly; today it is representable only as event-log-plus-adapter. targetSpec is `none` — the likelihood is over the event history itself; there is no separate label."
+    }
+  ],
+  "emits": [
+    {
+      "portType": "probability",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "conditional_probability_alive(frequency, recency, T) — the posterior probability the customer has not dropped out"
+    },
+    {
+      "portType": "score",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "conditional_expected_number_of_purchases_up_to_time(t) — expected transactions over a future horizon t; t is a predict-time argument, not a hyperparameter. lifetimes exposes the expectation only (the full predictive count distribution exists in the Fader–Hardie math but is not surfaced)"
+    },
+    {
+      "portType": "coefficients",
+      "granularity": "per-model",
+      "paramsAsOutput": "coefficients+SE",
+      "probabilistic": "none",
+      "note": "the fitted (r, α, a, b) ARE meaningful outputs (family truth: paramsAsOutput): r/α = cohort mean purchase rate, a/(a+b) = mean post-purchase dropout probability. lifetimes' summary exposes Hessian-derived SEs and CIs"
+    },
+    {
+      "portType": "trained-model",
+      "granularity": "per-model",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "the fitted transaction model is itself a consumable: gamma_gamma's customer_lifetime_value composition takes the MODEL object (not its scores). UNCERTAINTY (U2): whether every fitter implicitly emits trained-model or it must be declared per-sheet as here"
+    }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/bg_nbd.schema.json",
+    "hpMeta": {
+      "penalizer_coef": { "default": 0.0, "prior": "log-uniform[1e-6,1.0]", "searchable": true, "note": "L2 penalty on the four params; the documented lifetimes fix for non-convergence on sparse/low-repeat cohorts" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "sensitive in the INVERSE of the usual sense: frequency/recency/T are literal counts and durations inside the likelihood — standardization corrupts them; the only legal rescaling is a consistent time-unit change, absorbed exactly by α (equivariance). FLAGGED for U3: the boolean cannot express 'requires raw units' vs 'requires standardization'" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "log/rank transforms of recency or T change the exponential waiting-time structure the likelihood assumes; only linear time-unit changes are absorbed" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the likelihood needs a complete (frequency, recency, T) triple per customer; the RFM featurizer emits complete rows by construction, so a NaN signals an upstream defect — reject, don't impute" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "the pure BG/NBD takes NO covariates at all — customer heterogeneity enters only through the Gamma/Beta mixing distributions" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "four explicit commitments: Poisson purchasing while alive, Gamma-distributed purchase rates across customers, geometric dropout after each purchase, Beta-distributed dropout probability" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "empirical", "why": "per-customer data is three numbers; identification comes from cohort breadth, and hierarchical shrinkage of sparse individual histories toward the population is the model's raison d'être" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the fitted point process projects expected transactions over ANY future horizon t and P(alive) beyond the observation window — extrapolation is the model's purpose" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "repeat_rate", "why": "the dropout pair (a, b) is identified only from customers who purchased again — a cohort with few repeaters leaves attrition unidentified (degenerate or unbounded a, b)" },
+      { "stat": "frequency_overdispersion", "why": "variance/mean of repeat counts; the Gamma mixing exists to absorb overdispersion — a ratio near 1 says heterogeneity is weak and a plain Poisson would do" },
+      { "stat": "observation_window_T", "why": "recency separates 'alive but slow' from 'dropped out' only when T is long relative to typical inter-purchase gaps; short windows leave P(alive) prior-driven" }
+    ],
+    "modelMetrics": [
+      { "metric": "holdout_purchase_mae", "why": "expected vs actual transactions per customer over a calibration/holdout split (lifetimes' canonical validation) — the honest scoreboard for a model whose churn is never observed" },
+      { "metric": "frequency_histogram_fit", "why": "predicted vs observed repeat-frequency histogram on the calibration period; a mis-shaped fit flags the Poisson-Gamma commitment before holdout error does" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "frequency = 0 (zero-repeat customer)", "behavior": "P(alive) ≡ 1 by construction — dropout can only follow a purchase in the BG story", "mitigation": "gate", "note": "zero-repeat-heavy cohorts overstate aliveness; route to pareto_nbd (continuous-time dropout) when repeat_rate is low" },
+    { "condition": "T = 0 or recency > T", "behavior": "degenerate or impossible RFM summary — invalid likelihood contribution", "mitigation": "reject-input" },
+    { "condition": "cohort with (near-)zero repeat purchases overall", "behavior": "(a, b) unidentifiable — flat likelihood in the dropout parameters", "mitigation": "reject-input" },
+    { "condition": "non-convergence at penalizer_coef = 0", "behavior": "optimizer failure / diverging params on sparse cohorts (documented lifetimes issue)", "mitigation": "bank-entry", "note": "small penalizer_coef (e.g. 1e-3)" }
+  ],
+  "driver": {
+    "constructor": "BetaGeoFitter(penalizer_coef=...).fit(frequency, recency, T)",
+    "deps": ["lifetimes>=0.11.3", "autograd", "scipy", "pandas"],
+    "depNote": "UNCERTAINTY (dep choice): lifetimes is in maintenance mode; pymc-marketing's clv.BetaGeoModel is the maintained successor but drags in the full PyMC stack and (under MCMC) a non-deterministic fit. Sheet is written against lifetimes; the choice is flagged for family-level review",
+    "wrapperNeeds": "the event-log→RFM featurizer is a SEPARATE upstream component (lifetimes.utils.summary_data_from_transaction_data); predict maps to conditional_probability_alive / conditional_expected_number_of_purchases_up_to_time(t) with horizon t a predict-time argument",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit; predictions are pure functions of the four fitted params — safe to parallelize after fit",
+    "tranche": "T7 (clv-btyd)"
+  },
+  "canBeSeeds": [
+    { "template": "clv-composite", "slot": "transaction-model", "portType": "trained-model", "note": "the fitted BG/NBD is the transaction half of the CLV composition — gamma_gamma consumes it via its optional trained-model input" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "irrelevant", "why": "the RFM featurizer emits complete summaries by construction; a missing transaction is unobservable, not imputable — there is nothing upstream to impute" },
+    { "position": "transform", "verdict": "harmful", "why": "log/power transforms of frequency/recency/T corrupt the count/duration semantics the likelihood is written in" },
+    { "position": "scale", "verdict": "harmful", "why": "standardization destroys the raw units the Poisson/exponential machinery requires; only consistent time-unit changes are legal (absorbed by α)" },
+    { "position": "encode", "verdict": "irrelevant", "why": "no categorical covariates exist in the input contract — the pure BTYD model is covariate-free" }
+  ]
+}

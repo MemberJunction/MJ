@@ -1,0 +1,37 @@
+{
+  "hypothesis": "ETS beats the seasonal-naive floor on real dues revenue, time-ordered validation enforced",
+  "n_months": 139,
+  "horizon": 12,
+  "mase_naive": 2.0802937697160884,
+  "mase_ets": 1.8398942610243993,
+  "verdict": "PASS",
+  "actual_last12": [
+    1925.0,
+    5200.0,
+    4400.0,
+    4975.0,
+    3675.0,
+    2925.0,
+    53000.0,
+    1900.0,
+    2950.0,
+    2725.0,
+    3125.0,
+    2300.0
+  ],
+  "ets_pred": [
+    2485.0,
+    3390.0,
+    1956.0,
+    1678.0,
+    2483.0,
+    1596.0,
+    40870.0,
+    2144.0,
+    3042.0,
+    2753.0,
+    2709.0,
+    3102.0
+  ],
+  "pass_bar": "MASE(ets) < MASE(seasonal-naive)"
+}

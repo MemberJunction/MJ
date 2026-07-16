@@ -1,0 +1,88 @@
+{
+  "identity": {
+    "modelKey": "svm",
+    "family": "classic-supervised",
+    "libraryClass": "sklearn.svm.SVC / sklearn.svm.SVR",
+    "aliases": ["support vector machine", "SVC", "SVR", "kernel machine", "support vector"],
+    "displayName": "Support Vector Machine",
+    "description": "Max-margin kernel machine: solves a dual QP to find the separating surface (or ε-tube, SVR) defined by a subset of support vectors, with the RBF kernel lifting the boundary to be nonlinear. Strong on small-to-medium clean numeric data; fit cost over the n×n kernel matrix is its ceiling."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": ["regression"],
+    "learningType": "Supervised",
+    "parametric": "No",
+    "ensembleType": "None",
+    "interpretabilityClass": "BlackBox",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true }
+  ],
+  "emits": [
+    { "portType": "class-label", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "the native output — sign of the decision function" },
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "decision_function margin (uncalibrated but well-ranked); also the SVR regression prediction" },
+    { "portType": "probability", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "via-calibration", "note": "probability=True fits an INTERNAL Platt sigmoid on 5-fold CV — expensive at fit time, and its argmax can DISAGREE with predict() near the boundary; prefer the margin + an external calibrator on held-out data" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/svm.schema.json",
+    "hpMeta": {
+      "C": { "default": 1.0, "prior": "log-uniform[0.01,100]", "searchable": true },
+      "kernel": { "default": "rbf", "prior": "categorical[rbf,linear,poly,sigmoid]", "searchable": true },
+      "gamma": { "default": "scale", "prior": "log-uniform[1e-4,10]", "searchable": true, "conditionalOn": "kernel", "note": "rbf/poly/sigmoid only; 'scale' = 1/(p·Var(X)) is a strong default" },
+      "degree": { "default": 3, "prior": "int-uniform[2,5]", "searchable": true, "conditionalOn": "kernel", "note": "poly kernel only" },
+      "epsilon": { "default": 0.1, "prior": "log-uniform[0.01,1.0]", "searchable": true, "note": "SVR only — the no-penalty tube width" },
+      "class_weight": { "default": null, "prior": "categorical[null,balanced]", "searchable": true, "note": "SVC only" },
+      "probability": { "default": false, "prior": "categorical[false,true]", "searchable": false, "note": "turns on the internal Platt CV; leave false and calibrate externally unless the probability port is wired" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "the RBF kernel exp(-γ‖x−x′‖²) is a unit-weighted distance — an unscaled high-variance feature owns the kernel, and a single shared γ cannot fit incomparable units" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "kernel values depend on actual coordinates, not order; a log-transform reshapes the kernel matrix and hence the margin" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "kernel evaluation on a missing coordinate is undefined; sklearn raises on NaN" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "kernels operate on numeric vectors; categoricals must be encoded first" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "margin maximization is geometric, not likelihood-based — no assumption on feature or error distributions" },
+    { "flag": "dataSizeTolerance", "value": "small-to-medium", "basis": "mechanism-derived", "why": "the dual QP works over an n×n kernel matrix — fit cost grows between O(n²) and O(n³); beyond a few tens of thousands of rows training becomes impractical (that regime belongs to linear/SGD or tree families)" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "with the RBF kernel every term exp(-γ‖x−sv‖²) vanishes far from the support vectors, so the decision function collapses to the bias — predictions saturate outside the data (linear kernel is the exception)" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "n_rows", "why": "the n×n kernel QP is the family's hard gate — fit time is the first thing to check before proposing an SVM" },
+      { "stat": "feature_variance_ratio", "why": "a shared γ over unscaled features means the kernel distance is owned by the highest-variance feature — the direct standardization signal" },
+      { "stat": "class_balance", "why": "the hinge loss on a skewed problem is minimized by pushing the boundary into the minority class — flags class_weight='balanced' and PR-based metrics" }
+    ],
+    "modelMetrics": [
+      { "metric": "support_vector_fraction", "why": "SVs approaching n means no margin structure was found (the model memorized the data); a compact SV set is the direct evidence the kernel geometry fits the problem" },
+      { "metric": "proba_vs_decision_disagreement_rate", "why": "the internal Platt CV can make predict_proba's argmax disagree with predict() near the margin — a nonzero rate is the implementation-specific calibration-integrity warning to surface" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "n > ~50k rows", "behavior": "QP fit time and kernel cache blow up superquadratically", "mitigation": "gate", "note": "route to linear/SGD or gradient-boosting families" },
+    { "condition": "unscaled features", "behavior": "kernel distance dominated by one feature; gamma='scale' only partly compensates", "mitigation": "gate" },
+    { "condition": "probability=True on small n", "behavior": "internal 5-fold Platt fit is unstable and 5x's fit cost", "mitigation": "bank-entry", "note": "calibrate externally on held-out data instead" },
+    { "condition": "severe class imbalance", "behavior": "hinge loss degenerates toward the majority class", "mitigation": "bank-entry", "note": "class_weight='balanced'" },
+    { "condition": "C very large on noisy data", "behavior": "margin shrinks to fit noise — every noisy point becomes a support vector", "mitigation": "bank-entry", "note": "cap the C search range" }
+  ],
+  "driver": {
+    "constructor": "SVC(**hp) / SVR(**hp), selected by problem_type; probability=True only when the probability port is consumed",
+    "deps": ["scikit-learn>=1.4 (bundles libsvm)"],
+    "wrapperNeeds": "none (sklearn-compatible fit/predict/decision_function/predict_proba)",
+    "serialization": "joblib",
+    "serializationNote": "artifact stores the support vectors — size scales with SV count, worst-case the whole training set",
+    "threadSafety": "fit single-threaded (libsvm SMO); predict thread-safe",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [
+    { "template": "Calibrator Template", "slot": "model", "via": "probability", "note": "external isotonic/Platt on held-out data supersedes the internal probability=True machinery" },
+    { "template": "Cluster-then-Classify", "slot": "classifier", "via": "probability" },
+    { "template": "Stacking Template", "slot": "base", "via": "score→features:tabular adapter", "note": "the raw margin is the better stacking feature — monotone in confidence without the Platt squash" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN handling — kernel evaluation is undefined on missing coordinates" },
+    { "position": "transform", "verdict": "beneficial", "why": "not monotone-invariant: symmetrizing skewed features keeps a long tail from stretching the kernel distance along one axis" },
+    { "position": "scale", "verdict": "required", "why": "scale-sensitive by mechanism — a single γ over the RBF distance assumes comparable feature units" },
+    { "position": "encode", "verdict": "required", "why": "kernels need numeric input; categoricals must be encoded before fit" }
+  ]
+}

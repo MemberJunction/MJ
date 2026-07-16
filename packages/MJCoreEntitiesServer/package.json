@@ -38,6 +38,7 @@
     "@memberjunction/global": "5.47.0",
     "@memberjunction/integration-engine": "5.47.0",
     "@memberjunction/integration-pk-classifier": "5.47.0",
+    "@memberjunction/predictive-studio-core": "5.47.0",
     "@memberjunction/scheduling-engine": "5.47.0",
     "@memberjunction/sql-converter": "5.47.0",
     "@memberjunction/sql-dialect": "5.47.0",

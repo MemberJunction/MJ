@@ -1,0 +1,157 @@
+{
+  "library": [
+    {
+      "nominal_name": "Membership Renewal Likelihood",
+      "technical": "calibrated_gbt_renewal",
+      "emits": [
+        "probability"
+      ],
+      "groundings": [
+        "MembershipPeriod",
+        "EventRegistration",
+        "Order",
+        "CourseEnrollment"
+      ],
+      "holdout": "AUC 0.851 / PR-AUC(lapse) 0.296",
+      "narrative": "This model predicts the likelihood of membership renewal at the start of a new period. It relies on features such as auto-renewal status, membership start year, region, prior course enrollments, and events attended.",
+      "built_in": "S1",
+      "feature_importance": {
+        "tenure_days": 0.04128708317875862,
+        "prior_periods": 0.0,
+        "prior_lapses": 0.0,
+        "events_before": 0.03835181146860123,
+        "events_attended": 0.05516914650797844,
+        "attend_rate": 0.03502283990383148,
+        "event_recency_days": 0.05219900608062744,
+        "courses_before": 0.057553164660930634,
+        "courses_completed": 0.045497749000787735,
+        "complete_rate": 0.023265229538083076,
+        "orders_before": 0.046475693583488464,
+        "order_recency_days": 0.03596979007124901,
+        "payments_before": 0.047479599714279175,
+        "dues_amount": 0.04698304459452629,
+        "auto_renew": 0.09659790247678757,
+        "start_year": 0.08693938702344894,
+        "tier_Corporate": 0.0,
+        "tier_Enthusiast": 0.0,
+        "tier_Individual": 0.025475449860095978,
+        "tier_SmallBusiness": 0.026662789285182953,
+        "segment_Educator": 0.021575039252638817,
+        "segment_Enthusiast": 0.0,
+        "segment_Producer": 0.025847848504781723,
+        "segment_Retailer": 0.03828736022114754,
+        "segment_Supplier": 0.029034486040472984,
+        "region_EU": 0.03533412516117096,
+        "region_NA": 0.025300398468971252,
+        "region_RoW": 0.06369109451770782
+      }
+    },
+    {
+      "nominal_name": "Member Engagement Cadence Groups",
+      "technical": "kmeans_engagement",
+      "emits": [
+        "cluster-id"
+      ],
+      "groundings": [
+        "EventRegistration",
+        "CourseEnrollment",
+        "Order"
+      ],
+      "holdout": "silhouette 0.554",
+      "narrative": "This model groups members into distinct engagement clusters based on their activity patterns. It analyzes member interactions such as event registrations, course enrollments, and orders to identify engagement cadences.",
+      "built_in": "S1",
+      "feature_importance": {}
+    },
+    {
+      "nominal_name": "Member Lapse Time Predictor",
+      "technical": "coxph_time_to_lapse",
+      "emits": [
+        "hazard",
+        "survival-curve"
+      ],
+      "groundings": [
+        "MembershipPeriod.StartDate",
+        "MembershipPeriod.CancellationDate"
+      ],
+      "holdout": "C-index 0.968",
+      "narrative": "This model ranks members by their hazard of lapsing, predicting when they are likely to lapse rather than just if. It leverages key membership dates, specifically MembershipPeriod.StartDate and MembershipPeriod.CancellationDate, to generate these survival curves.",
+      "built_in": "S2",
+      "feature_importance": {}
+    },
+    {
+      "nominal_name": "Monthly Dues Revenue Forecast",
+      "technical": "ets_dues_forecast",
+      "emits": [
+        "forecast-series"
+      ],
+      "groundings": [
+        "MembershipPeriod.DuesAmount",
+        "MembershipPeriod.StartDate"
+      ],
+      "holdout": "MASE 1.84",
+      "narrative": "This model forecasts monthly dues revenue. It relies on historical dues amounts and membership start dates to identify trends and seasonality.",
+      "built_in": "S4",
+      "feature_importance": {}
+    }
+  ],
+  "faithfulness": {
+    "top3": [
+      "auto_renew",
+      "start_year",
+      "region_RoW"
+    ],
+    "named": [
+      "auto_renew",
+      "start_year"
+    ],
+    "faithful": true
+  },
+  "retrieval": {
+    "nominal": 1.0,
+    "technical": 0.875,
+    "queries": [
+      [
+        "find members drifting away before renewal",
+        "calibrated_gbt_renewal"
+      ],
+      [
+        "who is likely to leave us this year",
+        "calibrated_gbt_renewal"
+      ],
+      [
+        "how much membership lifetime does each member have left",
+        "coxph_time_to_lapse"
+      ],
+      [
+        "when will people cancel",
+        "coxph_time_to_lapse"
+      ],
+      [
+        "what will we collect in dues next year",
+        "ets_dues_forecast"
+      ],
+      [
+        "project our revenue for budgeting",
+        "ets_dues_forecast"
+      ],
+      [
+        "group our members into engagement types",
+        "kmeans_engagement"
+      ],
+      [
+        "which audience segments exist in the community",
+        "kmeans_engagement"
+      ]
+    ]
+  },
+  "reuse_events": [
+    {
+      "run_ts": 1784177513.681,
+      "chosen": [
+        "Member Engagement Cadence Clusters"
+      ]
+    }
+  ],
+  "verdict": "PASS",
+  "pass_bar": "faithful narrative AND nominal retrieval >=0.75 AND >= technical AND >=1 reuse event"
+}

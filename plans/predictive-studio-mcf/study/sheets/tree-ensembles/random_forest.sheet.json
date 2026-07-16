@@ -1,0 +1,250 @@
+{
+  "identity": {
+    "modelKey": "random_forest",
+    "family": "tree-ensembles",
+    "libraryClass": "sklearn.ensemble.RandomForestClassifier / sklearn.ensemble.RandomForestRegressor",
+    "aliases": [
+      "RF",
+      "random forest",
+      "bagged trees",
+      "forest"
+    ],
+    "displayName": "Random Forest",
+    "description": "Bagged decision-tree ensemble: each tree is fit on a bootstrap resample with a random feature subset per split, and predictions are averaged. Variance reduction by averaging \u2014 not additive error correction like boosting \u2014 makes it a robust, low-tuning tabular baseline that rarely embarrasses itself."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": [
+      "regression"
+    ],
+    "learningType": "Supervised",
+    "parametric": "No",
+    "ensembleType": "Bagging",
+    "interpretabilityClass": "ImportanceOnly",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    {
+      "portType": "features:tabular",
+      "dataShape": "row-matrix",
+      "dtypes": [
+        "numeric",
+        "encoded-categorical"
+      ],
+      "targetSpec": "plain",
+      "required": true
+    }
+  ],
+  "emits": [
+    {
+      "portType": "probability",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "classification; averaged leaf class fractions across trees \u2014 well-ranked but compressed toward the center (rarely near 0/1), so calibration sharpens the extremes"
+    },
+    {
+      "portType": "class-label",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none"
+    },
+    {
+      "portType": "score",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "regression mode; per-tree leaf means averaged"
+    },
+    {
+      "portType": "attributions",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "via SHAP (TreeExplainer), not native per-row; impurity and permutation importances are native but global-only"
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable"
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/random_forest.schema.json",
+    "hpMeta": {
+      "n_estimators": {
+        "default": 100,
+        "prior": "log-uniform[100,1000]",
+        "searchable": true,
+        "note": "more trees never hurt accuracy (averaging converges), only compute \u2014 unlike boosting there is no overfit-by-iteration axis"
+      },
+      "max_depth": {
+        "default": null,
+        "prior": "int-uniform[4,30] or null",
+        "searchable": true
+      },
+      "min_samples_split": {
+        "default": 2,
+        "prior": "int-uniform[2,20]",
+        "searchable": true
+      },
+      "min_samples_leaf": {
+        "default": 1,
+        "prior": "log-uniform-int[1,20]",
+        "searchable": true
+      },
+      "max_features": {
+        "default": "sqrt",
+        "prior": "categorical[sqrt,log2,null]",
+        "searchable": true,
+        "note": "the decorrelation knob \u2014 the smaller the per-split feature subset, the less correlated the trees and the more averaging buys"
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "every split is a threshold comparison on one feature; any monotone rescale yields identical trees in every ensemble member"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "the best-split search depends only on feature ORDER, so log/rank/box-cox of an input cannot change any tree in the forest"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": true,
+      "basis": "empirical",
+      "why": "sklearn >=1.4 forests route missing values down the lower-impurity child (learned direction) for dense numeric input; a driver pinned below 1.4 must impute \u2014 version-gated, hence empirical not mechanism"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": false,
+      "basis": "empirical",
+      "why": "sklearn trees require numeric input; categoricals must be pre-encoded (no native categorical splitter in this library, unlike LightGBM)"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "a non-parametric ensemble of partitions makes no assumption about the marginal or error distribution"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "small-to-large",
+      "basis": "empirical",
+      "why": "bootstrap averaging keeps variance in check even at a few hundred rows where boosting overfits; scales to large n with n_jobs parallelism"
+    },
+    {
+      "flag": "extrapolates",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "predictions are averages of piecewise-constant leaves; outside the training range every tree clamps to its boundary leaf"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "n_over_p",
+        "why": "each split partitions the bootstrap sample; low n/p leaves too few rows per leaf for the per-split feature lottery to find signal \u2014 a gate toward regularized linear"
+      },
+      {
+        "stat": "class_balance",
+        "why": "bootstrap resampling reproduces the imbalance inside every tree, so minority leaves are rare; severe skew shifts the honest metric to PR-AUC/lift and suggests class_weight='balanced'"
+      },
+      {
+        "stat": "missingness_rate",
+        "why": "high missingness is where learned NaN routing (sklearn >=1.4) is an advantage worth citing over impute-then-linear, and where imputation would erase the missingness signal"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "oob_vs_cv_gap",
+        "why": "bagging leaves ~37% of rows out of each tree, giving a free unbiased generalization estimate; OOB diverging from CV flags leakage or non-iid rows \u2014 a lens boosting cannot offer"
+      },
+      {
+        "metric": "cv_rf_vs_linear_gap",
+        "why": "if a linear model ties the forest, the ensemble's opacity and compute are not earning their keep \u2014 a commit-linear signal"
+      },
+      {
+        "metric": "single_feature_importance_share",
+        "why": "one feature owning most impurity importance is the leakage-dominance signature the promotion gate blocks"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "n < ~50",
+      "behavior": "bootstrap resamples nearly coincide; trees correlate and the variance-reduction mechanism has nothing to average away",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "high-cardinality one-hot categorical",
+      "behavior": "impurity importance biases toward the wide block; per-split feature subsets are flooded by near-empty dummies",
+      "mitigation": "bank-entry"
+    },
+    {
+      "condition": "single dominant feature (importance share near 1)",
+      "behavior": "every tree splits it first; forest degenerates to one tree's decision",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "constant feature",
+      "behavior": "never selected; zero importance",
+      "mitigation": "gate"
+    }
+  ],
+  "driver": {
+    "constructor": "RandomForestClassifier(**hp) / RandomForestRegressor(**hp), selected by problem_type",
+    "deps": [
+      "scikit-learn>=1.4"
+    ],
+    "wrapperNeeds": "none (sklearn-native fit/predict/predict_proba)",
+    "serialization": "joblib",
+    "threadSafety": "n_jobs-parallel fit and predict; fitted estimator is read-only thread-safe",
+    "tranche": "T0 (already shipped as driver 'random_forest')"
+  },
+  "canBeSeeds": [
+    {
+      "template": "Calibrator Template",
+      "slot": "model",
+      "via": "probability",
+      "note": "RF probabilities are center-compressed by averaging \u2014 the textbook calibration customer"
+    },
+    {
+      "template": "Cluster-then-Classify",
+      "slot": "classifier",
+      "via": "probability"
+    },
+    {
+      "template": "Stacking Template",
+      "slot": "base",
+      "via": "probability\u2192features:tabular adapter"
+    }
+  ],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "irrelevant",
+      "why": "learned NaN routing (driver floor sklearn>=1.4) makes upstream imputation unnecessary and sometimes harmful \u2014 it erases the missingness signal"
+    },
+    {
+      "position": "transform",
+      "verdict": "irrelevant",
+      "why": "monotone-transform-invariant: log/Yeo-Johnson cannot change any tree's split structure"
+    },
+    {
+      "position": "scale",
+      "verdict": "irrelevant",
+      "why": "scale-insensitive by mechanism; standardization is wasted compute"
+    },
+    {
+      "position": "encode",
+      "verdict": "required",
+      "why": "sklearn trees need categoricals encoded to numeric before fit"
+    }
+  ]
+}

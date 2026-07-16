@@ -1,0 +1,234 @@
+{
+  "identity": {
+    "modelKey": "lda",
+    "family": "pattern-mining",
+    "libraryClass": "sklearn.decomposition.LatentDirichletAllocation",
+    "aliases": [
+      "latent Dirichlet allocation",
+      "topic model",
+      "topic modeling"
+    ],
+    "displayName": "LDA Topic Model",
+    "description": "Generative probabilistic topic model over count data: documents are mixtures of K latent topics, topics are distributions over the vocabulary, with Dirichlet priors on both simplices and a multinomial word likelihood fit by variational Bayes. Emits a per-row topic mixture. (Latent Dirichlet allocation \u2014 NOT LinearDiscriminantAnalysis, which shares the acronym.)"
+  },
+  "axes": {
+    "task": "pattern-mining",
+    "secondaryTasks": [],
+    "learningType": "Unsupervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    {
+      "portType": "features:tabular",
+      "dataShape": "row-matrix",
+      "dtypes": [
+        "nonnegative integer counts (document-term / entity-event count matrix, sparse ok)"
+      ],
+      "targetSpec": "none",
+      "required": true,
+      "note": "counts are the sufficient statistics of the multinomial likelihood \u2014 tf-idf or other real-valued weightings violate the generative model"
+    }
+  ],
+  "emits": [
+    {
+      "portType": "topic-mixture",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "transform(X) returns theta_d \u2014 the per-document distribution over K topics (rows sum to 1); itself a probability vector"
+    },
+    {
+      "portType": "topic-word-dists",
+      "granularity": "per-model",
+      "paramsAsOutput": "topic-dists",
+      "probabilistic": "none",
+      "note": "components_ \u2014 the K x vocab topic-word distributions (the topics themselves), the fitted knowledge a labeling/summarization step consumes",
+      "portTypeProposal": {
+        "name": "topic-word-dists",
+        "carries": "K x vocabulary matrix of per-topic term distributions",
+        "wiringConsequence": "doc-topic mixtures (docs x K) and topic-word distributions (K x vocab) are NOT interchangeable: a downstream classifier consumes per-doc mixtures as features; a topic-labeling component consumes topic-word dists. Overloading one `topic-mixture` port for both shapes makes an illegal wiring look legal \u2014 U2 should rule SAME (granularity disambiguates) vs DISTINCT."
+      }
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable"
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/lda.schema.json",
+    "hpMeta": {
+      "n_components": {
+        "default": 10,
+        "prior": "int-log-uniform[5,50]",
+        "searchable": true,
+        "note": "K, the number of topics \u2014 the load-bearing choice; coherence-vs-K is the honest selector"
+      },
+      "doc_topic_prior": {
+        "default": null,
+        "prior": "log-uniform[0.01,1.0]",
+        "searchable": true,
+        "note": "alpha; sklearn default None -> 1/n_components. Small alpha -> sparse per-doc mixtures"
+      },
+      "topic_word_prior": {
+        "default": null,
+        "prior": "log-uniform[0.01,1.0]",
+        "searchable": true,
+        "note": "eta; sklearn default None -> 1/n_components. Small eta -> sparse, crisp topics"
+      },
+      "learning_method": {
+        "default": "batch",
+        "prior": "categorical[batch,online]",
+        "searchable": false,
+        "note": "optimization regime, not a statistical choice; online for corpora too large for batch E-steps"
+      },
+      "learning_decay": {
+        "default": 0.7,
+        "prior": "uniform[0.5,1.0]",
+        "searchable": false,
+        "conditionalOn": "learning_method"
+      },
+      "max_iter": {
+        "default": 10,
+        "prior": "int-uniform[10,100]",
+        "searchable": false,
+        "note": "convergence budget, not a searchable statistical knob"
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "the multinomial likelihood is defined over integer event counts; rescaling (e.g. tf-idf) changes the pseudo-counts entering the variational updates and breaks the generative semantics"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "log/sqrt of counts alters the multinomial sufficient statistics \u2014 the raw counts ARE the model, so any transform changes the fit"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "an absent term is a ZERO count, not missing; a literal NaN has no count interpretation and the variational E-step cannot process it"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "consumes a numeric count matrix, not raw tokens/categories \u2014 count-vectorization upstream is what converts categorical events into the sufficient statistics"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "fully generative: Dirichlet priors on both the doc-topic and topic-word simplices, multinomial word likelihood, and bag-of-words exchangeability (order discarded)"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "needs-many-docs-and-tokens",
+      "basis": "empirical",
+      "why": "theta_d posterior concentration grows with tokens per document and topic-word estimates with corpus size; short-text corpora (tweets) are the known weak regime"
+    },
+    {
+      "flag": "extrapolates",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "fold-in inference on new documents is confined to the fitted vocabulary and the K-simplex; out-of-vocabulary terms carry exactly zero information"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "tokens_per_doc_median",
+        "why": "theta_d's posterior concentrates at rate governed by document length; very short rows yield near-prior mixtures \u2014 the short-text regime where LDA is known to underperform"
+      },
+      {
+        "stat": "vocab_size_vs_corpus_tokens",
+        "why": "topic-word estimates need enough occurrences per term; a huge sparse vocabulary spreads counts too thin \u2014 flags min_df/max_df pruning upstream"
+      },
+      {
+        "stat": "count_matrix_integrality_and_nonnegativity",
+        "why": "floats or negatives (tf-idf, standardized input) violate the multinomial count assumption \u2014 the single most common silent misuse of this model"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "held_out_perplexity",
+        "why": "exp of negative held-out log-likelihood per token \u2014 the model's own generative scoreboard, but it anti-correlates with human topic quality, so it must be paired with coherence"
+      },
+      {
+        "metric": "topic_coherence_npmi",
+        "why": "coherence scores the co-occurrence consistency of each topic's top terms \u2014 the interpretability lens perplexity misses; low-coherence topics are statistical artifacts, not patterns"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "negative or real-valued input (tf-idf, z-scored)",
+      "behavior": "sklearn errors on negatives but SILENTLY accepts non-integer floats, corrupting the count semantics",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "n_components far above the corpus's effective pattern count",
+      "behavior": "duplicate and near-empty degenerate topics",
+      "mitigation": "bank-entry",
+      "note": "coherence-vs-K sweep selects K; don't gate \u2014 over-K is recoverable"
+    },
+    {
+      "condition": "very short documents dominate (median tokens/doc < ~20)",
+      "behavior": "per-doc mixtures collapse toward the Dirichlet prior; unstable topics across seeds",
+      "mitigation": "gate"
+    },
+    {
+      "condition": "all-zero rows (empty documents)",
+      "behavior": "transform silently returns the bare prior as the mixture \u2014 a fabricated-looking output",
+      "mitigation": "reject-input"
+    }
+  ],
+  "driver": {
+    "constructor": "LatentDirichletAllocation(n_components=..., doc_topic_prior=..., topic_word_prior=..., learning_method=..., max_iter=..., random_state=...)",
+    "deps": [
+      "scikit-learn>=1.4"
+    ],
+    "wrapperNeeds": "modest: enforce the nonnegative-integer count contract at the input boundary (CountVectorizer-style upstream, never tf-idf); transform -> per-row topic-mixture; expose components_ (topic-word dists) as the per-model artifact; persist the vocabulary/column mapping with the model so fold-in aligns columns; keep the registry key distinct from LinearDiscriminantAnalysis",
+    "serialization": "joblib",
+    "threadSafety": "n_jobs-parallel variational E-step; transform is thread-safe",
+    "tranche": "T7 (pattern-mining)"
+  },
+  "canBeSeeds": [
+    {
+      "template": "Topic-then-Model",
+      "slot": "topicizer",
+      "via": "topic-mixture->features:tabular adapter"
+    }
+  ],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "irrelevant",
+      "why": "a valid count matrix encodes absence as zero; literal NaNs indicate a broken vectorization to reject upstream, not a value to impute"
+    },
+    {
+      "position": "transform",
+      "verdict": "harmful",
+      "why": "log/tf-idf transforms destroy the integer-count sufficient statistics of the multinomial likelihood \u2014 the canonical misuse"
+    },
+    {
+      "position": "scale",
+      "verdict": "harmful",
+      "why": "standardization produces negative values the model rejects outright, and rescaling corrupts count semantics even where it runs"
+    },
+    {
+      "position": "encode",
+      "verdict": "required",
+      "why": "raw tokens/categorical events must be count-vectorized into the document-term matrix \u2014 the encode stage IS the construction of the model's sufficient statistics"
+    }
+  ]
+}

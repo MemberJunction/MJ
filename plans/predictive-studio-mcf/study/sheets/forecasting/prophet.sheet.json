@@ -1,0 +1,88 @@
+{
+  "identity": {
+    "modelKey": "prophet",
+    "family": "forecasting",
+    "libraryClass": "prophet.Prophet",
+    "aliases": ["Prophet", "fbprophet", "Facebook Prophet"],
+    "displayName": "Prophet",
+    "description": "Decomposable curve-fit forecaster: piecewise-linear (or logistic) trend with automatic changepoints + Fourier-series seasonalities + holiday effects, fit as a regression on time via Stan MAP. Regression-on-timestamps rather than lag-recursion — which is why it tolerates gaps and irregular sampling that break ARIMA/ETS."
+  },
+  "axes": {
+    "task": "forecasting",
+    "secondaryTasks": [],
+    "learningType": "Temporal",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Sequence",
+    "deterministicFit": true,
+    "note": "deterministicFit holds for the default MAP (L-BFGS) path; mcmc_samples>0 switches to stochastic full-Bayes sampling"
+  },
+  "consumes": [
+    { "portType": "series", "dataShape": "series", "dtypes": ["numeric-time-indexed"], "targetSpec": "series", "required": true, "note": "timestamped (ds, y) observations; a regular gap-free grid is NOT required — Prophet regresses on the timestamp itself" }
+  ],
+  "emits": [
+    { "portType": "forecast-series", "granularity": "per-series", "paramsAsOutput": "components", "probabilistic": "native", "note": "yhat with native [yhat_lower, yhat_upper] intervals from simulated trend-changepoint uncertainty; the per-timestamp trend/seasonal/holiday decomposition rides along as paramsAsOutput 'components' (see portTypeProposal for a first-class port)" }
+  ],
+  "portTypeProposals": [
+    { "name": "series-components", "carriedBy": "per-timestamp additive decomposition (trend, per-seasonality, holiday effect series)", "rationale": "Prophet's decomposition is a per-timestamp SERIES product, not per-model scalars — 'coefficients' misdescribes it and 'forecast-series' hides it; a distinct port would let downstream diagnostics/detrenders consume components directly. Until ruled SAME/ADAPTER-RELATED/DISTINCT by the cross-model study, it is carried only as paramsAsOutput on the forecast-series emit." }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/prophet.schema.json",
+    "hpMeta": {
+      "growth": { "default": "linear", "prior": "categorical[linear,logistic,flat]", "searchable": false, "note": "structural choice, not searched — logistic requires a user-supplied capacity cap column" },
+      "changepoint_prior_scale": { "default": 0.05, "prior": "log-uniform[0.001,0.5]", "searchable": true, "note": "THE flexibility knob — trend-changepoint sparsity (Laplace prior scale); the vendor-documented primary tuning parameter" },
+      "seasonality_prior_scale": { "default": 10, "prior": "log-uniform[0.01,10]", "searchable": true, "note": "shrinks Fourier seasonality amplitude" },
+      "seasonality_mode": { "default": "additive", "prior": "categorical[additive,multiplicative]", "searchable": true, "note": "multiplicative for series whose seasonal swing grows with level" },
+      "n_changepoints": { "default": 25, "prior": "fixed", "searchable": false, "note": "candidate changepoint count; regularization (changepoint_prior_scale) does the real selection" },
+      "holidays_prior_scale": { "default": 10, "prior": "log-uniform[0.01,10]", "searchable": true, "conditionalOn": "holidays", "note": "only meaningful when a holiday frame is supplied" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "the model is linear in y (Prophet internally rescales y to [0,1] before Stan); forecasts and intervals are equivariant to rescaling the series" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "a log transform changes additive vs multiplicative structure and the meaning of a linear trend — a modeling choice, not a no-op" },
+    { "flag": "nativeNaN", "value": true, "basis": "mechanism-derived", "why": "curve-fit on timestamps, not lag recursion: missing periods are simply absent rows in (ds, y) — no regular grid is required, the family's distinguishing tolerance" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "holidays enter via an explicit dataframe and extra regressors must be numeric — no native categorical pathway" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "Gaussian observation noise around the fitted curve; intervals come from simulating changepoint continuation under the fitted Laplace prior — both are model premises" },
+    { "flag": "dataSizeTolerance", "value": "needs-history", "basis": "empirical", "why": "each requested seasonality needs >=2 full cycles to separate from trend (yearly seasonality wants >=2 years); sub-daily/weekly-only series with yearly enabled overfit the Fourier terms" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the last trend segment is extended (with simulated future changepoints widening intervals); logistic growth saturates at the supplied cap instead of extending linearly" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "seasonal_strength", "why": "decides which Fourier seasonalities to enable and their prior scale; weak seasonality with seasonality enabled just spends flexibility on noise" },
+      { "stat": "trend_slope", "why": "sustained slope with visible kinks is Prophet's home turf (piecewise-linear changepoint trend); no-trend series waste its main mechanism" },
+      { "stat": "n_full_cycles", "why": "family gate applied per requested seasonality: fewer than 2 cycles of a component makes that Fourier block unidentifiable against trend" },
+      { "stat": "gap_fraction", "why": "the share of missing periods is precisely where Prophet earns its slot over ARIMA/ETS — high gap_fraction routes here rather than to interpolation-hungry recursions" }
+    ],
+    "modelMetrics": [
+      { "metric": "mase_vs_seasonal_naive", "why": "the family's honest scoreboard — Prophet's decomposition prettiness does not exempt it from having to beat repeating last season, evaluated on a time-ordered holdout" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "growth='logistic' without a cap column", "behavior": "fit raises — capacity is required", "mitigation": "reject-input" },
+    { "condition": "requested seasonality with < 2 full cycles of history", "behavior": "Fourier terms unidentifiable; seasonality absorbs trend", "mitigation": "gate", "note": "disable that seasonality component" },
+    { "condition": "changepoint_prior_scale set too high", "behavior": "trend chases noise; intervals explode at horizon", "mitigation": "gate", "note": "time-ordered CV over the documented [0.001,0.5] range" },
+    { "condition": "constant series", "behavior": "degenerate fit (internal y-scaling divides by max|y|; zero-variance series is meaningless to decompose)", "mitigation": "bank-entry", "note": "fall back to naive" },
+    { "condition": "cmdstan toolchain missing at runtime", "behavior": "import/fit fails at the Stan backend", "mitigation": "gate", "note": "driver availability gate — see deps flag; component may remain Planned" }
+  ],
+  "driver": {
+    "constructor": "Prophet(growth=, changepoint_prior_scale=, seasonality_mode=, ...).fit(df[ds,y]); predict(make_future_dataframe(horizon))",
+    "deps": [
+      "prophet>=1.1 — HEAVY: pulls cmdstanpy + a compiled CmdStan toolchain (optional extras file; may remain Planned permanently per the plan's risk register)",
+      "cmdstanpy",
+      "pandas"
+    ],
+    "wrapperNeeds": "series adapter: (time_col, value_col) -> ds/y frame; horizon -> make_future_dataframe(freq); component extraction from the predict frame; NO pickle anywhere in the wrapper",
+    "serialization": "prophet-json",
+    "threadSafety": "fit shells out to a Stan subprocess; one fit per process is safe, parallelize across processes",
+    "tranche": "T5 (forecasting)"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "irrelevant", "why": "gaps are handled natively (nativeNaN true) — imputing first only fabricates observations the likelihood would otherwise correctly ignore" },
+    { "position": "transform", "verdict": "beneficial", "why": "log transform stabilizes variance and is the alternative to seasonality_mode='multiplicative'; a deliberate structural choice" },
+    { "position": "scale", "verdict": "irrelevant", "why": "Prophet rescales y internally before Stan; external standardization changes nothing" },
+    { "position": "encode", "verdict": "irrelevant", "why": "single numeric series; holidays/extra regressors enter through dedicated numeric channels, not a preprocessing encode step" }
+  ]
+}

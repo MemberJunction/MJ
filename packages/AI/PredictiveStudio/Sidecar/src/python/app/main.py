@@ -40,6 +40,7 @@ def health() -> HealthResponse:
     return HealthResponse(
         status="ok",
         algorithms=algorithms.supported_algorithms(),
+        runnable_algorithms=algorithms.runnable_algorithms(),
         cached_models=len(artifacts.MODEL_CACHE),
     )
 

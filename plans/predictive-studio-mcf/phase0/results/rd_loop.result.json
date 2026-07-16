@@ -1,0 +1,42 @@
+{
+  "leaderboard": [
+    {
+      "branch": "logistic_regression",
+      "auc": 0.819,
+      "logloss": 0.507
+    },
+    {
+      "branch": "xgboost",
+      "auc": 0.85,
+      "logloss": 0.192
+    }
+  ],
+  "synthesis": {
+    "action": "resolve",
+    "winner": "xgboost",
+    "cited_numbers": [
+      "auc=0.85",
+      "logloss=0.192"
+    ],
+    "rationale": "XGBoost demonstrates superior performance with a higher AUC (0.85) and significantly lower logloss (0.192) compared to logistic regression (AUC=0.819, logloss=0.507) on the LOCKED holdout. Given the clear winning branch and the rejection of the previous recombine proposal, resolving the branch group is the most efficient next step."
+  },
+  "resolve_ok": true,
+  "cites_ok": true,
+  "illegal_edge": [
+    "survival-curve",
+    "probability"
+  ],
+  "illegal_rejected": true,
+  "budget_tripped": true,
+  "budget_log": [
+    "branch:logistic",
+    "branch:xgboost",
+    "sweep:0",
+    "sweep:1",
+    "sweep:2",
+    "sweep:3",
+    "sweep:4"
+  ],
+  "verdict": "PASS",
+  "pass_bar": "synthesis resolves/stops citing real numbers AND budget cap trips AND illegal wiring rejected"
+}

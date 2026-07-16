@@ -1,0 +1,92 @@
+{
+  "identity": {
+    "modelKey": "kmeans",
+    "family": "clustering",
+    "libraryClass": "sklearn.cluster.KMeans",
+    "aliases": ["k-means", "Lloyd's algorithm", "k-means++"],
+    "displayName": "K-Means",
+    "description": "Prototype-based partitioner; the clustering default. Alternates assign-to-nearest-centroid / recompute-centroid steps to minimize within-cluster squared Euclidean distance, yielding k compact spherical segments plus a readable k×p centroid matrix. k is selected by a silhouette sweep, not fixed a priori. Segmentation deliverable first, supervised feature second — see additionalObservations for the demand-gate lesson."
+  },
+  "axes": {
+    "task": "clustering",
+    "learningType": "Unsupervised",
+    "parametric": "Yes",
+    "ensembleType": "None",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric"], "targetSpec": "none", "required": true }
+  ],
+  "emits": [
+    { "portType": "cluster-id", "granularity": "per-row", "paramsAsOutput": "centroids", "probabilistic": "none", "note": "hard assignment via nearest centroid; the fitted knowledge is the k×p cluster_centers_ matrix, exposed as params-as-output and readable per-feature like coefficients" },
+    { "portType": "embedding", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "transform() = distance-to-each-centroid matrix; a k-dimensional representation consumable as downstream features" }
+  ],
+  "portTypeProposals": [
+    { "name": "centroids", "why": "a dedicated per-model centroid port would let profilers / nearest-centroid scorers consume the k×p matrix as typed data; today it rides as paramsAsOutput on the cluster-id emission, with 'coefficients' the nearest existing port if a typed edge is ever needed" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:../../../../metadata/ml-algorithms/schemas/kmeans.schema.json",
+    "hpMeta": {
+      "n_clusters": { "default": 8, "prior": "int-uniform[2,20]", "searchable": true, "note": "selected by silhouette sweep over the range, not treated as a known constant" },
+      "init": { "default": "k-means++", "prior": "categorical[k-means++,random]", "searchable": false },
+      "n_init": { "default": 10, "prior": "int-uniform[5,25]", "searchable": false },
+      "max_iter": { "default": 300, "prior": "int-uniform[100,1000]", "searchable": false },
+      "tol": { "default": 0.0001, "prior": "log-uniform[1e-6,1e-2]", "searchable": false }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "the objective sums per-feature SQUARED differences; a feature measured in larger units contributes quadratically more and single-handedly steers every centroid" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "Euclidean distances are not preserved under nonlinear monotone maps, so log/rank transforms change assignments and centroids" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "Euclidean distance is undefined when any coordinate is missing — imputation is a hard precondition" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "centroid updates take MEANS of coordinates; the mean of one-hot columns is not a category and Euclidean geometry on encodings distorts neighborhoods" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "minimizing within-cluster squared Euclidean distance implicitly assumes isotropic, similar-variance, similar-size clusters — elongated or varying-density structure gets sliced wrongly" },
+    { "flag": "dataSizeTolerance", "value": "small-to-very-large", "basis": "empirical", "why": "Lloyd's step is O(n·k·p) per iteration and mini-batch variants extend it to millions of rows; the floor is only k << n" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "any new point — however far outside the training support — is confidently assigned to the nearest centroid with no notion of 'none of the above'" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "feature_scale_spread", "why": "the ratio of largest to smallest feature variance predicts how badly the squared-Euclidean objective is dominated by one feature — large spread makes the scale placement non-negotiable" },
+      { "stat": "hopkins_statistic", "why": "measures cluster TENDENCY against a uniform-noise null; near 0.5 means any k-means partition is formatting noise, and even a high value only licenses segmentation, never supervised lift (see additionalObservations)" },
+      { "stat": "n_over_k_min", "why": "the smallest plausible cluster must still hold enough rows to estimate a stable centroid; tiny n/k invites empty-cluster reseeding and unstable partitions" }
+    ],
+    "modelMetrics": [
+      { "metric": "silhouette_score", "why": "the family's honest fit measure — cohesion vs separation under the SAME distance the model optimizes; there is no holdout AUC for an unlabeled task" },
+      { "metric": "silhouette_vs_k_curve", "why": "k is a hyperparameter, not a known — the silhouette sweep across k is how the partition count is chosen and defended" },
+      { "metric": "bootstrap_ari_stability", "why": "a partition that does not reproduce (adjusted Rand index) across resampled/reseeded fits is initialization noise, not structure — stability is the unsupervised analogue of a holdout" },
+      { "metric": "min_cluster_share", "why": "a near-empty cluster signals k set too high or scale problems; a single dominant cluster signals no real structure at this k" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "empty cluster during a Lloyd iteration", "behavior": "sklearn relocates the centroid to the farthest point; the partition becomes reseed-sensitive and unstable across runs", "mitigation": "gate" },
+    { "condition": "k >= number of distinct rows", "behavior": "degenerate one-point clusters; silhouette undefined", "mitigation": "reject-input" },
+    { "condition": "unscaled mixed-unit features", "behavior": "the highest-variance feature dictates all assignments; other features are cosmetic", "mitigation": "gate" },
+    { "condition": "non-convex / elongated / varying-density clusters", "behavior": "spherical bias slices true segments across boundaries", "mitigation": "bank-entry" },
+    { "condition": "single cluster truly present (Hopkins ≈ 0.5)", "behavior": "k-means still returns k confident segments — an artifact", "mitigation": "gate" }
+  ],
+  "driver": {
+    "constructor": "KMeans(**hp)",
+    "deps": ["scikit-learn>=1.3"],
+    "wrapperNeeds": "none (fit/predict/transform native; predict assigns NEW points by nearest centroid, so score-path reuse works out of the box)",
+    "serialization": "joblib",
+    "threadSafety": "fit is OpenMP-threaded; predict/transform are thread-safe",
+    "tranche": "T3"
+  },
+  "canBeSeeds": [
+    { "template": "Cluster-then-Classify", "slot": "clusterer", "via": "cluster-id" },
+    { "template": "Segment Profiler", "slot": "segmenter", "via": "cluster-id" },
+    { "template": "Cluster-Feature Augmenter", "slot": "featurizer", "via": "cluster-id→features:tabular adapter (one-hot)" },
+    { "template": "Distance-Embedding Feeder", "slot": "embedder", "via": "embedding" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "Euclidean distance is undefined on NaN — no assignment can be computed with missing coordinates" },
+    { "position": "transform", "verdict": "beneficial", "why": "heavy-tailed features stretch Euclidean geometry; log/Yeo-Johnson makes clusters closer to the isotropic shape the objective assumes" },
+    { "position": "scale", "verdict": "required", "why": "scale-sensitive by mechanism — without standardization the objective is a single-feature contest, not a multivariate segmentation" },
+    { "position": "encode", "verdict": "required", "why": "categoricals must be numeric before distances exist at all; note one-hot inflates dimensionality and flattens Euclidean contrast — heavy-categorical inputs are a bank-entry toward mode-based alternatives" }
+  ],
+  "additionalObservations": [
+    { "key": "demand-gate", "note": "Real-data validation lesson: cluster tendency (Hopkins) alone does NOT imply supervised lift. Segments that reproduce cleanly under bootstrap can still add zero AUC when appended as a feature to a downstream classifier. Clusters are a segmentation deliverable FIRST (profiling, targeting, reporting) and a candidate feature SECOND — gate cluster-feature promotion on measured lift in the supervised pipeline, never on cluster-quality metrics alone." }
+  ]
+}

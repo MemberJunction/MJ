@@ -1,0 +1,169 @@
+{
+  "hypothesis": "LLM triage >=80% with stats and materially better than no-stats",
+  "seeds": [
+    71,
+    72
+  ],
+  "per_case": [
+    {
+      "scenario": "clean_linear",
+      "seed": 71,
+      "stats_family_ok": true,
+      "stats_triage_ok": true,
+      "stats_both": true,
+      "nostats_family_ok": true,
+      "nostats_both": true,
+      "stats_verdict": "commit",
+      "family": "linear/regression"
+    },
+    {
+      "scenario": "survival",
+      "seed": 71,
+      "stats_family_ok": true,
+      "stats_triage_ok": true,
+      "stats_both": true,
+      "nostats_family_ok": false,
+      "nostats_both": false,
+      "stats_verdict": "commit",
+      "family": "survival"
+    },
+    {
+      "scenario": "seasonal",
+      "seed": 71,
+      "stats_family_ok": true,
+      "stats_triage_ok": true,
+      "stats_both": true,
+      "nostats_family_ok": true,
+      "nostats_both": true,
+      "stats_verdict": "commit",
+      "family": "forecasting"
+    },
+    {
+      "scenario": "cluster_hetero",
+      "seed": 71,
+      "stats_family_ok": true,
+      "stats_triage_ok": true,
+      "stats_both": true,
+      "nostats_family_ok": false,
+      "nostats_both": false,
+      "stats_verdict": "combine",
+      "family": "clustering/combine"
+    },
+    {
+      "scenario": "pure_noise",
+      "seed": 71,
+      "stats_family_ok": true,
+      "stats_triage_ok": true,
+      "stats_both": true,
+      "nostats_family_ok": false,
+      "nostats_both": false,
+      "stats_verdict": "no_model",
+      "family": "none"
+    },
+    {
+      "scenario": "overdispersed",
+      "seed": 71,
+      "stats_family_ok": true,
+      "stats_triage_ok": true,
+      "stats_both": true,
+      "nostats_family_ok": false,
+      "nostats_both": false,
+      "stats_verdict": "commit",
+      "family": "count/glm"
+    },
+    {
+      "scenario": "ambiguous",
+      "seed": 71,
+      "stats_family_ok": true,
+      "stats_triage_ok": false,
+      "stats_both": false,
+      "nostats_family_ok": false,
+      "nostats_both": false,
+      "stats_verdict": "commit",
+      "family": "linear/regression"
+    },
+    {
+      "scenario": "clean_linear",
+      "seed": 72,
+      "stats_family_ok": true,
+      "stats_triage_ok": true,
+      "stats_both": true,
+      "nostats_family_ok": true,
+      "nostats_both": true,
+      "stats_verdict": "commit",
+      "family": "linear/regression"
+    },
+    {
+      "scenario": "survival",
+      "seed": 72,
+      "stats_family_ok": true,
+      "stats_triage_ok": true,
+      "stats_both": true,
+      "nostats_family_ok": false,
+      "nostats_both": false,
+      "stats_verdict": "commit",
+      "family": "survival"
+    },
+    {
+      "scenario": "seasonal",
+      "seed": 72,
+      "stats_family_ok": true,
+      "stats_triage_ok": true,
+      "stats_both": true,
+      "nostats_family_ok": true,
+      "nostats_both": true,
+      "stats_verdict": "commit",
+      "family": "forecasting"
+    },
+    {
+      "scenario": "cluster_hetero",
+      "seed": 72,
+      "stats_family_ok": true,
+      "stats_triage_ok": true,
+      "stats_both": true,
+      "nostats_family_ok": false,
+      "nostats_both": false,
+      "stats_verdict": "combine",
+      "family": "clustering/combine"
+    },
+    {
+      "scenario": "pure_noise",
+      "seed": 72,
+      "stats_family_ok": true,
+      "stats_triage_ok": true,
+      "stats_both": true,
+      "nostats_family_ok": false,
+      "nostats_both": false,
+      "stats_verdict": "no_model",
+      "family": "none"
+    },
+    {
+      "scenario": "overdispersed",
+      "seed": 72,
+      "stats_family_ok": true,
+      "stats_triage_ok": true,
+      "stats_both": true,
+      "nostats_family_ok": false,
+      "nostats_both": false,
+      "stats_verdict": "commit",
+      "family": "count/glm"
+    },
+    {
+      "scenario": "ambiguous",
+      "seed": 72,
+      "stats_family_ok": true,
+      "stats_triage_ok": false,
+      "stats_both": false,
+      "nostats_family_ok": false,
+      "nostats_both": false,
+      "stats_verdict": "commit",
+      "family": "linear/regression"
+    }
+  ],
+  "family_acc": 1.0,
+  "stats_acc": 0.8571428571428571,
+  "nostats_acc": 0.2857142857142857,
+  "delta": 0.5714285714285714,
+  "verdict": "PASS",
+  "pass_bar": "stats triage>=0.80 and (stats-nostats)>=0.15"
+}

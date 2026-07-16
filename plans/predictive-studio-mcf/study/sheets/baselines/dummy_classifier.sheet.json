@@ -1,0 +1,202 @@
+{
+  "identity": {
+    "modelKey": "dummy_classifier",
+    "family": "baselines",
+    "libraryClass": "sklearn.dummy.DummyClassifier",
+    "aliases": [
+      "majority-class baseline",
+      "most-frequent baseline",
+      "prior baseline",
+      "chance floor"
+    ],
+    "displayName": "Dummy Classifier",
+    "description": "The leaderboard FLOOR for classification: predicts from the class marginals of y alone (most-frequent / prior / stratified / uniform / constant) and never reads a single feature. Its entire purpose is to define the score any real model must beat \u2014 a candidate that cannot clear this floor has learned nothing from the features."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Rules",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    {
+      "portType": "features:tabular",
+      "dataShape": "row-matrix",
+      "dtypes": [
+        "any"
+      ],
+      "targetSpec": "plain",
+      "required": true,
+      "note": "X is accepted for API symmetry and IGNORED \u2014 only n_samples is read, values are never inspected; the fit consumes y alone (its class marginals)"
+    }
+  ],
+  "emits": [
+    {
+      "portType": "class-label",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "the same label (or a marginal-distributed draw, under stratified/uniform) for every row"
+    },
+    {
+      "portType": "probability",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "predict_proba is strategy-dependent: 'prior' returns the class_prior_ per row; 'most_frequent' a hard one-hot on the majority; 'uniform' flat 1/n_classes; 'stratified' a fresh random draw per row. The prior_brier calibration claim holds ONLY under strategy='prior'."
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "both",
+    "note": "strategy-dependent, and deliberately so: most_frequent/prior/stratified DO fit \u2014 they estimate the class marginals from y (the smallest possible fit); constant/uniform learn nothing and are fully specified by their hyperparameters. The component therefore serves both as a trainable floor (refit per leaderboard) and as a fixed reusable reference \u2014 hence reusability 'both' even with learns:true"
+  },
+  "hyperparameters": {
+    "schema": "@file:../../../../metadata/ml-algorithms/schemas/dummy_classifier.schema.json",
+    "hpMeta": {
+      "strategy": {
+        "default": "prior",
+        "prior": "categorical[most_frequent, prior, stratified, uniform, constant]",
+        "searchable": false,
+        "note": "NOT searched on principle \u2014 the floor must be a fixed reference; tuning the baseline would move the goalpost every other model is judged against"
+      },
+      "random_state": {
+        "default": 0,
+        "prior": "fixed",
+        "searchable": false,
+        "conditionalOn": "strategy",
+        "note": "consulted only by the stochastic strategies (stratified/uniform); pinned so the floor is reproducible"
+      },
+      "constant": {
+        "default": null,
+        "prior": "fixed",
+        "searchable": false,
+        "conditionalOn": "strategy",
+        "note": "the label to always predict when strategy='constant'; must exist in y"
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "predictions are a function of the class marginals of y alone; X never enters the decision, so no rescaling of features can change anything"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "trivially: X is never read, so ANY transform of the features \u2014 monotone or not \u2014 leaves predictions bit-identical"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "missing values in X are irrelevant because feature values are never inspected; only the row count is used"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "raw string categoricals pass through untouched for the same reason \u2014 no encoding is ever consulted"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "assumes nothing about X (unread); the only implicit claim is that the class marginal is stationary between train and score time \u2014 an assumption every supervised model shares"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "any",
+      "basis": "mechanism-derived",
+      "why": "the only estimate is k class frequencies \u2014 the lowest-variance fit possible; a handful of rows suffices and cost is a single O(n) count"
+    },
+    {
+      "flag": "extrapolates",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "there is nothing to extend: predictions never depended on X, so outside the training range the output is the same constant prior \u2014 constant, not extrapolated"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "class_balance",
+        "why": "the dummy's score IS the base rate \u2014 most_frequent accuracy equals the majority-class share, so this one number states the floor every other model on the leaderboard is judged against"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "prior_brier_score",
+        "why": "the Brier score of predicting the marginal for every row \u2014 perfectly calibrated, zero resolution; the reference term that decomposes any candidate's Brier into calibration vs discrimination"
+      },
+      {
+        "metric": "candidate_vs_floor_gap",
+        "why": "the whole reason this model exists: every leaderboard entry is read relative to this floor, and a gap near zero means the features carry no usable signal for this target"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "single class in y",
+      "behavior": "predicts that class with probability 1.0 and every candidate ties the floor \u2014 the problem itself is degenerate",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "strategy='constant' with a label absent from y",
+      "behavior": "sklearn raises ValueError at fit",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "severe imbalance (majority share near 1.0)",
+      "behavior": "most_frequent accuracy approaches 1.0, making raw accuracy meaningless as a scoreboard",
+      "mitigation": "gate",
+      "note": "the floor making this visible is its job \u2014 switch the leaderboard metric to PR-AUC / balanced accuracy"
+    },
+    {
+      "condition": "stratified/uniform without a pinned random_state",
+      "behavior": "predictions are non-reproducible run-to-run",
+      "mitigation": "bank-entry",
+      "note": "driver pins random_state=0 by default"
+    }
+  ],
+  "driver": {
+    "constructor": "DummyClassifier(strategy=..., random_state=..., constant=...)",
+    "deps": [
+      "scikit-learn>=1.4"
+    ],
+    "wrapperNeeds": "none (native sklearn fit/predict/predict_proba)",
+    "serialization": "joblib",
+    "threadSafety": "stateless predict; trivially thread-safe",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "irrelevant",
+      "why": "X is never read; imputation cannot change a prediction derived solely from the class marginals of y"
+    },
+    {
+      "position": "transform",
+      "verdict": "irrelevant",
+      "why": "no transform of unread features can alter the output \u2014 the fit and predict paths touch only y and n_samples"
+    },
+    {
+      "position": "scale",
+      "verdict": "irrelevant",
+      "why": "the scale of features that never enter the decision is immaterial by construction"
+    },
+    {
+      "position": "encode",
+      "verdict": "irrelevant",
+      "why": "even raw string categoricals pass through \u2014 the estimator inspects only the row count, never a feature value"
+    }
+  ]
+}

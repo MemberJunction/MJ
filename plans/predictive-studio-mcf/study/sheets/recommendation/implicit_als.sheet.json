@@ -1,0 +1,231 @@
+{
+  "identity": {
+    "modelKey": "implicit_als",
+    "family": "recommendation",
+    "libraryClass": "implicit.als.AlternatingLeastSquares",
+    "aliases": [
+      "ALS",
+      "implicit-feedback matrix factorization",
+      "collaborative filtering",
+      "Hu-Koren-Volinsky ALS"
+    ],
+    "displayName": "Implicit ALS",
+    "description": "Alternating-least-squares matrix factorization for IMPLICIT feedback (clicks, plays, purchases \u2014 not ratings). Factorizes the user-item interaction matrix into low-rank user and item latent-factor matrices under the Hu-Koren-Volinsky confidence weighting, where unobserved cells are weak negatives, then ranks items per user by latent-factor dot product."
+  },
+  "axes": {
+    "task": "recommendation",
+    "secondaryTasks": [],
+    "learningType": "Unsupervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "BlackBox",
+    "dataShape": "InteractionMatrix",
+    "deterministicFit": false
+  },
+  "consumes": [
+    {
+      "portType": "interaction-matrix",
+      "dataShape": "interactions",
+      "dtypes": [
+        "nonnegative implicit-feedback counts/strengths (sparse CSR, users x items)"
+      ],
+      "targetSpec": "none",
+      "required": true,
+      "note": "no target column exists \u2014 the matrix IS both input and supervision; confidence c_ui = 1 + alpha*r_ui is derived from the raw interaction value"
+    }
+  ],
+  "emits": [
+    {
+      "portType": "embedding",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "user latent-factor vector, one per interaction-matrix row; consumable downstream as features via embedding->features:tabular adapter"
+    },
+    {
+      "portType": "embedding",
+      "granularity": "per-model",
+      "paramsAsOutput": "latent-factors",
+      "probabilistic": "none",
+      "note": "the item factor matrix as fitted knowledge \u2014 the other half of the factorization; item-item similarity queries read from it"
+    },
+    {
+      "portType": "ranked-list",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "none",
+      "note": "recommend(user) returns the top-N (item, score) pairs where score = user_factor . item_factor. `score` understates the real shape: a VARIABLE-LENGTH RANKED LIST per user, not one scalar per row."
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable"
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/implicit_als.schema.json",
+    "hpMeta": {
+      "factors": {
+        "default": 100,
+        "prior": "int-log-uniform[16,256]",
+        "searchable": true,
+        "note": "latent dimensionality of both factor matrices"
+      },
+      "regularization": {
+        "default": 0.01,
+        "prior": "log-uniform[0.001,0.1]",
+        "searchable": true
+      },
+      "alpha": {
+        "default": 1.0,
+        "prior": "log-uniform[1,100]",
+        "searchable": true,
+        "note": "confidence scaling in c_ui = 1 + alpha*r_ui (HKV); interacts with the raw-count scale of the input matrix"
+      },
+      "iterations": {
+        "default": 15,
+        "prior": "int-uniform[10,50]",
+        "searchable": true
+      },
+      "random_state": {
+        "default": null,
+        "prior": "fixed",
+        "searchable": false,
+        "note": "set by the harness for reproducibility; factor init is random otherwise"
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "confidence is LINEAR in the raw interaction value (c_ui = 1 + alpha*r_ui), so rescaling counts rescales the weighted-least-squares weights and changes the factorization (only exactly compensable by rescaling alpha)"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "log/BM25 weighting of play counts changes the confidence weights and therefore the fit \u2014 it is a deliberate modeling choice, not a no-op"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "unobserved cells are not missing data \u2014 the HKV objective sums over ALL user-item cells treating absent entries as zero-preference with confidence 1; sparsity is the native input and imputation has no meaning"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "the only inputs are two categorical id spaces (users, items) carried as matrix indices; the id->contiguous-index mapping is bookkeeping owned by the wrapper, not a statistical encoding"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "confidence-weighted least squares on a bilinear form; no likelihood or error distribution is assumed (contrast probabilistic MF variants)"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "needs-interaction-density",
+      "basis": "empirical",
+      "why": "an entity's factor quality scales with ITS OWN interaction count; users/items with a handful of interactions get factors dominated by the regularization prior \u2014 the cold-start regime"
+    },
+    {
+      "flag": "extrapolates",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "an entity absent at fit time has NO factor vector at all \u2014 scoring is confined to the fitted user/item index spaces and the span of the learned latent space"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "matrix_density",
+        "why": "the objective's personalization signal lives in observed cells; density so low that most entities have near-zero interactions makes factors indistinguishable from the regularization prior"
+      },
+      {
+        "stat": "interactions_per_entity_quantiles",
+        "why": "the share of users/items below ~5 interactions bounds the population the model can rank meaningfully \u2014 feeds the cold-start gate and the popularity-fallback share"
+      },
+      {
+        "stat": "item_popularity_skew",
+        "why": "linear confidence in raw counts lets blockbuster items dominate the least-squares weights; heavy tail flags log/BM25 confidence weighting upstream"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "map_at_k_vs_popularity_baseline",
+        "why": "a factorization that cannot beat always-recommend-most-popular is not learning personalization \u2014 the commit-to-popularity signal, the recommendation analogue of the GBT-vs-linear gap"
+      },
+      {
+        "metric": "catalog_coverage_at_k",
+        "why": "over-regularized or popularity-dominated factors recommend only the catalog head; coverage is the diversity lens that ranking metrics computed per-user miss"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "cold-start: user or item with ZERO interactions at fit",
+      "behavior": "no factor vector exists \u2014 the entity cannot be scored at all",
+      "mitigation": "gate",
+      "note": "THE defining edge case; the gate routes cold entities to a popularity/content fallback rather than erroring"
+    },
+    {
+      "condition": "user present at fit but new interactions arrive afterward",
+      "behavior": "stale factors under-rank the new taste",
+      "mitigation": "bank-entry",
+      "note": "implicit exposes recalculate_user() for fold-in; full refresh on schedule"
+    },
+    {
+      "condition": "explicit ratings fed as implicit counts",
+      "behavior": "a 1-star rating becomes a weak POSITIVE (any observation raises confidence)",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "extreme sparsity / near-empty matrix",
+      "behavior": "factors collapse to the regularization prior; recommendations degenerate to noise",
+      "mitigation": "gate"
+    }
+  ],
+  "driver": {
+    "constructor": "implicit.als.AlternatingLeastSquares(factors=..., regularization=..., alpha=..., iterations=..., random_state=...).fit(user_items_csr)",
+    "deps": [
+      "implicit>=0.7 (compiled native extension: OpenMP wheels; optional CUDA build for GPU) \u2014 HEAVY/OPTIONAL sidecar extra, not in the base image",
+      "scipy (sparse CSR)"
+    ],
+    "wrapperNeeds": "substantial: (1) user/item id <-> contiguous index maps built at fit and persisted with the model, (2) CSR construction from (user, item, strength) interaction triples, (3) predict surface is recommend(userid, user_row, N, filter_already_liked_items=...) \u2014 a per-user ranked list, NOT sklearn per-row predict, (4) cold-start guard: refuse/route entities absent from the fitted index maps",
+    "serialization": "joblib",
+    "threadSafety": "fit is OpenMP-parallel (num_threads); recommend is a thread-safe read of the factor matrices",
+    "tranche": "T7 (recommendation)"
+  },
+  "canBeSeeds": [
+    {
+      "template": "Embed-then-Model",
+      "slot": "embedder",
+      "via": "embedding->features:tabular adapter"
+    }
+  ],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "irrelevant",
+      "why": "unobserved cells ARE the model's weak-negative signal; densifying/imputing zeros just materializes what the confidence weighting already encodes, at catastrophic memory cost"
+    },
+    {
+      "position": "transform",
+      "verdict": "beneficial",
+      "why": "log/BM25 weighting of heavy-tailed raw counts tempers blockbuster dominance in the confidence weights \u2014 a real, fit-changing choice (monotone-transform-NOT-invariant)"
+    },
+    {
+      "position": "scale",
+      "verdict": "harmful",
+      "why": "z-scoring cells destroys sparsity (zeros become nonzero) and the nonnegativity the confidence construction c=1+alpha*r assumes; global rescaling is only ever alpha in disguise"
+    },
+    {
+      "position": "encode",
+      "verdict": "irrelevant",
+      "why": "the inputs are already two categorical id spaces carried as matrix indices; the id->index mapping is wrapper bookkeeping, not a pipeline encode stage"
+    }
+  ]
+}

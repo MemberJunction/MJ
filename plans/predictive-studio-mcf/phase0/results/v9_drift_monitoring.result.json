@@ -1,0 +1,214 @@
+{
+  "hypothesis": "PSI alarm precedes performance decay; challenger comparison direction-correct",
+  "seeds": [
+    81,
+    82,
+    83
+  ],
+  "periods": [
+    0.0,
+    0.5,
+    1.0,
+    1.75,
+    2.5
+  ],
+  "per_period": [
+    {
+      "seed": 81,
+      "period": 0,
+      "shift": 0.0,
+      "psi_score": 0.023,
+      "psi_f0": 0.003,
+      "holdout_auc": 0.792,
+      "auc_drop": 0.0,
+      "alarm": false
+    },
+    {
+      "seed": 81,
+      "period": 1,
+      "shift": 0.5,
+      "psi_score": 0.057,
+      "psi_f0": 0.263,
+      "holdout_auc": 0.353,
+      "auc_drop": 0.439,
+      "alarm": true
+    },
+    {
+      "seed": 81,
+      "period": 2,
+      "shift": 1.0,
+      "psi_score": 0.193,
+      "psi_f0": 0.911,
+      "holdout_auc": 0.533,
+      "auc_drop": 0.258,
+      "alarm": true
+    },
+    {
+      "seed": 81,
+      "period": 3,
+      "shift": 1.75,
+      "psi_score": 0.456,
+      "psi_f0": 2.695,
+      "holdout_auc": 0.41,
+      "auc_drop": 0.381,
+      "alarm": true
+    },
+    {
+      "seed": 81,
+      "period": 4,
+      "shift": 2.5,
+      "psi_score": 0.991,
+      "psi_f0": 5.766,
+      "holdout_auc": 0.721,
+      "auc_drop": 0.071,
+      "alarm": true
+    },
+    {
+      "seed": 82,
+      "period": 0,
+      "shift": 0.0,
+      "psi_score": 0.015,
+      "psi_f0": 0.002,
+      "holdout_auc": 0.191,
+      "auc_drop": 0.0,
+      "alarm": false
+    },
+    {
+      "seed": 82,
+      "period": 1,
+      "shift": 0.5,
+      "psi_score": 0.552,
+      "psi_f0": 0.23,
+      "holdout_auc": 0.396,
+      "auc_drop": -0.205,
+      "alarm": true
+    },
+    {
+      "seed": 82,
+      "period": 2,
+      "shift": 1.0,
+      "psi_score": 2.091,
+      "psi_f0": 0.952,
+      "holdout_auc": 0.398,
+      "auc_drop": -0.207,
+      "alarm": true
+    },
+    {
+      "seed": 82,
+      "period": 3,
+      "shift": 1.75,
+      "psi_score": 6.452,
+      "psi_f0": 2.568,
+      "holdout_auc": 0.448,
+      "auc_drop": -0.257,
+      "alarm": true
+    },
+    {
+      "seed": 82,
+      "period": 4,
+      "shift": 2.5,
+      "psi_score": 8.302,
+      "psi_f0": 4.765,
+      "holdout_auc": 0.693,
+      "auc_drop": -0.502,
+      "alarm": true
+    },
+    {
+      "seed": 83,
+      "period": 0,
+      "shift": 0.0,
+      "psi_score": 0.017,
+      "psi_f0": 0.008,
+      "holdout_auc": 0.565,
+      "auc_drop": 0.0,
+      "alarm": false
+    },
+    {
+      "seed": 83,
+      "period": 1,
+      "shift": 0.5,
+      "psi_score": 0.486,
+      "psi_f0": 0.3,
+      "holdout_auc": 0.402,
+      "auc_drop": 0.163,
+      "alarm": true
+    },
+    {
+      "seed": 83,
+      "period": 2,
+      "shift": 1.0,
+      "psi_score": 1.814,
+      "psi_f0": 1.002,
+      "holdout_auc": 0.492,
+      "auc_drop": 0.073,
+      "alarm": true
+    },
+    {
+      "seed": 83,
+      "period": 3,
+      "shift": 1.75,
+      "psi_score": 6.058,
+      "psi_f0": 2.788,
+      "holdout_auc": 0.726,
+      "auc_drop": -0.161,
+      "alarm": true
+    },
+    {
+      "seed": 83,
+      "period": 4,
+      "shift": 2.5,
+      "psi_score": 8.15,
+      "psi_f0": 5.427,
+      "holdout_auc": 0.528,
+      "auc_drop": 0.037,
+      "alarm": true
+    }
+  ],
+  "timing": [
+    {
+      "seed": 81,
+      "alarm_period": "1",
+      "decay_period": "1",
+      "alarm_leads_decay": "True"
+    },
+    {
+      "seed": 82,
+      "alarm_period": "1",
+      "decay_period": Infinity,
+      "alarm_leads_decay": "True"
+    },
+    {
+      "seed": 83,
+      "alarm_period": "1",
+      "decay_period": "1",
+      "alarm_leads_decay": "True"
+    }
+  ],
+  "challenger": [
+    {
+      "seed": 81,
+      "incumbent_auc_on_new": 0.347,
+      "challenger_auc_on_new": 0.837,
+      "improvement": 0.49,
+      "recommendation": "promote"
+    },
+    {
+      "seed": 82,
+      "incumbent_auc_on_new": 0.441,
+      "challenger_auc_on_new": 0.82,
+      "improvement": 0.378,
+      "recommendation": "promote"
+    },
+    {
+      "seed": 83,
+      "incumbent_auc_on_new": 0.51,
+      "challenger_auc_on_new": 0.854,
+      "improvement": 0.344,
+      "recommendation": "promote"
+    }
+  ],
+  "psi_warn": 0.1,
+  "psi_stale": 0.25,
+  "verdict": "PASS",
+  "pass_bar": "alarm at/before decay AND challenger recommendation correct"
+}

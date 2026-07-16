@@ -1,0 +1,87 @@
+{
+  "identity": {
+    "modelKey": "xgboost",
+    "family": "gradient-boosting",
+    "libraryClass": "xgboost.XGBClassifier / xgboost.XGBRegressor",
+    "aliases": ["XGB", "gradient boosted trees", "GBT", "boosted trees"],
+    "displayName": "XGBoost",
+    "description": "Gradient-boosted decision-tree ensemble; the strong tabular default. Additively fits shallow trees to the gradient of the loss, capturing non-linearities and interactions with minimal preprocessing."
+  },
+  "axes": {
+    "task": "classification",
+    "secondaryTasks": ["regression"],
+    "learningType": "Supervised",
+    "parametric": "No",
+    "ensembleType": "Boosting",
+    "interpretabilityClass": "ImportanceOnly",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true }
+  ],
+  "emits": [
+    { "portType": "probability", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "classification; well-ranked but often miscalibrated — see calibration placement" },
+    { "portType": "class-label", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none" },
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "regression mode" },
+    { "portType": "attributions", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "via SHAP (Explainer), not native per-row; global importances are native" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:../../../../metadata/ml-algorithms/schemas/xgboost.schema.json",
+    "hpMeta": {
+      "n_estimators": { "default": 300, "prior": "log-uniform[100,1000]", "searchable": true },
+      "max_depth": { "default": 6, "prior": "int-uniform[3,10]", "searchable": true },
+      "learning_rate": { "default": 0.1, "prior": "log-uniform[0.01,0.3]", "searchable": true, "conditionalOn": "n_estimators" },
+      "subsample": { "default": 0.9, "prior": "uniform[0.6,1.0]", "searchable": true },
+      "colsample_bytree": { "default": 0.9, "prior": "uniform[0.6,1.0]", "searchable": true },
+      "min_child_weight": { "default": 1, "prior": "log-uniform[1,20]", "searchable": true }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "split points are threshold comparisons; any monotone rescale of a feature yields identical trees" },
+    { "flag": "monotoneTransformInvariant", "value": true, "basis": "mechanism-derived", "why": "splits depend only on feature ORDER, so log/rank/box-cox of an input cannot change the fit" },
+    { "flag": "nativeNaN", "value": true, "basis": "mechanism-derived", "why": "the default-direction learning sends missing values down a learned branch — no imputation required" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "the sklearn wrapper requires pre-encoded integers; native categorical support exists but is off by default in this driver" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "a non-parametric ensemble makes no assumption about the marginal or error distribution" },
+    { "flag": "dataSizeTolerance", "value": "medium-to-large", "basis": "empirical", "why": "boosting overfits on very small n without heavy regularization; shines from a few thousand rows up" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "tree predictions are piecewise-constant; outside the training range the prediction is clamped to the nearest leaf" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "n_over_p", "why": "boosting needs enough rows per feature to avoid overfitting the gradient; low n/p flags a gate toward simpler families" },
+      { "stat": "class_balance", "why": "severe imbalance makes accuracy meaningless and shifts the honest metric to PR-AUC/lift and suggests scale_pos_weight" },
+      { "stat": "missingness_rate", "why": "high missingness is where XGBoost's native-NaN handling is an advantage worth citing over impute-then-linear" }
+    ],
+    "modelMetrics": [
+      { "metric": "cv_auc_gbt_vs_linear_gap", "why": "if a linear model ties the GBT, the added variance/opacity of boosting is not earning its keep — a commit-linear signal" },
+      { "metric": "single_feature_importance_share", "why": "one feature owning most importance is the leakage-dominance signature the promotion gate blocks" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "n < ~200", "behavior": "overfits the gradient; unstable CV", "mitigation": "gate" },
+    { "condition": "all-categorical high-cardinality input", "behavior": "one-hot explosion / weak splits", "mitigation": "bank-entry" },
+    { "condition": "perfectly separable classes", "behavior": "near-1.0 train score", "mitigation": "gate" },
+    { "condition": "single constant feature", "behavior": "ignored (zero importance)", "mitigation": "gate" }
+  ],
+  "driver": {
+    "constructor": "XGBClassifier(**hp) / XGBRegressor(**hp), selected by problem_type",
+    "deps": ["xgboost>=2.0", "OpenMP (libomp) at runtime"],
+    "wrapperNeeds": "none (sklearn-compatible fit/predict/predict_proba)",
+    "serialization": "xgboost-json",
+    "threadSafety": "n_jobs-parallel fit; predict is thread-safe",
+    "tranche": "T0 (already shipped)"
+  },
+  "canBeSeeds": [
+    { "template": "Calibrator Template", "slot": "model", "via": "probability" },
+    { "template": "Bagging Template", "slot": "model", "via": "probability" },
+    { "template": "Cluster-then-Classify", "slot": "classifier", "via": "probability" },
+    { "template": "Stacking Template", "slot": "base", "via": "probability→features:tabular adapter" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "irrelevant", "why": "native-NaN handling makes upstream imputation unnecessary and sometimes harmful (destroys the missingness signal)" },
+    { "position": "transform", "verdict": "irrelevant", "why": "monotone-transform-invariant: Yeo-Johnson/log cannot change the split structure" },
+    { "position": "scale", "verdict": "irrelevant", "why": "scale-insensitive by mechanism; standardization is wasted compute" },
+    { "position": "encode", "verdict": "required", "why": "the sklearn wrapper needs categoricals encoded to integers/one-hot before fit" }
+  ]
+}

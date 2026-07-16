@@ -1,0 +1,178 @@
+{
+  "hypothesis": "nominal/story retrieval beats keyword-over-technical",
+  "queries": [
+    "who is quietly disengaging and about to leave?",
+    "can I trust these scores as real probabilities?",
+    "what should we recommend this member buy next?",
+    "when will this member lapse?",
+    "what natural groups do our members fall into?",
+    "project next year's dues revenue by month",
+    "is this inactive member actually gone or just quiet?",
+    "how much is this member worth over time?",
+    "which products sell together?",
+    "will this member renew?"
+  ],
+  "per_query": [
+    {
+      "query": "who is quietly disengaging and about to leav",
+      "keyword_top3": [
+        "c9",
+        "c8",
+        "c7"
+      ],
+      "nominal_top3": [
+        "c1",
+        "c4",
+        "c8"
+      ],
+      "kw_hit": false,
+      "nom_hit": true,
+      "both_hit": true
+    },
+    {
+      "query": "can I trust these scores as real probabiliti",
+      "keyword_top3": [
+        "c9",
+        "c8",
+        "c7"
+      ],
+      "nominal_top3": [
+        "c2",
+        "c8",
+        "c4"
+      ],
+      "kw_hit": false,
+      "nom_hit": true,
+      "both_hit": true
+    },
+    {
+      "query": "what should we recommend this member buy nex",
+      "keyword_top3": [
+        "c9",
+        "c8",
+        "c7"
+      ],
+      "nominal_top3": [
+        "c3",
+        "c10",
+        "c5"
+      ],
+      "kw_hit": false,
+      "nom_hit": true,
+      "both_hit": true
+    },
+    {
+      "query": "when will this member lapse?",
+      "keyword_top3": [
+        "c4",
+        "c9",
+        "c8"
+      ],
+      "nominal_top3": [
+        "c4",
+        "c1",
+        "c8"
+      ],
+      "kw_hit": true,
+      "nom_hit": true,
+      "both_hit": true
+    },
+    {
+      "query": "what natural groups do our members fall into",
+      "keyword_top3": [
+        "c9",
+        "c8",
+        "c7"
+      ],
+      "nominal_top3": [
+        "c5"
+      ],
+      "kw_hit": false,
+      "nom_hit": true,
+      "both_hit": true
+    },
+    {
+      "query": "project next year's dues revenue by month",
+      "keyword_top3": [
+        "c6",
+        "c9",
+        "c8"
+      ],
+      "nominal_top3": [
+        "c6",
+        "c8",
+        "c4"
+      ],
+      "kw_hit": true,
+      "nom_hit": true,
+      "both_hit": true
+    },
+    {
+      "query": "is this inactive member actually gone or jus",
+      "keyword_top3": [
+        "c9",
+        "c8",
+        "c7"
+      ],
+      "nominal_top3": [
+        "c7",
+        "c4",
+        "c1"
+      ],
+      "kw_hit": true,
+      "nom_hit": true,
+      "both_hit": true
+    },
+    {
+      "query": "how much is this member worth over time?",
+      "keyword_top3": [
+        "c9",
+        "c8",
+        "c7"
+      ],
+      "nominal_top3": [
+        "c9",
+        "c4",
+        "c8"
+      ],
+      "kw_hit": true,
+      "nom_hit": true,
+      "both_hit": true
+    },
+    {
+      "query": "which products sell together?",
+      "keyword_top3": [
+        "c9",
+        "c8",
+        "c7"
+      ],
+      "nominal_top3": [
+        "c10"
+      ],
+      "kw_hit": false,
+      "nom_hit": true,
+      "both_hit": true
+    },
+    {
+      "query": "will this member renew?",
+      "keyword_top3": [
+        "c9",
+        "c8",
+        "c7"
+      ],
+      "nominal_top3": [
+        "c8",
+        "c2",
+        "c1"
+      ],
+      "kw_hit": true,
+      "nom_hit": true,
+      "both_hit": true
+    }
+  ],
+  "keyword_acc": 0.5,
+  "nominal_acc": 1.0,
+  "both_acc": 1.0,
+  "verdict": "PASS",
+  "pass_bar": "meaning-aware top3>=0.8 and >=0.2 over keyword"
+}

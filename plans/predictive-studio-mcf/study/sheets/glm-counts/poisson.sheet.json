@@ -1,0 +1,80 @@
+{
+  "identity": {
+    "modelKey": "poisson",
+    "family": "glm-counts",
+    "libraryClass": "statsmodels.genmod.generalized_linear_model.GLM (family=sm.families.Poisson)",
+    "aliases": ["Poisson regression", "Poisson GLM", "log-linear count model"],
+    "displayName": "Poisson GLM",
+    "description": "The canonical count regression: models a non-negative integer target as Poisson-distributed with log-linear mean exp(x'B). Coefficients exponentiate to rate ratios; supports offsets/exposure for per-unit-time rates. Its defining commitment is equidispersion — variance EQUALS the mean."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "None",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true, "note": "target must be a non-negative integer count; optional offset/exposure column carried as a driver passthrough, not a port" }
+  ],
+  "emits": [
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "predicted mean count/rate lambda-hat; the fitted family defines a full count distribution P(Y=k|x) around it — no separate 'count' port exists, score is the closest match" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "log rate ratios with SEs/CIs; exp(B) is the multiplicative effect on the expected count" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/poisson.schema.json",
+    "hpMeta": {
+      "link": { "default": "log", "prior": "categorical[log,identity,sqrt]", "searchable": false, "note": "canonical log link almost always; identity/sqrt are statsmodels-supported alternates for special mean structures" },
+      "alpha": { "default": 0.0, "prior": "log-uniform[1e-4,1.0]", "searchable": true, "note": "fit_regularized elastic-net strength; 0.0 = plain IRLS MLE" },
+      "L1_wt": { "default": 1.0, "prior": "uniform[0.0,1.0]", "searchable": true, "conditionalOn": "alpha" },
+      "maxiter": { "default": 100, "prior": "fixed", "searchable": false },
+      "tol": { "default": 1e-8, "prior": "fixed", "searchable": false }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "unpenalized MLE is scale-equivariant, but the searchable elastic-net penalty (fit_regularized alpha) is NOT — penalized coefficient magnitudes depend on units, and badly-scaled columns condition the IRLS working matrix poorly" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "the linear predictor assumes log-linear covariate effects; a monotone transform of an input changes the fitted mean function" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the IRLS likelihood has no missing-value mechanism — statsmodels raises or drops rows (missing='drop'), silently biasing the sample" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "the array API requires a pre-encoded design matrix; patsy formulas can encode but this driver takes matrices" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes the conditional distribution is Poisson, whose single parameter forces variance = mean (equidispersion); overdispersed data keeps the mean estimate consistent but deflates SEs, fabricating significance" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "empirical", "why": "only p+1 parameters estimated by MLE; usable at tens-to-hundreds of rows with honest (wide) CIs" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the log-linear form extends beyond the observed covariate range — predictions grow exponentially in x, so extrapolation is possible but aggressive" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "dispersion_ratio", "why": "the family's defining qualia stat: sample variance/mean of the count target — Poisson's likelihood forces this to 1, so a ratio well above 1 (overdispersion) is the gate toward NegativeBinomial before any fit is run" },
+      { "stat": "zero_fraction", "why": "observed share of zeros vs the Poisson-implied exp(-lambda-hat); an excess-zero gap means zeros arrive from a second mechanism the single-parameter Poisson cannot express — the commit-zero-inflated signal" },
+      { "stat": "target_is_count", "why": "the Poisson likelihood is defined only on non-negative integers; negatives or non-integer values make the log-likelihood undefined — a reject-input check, not a modeling choice" }
+    ],
+    "modelMetrics": [
+      { "metric": "pearson_chi2_over_df", "why": "the post-fit dispersion estimate — approximately 1 under a correctly-specified Poisson; values well above 1 are the overdispersion red flag that re-routes to NB even when coefficients look significant" },
+      { "metric": "deviance", "why": "the GLM-native goodness-of-fit measure; deviance/df near 1 supports the distributional claim, letting the equidispersion assumption be checked rather than trusted" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "target contains negatives or non-integers", "behavior": "log-likelihood undefined / invalid family", "mitigation": "reject-input" },
+    { "condition": "dispersion ratio >> 1 (overdispersion)", "behavior": "consistent mean but SEs too small — spurious significance", "mitigation": "gate", "note": "route to neg_binomial" },
+    { "condition": "excess zeros beyond exp(-lambda)", "behavior": "systematic underprediction of the zero class", "mitigation": "gate", "note": "route to zero_inflated" },
+    { "condition": "a covariate perfectly predicts zero counts", "behavior": "coefficient diverges to -inf (quasi-separation)", "mitigation": "bank-entry", "note": "fit_regularized alpha > 0 stabilizes" },
+    { "condition": "all-zero target", "behavior": "degenerate fit — intercept -> -inf", "mitigation": "reject-input" }
+  ],
+  "driver": {
+    "constructor": "sm.GLM(y, sm.add_constant(X), family=sm.families.Poisson(link=...), offset=..., exposure=...).fit(maxiter=..., tol=...) or .fit_regularized(alpha=..., L1_wt=...)",
+    "deps": ["statsmodels>=0.14", "scipy"],
+    "wrapperNeeds": "adapter: add_constant on the design matrix; predict returns the mean count; expose offset/exposure passthrough for rate models",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded IRLS fit; predict is thread-safe",
+    "tranche": "T2"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN handling; statsmodels drops or rejects incomplete rows, biasing the fitted rates" },
+    { "position": "transform", "verdict": "beneficial", "why": "log/Yeo-Johnson of skewed covariates improves the log-linear fit the link assumes" },
+    { "position": "scale", "verdict": "beneficial", "why": "unpenalized MLE is scale-equivariant, but standardization conditions IRLS and is required in practice whenever the searchable penalty alpha > 0" },
+    { "position": "encode", "verdict": "required", "why": "categoricals must be design-encoded before the likelihood sees the matrix" }
+  ]
+}

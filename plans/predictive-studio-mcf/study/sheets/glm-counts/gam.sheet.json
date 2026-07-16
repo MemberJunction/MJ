@@ -1,0 +1,83 @@
+{
+  "identity": {
+    "modelKey": "gam",
+    "family": "glm-counts",
+    "libraryClass": "pygam.LinearGAM / pygam.LogisticGAM / pygam.PoissonGAM (alt: statsmodels.gam.api.GLMGam)",
+    "aliases": ["GAM", "generalized additive model", "spline regression", "smooth additive model"],
+    "displayName": "Generalized Additive Model",
+    "description": "A GLM whose linear terms are replaced by penalized SMOOTHS: y's link-mean = intercept + f1(x1) + ... + fp(xp), each f a spline whose wiggliness is penalty-controlled. Keeps the GLM's per-feature interpretability (each effect is a plottable 1-D curve) while capturing nonlinearity a straight coefficient cannot — the midpoint between GLM and black-box."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": ["classification"],
+    "learningType": "Supervised",
+    "parametric": "Semi",
+    "ensembleType": "None",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true }
+  ],
+  "emits": [
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "link-mean prediction; pyGAM exposes native prediction_intervals from the smoothing basis (LinearGAM)" },
+    { "portType": "probability", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "native", "note": "LogisticGAM classification mode" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "the smooths ARE spline-basis coefficients; exported per-term as partial-dependence curves with confidence bands — the plottable per-feature effect story" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/gam.schema.json",
+    "hpMeta": {
+      "lam": { "default": 0.6, "prior": "log-uniform[1e-3,1e3]", "searchable": true, "note": "the smoothing penalty — the model's single most important knob; lam -> inf collapses every smooth to a line (a plain GLM), lam -> 0 interpolates; pyGAM's gridsearch scans it natively" },
+      "n_splines": { "default": 20, "prior": "int-uniform[5,50]", "searchable": true, "note": "basis size per term; sets the CEILING on wiggliness — lam does the actual regularizing" },
+      "spline_order": { "default": 3, "prior": "fixed", "searchable": false, "note": "cubic p-splines" },
+      "fit_intercept": { "default": true, "prior": "fixed", "searchable": false },
+      "max_iter": { "default": 100, "prior": "fixed", "searchable": false },
+      "tol": { "default": 1e-4, "prior": "fixed", "searchable": false }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "spline knots are placed by feature quantiles, so an affine rescale of a feature moves knots with the data and spans the same function space — the fit is unchanged" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "the second-derivative wiggliness penalty is NOT invariant under nonlinear reparameterization of x — a log-transform changes what counts as 'smooth' and hence the fit (though far less than for a strict linear model)" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "the penalized IRLS has no missing-value mechanism; rows must be complete" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "this driver's auto term-build treats every column as a numeric spline; pyGAM factor terms f() exist but need explicit term specs plus integer codes — off by default here" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "keeps the exponential-family assumption of the chosen class — Normal errors for LinearGAM, Bernoulli/logit for LogisticGAM, Poisson (equidispersion included) for PoissonGAM; additivity replaces LINEARITY, not the distribution" },
+    { "flag": "dataSizeTolerance", "value": "small-to-medium", "basis": "empirical", "why": "each smooth spends effective degrees of freedom the data must fund; at small n the penalty shrinks smooths toward lines gracefully, but many terms with few rows overfit" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "outside the boundary knots the spline basis has no data support — the boundary polynomial extends uncontrolled, so out-of-range predictions are not trustworthy (unlike a linear model's disciplined line)" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "nonlinearity_gap", "why": "the spread between rank correlation (or mutual information) and Pearson correlation per feature — a monotone-but-curved or U-shaped relation is exactly the signal a smooth captures and a straight coefficient misrepresents" },
+      { "stat": "n_per_smooth_term", "why": "rows divided by candidate smooth terms bounds the edf budget the data can fund; a low ratio says shrink terms or raise lam before trusting any curve" },
+      { "stat": "concurvity", "why": "the GAM analogue of collinearity — one feature's smooth expressible through another's makes the decomposition unidentifiable and the per-feature curves (the whole interpretability payoff) unreliable" }
+    ],
+    "modelMetrics": [
+      { "metric": "edf_per_term", "why": "effective degrees of freedom of each fitted smooth — edf ~= 1 means the penalty collapsed the term to a line, the per-term commit-linear signal; large edf flags genuine curvature (or overfit if n is thin)" },
+      { "metric": "gam_vs_glm_deviance_gap", "why": "if the strictly-linear GLM matches the GAM's held-out deviance, the extra edf are not earning their keep — the family-internal simplicity gate" },
+      { "metric": "gcv_score", "why": "pyGAM's native generalized cross-validation objective for lam selection — the smoothing knob's honest scoreboard without a manual CV loop" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "many smooth terms with small n", "behavior": "edf explosion; wiggly curves fit noise", "mitigation": "gate", "note": "raise lam / cut terms / fall back to GLM" },
+    { "condition": "encoded categorical fed to a numeric spline term", "behavior": "nonsense smooth over arbitrary integer codes", "mitigation": "reject-input", "note": "route through factor terms or one-hot into linear terms" },
+    { "condition": "prediction beyond the boundary knots", "behavior": "uncontrolled boundary-polynomial extrapolation", "mitigation": "gate", "note": "clamp inputs to the training range or warn" },
+    { "condition": "high concurvity between features", "behavior": "unstable, non-unique smooth decomposition", "mitigation": "bank-entry", "note": "raise lam; drop one of the entangled features" },
+    { "condition": "lam grid hits its search boundary", "behavior": "GCV optimum outside the scanned range", "mitigation": "bank-entry", "note": "widen the log-spaced lam grid" }
+  ],
+  "driver": {
+    "constructor": "LinearGAM(terms='auto', n_splines=..., spline_order=3, lam=...).gridsearch(X, y) — class picked by problem_type (LinearGAM/LogisticGAM/PoissonGAM)",
+    "deps": ["pygam>=0.9", "scipy", "numpy"],
+    "wrapperNeeds": "EXTRA DEP: pygam is NOT in the sidecar's statsmodels stack — tranche T2 must add it to requirements (statsmodels.gam.api.GLMGam is the dep-free fallback at the cost of pyGAM's gridsearch/intervals). Adapter: class switch on problem_type; export per-term partial dependence + bands for the coefficients port",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit; predict is thread-safe",
+    "tranche": "T2"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN handling; incomplete rows are lost from the penalized likelihood" },
+    { "position": "transform", "verdict": "irrelevant", "why": "the smooth itself absorbs monotone curvature — pre-transforming x is what the spline is FOR; only extreme-tail compression occasionally helps knot coverage" },
+    { "position": "scale", "verdict": "irrelevant", "why": "quantile-placed knots make the fit invariant to affine rescaling; standardization is wasted compute" },
+    { "position": "encode", "verdict": "required", "why": "categoricals cannot enter numeric spline terms; they must be encoded (and routed to linear/factor terms, not smooths)" }
+  ]
+}

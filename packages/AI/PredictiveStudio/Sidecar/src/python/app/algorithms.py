@@ -141,6 +141,21 @@ def supported_algorithms() -> List[str]:
     return sorted(_REGISTRY.keys())
 
 
+# Per-driver optional-dependency importability. A driver key is RUNNABLE only if its
+# native dep imported successfully (the `_HAVE_*` flags); everything else is a pure-
+# sklearn/statsmodels driver that is always runnable. `/health` reports this so the
+# catalog can show Planned (cataloged, no runnable driver) vs Active per component.
+_DRIVER_REQUIREMENTS = {
+    "xgboost": _HAVE_XGB,
+    "lightgbm": _HAVE_LGBM,
+}
+
+
+def runnable_algorithms() -> List[str]:
+    """Registered drivers whose native dependency (if any) is importable here."""
+    return sorted(k for k in _REGISTRY if _DRIVER_REQUIREMENTS.get(k, True))
+
+
 def build_estimator(algorithm: str, problem_type: str, hyperparameters: Dict[str, Any]):
     """Build an sklearn-compatible estimator for the given driver key.
 

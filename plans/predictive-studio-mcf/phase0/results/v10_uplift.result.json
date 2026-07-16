@@ -1,0 +1,88 @@
+{
+  "hypothesis": "T-learner recovers segments; uplift-targeting beats risk-targeting net + avoids sleeping-dogs",
+  "seeds": [
+    91,
+    92,
+    93,
+    94,
+    95
+  ],
+  "per_seed": [
+    {
+      "seed": 91,
+      "net_none": 736.1,
+      "net_everyone": 851.8,
+      "net_risk": 854.2,
+      "net_uplift": 966.6,
+      "risk_contacts_dogs": 0,
+      "uplift_contacts_dogs": 2
+    },
+    {
+      "seed": 92,
+      "net_none": 768.7,
+      "net_everyone": 854.2,
+      "net_risk": 884.4,
+      "net_uplift": 986.8,
+      "risk_contacts_dogs": 0,
+      "uplift_contacts_dogs": 3
+    },
+    {
+      "seed": 93,
+      "net_none": 768.6,
+      "net_everyone": 865.3,
+      "net_risk": 898.2,
+      "net_uplift": 1001.5,
+      "risk_contacts_dogs": 0,
+      "uplift_contacts_dogs": 3
+    },
+    {
+      "seed": 94,
+      "net_none": 757.9,
+      "net_everyone": 842.1,
+      "net_risk": 876.0,
+      "net_uplift": 984.0,
+      "risk_contacts_dogs": 0,
+      "uplift_contacts_dogs": 0
+    },
+    {
+      "seed": 95,
+      "net_none": 756.0,
+      "net_everyone": 846.4,
+      "net_risk": 879.4,
+      "net_uplift": 981.8,
+      "risk_contacts_dogs": 0,
+      "uplift_contacts_dogs": 2
+    }
+  ],
+  "segment_recovery": [
+    {
+      "seed": 91,
+      "segment_recovery_acc": 0.875
+    },
+    {
+      "seed": 92,
+      "segment_recovery_acc": 0.912
+    },
+    {
+      "seed": 93,
+      "segment_recovery_acc": 0.902
+    },
+    {
+      "seed": 94,
+      "segment_recovery_acc": 0.894
+    },
+    {
+      "seed": 95,
+      "segment_recovery_acc": 0.911
+    }
+  ],
+  "net_uplift": 984.14,
+  "net_risk": 878.4399999999999,
+  "net_everyone": 851.96,
+  "uplift_gain_over_risk": 105.70000000000005,
+  "sleeping_dogs_contacted_risk": 0.0,
+  "sleeping_dogs_contacted_uplift": 2.0,
+  "segment_recovery_acc": 0.8987999999999999,
+  "verdict": "PASS",
+  "pass_bar": "uplift net>risk AND fewer dogs contacted AND seg recovery>=0.6"
+}

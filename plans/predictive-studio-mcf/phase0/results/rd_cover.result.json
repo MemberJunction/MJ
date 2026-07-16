@@ -1,0 +1,41 @@
+{
+  "hypothesis": "censoring-aware survival >= GBT-window on real time-to-lapse ranking",
+  "seeds": [
+    211,
+    212,
+    213
+  ],
+  "per_seed": [
+    {
+      "seed": 211,
+      "hold_events": 24,
+      "cindex_cox": 0.968,
+      "cindex_aft": 0.973,
+      "cindex_gbt_window": 0.979,
+      "timing_rho_cox": 0.764,
+      "timing_rho_gbt": 0.826
+    },
+    {
+      "seed": 212,
+      "hold_events": 15,
+      "cindex_cox": 0.981,
+      "cindex_aft": 0.98,
+      "cindex_gbt_window": 0.992,
+      "timing_rho_cox": 0.863,
+      "timing_rho_gbt": 0.918
+    },
+    {
+      "seed": 213,
+      "hold_events": 25,
+      "cindex_cox": 0.959,
+      "cindex_aft": 0.959,
+      "cindex_gbt_window": 0.974,
+      "timing_rho_cox": 0.785,
+      "timing_rho_gbt": 0.854
+    }
+  ],
+  "survival_wins": 0,
+  "verdict": "REVISE",
+  "pass_bar": "survival c-index >= gbt-window in >=2/3 seeds",
+  "honest_limits": "69 events total; ~20 holdout events/seed; wide CIs"
+}

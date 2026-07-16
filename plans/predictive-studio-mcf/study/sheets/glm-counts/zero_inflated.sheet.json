@@ -1,0 +1,235 @@
+{
+  "identity": {
+    "modelKey": "zero_inflated",
+    "family": "glm-counts",
+    "libraryClass": "statsmodels.discrete.count_model.ZeroInflatedPoisson / ZeroInflatedNegativeBinomialP",
+    "aliases": [
+      "ZIP",
+      "ZINB",
+      "zero-inflated count model",
+      "two-part count model"
+    ],
+    "displayName": "Zero-Inflated Count Model",
+    "description": "Two-part count mixture: a logit/probit INFLATION submodel decides whether a row is a structural zero (never-participant), and a Poisson/NB COUNT submodel generates counts (including sampling zeros) otherwise. Separates 'won't ever' from 'didn't this time' \u2014 two coefficient stories one plain count model conflates."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "None",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true
+  },
+  "consumes": [
+    {
+      "portType": "features:tabular",
+      "dataShape": "row-matrix",
+      "dtypes": [
+        "numeric",
+        "encoded-categorical"
+      ],
+      "targetSpec": "plain",
+      "required": true,
+      "note": "non-negative integer count target with excess zeros; exog_infl (inflation design) defaults to the same matrix but may be a subset"
+    }
+  ],
+  "emits": [
+    {
+      "portType": "score",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "expected count = (1 - pi) * lambda, the mixture mean; the fitted two-part model defines the full zero-inflated predictive distribution"
+    },
+    {
+      "portType": "probability",
+      "granularity": "per-row",
+      "paramsAsOutput": "none",
+      "probabilistic": "native",
+      "note": "pi = P(structural zero | x) from the inflation submodel \u2014 a per-row probability, though of a latent regime rather than a class label; closest existing port (pi derived as 1 - prob-main; prob-main returns the COUNT-regime probability, not pi)"
+    },
+    {
+      "portType": "coefficients",
+      "granularity": "per-model",
+      "paramsAsOutput": "coefficients+SE",
+      "probabilistic": "none",
+      "note": "TWO blocks: inflation (logit/probit) coefficients and count (log-linear) coefficients \u2014 the two-mechanism story is the interpretability payoff"
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable"
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/zero_inflated.schema.json",
+    "hpMeta": {
+      "count_family": {
+        "default": "poisson",
+        "prior": "categorical[poisson,negbin]",
+        "searchable": true,
+        "note": "wrapper-level class choice: ZeroInflatedPoisson vs ZeroInflatedNegativeBinomialP \u2014 negbin when the POSITIVE counts are themselves overdispersed"
+      },
+      "inflation": {
+        "default": "logit",
+        "prior": "categorical[logit,probit]",
+        "searchable": true,
+        "note": "link of the structural-zero submodel"
+      },
+      "p": {
+        "default": 2,
+        "prior": "categorical[1,2]",
+        "searchable": true,
+        "conditionalOn": "count_family",
+        "note": "NB variance power for ZeroInflatedNegativeBinomialP: 2=NB2, 1=NB1; only when count_family=negbin"
+      },
+      "method": {
+        "default": "bfgs",
+        "prior": "categorical[bfgs,newton,nm,lbfgs]",
+        "searchable": false
+      },
+      "maxiter": {
+        "default": 35,
+        "prior": "fixed",
+        "searchable": false,
+        "note": "statsmodels default; the two-block likelihood often needs more \u2014 raise on ConvergenceWarning"
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "unpenalized MLE is scale-equivariant, but fit_regularized's L1 penalty is unit-dependent and the joint two-block Hessian is fragile under badly-scaled columns \u2014 the hardest convergence surface in this family"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "both submodels are link-linear in their covariates; a monotone transform changes both fitted mechanisms"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "no missing-value mechanism in either likelihood block; rows must be complete in BOTH exog and exog_infl"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": false,
+      "basis": "empirical",
+      "why": "requires pre-encoded design matrices for both submodels"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "assumes a two-part mixture: a degenerate point mass at zero (Bernoulli via logit/probit) mixed with a Poisson or NB2/NB1 count distribution \u2014 zeros are asserted to arise from TWO distinct mechanisms"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "medium",
+      "basis": "empirical",
+      "why": "twice the parameters of a plain count model, and the mixture is identified only through the zero-vs-positive contrast \u2014 needs enough rows AND enough positive counts to separate the mechanisms"
+    },
+    {
+      "flag": "extrapolates",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "both link-linear submodels extend beyond the covariate range; the mixture mean extrapolates as their composition"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "excess_zero_gap",
+        "why": "observed zero share minus the Poisson-implied exp(-lambda-hat) \u2014 the single stat that justifies the second mechanism; a near-zero gap means the inflation component is unidentifiable ballast"
+      },
+      {
+        "stat": "dispersion_ratio",
+        "why": "variance/mean of the POSITIVE counts decides the count block: near 1 -> ZIP, well above 1 -> ZINB \u2014 dispersion and zero-inflation are separate diseases needing separate cures"
+      },
+      {
+        "stat": "zero_fraction",
+        "why": "the raw zero share bounds the inflation model's class balance \u2014 at extreme fractions the count block starves; at low fractions the mixture collapses"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "vuong_zi_vs_plain",
+        "why": "the Vuong non-nested test of the ZI model against its plain counterpart \u2014 the honest 'did two mechanisms beat one' scoreboard, since the models are not likelihood-nested"
+      },
+      {
+        "metric": "inflation_pi_distribution",
+        "why": "the fitted pi's clustering near 0 means the structural-zero regime is vestigial (commit back to plain count); pi near the raw zero rate everywhere means the inflation covariates carry no signal"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "no excess zeros (observed ~= family-implied)",
+      "behavior": "inflation block unidentified; pi -> 0 boundary, SEs blow up",
+      "mitigation": "gate",
+      "note": "commit back to poisson / neg_binomial"
+    },
+    {
+      "condition": "target contains negatives or non-integers",
+      "behavior": "count likelihood undefined",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "BFGS non-convergence of the joint likelihood",
+      "behavior": "ConvergenceWarning; parameters at last iterate",
+      "mitigation": "bank-entry",
+      "note": "start_params from a plain count fit + zero inflation; raise maxiter"
+    },
+    {
+      "condition": "separation in the inflation submodel",
+      "behavior": "inflation coefficient diverges",
+      "mitigation": "bank-entry",
+      "note": "fit_regularized or shrink exog_infl to fewer columns"
+    },
+    {
+      "condition": "positive counts overdispersed under ZIP",
+      "behavior": "zero-inflation absorbs variance it shouldn't; biased pi",
+      "mitigation": "gate",
+      "note": "switch count_family to negbin (ZINB)"
+    }
+  ],
+  "driver": {
+    "constructor": "ZeroInflatedPoisson(y, sm.add_constant(X), exog_infl=..., inflation='logit').fit(method='bfgs', maxiter=...) | ZeroInflatedNegativeBinomialP(..., p=2)",
+    "deps": [
+      "statsmodels>=0.14",
+      "scipy"
+    ],
+    "wrapperNeeds": "adapter: add_constant on both designs; predict(which='mean') for the score port and (1 - predict(which='prob-main'))  # pi = P(structural zero) = 1 - P(main regime) / inflation pi for the probability port; class switch on count_family",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit; predict is thread-safe",
+    "tranche": "T2"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "required",
+      "why": "no native NaN handling in either block; dropped rows distort the zero-vs-positive contrast the mixture is identified by"
+    },
+    {
+      "position": "transform",
+      "verdict": "beneficial",
+      "why": "link-linearity in both submodels benefits from unskewing covariates"
+    },
+    {
+      "position": "scale",
+      "verdict": "beneficial",
+      "why": "MLE is scale-equivariant, but the joint two-block optimization is the family's most fragile \u2014 standardization materially helps BFGS converge"
+    },
+    {
+      "position": "encode",
+      "verdict": "required",
+      "why": "both design matrices need categoricals encoded before fitting"
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "hypothesis": "survival beats GBT-window on censored time-to-lapse ranking",
+  "seeds": [
+    51,
+    52,
+    53,
+    54,
+    55
+  ],
+  "per_seed": [
+    {
+      "seed": 51,
+      "cox_c_index": 0.7461552868707468,
+      "gbt_window_c_index": 0.7218220357878652,
+      "advantage": 0.024333251082881646
+    },
+    {
+      "seed": 52,
+      "cox_c_index": 0.7590209452346087,
+      "gbt_window_c_index": 0.7295520767783169,
+      "advantage": 0.02946886845629182
+    },
+    {
+      "seed": 53,
+      "cox_c_index": 0.7475081568868603,
+      "gbt_window_c_index": 0.7219120996558137,
+      "advantage": 0.02559605723104663
+    },
+    {
+      "seed": 54,
+      "cox_c_index": 0.7741487043427495,
+      "gbt_window_c_index": 0.7558048797405795,
+      "advantage": 0.01834382460216999
+    },
+    {
+      "seed": 55,
+      "cox_c_index": 0.757548556747597,
+      "gbt_window_c_index": 0.7365089777117984,
+      "advantage": 0.021039579035798672
+    }
+  ],
+  "cox_c_mean": 0.7568763300165126,
+  "gbt_window_c_mean": 0.7331200139348747,
+  "advantage_mean": 0.02375631608163775,
+  "verdict": "REVISE",
+  "pass_bar": "cox C-index advantage >= 0.03"
+}

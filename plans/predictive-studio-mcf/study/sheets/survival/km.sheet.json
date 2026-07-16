@@ -1,0 +1,201 @@
+{
+  "identity": {
+    "modelKey": "km",
+    "family": "survival",
+    "libraryClass": "lifelines.KaplanMeierFitter",
+    "aliases": [
+      "Kaplan-Meier",
+      "KM estimator",
+      "product-limit estimator"
+    ],
+    "displayName": "Kaplan-Meier Estimator",
+    "description": "Nonparametric POPULATION survival curve \u2014 the survival floor. Covariate-free: consumes only the (duration, event) pair, no feature matrix at all. Every covariate survival model (Cox, AFT, RSF) is compared against this baseline; if a model cannot beat the KM curve's summary, its covariates are earning nothing."
+  },
+  "axes": {
+    "task": "survival",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "No",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true,
+    "note": "interpretabilityClass 'Coefficients' is the least-wrong of the 4-value axis: the fitted state IS the fully-inspectable step-function curve (parameters-as-the-model). Flagged as an axes-vocabulary tension for reconciliation. learningType 'Supervised' because it fits the labeled (duration,event) target \u2014 the intercept-only survival model \u2014 despite consuming zero covariates."
+  },
+  "consumes": [
+    {
+      "portType": "features:tabular",
+      "proposal": true,
+      "dataShape": "row-matrix",
+      "dtypes": [
+        "numeric-duration",
+        "binary-event"
+      ],
+      "targetSpec": "duration+event",
+      "required": false,
+      "note": "covariate-FREE: consumes only the (duration, event) pair; no feature columns used (the population baseline)"
+    }
+  ],
+  "portTypeProposals": [
+    {
+      "name": "target:duration-event",
+      "role": "input",
+      "carries": "the bare (duration, event-indicator) column pair with zero covariate columns",
+      "rationale": "KM is the proof-case that a survival component can be target-only. Typing its input as features:tabular would tell the composer a feature matrix is consumed when it is ignored \u2014 a dishonest composition contract. A distinct target-only port also lets the wiring UI show 'baseline comparator' components as feature-independent.",
+      "adapterFallback": "features:tabular -> target:duration-event, strategy: project-target-columns, lossless (drops only covariates, which KM ignores by construction)"
+    }
+  ],
+  "emits": [
+    {
+      "portType": "survival-curve",
+      "granularity": "per-model",
+      "paramsAsOutput": "survival-curve",
+      "probabilistic": "native",
+      "note": "ONE population curve S(t) with Greenwood confidence bands \u2014 per-model granularity, NOT per-row (every subject gets the same curve; that is the point of a baseline)"
+    }
+  ],
+  "learnsVsFixed": {
+    "learns": true,
+    "reusability": "trainable",
+    "note": "learns the curve from data, but its role in compositions is COMPARATOR, not scorer: the baseline every covariate survival model is measured against. Cheap to refit per population/segment."
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/km.schema.json",
+    "hpMeta": {
+      "alpha": {
+        "default": 0.05,
+        "prior": "fixed",
+        "searchable": false,
+        "note": "CI level for the Greenwood bands \u2014 a reporting knob, not a fit hyperparameter; KM has essentially no searchable hyperparameters (that honesty is itself catalog signal)"
+      }
+    }
+  },
+  "invariances": [
+    {
+      "flag": "scaleSensitive",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "no covariates enter the estimator \u2014 there is nothing to scale; the product-limit formula uses only risk-set counts at ranked event times"
+    },
+    {
+      "flag": "monotoneTransformInvariant",
+      "value": true,
+      "basis": "mechanism-derived",
+      "why": "the estimator depends only on the ORDER of event/censoring times (risk sets at ranked event times); a monotone transform of duration relabels the time axis but leaves every step's height identical \u2014 and covariate transforms are vacuously irrelevant"
+    },
+    {
+      "flag": "nativeNaN",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "a missing duration or event indicator makes the row's risk-set membership undefined \u2014 such rows must be rejected, not imputed (imputing a TARGET fabricates evidence)"
+    },
+    {
+      "flag": "nativeCategorical",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "vacuous \u2014 no covariate pathway exists; stratified KM (one curve per group) is a composition-level group-by, not native categorical handling"
+    },
+    {
+      "flag": "distributionalAssumption",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "fully nonparametric: no proportional-hazards form, no AFT time-rescaling, no assumed lifetime distribution \u2014 the empirical product-limit is assumption-free given independent censoring"
+    },
+    {
+      "flag": "dataSizeTolerance",
+      "value": "small-friendly",
+      "basis": "empirical",
+      "why": "defined at any event count; as events thin the steps get coarse and the Greenwood bands widen honestly \u2014 degradation is visible, not silent"
+    },
+    {
+      "flag": "extrapolates",
+      "value": false,
+      "basis": "mechanism-derived",
+      "why": "the curve is undefined beyond the last observed time; if the last observation is censored the tail never reaches 0 and is unidentified \u2014 no parametric form exists to extend it"
+    }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      {
+        "stat": "censoring_rate",
+        "why": "THE commit-survival stat: the fraction right-censored is what makes any survival treatment necessary vs a fixed-window classifier \u2014 and KM is the first thing censored data buys"
+      },
+      {
+        "stat": "event_count",
+        "why": "the effective sample size of the product-limit estimator is the number of EVENTS \u2014 each step exists only at an event time, so few events means a coarse, wide-banded curve"
+      },
+      {
+        "stat": "follow_up_window",
+        "why": "the maximum observed duration bounds where S(t) is estimable at all \u2014 the curve simply stops there, which decides whether the business's horizon of interest is even answerable"
+      }
+    ],
+    "modelMetrics": [
+      {
+        "metric": "median_survival_time",
+        "why": "the single-number population summary the curve exists to give \u2014 the time at which S(t) crosses 0.5, with Greenwood CI; undefined when the curve never reaches 0.5 (report RMST instead)"
+      },
+      {
+        "metric": "concordance_index",
+        "why": "0.5 BY CONSTRUCTION for a covariate-free curve (every subject gets the same prediction, zero discrimination) \u2014 its role here is the FLOOR: the number every covariate model's C-index must beat to justify its features"
+      }
+    ]
+  },
+  "edgeCases": [
+    {
+      "condition": "zero events (all censored)",
+      "behavior": "S(t)=1 everywhere \u2014 computable but vacuous; no survival information exists",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "duration <= 0",
+      "behavior": "invalid risk-set membership at t=0",
+      "mitigation": "reject-input"
+    },
+    {
+      "condition": "last observation censored (curve never reaches 0)",
+      "behavior": "median undefined when S never crosses 0.5; tail beyond last event unidentified",
+      "mitigation": "bank-entry",
+      "note": "report restricted-mean survival time (RMST) up to the last event time instead of the median"
+    },
+    {
+      "condition": "very few subjects at risk at late times",
+      "behavior": "late steps are huge and Greenwood bands explode \u2014 the tail looks dramatic but is noise",
+      "mitigation": "gate",
+      "note": "truncate reporting at a minimum-risk-set threshold"
+    }
+  ],
+  "driver": {
+    "constructor": "KaplanMeierFitter(alpha=...).fit(durations, event_observed)",
+    "deps": [
+      "lifelines>=0.30",
+      "scipy"
+    ],
+    "wrapperNeeds": "adapter: (duration,event) columns extracted from the input; NO feature matrix consumed. predict maps to survival_function_ / median_survival_time_; per-row scoring is a broadcast of the single population curve",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded fit",
+    "tranche": "T4 (survival)"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    {
+      "position": "impute",
+      "verdict": "irrelevant",
+      "why": "no covariate pathway; a missing duration/event is a reject-input (target imputation fabricates evidence), never an impute step"
+    },
+    {
+      "position": "transform",
+      "verdict": "irrelevant",
+      "why": "no covariates to transform, and the estimator is rank-based in time"
+    },
+    {
+      "position": "scale",
+      "verdict": "irrelevant",
+      "why": "scaleSensitive is false by mechanism \u2014 there are no covariates"
+    },
+    {
+      "position": "encode",
+      "verdict": "irrelevant",
+      "why": "no categorical covariates exist to encode; stratification is a composition concern, not preprocessing"
+    }
+  ]
+}

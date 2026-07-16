@@ -1,0 +1,79 @@
+{
+  "identity": {
+    "modelKey": "sma",
+    "family": "forecasting",
+    "libraryClass": "hand-rolled rolling mean (pandas.Series.rolling(window).mean()) — no fit",
+    "aliases": ["SMA", "simple moving average", "rolling mean", "window average"],
+    "displayName": "Simple Moving Average",
+    "description": "Mean of the last k observations, held flat over the horizon. The family's second floor and its resident SMOOTHER: as a forecaster it is the level-only reference for non-seasonal series; as a preprocessor it emits the rolling-mean series itself for a downstream forecaster to consume."
+  },
+  "axes": {
+    "task": "forecasting",
+    "secondaryTasks": [],
+    "learningType": "Temporal",
+    "parametric": "No",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Rules",
+    "dataShape": "Sequence",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "series", "dataShape": "series", "dtypes": ["numeric-time-indexed"], "targetSpec": "series", "required": true, "note": "regular time-indexed numeric series with at least k trailing observations" }
+  ],
+  "emits": [
+    { "portType": "forecast-series", "granularity": "per-series", "paramsAsOutput": "none", "probabilistic": "none", "note": "floor role: the last k-window mean repeated flat across the horizon; no native intervals" },
+    { "portType": "series", "granularity": "per-series", "paramsAsOutput": "none", "probabilistic": "none", "note": "smoother role: the full rolling-mean series, consumable by a downstream forecaster or detrender — the composition role that distinguishes sma from seasonal_naive" }
+  ],
+  "learnsVsFixed": {
+    "learns": false,
+    "reusability": "reusable-only",
+    "note": "nothing is estimated — the window mean is arithmetic on the last k values; the window length is supplied configuration. Reusable as a fixed floor/smoother on any numeric series."
+  },
+  "hyperparameters": {
+    "schema": "@file:schemas/sma.schema.json",
+    "hpMeta": {
+      "window": { "default": 3, "prior": "int-uniform[2,24]", "searchable": true, "note": "k, the only knob — a CONFIG choice (bias-variance of the smoother), searchable in the smoother role but conventionally FIXED in the floor role so the reference does not move" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "the arithmetic mean is equivariant to rescaling; forecasts and smoothed series rescale with the input" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "by Jensen's inequality mean(f(y)) != f(mean(y)) for nonlinear monotone f — unlike seasonal_naive, averaging does NOT commute with transforms" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "a NaN inside the window poisons the mean (or silently shrinks the effective window under skipna) — the grid must be gap-free" },
+    { "flag": "nativeCategorical", "value": false, "basis": "mechanism-derived", "why": "the mean is only defined on numeric values" },
+    { "flag": "distributionalAssumption", "value": false, "basis": "mechanism-derived", "why": "no distributional form — only the implicit bet that the recent local level persists, which is a structural (not distributional) premise" },
+    { "flag": "dataSizeTolerance", "value": "minimal", "basis": "mechanism-derived", "why": "needs only k observations — with seasonal_naive, the cheapest history requirement in the family" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "any horizon receives the same flat last-window mean — it lags a trend by construction ((k-1)/2 steps) and never extends one" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "trend_slope", "why": "the k-window mean lags a trend by (k-1)/2 steps, so a strong slope makes the flat forecast systematically biased — the stat that routes trending series away from this floor" },
+      { "stat": "seasonal_strength", "why": "a window spanning a seasonal cycle averages the seasonality away, so strong seasonality means the honest floor is seasonal_naive, not sma" },
+      { "stat": "noise_variance", "why": "averaging k points cuts noise variance by ~1/k — the exact payoff that justifies sma in its smoother role upstream of another forecaster" }
+    ],
+    "modelMetrics": [
+      { "metric": "mase_vs_seasonal_naive", "why": "even a floor is scored on the family scoreboard: on seasonal series sma loses to seasonal_naive by construction, and that ranking honestly decides which floor a given series should be scored against" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "fewer than k observations", "behavior": "window undefined", "mitigation": "gate", "note": "shrink the window or fall back to last-value naive" },
+    { "condition": "NaN inside the trailing window", "behavior": "NaN (or a silently shorter window) in the forecast", "mitigation": "reject-input", "note": "time-aware imputation first" },
+    { "condition": "strongly trending series", "behavior": "systematic lag bias of (k-1)/2 steps", "mitigation": "gate", "note": "route to a trend-capable member (ets/theta)" },
+    { "condition": "strongly seasonal series", "behavior": "seasonality averaged away; flat forecast misses every peak", "mitigation": "gate", "note": "route to seasonal_naive or a seasonal model" },
+    { "condition": "outlier spike inside the window", "behavior": "the mean is dragged by a single spike for k periods", "mitigation": "bank-entry", "note": "a median window or longer k is the robust alternative" }
+  ],
+  "driver": {
+    "constructor": "no fit — forecast: y.rolling(window=k).mean().iloc[-1] tiled over the horizon; smoother: the full rolling-mean series",
+    "deps": ["pandas", "numpy"],
+    "wrapperNeeds": "series adapter: (time_col, value_col, freq, horizon) + window config; dual-role wrapper exposes forecast(horizon) and transform() -> smoothed series",
+    "serialization": "joblib",
+    "threadSafety": "trivially thread-safe (immutable window buffer)",
+    "tranche": "T5 (forecasting)"
+  },
+  "canBeSeeds": [],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "the trailing window must be gap-free or the mean is poisoned; time-aware fill first" },
+    { "position": "transform", "verdict": "beneficial", "why": "averaging on a variance-stabilized (log) scale resists spikes — the raw-scale mean is spike-sensitive, and since averaging does not commute with transforms this is a real choice" },
+    { "position": "scale", "verdict": "irrelevant", "why": "scale-equivariant mean; standardization changes nothing" },
+    { "position": "encode", "verdict": "irrelevant", "why": "single numeric series has nothing to encode" }
+  ]
+}

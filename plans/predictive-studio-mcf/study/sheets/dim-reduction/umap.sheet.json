@@ -1,0 +1,80 @@
+{
+  "identity": {
+    "modelKey": "umap",
+    "family": "dim-reduction",
+    "libraryClass": "umap.UMAP",
+    "aliases": ["Uniform Manifold Approximation and Projection", "manifold embedding", "nonlinear embedding"],
+    "displayName": "UMAP",
+    "description": "Nonlinear manifold learning: builds a fuzzy k-NN topology of the data and optimizes a low-dimensional layout that preserves LOCAL neighborhood structure. Unrolls curved structure PCA cannot; the price is stochastic fits, unreliable global distances, and no meaningful inverse back to feature space."
+  },
+  "axes": {
+    "task": "dim-reduction",
+    "secondaryTasks": [],
+    "learningType": "Unsupervised",
+    "parametric": "No",
+    "ensembleType": "None",
+    "interpretabilityClass": "BlackBox",
+    "dataShape": "Tabular",
+    "deterministicFit": false
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric"], "targetSpec": "none", "required": true, "note": "unsupervised — no target; the k-NN graph is built from a numeric distance metric (euclidean by default)" }
+  ],
+  "emits": [
+    { "portType": "embedding", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none", "note": "the low-dimensional layout coordinates. ONE-WAY map: there is no meaningful inverse — inverse_transform exists but is experimental/approximate, so reconstruction is unsupported in this driver. Within-neighborhood distances are meaningful; between-cluster distances are NOT" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/umap.schema.json",
+    "hpMeta": {
+      "n_neighbors": { "default": 15, "prior": "int-log-uniform[5,100]", "searchable": true, "note": "the local/global dial — small values preserve fine local structure, large values force more global shape into the layout" },
+      "min_dist": { "default": 0.1, "prior": "uniform[0.0,0.99]", "searchable": true, "note": "minimum spacing in the layout; low values pack neighborhoods tight (cluster-friendly), high values spread them (topology-friendly)" },
+      "n_components": { "default": 2, "prior": "int-uniform[2,20]", "searchable": true, "note": "2 is the visualization default; feed a downstream model 5–20 instead — 2D throws away too much for modeling" },
+      "metric": { "default": "euclidean", "prior": "categorical[euclidean,manhattan,cosine]", "searchable": false, "note": "a data-semantics choice (what 'near' means), not a tunable — pick from the data type, don't search it" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "the fuzzy topology is built from metric distances — rescaling a feature reweights the metric and rewires the entire neighbor graph" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "pairwise distances change under nonlinear monotone maps, so the k-NN graph (and hence the embedding) changes" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "distance computation is undefined on missing entries — the neighbor graph cannot be built with NaN" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "this driver runs numeric metrics; categorical inputs must be encoded first (custom metrics over mixed types exist in the library but are out of driver scope)" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes the data is (approximately) uniformly distributed on a locally connected Riemannian manifold — literally the 'U' in UMAP; when it fails, the embedding's apparent densities and cluster sizes are artifacts" },
+    { "flag": "dataSizeTolerance", "value": "medium-to-large", "basis": "empirical", "why": "needs enough rows for a meaningful k-NN graph — below a few hundred the fuzzy topology is mostly noise; scales well upward via approximate nearest neighbors" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "a new point is embedded only through its neighbors in the TRAINING graph — a point off the learned manifold has no neighbors that describe it and its placement is unreliable" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "intrinsic_dimension_estimate", "why": "UMAP earns its keep exactly when intrinsic dimension is far below ambient dimension — near-full-rank data has no manifold to unroll and PCA-level linear structure is all there is" },
+      { "stat": "knn_graph_connectivity", "why": "the fuzzy topology is derived from the k-NN graph — a fragmented graph yields disconnected islands whose relative placement in the layout is arbitrary" },
+      { "stat": "feature_scale_disparity", "why": "with an unstandardized euclidean metric, the biggest-unit feature dominates every distance and the neighbor graph degenerates to a 1-feature ordering" }
+    ],
+    "modelMetrics": [
+      { "metric": "trustworthiness", "why": "the direct check of the neighborhood-preservation objective — measures whether points near each other in the embedding were truly neighbors in input space" },
+      { "metric": "embedding_stability_across_seeds", "why": "the layout comes from stochastic optimization; if the structure story changes across seeds it is optimizer noise, not manifold signal" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "NaN anywhere in the input matrix", "behavior": "distance computation fails — fit raises", "mitigation": "reject-input" },
+    { "condition": "n_samples <= n_neighbors", "behavior": "library warns and clamps k; the fuzzy topology degenerates toward all-points-are-neighbors", "mitigation": "gate" },
+    { "condition": "disconnected k-NN graph (well-separated islands)", "behavior": "components embed independently — inter-island distances in the layout are meaningless", "mitigation": "gate" },
+    { "condition": "reading global distances / cluster sizes off the embedding", "behavior": "between-cluster distances and apparent densities are optimization artifacts, not data facts", "mitigation": "gate" }
+  ],
+  "driver": {
+    "constructor": "UMAP(n_neighbors=..., min_dist=..., n_components=..., metric=..., random_state=...)",
+    "deps": ["umap-learn>=0.5 — HEAVY OPTIONAL dep: pulls numba + llvmlite + pynndescent; import-guarded, NOT in the base sidecar env — driver surfaces a clear 'umap-learn not installed' error when absent"],
+    "wrapperNeeds": "sklearn-compatible fit/transform, but: guard the import (optional dep); do NOT expose inverse_transform (experimental, not meaningful); setting random_state for reproducibility forces single-threaded layout optimization",
+    "serialization": "joblib",
+    "threadSafety": "fit is numba-parallelized (unless random_state is set — determinism costs the parallelism); transform on a fitted model is safe for concurrent reads",
+    "tranche": "T3 (dim-reduction)"
+  },
+  "canBeSeeds": [
+    { "template": "Reduce-then-Cluster", "slot": "reducer", "via": "embedding" },
+    { "template": "Reduce-then-Model", "slot": "reducer", "via": "embedding" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN path — distances (and hence the neighbor graph) are undefined on missing values" },
+    { "position": "transform", "verdict": "beneficial", "why": "de-skewing heavy-tailed features tames outlier-dominated distances so the k-NN graph reflects the bulk structure" },
+    { "position": "scale", "verdict": "required", "why": "metric-based mechanism: mixed-unit features must be standardized or the largest-unit column owns the distance and the graph" },
+    { "position": "encode", "verdict": "required", "why": "numeric metric — categoricals must be encoded before 'distance' means anything" }
+  ]
+}

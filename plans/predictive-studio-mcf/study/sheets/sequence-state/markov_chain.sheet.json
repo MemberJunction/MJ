@@ -1,0 +1,80 @@
+{
+  "identity": {
+    "modelKey": "markov_chain",
+    "family": "sequence-state",
+    "libraryClass": "custom numpy transition-count MLE (no canonical sklearn-family class; cf. pomegranate.MarkovChain)",
+    "aliases": ["Markov chain", "first-order Markov model", "transition matrix model"],
+    "displayName": "Discrete Markov Chain",
+    "description": "First-order Markov chain over OBSERVED discrete states: estimates the K x K transition-probability matrix by counting state-to-state transitions across sequences. The matrix IS the model — fully inspectable, fit by counting, no latent structure."
+  },
+  "axes": {
+    "task": "sequence-state",
+    "secondaryTasks": [],
+    "learningType": "Unsupervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Sequence",
+    "deterministicFit": true
+  },
+  "consumes": [
+    { "portType": "features:sequence", "dataShape": "event-sequence", "dtypes": ["categorical-state"], "targetSpec": "none", "required": true, "note": "per-entity ordered sequences of discrete state tokens (e.g. monthly engagement tier); unsupervised — no target" },
+    { "portType": "state-sequence", "dataShape": "event-sequence", "dtypes": ["categorical-state"], "targetSpec": "none", "required": false, "note": "an upstream decoder's state path (e.g. HMM Viterbi output) is itself a legal observed-state input — the chain-on-decoded-states composition" }
+  ],
+  "emits": [
+    { "portType": "transition-matrix", "granularity": "per-model", "paramsAsOutput": "transition-matrix", "probabilistic": "none", "note": "the row-stochastic K x K matrix — the model's entire fitted knowledge, directly consumable downstream (steady-state analysis, churn-path features)" },
+    { "portType": "score", "granularity": "per-series", "paramsAsOutput": "none", "probabilistic": "none", "note": "per-sequence log-likelihood under the fitted chain — 'how typical is this member's path' as a downstream feature or anomaly-ish signal" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/markov_chain.schema.json",
+    "hpMeta": {
+      "laplace_alpha": { "default": 1.0, "prior": "log-uniform[0.01,10.0]", "searchable": true, "note": "additive smoothing pseudo-count — the only real knob; keeps unobserved transitions from annihilating held-out likelihood" },
+      "min_state_support": { "default": 5, "prior": "int-uniform[1,50]", "searchable": false, "note": "states with fewer total observations than this are pooled into a rare-state bucket before counting" },
+      "unk_state": { "default": true, "prior": "categorical[true,false]", "searchable": false, "note": "reserve an explicit UNK row/column so unseen states at scoring time remain scoreable" }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": false, "basis": "mechanism-derived", "why": "inputs are categorical state tokens — there is no numeric scale anywhere in the fit" },
+    { "flag": "monotoneTransformInvariant", "value": true, "basis": "mechanism-derived", "why": "any bijective recoding of the state alphabet yields an isomorphic transition matrix; only the labels move" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "a missing state token breaks adjacency — splicing over a gap fabricates a transition that never happened; gaps must be segmented or given an explicit missing-state token" },
+    { "flag": "nativeCategorical", "value": true, "basis": "mechanism-derived", "why": "the state alphabet IS categorical; counting operates on tokens directly, no encoding step" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "assumes the first-order Markov property (next state depends only on current) and time-homogeneous transition probabilities" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "empirical", "why": "counting is sample-efficient for small alphabets, but the K^2 cells each need support — large K with few sequences leaves the matrix sparse and smoothing-dependent" },
+    { "flag": "extrapolates", "value": false, "basis": "mechanism-derived", "why": "a state never seen in training has no row or column — the model is undefined outside the observed alphabet (hence the UNK-state hedge)" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "n_states", "why": "the matrix has K^2 cells to support with transition counts; a large alphabet against a small corpus flags pooling or a coarser state definition" },
+      { "stat": "min_cell_transition_count", "why": "an unobserved (i,j) cell gets probability zero and annihilates the likelihood of any future sequence containing that transition — the Laplace-smoothing trigger" },
+      { "stat": "median_sequence_length", "why": "a length-L sequence contributes L-1 transitions; a corpus of length-1 sequences carries zero transition information" }
+    ],
+    "modelMetrics": [
+      { "metric": "held_out_perplexity", "why": "perplexity on held-out sequences is the honest scoreboard for a generative sequence model — training-set transition recall proves nothing" },
+      { "metric": "order2_vs_order1_likelihood_ratio", "why": "a significant LR for a second-order chain over first-order says the memorylessness assumption is violated — the gate toward higher order or an HMM" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "unseen state token at scoring time", "behavior": "no row/column — probability undefined", "mitigation": "bank-entry", "note": "UNK state + Laplace prior" },
+    { "condition": "corpus dominated by length-1 sequences", "behavior": "no transitions observed — matrix unsupported", "mitigation": "gate" },
+    { "condition": "zero-count transition cells", "behavior": "hard-zero probabilities annihilate held-out likelihood", "mitigation": "bank-entry", "note": "laplace_alpha > 0" },
+    { "condition": "transition behavior drifts over calendar time", "behavior": "the single matrix is a blur of regimes", "mitigation": "gate", "note": "markov_switching / hmm are the regime-aware siblings" }
+  ],
+  "driver": {
+    "constructor": "TransitionMatrixEstimator(alpha=laplace_alpha, unk=unk_state).fit(sequences) — group-by (prev,next) count, row-normalize",
+    "deps": ["numpy", "pandas"],
+    "wrapperNeeds": "sequence adapter: (entity_id, order_col, state_col) -> per-entity ordered token lists, segmented at gaps; score maps to per-sequence log-likelihood",
+    "serialization": "joblib",
+    "threadSafety": "stateless counting; fit and score are thread-safe",
+    "tranche": "T6 (sequence-state)"
+  },
+  "canBeSeeds": [
+    { "template": "Path-Typicality Feature", "slot": "sequence-scorer", "via": "score -> features:tabular adapter (per-entity path log-likelihood as a model feature)" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "a gap spliced over creates a spurious transition; sequences must be segmented at gaps or carry an explicit missing-state token before counting" },
+    { "position": "transform", "verdict": "irrelevant", "why": "bijective recoding of tokens is a no-op on the fit; there is no numeric transform to apply" },
+    { "position": "scale", "verdict": "irrelevant", "why": "categorical states carry no scale — nothing to standardize" },
+    { "position": "encode", "verdict": "irrelevant", "why": "native-categorical: counting consumes tokens directly; integer coding is an internal implementation detail, not a pipeline stage" }
+  ]
+}

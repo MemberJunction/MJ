@@ -1,0 +1,29 @@
+{
+  "arms": [
+    {
+      "arm": "raw",
+      "ece": 0.0315,
+      "brier": 0.0506,
+      "logloss": 0.1922,
+      "auc": 0.85
+    },
+    {
+      "arm": "isotonic",
+      "ece": 0.0141,
+      "brier": 0.0475,
+      "logloss": 0.1702,
+      "auc": 0.856
+    },
+    {
+      "arm": "sigmoid",
+      "ece": 0.0057,
+      "brier": 0.0499,
+      "logloss": 0.1911,
+      "auc": 0.843
+    }
+  ],
+  "raw_ece": 0.0315,
+  "gate_decision": "CALIBRATE:sigmoid",
+  "verdict": "PASS",
+  "pass_bar": "gate decides correctly; calibration never degrades logloss >10%"
+}

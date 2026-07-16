@@ -1,0 +1,85 @@
+{
+  "identity": {
+    "modelKey": "elastic_net",
+    "family": "linear-glm",
+    "libraryClass": "sklearn.linear_model.ElasticNet",
+    "aliases": ["enet", "L1+L2 regression", "elastic-net regression"],
+    "displayName": "Elastic Net",
+    "description": "Convex blend of L1 and L2 penalties: keeps lasso's exact-zero selection while the L2 component adds the grouping effect — correlated features enter and leave the support TOGETHER instead of lasso's arbitrary single pick. The default when you want sparsity on correlated tabular data."
+  },
+  "axes": {
+    "task": "regression",
+    "secondaryTasks": [],
+    "learningType": "Supervised",
+    "parametric": "Yes",
+    "ensembleType": "Single",
+    "interpretabilityClass": "Coefficients",
+    "dataShape": "Tabular",
+    "deterministicFit": true,
+    "note": "cyclic coordinate descent is deterministic; selection='random' is the only stochastic mode"
+  },
+  "consumes": [
+    { "portType": "features:tabular", "dataShape": "row-matrix", "dtypes": ["numeric", "encoded-categorical"], "targetSpec": "plain", "required": true }
+  ],
+  "emits": [
+    { "portType": "score", "granularity": "per-row", "paramsAsOutput": "none", "probabilistic": "none" },
+    { "portType": "coefficients", "granularity": "per-model", "paramsAsOutput": "coefficients+SE", "probabilistic": "none", "note": "POINT ESTIMATES ONLY — no SEs from sklearn; sparse-with-grouping support pattern is the effect story" }
+  ],
+  "learnsVsFixed": { "learns": true, "reusability": "trainable" },
+  "hyperparameters": {
+    "schema": "@file:schemas/elastic_net.schema.json",
+    "hpMeta": {
+      "alpha": { "default": 1.0, "prior": "log-uniform[0.0001,10]", "searchable": true, "note": "overall penalty strength" },
+      "l1_ratio": { "default": 0.5, "prior": "uniform[0.05,0.95]", "searchable": true, "conditionalOn": "alpha", "note": "the L1/L2 mix; endpoints excluded — 1.0 IS lasso, and sklearn's own docs advise Ridge over coordinate descent at 0.0" },
+      "fit_intercept": { "default": true, "prior": "categorical[true,false]", "searchable": false },
+      "max_iter": { "default": 1000, "prior": "int-uniform[1000,10000]", "searchable": false },
+      "tol": { "default": 0.0001, "prior": "log-uniform[1e-6,1e-2]", "searchable": false },
+      "selection": { "default": "cyclic", "prior": "categorical[cyclic,random]", "searchable": false },
+      "positive": { "default": false, "prior": "categorical[false,true]", "searchable": false }
+    }
+  },
+  "invariances": [
+    { "flag": "scaleSensitive", "value": true, "basis": "mechanism-derived", "why": "both penalty components are unit-dependent — unscaled features get arbitrary relative shrinkage AND arbitrary selection thresholds" },
+    { "flag": "monotoneTransformInvariant", "value": false, "basis": "mechanism-derived", "why": "linear in the inputs; monotone transforms change fit and support" },
+    { "flag": "nativeNaN", "value": false, "basis": "mechanism-derived", "why": "coordinate descent has no missing-value path; NaN raises" },
+    { "flag": "nativeCategorical", "value": false, "basis": "empirical", "why": "requires a pre-encoded numeric design matrix" },
+    { "flag": "distributionalAssumption", "value": true, "basis": "mechanism-derived", "why": "squared-error loss presumes a linear mean; the mixed penalty bets the signal is sparse-but-grouped" },
+    { "flag": "dataSizeTolerance", "value": "small-friendly", "basis": "mechanism-derived", "why": "defined at p >> n like lasso, but the L2 component removes lasso's at-most-n-features ceiling — the strictly safer wide-data choice" },
+    { "flag": "extrapolates", "value": true, "basis": "mechanism-derived", "why": "the linear predictor extends unboundedly beyond the training range" }
+  ],
+  "nodeQualia": {
+    "featureStats": [
+      { "stat": "max_pairwise_correlation", "why": "the grouping effect is the point: the L2 term makes correlated features enter/exit the support together — high correlation is the commit-enet-over-lasso signal" },
+      { "stat": "n_over_p", "why": "wide data is home turf; unlike lasso, the support size is not capped at n thanks to the strictly convex L2 component" },
+      { "stat": "vif_max", "why": "the same collinearity that destabilizes lasso's pick and inflates OLS variance is exactly what the L2 blend is dosed (via l1_ratio) to absorb" }
+    ],
+    "modelMetrics": [
+      { "metric": "support_stability_jaccard", "why": "on correlated designs enet's fold-to-fold support overlap should beat lasso's — if it doesn't, l1_ratio is set too close to 1 to buy the grouping effect" },
+      { "metric": "cv_r2_linear_vs_gbt_gap", "why": "a boosted-tree model decisively winning says the residual signal is non-linear — sparsity tuning cannot close a functional-form gap" }
+    ]
+  },
+  "edgeCases": [
+    { "condition": "l1_ratio = 0", "behavior": "pure L2 objective solved by coordinate descent — sklearn's docs recommend Ridge's closed-form solvers instead", "mitigation": "bank-entry", "note": "route to ridge" },
+    { "condition": "l1_ratio = 1", "behavior": "exactly lasso — the grouping effect vanishes", "mitigation": "gate" },
+    { "condition": "alpha above the data-dependent maximum", "behavior": "all coefficients zero; intercept-only model returned silently", "mitigation": "gate" },
+    { "condition": "ConvergenceWarning at max_iter", "behavior": "coefficients from an unconverged pass; usually tiny alpha or unscaled X", "mitigation": "gate" }
+  ],
+  "driver": {
+    "constructor": "ElasticNet(**hp)",
+    "deps": ["scikit-learn>=1.4"],
+    "wrapperNeeds": "none (sklearn-compatible fit/predict)",
+    "serialization": "joblib",
+    "threadSafety": "single-threaded coordinate descent; predict is thread-safe",
+    "tranche": "T1"
+  },
+  "canBeSeeds": [
+    { "template": "Stacking Template", "slot": "base", "via": "score" },
+    { "template": "Bagging Template", "slot": "model", "via": "score" }
+  ],
+  "placementClaims": [
+    { "position": "impute", "verdict": "required", "why": "no native NaN path — coordinate descent raises on missing values" },
+    { "position": "transform", "verdict": "beneficial", "why": "linearizing skewed covariates improves the linear-mean fit the squared loss assumes" },
+    { "position": "scale", "verdict": "required", "why": "both penalty components are unit-dependent — standardization is what makes shrinkage and selection comparable across features" },
+    { "position": "encode", "verdict": "required", "why": "categoricals must be design-encoded; the grouping effect then usefully keeps one-hot siblings together" }
+  ]
+}
