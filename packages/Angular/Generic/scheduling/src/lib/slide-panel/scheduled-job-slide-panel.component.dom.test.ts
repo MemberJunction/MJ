@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { CommonModule } from '@angular/common';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { query, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
 import { ScheduledJobSlidePanelComponent } from './scheduled-job-slide-panel.component';
@@ -9,16 +10,32 @@ import { ScheduledJobSlidePanelComponent } from './scheduled-job-slide-panel.com
 /**
  * DOM spec for <mj-scheduled-job-slide-panel> — a presentational wrapper around the editor.
  * It gates its whole body on IsOpen, renders a title, and emits Close from both the backdrop
- * and the close button. The nested <mj-scheduled-job-editor> is left unresolved via
- * NO_ERRORS_SCHEMA (it's data-bound and tested elsewhere; here we only assert the wrapper's
- * own gating / title / Close wiring).
+ * and the close button. The nested <mj-scheduled-job-editor> is replaced with an explicit
+ * stub mirroring its bound inputs/outputs (it's data-bound and tested elsewhere; here we
+ * only assert the wrapper's own gating / title / Close wiring).
  */
+
+/** Stub for <mj-scheduled-job-editor> — mirrors the inputs/outputs bound in the template. */
+@Component({
+  standalone: true,
+  selector: 'mj-scheduled-job-editor',
+  template: '',
+})
+class StubScheduledJobEditorComponent {
+  @Input() ScheduledJobID: string | null = null;
+  @Input() JobTypeID: string | null = null;
+  @Input() DefaultConfiguration: string | null = null;
+  @Input() HideJobType = false;
+  @Output() Saved = new EventEmitter<MJScheduledJobEntity>();
+  @Output() Deleted = new EventEmitter<string>();
+  @Output() Cancelled = new EventEmitter<void>();
+}
+
 describe('ScheduledJobSlidePanelComponent (DOM)', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [CommonModule],
+      imports: [CommonModule, StubScheduledJobEditorComponent],
       declarations: [ScheduledJobSlidePanelComponent],
-      schemas: [NO_ERRORS_SCHEMA],
     });
   });
 

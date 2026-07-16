@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
+import { MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
 import { query } from '@memberjunction/ng-test-utils';
 import { AgentRequestDialogComponent } from './agent-request-dialog.component';
+import { AgentRequestPanelResult } from '../panels/agent-request-panel/agent-request-panel.component';
 
 /**
  * DOM-level test for AgentRequestDialogComponent's template gating.
@@ -15,16 +17,29 @@ import { AgentRequestDialogComponent } from './agent-request-dialog.component';
  * they depend on that backend load, plus the child `mj-agent-request-panel` /
  * `mj-loading` rendering, neither of which this component owns.
  *
- * `mj-agent-request-panel` / `mj-loading` are declared unknown via
- * CUSTOM_ELEMENTS_SCHEMA so the compile doesn't require their real modules.
+ * `mj-agent-request-panel` / `mj-loading` are replaced with explicit standalone
+ * stubs (below) so the template compiles without any blanket schema.
  */
+
+@Component({ standalone: true, selector: 'mj-loading', template: '' })
+class MjLoadingStubComponent {
+  @Input() text = '';
+}
+
+@Component({ standalone: true, selector: 'mj-agent-request-panel', template: '' })
+class AgentRequestPanelStubComponent {
+  @Input() Request: MJAIAgentRequestEntity | null = null;
+  @Input() RequestTypes: MJAIAgentRequestTypeEntity[] = [];
+  @Input() IsOpen = false;
+  @Output() Close = new EventEmitter<AgentRequestPanelResult>();
+}
+
 describe('AgentRequestDialogComponent (DOM)', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
-      imports: [CommonModule],
+      imports: [CommonModule, MjLoadingStubComponent, AgentRequestPanelStubComponent],
       declarations: [AgentRequestDialogComponent],
-      schemas: [CUSTOM_ELEMENTS_SCHEMA],
     });
   });
 

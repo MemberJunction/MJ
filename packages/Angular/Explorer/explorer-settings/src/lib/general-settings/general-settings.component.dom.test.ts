@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { ComponentFixture } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
 import { GeneralSettingsComponent } from './general-settings.component';
 
@@ -31,6 +33,10 @@ const render = () =>
     declarations: [GeneralSettingsComponent],
   });
 
+/** The two card stub instances (Profile first, Account second), resolved via DI for clean typing. */
+const cardStubs = (fixture: ComponentFixture<GeneralSettingsComponent>): SettingsCardStub[] =>
+  fixture.debugElement.queryAll(By.directive(SettingsCardStub)).map((de) => de.injector.get(SettingsCardStub));
+
 describe('GeneralSettingsComponent (DOM)', () => {
   it('renders the section heading and description', () => {
     const fixture = render();
@@ -49,15 +55,30 @@ describe('GeneralSettingsComponent (DOM)', () => {
     expect(query(fixture, 'mj-account-info')).not.toBeNull();
   });
 
-  it('starts with both sections expanded', () => {
-    const c = render().componentInstance;
-    expect(c.ProfileExpanded).toBe(true);
-    expect(c.AccountExpanded).toBe(true);
+  it('starts with both sections expanded (as seen through the [expanded] bindings)', () => {
+    const [profile, account] = cardStubs(render());
+    expect(profile.expanded).toBe(true);
+    expect(account.expanded).toBe(true);
   });
 
-  it('toggles the profile section expansion state', () => {
-    const c = render().componentInstance;
-    c.ToggleProfile();
-    expect(c.ProfileExpanded).toBe(false);
+  // Triggered through the card's (toggle) output — proves the template wiring, not just the method.
+  it('collapses the profile section when its card emits toggle', () => {
+    const fixture = render();
+    const [profile, account] = cardStubs(fixture);
+    profile.toggle.emit();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.ProfileExpanded).toBe(false);
+    expect(profile.expanded).toBe(false);
+    expect(account.expanded).toBe(true); // the other card is untouched
+  });
+
+  it('collapses the account section when its card emits toggle', () => {
+    const fixture = render();
+    const [profile, account] = cardStubs(fixture);
+    account.toggle.emit();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.AccountExpanded).toBe(false);
+    expect(account.expanded).toBe(false);
+    expect(profile.expanded).toBe(true);
   });
 });

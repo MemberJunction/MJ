@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { CommonModule } from '@angular/common';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { query, queryAll, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
@@ -13,9 +13,19 @@ import { ScheduledJobService } from '../../services/scheduled-job.service';
  * (its LoadJob/LoadJobRuns are the only seam the component touches) so we can drive the
  * three template branches (loading / job / empty) deterministically with no backend.
  *
- * mj-loading (from SharedGenericModule) is left unresolved via NO_ERRORS_SCHEMA — we never
+ * mj-loading (from SharedGenericModule) is replaced with an explicit stub — we never
  * assert on its internals, only on the host component's own template.
  */
+
+/** Stub for <mj-loading> — mirrors the `size` attribute bound in the template. */
+@Component({
+  standalone: true,
+  selector: 'mj-loading',
+  template: '',
+})
+class StubLoadingComponent {
+  @Input() size = '';
+}
 
 interface FakeJob {
   Name: string;
@@ -45,10 +55,9 @@ describe('ScheduledJobSummaryComponent (DOM, data-bound)', () => {
   beforeEach(() => {
     fakeService = new FakeScheduledJobService();
     TestBed.configureTestingModule({
-      imports: [CommonModule, MJEmptyStateComponent],
+      imports: [CommonModule, MJEmptyStateComponent, StubLoadingComponent],
       declarations: [ScheduledJobSummaryComponent],
       providers: [{ provide: ScheduledJobService, useValue: fakeService }],
-      schemas: [NO_ERRORS_SCHEMA],
     });
   });
 

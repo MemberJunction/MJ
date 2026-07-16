@@ -3,7 +3,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
 import { CreateAgentSlideInComponent } from './create-agent-slidein.component';
-import type { CreateAgentConfig } from './create-agent-panel.component';
+import type { CreateAgentConfig, CreateAgentResult } from './create-agent-panel.component';
 
 /** Stub for the data-bound <mj-create-agent-panel> child (see create-agent-dialog spec). */
 @Component({ standalone: false, selector: 'mj-create-agent-panel', template: '' })
@@ -96,7 +96,10 @@ describe('CreateAgentSlideInComponent (DOM)', () => {
     const created = capture(fixture.componentInstance.Created);
     expect(query(fixture, 'mj-create-agent-panel')).not.toBeNull();
 
-    const result = { Agent: {} } as never;
+    // Typed double: provided fields are validated against the real entity shape;
+    // one seam cast widens the partial agent to the full entity type.
+    const agentDouble = { Name: 'Test Agent' } satisfies Pick<CreateAgentResult['Agent'], 'Name'>;
+    const result = { Agent: agentDouble as unknown as CreateAgentResult['Agent'] } satisfies CreateAgentResult;
     fixture.componentInstance.OnCreated(result);
     expect(created).toEqual([result]);
     expect(fixture.componentInstance.IsVisible).toBe(false);

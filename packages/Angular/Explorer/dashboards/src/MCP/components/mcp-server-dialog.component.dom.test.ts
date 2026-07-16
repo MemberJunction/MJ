@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Component, EventEmitter, forwardRef, Input, Output } from '@angular/core';
 import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR, ReactiveFormsModule } from '@angular/forms';
-import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
+import { By } from '@angular/platform-browser';
+import { renderComponentFixture, query, click, capture } from '@memberjunction/ng-test-utils';
 import type { MCPServerData } from '../mcp-dashboard.component';
 import { MCPServerDialogComponent, ServerDialogResult } from './mcp-server-dialog.component';
 
@@ -117,10 +118,19 @@ describe('MCPServerDialogComponent (DOM)', () => {
     expect(query(fixture, 'mj-alert')).toBeNull();
   });
 
-  it('emits close({saved:false}) when Cancel is clicked', () => {
+  it('emits close({saved:false}) when the Cancel button is clicked', () => {
     const fixture = render({ server: SERVER });
     const closed = capture<ServerDialogResult>(fixture.componentInstance.close);
-    fixture.componentInstance.cancel();
+    // The Cancel button is the variant-less mjButton in the dialog actions (Save is variant="primary").
+    click(fixture, 'mj-dialog-actions button:not([variant])');
+    expect(closed).toEqual([{ saved: false }]);
+  });
+
+  it('emits close({saved:false}) when the dialog itself is closed (mj-dialog Close output)', () => {
+    const fixture = render({ server: SERVER });
+    const closed = capture<ServerDialogResult>(fixture.componentInstance.close);
+    const dialog = fixture.debugElement.query(By.directive(StubDialog));
+    (dialog.componentInstance as StubDialog).Close.emit();
     expect(closed).toEqual([{ saved: false }]);
   });
 });

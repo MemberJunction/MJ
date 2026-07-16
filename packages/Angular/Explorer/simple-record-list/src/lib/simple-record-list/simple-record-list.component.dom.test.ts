@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
 import { createFakeProvider } from '@memberjunction/ng-test-utils';
+import type { EntityFieldInfo, EntityInfo } from '@memberjunction/core';
 import { SimpleRecordListComponent } from './simple-record-list.component';
 import { SimpleRecordListModule } from '../module';
 
@@ -29,7 +30,11 @@ const ROWS: FakeRow[] = [
 ];
 
 // Minimal entity catalog: getRecordName() scans Entities for the IsNameField column.
-const ENTITIES = [{ Name: 'Users', Fields: [{ Name: 'Name', IsNameField: true }] }] as never;
+// The two field props we supply stay type-checked against EntityFieldInfo; one seam cast lifts
+// the partial field into the `Fields` array, and the entity itself is a plain Partial<EntityInfo>
+// (exactly what createFakeProvider's `entities` option accepts).
+const NAME_FIELD = { Name: 'Name', IsNameField: true } satisfies Pick<EntityFieldInfo, 'Name' | 'IsNameField'>;
+const ENTITIES: Array<Partial<EntityInfo>> = [{ Name: 'Users', Fields: [NAME_FIELD as unknown as EntityFieldInfo] }];
 
 interface RenderOpts {
   AllowNew?: boolean;

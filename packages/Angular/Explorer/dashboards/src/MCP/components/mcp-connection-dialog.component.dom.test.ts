@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Component, EventEmitter, forwardRef, Input, Output } from '@angular/core';
 import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR, ReactiveFormsModule } from '@angular/forms';
-import { renderComponentFixture, query, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { By } from '@angular/platform-browser';
+import { renderComponentFixture, query, click, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import type { MCPConnectionData, MCPServerData } from '../mcp-dashboard.component';
 import { MCPConnectionDialogComponent, ConnectionDialogResult } from './mcp-connection-dialog.component';
 
@@ -122,18 +123,33 @@ describe('MCPConnectionDialogComponent (DOM)', () => {
     expect(query(fixture, 'textarea[formControlName="Description"]')).not.toBeNull();
   });
 
-  it('emits close({saved:false}) when Cancel is invoked', () => {
+  it('emits close({saved:false}) when the Cancel button is clicked', () => {
     const fixture = render({ connection: CONNECTION });
     const closed = capture<ConnectionDialogResult>(fixture.componentInstance.close);
-    fixture.componentInstance.cancel();
+    // The Cancel button is the variant-less mjButton in the dialog actions (Save is variant="primary").
+    click(fixture, 'mj-dialog-actions button:not([variant])');
     expect(closed).toEqual([{ saved: false }]);
   });
 
-  it('toggles the credential creation dialog flag via openCredentialDialog()', () => {
+  it('emits close({saved:false}) when the dialog itself is closed (mj-dialog Close output)', () => {
     const fixture = render({ connection: CONNECTION });
+    const closed = capture<ConnectionDialogResult>(fixture.componentInstance.close);
+    const dialog = fixture.debugElement.query(By.directive(StubDialog));
+    (dialog.componentInstance as StubDialog).Close.emit();
+    expect(closed).toEqual([{ saved: false }]);
+  });
+
+  it('opens the credential creation dialog when the "New" credential button is clicked', async () => {
+    const fixture = render({ connection: CONNECTION });
+    // loadDropdownData is async; the credential row (which holds the "New" button) only renders
+    // once IsLoadingDropdowns flips back to false — flush the fake-provider promise first.
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges(false);
     expect(fixture.componentInstance.ShowCredentialDialog).toBe(false);
-    fixture.componentInstance.openCredentialDialog();
+    expect(query(fixture, 'mj-credential-dialog')).toBeNull();
+    click(fixture, '.credential-row button');
     fixture.detectChanges(false);
     expect(fixture.componentInstance.ShowCredentialDialog).toBe(true);
+    expect(query(fixture, 'mj-credential-dialog')).not.toBeNull();
   });
 });
