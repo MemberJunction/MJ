@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from fastapi import FastAPI, HTTPException
 
-from . import algorithms, artifacts, metrics, preprocessing
+from . import algorithms, artifacts, metrics, preprocessing, survival_wrappers
 from .schemas import (
     HealthResponse,
     PredictRequest,
@@ -69,7 +69,14 @@ def train(req: TrainRequest) -> TrainResponse:
             detail="Inline `data` is required (data_ref shared-storage is not "
             "implemented in v1).",
         )
-    if req.target not in req.data.columns:
+    is_survival = survival_wrappers.is_survival(req.algorithm)
+    if is_survival:
+        if req.target_spec is None:
+            raise HTTPException(status_code=400, detail="Survival algorithms require `target_spec` (duration_col, event_col).")
+        for c in (req.target_spec.duration_col, req.target_spec.event_col):
+            if c not in req.data.columns:
+                raise HTTPException(status_code=400, detail=f"Survival target column '{c}' not found in data columns.")
+    elif req.target not in req.data.columns:
         raise HTTPException(
             status_code=400,
             detail=f"Target column '{req.target}' not found in data columns.",
@@ -77,7 +84,7 @@ def train(req: TrainRequest) -> TrainResponse:
 
     started = time.perf_counter()
     try:
-        result = _run_training(req)
+        result = _run_survival_training(req) if is_survival else _run_training(req)
     except algorithms.AlgorithmNotSupportedError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
@@ -105,6 +112,55 @@ def train(req: TrainRequest) -> TrainResponse:
         duration_sec=round(duration, 4),
         holdout_metrics=result.get("holdout_metrics"),
     )
+
+
+def _run_survival_training(req) -> Dict[str, Any]:
+    """Survival training branch (Doc 3 T4). Fits preprocessing on the feature columns
+    (frozen, anti-skew), fits a lifelines survival model on (X, duration, event), and
+    scores the locked holdout ONCE with Harrell's C-index. Never touches the standard
+    single-target path."""
+    survival_wrappers  # ensure imported
+    ts = req.target_spec
+    columns = list(req.data.columns)
+    di, ei = columns.index(ts.duration_col), columns.index(ts.event_col)
+    feature_cols = [c for c in (req.feature_schema and [f.Name for f in req.feature_schema] or columns)
+                    if c not in (ts.duration_col, ts.event_col)]
+
+    rows = req.data.rows
+    durations = np.array([float(r[di]) for r in rows])
+    events = np.array([int(r[ei]) for r in rows])
+
+    # frozen preprocessing on the feature columns only
+    ops_spec = [op.model_dump(exclude_none=True) for op in req.preprocessing]
+    matrix, output_columns, fitted = preprocessing.fit_transform(columns, rows, ops_spec, feature_cols)
+
+    # optional locked holdout (rows carved by the orchestrator); score C-index once
+    hold_matrix = None
+    hold_dur = hold_evt = None
+    if req.holdout is not None:
+        hcols = list(req.holdout.columns)
+        hdi, hei = hcols.index(ts.duration_col), hcols.index(ts.event_col)
+        hrows = req.holdout.rows
+        hold_dur = np.array([float(r[hdi]) for r in hrows])
+        hold_evt = np.array([int(r[hei]) for r in hrows])
+        # apply the FROZEN preprocessing to the holdout rows (dict shape, apply-only)
+        hold_dicts = [dict(zip(hcols, r)) for r in hrows]
+        hold_matrix = preprocessing.transform(hold_dicts, fitted, feature_cols)
+
+    model = survival_wrappers.build_survival(req.algorithm, dict(req.hyperparameters))
+    model.fit(matrix, durations, events, output_columns)
+
+    train_ci = survival_wrappers.c_index(durations, events, model.risk(matrix))
+    result: Dict[str, Any] = {
+        "estimator": model, "fitted": fitted,
+        "metrics": {"c_index": train_ci},
+        "feature_importance": {},
+        "training_row_count": len(rows),
+    }
+    if hold_matrix is not None and hold_dur is not None:
+        hold_ci = survival_wrappers.c_index(hold_dur, hold_evt, model.risk(hold_matrix))
+        result["holdout_metrics"] = {"c_index": hold_ci}
+    return result
 
 
 def _feature_columns(req: TrainRequest) -> List[str]:

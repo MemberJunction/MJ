@@ -222,6 +222,7 @@ def _dummy_regressor(problem_type: str, hp: Dict[str, Any]):
 
 # --- T2: statsmodels count/GLM families (optional extra; sklearn-wrapped) ---
 from app import glm_wrappers as _glm  # noqa: E402
+from app import survival_wrappers as _surv  # noqa: E402
 
 
 def _glm_factory(maker):
@@ -233,6 +234,12 @@ def _glm_factory(maker):
             )
         return maker(hp)
     return factory
+
+
+def _survival_placeholder(problem_type: str, hp: Dict[str, Any]):
+    raise AlgorithmNotSupportedError(
+        "survival algorithms are trained via the survival branch (target_spec), not build_estimator."
+    )
 
 
 _REGISTRY: Dict[str, EstimatorFactory] = {
@@ -260,6 +267,10 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "tweedie": _glm_factory(_glm.make_tweedie),
     "quantile": _glm_factory(_glm.make_quantile),
     "zero_inflated": _glm_factory(_glm.make_zero_inflated),
+    # T4 survival — handled by the survival branch in main.py, not build_estimator
+    "cox_ph": _survival_placeholder,
+    "weibull_aft": _survival_placeholder,
+    "km": _survival_placeholder,
 }
 
 
@@ -281,6 +292,9 @@ _DRIVER_REQUIREMENTS = {
     "tweedie": _glm._HAVE_STATSMODELS,
     "quantile": _glm._HAVE_STATSMODELS,
     "zero_inflated": _glm._HAVE_STATSMODELS,
+    "cox_ph": _surv._HAVE_LIFELINES,
+    "weibull_aft": _surv._HAVE_LIFELINES,
+    "km": _surv._HAVE_LIFELINES,
 }
 
 

@@ -15,3 +15,4 @@ export * from './concurrency';
 export * from './wave-strategist';
 export * from './seams';
 export * from './experiment-orchestrator';
+export * from './tree-sampling-strategist';

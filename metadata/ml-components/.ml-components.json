@@ -4554,7 +4554,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Cox Proportional Hazards"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -4632,8 +4633,8 @@
       "ID": "D56BCAAB-D0F8-48C2-8D7E-CE9A14AC3652"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.461Z",
-      "checksum": "3396f9f28ed0ce677e5fafedd3dd3979b1f7fffbab20cde9fadda29c615acd31"
+      "lastModified": "2026-07-16T08:11:13.656Z",
+      "checksum": "9bf11a1234df35ef343eef036abe1c483345a135e4e471782e9c58a5b7b86dc1"
     }
   },
   {
@@ -4650,7 +4651,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Kaplan-Meier"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -4694,8 +4696,8 @@
       "ID": "4DA63B99-0572-4085-9989-BCD799C72375"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.475Z",
-      "checksum": "ad23cd345be5e7732843270a42284790614a0a36d3e8ba7109bdebb53bc45016"
+      "lastModified": "2026-07-16T08:11:13.675Z",
+      "checksum": "ed766f9f2c58512ef432515861f5b97d5c60ee61c78690e4da081e5ec426891c"
     }
   },
   {
@@ -4808,7 +4810,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Weibull AFT"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -4903,8 +4906,8 @@
       "ID": "AEC80FE8-C77B-4FF2-BD70-F8FE61C567F3"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.511Z",
-      "checksum": "f2dfe206888699b9f79c45267d6b43945d7de87a372e363109a267bc33f918c6"
+      "lastModified": "2026-07-16T08:11:13.693Z",
+      "checksum": "1db100b41cd30cb265860d18dc80aca363c1b03b19d450516e0d8e9e188caa94"
     }
   },
   {

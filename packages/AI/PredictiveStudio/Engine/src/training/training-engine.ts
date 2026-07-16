@@ -75,6 +75,20 @@ interface HoldoutSplit {
  * Training orchestrator. Stateless across calls; construct once and reuse. All
  * dependencies are supplied per call via {@link TrainingDeps}.
  */
+/**
+ * Narrow a pipeline's CodeGen'd 10-value Task ProblemType to the binary
+ * {@link ProblemType} the sidecar train/predict path supports today. Non-binary
+ * values are a future-tranche pipeline (survival/forecasting/…) not yet served by
+ * this path — fail loud rather than silently mis-train.
+ */
+function narrowProblemType(pt: string): ProblemType {
+  if (pt === 'classification' || pt === 'regression') return pt;
+  throw new Error(
+    `Pipeline ProblemType '${pt}' is not yet supported by the sidecar train path ` +
+    `(classification/regression only). It requires the corresponding Doc-3 contract delta.`,
+  );
+}
+
 export class TrainingEngine {
   private readonly assembler: FeatureAssemblyExecutor;
 
@@ -133,7 +147,11 @@ export class TrainingEngine {
       pipeline,
       targetEntityName: pipeline.TargetEntity,
       targetVariable: pipeline.TargetVariable,
-      problemType: pipeline.ProblemType,
+      // MLTrainingPipeline.ProblemType is CodeGen'd as the 10-value Task union
+      // (the migration widened its CHECK), but the sidecar train/predict path is
+      // binary today. Narrow at this DB→contract boundary; non-binary values are a
+      // future-tranche pipeline that this path doesn't yet serve — fail loud.
+      problemType: narrowProblemType(pipeline.ProblemType),
       algorithmDriverKey: resolvedDriverKey,
       hyperparameters: parseJson<Record<string, unknown>>(pipeline.Hyperparameters, {}),
       sourceBindings: parseJson<SourceBinding[]>(pipeline.SourceBindings, []),

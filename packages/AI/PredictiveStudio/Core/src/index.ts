@@ -19,3 +19,4 @@ export * from './trust';
 export * from './tasks';
 export * from './port-types';
 export * from './composite-schema';
+export * from './tree-profile';

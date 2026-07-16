@@ -400,5 +400,59 @@
       "lastModified": "2026-07-16T07:48:54.321Z",
       "checksum": "b2a1b98925d8c5f7b7573e28d41c02a13355dd9b6b5f9a796eda57884d19b183"
     }
+  },
+  {
+    "fields": {
+      "Name": "Cox Proportional Hazards",
+      "Description": "Cox Proportional Hazards — T4 survival (lifelines, optional extra).",
+      "ProblemTypes": "survival",
+      "DriverClass": "cox_ph",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2A5AD6C1-6A49-4A85-8E65-D8B6380F60D7"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T08:11:08.788Z",
+      "checksum": "c38512680945db0aa5d375370e15cb0428ccdf314f39e2414afeee8d4d245c0e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Weibull AFT",
+      "Description": "Weibull AFT — T4 survival (lifelines, optional extra).",
+      "ProblemTypes": "survival",
+      "DriverClass": "weibull_aft",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D6D0B4A8-AE26-4ECE-A9A6-A4158745DC79"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T08:11:08.805Z",
+      "checksum": "08657fe81d699e491b8882ffeacb50ffb67fce3520cbe7794590c9980ba1bc94"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kaplan-Meier",
+      "Description": "Kaplan-Meier — T4 survival (lifelines, optional extra).",
+      "ProblemTypes": "survival",
+      "DriverClass": "km",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A1FD975F-8B33-40E0-AC62-3548B7417A98"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T08:11:08.819Z",
+      "checksum": "15c1d01973257c4de8e0f6b4e352a0d1dd34bcb87b11f8b9be9d9ada6b488afa"
+    }
   }
 ]

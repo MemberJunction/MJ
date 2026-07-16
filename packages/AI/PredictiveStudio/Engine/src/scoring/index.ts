@@ -24,3 +24,4 @@ export * from './startup-register';
 export * from './scoring-binding';
 export * from './ml-model-score-enricher';
 export * from './scoring-process';
+export * from './composite-inference-executor';

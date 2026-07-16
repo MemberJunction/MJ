@@ -123,6 +123,19 @@ export interface MatrixData {
  * executor (plan §6) and sends it here. Either {@link TrainRequest.data} (inline)
  * or {@link TrainRequest.data_ref} (shared-storage handle) is provided.
  */
+/**
+ * The survival target: names the duration + event-indicator columns carried in
+ * `TrainRequest.data`. `duration` is the observed time; `event` is 1 when the
+ * event occurred and 0 when the row is right-censored (the observation ended
+ * before the event). Doc 3 T4.
+ */
+export interface SurvivalTargetSpec {
+  /** Column name of the observed duration (time-to-event or time-to-censor). */
+  duration_col: string;
+  /** Column name of the event indicator (1 = event observed, 0 = right-censored). */
+  event_col: string;
+}
+
 export interface TrainRequest {
   /** Sidecar algorithm driver key (e.g. `xgboost`, `lightgbm`, `logistic_regression`). */
   algorithm: string;
@@ -139,10 +152,16 @@ export interface TrainRequest {
   /**
    * Target/label column name. OPTIONAL: unsupervised task families (clustering,
    * dim-reduction, anomaly, sequence-state, pattern-mining) train with no target —
-   * omit it. Supervised families (classification, regression, survival — where the
-   * "target" is the (duration,event) pair carried in the matrix — forecasting) set it.
+   * omit it. Supervised families (classification, regression, forecasting) set it.
+   * Survival uses `target_spec` instead (the (duration,event) pair).
    */
   target?: string;
+  /**
+   * The survival target spec — names the duration + event-indicator columns in
+   * `data` (Doc 3 T4 contract delta). Present ONLY for the survival task family;
+   * mutually exclusive with `target`.
+   */
+  target_spec?: SurvivalTargetSpec;
   /** Inline matrix data (mutually exclusive with `data_ref`). */
   data?: MatrixData;
   /** Shared-storage handle to the matrix (Parquet/Arrow), used for very large sets. */

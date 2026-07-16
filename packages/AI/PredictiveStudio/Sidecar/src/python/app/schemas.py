@@ -85,6 +85,13 @@ class MatrixData(BaseModel):
     rows: List[List[Cell]]
 
 
+class SurvivalTargetSpec(BaseModel):
+    """Survival (duration, event) target columns (Doc 3 T4)."""
+
+    duration_col: str
+    event_col: str
+
+
 class TrainRequest(BaseModel):
     """``POST /train`` request body."""
 
@@ -98,6 +105,7 @@ class TrainRequest(BaseModel):
     # sequence-state/pattern-mining) train with no target. Mirrors the TS contract's
     # `target?`. Supervised families still set it.
     target: Optional[str] = None
+    target_spec: Optional[SurvivalTargetSpec] = None
     data: Optional[MatrixData] = None
     data_ref: Optional[str] = None  # shared-storage handle (not implemented in v1)
     # The locked holdout (plan §8.2): rows carved off by the orchestrator BEFORE

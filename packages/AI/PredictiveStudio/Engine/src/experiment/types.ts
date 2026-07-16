@@ -159,6 +159,32 @@ export interface WaveStrategistContext {
   waveIndex: number;
   /** The max iterations this wave may contain (the configured concurrency). */
   maxWaveSize: number;
+  /**
+   * Optional computed dataset profile (n, features, task, balance, …) — set once by
+   * FeatureAssembly and used by adaptive strategists (e.g. the tree-sampling
+   * strategist) to gate-prune ineligible leaves BEFORE sampling. The deterministic
+   * plan-order strategist ignores it.
+   */
+  datasetProfile?: DatasetProfile;
+}
+
+/**
+ * The computed shape of the assembled dataset a strategist gates against.
+ * Statistics only — no raw data. Mirrors the (future) sidecar /profile output.
+ */
+export interface DatasetProfile {
+  /** Row count of the assembled training matrix. */
+  n: number;
+  /** Feature (column) count, excluding the target. */
+  nFeatures: number;
+  /** The task family the plan targets. */
+  task: string;
+  /** Positive-class fraction for classification (undefined otherwise). */
+  classBalance?: number;
+  /** Fraction right-censored for survival (undefined otherwise). */
+  censoringRate?: number;
+  /** Whether the target/data carries a usable time index (forecasting/sequence). */
+  hasTimeIndex?: boolean;
 }
 
 /**
