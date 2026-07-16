@@ -18,6 +18,18 @@ This document covers the end-to-end process for releasing a new version of Membe
 
 ## Pre-Release Checklist
 
+> **Recommended: work on a release-prep branch instead of committing to `next`
+> directly.** Cut `release/vX.Y-prep` from the tip of `next`
+> (`git checkout -b release/vX.Y-prep && git push -u origin release/vX.Y-prep` —
+> same-named remote tracking, per the branch rules), land the Step 2–7 commits
+> there, and merge into `next` via a PR (e.g. #3163 for v5.48). This keeps `next`
+> green while prep is in flight and gives the release artifacts a reviewable PR.
+>
+> **Reading the steps below:** where they say "commit/push to `next`" (Step 3.8,
+> Step 6), that is the target on the direct-to-`next` workflow. On the prep-branch
+> workflow, commit to your prep branch instead — it reaches `next` through the PR.
+> The steps use `next` as shorthand for "the branch that becomes the release."
+
 ### Step 1: Verify CI on `next`
 
 Before anything else, confirm the `next` branch is healthy:
@@ -64,13 +76,26 @@ Check if there are any pending metadata changes (new/updated records in `metadat
 
 #### If metadata has changed since the last release:
 
-1. **Verify MJ CLI is up to date** — run `mj version` to confirm you're on the latest
-2. **Start a fresh database** — spin up a clean SQL Server instance
-3. **Update local `.env`** to point to this fresh database
+1. **Verify MJ CLI is up to date** — run `mj version` and compare against `npm view @memberjunction/cli version`; update with `npm install -g @memberjunction/cli@latest` if behind (a stale CLI produces stale sync/codegen output)
+2. **Start a fresh database** — a new empty database on your existing dev SQL Server works fine (no separate instance needed). Example, with the standard MJ logins mapped in:
+   ```bash
+   docker exec <your-sql-container> bash -c '
+     /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C \
+       -Q "CREATE DATABASE MJ_Release_vXXX; ALTER DATABASE MJ_Release_vXXX SET RECOVERY SIMPLE;" &&
+     /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d MJ_Release_vXXX \
+       -Q "CREATE USER MJ_CodeGen FOR LOGIN MJ_CodeGen; ALTER ROLE db_owner ADD MEMBER MJ_CodeGen;
+           CREATE USER MJ_Connect FOR LOGIN MJ_Connect; ALTER ROLE db_owner ADD MEMBER MJ_Connect;"'
+   ```
+3. **Update local `.env`** to point to this fresh database (back up your `.env` first — `cp .env .env.release-backup` — and restore it when done)
 4. **Run migrations** to bring it to the latest version:
    ```bash
+   export MJ_MIGRATION_REQUEST_TIMEOUT=1800000   # REQUIRED — see below
    mj migrate
    ```
+   Three field-tested gotchas here:
+   - **Set `MJ_MIGRATION_REQUEST_TIMEOUT` (30 min shown) in the same shell.** The default request timeout is 300s and at least one baseline batch exceeds it on a busy machine — the failure mode is `Timeout: Request failed to complete in 300000ms`, or the uglier `Failed to cancel request in 5000ms` → `Requests can only be made in the LoggedIn state` cascade, which leaves the DB half-applied (drop + recreate before retrying).
+   - **Don't run probe/status queries against the DB while migrate is executing.** They queue behind DDL locks, get chosen as deadlock victims, and add contention. Wait for the CLI to report.
+   - **Check for CPU-hungry Docker containers competing with your SQL Server.** An unrelated hot container on the same Docker VM starved the server badly enough to masquerade as migration timeouts (a clean run takes ~1 min; the starved runs died for over an hour). `docker stats --no-stream` before you start.
 5. **Push metadata** to the fresh database:
    ```bash
    mj sync push --dir ./metadata
@@ -94,12 +119,20 @@ Check if there are any pending metadata changes (new/updated records in `metadat
    - Version: use the **next minor version** (e.g., if current release is `5.5.x`, use `v5.6.x`)
    - Timestamp must be **strictly greater** than all existing migration timestamps (enforced by CI)
 
-8. **Commit the migration script to `next`** — push this new migration file to the `next` branch so it's included in the release PR
+8. **Commit the migration script to `next`** — push this new migration file to the `next` branch so it's included in the release PR. **Also commit the mj-sync writeback**: the push back-fills `primaryKey`/`sync` blocks into the new records' metadata JSON files (`metadata/**/.*.json`) — those belong in the same commit so future pushes recognize the records as existing.
 9. **Ensure a minor changeset exists** — if changesets only have `patch` bumps, you must add a changeset with `minor` on at least one `@memberjunction/*` package to indicate this is a minor release:
    ```bash
    npm run change
    # Select at least one package, choose "minor"
    ```
+   The migration/metadata files themselves do **not** get their own changeset — changesets version npm packages, and the minor signal is normally already carried by the feature changesets on `next`. This step is a check, not an automatic add.
+
+> **`mj codegen` is NOT part of this step.** On a fresh database, `mj migrate`
+> already replays every historical `CodeGen_Run_*.sql`, so schema and generated
+> objects are current before the push; the metadata-sync migration is pure data,
+> captured entirely by `mj sync push`'s SQL log. Running codegen afterwards is an
+> *optional* drift check — expect zero output; if it emits a new `CodeGen_Run`
+> migration, stop and investigate before including anything.
 
 #### If no metadata changes:
 - Skip this step. Changesets will determine patch vs minor based on what's already been added.
@@ -135,7 +168,10 @@ mj sync push --dir ./metadata-integration-fixtures
 
 Follow [NEW_PACKAGE_SETUP.md](NEW_PACKAGE_SETUP.md):
 
-1. Check if any new `@memberjunction/*` packages were added since the last release
+1. Check if any new `@memberjunction/*` packages were added since the last release — the authoritative check is the same script the publish workflow runs:
+   ```bash
+   ./.github/scripts/validate-npm-packages.sh   # lists every package missing from npm
+   ```
 2. For each new package, create a placeholder on npm with OIDC trusted publishing:
    ```bash
    npx setup-npm-trusted-publish @memberjunction/new-package-name
@@ -205,7 +241,7 @@ git push origin next
 
 **This must be done for every release that adds new migrations** (including the metadata-sync migration from Step 3).
 
-MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migrations in `migrations/v5/` are authored first; each needs a validated PostgreSQL counterpart (`.pg.sql`) in `migrations-pg/v5/`. Producing those counterparts is now a standard part of the release process, run via the **`/pg-migrate-v2`** skill (the "split-and-regenerate" pipeline).
+MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migrations in `migrations/v5/` are authored first; each needs a validated PostgreSQL counterpart (`.pg.sql`) in `migrations-pg/v5/`. Producing those counterparts is now a standard part of the release process, run via the **`/pg-migrate-v2`** skill (the "split-and-regenerate" pipeline) or its successor runbook **`/pg-migrate-experimental`**, which carries the latest field-tested gotchas (converter dedup mutating committed files, workbench memory limits, scheduled-job OOM, `provisioningGuard`, correct `mj_api`/`mj_explorer` workspace names — see the Gotchas section in `.claude/commands/pg-migrate-experimental.md`). Whichever variant runs, the non-negotiables are the same: **the real gate is a clean `mj migrate` on a fresh PG database**, committed `.pg.sql` files are immutable, and no `.needs-hand` files may remain.
 
 > ⚠️ **Do this after the full build (Step 7) and before the release PR (Step 9).** Every new SS migration in this release must have a committed, verified `.pg.sql` counterpart on `next` before the PR is opened — otherwise PostgreSQL deployments of the release are missing migrations.
 
