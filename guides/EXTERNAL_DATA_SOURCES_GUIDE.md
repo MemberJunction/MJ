@@ -162,6 +162,34 @@ with `DefaultDatabase` set to the warehouse name and a credential carrying `tena
 
 > **FK introspection on Fabric.** Fabric Warehouse supports `PRIMARY KEY` / `FOREIGN KEY` constraints only as **`NOT ENFORCED`**, and only when added via `ALTER TABLE` (inline constraints in `CREATE TABLE` error with *"…not supported in this edition"*). When such constraints exist, the driver's `sys.foreign_keys` introspection surfaces them into MJ `Relationships` exactly as for SQL Server — verified by a live integration test that seeds a `NOT ENFORCED` FK and asserts it's introspected. A Fabric source with no declared constraints simply yields empty `Relationships` (the query returns gracefully, it doesn't error).
 
+**Operational caveats.** A few Fabric-specific behaviors worth knowing before you point production entities at a Fabric source:
+
+- **A tenant admin must enable SPN access.** Beyond the workspace grant above, a Fabric **tenant admin** must turn on *"Service principals can use Fabric APIs"* (admin portal → tenant settings). Without it, Entra auth fails outright no matter how the workspace is shared — this is the most common first-connect failure.
+- **Lakehouse table discovery lags.** The Lakehouse SQL analytics endpoint discovers new Delta tables **asynchronously** — a just-written gold table can take seconds-to-minutes to become introspectable/queryable. A non-issue for steady-state gold consumption; occasionally visible right after a pipeline creates a *new* table.
+- **Every query bills capacity units.** Fabric meters each query against your capacity. The external-read row caps (default **1,000** / hard **50,000**) and the TTL cache (default **300s**) are the cost governors — keep them tight, and use a least-privilege, read-only SPN.
+- **Identifiers are case-sensitive.** Fabric endpoints use a binary, case-sensitive collation (`Latin1_General_100_BIN2_UTF8`), so object/column names must match **exactly**. MJ quotes and passes identifiers through as-is, so make sure each entity's `SchemaName` / `ExternalObjectName` and field names match the Fabric casing precisely.
+
+**Connecting a Fabric source, end to end.** The MJ pieces are the same as any external source; the Fabric-specific parts are the Entra service principal and the endpoint host:
+
+1. **Register an Entra application (service principal)** in your Microsoft Entra tenant and **create a client secret** for it. Record the **tenant ID**, **application (client) ID**, and the **secret value**.
+2. **Enable the tenant switch** *"Service principals can use Fabric APIs"* (Fabric admin portal → tenant settings). Without it, everything below fails at auth no matter what else is correct.
+3. **Grant the service principal access to the Fabric workspace** holding your Warehouse / Lakehouse — a **Viewer** role is enough for read-only consumption.
+4. **Get the SQL endpoint host.** In Fabric, open the Warehouse (or the Lakehouse's **SQL analytics endpoint**) → its settings → copy the **SQL connection string**. The host looks like `<workspace-id>-<warehouse-id>.datawarehouse.fabric.microsoft.com`; the warehouse/endpoint **name** is your `DefaultDatabase`.
+5. **Create the credential in MJ.** In the **Credentials dashboard**, create an **Azure Service Principal** credential carrying the `tenantId` / `clientId` / `clientSecret` from step 1 (the secret is encrypted on save — it can't be entered through the generic entity form).
+6. **Create the data source instance** (`MJ: External Data Sources`): `TypeID` → **Microsoft Fabric SQL Endpoint (External)**, `CredentialID` → the credential from step 5, `DefaultDatabase` → the warehouse name, `DefaultSchema` → your schema if objects aren't in `dbo`, and a `ConnectionConfig` of `{ "host": "…datawarehouse.fabric.microsoft.com", "authMode": "entra-service-principal", "ssl": true }`.
+7. **Point entities at it and run CodeGen.** Set each entity's `ExternalDataSourceID` + `ExternalObjectName` with the read APIs off, then `mj codegen` introspects the remote schema and fills in the fields (see *Setup* above).
+
+> The Azure / Fabric **portal** navigation in steps 1–4 reflects Microsoft's current UI, whose menu labels change periodically. The underlying concepts — an Entra app + secret, the tenant API toggle, a workspace grant, and the SQL endpoint host — are what stay stable.
+
+**Troubleshooting.**
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Connection drops immediately (`socket hang up`, no error) | `mssql` older than 12.7.0 resolved at runtime (tedious fedauth `FeatureExt` bug) | Ensure the SQL Server EDS provider's `mssql` (`≥ 12.7.0`, floored in its `package.json`) is what actually resolves — npm hoisting can surface an older copy. |
+| Auth fails with an `AADSTS…` code | Tenant toggle off, the SP lacks workspace access, or the client secret expired | Enable *"Service principals can use Fabric APIs"*; grant the SP a workspace role; or rotate the secret (a rotated/expired secret self-heals on the next read). |
+| `Invalid object name '…'` | Casing mismatch (Fabric is case-sensitive), or the object isn't in the default schema | Match Fabric's exact object/column casing, and ensure the object is schema-qualified (set the entity's `SchemaName`). |
+| A just-created table isn't visible to introspection/queries | The Lakehouse SQL endpoint hasn't synced the new Delta table yet | Wait — discovery is asynchronous (seconds-to-minutes); re-run CodeGen / retry once it appears. |
+
 ---
 
 ## Known limitations

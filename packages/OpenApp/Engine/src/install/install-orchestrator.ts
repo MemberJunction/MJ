@@ -23,7 +23,7 @@ import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.
 import { extractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping } from './config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, TransactionGroupBase } from '@memberjunction/core';
@@ -1125,6 +1125,7 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       await Promise.all([
         Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName, context.ServerPackagePath)),
         Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name, context.ServerPackagePath) : undefined),
+        Promise.resolve(manifest.schema ? RemoveExcludeSchema(context.RepoRoot, manifest.schema.name, context.ServerPackagePath) : undefined),
         Promise.resolve(HandleAngularPrebundleExcludeRemoval(manifest, otherManifests, context)),
         Promise.resolve(
           RemoveAppPackages({
@@ -1759,6 +1760,15 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
   const entityResult = AddEntityPackageMapping(context.RepoRoot, manifest, context.ServerPackagePath);
   if (!entityResult.Success) {
     return { Success: false, ErrorMessage: entityResult.ErrorMessage };
+  }
+
+  // Add app schema to excludeSchemas so CodeGen skips entity discovery,
+  // view generation, and Angular component generation for app-owned tables
+  if (manifest.schema?.name) {
+    const excludeResult = AddExcludeSchema(context.RepoRoot, manifest.schema.name, context.ServerPackagePath);
+    if (!excludeResult.Success) {
+      return { Success: false, ErrorMessage: excludeResult.ErrorMessage };
+    }
   }
 
   return { Success: true };

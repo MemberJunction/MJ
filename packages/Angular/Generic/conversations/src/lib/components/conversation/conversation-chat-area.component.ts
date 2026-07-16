@@ -23,6 +23,7 @@ import { MessageInputComponent } from '../message/message-input.component';
 import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ComposerDraftStore } from '../../services/composer-draft-store';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
@@ -103,6 +104,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Input()
   set conversationId(value: string | null) {
     if (value !== this._conversationId) {
+      // Leaving a conversation is a save point for its in-progress draft.
+      // (Optional-chained: harness-constructed instances may skip field initializers.)
+      this.draftStore?.Flush();
       this._conversationId = value;
       // SESSION-REVIEW lifecycle: changing the active conversation must NEVER leave a
       // stale review overlay hosted over the new conversation. A LIVE call is untouched
@@ -510,6 +514,129 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
+
+  /**
+   * Prefill the composer with draft text (NOT sent — unlike pendingMessage) and focus
+   * it. Targets the empty-state input for new/unsaved conversations, else the active
+   * conversation's cached input. Emits composerDraftConsumed once applied. Retries
+   * briefly because the target input mounts asynchronously (config params can arrive
+   * before the first render).
+   */
+  @Input() composerDraft: string | null = null;
+
+  @Output() composerDraftConsumed = new EventEmitter<void>();
+
+  /**
+   * Pre-address the composer to an AGENT as a resolved mention pill (+ space +
+   * focus) — the chip-resolving sibling of {@link composerDraft}. Value = the
+   * agent's name. Emits composerAgentMentionConsumed once applied.
+   */
+  @Input()
+  set composerAgentMention(value: string | null) {
+    if (value && value !== this._composerAgentMention) {
+      this._composerAgentMention = value;
+      this.applyComposerAgentMention(0);
+    } else if (!value) {
+      this._composerAgentMention = null;
+    }
+  }
+  get composerAgentMention(): string | null {
+    return this._composerAgentMention;
+  }
+  private _composerAgentMention: string | null = null;
+
+  @Output() composerAgentMentionConsumed = new EventEmitter<void>();
+
+  /**
+   * Per-user persisted composer drafts (UserInfoEngine-backed): restore on mount,
+   * debounced-persist while typing, flush on blur/switch, delete on send.
+   * See {@link ComposerDraftStore} for the storage contract.
+   */
+  private readonly draftStore = new ComposerDraftStore();
+
+  /**
+   * ONE-SHOT restore snapshot per composer key. This MUST NOT be a live read:
+   * the store updates on every keystroke (DraftStateChanged), and a live binding
+   * would re-stage the serialized draft into the composer while the user types —
+   * rewriting content and scrambling the caret. The first evaluation per key wins
+   * for the life of this chat area: a pending agent pre-address or host-supplied
+   * composerDraft outranks the persisted draft (fresher intent); afterwards the
+   * binding returns the frozen snapshot so the initialDraft setter's dedupe holds.
+   */
+  private readonly initialDraftSnapshots = new Map<string, string | null>();
+
+  public GetInitialDraftFor(conversationId: string | null): string | null {
+    const key = conversationId ? conversationId.trim().toLowerCase() : 'new';
+    if (!this.initialDraftSnapshots.has(key)) {
+      let snapshot: string | null;
+      if (this._composerAgentMention) {
+        snapshot = null; // pre-address wins; never restore over it
+      } else if (!conversationId && this.composerDraft) {
+        snapshot = this.composerDraft;
+      } else {
+        snapshot = this.draftStore.GetDraft(conversationId);
+      }
+      this.initialDraftSnapshots.set(key, snapshot);
+    }
+    return this.initialDraftSnapshots.get(key) ?? null;
+  }
+
+  /** Live draft persistence (store debounces the server write). */
+  public OnDraftStateChanged(conversationId: string | null, serialized: string): void {
+    console.log(`[Drafts] chat-area: draft change for '${conversationId ?? 'new'}' (${serialized.length} chars)`);
+    this.draftStore.SetDraft(conversationId, serialized);
+  }
+
+  /** Blur = a natural save point — persist immediately. */
+  public OnComposerBlurred(): void {
+    this.draftStore.Flush();
+  }
+
+  /** Cold deep-link boots can take several seconds before a composer mounts. */
+  private static readonly AGENT_MENTION_MAX_ATTEMPTS = 60; // × 150ms ≈ 9s
+
+  private applyComposerAgentMention(attempt: number): void {
+    const agentName = this._composerAgentMention;
+    if (!agentName) {
+      return;
+    }
+    // New/unsaved conversations render the empty-state composer; established ones
+    // use the active cached input. Both resolve the agent to a pill.
+    const target = this.emptyStateComponent ? 'empty-state' : this.messageInputComponents?.first ? 'active-input' : null;
+    if (attempt === 0 || attempt % 10 === 0 || target) {
+      console.log(`[Omnibar→Chat] chat-area apply('${agentName}') attempt ${attempt}: target=${target ?? 'none-mounted'}`);
+    }
+    const insert: Promise<boolean> | null = this.emptyStateComponent
+      ? this.emptyStateComponent.InsertAgentMention(agentName, true)
+      : this.messageInputComponents?.first
+        ? this.messageInputComponents.first.InsertAgentMention(agentName, true)
+        : null;
+    if (insert) {
+      void insert.then((applied: boolean) => {
+        if (applied) {
+          console.log(`[Omnibar→Chat] chat-area apply('${agentName}'): APPLIED on ${target} (attempt ${attempt})`);
+          this._composerAgentMention = null;
+          this.composerAgentMentionConsumed.emit();
+        } else if (attempt < ConversationChatAreaComponent.AGENT_MENTION_MAX_ATTEMPTS) {
+          setTimeout(() => this.applyComposerAgentMention(attempt + 1), 150);
+        } else {
+          console.error(`[Omnibar→Chat] chat-area apply('${agentName}'): GAVE UP after ${attempt} attempts — composer never became insertable`);
+        }
+      });
+      return;
+    }
+    if (attempt < ConversationChatAreaComponent.AGENT_MENTION_MAX_ATTEMPTS) {
+      setTimeout(() => this.applyComposerAgentMention(attempt + 1), 150);
+    } else {
+      console.error(`[Omnibar→Chat] chat-area apply('${agentName}'): GAVE UP after ${attempt} attempts — no composer mounted (emptyState=${!!this.emptyStateComponent}, inputs=${this.messageInputComponents?.length ?? 0})`);
+    }
+  }
+
+  /** The empty-state input applied the staged draft — clear + inform the host. */
+  public OnComposerDraftApplied(): void {
+    this.composerDraft = null;
+    this.composerDraftConsumed.emit();
+  }
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
   @ViewChild(ConversationEmptyStateComponent) private emptyStateComponent?: ConversationEmptyStateComponent;
 
@@ -1533,6 +1660,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   async onMessageSent(message: MJConversationDetailEntity): Promise<void> {
+    // The draft became a message — remove it from the persisted map + snapshot.
+    const sentKey = (message.ConversationID ?? this.conversationId ?? '').trim().toLowerCase();
+    this.draftStore.ClearDraft(message.ConversationID ?? this.conversationId);
+    if (sentKey) {
+      this.initialDraftSnapshots.delete(sentKey);
+    }
     if (this.pendingMessage && this.isPendingMessageTarget(message.ConversationID)) {
       this._pendingMessageReservedTargetId = null;
       this.pendingMessageConsumed.emit();
@@ -2894,6 +3027,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Creates a new conversation and emits to parent to update selection
    */
   async onEmptyStateMessageSent(event: {text: string; attachments: PendingAttachment[]}): Promise<void> {
+    // The new-conversation draft became a message — remove the 'new' entry and
+    // reset its restore snapshot so the NEXT new-conversation composer starts clean.
+    this.draftStore.ClearDraft(null);
+    this.initialDraftSnapshots.delete('new');
     const { text, attachments } = event;
     if (!text?.trim() && (!attachments || attachments.length === 0)) {
       return;

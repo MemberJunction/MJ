@@ -78,7 +78,7 @@ import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect } from '@memberjunction/sql-dialect';
 // QueryCompositionEngine is now owned by RenderPipeline
-import { RenderPipeline } from './renderPipeline.js';
+import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
 import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
 import type { RecordChangePayload } from '@memberjunction/core';
@@ -3000,12 +3000,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return this.ExecuteAdhocQuery(params, contextUser);
         }
 
+        let finalSQL: string | undefined;
         try {
             // Find and validate query
             const query = this.findAndValidateQuery(params, contextUser);
 
             // Process parameters (composition + Nunjucks templates)
-            const { finalSQL, appliedParameters } = this.processQueryParameters(query, params.Parameters, contextUser);
+            const resolved = this.processQueryParameters(query, params.Parameters, contextUser);
+            finalSQL = resolved.finalSQL;
+            const appliedParameters = resolved.appliedParameters;
 
             // ── External data source dispatch ──
             // Queries bound to an external data source execute their (now fully-rendered)
@@ -3102,6 +3105,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
                 AppliedParameters: appliedParameters,
+                RenderedSQL: finalSQL,
                 CacheHit: false
             };
         } catch (e) {
@@ -3120,6 +3124,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 TotalRowCount: 0,
                 ExecutionTime: 0,
                 ErrorMessage: errorMessage,
+                RenderedSQL: finalSQL,
             };
         }
     }
@@ -3228,7 +3233,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         query: MJQueryEntityExtended,
         parameters?: Record<string, string>,
         contextUser?: UserInfo,
-    ): { finalSQL: string; appliedParameters: Record<string, string> } {
+    ): { finalSQL: string; appliedParameters: Record<string, string>; renderResult: RenderResult } {
         const result = RenderPipeline.Run(
             query.GetPlatformSQL(this.PlatformKey),
             {
@@ -3248,7 +3253,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
         }
 
-        return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters };
+        return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters, renderResult: result };
     }
 
     /**
@@ -3371,8 +3376,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         spec: QueryExecutionSpec,
         contextUser?: UserInfo,
     ): Promise<RunQueryResult> {
+        let finalSQL: string | undefined;
         try {
-            const { finalSQL, appliedParameters } = this.resolveSpecParameters(spec, contextUser);
+            const resolved = this.resolveSpecParameters(spec, contextUser);
+            finalSQL = resolved.finalSQL;
 
             // Execute
             const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
@@ -3386,7 +3393,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 TotalRowCount: result?.length ?? 0,
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
-                AppliedParameters: appliedParameters,
+                AppliedParameters: resolved.appliedParameters,
+                RenderedSQL: finalSQL,
             };
         } catch (e) {
             LogError(e);
@@ -3400,6 +3408,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 TotalRowCount: 0,
                 ExecutionTime: 0,
                 ErrorMessage: errorMessage,
+                RenderedSQL: finalSQL,
             };
         }
     }
@@ -3413,7 +3422,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private resolveSpecParameters(
         spec: QueryExecutionSpec,
         contextUser?: UserInfo,
-    ): { finalSQL: string; appliedParameters: Record<string, string> } {
+    ): { finalSQL: string; appliedParameters: Record<string, string>; renderResult: RenderResult } {
         // QueryExecutionSpec.ParameterDefinitions is QueryParameterInfo[] (MJCore),
         // while RenderContext expects MJQueryParameterEntity[] (core-entities).
         // Both share the structural shape the processor needs (Name, DataType, IsRequired).
@@ -3436,7 +3445,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
         }
 
-        return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters };
+        return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters, renderResult: result };
     }
 
     // wrapWithMaxRows is now handled by RenderPipeline.applyMaxRows

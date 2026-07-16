@@ -36,7 +36,9 @@ import {
     EntityDeleteOptions,
     QueryInfo,
     QueryCategoryInfo,
+    Metadata,
 } from '@memberjunction/core';
+import type { QueryExecutionSpec } from '@memberjunction/core';
 import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
 
 /**
@@ -1166,5 +1168,130 @@ describe('SqlLoggingSessionImpl', () => {
             });
             expect(session.options.variableBatchThreshold).toBeUndefined();
         });
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// RenderedSQL — verify the executed SQL flows through RunQueryResult
+// ════════════════════════════════════════════════════════════════════
+
+describe('RenderedSQL in ExecuteQueryFromSpec', () => {
+    let provider: TestGenericProvider;
+
+    beforeEach(() => {
+        provider = new TestGenericProvider();
+        // Stub Metadata.Provider so RenderPipeline's composition step doesn't throw
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+            Queries: [],
+            QueryDependencies: [],
+        } as unknown as typeof Metadata.Provider);
+    });
+
+    it('returns RenderedSQL on success — plain SQL without templates', async () => {
+        provider.executeSQLResults = [[{ ID: 1 }]];
+
+        const spec: QueryExecutionSpec = {
+            SQL: 'SELECT ID FROM [dbo].[vwMembers]',
+            MaxRows: 10,
+        };
+        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+
+        expect(result.Success).toBe(true);
+        expect(result.RenderedSQL).toBeDefined();
+        expect(result.RenderedSQL).toMatch(/\bTOP\s+10\b/i);
+        expect(result.RenderedSQL).toContain('vwMembers');
+    });
+
+    it('returns RenderedSQL on success — with Nunjucks template resolution', async () => {
+        provider.executeSQLResults = [[{ ID: 1, Status: 'Active' }]];
+
+        const spec: QueryExecutionSpec = {
+            SQL: `SELECT ID FROM [dbo].[vwMembers] WHERE [Status] = {{ Status | sqlString }}`,
+            UsesTemplate: true,
+            Parameters: { Status: 'Active' },
+            MaxRows: 10,
+        };
+        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+
+        expect(result.Success).toBe(true);
+        expect(result.RenderedSQL).toBeDefined();
+        // Nunjucks should be resolved
+        expect(result.RenderedSQL).not.toContain('{{');
+        expect(result.RenderedSQL).toContain("'Active'");
+        // MaxRows should be applied
+        expect(result.RenderedSQL).toMatch(/\bTOP\s+10\b/i);
+    });
+
+    it('returns RenderedSQL on error — making the executed SQL visible for debugging', async () => {
+        // Simulate a DB execution failure by making ExecuteSQL throw
+        vi.spyOn(provider, 'ExecuteSQL').mockRejectedValueOnce(
+            new Error('The ORDER BY clause is invalid in views, inline functions, derived tables')
+        );
+
+        const spec: QueryExecutionSpec = {
+            SQL: `SELECT ID FROM [dbo].[vwMembers] WHERE [Status] = {{ Status | sqlString }}`,
+            UsesTemplate: true,
+            Parameters: { Status: 'Active' },
+            MaxRows: 10,
+        };
+        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('ORDER BY');
+        // The rendered SQL should still be present even on failure
+        expect(result.RenderedSQL).toBeDefined();
+        expect(result.RenderedSQL).not.toContain('{{');
+        expect(result.RenderedSQL).toContain("'Active'");
+        expect(result.RenderedSQL).toMatch(/\bTOP\s+10\b/i);
+    });
+
+    it('RenderedSQL shows MaxRows outer-wrap transformation for unparseable SQL', async () => {
+        // Simulate a DB execution failure
+        vi.spyOn(provider, 'ExecuteSQL').mockRejectedValueOnce(
+            new Error('The ORDER BY clause is invalid')
+        );
+
+        const spec: QueryExecutionSpec = {
+            SQL: `SELECT t.ID, COUNT(DISTINCT mel.ID) AS Cnt
+FROM [document].[vwMemberEngagementLogs] mel
+INNER JOIN [__mj].[vwTaggedItems] ti ON mel.ID = TRY_CAST(ti.RecordID AS INT)
+INNER JOIN [__mj].[vwTags] t ON ti.TagID = t.ID
+WHERE mel.IsMemberInitiated = 1
+  AND mel.[Date] >= {{ StartDate | sqlDate }}
+GROUP BY t.ID
+ORDER BY Cnt DESC`,
+            UsesTemplate: true,
+            Parameters: { StartDate: '2024-01-01' },
+            MaxRows: 10,
+        };
+        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+
+        expect(result.Success).toBe(false);
+        // RenderedSQL reveals the outer-wrap transformation that the error message alone cannot
+        expect(result.RenderedSQL).toBeDefined();
+        expect(result.RenderedSQL).toMatch(/_mj_capped/);
+        expect(result.RenderedSQL).toMatch(/\bTOP\s+10\b/i);
+        // Nunjucks tokens should be resolved
+        expect(result.RenderedSQL).not.toContain('{{');
+        expect(result.RenderedSQL).toMatch(/2024-01-01/);
+    });
+
+    it('RenderedSQL is undefined when rendering itself throws (before SQL is produced)', async () => {
+        // Make RenderPipeline.Run() throw by providing SQL with a composition
+        // token that triggers a Metadata.Provider access on a broken mock
+        vi.spyOn(Metadata, 'Provider', 'get').mockImplementation(() => {
+            throw new Error('Metadata not available');
+        });
+
+        const spec: QueryExecutionSpec = {
+            SQL: `SELECT * FROM {{query:"NonExistent/Query"}}`,
+            MaxRows: 10,
+        };
+        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBeTruthy();
+        // RenderedSQL is undefined because the rendering step itself failed
+        expect(result.RenderedSQL).toBeUndefined();
     });
 });

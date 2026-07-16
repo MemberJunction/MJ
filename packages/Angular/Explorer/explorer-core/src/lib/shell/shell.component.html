@@ -46,26 +46,54 @@
       </mj-app-nav>
     }
 
-    <!-- Universal Search Bar -->
-    @if (ShowSearchBar) {
-      <div class="shell-search-bar desktop-only">
-        <mj-search-composite
-          #shellSearchComposite
-          Placeholder="Search everything..."
-          [ShowShortcutHint]="true"
-          [EnablePreview]="ShowSearchPreview"
-          [EnableRecent]="true"
-          [MaxPreviewResults]="8"
-          (ResultSelected)="OnSearchResultSelected($event)"
-          (SearchSubmitted)="OnSearchSubmitted($event)"
-          (SeeAllRequested)="OnSeeAllSearch($event)">
-        </mj-search-composite>
-      </div>
-    }
     <!-- Spacer -->
     <div class="spacer"></div>
     <!-- Actions (activity, notifications, user menu) -->
     <div class="header-actions">
+      <!-- Universal Search — right-anchored with the action cluster, static width
+           (2026-07 review consensus: visible when space permits, never resizes).
+           Omnibar ON: a button styled as an input — clicking (or Ctrl/Cmd+K) opens
+           the modal palette; typing happens there. Collapses to the icon circle at
+           the mobile breakpoint.
+           Omnibar OFF: a REAL inline input (mj-search-composite) — results attach
+           beneath it as a suggest dropdown with a "See all results" footer. On
+           mobile the composite hides and an icon button opens the Spotlight
+           overlay instead (same slot, same collapse point). -->
+      @if (ShowSearchBar) {
+        @if (UseOmnibar) {
+          <button class="search-btn" title="Search everything"
+            [attr.aria-label]="'Search everything (' + OmnibarShortcutLabel + ')'"
+            (click)="OnHeaderSearchClick()">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <span class="search-btn-text desktop-only">Search everything</span>
+            <kbd class="search-btn-kbd desktop-only" aria-hidden="true">{{ OmnibarShortcutLabel }}</kbd>
+          </button>
+        } @else {
+          <div class="shell-search-bar desktop-only">
+            <mj-search-composite
+              #shellSearchComposite
+              Placeholder="Search everything..."
+              [ShowShortcutHint]="true"
+              [EnablePreview]="ShowSearchPreview"
+              [EnableRecent]="true"
+              [MaxPreviewResults]="8"
+              [ShowPromo]="ShowOmnibarPromo"
+              [PromoText]="OmnibarPromoText"
+              (ResultSelected)="OnSearchResultSelected($event)"
+              (SearchSubmitted)="OnSearchSubmitted($event)"
+              (SeeAllRequested)="OnSeeAllSearch($event)"
+              (RecentRecordSelected)="OnSearchResultSelected($event)"
+              (PromoAccepted)="OnOmnibarPromoAccepted($event)"
+              (PromoDismissed)="OnOmnibarPromoDismissed()">
+            </mj-search-composite>
+          </div>
+          <button class="search-btn search-btn-mobile" title="Search everything"
+            [attr.aria-label]="'Search everything (' + OmnibarShortcutLabel + ')'"
+            (click)="OnHeaderSearchClick()">
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </button>
+        }
+      }
       <!-- Global Activity indicator -->
       @if (activityItems.length > 0) {
         <div class="activity-wrap">
@@ -316,6 +344,27 @@
 
 <!-- Command Palette -->
 <mj-command-palette (AppSelected)="onAppSwitch($event)"></mj-command-palette>
+
+<!-- Unified command palette (Shell.Omnibar.Enabled) -->
+<mj-omnibar-palette #omnibarPalette (SettingsRequested)="OnPaletteSettingsRequested()"></mj-omnibar-palette>
+
+<!-- Legacy universal search as a Spotlight-style overlay — omnibar-off MOBILE only
+     (on desktop the inline header composite owns the experience; this opens from
+     the mobile icon or Ctrl/Cmd+K when the composite isn't visible).
+     The shell owns the Ctrl/Cmd+K chord, so the overlay's own global shortcut is off. -->
+@if (ShowSearchBar && !UseOmnibar) {
+  <mj-search-overlay
+    [(IsOpen)]="LegacySearchOpen"
+    Placeholder="Search everything..."
+    [EnableGlobalShortcut]="false"
+    [ShowPromo]="ShowOmnibarPromo"
+    [PromoText]="OmnibarPromoText"
+    (ResultSelected)="OnOverlayResultSelected($event)"
+    (SeeAllRequested)="OnOverlaySeeAll($event)"
+    (PromoAccepted)="OnOmnibarPromoAccepted($event)"
+    (PromoDismissed)="OnOmnibarPromoDismissed()">
+  </mj-search-overlay>
+}
 
 <!-- Pin Progress Overlay -->
 @if (PinProgressVisible) {
