@@ -92,7 +92,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Dummy Classifier"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -153,8 +154,8 @@
       "ID": "08063332-44F4-4CC4-B949-B81F1277B4CB"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:32.768Z",
-      "checksum": "5da40ca387cc8d6da332544a31c82ed2ebb2d02b43e316bc4a57a6c1b04c6c0f"
+      "lastModified": "2026-07-16T07:44:04.168Z",
+      "checksum": "8ee641708503496cc3fba44695f634ff7643cf0cf56a46ba5fe8d22f840fc5c9"
     }
   },
   {
@@ -171,7 +172,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Dummy Regressor"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -215,8 +217,8 @@
       "ID": "46EF2ED0-73BA-469A-8629-F7FB3FB42849"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:32.782Z",
-      "checksum": "7a061d1fc1f72c238f60dae33634b69f5170527f5f55c0c72e3b9c88128563b5"
+      "lastModified": "2026-07-16T07:44:04.183Z",
+      "checksum": "3f70a075266b4cc7b75313469ba8508034a6ba517935f110fee1dcadfddd4fad"
     }
   },
   {
@@ -233,7 +235,8 @@
       "SupportsFeatureImportance": false,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Gaussian Process"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -311,8 +314,8 @@
       "ID": "ABF9370E-BA5B-4170-B4D5-C99F3481A9CF"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:32.795Z",
-      "checksum": "0b8e36b2c073fd8ce9ed3b879beb26a47021effe7fc099dc381a3b860972b1ef"
+      "lastModified": "2026-07-16T07:44:04.198Z",
+      "checksum": "1eae7d14ad5bb1719ac3734a77c3a8d8fc8a33b6d8f71f509ee8c67ef86a4012"
     }
   },
   {
@@ -329,7 +332,8 @@
       "SupportsFeatureImportance": false,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=k-Nearest Neighbors"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -407,8 +411,8 @@
       "ID": "2FE58451-E3F4-4BB9-A7A3-DF7956322D08"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:32.807Z",
-      "checksum": "188dd05e4339e3a84d03a1201daaa428b61f48ccd10b45a6bf0a6dc997ea7fc5"
+      "lastModified": "2026-07-16T07:38:06.921Z",
+      "checksum": "375c532d76ec7e5a27273082acb9e7eebe4f8a64a08362317d845edadd4e16d4"
     }
   },
   {
@@ -522,7 +526,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Naive Bayes"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -583,8 +588,8 @@
       "ID": "737694A5-B468-4F27-847D-4B8CD12E6653"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:32.820Z",
-      "checksum": "a804ced7fa49acdee7b8b64ba68a6e618dd37ceaf52d3fe4271dd1927ac62ece"
+      "lastModified": "2026-07-16T07:38:06.933Z",
+      "checksum": "5682327de0f192d07f3628ae77da3b9ce0ea700cef64862935c9ad55c901a355"
     }
   },
   {
@@ -601,7 +606,8 @@
       "SupportsFeatureImportance": false,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Support Vector Machine"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -679,8 +685,8 @@
       "ID": "D13019FF-0173-4732-8C15-8DF5C53F7F30"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:32.832Z",
-      "checksum": "88a813c2253392f61b32615d534ac4deadb1441f819ae07d643436e785c3e35e"
+      "lastModified": "2026-07-16T07:44:04.210Z",
+      "checksum": "ff1f8418ec201a6464404fa019756519e6035c7d3fe5250d0326af0ecbaef05c"
     }
   },
   {
@@ -2057,7 +2063,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Negative Binomial Regression"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -2118,8 +2125,8 @@
       "ID": "35DC8A4B-FF55-48CD-8488-798E92AB5711"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.068Z",
-      "checksum": "d0674692cf28e652a7bebf93309b6d760cd9e2f2163d71a21a1116633ae7120c"
+      "lastModified": "2026-07-16T07:46:29.284Z",
+      "checksum": "ef7b2ed6cc732fef8849005f62fdd21092595b8a93fb35a9d1651987aecb3cc8"
     }
   },
   {
@@ -2232,7 +2239,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Poisson Regression"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -2293,8 +2301,8 @@
       "ID": "87579B82-EC65-46F8-A1F8-28F088BE3AA4"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.091Z",
-      "checksum": "568e31387b990caa2beba130dd3312c1c0ed82e33987e48bd389406cf61602b0"
+      "lastModified": "2026-07-16T07:46:29.300Z",
+      "checksum": "e60744a507e05c32b87271d9c8c795e038912c7066423bfd3b0d3d7659e13ac5"
     }
   },
   {
@@ -2311,7 +2319,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Quantile Regression"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -2372,8 +2381,8 @@
       "ID": "10B5735A-5952-43B8-A061-C8B10F3F4B35"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.101Z",
-      "checksum": "5479e152bf632a87349ed9bd093796fc1bef23616099c8534a78e13620dc52b8"
+      "lastModified": "2026-07-16T07:46:29.315Z",
+      "checksum": "98062fb2cebbadd19ae0ccaf4359c8b568a745a0e3f5b6ce66d490a0d268fa7d"
     }
   },
   {
@@ -2390,7 +2399,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Tweedie Regression"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -2451,8 +2461,8 @@
       "ID": "56613CCA-A1B2-4BF7-B39C-5884C375624A"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.111Z",
-      "checksum": "d797718492f4f004b6ef15fc2ec23f54aaf41cb69aed08862d208cebc767d592"
+      "lastModified": "2026-07-16T07:46:29.326Z",
+      "checksum": "8d0bd505e9d73775e39ace7952f747fce32c2d69296c17bf072ae279a8c062b0"
     }
   },
   {
@@ -2469,7 +2479,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Zero-Inflated Poisson"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -2547,8 +2558,8 @@
       "ID": "8E5010D7-F3FC-4C39-A859-182C72D6F5CC"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.137Z",
-      "checksum": "1acbd1cec0efc4c258524a2cb5f53c9f119bdd678264fd791ec9b7d5ddded15c"
+      "lastModified": "2026-07-16T07:48:58.821Z",
+      "checksum": "c709dcd13194cdfd9a3593fd6a283ec97c9ef012db18a1f826d98fda0f0bd547"
     }
   },
   {
@@ -2906,7 +2917,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Elastic Net"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -2967,8 +2979,8 @@
       "ID": "FCB5BA68-392C-480E-9BE6-CA1BAD13FFDB"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.162Z",
-      "checksum": "e06cf7276b8c51757e178522805e875ed1a58718f9a548f95f8f73cd28b89978"
+      "lastModified": "2026-07-16T07:38:06.971Z",
+      "checksum": "86a28f609ff562193a2b4065ed05199a32ed05cc2e69e02142c7b03cc5886b78"
     }
   },
   {
@@ -2985,7 +2997,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Lasso"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -3046,8 +3059,8 @@
       "ID": "C5DBAE57-B120-4369-BE97-611479E9DC40"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.172Z",
-      "checksum": "47a85f7130beeea9731445ed38502cfc6c1f4d6328bf6d5051b8c2f8539143f3"
+      "lastModified": "2026-07-16T07:38:06.984Z",
+      "checksum": "ad0cfa4880f343f0b2b3af664f9ec1ae1caf1c7a8968613b942b28553a89d643"
     }
   },
   {
@@ -3257,7 +3270,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Ordinary Least Squares"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -3318,8 +3332,8 @@
       "ID": "6114783C-1360-492B-A4DA-08D2B6BAEAE5"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.202Z",
-      "checksum": "996a310cce73eac818178e5040dc979b91de02ffe37a56b895ae02236fe16285"
+      "lastModified": "2026-07-16T07:44:04.247Z",
+      "checksum": "0f1ff1dd22d7931439ac222313fb7956cde8df2c7f8c25adf40ff0ac51700747"
     }
   },
   {
@@ -4907,7 +4921,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Decision Tree"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -5002,8 +5017,8 @@
       "ID": "5041F2B7-AECE-4AF6-817A-9C501167159B"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.526Z",
-      "checksum": "cb5b50beb21bc7ea8fe1b694114b2ca962ebc324f75c12c3dcca87e149d78883"
+      "lastModified": "2026-07-16T07:38:07.012Z",
+      "checksum": "43c73b70500ecf86e262485d41e6d20334637a0b1bbd5bb204a21db22bddd22a"
     }
   },
   {
@@ -5020,7 +5035,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Extra Trees"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -5115,8 +5131,8 @@
       "ID": "02CE0192-B966-4E09-8CC7-39368CD2E913"
     },
     "sync": {
-      "lastModified": "2026-07-16T07:21:33.536Z",
-      "checksum": "2eceb64a280b26388da41ba0709c3fc2ab6009aae19ce52e5b0df791db116657"
+      "lastModified": "2026-07-16T07:38:07.023Z",
+      "checksum": "c0e3a0a671d8106e72c6ef25c2053c40a31b6b4ccfc191d90254508b30a5fb57"
     }
   },
   {

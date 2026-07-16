@@ -112,5 +112,293 @@
       "lastModified": "2026-07-01T17:33:30.776Z",
       "checksum": "08d05de6c281a50dde9a8148ddedf4aaaed4af70d50df225ca7ae870e5d4f5c2"
     }
+  },
+  {
+    "fields": {
+      "Name": "Extra Trees",
+      "Description": "Extra Trees — T1 sklearn driver.",
+      "ProblemTypes": "classification,regression",
+      "DriverClass": "extra_trees",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "15FFCE51-5E0B-46BD-BB92-F7D81E4AC5E0"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:38:02.631Z",
+      "checksum": "03e4c758dff253d2cfc429d9e572de65a7d329cdcbcab4fa993f697149f23381"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Decision Tree",
+      "Description": "Decision Tree — T1 sklearn driver.",
+      "ProblemTypes": "classification,regression",
+      "DriverClass": "decision_tree",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "13DD450B-49E2-4DF8-AA5F-8747196EE2A4"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:38:02.642Z",
+      "checksum": "3892e3eafa821e546c17474e15498ebb2431e861a89ebbb3924e9caada70f161"
+    }
+  },
+  {
+    "fields": {
+      "Name": "k-Nearest Neighbors",
+      "Description": "k-Nearest Neighbors — T1 sklearn driver.",
+      "ProblemTypes": "classification,regression",
+      "DriverClass": "knn",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "39AB078D-353D-4C1F-8A22-7613A1E1162A"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:38:02.651Z",
+      "checksum": "03c50808d6c7639a432a1f4efe9d5cfd552a03de767039348057f7c315f9acd3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Naive Bayes",
+      "Description": "Naive Bayes — T1 sklearn driver.",
+      "ProblemTypes": "classification",
+      "DriverClass": "naive_bayes",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "934F6A21-A366-4DDE-9B74-82CD11DD43F4"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:38:02.661Z",
+      "checksum": "00e4a03b8e91091a49811e8f493429c782cd69c3d2a161b7db09dffa2545c04b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lasso",
+      "Description": "Lasso — T1 sklearn driver.",
+      "ProblemTypes": "regression",
+      "DriverClass": "lasso",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "21113A8D-8462-4DC8-BEBE-51D649FAA17A"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:38:02.674Z",
+      "checksum": "8b49ad0a66253f1981a98cd181815786997bd55a9536cd29d1e1e71d66c4f490"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Elastic Net",
+      "Description": "Elastic Net — T1 sklearn driver.",
+      "ProblemTypes": "regression",
+      "DriverClass": "elastic_net",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "9EC8ED19-5324-48F2-9A51-88FFE83856A8"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:38:02.684Z",
+      "checksum": "7fd81bf14118810032564eeef1db312f92e7a81ca04650c8f330e073a6e07cef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Support Vector Machine",
+      "Description": "Support Vector Machine — T1 sklearn driver.",
+      "ProblemTypes": "classification,regression",
+      "DriverClass": "svm",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E40D0CAE-194F-420B-89E0-8A2A17924154"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:43:59.810Z",
+      "checksum": "096a771a85ccacae2d86d904daedbb59579021d4b8222ed771d3ef56fe94661c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gaussian Process",
+      "Description": "Gaussian Process — T1 sklearn driver.",
+      "ProblemTypes": "classification,regression",
+      "DriverClass": "gp",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3B278F1C-A732-431A-BEB0-628155E2F00D"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:43:59.826Z",
+      "checksum": "0279b7c3d7013f1c8c91fe3ebb49738b372c7fbac7cd24e3b11d6eb4d3c9b1e1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ordinary Least Squares",
+      "Description": "Ordinary Least Squares — T1 sklearn driver.",
+      "ProblemTypes": "regression",
+      "DriverClass": "ols",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A2B9AEF1-4B61-4773-B863-28946C6B77E1"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:43:59.838Z",
+      "checksum": "dd29ce70bb75f67aa01960b212c91d4321f25dc8d5c91730041ed72bc6cf8b9b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dummy Classifier",
+      "Description": "Dummy Classifier — T1 sklearn driver.",
+      "ProblemTypes": "classification",
+      "DriverClass": "dummy_classifier",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "905965A4-182A-4126-8CAF-8A706DA5A4DE"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:43:59.851Z",
+      "checksum": "f9d74f4bb22bb914b7f5f3faefa7d6ae5337dd8727b3cca9b9a641e30dc588da"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dummy Regressor",
+      "Description": "Dummy Regressor — T1 sklearn driver.",
+      "ProblemTypes": "regression",
+      "DriverClass": "dummy_regressor",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "79AD31FA-0FD0-4DCC-A183-4B7034A0C1B8"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:43:59.861Z",
+      "checksum": "2a3f7a827764ab4375bc2897d23ff98ee00c96195c1d2382ecbdb559dd08b98f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Poisson Regression",
+      "Description": "Poisson Regression — T2 statsmodels GLM (optional extra).",
+      "ProblemTypes": "regression",
+      "DriverClass": "poisson",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F3F53C0D-2ED6-491E-AD71-B4C8FFEADDFD"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:46:24.564Z",
+      "checksum": "a8ffda3ba08d1028402da6f324ad2eb1affd43847dfef34e07b57bcb0ba7a797"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Negative Binomial Regression",
+      "Description": "Negative Binomial Regression — T2 statsmodels GLM (optional extra).",
+      "ProblemTypes": "regression",
+      "DriverClass": "neg_binomial",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "6B572F70-4B83-46FB-87CB-EF0C6752C884"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:46:24.580Z",
+      "checksum": "6fa96ebd27af9de483f75079614f37a4bb716b6c702129770d7d1529e6026b36"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tweedie Regression",
+      "Description": "Tweedie Regression — T2 statsmodels GLM (optional extra).",
+      "ProblemTypes": "regression",
+      "DriverClass": "tweedie",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "5EC85362-E7A6-43CA-BE48-CA764A03DBDA"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:46:24.592Z",
+      "checksum": "a5a532c97772f19e1aa260d9641dd1beeb199239a40a4cdc1003e4df16c6e3ab"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quantile Regression",
+      "Description": "Quantile Regression — T2 statsmodels GLM (optional extra).",
+      "ProblemTypes": "regression",
+      "DriverClass": "quantile",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "621F191C-78DA-4D2C-8861-4F6E3D0BC954"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:46:24.606Z",
+      "checksum": "c732ec1db217199b0976b7d90b120c00d6d5943bb2d15c38c4d9ad036fd81905"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zero-Inflated Poisson",
+      "Description": "Zero-Inflated Poisson — T2 statsmodels (optional extra).",
+      "ProblemTypes": "regression",
+      "DriverClass": "zero_inflated",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D44D660D-B43F-48F7-8DB3-45E6F54995F1"
+    },
+    "sync": {
+      "lastModified": "2026-07-16T07:48:54.321Z",
+      "checksum": "b2a1b98925d8c5f7b7573e28d41c02a13355dd9b6b5f9a796eda57884d19b183"
+    }
   }
 ]

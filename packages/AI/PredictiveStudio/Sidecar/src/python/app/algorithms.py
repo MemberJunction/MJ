@@ -14,11 +14,25 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List
 
 from sklearn.ensemble import (
+    ExtraTreesClassifier,
+    ExtraTreesRegressor,
     RandomForestClassifier,
     RandomForestRegressor,
 )
-from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.dummy import DummyClassifier, DummyRegressor
+from sklearn.gaussian_process import GaussianProcessClassifier, GaussianProcessRegressor
+from sklearn.linear_model import (
+    ElasticNet,
+    Lasso,
+    LinearRegression,
+    LogisticRegression,
+    Ridge,
+)
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.neural_network import MLPClassifier, MLPRegressor
+from sklearn.svm import SVC, SVR
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 try:  # xgboost requires OpenMP (libomp on macOS, libgomp1 on Linux)
     from xgboost import XGBClassifier, XGBRegressor
@@ -126,6 +140,101 @@ def _mlp(problem_type: str, hp: Dict[str, Any]):
     return MLPRegressor(**params)
 
 
+def _extra_trees(problem_type: str, hp: Dict[str, Any]):
+    """Extremely-randomized trees (bagging with random split thresholds)."""
+    common = {"n_jobs": -1, **hp}
+    if problem_type == "classification":
+        return ExtraTreesClassifier(**common)
+    return ExtraTreesRegressor(**common)
+
+
+def _decision_tree(problem_type: str, hp: Dict[str, Any]):
+    """A single CART decision tree (interpretable rule paths)."""
+    if problem_type == "classification":
+        return DecisionTreeClassifier(**hp)
+    return DecisionTreeRegressor(**hp)
+
+
+def _knn(problem_type: str, hp: Dict[str, Any]):
+    """k-nearest-neighbors (distance-based; scale the inputs upstream)."""
+    common = {"n_jobs": -1, **hp}
+    if problem_type == "classification":
+        return KNeighborsClassifier(**common)
+    return KNeighborsRegressor(**common)
+
+
+def _naive_bayes(problem_type: str, hp: Dict[str, Any]):
+    """Gaussian naive Bayes (classification only; probabilities are often over-confident)."""
+    if problem_type != "classification":
+        raise AlgorithmNotSupportedError("naive_bayes supports classification only.")
+    return GaussianNB(**hp)
+
+
+def _lasso(problem_type: str, hp: Dict[str, Any]):
+    """Lasso (L1) regression — sparse coefficients (regression only)."""
+    if problem_type != "regression":
+        raise AlgorithmNotSupportedError("lasso supports regression only.")
+    return Lasso(**{"max_iter": 5000, **hp})
+
+
+def _elastic_net(problem_type: str, hp: Dict[str, Any]):
+    """ElasticNet (L1+L2) regression (regression only)."""
+    if problem_type != "regression":
+        raise AlgorithmNotSupportedError("elastic_net supports regression only.")
+    return ElasticNet(**{"max_iter": 5000, **hp})
+
+
+def _svm(problem_type: str, hp: Dict[str, Any]):
+    """Support vector machine (kernel; scale inputs upstream). SVC exposes calibrated
+    probabilities only with probability=True (internal Platt CV)."""
+    if problem_type == "classification":
+        return SVC(**{"probability": True, **hp})
+    return SVR(**hp)
+
+
+def _gp(problem_type: str, hp: Dict[str, Any]):
+    """Gaussian process (native uncertainty; O(n^3) — gate to small n upstream)."""
+    if problem_type == "classification":
+        return GaussianProcessClassifier(**hp)
+    return GaussianProcessRegressor(**{"normalize_y": True, **hp})
+
+
+def _ols(problem_type: str, hp: Dict[str, Any]):
+    """Ordinary least squares linear regression (regression only)."""
+    if problem_type != "regression":
+        raise AlgorithmNotSupportedError("ols supports regression only.")
+    return LinearRegression(**hp)
+
+
+def _dummy_classifier(problem_type: str, hp: Dict[str, Any]):
+    """The classification leaderboard floor (predicts the base rate / prior)."""
+    if problem_type != "classification":
+        raise AlgorithmNotSupportedError("dummy_classifier supports classification only.")
+    return DummyClassifier(**{"strategy": "prior", **hp})
+
+
+def _dummy_regressor(problem_type: str, hp: Dict[str, Any]):
+    """The regression leaderboard floor (predicts the mean/median)."""
+    if problem_type != "regression":
+        raise AlgorithmNotSupportedError("dummy_regressor supports regression only.")
+    return DummyRegressor(**{"strategy": "mean", **hp})
+
+
+# --- T2: statsmodels count/GLM families (optional extra; sklearn-wrapped) ---
+from app import glm_wrappers as _glm  # noqa: E402
+
+
+def _glm_factory(maker):
+    def factory(problem_type: str, hp: Dict[str, Any]):
+        _require(_glm._HAVE_STATSMODELS, "statsmodels")
+        if problem_type != "regression":
+            raise AlgorithmNotSupportedError(
+                "count/GLM families model a non-negative response; use problem_type='regression'."
+            )
+        return maker(hp)
+    return factory
+
+
 _REGISTRY: Dict[str, EstimatorFactory] = {
     "xgboost": _xgboost,
     "lightgbm": _lightgbm,
@@ -133,7 +242,26 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "random_forest": _random_forest,
     "ridge": _ridge,
     "mlp": _mlp,
+    # T1 tranche — zero-new-dependency sklearn drivers
+    "extra_trees": _extra_trees,
+    "decision_tree": _decision_tree,
+    "knn": _knn,
+    "naive_bayes": _naive_bayes,
+    "lasso": _lasso,
+    "elastic_net": _elastic_net,
+    "svm": _svm,
+    "gp": _gp,
+    "ols": _ols,
+    "dummy_classifier": _dummy_classifier,
+    "dummy_regressor": _dummy_regressor,
+    # T2 — statsmodels GLM families (optional extra)
+    "poisson": _glm_factory(_glm.make_poisson),
+    "neg_binomial": _glm_factory(_glm.make_neg_binomial),
+    "tweedie": _glm_factory(_glm.make_tweedie),
+    "quantile": _glm_factory(_glm.make_quantile),
+    "zero_inflated": _glm_factory(_glm.make_zero_inflated),
 }
+
 
 
 def supported_algorithms() -> List[str]:
@@ -148,6 +276,11 @@ def supported_algorithms() -> List[str]:
 _DRIVER_REQUIREMENTS = {
     "xgboost": _HAVE_XGB,
     "lightgbm": _HAVE_LGBM,
+    "poisson": _glm._HAVE_STATSMODELS,
+    "neg_binomial": _glm._HAVE_STATSMODELS,
+    "tweedie": _glm._HAVE_STATSMODELS,
+    "quantile": _glm._HAVE_STATSMODELS,
+    "zero_inflated": _glm._HAVE_STATSMODELS,
 }
 
 
