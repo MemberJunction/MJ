@@ -18,7 +18,13 @@ import numpy as np
 import pandas as pd
 
 try:
-    from lifelines import CoxPHFitter, KaplanMeierFitter, WeibullAFTFitter
+    from lifelines import (
+        CoxPHFitter,
+        KaplanMeierFitter,
+        LogLogisticAFTFitter,
+        LogNormalAFTFitter,
+        WeibullAFTFitter,
+    )
     from lifelines.utils import concordance_index
 
     _HAVE_LIFELINES = True
@@ -107,9 +113,38 @@ class _KaplanMeierWrapper:
         return [{"times": times, "survival": surv} for _ in range(len(np.asarray(X, dtype=float)))]
 
 
+class _AFTWrapper:
+    """Accelerated-failure-time with a Log-Logistic (default) or Log-Normal
+    baseline — parametric, heavier-tailed than Weibull, good when the hazard is
+    non-monotone (rises then falls). risk = -expected lifetime; curve = survival
+    function per row. Pick the baseline via hp['dist'] ∈ {log_logistic, log_normal}."""
+
+    def __init__(self, dist: str = "log_logistic", penalizer: float = 0.1, **hp: Any):
+        fitter_cls = LogNormalAFTFitter if dist == "log_normal" else LogLogisticAFTFitter
+        self._fitter = fitter_cls(penalizer=penalizer)
+        self._feature_names: List[str] = []
+
+    def fit(self, X, durations, events, feature_names: List[str]):
+        self._feature_names = feature_names
+        df = _frame(X, durations, events, feature_names)
+        self._fitter.fit(df, duration_col=_DURATION, event_col=_EVENT)
+        return self
+
+    def risk(self, X):
+        df = pd.DataFrame(np.asarray(X, dtype=float), columns=self._feature_names)
+        return -np.asarray(self._fitter.predict_expectation(df)).ravel()
+
+    def curve(self, X):
+        df = pd.DataFrame(np.asarray(X, dtype=float), columns=self._feature_names)
+        sf = self._fitter.predict_survival_function(df)
+        times = [float(t) for t in sf.index]
+        return [{"times": times, "survival": [float(v) for v in sf[col].values]} for col in sf.columns]
+
+
 _SURVIVAL_REGISTRY = {
     "cox_ph": _CoxPHWrapper,
     "weibull_aft": _WeibullAFTWrapper,
+    "aft": _AFTWrapper,
     "km": _KaplanMeierWrapper,
 }
 

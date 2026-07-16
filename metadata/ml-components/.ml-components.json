@@ -1979,7 +1979,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Generalized Additive Model"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -2155,7 +2156,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Ordinal Regression"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -3186,7 +3188,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Multinomial Logit"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -3680,7 +3683,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Rubric (Weighted Scorecard)"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -3924,7 +3928,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Kalman Filter / DLM"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -4037,7 +4042,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Discrete Markov Chain"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -4133,7 +4139,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Markov Switching Regression"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -4263,7 +4270,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Structural Time Series"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -4376,7 +4384,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Vector Autoregression"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -4455,7 +4464,8 @@
       "SupportsFeatureImportance": true,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=AFT (Log-Logistic/Log-Normal)"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -5277,7 +5287,8 @@
       "SupportsFeatureImportance": false,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Isotonic Calibrator"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [
@@ -5336,7 +5347,8 @@
       "SupportsFeatureImportance": false,
       "Source": "System",
       "CodeApprovalStatus": "Approved",
-      "Status": "Planned"
+      "Status": "Active",
+      "AlgorithmID": "@lookup:MJ: ML Algorithms.Name=Platt Calibrator"
     },
     "relatedEntities": {
       "MJ: ML Component Ports": [

@@ -226,6 +226,8 @@ from app import survival_wrappers as _surv  # noqa: E402
 from app import forecast_wrappers as _fc  # noqa: E402
 from app import sequence_wrappers as _seq  # noqa: E402
 from app import unsupervised_wrappers as _uns  # noqa: E402
+from app import rubric_wrappers as _rub  # noqa: E402
+from app import calibration_wrappers as _cal  # noqa: E402
 
 
 def _glm_factory(maker):
@@ -237,6 +239,23 @@ def _glm_factory(maker):
             )
         return maker(hp)
     return factory
+
+
+def _glm_classifier_factory(maker):
+    """Factory for statsmodels classifiers (ordinal / multinomial) — classification only."""
+    def factory(problem_type: str, hp: Dict[str, Any]):
+        _require(_glm._HAVE_STATSMODELS, "statsmodels")
+        if problem_type != "classification":
+            raise AlgorithmNotSupportedError(
+                "ordinal / multinomial-logit model discrete classes; use problem_type='classification'."
+            )
+        return maker(hp)
+    return factory
+
+
+def _rubric(problem_type: str, hp: Dict[str, Any]):
+    """The glass-box weighted scorecard — trainable or reusable, both tasks."""
+    return _rub.make_rubric(hp)
 
 
 def _survival_placeholder(problem_type: str, hp: Dict[str, Any]):
@@ -270,9 +289,15 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "tweedie": _glm_factory(_glm.make_tweedie),
     "quantile": _glm_factory(_glm.make_quantile),
     "zero_inflated": _glm_factory(_glm.make_zero_inflated),
+    "gam": _glm_factory(_glm.make_gam),
+    "ordinal": _glm_classifier_factory(_glm.make_ordinal),
+    "multinomial_logit": _glm_classifier_factory(_glm.make_multinomial_logit),
+    # Rubric / weighted scorecard (glass-box; sklearn+scipy, no dep)
+    "rubric": _rubric,
     # T4 survival — handled by the survival branch in main.py, not build_estimator
     "cox_ph": _survival_placeholder,
     "weibull_aft": _survival_placeholder,
+    "aft": _survival_placeholder,
     "km": _survival_placeholder,
     # T5 forecasting — handled by the forecast branch in main.py
     "seasonal_naive": _survival_placeholder,
@@ -281,7 +306,12 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "arima": _survival_placeholder,
     "theta": _survival_placeholder,
     "croston": _survival_placeholder,
+    "structural_ts": _survival_placeholder,
+    "kalman_dlm": _survival_placeholder,
+    "markov_switching": _survival_placeholder,
+    "var": _survival_placeholder,
     "hmm": _survival_placeholder,
+    "markov_chain": _survival_placeholder,
     # T3 unsupervised (sklearn, no dep) — handled by the unsupervised branch
     "kmeans": _survival_placeholder,
     "dbscan": _survival_placeholder,
@@ -290,6 +320,9 @@ _REGISTRY: Dict[str, EstimatorFactory] = {
     "pca": _survival_placeholder,
     "isolation_forest": _survival_placeholder,
     "lda": _survival_placeholder,
+    # Calibration (sklearn, no dep) — handled by the calibration branch in main.py
+    "platt": _survival_placeholder,
+    "isotonic": _survival_placeholder,
 }
 
 
@@ -311,8 +344,13 @@ _DRIVER_REQUIREMENTS = {
     "tweedie": _glm._HAVE_STATSMODELS,
     "quantile": _glm._HAVE_STATSMODELS,
     "zero_inflated": _glm._HAVE_STATSMODELS,
+    "gam": _glm._HAVE_STATSMODELS,
+    "ordinal": _glm._HAVE_STATSMODELS,
+    "multinomial_logit": _glm._HAVE_STATSMODELS,
+    "rubric": True,
     "cox_ph": _surv._HAVE_LIFELINES,
     "weibull_aft": _surv._HAVE_LIFELINES,
+    "aft": _surv._HAVE_LIFELINES,
     "km": _surv._HAVE_LIFELINES,
     "seasonal_naive": True,
     "sma": True,
@@ -320,9 +358,15 @@ _DRIVER_REQUIREMENTS = {
     "arima": _fc._HAVE_STATSMODELS_TS,
     "theta": _fc._HAVE_STATSMODELS_TS,
     "croston": True,
+    "structural_ts": _fc._HAVE_STATSMODELS_TS,
+    "kalman_dlm": _fc._HAVE_STATSMODELS_TS,
+    "markov_switching": _fc._HAVE_STATSMODELS_TS,
+    "var": _fc._HAVE_STATSMODELS_TS,
     "hmm": _seq._HAVE_HMMLEARN,
+    "markov_chain": True,
     "kmeans": True, "dbscan": True, "gmm": True, "hierarchical": True,
     "pca": True, "isolation_forest": True, "lda": True,
+    "platt": True, "isotonic": True,
 }
 
 

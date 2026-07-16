@@ -18,8 +18,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from fastapi import FastAPI, HTTPException
 
-from . import (algorithms, artifacts, forecast_wrappers, metrics, preprocessing,
-               sequence_wrappers, survival_wrappers, unsupervised_wrappers)
+from . import (algorithms, artifacts, calibration_wrappers, forecast_wrappers, metrics,
+               preprocessing, sequence_wrappers, survival_wrappers, unsupervised_wrappers)
 from .schemas import (
     HealthResponse,
     PredictRequest,
@@ -70,11 +70,15 @@ def train(req: TrainRequest) -> TrainResponse:
             detail="Inline `data` is required (data_ref shared-storage is not "
             "implemented in v1).",
         )
+    is_calibration = calibration_wrappers.is_calibration(req.algorithm)
     is_unsup = unsupervised_wrappers.is_unsupervised(req.algorithm)
     is_sequence = sequence_wrappers.is_sequence(req.algorithm)
     is_forecast = forecast_wrappers.is_forecast(req.algorithm)
     is_survival = survival_wrappers.is_survival(req.algorithm)
-    if is_unsup:
+    if is_calibration:
+        if req.target not in req.data.columns:
+            raise HTTPException(status_code=400, detail=f"Calibrator requires a `target` column; '{req.target}' not found.")
+    elif is_unsup:
         pass  # unsupervised: fits on X, no target/spec required
     elif is_sequence:
         if req.sequence_spec is None:
@@ -99,7 +103,8 @@ def train(req: TrainRequest) -> TrainResponse:
 
     started = time.perf_counter()
     try:
-        result = (_run_unsupervised_training(req) if is_unsup else
+        result = (_run_calibration_training(req) if is_calibration else
+                  _run_unsupervised_training(req) if is_unsup else
                   _run_sequence_training(req) if is_sequence else
                   _run_forecast_training(req) if is_forecast else
                   _run_survival_training(req) if is_survival else _run_training(req))
@@ -130,6 +135,40 @@ def train(req: TrainRequest) -> TrainResponse:
         duration_sec=round(duration, 4),
         holdout_metrics=result.get("holdout_metrics"),
     )
+
+
+def _run_calibration_training(req) -> Dict[str, Any]:
+    """Calibration branch (Doc 3 T1). Reads the single raw-probability input column
+    + the true labels, fits a Platt / isotonic map, and reports ECE + log-loss BEFORE
+    vs AFTER — the honesty check that a calibrator improves reliability and never
+    worsens log-loss. At /predict the fitted map transforms the probability column."""
+    from sklearn.metrics import log_loss
+
+    cols = list(req.data.columns)
+    feature_cols = [f.Name for f in req.feature_schema] if req.feature_schema else \
+        [c for c in cols if c != req.target]
+    raw_col = feature_cols[0]  # the calibrator consumes ONE probability column
+    ri, yi = cols.index(raw_col), cols.index(req.target)
+    raw = np.array([float(r[ri]) for r in req.data.rows])
+    y = np.array([int(float(r[yi])) for r in req.data.rows])
+
+    model = calibration_wrappers.build_calibration(req.algorithm, dict(req.hyperparameters))
+    model.fit(raw, y)
+    calibrated = model.transform(raw)
+
+    ece_before = calibration_wrappers.expected_calibration_error(raw, y)
+    ece_after = calibration_wrappers.expected_calibration_error(calibrated, y)
+    eps = 1e-7
+    ll_before = float(log_loss(y, np.clip(raw, eps, 1 - eps), labels=[0, 1]))
+    ll_after = float(log_loss(y, np.clip(calibrated, eps, 1 - eps), labels=[0, 1]))
+    return {
+        "estimator": model,
+        "fitted": {"output_columns": [raw_col], "calibration_input": raw_col},
+        "metrics": {"ece_before": ece_before, "ece_after": ece_after,
+                    "log_loss_before": ll_before, "log_loss_after": ll_after},
+        "feature_importance": {},
+        "training_row_count": len(req.data.rows),
+    }
 
 
 def _run_unsupervised_training(req) -> Dict[str, Any]:
@@ -186,17 +225,34 @@ def _run_forecast_training(req) -> Dict[str, Any]:
     if len(y) <= h + m:
         raise ValueError(f"series too short ({len(y)}) for horizon {h} + season {m}.")
 
-    y_train, y_test = y[:-h], y[-h:]
-    model = forecast_wrappers.build_forecast(
-        req.algorithm, {**dict(req.hyperparameters), "seasonal_periods": ss.seasonal_periods})
-    model.fit(y_train)
+    # VAR is multivariate: it consumes ALL numeric series, forecasting the value_col
+    # from the joint lag dynamics. Everything else is univariate on `y`.
+    multivariate = forecast_wrappers.is_multivariate(req.algorithm)
+    if multivariate:
+        num_cols = [c for c in cols if c != ss.time_col]
+        target_index = num_cols.index(ss.value_col)
+        Y = np.array([[float(r[cols.index(c)]) for c in num_cols] for r in rows])
+        train_input, prod_input = Y[:-h], Y
+    else:
+        target_index = 0
+        train_input, prod_input = y[:-h], y
+    y_test = y[-h:]
+
+    def _build():
+        return forecast_wrappers.build_forecast(
+            req.algorithm, {**dict(req.hyperparameters),
+                            "seasonal_periods": ss.seasonal_periods,
+                            "target_index": target_index})
+
+    model = _build()
+    model.fit(train_input)
     y_pred = model.forecast(h)
+    y_train = y[:-h]
     holdout_mase = forecast_wrappers.mase(y_train, y_test, y_pred, m)
 
     # refit on the FULL series for the production forecaster
-    prod = forecast_wrappers.build_forecast(
-        req.algorithm, {**dict(req.hyperparameters), "seasonal_periods": ss.seasonal_periods})
-    prod.fit(y)
+    prod = _build()
+    prod.fit(prod_input)
     return {
         "estimator": prod, "fitted": {"output_columns": [ss.value_col], "series_spec": ss.model_dump()},
         "metrics": {"mase": holdout_mase},

@@ -84,17 +84,70 @@ def group_sequences(rows: Sequence[Sequence[Any]], columns: List[str],
     return np.asarray(X, dtype=float), lengths, order
 
 
+class _MarkovChainWrapper:
+    """Discrete first-order Markov chain over an OBSERVED single state column.
+    fit(X, lengths) estimates the state transition matrix by counting adjacent
+    (state_t → state_{t+1}) pairs within each grouped sequence (Laplace-smoothed).
+    The matrix IS the model — decode returns the per-row observed state (there is
+    no latent inference). log_likelihood scores the sequences under the matrix.
+    Pure numpy; no dependency."""
+
+    def __init__(self, n_states: int | None = None, **hp: Any):
+        self.n_states = n_states
+        self.transition_matrix_ = None
+
+    def _states(self, X: np.ndarray) -> np.ndarray:
+        # single observed state column, coerced to contiguous int labels
+        col = np.asarray(X, dtype=float)[:, 0]
+        uniq = np.unique(col)
+        self._levels = uniq
+        return np.searchsorted(uniq, col)
+
+    def fit(self, X, lengths: List[int]):
+        s = self._states(X)
+        k = self.n_states or int(s.max()) + 1
+        self.n_states = k
+        counts = np.ones((k, k))  # Laplace smoothing
+        pos = 0
+        for L in lengths:
+            seg = s[pos:pos + L]
+            for a, b in zip(seg[:-1], seg[1:]):
+                counts[a, b] += 1
+            pos += L
+        self.transition_matrix_ = counts / counts.sum(axis=1, keepdims=True)
+        self._fitted_states = s
+        return self
+
+    def log_likelihood(self, X: np.ndarray, lengths: List[int]) -> float:
+        s = self._states(X)
+        ll = 0.0
+        pos = 0
+        for L in lengths:
+            seg = s[pos:pos + L]
+            for a, b in zip(seg[:-1], seg[1:]):
+                ll += float(np.log(self.transition_matrix_[a, b]))
+            pos += L
+        return ll
+
+    def decode(self, X: np.ndarray, lengths: List[int]) -> np.ndarray:
+        return self._states(X)
+
+
 def is_sequence(algorithm: str) -> bool:
-    return algorithm in {"hmm"}
+    return algorithm in {"hmm", "markov_chain"}
 
 
 def runnable(algorithm: str) -> bool:
     if algorithm == "hmm":
         return _HAVE_HMMLEARN
+    if algorithm == "markov_chain":
+        return True
     return False
 
 
 def build_sequence(algorithm: str, hp: Dict[str, Any]):
     if algorithm == "hmm":
         return _HMMWrapper(**hp)
+    if algorithm == "markov_chain":
+        return _MarkovChainWrapper(**hp)
     raise ValueError(f"unknown sequence algorithm '{algorithm}'")

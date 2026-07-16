@@ -657,5 +657,137 @@
       "SupportsFeatureImportance": true,
       "Status": "Active"
     }
+  },
+  {
+    "fields": {
+      "Name": "Generalized Additive Model",
+      "Description": "Generalized Additive Model \u2014 spline-additive GLM (statsmodels); smooth per-feature effects, regression.",
+      "ProblemTypes": "regression",
+      "DriverClass": "gam",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ordinal Regression",
+      "Description": "Ordinal Regression \u2014 proportional-odds ordered logit (statsmodels OrderedModel).",
+      "ProblemTypes": "classification",
+      "DriverClass": "ordinal",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Multinomial Logit",
+      "Description": "Multinomial Logit \u2014 softmax classifier with coefficients+SE (statsmodels MNLogit).",
+      "ProblemTypes": "classification",
+      "DriverClass": "multinomial_logit",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric (Weighted Scorecard)",
+      "Description": "Rubric / Weighted Scorecard \u2014 glass-box weighted-sum scorer; trainable (NNLS) or operator-supplied weights.",
+      "ProblemTypes": "classification",
+      "DriverClass": "rubric",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AFT (Log-Logistic/Log-Normal)",
+      "Description": "AFT (Log-Logistic / Log-Normal) \u2014 parametric accelerated-failure-time survival (lifelines).",
+      "ProblemTypes": "survival",
+      "DriverClass": "aft",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Discrete Markov Chain",
+      "Description": "Discrete Markov Chain \u2014 observed-state transition-matrix estimator (Laplace-smoothed counting).",
+      "ProblemTypes": "sequence-state",
+      "DriverClass": "markov_chain",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Markov Switching Regression",
+      "Description": "Markov Switching Regression \u2014 hidden-regime level model (statsmodels MarkovRegression).",
+      "ProblemTypes": "forecasting",
+      "DriverClass": "markov_switching",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Structural Time Series",
+      "Description": "Structural Time Series \u2014 unobserved-components trend+seasonal state space (statsmodels).",
+      "ProblemTypes": "forecasting",
+      "DriverClass": "structural_ts",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vector Autoregression",
+      "Description": "Vector Autoregression \u2014 multivariate lag-dynamics forecaster (statsmodels VAR).",
+      "ProblemTypes": "forecasting",
+      "DriverClass": "var",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kalman Filter / DLM",
+      "Description": "Kalman / Dynamic Linear Model \u2014 local-level state space, Kalman-filtered (statsmodels).",
+      "ProblemTypes": "forecasting",
+      "DriverClass": "kalman_dlm",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Isotonic Calibrator",
+      "Description": "Isotonic Calibrator \u2014 non-parametric monotone probability calibration (sklearn).",
+      "ProblemTypes": "calibration",
+      "DriverClass": "isotonic",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Platt Calibrator",
+      "Description": "Platt Calibrator \u2014 1-D logistic probability calibration (sklearn).",
+      "ProblemTypes": "calibration",
+      "DriverClass": "platt",
+      "DefaultHyperparameters": "{}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    }
   }
 ]

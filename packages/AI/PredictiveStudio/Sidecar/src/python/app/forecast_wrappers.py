@@ -20,6 +20,9 @@ try:
     from statsmodels.tsa.arima.model import ARIMA
     from statsmodels.tsa.forecasting.theta import ThetaModel
     from statsmodels.tsa.holtwinters import ExponentialSmoothing
+    from statsmodels.tsa.api import VAR
+    from statsmodels.tsa.regime_switching.markov_regression import MarkovRegression
+    from statsmodels.tsa.statespace.structural import UnobservedComponents
 
     _HAVE_STATSMODELS_TS = True
 except Exception:  # pragma: no cover
@@ -140,6 +143,97 @@ class _Croston:
         return np.full(h, self._rate)
 
 
+class _StructuralTS:
+    """Structural / unobserved-components time series: a local linear trend (+
+    optional seasonal) state-space model. Decomposes the series into trend +
+    seasonal + irregular and forecasts the trend forward."""
+
+    def __init__(self, seasonal_periods: int | None = None, **hp: Any):
+        self.seasonal_periods = seasonal_periods
+        self._result = None
+
+    def fit(self, y):
+        ya = np.asarray(y, dtype=float)
+        seasonal = self.seasonal_periods if (self.seasonal_periods and len(ya) >= 2 * self.seasonal_periods) else None
+        self._result = UnobservedComponents(
+            ya, level="local linear trend", seasonal=seasonal
+        ).fit(disp=0)
+        return self
+
+    def forecast(self, h: int):
+        return np.asarray(self._result.forecast(h))
+
+
+class _KalmanDLM:
+    """Dynamic linear model / Kalman local-level: a random-walk-plus-noise state
+    space. The Kalman filter tracks a slowly-varying level; the forecast is the
+    last filtered level held flat (with widening uncertainty, not modeled here)."""
+
+    def __init__(self, trend: bool = False, **hp: Any):
+        self.level = "local linear trend" if trend else "local level"
+        self._result = None
+
+    def fit(self, y):
+        self._result = UnobservedComponents(np.asarray(y, dtype=float), level=self.level).fit(disp=0)
+        return self
+
+    def forecast(self, h: int):
+        return np.asarray(self._result.forecast(h))
+
+
+class _MarkovSwitching:
+    """Markov-switching (regime) model: a small number of hidden regimes each with
+    its own mean/variance, with Markov transitions between them. The forecast is the
+    regime-probability-weighted mean under the last filtered regime distribution,
+    held flat over the horizon — an honest level forecast under regime uncertainty."""
+
+    def __init__(self, k_regimes: int = 2, **hp: Any):
+        self.k_regimes = int(k_regimes)
+        self._level = 0.0
+
+    def fit(self, y):
+        ya = np.asarray(y, dtype=float)
+        res = MarkovRegression(ya, k_regimes=self.k_regimes, trend="c",
+                               switching_variance=True).fit()
+        # regime means (constants) weighted by the last filtered regime probabilities
+        means = np.asarray(res.params[: self.k_regimes])
+        last_probs = np.asarray(res.filtered_marginal_probabilities[-1])
+        self._level = float(np.dot(means, last_probs))
+        return self
+
+    def forecast(self, h: int):
+        return np.full(h, self._level)
+
+
+class _VAR:
+    """Vector autoregression: a MULTIVARIATE forecaster where each series is a
+    linear function of the recent lags of ALL series (cross-series dynamics). Fits
+    on the full matrix; the horizon forecast for the target column is returned. The
+    forecast branch feeds it every numeric column and the target index."""
+
+    def __init__(self, maxlags: int | None = None, target_index: int = 0, **hp: Any):
+        self.maxlags = maxlags
+        self.target_index = int(target_index)
+        self._result = None
+        self._endog = None
+        self._k_ar = 1
+
+    def fit(self, Y):
+        Ya = np.asarray(Y, dtype=float)
+        if Ya.ndim == 1:
+            Ya = Ya.reshape(-1, 1)
+        self._endog = Ya
+        maxlags = self.maxlags or max(1, min(8, Ya.shape[0] // (Ya.shape[1] + 1) - 1))
+        res = VAR(Ya).fit(maxlags=maxlags)
+        self._result = res
+        self._k_ar = max(int(res.k_ar), 1)
+        return self
+
+    def forecast(self, h: int):
+        fc = self._result.forecast(self._endog[-self._k_ar:], h)  # (h, k)
+        return np.asarray(fc)[:, self.target_index]
+
+
 _FORECAST_REGISTRY = {
     "seasonal_naive": _SeasonalNaive,
     "sma": _SMA,
@@ -147,10 +241,20 @@ _FORECAST_REGISTRY = {
     "arima": _ARIMA,
     "theta": _Theta,
     "croston": _Croston,
+    "structural_ts": _StructuralTS,
+    "kalman_dlm": _KalmanDLM,
+    "markov_switching": _MarkovSwitching,
+    "var": _VAR,
 }
 
-# floors + croston need no statsmodels; ETS/ARIMA/theta do
-_NEEDS_STATSMODELS = {"ets", "arima", "theta"}
+# floors + croston need no statsmodels; the rest do
+_NEEDS_STATSMODELS = {"ets", "arima", "theta", "structural_ts", "kalman_dlm",
+                      "markov_switching", "var"}
+
+
+def is_multivariate(algorithm: str) -> bool:
+    """VAR consumes ALL numeric series (not just the value column)."""
+    return algorithm == "var"
 
 
 def is_forecast(algorithm: str) -> bool:
