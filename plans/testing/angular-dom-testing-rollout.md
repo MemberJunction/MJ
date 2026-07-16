@@ -207,21 +207,26 @@ is documented in-spec** with its reason — no silent gaps, no faked green.
 
 The "keep tests honest" half of the tooling gameplan lands here, alongside the coverage gate:
 
-- **Spec type-check gate (`test:types`) — DEFERRED HERE FROM PHASE 3.** DOM specs are currently
-  type-checked by *nothing* in the normal loop: the build `tsconfig.json` excludes `*.test.ts` (correct —
-  per ANGULAR_TESTING_GUIDE §3c, tests must not ship in `dist`), and the vitest/esbuild path is
-  transpile-only (it strips types and even silently erases broken `import type` statements). During Phase 3
-  this let a batch of real spec type errors — wrong `import type` paths, `Subject`-typed component outputs
-  used where `EventEmitter` was expected, un-cast DOM elements — pass `vitest` green while failing the CI
-  `ngc` build. They were fixed reactively; the gate makes it impossible to reintroduce.
-  **Plan:** add `"test:types": "tsc --noEmit -p tsconfig.spec.json"` to each DOM package and run it from the
-  package's `test` script (`npm run test:types && vitest run`) so the existing `turbo run test` in CI
-  enforces it with **zero CI-config change**. **Prerequisite:** one pre-existing latent error must be fixed
-  first — `packages/Angular/Explorer/dashboards/src/__tests__/mcp-dashboard-tools-index.test.ts` calls
-  `new MCPDashboardComponent(cdr, svc)` with 2 args but the constructor now takes 3 (came in from `next`,
-  latent because it's excluded from the build and transpiled by vitest). As of end-of-Phase-3, all
-  `*.dom.test.ts` across the 8 Explorer DOM packages ARE `tsc --noEmit -p tsconfig.spec.json`-clean, so
-  wiring the gate is now low-friction.
+- **Spec type-check gate (`test:types`) ✅ SHIPPED.** DOM specs were previously type-checked by *nothing*
+  in the normal loop: the build `tsconfig.json` excludes `*.test.ts` (correct — per ANGULAR_TESTING_GUIDE
+  §3c, tests must not ship in `dist`), and the vitest/esbuild path is transpile-only (it strips types and
+  even silently erases broken `import type` statements). During Phase 3 this let a batch of real spec type
+  errors — wrong `import type` paths, `Subject`-typed component outputs used where `EventEmitter` was
+  expected, un-cast DOM elements — pass `vitest` green while failing the CI `ngc` build.
+  **As built:** each DOM-testing package has `"test:types": "tsc --noEmit -p tsconfig.spec.json"`, run as a
+  dedicated turbo task (`test:types` in `turbo.json`, `dependsOn: ["build"]`, cached) — a separate task
+  rather than a `test`-script prefix so local `npm test` stays fast. CI (`test.yml`) runs
+  `npx turbo run test:types` on BOTH the affected path (filtered) and the full-suite backstop, before the
+  vitest run (fails fast; builds already cached). The prerequisite latent error
+  (`mcp-dashboard-tools-index.test.ts` calling the `MCPDashboardComponent` constructor with 2 of its 3
+  args) was fixed as part of the wiring. **When a new package adopts DOM testing, add the `test:types`
+  script alongside its `tsconfig.spec.json` — the turbo task and CI wiring pick it up automatically.**
+- **DOM-spec placement guard ✅ SHIPPED** (`scripts/check-dom-spec-placement.mjs`, run as a fast pre-build
+  CI step): fails when any `*.dom.test.ts` sits inside a `__tests__/` directory — in a dual-preset package
+  such a file matches NEITHER vitest project and silently never runs (`passWithNoTests` hides the silence);
+  in a single-preset package it runs today but drops out the moment the package converts to dual. The guard
+  found one real offender on arrival (`ng-markdown`'s service spec), which was relocated next to its source
+  per §3d.
 - Add a coverage threshold for Angular packages in CI (start lenient, ratchet up).
 - **Guardrails** (tooling-roadmap #4): lint/CI rules for spec naming + anti-patterns.
 - **Mutation testing** (tooling-roadmap #5): verify the tests actually catch bugs, once there's a real body of them.
@@ -240,9 +245,9 @@ The "keep tests honest" half of the tooling gameplan lands here, alongside the c
   `flowchart` key off styling constants (`stroke-width === '1.4'`); a design tweak breaks the "count" tests
   confusingly. Switch to a `data-*` attribute hook.
 - **Prototype-patch teardown.** The flow specs patch `SVGElement.prototype.getBBox`/`getTotalLength` and the
-  omnibar spec registers a ClassFactory class with no `afterAll` restore — safe today only because
-  `fileParallelism: false` + per-file isolation contain them. Add teardown so they don't leak if isolation
-  is ever relaxed for speed.
+  omnibar spec registers a ClassFactory class with no `afterAll` restore — safe today only because the
+  forks pool's default per-file isolation contains them (the preset runs `maxWorkers: 2`; each spec file
+  still gets a fresh process). Add teardown so they don't leak if isolation is ever relaxed for speed.
 - **Consolidate duplicated stubs.** ~50 lines of copy-pasted CVA stubs (`StubNumericInput`/`StubDropdown`)
   and `StubLoading`/`StubEmptyState` across 7+ specs belong in `@memberjunction/ng-test-utils`.
 - **Classifier heuristic refinements.** The `\w*Engine\w*\.Instance` singleton regex matches *any* usage

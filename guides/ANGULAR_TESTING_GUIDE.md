@@ -136,11 +136,31 @@ the build `tsconfig.json` usually **excludes** `*.test.ts`. So each DOM package 
 }
 ```
 
+**Also add the `test:types` gate script** alongside it — this is what actually type-checks your
+specs. Vitest/esbuild is transpile-only: it strips types and silently erases broken `import type`
+statements, so a spec can be vitest-green while carrying real type errors (Phase 3 shipped a batch
+this way; CI's `ngc` build caught them the hard way). The gate closes that hole:
+
+```json
+"scripts": {
+  "test:types": "tsc --noEmit -p tsconfig.spec.json"
+}
+```
+
+CI runs it automatically via the `test:types` turbo task (before the vitest run, on both the
+affected and full-suite paths). Run it locally with `npm run test:types` — do this before pushing;
+`vitest run` passing does NOT mean your spec type-checks.
+
 ### 3d. Naming & location
 
 Name DOM specs `*.component.dom.test.ts` and put them next to the component
 (`src/lib/<feature>/x.component.dom.test.ts`). The `.dom.test.ts` suffix is what the dual-preset
 split keys off; it also reads as "this renders."
+
+**Never place a `*.dom.test.ts` inside a `__tests__/` directory.** In a dual-preset package it
+matches NEITHER vitest project (node excludes `*.dom.test.ts`; dom excludes `__tests__/`), so it
+silently never runs — and `passWithNoTests: true` hides the silence. CI enforces this via
+`scripts/check-dom-spec-placement.mjs` (a fast pre-build step in the Unit Tests workflow).
 
 ---
 
