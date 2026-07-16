@@ -21,6 +21,8 @@ on:
       - '.github/scripts/check-esm-imports.mjs'
       - '.github/scripts/vitest.config.mts'
       - '.github/scripts/__tests__/**'
+      # The DOM-spec placement guard runs in this workflow too.
+      - 'scripts/check-dom-spec-placement.mjs'
   # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
@@ -95,6 +97,12 @@ jobs:
           ENVEOF
           sed -i 's/^          //' packages/MJExplorer/src/environments/environment.ts
 
+      # Fast pure-file guard (no build needed): a *.dom.test.ts placed inside __tests__/ is
+      # silently excluded from BOTH projects of a dual-preset package (and passWithNoTests
+      # hides the silence). Fails loud here instead.
+      - name: DOM-spec placement guard
+        run: node scripts/check-dom-spec-placement.mjs packages
+
       # Decide what to run:
       #  - pull_request: only packages changed since the base branch PLUS everything that
       #    depends on them (turbo's `...[ref]` package-dependency selection).
@@ -129,13 +137,20 @@ jobs:
           # PR case). The FULL-suite backstop can fire all ~8 DOM packages at once,
           # so it caps turbo `--concurrency` to keep peak workers (concurrency × 2)
           # well under the 16 GB runner's limit (otherwise: OOM / exit 137).
+          # `test:types` = the spec type-check gate (tsc --noEmit -p tsconfig.spec.json in
+          # each DOM-testing package). Vitest/esbuild is transpile-only — it strips types and
+          # silently erases broken `import type` statements — so without this gate a spec can
+          # be vitest-green while carrying real type errors (bit us in Phase 3). It runs
+          # BEFORE the test suite: seconds-cheap, fails fast, and builds are already cached.
           if [ -n "$TURBO_FILTER" ]; then
             echo "::group::Affected build"
             npx turbo run build --log-order=stream "$TURBO_FILTER"
             echo "::endgroup::"
+            npx turbo run test:types "$TURBO_FILTER"
             npx turbo run test "$TURBO_FILTER"
           else
             npm run build
+            npx turbo run test:types
             npm test -- --concurrency=4
           fi
 
