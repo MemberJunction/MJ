@@ -195,6 +195,34 @@ export class ResolverBase {
   }
 
   /**
+   * Loads a single external-data-source-backed entity record by primary key and returns it in
+   * GraphQL field-name (CodeName) shape, or null if not found.
+   *
+   * External entities (`Entity.ExternalDataSourceID` set) have no MJ base view or sproc — their
+   * data is proxied live from a remote system — so the generated single-record resolver cannot run
+   * `SELECT * FROM <baseView>`. Instead it loads through a BaseEntity object, whose `InnerLoad`
+   * the data provider dispatches to the external read router's `LoadExternalRecord` (a composite-key
+   * aware, quoted, parameter-bound single-record lookup), applying the same RLS gate and field
+   * post-processing (decryption / datetime normalization) as the MJ-DB path. The caller is
+   * responsible for the `CheckUserReadPermissions` gate beforehand.
+   */
+  protected async LoadExternalRecordByKey<T>(
+    entityName: string,
+    compositeKey: CompositeKey,
+    provider: DatabaseProviderBase,
+    userPayload: UserPayload,
+  ): Promise<T | null> {
+    const contextUser = this.GetUserFromPayload(userPayload);
+    const entityObject = await provider.GetEntityObject(entityName, contextUser);
+    const loaded = await entityObject.InnerLoad(compositeKey);
+    if (!loaded) {
+      return null;
+    }
+    const mapped = await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), contextUser);
+    return mapped as T;
+  }
+
+  /**
    * Filters encrypted field values before sending to the API client.
    *
    * For each encrypted field in the entity:
@@ -645,14 +673,17 @@ export class ResolverBase {
 
     const apiKeyEngine = GetAPIKeyEngine();
 
-    // Check for full_access scope first (god power - bypasses all other checks)
+    // Check for full_access scope first (god power - bypasses all other checks).
+    // Use skipLogging to avoid polluting the usage log with expected denials —
+    // this is a fast-path optimization, not the real authorization decision.
     const fullAccessResult = await apiKeyEngine.Authorize(
       userPayload.apiKeyHash,
       'MJAPI',
       'full_access',
       '*',
       systemUser,
-      { endpoint: '/graphql', method: 'POST' }
+      { endpoint: '/graphql', method: 'POST' },
+      { skipLogging: true }
     );
 
     if (fullAccessResult.Allowed) {

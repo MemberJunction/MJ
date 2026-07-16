@@ -162,7 +162,7 @@ export default class MigrateRebake extends Command {
     transpiler: MJPostgresTranspiler,
     schema: string,
   ): Promise<{ baker: IncrementalBaker; dispose: () => Promise<void> }> {
-    const { RunCodeGenBase, SQLCodeGenBase, initializeConfig, dbPlatform } = await import('@memberjunction/codegen-lib');
+    const { RunCodeGenBase, SQLCodeGenBase, initializeConfig, dbPlatform, configInfo } = await import('@memberjunction/codegen-lib');
 
     if (dbPlatform() !== 'postgresql') {
       this.error('migrate rebake requires DB_PLATFORM=postgresql with PG_* connection env (the working DB CodeGen is captured from).');
@@ -198,6 +198,14 @@ export default class MigrateRebake extends Command {
           skipExecution: true, // READ-ONLY: capture only; the committed file advances the working DB
         });
         return { sql: r.sql ?? '', permissionsSQL: r.permissionsSQL ?? '' };
+      },
+      // Only exercised for baseline bakes (rebake advances via committedPgSql, not this path);
+      // mirrors the full CodeGen entity set for interface completeness.
+      listBakeableEntities: async () => {
+        const excluded = new Set((configInfo.excludeSchemas ?? []).map((s: string) => s.toLowerCase()));
+        return ds.provider.Entities
+          .filter((e) => e.IncludeInAPI && !excluded.has(e.SchemaName.toLowerCase()))
+          .map((e) => e.Name);
       },
     };
     return { baker: new IncrementalBaker({ transpiler, db, schema }), dispose: async () => {} };

@@ -5,6 +5,7 @@ export * from './custom/MJConversationDetailEntityServer.server';
 export * from './custom/MJConversationDetailAttachmentEntityServer.server';
 export * from './custom/MJDuplicateRunEntityServer.server';
 export * from './custom/MJQueryEntityServer.server';
+export * from './custom/MJQuerySQLEntityServer.server';
 export * from './custom/MJTemplateContentEntityServer.server';
 export * from './custom/MJUserViewEntityServer.server';
 export * from './custom/MJActionEntityServer.server';

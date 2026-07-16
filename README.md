@@ -27,7 +27,7 @@
 
 MemberJunction is a **metadata-driven application platform** that turns your database into a fully functional application — complete with auto-generated APIs, forms, security, and deep AI integration. Define your schema, and MJ generates everything else: typed entity classes, GraphQL endpoints, Angular UI components, validation, and audit trails.
 
-What makes it different: **175 modular TypeScript packages** that work together or independently, **15+ AI providers** behind a single abstraction layer, and an **agent framework** for building autonomous workflows — all driven by metadata, not boilerplate.
+What makes it different: **290+ modular TypeScript packages** that work together or independently, **15+ AI providers** behind a single abstraction layer, and an **agent framework** for building autonomous workflows — all driven by metadata, not boilerplate.
 
 It's two things in one. A **data platform** for unifying and reasoning over your data — *and* a **full-stack framework for building AI-native applications** on top of it, where agents, prompts, and RAG operate directly on your entities. And because the whole stack is **TypeScript with one object model that runs identically on the server, in the browser, in the CLI, and inside agents**, you write your data and business logic once and run it on every tier.
 
@@ -92,7 +92,7 @@ const result = await ai.ChatCompletion({
 <td width="50%" valign="top">
 
 ### Developer Experience
-- **175 npm packages** — Use the whole platform or just the pieces you need
+- **290+ npm packages** — Use the whole platform or just the pieces you need
 - **Code generation** — Entity classes, stored procedures, views, and Angular forms
 - **CLI tooling** — Command-line tools for codegen, metadata sync, and AI operations
 - **Docker support** — Containerized deployment with Flyway migrations
@@ -185,7 +185,7 @@ flowchart TD
     style Data fill:#64748b,stroke:#475569,color:#fff
 ```
 
-> **[Full package directory with 175 packages](#-full-package-directory)** | **[packages/ overview](./packages/README.md)**
+> **[Full package directory with 290+ packages](#-full-package-directory)** | **[packages/ overview](./packages/README.md)**
 
 ---
 
@@ -264,7 +264,7 @@ MemberJunction is open source under the [ISC License](./LICENSE).
 
 ### [Actions](./packages/Actions/README.md)
 
-Metadata-driven action framework for workflows, agents, and automation (13 packages).
+Metadata-driven action framework for workflows, agents, and automation (15 packages).
 
 #### Core
 
@@ -303,7 +303,7 @@ Business application-specific actions for integrating with external business sys
 
 ### [AI](./packages/AI/README.md)
 
-AI infrastructure -- model abstractions, provider implementations, vector operations, agent management, and supporting tools (42 packages).
+AI infrastructure -- model abstractions, provider implementations, vector operations, agent management, and supporting tools (88 packages).
 
 #### Core Packages
 
@@ -333,7 +333,7 @@ AI infrastructure -- model abstractions, provider implementations, vector operat
 
 #### [AI / Providers](./packages/AI/Providers/README.md)
 
-LLM, embedding, cloud-platform, local-inference, and specialty AI provider implementations (23 packages).
+LLM, embedding, cloud-platform, local-inference, and specialty AI provider implementations (28 packages).
 
 **LLM Providers**
 
@@ -400,7 +400,7 @@ LLM, embedding, cloud-platform, local-inference, and specialty AI provider imple
 
 #### [AI / Vectors](./packages/AI/Vectors/README.md)
 
-Vector storage, search, and synchronization (5 packages).
+Vector storage, search, and synchronization (10 packages).
 
 | Package | npm | Description |
 |---------|-----|-------------|
@@ -429,7 +429,7 @@ Provider-agnostic recommendation engine framework (1 package).
 
 ### [Angular](./packages/Angular/README.md)
 
-Angular UI framework -- the Bootstrap package, Explorer application components, and a comprehensive library of reusable generic components (61 packages).
+Angular UI framework -- the Bootstrap package, Explorer application components, and a comprehensive library of reusable generic components (85 packages).
 
 | Package | npm | Description |
 |---------|-----|-------------|
@@ -437,7 +437,7 @@ Angular UI framework -- the Bootstrap package, Explorer application components, 
 
 #### [Angular / Explorer](./packages/Angular/Explorer/README.md)
 
-The MJExplorer application -- MemberJunction's primary Angular-based UI for browsing, editing, and managing data (19 packages).
+The MJExplorer application -- MemberJunction's primary Angular-based UI for browsing, editing, and managing data (16 packages).
 
 **Core / Shell**
 
@@ -482,7 +482,7 @@ The MJExplorer application -- MemberJunction's primary Angular-based UI for brow
 
 #### [Angular / Generic](./packages/Angular/Generic/README.md)
 
-Reusable Angular components and services shared across MemberJunction applications (41 packages).
+Reusable Angular components and services shared across MemberJunction applications (67 packages).
 
 **Core & Base Types**
 
@@ -573,7 +573,7 @@ Server-side API key authorization with hierarchical scopes and pattern-based acc
 
 ### [Communication](./packages/Communication/README.md)
 
-Multi-channel messaging -- message composition, delivery, and entity-level integration (10 packages).
+Multi-channel messaging -- message composition, delivery, and entity-level integration (11 packages).
 
 | Package | npm | Description |
 |---------|-----|-------------|
@@ -605,7 +605,7 @@ Secure credential management (1 package).
 
 ### [React](./packages/React/README.md)
 
-React component infrastructure for the MemberJunction platform (2 packages).
+React component infrastructure for the MemberJunction platform (4 packages).
 
 | Package | npm | Description |
 |---------|-----|-------------|
@@ -708,7 +708,7 @@ Packages at the top level of the `packages/` directory, not part of a multi-pack
 | [MJExportEngine](./packages/MJExportEngine/README.md) | `@memberjunction/export-engine` | Export engine for Excel, CSV, and JSON with sampling and formatting |
 | [MJQueue](./packages/MJQueue/README.md) | `@memberjunction/queue` | Server-side queue management |
 | [QueryGen](./packages/QueryGen/README.md) | `@memberjunction/query-gen` | AI-powered SQL query template generation with automatic testing and refinement |
-| [SkipTypes](./packages/SkipTypes/readme.md) | `@memberjunction/skip-types` | Shared types for the Skip AI Assistant used across MJAPI, Skip API, and Explorer |
+| [SkipTypes](./packages/SkipTypes/) | `@memberjunction/skip-types` | Shared types for the Skip AI Assistant used across MJAPI, Skip API, and Explorer |
 | [VersionHistory](./packages/VersionHistory/README.md) | `@memberjunction/version-history` | Label-based versioning, dependency-graph snapshots, cross-entity diffs, and point-in-time restore |
 
 ---

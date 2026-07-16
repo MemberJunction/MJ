@@ -1,5 +1,41 @@
 # @memberjunction/esignature-dropboxsign
 
+## 5.48.0
+
+### Patch Changes
+
+- @memberjunction/esignature@5.48.0
+- @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/esignature@5.47.0
+- @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/esignature@5.46.0
+- @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/global@5.45.1
+- @memberjunction/esignature@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/global@5.45.0
+  - @memberjunction/esignature@5.45.0
+
 ## 5.44.0
 
 ### Patch Changes

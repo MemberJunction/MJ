@@ -49,6 +49,7 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
 import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
+import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import {
     AIPromptParams,
@@ -1642,6 +1643,20 @@ export class BaseAgent {
             // consumers that re-read `params` after the call see what they
             // passed in, not our chained signal.
             params.cancellationToken = upstreamToken;
+            this.releasePerRunDataCache();
+        }
+    }
+
+    /**
+     * Releases this run's PerRun-scoped preloaded-data cache entry. `preloadAgentData()`
+     * (Phase 2 of `Execute()`) may have populated one keyed by `this._agentRun.ID`; without
+     * this call it is never reclaimed and grows unbounded for the life of the process.
+     * Called from `Execute()`'s top-level `finally` block so it runs on every exit path
+     * (success, failure, or cancellation).
+     */
+    private releasePerRunDataCache(): void {
+        if (this._agentRun?.ID) {
+            AgentDataPreloader.Instance.clearRunCache(this._agentRun.ID);
         }
     }
 
@@ -3496,6 +3511,38 @@ export class BaseAgent {
 
         // Thread the per-request provider so prompt run records are saved through the isolated provider
         promptParams.provider = params.provider || this._activeProvider;
+
+        // Overlay scope-resolved run settings (model / vendor / configuration / effort / sampling
+        // knobs) for this run's scope — the config sibling of scoped prompt parts. Uses the same
+        // run scope BaseAgent already carries; runtime-explicit values set above still win.
+        const scopedConfigPromptId = promptParams.prompt?.ID;
+        if (scopedConfigPromptId) {
+            const primaryScopeEntityName =
+                params.PrimaryScopeEntityName ?? (params.data?.PrimaryScopeEntityName as string | undefined);
+            let primaryScopeEntityId: string | undefined;
+            if (primaryScopeEntityName) {
+                const primaryEntity = this.ProviderToUse.EntityByName(primaryScopeEntityName);
+                if (primaryEntity) {
+                    primaryScopeEntityId = primaryEntity.ID;
+                }
+            }
+            const configResolver =
+                MJGlobal.Instance.ClassFactory.CreateInstance<ScopedPromptConfigResolver>(ScopedPromptConfigResolver) ??
+                new ScopedPromptConfigResolver();
+            ApplyScopedPromptConfig(
+                configResolver,
+                scopedConfigPromptId,
+                {
+                    primaryScopeEntityId,
+                    primaryScopeRecordId:
+                        params.PrimaryScopeRecordID ?? (params.data?.PrimaryScopeRecordID as string | undefined),
+                    secondaryScopes:
+                        params.SecondaryScopes ??
+                        (params.data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined),
+                },
+                promptParams,
+            );
+        }
 
         return promptParams;
     }

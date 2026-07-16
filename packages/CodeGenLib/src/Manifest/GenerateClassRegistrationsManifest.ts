@@ -263,7 +263,8 @@ function isPackageExcluded(packageName: string, excludePackages: string[]): bool
 function walkDependencyTree(
     appDir: string,
     log: (msg: string) => void,
-    excludePackages: string[] = []
+    excludePackages: string[] = [],
+    includeRootDevDependencies: boolean = true
 ): Map<string, string> {
     // Map of package name -> resolved directory
     const visited = new Map<string, string>();
@@ -280,8 +281,14 @@ function walkDependencyTree(
         log(`Excluding packages matching: ${excludePackages.join(', ')}`);
     }
 
-    // Seed queue with all direct dependencies (both deps and devDeps for the root app)
-    const allDeps = { ...appPkg.dependencies, ...appPkg.devDependencies };
+    // Seed queue with the root app's direct dependencies. devDeps are included by default
+    // (eager manifests may legitimately register classes from build-time packages), but the
+    // lazy-config walk passes false: lazy chunks become dynamic import() statements in a
+    // BROWSER bundle, and a build tool in devDependencies (e.g. @memberjunction/cli) must not
+    // drag its server-side dependency tree into the app's lazy-load surface.
+    const allDeps = includeRootDevDependencies
+        ? { ...appPkg.dependencies, ...appPkg.devDependencies }
+        : { ...appPkg.dependencies };
     for (const depName of Object.keys(allDeps)) {
         queue.push({ depName, fromDir: appDir });
     }
@@ -1599,7 +1606,38 @@ function groupClassesIntoChunks(
         });
     }
 
-    return Array.from(chunks.values()).sort((a, b) => a.importPath.localeCompare(b.importPath));
+    const sorted = Array.from(chunks.values()).sort((a, b) => a.importPath.localeCompare(b.importPath));
+    uniquifyLoaderVarNames(sorted);
+    return sorted;
+}
+
+/**
+ * Ensures every chunk's loader variable name is unique in the generated file. Subpath-derived
+ * names collide when two packages expose the same subpath export (e.g. './plugins' in both
+ * codegen-lib and metadata-sync produced two `const loadPlugins` → TS2451). Non-colliding
+ * names are left untouched so existing generated files don't churn; every member of a colliding
+ * group is package-qualified, which is deterministic regardless of chunk discovery order.
+ */
+function uniquifyLoaderVarNames(chunks: LazyChunk[]): void {
+    const byName = new Map<string, LazyChunk[]>();
+    for (const chunk of chunks) {
+        const group = byName.get(chunk.loaderVarName) ?? [];
+        group.push(chunk);
+        byName.set(chunk.loaderVarName, group);
+    }
+
+    for (const [name, group] of byName.entries()) {
+        if (group.length < 2) continue;
+        const suffix = name.replace(/^load/, '');
+        group.forEach((chunk, index) => {
+            const qualified = `${buildLoaderVarName(chunk.packageName, '.')}${suffix}`;
+            // Same package + same-named subpaths can't happen (chunkKey is unique per subpath),
+            // but guard against pathological sanitized-name ties with an index suffix.
+            const stillTaken = group.some((other, i) => i < index &&
+                `${buildLoaderVarName(other.packageName, '.')}${suffix}` === qualified);
+            chunk.loaderVarName = stillTaken ? `${qualified}${index}` : qualified;
+        });
+    }
 }
 
 /**
@@ -1649,27 +1687,34 @@ function findClassSubpathByFile(
 /**
  * Builds a deterministic loader variable name from a package name and subpath.
  *
+ * Both package name and subpath are included to prevent collisions when
+ * different packages export the same subpath (e.g. two packages both
+ * exporting `./plugins` would otherwise both produce `loadPlugins`).
+ *
  * Examples:
- *   ('@memberjunction/ng-dashboards', './ai-dashboards.module') → 'loadAiDashboardsModule'
+ *   ('@memberjunction/ng-dashboards', './ai-dashboards.module') → 'loadNgDashboardsAiDashboardsModule'
  *   ('@memberjunction/ng-explorer-settings', '.')               → 'loadNgExplorerSettings'
+ *   ('@memberjunction/codegen-lib', './plugins')                → 'loadCodegenLibPlugins'
+ *   ('@memberjunction/metadata-sync', './plugins')              → 'loadMetadataSyncPlugins'
  */
 function buildLoaderVarName(packageName: string, subpath: string): string {
+    const pkgParts = sanitizePackageName(packageName).split('_').filter(Boolean);
+    const pkgPascal = pkgParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+
     if (subpath === '.') {
-        // Whole-package chunk: derive from package name
-        const parts = sanitizePackageName(packageName).split('_').filter(Boolean);
-        const pascalParts = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1));
-        return `load${pascalParts.join('')}`;
+        // Whole-package chunk: derive from package name only
+        return `load${pkgPascal}`;
     }
 
-    // Subpath chunk: derive from subpath name
+    // Subpath chunk: combine package name + subpath to avoid cross-package collisions
     const clean = subpath
         .replace(/^\.\//, '')
         .replace(/\.module$/, '-module')
         .replace(/\.[^.]+$/, ''); // strip file extensions
 
-    const parts = clean.split(/[-./]/).filter(Boolean);
-    const pascalParts = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1));
-    return `load${pascalParts.join('')}`;
+    const subParts = clean.split(/[-./]/).filter(Boolean);
+    const subPascal = subParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+    return `load${pkgPascal}${subPascal}`;
 }
 
 /**
@@ -1904,8 +1949,13 @@ export async function generateClassRegistrationsManifest(
         log('--- Lazy Config Generation ---');
 
         try {
-            // Walk full dep tree (no excludes) to find packages excluded from the eager manifest
-            const fullDepTree = walkDependencyTree(absoluteAppDir, log, []);
+            // Walk full dep tree (no excludes) to find packages excluded from the eager manifest.
+            // Runtime dependencies ONLY (includeRootDevDependencies=false): lazy chunks are
+            // dynamic import()s bundled into the browser app, so packages reachable only through
+            // a devDependency (build tooling like @memberjunction/cli) must never contribute
+            // chunks — they'd pull node-only code into the bundle and collide on loader names
+            // (two packages exposing './plugins' both produced `const loadPlugins`, #3139 fallout).
+            const fullDepTree = walkDependencyTree(absoluteAppDir, log, [], false);
 
             // Detect the package that hosts the lazy config file to prevent self-imports
             const hostPackageName = resolveHostPackage(lazyConfigPath, fullDepTree);

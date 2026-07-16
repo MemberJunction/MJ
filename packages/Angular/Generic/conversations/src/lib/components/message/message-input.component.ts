@@ -261,6 +261,133 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @ViewChild('inputBox') inputBox!: AiComposerComponent;
 
   public messageText: string = '';
+
+  /**
+   * Prefills the composer with draft text WITHOUT sending (unlike pendingMessage,
+   * which auto-sends) and focuses the input — e.g. the omnibar's '@agent' flow
+   * lands in chat with '@AgentName ' staged so the user just types their ask.
+   */
+  /**
+   * Draft text to stage in the composer when this input mounts (NOT sent — unlike
+   * pendingMessage). Applied once per distinct value, view-readiness-proof: if the
+   * view isn't up yet, ngAfterViewInit applies it. Emits initialDraftApplied so the
+   * host can clear its pending state.
+   */
+  @Input()
+  set initialDraft(value: string | null) {
+    if (value && value !== this.appliedInitialDraft) {
+      this.appliedInitialDraft = value;
+      if (this.inputBox) {
+        this.SetDraft(value, true);
+        this.initialDraftApplied.emit();
+      } else {
+        this.pendingInitialDraft = value;
+      }
+    }
+  }
+  get initialDraft(): string | null {
+    return this.appliedInitialDraft;
+  }
+  private appliedInitialDraft: string | null = null;
+  private pendingInitialDraft: string | null = null;
+
+  @Output() initialDraftApplied = new EventEmitter<void>();
+
+  /**
+   * Live draft-state signal: fires on every composer value change with the
+   * SERIALIZED content (mention pills encoded via getPlainTextWithJsonMentions,
+   * so hosts can persist drafts losslessly). Empty string = draft cleared.
+   */
+  @Output() DraftStateChanged = new EventEmitter<string>();
+
+  /** The composer lost focus — hosts flush persisted drafts on this. */
+  @Output() ComposerBlurred = new EventEmitter<void>();
+
+  /** Handles the composer's value stream: keeps messageText in sync + emits draft state. */
+  public OnComposerValueChanged(value: string): void {
+    this.messageText = value;
+    this.DraftStateChanged.emit(this.GetSerializedDraft());
+  }
+
+  /** Current composer content in the lossless serialized form ('' when empty). */
+  public GetSerializedDraft(): string {
+    const serialized = this.inputBox?.getPlainTextWithJsonMentions() ?? this.messageText ?? '';
+    return serialized.trim().length === 0 ? '' : serialized;
+  }
+
+  /**
+   * Pre-addresses the composer to an agent as a RESOLVED mention pill (+ trailing
+   * space, caret after, focused) — identical to the user typing '@agent' and picking
+   * it from the dropdown. Resolves the agent through MentionAutocompleteService so
+   * the chip carries the agent's real id/icon/presets; falls back to a plain-text
+   * '@Name ' draft when the agent can't be resolved (e.g. name mismatch).
+   *
+   * @returns false while the composer view isn't mounted yet — callers may retry.
+   */
+  public async InsertAgentMention(agentName: string, focus: boolean = true, clearExisting: boolean = true): Promise<boolean> {
+    if (!this.inputBox) {
+      console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): input box not mounted yet — caller will retry`);
+      return false;
+    }
+    if (clearExisting) {
+      // Pre-addressing REPLACES any un-sent draft (tagging agent B after agent A
+      // must not stack pills).
+      this.inputBox.mentionEditor?.clear();
+      this.messageText = '';
+    }
+    try {
+      if (!this.mentionAutocomplete.IsInitialized && this.currentUser) {
+        console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): initializing mention autocomplete…`);
+        await this.mentionAutocomplete.initialize(this.currentUser);
+      }
+      const wanted = agentName.trim().toLowerCase();
+      const suggestion = this.mentionAutocomplete
+        .getSuggestions(agentName, false, '@')
+        .find(s => s.type === 'agent' && s.name.trim().toLowerCase() === wanted);
+      if (suggestion) {
+        const inserted = this.inputBox.InsertMention(suggestion, focus);
+        console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): resolved to pill (id=${suggestion.id}) — insert ${inserted ? 'OK' : 'FAILED (editor view not ready)'}`);
+        if (inserted) {
+          if (focus) {
+            this.scheduleFocusReassert(agentName);
+          }
+          return true;
+        }
+        return false; // editor view not mounted — caller retries
+      }
+      console.warn(`[Omnibar→Chat] InsertAgentMention('${agentName}'): agent NOT found in autocomplete (initialized=${this.mentionAutocomplete.IsInitialized}) — falling back to plain text`);
+    } catch (e) {
+      console.warn(`[Omnibar→Chat] InsertAgentMention('${agentName}'): resolution error — falling back to plain text`, e);
+    }
+    const mention = agentName.includes(' ') ? `@"${agentName}" ` : `@${agentName} `;
+    this.SetDraft(mention, focus);
+    return true;
+  }
+
+  /**
+   * The insert happens mid-tab-mount; late-arriving chat UI (lists, empty-state
+   * autofocus, tab chrome) can steal focus AFTER we set it. Re-assert at settle
+   * points — only when focus genuinely left the editor, so we never fight the user.
+   */
+  private scheduleFocusReassert(context: string): void {
+    for (const delay of [300, 900, 1800]) {
+      setTimeout(() => {
+        const editor = this.inputBox?.mentionEditor;
+        if (editor && !editor.HasFocus) {
+          const ok = editor.FocusCaretAtEnd();
+          console.log(`[Omnibar→Chat] focus re-assert (+${delay}ms) for '${context}': ${ok ? 'refocused' : 'editor gone'}`);
+        }
+      }, delay);
+    }
+  }
+
+  public SetDraft(text: string, focus: boolean = true): void {
+    this.messageText = text;
+    if (focus) {
+      // The composer mounts/binds on the next tick after messageText flows down.
+      setTimeout(() => this.inputBox?.focus(), 50);
+    }
+  }
   public isSending: boolean = false;
   public isProcessing: boolean = false; // True when waiting for agent/naming response
   public processingMessage: string = 'AI is responding...'; // Message shown during processing
@@ -335,6 +462,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   ngAfterViewInit() {
+    if (this.pendingInitialDraft) {
+      const draft = this.pendingInitialDraft;
+      this.pendingInitialDraft = null;
+      // next tick — the composer's own view finishes mounting first
+      setTimeout(() => {
+        this.SetDraft(draft, true);
+        this.initialDraftApplied.emit();
+      }, 50);
+    }
     // Focus input on initial load
     this.focusInput();
 
@@ -704,10 +840,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * This callback will be invoked by the streaming service when progress updates arrive.
    */
   private createMessageProgressCallback(messageId: string): (progress: MessageProgressUpdate) => Promise<void> {
+    // Resolve the message once and reuse it for the callback's lifetime: streamed
+    // final-response updates arrive per content delta, and re-awaiting the cache on
+    // every delta both wastes work and (on a cold cache) races concurrent loads.
+    let resolvedMessage: Awaited<ReturnType<DataCacheService['getConversationDetail']>> = null;
     return async (progress: MessageProgressUpdate) => {
       try {
         // Get message from cache (single source of truth)
-        const message = await this.dataCache.getConversationDetail(messageId, this.currentUser);
+        const message = (resolvedMessage ??= await this.dataCache.getConversationDetail(messageId, this.currentUser));
 
         if (!message) {
           console.warn(`[StreamingCallback] Message ${messageId} not found in cache`);
@@ -724,6 +864,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         const completionTime = this.completionTimestamps.get(messageId);
         if (completionTime) {
           console.log(`[StreamingCallback] Message ${messageId} marked complete at ${new Date(completionTime).toISOString()}, ignoring late progress update`);
+          return;
+        }
+
+        // Streamed final-response content: the service accumulates deltas, so
+        // progress.streaming.content is always the full reply text so far — assign it.
+        // The completion flow (above guards + the 'complete' path) reconciles the
+        // bubble with the server-saved final message, so no append/merge is needed here.
+        if (progress.streaming) {
+          message.Message = progress.streaming.content;
+          this.messageSent.emit(message);
+          // Keep the tasks dropdown on a stable status line rather than the growing reply text.
+          this.activeTasks.updateStatusByConversationDetailId(message.ID, 'Responding…');
           return;
         }
 

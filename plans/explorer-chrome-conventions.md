@@ -1028,3 +1028,7 @@ See Section 11 for the full migration status table.
 
 See [`plans/explorer-ia-progress.md`](explorer-ia-progress.md) for the per-page
 migration status.
+
+## 11. Quick-switcher = ONE palette (the omnibar)
+
+The shell's three historical quick-switchers — the Ctrl+K header search composite, the Ctrl+/ app command palette, and the legacy per-entity Search Popup — are unified into **one command palette**: `mj-omnibar-palette` (`explorer-core/src/lib/omnibar/`), gated by a **two-layer switch**: the `Shell.Omnibar.Enabled` instance-config flag is the master AVAILABILITY switch (default ON when the row is absent; OFF restores the legacy trio for everyone and hides the toggle), and each user then **opts in personally** via My Profile → Command Palette (UserInfoEngine setting `mj.shell.omnibar.enabled`, default OFF — follows the user across devices; flips live, no reload). Resolution lives in `omnibar/omnibar-user-setting.ts` (`ResolveOmnibarEnabled`). Modes are pluggable `OmnibarProvider` ClassFactory registrations (plain text = cross-source search, `#` records, `/` commands, `@` agents). Do NOT add new shell-level search/switcher surfaces — register an `OmnibarProvider` instead.

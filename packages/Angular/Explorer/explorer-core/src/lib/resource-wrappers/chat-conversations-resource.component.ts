@@ -95,7 +95,9 @@ import { Subject, takeUntil } from 'rxjs';
               (pendingMessageRequested)="onPendingMessageRequested($event)"
               (artifactLinkClicked)="onArtifactLinkClicked($event)"
               (openEntityRecord)="onOpenEntityRecord($event)"
-              (navigationRequest)="onNavigationRequest($event)">
+              (navigationRequest)="onNavigationRequest($event)"
+              [composerAgentMention]="pendingComposerAgentMention"
+              (composerAgentMentionConsumed)="onComposerAgentMentionConsumed()">
             </mj-conversation-chat-area>
           }
         </div>
@@ -452,12 +454,73 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * The shell populates queryParams from the URL, and nav params come from cross-resource linking.
    * Sets state synchronously so child components see values immediately.
    */
+  /**
+   * The omnibar's '@' mode lands here with ?agent=<AgentName>: start a NEW
+   * conversation with the composer pre-addressed to that agent. The mention chip
+   * itself is typed by the user's send; prefilling '@"Name" ' is the plain-text
+   * form the composer's agent-mention provider recognizes.
+   */
+  private applyAgentParam(agentName: string | null | undefined, requestNonce?: string | null): void {
+    if (!agentName) {
+      return;
+    }
+    // The pre-address is a one-shot INSTRUCTION keyed by agent|nonce (the omnibar
+    // stamps ?agentReq=<nonce> alongside ?agent=). The shell's URL↔tab-config sync
+    // can echo an already-consumed param back at us — an in-flight navigation that
+    // settles AFTER our consume-clear backfills the tab config from the URL ("URL
+    // is source of truth"). A value-only guard can't tell that echo apart from a
+    // genuine re-tag of the same agent; the nonce can. Nonce-less deliveries (hand
+    // typed deep links) still apply once per session.
+    const requestKey = `${agentName}|${requestNonce ?? ''}`;
+    if (requestKey === this.lastAppliedAgentParamKey) {
+      // Stale echo. Re-issue the clear so tab config and URL converge to clean —
+      // otherwise the echoed param persists into the saved workspace and re-applies
+      // on every boot, wiping whatever draft the composer restored.
+      console.log(`[Omnibar→Chat] wrapper: agent param '${agentName}' (req=${requestNonce ?? 'none'}) already applied — ignoring echo, re-clearing`);
+      this.clearAgentParamDeferred();
+      return;
+    }
+    console.log(`[Omnibar→Chat] wrapper: agent param '${agentName}' (req=${requestNonce ?? 'none'}) received — staging composer pre-address`);
+    this.lastAppliedAgentParamKey = requestKey;
+    this.isNewUnsavedConversation = true;
+    this.selectedConversationId = null;
+    this.selectedConversation = null;
+    // Resolved mention PILL (composerAgentMention) — matching the UX of typing
+    // '@agent' and picking from the dropdown; pendingMessage would AUTO-SEND.
+    this.pendingComposerAgentMention = agentName;
+    this.cdr.detectChanges();
+  }
+
+  public pendingComposerAgentMention: string | null = null;
+  private lastAppliedAgentParamKey: string | null = null;
+
+  public onComposerAgentMentionConsumed(): void {
+    this.pendingComposerAgentMention = null;
+    // Consume-and-clear: drop the agent params from the tab/URL so boots and
+    // back/forward can't re-stage the pill. lastAppliedAgentParamKey is
+    // intentionally NOT reset — a fresh omnibar re-tag (even of the same agent)
+    // carries a new agentReq nonce and forms a new key, so anything re-delivering
+    // the OLD key is by definition a stale echo.
+    console.log(`[Omnibar→Chat] wrapper: pill applied — clearing agent param from URL`);
+    this.clearAgentParamDeferred();
+  }
+
+  /**
+   * Clears the agent pre-address params OUTSIDE any OnQueryParamsChanged delivery:
+   * UpdateQueryParams is suppressed synchronously during delivery, so an inline
+   * call from the echo path would silently no-op.
+   */
+  private clearAgentParamDeferred(): void {
+    setTimeout(() => this.UpdateQueryParams({ agent: null, agentReq: null }), 0);
+  }
+
   private applyConfigurationParams(): void {
     const config = this.Data?.Configuration;
     if (!config) return;
 
     // Check queryParams first (shell populates these from the URL for deep-linking)
     const qp = config['queryParams'] as Record<string, string> | undefined;
+    this.applyAgentParam(qp?.['agent'], qp?.['agentReq']);
     const conversationId = qp?.['conversationId'] || (config.conversationId as string);
     const artifactId = qp?.['artifactId'] || (config.artifactId as string);
     const versionNumber = qp?.['versionNumber'] ? parseInt(qp['versionNumber'], 10)
@@ -512,6 +575,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * was already open instead of the pinned one.
    */
   protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    this.applyAgentParam(params['agent'], params['agentReq']);
     const realtimeSessionId = params['realtimeSessionId'] || null;
     if (realtimeSessionId) {
       this.pendingRealtimeSessionId = realtimeSessionId;

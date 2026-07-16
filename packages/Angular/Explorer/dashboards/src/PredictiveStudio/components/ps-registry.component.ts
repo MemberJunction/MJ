@@ -22,6 +22,7 @@ import {
   primaryAuc,
 } from '../predictive-studio.view-models';
 import { PSConfirmModalComponent } from './ps-confirm-modal.component';
+import { humanizeFeatureName } from '../at-risk.view-models';
 
 interface ModelRowVM {
   id: string;
@@ -61,7 +62,7 @@ interface PendingPromotion {
   selector: 'ps-registry',
   imports: [CommonModule, MJButtonDirective, PSConfirmModalComponent],
   encapsulation: ViewEncapsulation.None,
-  styleUrls: ['../predictive-studio.shared.scss', './ps-registry.component.scss'],
+  styleUrls: ['../predictive-studio.shared.css', './ps-registry.component.css'],
   template: `
     <div class="ps-panel ps-registry" data-testid="ps-registry-panel">
       @if (models.length === 0) {
@@ -156,7 +157,7 @@ interface PendingPromotion {
                 @if (importance.length > 0) {
                   @for (f of importance; track f.name) {
                     <div class="ps-fbar">
-                      <span class="name ps-small">{{ f.name }}</span>
+                      <span class="name ps-small" [title]="f.name">{{ f.name }}</span>
                       <div class="track"><span [class.warn]="f.warning" [style.width.%]="f.pct"></span></div>
                       <span class="ps-mono">{{ f.value }}</span>
                     </div>
@@ -267,9 +268,12 @@ export class PSRegistryComponent implements OnInit {
 
   // ---- live detail: feature importance + metrics ----
 
-  /** Top-6 feature importance bars parsed live from the selected model's `FeatureImportance` JSON. */
+  /** Top-6 feature importance bars parsed live from the selected model's `FeatureImportance` JSON, with humanized display names. */
   public get importance(): PSFeatureBar[] {
-    return parseFeatureImportance(this.selectedEntity?.FeatureImportance, 6);
+    return parseFeatureImportance(this.selectedEntity?.FeatureImportance, 6).map((b) => ({
+      ...b,
+      name: humanizeFeatureName(b.name),
+    }));
   }
 
   public get importanceCaption(): string {

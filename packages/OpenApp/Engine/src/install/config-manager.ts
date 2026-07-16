@@ -53,9 +53,10 @@ export interface ConfigOperationResult {
  */
 export function AddServerDynamicPackages(
     repoRoot: string,
-    manifest: MJAppManifest
+    manifest: MJAppManifest,
+    serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot);
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
     if (!configPath) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
     }
@@ -98,9 +99,10 @@ export function AddServerDynamicPackages(
  */
 export function AddClientDynamicPackages(
     repoRoot: string,
-    manifest: MJAppManifest
+    manifest: MJAppManifest,
+    serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot);
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
     if (!configPath) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
     }
@@ -139,9 +141,10 @@ export function AddClientDynamicPackages(
  */
 export function RemoveServerDynamicPackages(
     repoRoot: string,
-    appName: string
+    appName: string,
+    serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot);
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
     if (!configPath) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
     }
@@ -169,9 +172,10 @@ export function RemoveServerDynamicPackages(
 export function ToggleServerDynamicPackages(
     repoRoot: string,
     appName: string,
-    enabled: boolean
+    enabled: boolean,
+    serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot);
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
     if (!configPath) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
     }
@@ -190,11 +194,22 @@ export function ToggleServerDynamicPackages(
 
 /**
  * Resolves the path to the MJ config file.
- * Returns the absolute path if it exists, or undefined if not found.
+ *
+ * Checks multiple locations in priority order, matching how cosmiconfig (used by
+ * ServerBootstrap) discovers the config at runtime:
+ *   1. ServerPackagePath (e.g. apps/MJAPI/mj.config.cjs) — the MJAPI's own config
+ *   2. Repo root (mj.config.cjs) — fallback for monorepos without a per-app config
+ *
+ * This ensures the dynamicPackages section is written to the same file the MJAPI
+ * will actually load at boot, not a root config that gets shadowed by a closer one.
  */
-function resolveConfigPath(repoRoot: string): string | undefined {
-    const candidate = resolve(repoRoot, CONFIG_FILE_NAME);
-    return existsSync(candidate) ? candidate : undefined;
+function resolveConfigPath(repoRoot: string, serverPackagePath?: string): string | undefined {
+    if (serverPackagePath) {
+        const serverConfig = resolve(repoRoot, serverPackagePath, CONFIG_FILE_NAME);
+        if (existsSync(serverConfig)) return serverConfig;
+    }
+    const rootConfig = resolve(repoRoot, CONFIG_FILE_NAME);
+    return existsSync(rootConfig) ? rootConfig : undefined;
 }
 
 /**
@@ -519,33 +534,198 @@ function EnsureTrailingComma(before: string, openBracePos: number): string {
 }
 
 /**
- * Inserts a section just before the closing brace of the `module.exports = { ... }` object
- * literal. Anchoring to that brace (via FindMatchingBracket) is correct even when the file
- * has trailing code or a later `};` — unlike `lastIndexOf('};')`, which lands in the wrong
- * block for `module.exports = { ... }; function helper() { ... };` and corrupts the config
- * (B4). Throws (rather than silently corrupting) when module.exports is not a direct object
- * literal — e.g. `module.exports = config;` — so the caller fails loudly.
+ * Inserts a section just before the closing brace of the config object exported by
+ * `module.exports`. Supports two patterns:
+ *
+ *   1. `module.exports = { ... }` — inline object literal (insert before its closing `}`)
+ *   2. `module.exports = config;` — variable reference (find the variable's object literal
+ *      declaration and insert before ITS closing `}`)
+ *
+ * Anchoring to the correct closing brace (via FindMatchingBracket) is correct even when the
+ * file has trailing code — unlike `lastIndexOf('};')`, which lands in the wrong block (B4).
  */
 function InsertBeforeModuleExportsClose(content: string, section: string): string {
-    const exportMatch = content.match(/module\.exports\s*=\s*\{/);
-    if (!exportMatch || exportMatch.index === undefined) {
-        throw new Error(
-            'Could not find a `module.exports = { ... }` object literal in mj.config.cjs to insert into. ' +
-            'If module.exports references a variable (e.g. `module.exports = config;`), add the section manually.',
-        );
+    // Try pattern 1: module.exports = { ... }
+    const inlineMatch = content.match(/module\.exports\s*=\s*\{/);
+    if (inlineMatch && inlineMatch.index !== undefined) {
+        const bracePos = content.indexOf('{', inlineMatch.index);
+        const closePos = FindMatchingBracket(content, bracePos);
+        if (closePos === -1) {
+            throw new Error('Could not locate the closing brace of module.exports in mj.config.cjs.');
+        }
+        const before = EnsureTrailingComma(content.slice(0, closePos), bracePos);
+        return before + section + content.slice(closePos);
     }
-    const bracePos = content.indexOf('{', exportMatch.index);
-    const closePos = FindMatchingBracket(content, bracePos);
-    if (closePos === -1) {
-        throw new Error('Could not locate the closing brace of module.exports in mj.config.cjs.');
+
+    // Try pattern 2: module.exports = someVar;
+    const varMatch = content.match(/module\.exports\s*=\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*;/);
+    if (varMatch && varMatch.index !== undefined) {
+        const varName = varMatch[1];
+        // Find the variable's object literal: const/let/var varName = { ... }
+        const declPattern = new RegExp(`(?:const|let|var)\\s+${EscapeRegex(varName)}\\s*=\\s*\\{`);
+        const declMatch = content.match(declPattern);
+        if (declMatch && declMatch.index !== undefined) {
+            const bracePos = content.indexOf('{', declMatch.index);
+            const closePos = FindMatchingBracket(content, bracePos);
+            if (closePos === -1) {
+                throw new Error(`Could not locate the closing brace of '${varName}' object in mj.config.cjs.`);
+            }
+            const before = EnsureTrailingComma(content.slice(0, closePos), bracePos);
+            return before + section + content.slice(closePos);
+        }
     }
-    // Comma-terminate the property immediately before the insertion point so the new section
-    // is a valid sibling rather than a syntax error (#2975). Without this, a config whose last
-    // top-level property is a brace-terminated block (e.g. `openApps: { ... }` with no trailing
-    // comma) becomes `}\n  dynamicPackages: { ... }` — invalid JS that breaks every later
-    // `require('mj.config.cjs')`, including the mj migrate / codegen / build steps an install runs.
-    const before = EnsureTrailingComma(content.slice(0, closePos), bracePos);
-    return before + section + content.slice(closePos);
+
+    throw new Error(
+        'Could not find a config object in mj.config.cjs to insert into. ' +
+        'Expected either `module.exports = { ... }` or `module.exports = <variable>;` where the variable is declared as an object literal.',
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXCLUDE SCHEMAS (CodeGen)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Adds an app's schema to the `excludeSchemas` array in mj.config.cjs.
+ *
+ * CodeGen uses `excludeSchemas` to skip entity discovery, view generation,
+ * and Angular component generation for schemas owned by external apps.
+ * Without this, CodeGen will pick up app-owned tables (e.g. flyway_schema_history)
+ * and create unwanted entity metadata.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param schemaName - The schema name to exclude
+ * @param serverPackagePath - Optional server package path for config resolution
+ * @returns Operation result
+ */
+export function AddExcludeSchema(
+    repoRoot: string,
+    schemaName: string,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    if (!schemaName) {
+        return { Success: true };
+    }
+
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
+    if (!configPath) {
+        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
+    }
+
+    try {
+        let content = readFileSync(configPath, 'utf-8');
+        content = EnsureExcludeSchemasSection(content);
+        content = AddSchemaToExcludeArray(content, schemaName);
+        WriteConfigChecked(configPath, content);
+        return { Success: true };
+    }
+    catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { Success: false, ErrorMessage: `Failed to update excludeSchemas config: ${message}` };
+    }
+}
+
+/**
+ * Removes an app's schema from the `excludeSchemas` array in mj.config.cjs.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param schemaName - The schema name to remove from exclusion
+ * @param serverPackagePath - Optional server package path for config resolution
+ * @returns Operation result
+ */
+export function RemoveExcludeSchema(
+    repoRoot: string,
+    schemaName: string,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    if (!schemaName) {
+        return { Success: true };
+    }
+
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
+    if (!configPath) {
+        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
+    }
+
+    try {
+        let content = readFileSync(configPath, 'utf-8');
+        content = RemoveSchemaFromExcludeArray(content, schemaName);
+        WriteConfigChecked(configPath, content);
+        return { Success: true };
+    }
+    catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { Success: false, ErrorMessage: `Failed to remove schema from excludeSchemas: ${message}` };
+    }
+}
+
+/**
+ * Ensures the config file has an excludeSchemas array.
+ * If it doesn't exist, adds one inside the module.exports object.
+ */
+function EnsureExcludeSchemasSection(content: string): string {
+    if (/excludeSchemas\s*:/.test(content)) {
+        return content;
+    }
+
+    const section = `\n  excludeSchemas: [],\n`;
+    return InsertBeforeModuleExportsClose(content, section);
+}
+
+/**
+ * Adds a schema name to the first excludeSchemas array if not already present.
+ */
+function AddSchemaToExcludeArray(content: string, schemaName: string): string {
+    // Check if the schema is already in the array (case-insensitive)
+    const alreadyExists = new RegExp(
+        `excludeSchemas\\s*:\\s*\\[[^\\]]*['"]${EscapeRegex(schemaName)}['"]`,
+        'i'
+    );
+    if (alreadyExists.test(content)) {
+        return content;
+    }
+
+    // Find the first excludeSchemas array's closing bracket
+    const arrayMatch = content.match(/excludeSchemas\s*:\s*\[/);
+    if (!arrayMatch || arrayMatch.index === undefined) {
+        return content;
+    }
+
+    const openBracketPos = arrayMatch.index + arrayMatch[0].length - 1;
+    const closingBracket = FindMatchingBracket(content, openBracketPos);
+    if (closingBracket === -1) {
+        return content;
+    }
+
+    // Check if the array has existing entries to determine formatting
+    const arrayContent = content.slice(openBracketPos + 1, closingBracket).trim();
+    const entry = arrayContent.length > 0
+        ? `, '${schemaName}'`
+        : `'${schemaName}'`;
+
+    return content.slice(0, closingBracket) + entry + content.slice(closingBracket);
+}
+
+/**
+ * Removes a schema name from all excludeSchemas arrays in the config.
+ */
+function RemoveSchemaFromExcludeArray(content: string, schemaName: string): string {
+    // Remove the schema entry (with optional leading comma+space or trailing comma+space)
+    const patterns = [
+        // Entry with leading comma: , 'schemaName'
+        new RegExp(`,\\s*'${EscapeRegex(schemaName)}'`, 'gi'),
+        // Entry with trailing comma (first in array): 'schemaName',
+        new RegExp(`'${EscapeRegex(schemaName)}'\\s*,\\s*`, 'gi'),
+        // Sole entry: 'schemaName'
+        new RegExp(`'${EscapeRegex(schemaName)}'`, 'gi'),
+    ];
+
+    for (const pattern of patterns) {
+        if (pattern.test(content)) {
+            return content.replace(pattern, '');
+        }
+    }
+    return content;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -565,7 +745,8 @@ function InsertBeforeModuleExportsClose(content: string, section: string): strin
  */
 export function AddEntityPackageMapping(
     repoRoot: string,
-    manifest: MJAppManifest
+    manifest: MJAppManifest,
+    serverPackagePath?: string
 ): ConfigOperationResult {
     const schemaName = manifest.schema?.name;
     if (!schemaName) {
@@ -577,7 +758,7 @@ export function AddEntityPackageMapping(
         return { Success: true }; // No entities package found → nothing to map
     }
 
-    const configPath = resolveConfigPath(repoRoot);
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
     if (!configPath) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
     }
@@ -604,13 +785,14 @@ export function AddEntityPackageMapping(
  */
 export function RemoveEntityPackageMapping(
     repoRoot: string,
-    schemaName: string
+    schemaName: string,
+    serverPackagePath?: string
 ): ConfigOperationResult {
     if (!schemaName) {
         return { Success: true };
     }
 
-    const configPath = resolveConfigPath(repoRoot);
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
     if (!configPath) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
     }

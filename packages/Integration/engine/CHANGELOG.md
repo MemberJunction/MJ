@@ -1,5 +1,105 @@
 # @memberjunction/integration-engine
 
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/integration-engine-base@5.48.0
+  - @memberjunction/integration-pk-classifier@5.48.0
+  - @memberjunction/integration-progress-artifacts@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/integration-engine-base@5.47.0
+  - @memberjunction/integration-pk-classifier@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/integration-progress-artifacts@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/integration-engine-base@5.46.0
+  - @memberjunction/integration-pk-classifier@5.46.0
+  - @memberjunction/integration-progress-artifacts@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/integration-engine-base@5.45.1
+- @memberjunction/integration-pk-classifier@5.45.1
+- @memberjunction/integration-progress-artifacts@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- 81a8aa2: Custom-column promotion gate (U3) + opt-in reclaim planner (U7) — two pure decision functions in `CustomColumnPromotion.ts`; the engine PLANS, the consumer executes.
+
+  **U3 — hold promotion until a full sync (`planPromotions` + `PromotionPlanOptions.LockUntilFullSync`).** After a rediscovery, an _incremental_ sync only re-syncs changed rows, so unchanged rows still carry now-vanished keys in their overflow JSON — a coverage scan over that stale mix could **phantom-promote** a column the source already dropped. A full sync evicts every stale key per-row (`reconcileOverflowValue`, shipped in the schema-fidelity change), making the scan trustworthy. When `LockUntilFullSync` is set, `planPromotions` plans **nothing** — the engine's half of "lock column-application until the sync after a schema change." The engine supplies the lever; the consumer owns the state (it knows when a full sync completed) and pulls it. Default (undefined/false) = unlocked, so existing callers are unchanged.
+
+  **U7 — opt-in reclaim of vanished promoted columns (`planColumnReclamations`).** A promoted column the source stops sending currently lingers all-NULL (non-destructive by design). This adds a **pure, triple-gated, default-OFF** planner: it returns candidates only when the deployment opts in (`ReclaimVanishedColumns`) AND a full sync was observed (`FullSyncCompleted`), and even then only for a column that is BOTH all-NULL across that full sync AND absent from the source. Nothing is dropped by default, and a column holding data is never a candidate. Symmetric to `planPromotions`: the engine only PLANS the drop; the consumer/RSU performs the destructive DDL.
+
+  Both are pure and deterministic (sorted output), matching the existing `decideLengthOverlay` / `reconcileOverflowValue` pattern. Unit-tested (2 lock cases + 4 reclaim cases). No migration; no behavior change unless a caller passes the new options.
+
+### Patch Changes
+
+- f99cbc1: Fix: template-var **child** objects now receive sampled field metadata at discovery, and the parent's addressing key is **resolved from the fetched rows** rather than presupposed.
+
+  A second-layer object whose API path nests under a parent (`/orgs/{OrgId}/events`) resolves its parent IDs through `LoadParentIDs`, which reads the **synced** DB. At discovery nothing is synced yet, so the child yields zero records → it is sampled with no fields (no widths, no PK, no custom-column capture), silently falling back to declared-only metadata. Discovery instead **walks the same DAG sync walks** — parents before children, a child reading its parents — but adapted with a rough per-table record limit (~`maxRecords`) and reading parents from a **live sample** instead of the DB. This is a single recursive routine (`StreamRecordsForDiscovery`), **uniform to all depths**: a template-var child streams its parent by calling the _same routine_ one level up, so a grandparent is sampled identically. Because each level pulls its parent lazily and there is **no per-level cap**, the child's fill-to-N demand propagates up the _entire_ dependency chain to the parentless top — the "fill to N" completion happens at the top of the chain, not locally. A million-row ancestor is streamed and cut off early (record-constrained, unlike sync which walks every row).
+
+  Crucially, the parent's addressing-key **field name is not presupposed**. After fetching the parent it is resolved, in order: (1) a **declared PK** in metadata; else (2) the engine's **value-statistic PK classifier run over the rows fetch just returned** (`pickKeyFromStats` / soft-fallback — discovery-via-fetch, the same determination used everywhere). If neither resolves, the parent is genuinely keyless and its child **adjourns** (caught on the first real sync). No conventional identity name is ever guessed — a field name is never assumed for a field the data doesn't prove is the key.
+
+  Discovery-only and additive: it runs through a dedicated path (the REST `DiscoverySampleRecordStream` override → `StreamRecordsForDiscovery`), so the **sync path** (`FetchWithTemplateVars` → `LoadParentIDs`) is untouched — `ZERO_PARENTS` and the "sync the parent first" DAG contract are unchanged; non-template-var objects are untouched. Multi-var (composition) children are **deferred**: the sampler adjourns them (declared-only until first sync) rather than fire malformed URLs at the vendor. The parent live-sample is an HTTP fetch with no SQL, so it is dialect-agnostic — identical on SQL Server and PostgreSQL. Covered by unit tests: the pre-fix zero-record gap, a declared-PK parent, a **keyless parent whose key is resolved from the fetched rows**, the record bound, and the sync path staying unchanged.
+
+- 11d5b4e: Fix (MJ#3047): quote the primary-key identifier in the content-hash prefetch filter so an integration object whose PK column name is a SQL reserved word (e.g. Zendesk `custom_objects.key`) no longer silently loses idempotency.
+
+  `IntegrationEngine.PrefetchContentHashes` built its bulk stored-hash lookup as `WHERE key IN (…)` with the PK identifier unquoted. For a reserved-word PK the database rejects the query; because the prefetch is best-effort it swallows the error and returns nothing, so the content-hash idempotent-skip fast path can never engage — every unchanged record is re-written on each sync (inflated `RecordsUpdated`, redundant writes). The filter now quotes the PK identifier(s) **and** value literals through the provider's dialect (`DatabaseProviderBase.Dialect` → `[key]` on SQL Server, `"key"` on PostgreSQL), so it is valid on both targets without reintroducing the SS-brackets-break-Postgres problem the previous unquoted form was guarding against. Filter construction is extracted to a pure `buildContentHashPrefetchFilter` helper with unit tests covering reserved-word single + composite PKs on both dialects.
+
+- 82ca89b: Two catalog-fidelity fixes for the connector discovery/sync pipeline:
+  - **Width never shrinks on rediscovery (U2).** `IntegrationSchemaSync`'s per-field overlay assigned the rediscovered `MaxLength` directly, so a rediscovery whose sample happened to be narrower than a prior run shrank the persisted `IOF.Length`. RSU only ever widens the physical column (never shrinks it), so the catalog drifted below the column (catalog `nvarchar(128)` vs column `nvarchar(512)`) and a later apply keyed off the catalog could truncate a value the wider column still holds. The overlay is now a pure `decideLengthOverlay` that grows the persisted width but never shrinks it (a null/undefined source width is "no opinion" — the persisted value sticks).
+  - **Stale overflow keys are evicted on re-sync (U4), which also stops phantom promotion (U3).** The custom-overflow write only fired when a record had unmapped fields, so when a source column vanished the record's unmapped set emptied, the write was skipped, and the prior overflow JSON (with the now-gone key) stuck around forever — where a coverage scan could still promote it to a real column. The write now reconciles to the record's CURRENT unmapped keys on every sync (`reconcileOverflowValue`), clearing the column to null when there are none, so a vanished key is evicted the next time its row is synced. Byte-identical for customs-free rows (writing null to an already-null column is a no-op under dirty tracking).
+
+  Both are extracted as pure, unit-tested decision functions (`decideLengthOverlay`, `reconcileOverflowValue`) matching the existing `decideBooleanOverlay` pattern. Code-only, no migration.
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/integration-engine-base@5.45.0
+  - @memberjunction/integration-pk-classifier@5.45.0
+  - @memberjunction/integration-progress-artifacts@5.45.0
+
 ## 5.44.0
 
 ### Patch Changes

@@ -7,6 +7,7 @@ import { AppNavComponent } from './components/header/app-nav.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { AppAccessDialogComponent } from './components/dialogs/app-access-dialog.component';
 import { CommandPaletteComponent } from '../command-palette/command-palette.component';
+import { OmnibarPaletteComponent } from '../omnibar/omnibar-palette.component';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -20,7 +21,8 @@ import { SearchModule } from '@memberjunction/ng-search';
     AppNavComponent,
     TabContainerComponent,
     AppAccessDialogComponent,
-    CommandPaletteComponent
+    CommandPaletteComponent,
+    OmnibarPaletteComponent
   ],
   imports: [
     CommonModule,
