@@ -21,3 +21,4 @@ export * from './port-types';
 export * from './composite-schema';
 export * from './tree-profile';
 export * from './triage-decision';
+export * from './story-faithfulness';
