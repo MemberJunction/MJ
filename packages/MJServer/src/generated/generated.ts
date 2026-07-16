@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJSystemEventEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -75,11 +75,11 @@ export class MJAccessControlRule_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     GrantedByUser: string;
         
 }
@@ -291,11 +291,11 @@ export class MJActionAuthorization_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(425)
+    @MaxLength(850)
     Action: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Authorization: string;
         
 }
@@ -463,7 +463,7 @@ export class MJActionCategory_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -840,11 +840,11 @@ export class MJActionContext_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(425)
+    @MaxLength(850)
     Action: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ContextType?: string;
         
 }
@@ -1024,18 +1024,15 @@ export class MJActionExecutionLog_ {
     Message?: string;
         
     @Field() 
-    @MaxLength(425)
+    @MaxLength(850)
     Action: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field(() => [MJProcessRunDetail_])
     MJProcessRunDetails_ActionExecutionLogIDArray: MJProcessRunDetail_[]; // Link to MJProcessRunDetails
-    
-    @Field(() => [MJUserRoutineRun_])
-    MJUserRoutineRuns_ActionExecutionLogIDArray: MJUserRoutineRun_[]; // Link to MJUserRoutineRuns
     
 }
 
@@ -1179,16 +1176,6 @@ export class MJActionExecutionLogResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRunDetails')} WHERE ${provider.QuoteIdentifier('ActionExecutionLogID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjactionexecutionlog_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Run Details', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJUserRoutineRun_])
-    async MJUserRoutineRuns_ActionExecutionLogIDArray(@Root() mjactionexecutionlog_: MJActionExecutionLog_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Routine Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRuns')} WHERE ${provider.QuoteIdentifier('ActionExecutionLogID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjactionexecutionlog_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -1428,11 +1415,11 @@ export class MJActionLibrary_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(425)
+    @MaxLength(850)
     Action: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Library: string;
         
 }
@@ -1617,7 +1604,7 @@ export class MJActionParam_ {
     MediaModality?: string;
         
     @Field() 
-    @MaxLength(425)
+    @MaxLength(850)
     Action: string;
         
     @Field(() => [MJEntityActionParam_])
@@ -1846,7 +1833,7 @@ export class MJActionResultCode_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(425)
+    @MaxLength(850)
     Action: string;
         
 }
@@ -2016,16 +2003,16 @@ export class MJAction_ {
     @Field({nullable: true, description: `The natural language prompt provided by the user describing what the action should accomplish, used for AI code generation.`}) 
     UserPrompt?: string;
         
-    @Field({nullable: true, description: `User's comments not shared with the LLM.`}) 
+    @Field({nullable: true, description: `User`}) 
     UserComments?: string;
         
     @Field({nullable: true, description: `The generated or manually written code that implements the action logic, typically TypeScript/JavaScript that will be executed.`}) 
     Code?: string;
         
-    @Field({nullable: true, description: `AI's explanation of the code.`}) 
+    @Field({nullable: true, description: `AI`}) 
     CodeComments?: string;
         
-    @Field({description: `An action won't be usable until the code is approved.`}) 
+    @Field({description: `An action won`}) 
     @MaxLength(20)
     CodeApprovalStatus: string;
         
@@ -2042,7 +2029,7 @@ export class MJAction_ {
     @Field(() => Boolean, {description: `If set to 1, Code will never be generated by the AI system. This overrides all other settings including the ForceCodeGeneration bit`}) 
     CodeLocked: boolean;
         
-    @Field(() => Boolean, {description: `If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn't changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.`}) 
+    @Field(() => Boolean, {description: `If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn`}) 
     ForceCodeGeneration: boolean;
         
     @Field(() => Int, {nullable: true, description: `Number of days to retain execution logs; NULL for indefinite.`}) 
@@ -2058,7 +2045,7 @@ export class MJAction_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `For actions where Type='Custom', this specifies the fully qualified class name of the BaseAction sub-class that should be instantiated to handle the action execution. This provides a more reliable mechanism than relying on the Name field for class instantiation.`}) 
+    @Field({nullable: true, description: `For actions where Type=`}) 
     @MaxLength(255)
     DriverClass?: string;
         
@@ -2070,14 +2057,14 @@ export class MJAction_ {
     @MaxLength(100)
     IconClass?: string;
         
-    @Field({nullable: true, description: `Default prompt for compacting/summarizing this action's results when used by agents with CompactMode=AISummary. Action designers define how their specific results should be summarized. Can be overridden per agent in AIAgentAction.CompactPromptID.`}) 
+    @Field({nullable: true, description: `Default prompt for compacting/summarizing this action`}) 
     @MaxLength(36)
     DefaultCompactPromptID?: string;
         
     @Field({nullable: true, description: `Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.`}) 
     Config?: string;
         
-    @Field({nullable: true, description: `JSON blob holding configuration specific to Type='Runtime' actions: declarative permission scopes (allowedEntities, allowedActions, allowedAgents with id+name pairs), resource limits (maxMemoryMB, maxBridgeCalls), and sandbox options (additionalLibraries, debugMode). Evolvable — new keys can be introduced without schema changes. NULL for non-Runtime actions.`}) 
+    @Field({nullable: true, description: `JSON blob holding configuration specific to Type=`}) 
     RuntimeActionConfiguration?: string;
         
     @Field(() => Int, {nullable: true, description: `Universal maximum execution time in milliseconds for a single action invocation. Enforced by ActionEngine across ALL action types (Custom, Generated, Runtime) via AbortSignal passed through RunActionParams. NULL means use the engine default.`}) 
@@ -2088,23 +2075,23 @@ export class MJAction_ {
     CreatedByAgentID?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Category?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     CodeApprovedByUser?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(425)
+    @MaxLength(850)
     Parent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     DefaultCompactPrompt?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     CreatedByAgent?: string;
         
     @Field({nullable: true}) 
@@ -2586,7 +2573,7 @@ export class MJAIAction_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     DefaultModel?: string;
         
     @Field(() => [MJAIModelAction_])
@@ -2811,27 +2798,27 @@ export class MJAIAgentAction_ {
     @MaxLength(20)
     ResultExpirationMode: string;
         
-    @Field({nullable: true, description: `How to compact results when ResultExpirationMode=Compact: FirstNChars (truncate to CompactLength characters, fast and free), AISummary (use LLM to intelligently summarize with CompactPromptID or Action.DefaultCompactPromptID).`}) 
+    @Field({nullable: true, description: `How to compact results when ResultExpirationMode=Compact: FirstNChars (truncate to CompactLength characters, fast and free), AISummary (use LLM to intelligently summarize with CompactPromptID or Action."DefaultCompactPromptID").`}) 
     @MaxLength(20)
     CompactMode?: string;
         
     @Field(() => Int, {nullable: true, description: `Number of characters to keep when CompactMode=FirstNChars. Required when CompactMode is FirstNChars, ignored otherwise.`}) 
     CompactLength?: number;
         
-    @Field({nullable: true, description: `Optional override for AI summarization prompt when CompactMode=AISummary. Lookup hierarchy: this field -> Action.DefaultCompactPromptID -> system default. Allows agent-specific summarization focus (e.g., technical vs. marketing perspective).`}) 
+    @Field({nullable: true, description: `Optional override for AI summarization prompt when CompactMode=AISummary. Lookup hierarchy: this field -> Action."DefaultCompactPromptID" -> system default. Allows agent-specific summarization focus (e.g., technical vs. marketing perspective).`}) 
     @MaxLength(36)
     CompactPromptID?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Agent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(425)
+    @MaxLength(850)
     Action?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     CompactPrompt?: string;
         
 }
@@ -3036,12 +3023,12 @@ export class MJAIAgentArtifactType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     ArtifactType: string;
         
 }
@@ -3216,11 +3203,11 @@ export class MJAIAgentCategory_ {
     DefaultStorageAccountID?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     Parent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     DefaultStorageAccount?: string;
         
     @Field({nullable: true}) 
@@ -3422,11 +3409,11 @@ export class MJAIAgentChannel_ {
     @MaxLength(1000)
     Description?: string;
         
-    @Field({description: `Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance on the server. MUST match the @RegisterClass key on the concrete server-side channel plugin.`}) 
+    @Field({description: `Driver key resolved at runtime via MJGlobal."ClassFactory"."CreateInstance" on the server. MUST match the @RegisterClass key on the concrete server-side channel plugin.`}) 
     @MaxLength(250)
     ServerPluginClass: string;
         
-    @Field({description: `Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance on the client. MUST match the @RegisterClass key on the concrete client-side channel plugin (typically an Angular component).`}) 
+    @Field({description: `Driver key resolved at runtime via MJGlobal."ClassFactory"."CreateInstance" on the client. MUST match the @RegisterClass key on the concrete client-side channel plugin (typically an Angular component).`}) 
     @MaxLength(250)
     ClientPluginClass: string;
         
@@ -3434,7 +3421,7 @@ export class MJAIAgentChannel_ {
     @MaxLength(20)
     TransportType: string;
         
-    @Field({nullable: true, description: `Optional JSON Schema used to validate the per-instance channel configuration (AIAgentSessionChannel.Config).`}) 
+    @Field({nullable: true, description: `Optional JSON Schema used to validate the per-instance channel configuration (AIAgentSessionChannel."Config").`}) 
     ConfigSchema?: string;
         
     @Field(() => Boolean, {description: `Whether this channel definition is available for use. Inactive channels cannot be attached to a session.`}) 
@@ -3677,12 +3664,12 @@ export class MJAIAgentClientTool_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     ClientToolDefinition: string;
         
 }
@@ -3850,7 +3837,7 @@ export class MJAIAgentCoAgent_ {
     @MaxLength(30)
     Type: string;
         
-    @Field(() => Boolean, {description: `When 1: for a TargetAgentID row, this target is the co-agent's default underlying agent (used when a session starts against the co-agent without an explicit runtime target); for a TargetAgentTypeID row, this co-agent is the default co-agent for agents of that type. At most one default per (CoAgentID, Type) is enforced server-side.`}) 
+    @Field(() => Boolean, {description: `When 1: for a TargetAgentID row, this target is the co-agent`}) 
     IsDefault: boolean;
         
     @Field(() => Int, {description: `Display/priority order of this pairing in target-agent pickers and resolution ties (ascending).`}) 
@@ -3860,7 +3847,7 @@ export class MJAIAgentCoAgent_ {
     @MaxLength(20)
     Status: string;
         
-    @Field({nullable: true, description: `Optional per-relationship configuration JSON (shape owned by the Type, e.g. a future Peer arena's turn budget). NULL for plain pairings.`}) 
+    @Field({nullable: true, description: `Optional per-relationship configuration JSON (shape owned by the Type, e.g. a future Peer arena`}) 
     Configuration?: string;
         
     @Field() 
@@ -3869,16 +3856,16 @@ export class MJAIAgentCoAgent_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    CoAgent?: string;
+    @Field() 
+    @MaxLength(510)
+    CoAgent: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     TargetAgent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     TargetAgentType?: string;
         
 }
@@ -4089,12 +4076,12 @@ export class MJAIAgentConfiguration_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     AIConfiguration?: string;
         
 }
@@ -4345,9 +4332,9 @@ export class MJAIAgentDataSource_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
 }
 
@@ -4668,36 +4655,35 @@ export class MJAIAgentExample_ {
     @Field({nullable: true, description: `Optional expiration timestamp. Examples past this date are candidates for archival. NULL means no expiration.`}) 
     ExpiresAt?: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Company?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     SourceConversation?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
     SourceConversationDetail?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     SourceAIAgentRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     EmbeddingModel?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     PrimaryScopeEntity?: string;
         
 }
@@ -4974,9 +4960,9 @@ export class MJAIAgentLearningCycle_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
 }
 
@@ -5160,12 +5146,12 @@ export class MJAIAgentModality_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Modality: string;
         
 }
@@ -5350,11 +5336,11 @@ export class MJAIAgentModel_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Agent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Model?: string;
         
 }
@@ -5788,43 +5774,41 @@ export class MJAIAgentNote_ {
     AuthorType: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Agent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     AgentNoteType?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     SourceConversation?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
     SourceConversationDetail?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     SourceAIAgentRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Company?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     EmbeddingModel?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     PrimaryScopeEntity?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(20)
     ConsolidatedIntoNote?: string;
         
     @Field({nullable: true}) 
@@ -6158,16 +6142,16 @@ export class MJAIAgentPermission_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(50)
-    Role?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field({nullable: true}) 
     @MaxLength(100)
+    Role?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
     User?: string;
         
 }
@@ -6354,7 +6338,7 @@ export class MJAIAgentPrompt_ {
     @Field({nullable: true, description: `The functional purpose of this prompt within the agent, such as "Initialize", "ProcessData", or "Summarize".`}) 
     Purpose?: string;
         
-    @Field(() => Int, {description: `The sequence order in which this prompt should be executed within the agent's workflow.`}) 
+    @Field(() => Int, {description: `The sequence order in which this prompt should be executed within the agent`}) 
     ExecutionOrder: number;
         
     @Field({nullable: true, description: `Optional reference to a specific configuration to use for this prompt. If NULL, uses the default configuration.`}) 
@@ -6378,16 +6362,16 @@ export class MJAIAgentPrompt_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Prompt: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Configuration?: string;
         
 }
@@ -6590,20 +6574,20 @@ export class MJAIAgentRelationship_ {
     @Field({nullable: true, description: `JSON array of parent payload paths to send as LLM context to related sub-agent. Sub-agent receives this data in a formatted context message before its task message. Format: ["path1", "path2.nested", "path3.*", "*"]. Use "*" to send entire parent payload. Example: ["userPreferences", "priorFindings.summary", "sources[*]"]. If null, no parent context is sent (default behavior).`}) 
     SubAgentContextPaths?: string;
         
-    @Field({description: `Specifies how conversation messages are passed from parent agent to related sub-agent. Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on relationship because related sub-agents can have multiple parents with different message passing needs.`}) 
+    @Field({description: `Specifies how conversation messages are passed from parent agent to related sub-agent. Valid values: `}) 
     @MaxLength(50)
     MessageMode: string;
         
-    @Field(() => Int, {nullable: true, description: `Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`}) 
+    @Field(() => Int, {nullable: true, description: `Maximum number of conversation messages to include when MessageMode is `}) 
     MaxMessages?: number;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    SubAgent?: string;
+    @Field() 
+    @MaxLength(510)
+    SubAgent: string;
         
 }
 
@@ -7028,7 +7012,7 @@ export class MJAIAgentRequest_ {
     @MaxLength(36)
     RequestTypeID?: string;
         
-    @Field({nullable: true, description: `JSON-serialized AgentResponseForm defining the structured input form the agent presents to the human. Uses the same form types as ConversationDetail.ResponseForm.`}) 
+    @Field({nullable: true, description: `JSON-serialized AgentResponseForm defining the structured input form the agent presents to the human. Uses the same form types as ConversationDetail."ResponseForm".`}) 
     ResponseSchema?: string;
         
     @Field({nullable: true, description: `JSON structured response data provided by the human, conforming to the ResponseSchema definition.`}) 
@@ -7056,32 +7040,32 @@ export class MJAIAgentRequest_ {
     @MaxLength(20)
     ResponseSource?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     RequestForUser?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     ResponseByUser?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     RequestType?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     OriginatingAgentRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     OriginatingAgentRunStep?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ResumingAgentRun?: string;
         
 }
@@ -7378,20 +7362,20 @@ export class MJAIAgentRunMedia_ {
     @Field({nullable: true, description: `Agent notes describing what this media represents. Used for internal tracking and can be displayed in UI.`}) 
     Description?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    AgentRun?: string;
+    @Field() 
+    @MaxLength(510)
+    AgentRun: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     SourcePromptRunMedia?: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Modality: string;
         
     @Field({nullable: true}) 
-    @MaxLength(500)
+    @MaxLength(1000)
     File?: string;
         
 }
@@ -7630,7 +7614,7 @@ export class MJAIAgentRunStep_ {
     @MaxLength(255)
     StepName: string;
         
-    @Field({nullable: true, description: `ID of the specific target being executed (AIPrompt.ID, AIAction.ID, AIAgent.ID, etc.). NULL for steps that don't target a specific entity.`}) 
+    @Field({nullable: true, description: `ID of the specific target being executed (AIPrompt."ID", AIAction."ID", AIAgent."ID", etc.). NULL for steps that don`}) 
     @MaxLength(36)
     TargetID?: string;
         
@@ -7662,7 +7646,7 @@ export class MJAIAgentRunStep_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `ID of the execution log/run record created for this step (ActionExecutionLog.ID for action steps, AIAgentRun.ID for subagent steps, AIPromptRun.ID for prompt steps)`}) 
+    @Field({nullable: true, description: `ID of the execution log/run record created for this step (ActionExecutionLog."ID" for action steps, AIAgentRun."ID" for subagent steps, AIPromptRun."ID" for prompt steps)`}) 
     @MaxLength(36)
     TargetLogID?: string;
         
@@ -7689,15 +7673,12 @@ detailed information about what validation rules failed.`})
     @Field({nullable: true, description: `Human-readable notes and comments about this agent run step`}) 
     Comments?: string;
         
-    @Field({nullable: true, description: `JSON array of skill-invocation records (AgentSkillInvocation[]) associating this step with the skills involved in it, or NULL when no skills are in play. Each record carries SkillID, SkillName, ActivationType (requested = user /skill mention; auto = agent self-activation), Provenance of authority (the gate values that admitted the skill: AcceptsSkills, both ActivationMode dials, and who requested it), and an optional agent-stated Reason when self-activated. Population: Skill steps record the activation(s) they performed; Prompt steps record the full set of skills in effect for that turn; Actions and Sub-Agent steps record the skill(s) through which the executed tool became available (NULL means the tool was a native grant).`}) 
-    Skills?: string;
+    @Field() 
+    @MaxLength(510)
+    AgentRun: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
-    AgentRun?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -7777,9 +7758,6 @@ export class CreateMJAIAgentRunStepInput {
     @Field({ nullable: true })
     Comments: string | null;
 
-    @Field({ nullable: true })
-    Skills: string | null;
-
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -7849,9 +7827,6 @@ export class UpdateMJAIAgentRunStepInput {
 
     @Field({ nullable: true })
     Comments?: string | null;
-
-    @Field({ nullable: true })
-    Skills?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8087,7 +8062,7 @@ each time the agent processes a prompt step.`})
     @MaxLength(36)
     OverrideVendorID?: string;
         
-    @Field({nullable: true, description: `JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`}) 
+    @Field({nullable: true, description: `JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent`}) 
     Data?: string;
         
     @Field(() => Boolean, {nullable: true, description: `Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.`}) 
@@ -8122,7 +8097,7 @@ each time the agent processes a prompt step.`})
     @Field({nullable: true, description: `JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`}) 
     SecondaryScopes?: string;
         
-    @Field({nullable: true, description: `Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.`}) 
+    @Field({nullable: true, description: `Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller`}) 
     @MaxLength(200)
     ExternalReferenceID?: string;
         
@@ -8130,10 +8105,10 @@ each time the agent processes a prompt step.`})
     @MaxLength(36)
     CompanyID?: string;
         
-    @Field(() => Int, {nullable: true, description: `Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.`}) 
+    @Field(() => Int, {nullable: true, description: `Total input tokens served from the AI provider`}) 
     TotalCacheReadTokensUsed?: number;
         
-    @Field(() => Int, {nullable: true, description: `Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`}) 
+    @Field(() => Int, {nullable: true, description: `Total input tokens written to the AI provider`}) 
     TotalCacheWriteTokensUsed?: number;
         
     @Field({nullable: true, description: `Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.`}) 
@@ -8143,55 +8118,51 @@ each time the agent processes a prompt step.`})
     @MaxLength(36)
     AgentSessionID?: string;
         
-    @Field(() => Boolean, {description: `1 when this run executed under plan mode (whether via the per-request planMode flag or the agent's RequirePlanMode setting). Drives plan-mode indicators in the run UX and supports plan-drift auditing (comparing the approved plan against the steps that actually executed).`}) 
-    PlanMode: boolean;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ParentRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Conversation?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     LastRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Configuration?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     OverrideModel?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     OverrideVendor?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     ScheduledJobRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     TestRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     PrimaryScopeEntity?: string;
         
     @Field({nullable: true}) 
@@ -8240,9 +8211,6 @@ each time the agent processes a prompt step.`})
     
     @Field(() => [MJExperimentSession_])
     MJExperimentSessions_AgentRunIDArray: MJExperimentSession_[]; // Link to MJExperimentSessions
-    
-    @Field(() => [MJUserRoutineRun_])
-    MJUserRoutineRuns_AgentRunIDArray: MJUserRoutineRun_[]; // Link to MJUserRoutineRuns
     
 }
 
@@ -8394,9 +8362,6 @@ export class CreateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     AgentSessionID: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    PlanMode?: boolean;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -8551,9 +8516,6 @@ export class UpdateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     AgentSessionID?: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    PlanMode?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8749,16 +8711,6 @@ export class MJAIAgentRunResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJUserRoutineRun_])
-    async MJUserRoutineRuns_AgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Routine Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRuns')} WHERE ${provider.QuoteIdentifier('AgentRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjaiagentrun_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Runs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @Mutation(() => MJAIAgentRun_)
     async CreateMJAIAgentRun(
         @Arg('input', () => CreateMJAIAgentRunInput) input: CreateMJAIAgentRunInput,
@@ -8828,14 +8780,14 @@ export class MJAIAgentSearchScope_ {
     @Field(() => Float, {nullable: true, description: `Override min score threshold (0.0000–1.0000). NULL = use engine default.`}) 
     MinScore?: number;
         
-    @Field({nullable: true, description: `FK to Templates. MJ Template used to generate the search query from conversation context (lastUserMessage, recentMessages, payload, etc.). NULL = use lastUserMessage as-is. Can be further specialized per-provider via SearchScopeProvider.QueryTransformTemplateID.`}) 
+    @Field({nullable: true, description: `FK to Templates. MJ Template used to generate the search query from conversation context (lastUserMessage, recentMessages, payload, etc.). NULL = use lastUserMessage as-is. Can be further specialized per-provider via SearchScopeProvider."QueryTransformTemplateID".`}) 
     @MaxLength(36)
     QueryTemplateID?: string;
         
-    @Field({nullable: true, description: `JSON override for RRF per-provider fusion weights when this agent uses this scope. Resolution order: AIAgentSearchScope.FusionWeightsOverride > SearchScope.ScopeConfig.fusionWeights > engine defaults. Example: { "vector": 2.0, "fulltext": 1.0, "entity": 1.0 }.`}) 
+    @Field({nullable: true, description: `JSON override for RRF per-provider fusion weights when this agent uses this scope. Resolution order: AIAgentSearchScope."FusionWeightsOverride" > SearchScope."ScopeConfig".fusionWeights > engine defaults. Example: { "vector": 2.0, "fulltext": 1.0, "entity": 1.0 }.`}) 
     FusionWeightsOverride?: string;
         
-    @Field(() => Boolean, {description: `If true, this is the agent's default scope when no scope is specified in a tool call.`}) 
+    @Field(() => Boolean, {description: `If true, this is the agent`}) 
     IsDefault: boolean;
         
     @Field() 
@@ -8844,16 +8796,16 @@ export class MJAIAgentSearchScope_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     SearchScope: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     QueryTemplate?: string;
         
 }
@@ -9057,15 +9009,15 @@ export class MJAIAgentSessionBridgeParticipant_ {
     @MaxLength(36)
     SessionBridgeID: string;
         
-    @Field({nullable: true, description: `The platform's participant identifier (used to map diarized audio to a person).`}) 
+    @Field({nullable: true, description: `The platform`}) 
     @MaxLength(500)
     ExternalParticipantID?: string;
         
-    @Field({nullable: true, description: `The participant's display name as shown on the platform.`}) 
+    @Field({nullable: true, description: `The participant`}) 
     @MaxLength(500)
     DisplayName?: string;
         
-    @Field({description: `The participant's role in the meeting/call: Host, CoHost, Participant, or Agent (the AI bot).`}) 
+    @Field({description: `The participant`}) 
     @MaxLength(20)
     Role: string;
         
@@ -9088,12 +9040,12 @@ export class MJAIAgentSessionBridgeParticipant_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(500)
-    SessionBridge?: string;
+    @Field() 
+    @MaxLength(1000)
+    SessionBridge: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
 }
@@ -9281,7 +9233,7 @@ export class MJAIAgentSessionBridge_ {
     @MaxLength(20)
     Direction: string;
         
-    @Field({description: `How the agent connected: OnDemand, Scheduled, Invite (calendar), NativeInvite (platform UI), InboundRoute (call/invite to the agent's identity), or InMeetingCommand (chat command).`}) 
+    @Field({description: `How the agent connected: OnDemand, Scheduled, Invite (calendar), NativeInvite (platform UI), InboundRoute (call/invite to the agent`}) 
     @MaxLength(30)
     JoinMethod: string;
         
@@ -9289,7 +9241,7 @@ export class MJAIAgentSessionBridge_ {
     @MaxLength(20)
     TurnMode: string;
         
-    @Field({nullable: true, description: `The platform's identifier for the connection (meeting id / call SID), set once connecting.`}) 
+    @Field({nullable: true, description: `The platform`}) 
     @MaxLength(500)
     ExternalConnectionID?: string;
         
@@ -9297,7 +9249,7 @@ export class MJAIAgentSessionBridge_ {
     @MaxLength(2000)
     Address?: string;
         
-    @Field({nullable: true, description: `The agent bot's own participant id within the meeting/call once admitted.`}) 
+    @Field({nullable: true, description: `The agent bot`}) 
     @MaxLength(500)
     BotParticipantID?: string;
         
@@ -9318,7 +9270,7 @@ export class MJAIAgentSessionBridge_ {
     @MaxLength(20)
     CloseReason?: string;
         
-    @Field({nullable: true, description: `Identifier of the server node currently hosting this bridge's bot connection (hostname:pid:bootId). Used for affinity and janitor orphan reconciliation, mirroring AIAgentSession.`}) 
+    @Field({nullable: true, description: `Identifier of the server node currently hosting this bridge`}) 
     @MaxLength(200)
     HostInstanceID?: string;
         
@@ -9332,7 +9284,7 @@ export class MJAIAgentSessionBridge_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Provider: string;
         
     @Field(() => [MJAIAgentSessionBridgeParticipant_])
@@ -9595,7 +9547,7 @@ export class MJAIAgentSessionChannel_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Channel: string;
         
 }
@@ -9819,16 +9771,16 @@ export class MJAIAgentSession_ {
     @MaxLength(36)
     RecordingFileID?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Conversation?: string;
         
     @Field({nullable: true}) 
@@ -10125,9 +10077,9 @@ export class MJAIAgentSkill_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(255)
-    Agent?: string;
+    Agent: string;
         
     @Field() 
     @MaxLength(255)
@@ -10304,11 +10256,11 @@ export class MJAIAgentStepPath_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     OriginStep: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     DestinationStep: string;
         
 }
@@ -10547,20 +10499,20 @@ export class MJAIAgentStep_ {
     @Field({nullable: true, description: `JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.`}) 
     Configuration?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field({nullable: true}) 
-    @MaxLength(425)
+    @MaxLength(850)
     Action?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     SubAgent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Prompt?: string;
         
     @Field(() => [MJAIAgentStepPath_])
@@ -10854,7 +10806,7 @@ export class MJAIAgentType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `The placeholder name used in the system prompt template where the agent prompt result should be injected. For example, if the system prompt contains "{{ agentPrompt }}", this field should contain "agentPrompt". This enables proper hierarchical prompt execution where the agent type's system prompt acts as the parent and the agent's specific prompt acts as the child.`}) 
+    @Field({nullable: true, description: `The placeholder name used in the system prompt template where the agent prompt result should be injected. For example, if the system prompt contains "{{ agentPrompt }}", this field should contain "agentPrompt". This enables proper hierarchical prompt execution where the agent type`}) 
     @MaxLength(255)
     AgentPromptPlaceholder?: string;
         
@@ -10883,18 +10835,18 @@ export class MJAIAgentType_ {
     @MaxLength(36)
     DefaultStorageAccountID?: string;
         
-    @Field({nullable: true, description: `JSON Schema (draft-07) describing the shape of TypeConfiguration payloads on agents of this type. When present, agent saves validate their TypeConfiguration against it server-side (MJAIAgentEntityServer.ValidateAsync); null = TypeConfiguration is freeform for this type.`}) 
+    @Field({nullable: true, description: `JSON Schema (draft-07) describing the shape of TypeConfiguration payloads on agents of this type. When present, agent saves validate their TypeConfiguration against it server-side (MJAIAgentEntityServer."ValidateAsync"); null = TypeConfiguration is freeform for this type.`}) 
     ConfigSchema?: string;
         
     @Field({nullable: true, description: `Type-level DEFAULT configuration JSON for agents of this type — the base layer of the effective-configuration merge: type DefaultConfiguration <- agent TypeConfiguration <- runtime overrides (later layers win per key, deep-merged). Must itself conform to ConfigSchema when one is published. Null = no type defaults.`}) 
     DefaultConfiguration?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     SystemPrompt?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     DefaultStorageAccount?: string;
         
     @Field(() => [MJAIAgentCoAgent_])
@@ -11159,7 +11111,7 @@ export class MJAIAgent_ {
     @Field(() => Int, {description: `The order in which this agent should be executed among its siblings under the same parent.`}) 
     ExecutionOrder: number;
         
-    @Field({description: `Controls how this agent's child agents are executed. Sequential runs children in order, Parallel runs them simultaneously.`}) 
+    @Field({description: `Controls how this agent`}) 
     @MaxLength(20)
     ExecutionMode: string;
         
@@ -11184,7 +11136,7 @@ export class MJAIAgent_ {
     @MaxLength(20)
     Status: string;
         
-    @Field({nullable: true, description: `Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type's DriverClass. Useful for specialized agent implementations.`}) 
+    @Field({nullable: true, description: `Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type`}) 
     @MaxLength(255)
     DriverClass?: string;
         
@@ -11192,7 +11144,7 @@ export class MJAIAgent_ {
     @MaxLength(100)
     IconClass?: string;
         
-    @Field({description: `Controls whether model selection is driven by the Agent Type's system prompt or the Agent's specific prompt. Default is Agent Type for backward compatibility.`}) 
+    @Field({description: `Controls whether model selection is driven by the Agent Type`}) 
     @MaxLength(50)
     ModelSelectionMode: string;
         
@@ -11202,18 +11154,16 @@ export class MJAIAgent_ {
     @Field({description: `JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`}) 
     PayloadUpstreamPaths: string;
         
-    @Field({nullable: true, description: `JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
-flow when the agent executes its own prompt step.`}) 
+    @Field({nullable: true, description: `JSON array of paths that specify what parts of the payload the agent`}) 
     PayloadSelfReadPaths?: string;
         
-    @Field({nullable: true, description: `JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
-data flow when the agent executes its own prompt step.`}) 
+    @Field({nullable: true, description: `JSON array of paths that specify what parts of the payload the agent`}) 
     PayloadSelfWritePaths?: string;
         
     @Field({nullable: true, description: `Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)`}) 
     PayloadScope?: string;
         
-    @Field({nullable: true, description: `Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.`}) 
+    @Field({nullable: true, description: `Optional JSON schema or requirements that define the expected structure and content of the agent`}) 
     FinalPayloadValidation?: string;
         
     @Field({description: `Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.`}) 
@@ -11272,7 +11222,7 @@ if this limit is exceeded.`})
     @MaxLength(20)
     InvocationMode: string;
         
-    @Field({description: `Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.`}) 
+    @Field({description: `Controls how artifacts are created from this agent`}) 
     @MaxLength(20)
     ArtifactCreationMode: string;
         
@@ -11305,25 +11255,25 @@ if this limit is exceeded.`})
     @Field(() => Boolean, {description: `When true, agent is restricted to system/scheduled use only and hidden from user selection, Agent Manager, and MCP/A2A discovery.`}) 
     IsRestricted: boolean;
         
-    @Field({description: `Specifies how conversation messages are passed from parent agent to this child sub-agent (when this agent is a child via ParentID). Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on child agent because each child has only one parent relationship.`}) 
+    @Field({description: `Specifies how conversation messages are passed from parent agent to this child sub-agent (when this agent is a child via ParentID). Valid values: `}) 
     @MaxLength(50)
     MessageMode: string;
         
-    @Field(() => Int, {nullable: true, description: `Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`}) 
+    @Field(() => Int, {nullable: true, description: `Maximum number of conversation messages to include when MessageMode is `}) 
     MaxMessages?: number;
         
     @Field({nullable: true, description: `File storage provider for large attachments. Overrides the default from AIConfiguration. NULL uses system default.`}) 
     @MaxLength(36)
     AttachmentStorageProviderID?: string;
         
-    @Field({nullable: true, description: `Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`}) 
+    @Field({nullable: true, description: `Base path within the storage provider for this agent`}) 
     @MaxLength(500)
     AttachmentRootPath?: string;
         
     @Field(() => Int, {nullable: true, description: `File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`}) 
     InlineStorageThresholdBytes?: number;
         
-    @Field({nullable: true, description: `JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.`}) 
+    @Field({nullable: true, description: `JSON object containing parameter values that customize how this agent`}) 
     AgentTypePromptParams?: string;
         
     @Field({nullable: true, description: `JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}`}) 
@@ -11352,7 +11302,7 @@ if this limit is exceeded.`})
     @MaxLength(36)
     DefaultStorageAccountID?: string;
         
-    @Field({description: `Controls the agent's search capability. All = may use any scope including Global; search action does not restrict. Assigned = may use ONLY scopes explicitly linked via AIAgentSearchScope; scoped search action enforces this. None = agent has no search capability; the scoped search action rejects all requests.`}) 
+    @Field({description: `Controls the agent`}) 
     @MaxLength(20)
     SearchScopeAccess: string;
         
@@ -11363,7 +11313,7 @@ if this limit is exceeded.`})
     @MaxLength(36)
     DefaultCoAgentID?: string;
         
-    @Field({nullable: true, description: `Agent-type-specific configuration JSON, validated against the agent type's ConfigSchema (when one is published) in the server-side entity subclass. For Realtime-type co-agents this holds the realtime profile: preferred model, per-provider voice settings, tone/speaking style (folded into the session system prompt at mint), user-override policy, and narration pacing. Null = type defaults apply.`}) 
+    @Field({nullable: true, description: `Agent-type-specific configuration JSON, validated against the agent type`}) 
     TypeConfiguration?: string;
         
     @Field(() => Boolean, {description: `When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents.`}) 
@@ -11388,47 +11338,40 @@ if this limit is exceeded.`})
     @MaxLength(20)
     AcceptsSkills: string;
         
-    @Field({description: `Controls whether this agent may ever self-activate skills from its prompt catalog. Auto: the agent sees its allowed skills whose own ActivationMode is Auto (double gate) and may activate them mid-run on its own judgment. RequestedOnly (default): the agent's prompt catalog is empty and skills only enter a run via an explicit user request (/skill mention). Orthogonal to AcceptsSkills, which governs which skills are available at all; this governs who may pull the activation trigger.`}) 
-    @MaxLength(20)
-    SkillActivationMode: string;
-        
-    @Field(() => Boolean, {description: `When 1, every root-level run of this agent executes in plan mode regardless of the per-request planMode flag — the agent must present a plan and receive human approval before any Actions or Sub-Agent steps execute. SupportsPlanMode is irrelevant when this is set. Use for high-consequence agents (e.g. ones with outbound-communication capabilities) where human-in-the-loop review is mandatory.`}) 
-    RequirePlanMode: boolean;
-        
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ContextCompressionPrompt?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Type?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     DefaultArtifactType?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     OwnerUser: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     AttachmentStorageProvider?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     Category?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     DefaultStorageAccount?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     DefaultCoAgent?: string;
         
     @Field({nullable: true}) 
@@ -11778,12 +11721,6 @@ export class CreateMJAIAgentInput {
     @Field({ nullable: true })
     AcceptsSkills?: string;
 
-    @Field({ nullable: true })
-    SkillActivationMode?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    RequirePlanMode?: boolean;
-
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -12009,12 +11946,6 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     AcceptsSkills?: string;
-
-    @Field({ nullable: true })
-    SkillActivationMode?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    RequirePlanMode?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12511,7 +12442,7 @@ export class MJAIArchitecture_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     ParentArchitecture?: string;
         
     @Field({nullable: true}) 
@@ -12743,12 +12674,12 @@ export class MJAIBridgeAgentIdentity_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Agent?: string;
+    @Field() 
+    @MaxLength(510)
+    Agent: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Provider: string;
         
 }
@@ -12932,7 +12863,7 @@ export class MJAIBridgeProviderChannel_ {
     @Field(() => Int, {description: `Display/attachment order of this channel for the provider (ascending).`}) 
     Sequence: number;
         
-    @Field({nullable: true, description: `Optional per-provider configuration JSON for this channel contribution (e.g. mapping platform tool names to the channel's tool vocabulary).`}) 
+    @Field({nullable: true, description: `Optional per-provider configuration JSON for this channel contribution (e.g. mapping platform tool names to the channel`}) 
     Configuration?: string;
         
     @Field() 
@@ -12942,11 +12873,11 @@ export class MJAIBridgeProviderChannel_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Provider: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Channel: string;
         
 }
@@ -13116,7 +13047,7 @@ export class MJAIBridgeProvider_ {
     @MaxLength(20)
     BridgeType: string;
         
-    @Field({description: `Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseRealtimeBridge, DriverClass). MUST match the @RegisterClass key on the concrete bridge driver.`}) 
+    @Field({description: `Driver key resolved at runtime via MJGlobal."ClassFactory"."CreateInstance"(BaseRealtimeBridge, DriverClass). MUST match the @RegisterClass key on the concrete bridge driver.`}) 
     @MaxLength(250)
     DriverClass: string;
         
@@ -13124,7 +13055,7 @@ export class MJAIBridgeProvider_ {
     @MaxLength(20)
     Status: string;
         
-    @Field({nullable: true, description: `Strongly-typed JSON of the platform's supported features (the IBridgeProviderFeatures interface, bound via JSONType metadata): join methods (OnDemandJoin, ScheduledJoin, InviteJoin, NativeInvite, InboundRouting, OutboundDial), directional media tracks (AudioIn/Out, VideoIn/Out, ScreenIn/Out), and signals (SpeakerDiarization, DTMF, CallTransfer, Recording). The engine gates optional driver calls on these flags; the base driver throws BridgeCapabilityNotSupportedError when a feature is claimed but unimplemented. Held as JSON so new features need no schema change. NULL/omitted = unsupported.`}) 
+    @Field({nullable: true, description: `Strongly-typed JSON of the platform`}) 
     SupportedFeatures?: string;
         
     @Field({nullable: true, description: `Optional JSON Schema validating the provider Configuration and per-session bridge Config payloads.`}) 
@@ -13586,7 +13517,7 @@ export class MJAIConfigurationParam_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Configuration: string;
         
 }
@@ -13785,19 +13716,19 @@ export class MJAIConfiguration_ {
     ParentID?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     DefaultPromptForContextCompression?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     DefaultPromptForContextSummarization?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     DefaultStorageProvider?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -14120,19 +14051,19 @@ export class MJAICredentialBinding_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     Credential: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     AIVendor?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     AIModelVendor?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     AIPromptModel?: string;
         
 }
@@ -14619,11 +14550,11 @@ export class MJAIModelAction_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     AIModel: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     AIAction: string;
         
 }
@@ -14804,11 +14735,11 @@ export class MJAIModelArchitecture_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Model: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Architecture: string;
         
 }
@@ -15015,26 +14946,26 @@ export class MJAIModelCost_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field(() => Float, {nullable: true, description: `Optional price per unit for input tokens served from the AI provider's prompt cache (cache reads / hits), expressed in the same currency and UnitType (e.g. per 1M tokens) as InputPricePerUnit. When NULL, cache-read tokens are priced at InputPricePerUnit. Cache reads are usually far cheaper than uncached input (e.g. ~0.1x for Anthropic/Gemini, ~0.5x for OpenAI).`}) 
+    @Field(() => Float, {nullable: true, description: `Optional price per unit for input tokens served from the AI provider`}) 
     CacheReadPricePerUnit?: number;
         
-    @Field(() => Float, {nullable: true, description: `Optional price per unit for input tokens written to the AI provider's prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.`}) 
+    @Field(() => Float, {nullable: true, description: `Optional price per unit for input tokens written to the AI provider`}) 
     CacheWritePricePerUnit?: number;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Model: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Vendor: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     PriceType: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     UnitType: string;
         
 }
@@ -15268,10 +15199,10 @@ export class MJAIModelModality_ {
     @MaxLength(500)
     SupportedFormats?: string;
         
-    @Field(() => Int, {nullable: true, description: `Model-specific maximum size in bytes. Overrides AIModality.DefaultMaxSizeBytes. NULL means use system default.`}) 
+    @Field(() => Int, {nullable: true, description: `Model-specific maximum size in bytes. Overrides AIModality."DefaultMaxSizeBytes". NULL means use system default.`}) 
     MaxSizeBytes?: number;
         
-    @Field(() => Int, {nullable: true, description: `Model-specific maximum count per message. Overrides AIModality.DefaultMaxCountPerMessage. NULL means use system default.`}) 
+    @Field(() => Int, {nullable: true, description: `Model-specific maximum count per message. Overrides AIModality."DefaultMaxCountPerMessage". NULL means use system default.`}) 
     MaxCountPerMessage?: number;
         
     @Field(() => Int, {nullable: true, description: `For image/video modalities: maximum dimension (width or height) in pixels supported by this model.`}) 
@@ -15287,11 +15218,11 @@ export class MJAIModelModality_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Model: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Modality: string;
         
 }
@@ -15843,11 +15774,11 @@ export class MJAIModelType_ {
     PrefillFallbackText?: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     DefaultInputModality: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     DefaultOutputModality: string;
         
     @Field(() => [MJAIModel_])
@@ -16107,15 +16038,15 @@ export class MJAIModelVendor_ {
     PrefillFallbackText?: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Model: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Vendor: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Type: string;
         
     @Field(() => [MJAICredentialBinding_])
@@ -16392,30 +16323,30 @@ export class MJAIModel_ {
     PrefillFallbackText?: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     AIModelType: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Vendor?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     DriverClass?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     DriverImportPath?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     APIName?: string;
         
     @Field(() => Int, {nullable: true}) 
     InputTokenLimit?: number;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     SupportedResponseFormats?: string;
         
     @Field(() => Boolean, {nullable: true}) 
@@ -17013,7 +16944,7 @@ export class MJAIPromptCategory_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -17239,19 +17170,19 @@ export class MJAIPromptModel_ {
     EffortLevel?: number;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Prompt: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Model: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Vendor?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Configuration?: string;
         
     @Field(() => [MJAICredentialBinding_])
@@ -17517,16 +17448,16 @@ export class MJAIPromptRunMedia_ {
     @Field({nullable: true, description: `Description of the media generated during prompt execution. Provides context for audit trail.`}) 
     Description?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    PromptRun?: string;
+    @Field() 
+    @MaxLength(510)
+    PromptRun: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Modality: string;
         
     @Field({nullable: true}) 
-    @MaxLength(500)
+    @MaxLength(1000)
     File?: string;
         
     @Field(() => [MJAIAgentRunMedia_])
@@ -17810,7 +17741,7 @@ export class MJAIPromptRun_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.`}) 
+    @Field({nullable: true, description: `References the parent AIPromptRun."ID" for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.`}) 
     @MaxLength(36)
     ParentID?: string;
         
@@ -17865,7 +17796,7 @@ export class MJAIPromptRun_ {
     @Field({nullable: true, description: `JSON array of stop sequences used. The model stops generating when any of these sequences are encountered`}) 
     StopSequences?: string;
         
-    @Field({nullable: true, description: `The response format requested for this run (e.g., 'JSON', 'Text', 'Markdown')`}) 
+    @Field({nullable: true, description: `The response format requested for this run (e.g., `}) 
     @MaxLength(50)
     ResponseFormat?: string;
         
@@ -17875,7 +17806,7 @@ export class MJAIPromptRun_ {
     @Field(() => Int, {nullable: true, description: `Number of top log probabilities requested per token (if LogProbs is true)`}) 
     TopLogProbs?: number;
         
-    @Field(() => Float, {nullable: true, description: `The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`}) 
+    @Field(() => Float, {nullable: true, description: `The total cost of all descendant (child and grandchild) prompt runs, excluding this run`}) 
     DescendantCost?: number;
         
     @Field(() => Int, {nullable: true, description: `Total number of validation attempts made (including the initial attempt)`}) 
@@ -17993,7 +17924,7 @@ export class MJAIPromptRun_ {
     @Field({nullable: true, description: `Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes`}) 
     ErrorDetails?: string;
         
-    @Field({nullable: true, description: `References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.`}) 
+    @Field({nullable: true, description: `References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don`}) 
     @MaxLength(36)
     ChildPromptID?: string;
         
@@ -18026,10 +17957,10 @@ export class MJAIPromptRun_ {
     @Field({nullable: true, description: `The assistant prefill text that was used during this prompt execution. Records whether native prefill or fallback was applied. NULL means no prefill was used.`}) 
     AssistantPrefill?: string;
         
-    @Field(() => Int, {nullable: true, description: `Number of input tokens served from the AI provider's prompt cache (a cache READ / hit) for this run, as reported by the provider. Counts only; no cost is derived here. NULL if the provider did not report cache reads or caching did not engage. Distinct from CacheHit/CacheKey, which track MemberJunction's own result cache.`}) 
+    @Field(() => Int, {nullable: true, description: `Number of input tokens served from the AI provider`}) 
     TokensCacheRead?: number;
         
-    @Field(() => Int, {nullable: true, description: `Number of input tokens written to the AI provider's prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.`}) 
+    @Field(() => Int, {nullable: true, description: `Number of input tokens written to the AI provider`}) 
     TokensCacheWrite?: number;
         
     @Field(() => Int, {nullable: true, description: `Rollup of TokensCacheRead across this prompt run and all of its descendant prompt runs (e.g. the individual attempts behind a parallel / multi-attempt / failover consolidation). For a leaf run this equals TokensCacheRead. Use this (not TokensCacheRead) when aggregating cache reads up a prompt-run or agent-run hierarchy so fan-out provider calls are not under-counted.`}) 
@@ -18039,51 +17970,51 @@ export class MJAIPromptRun_ {
     TokensCacheWriteRollup?: number;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Prompt: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Model: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Vendor: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Agent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Configuration?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     AgentRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     OriginalModel?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     RerunFromPromptRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Judge?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ChildPrompt?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     TestRun?: string;
         
     @Field({nullable: true}) 
@@ -18114,9 +18045,6 @@ export class MJAIPromptRun_ {
     
     @Field(() => [MJDuplicateRunDetailMatch_])
     MJDuplicateRunDetailMatches_AIPromptRunIDArray: MJDuplicateRunDetailMatch_[]; // Link to MJDuplicateRunDetailMatches
-    
-    @Field(() => [MJUserRoutineRun_])
-    MJUserRoutineRuns_PromptRunIDArray: MJUserRoutineRun_[]; // Link to MJUserRoutineRuns
     
 }
 
@@ -18791,16 +18719,6 @@ export class MJAIPromptRunResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJUserRoutineRun_])
-    async MJUserRoutineRuns_PromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Routine Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRuns')} WHERE ${provider.QuoteIdentifier('PromptRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjaipromptrun_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Runs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @Mutation(() => MJAIPromptRun_)
     async CreateMJAIPromptRun(
         @Arg('input', () => CreateMJAIPromptRunInput) input: CreateMJAIPromptRunInput,
@@ -19053,7 +18971,7 @@ export class MJAIPrompt_ {
     @MaxLength(20)
     PowerPreference: string;
         
-    @Field({description: `Controls parallelization: None (no parallelization), StaticCount (use AIPrompt.ParallelCount for total runs), ConfigParam (use config param specified in ParallelConfigParam for total runs), or ModelSpecific (check each AIPromptModel's individual settings).`}) 
+    @Field({description: `Controls parallelization: None (no parallelization), StaticCount (use AIPrompt."ParallelCount" for total runs), ConfigParam (use config param specified in ParallelConfigParam for total runs), or ModelSpecific (check each AIPromptModel`}) 
     @MaxLength(20)
     ParallelizationMode: string;
         
@@ -19185,23 +19103,23 @@ export class MJAIPrompt_ {
     RequireSpecificModels: boolean;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Template: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Category?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Type: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     AIModelType?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ResultSelectorPrompt?: string;
         
     @Field({nullable: true}) 
@@ -19872,7 +19790,7 @@ export class MJAIRemoteBrowserProvider_ {
     @MaxLength(20)
     ProviderType: string;
         
-    @Field({description: `Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseRemoteBrowserProvider, DriverClass). MUST match the @RegisterClass key on the concrete provider driver.`}) 
+    @Field({description: `Driver key resolved at runtime via MJGlobal."ClassFactory"."CreateInstance"(BaseRemoteBrowserProvider, DriverClass). MUST match the @RegisterClass key on the concrete provider driver.`}) 
     @MaxLength(250)
     DriverClass: string;
         
@@ -19880,7 +19798,7 @@ export class MJAIRemoteBrowserProvider_ {
     @MaxLength(20)
     Status: string;
         
-    @Field({nullable: true, description: `Strongly-typed JSON of the backend's supported features (the IRemoteBrowserProviderFeatures interface, bound via JSONType metadata): the universal CDP-control substrate (RawCdpControl), an optional provider-native AI-control harness (NativeAIControl, e.g. Browserbase Stagehand), LiveView, HumanTakeover, ScreenStreaming, and operational capabilities (Stealth, ProxyEgress, SessionRecording, PersistentContext, MultiTab, FileDownloads, CaptchaSolving). The engine gates optional driver calls on these flags; the base driver throws RemoteBrowserCapabilityNotSupportedError when a feature is claimed but unimplemented. Held as JSON so new features need no schema change. NULL/omitted = unsupported.`}) 
+    @Field({nullable: true, description: `Strongly-typed JSON of the backend`}) 
     SupportedFeatures?: string;
         
     @Field({description: `Default control mode for channels using this backend, overridable per-channel and at runtime: AgentOnly (only the agent drives — e.g. a sales demo), ViewOnly (the agent drives while humans watch the live view but cannot take over), or Collaborative (a human can grab the wheel — e.g. a trainer agent that demonstrates then watches the user try). The backend must support the capabilities a mode requires (HumanTakeover for Collaborative, LiveView for ViewOnly/Collaborative).`}) 
@@ -20128,27 +20046,27 @@ export class MJAIResultCache_ {
     PromptRunID?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     AIPrompt: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     AIModel: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Vendor?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Agent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Configuration?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     PromptRun?: string;
         
 }
@@ -20743,9 +20661,9 @@ export class MJAISkillSubAgent_ {
     @MaxLength(255)
     Skill: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(255)
-    SubAgent?: string;
+    SubAgent: string;
         
 }
 
@@ -20920,10 +20838,6 @@ export class MJAISkill_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({description: `Controls whether this skill may ever be self-activated by an agent. Auto: the skill may appear in accepting agents' prompt catalogs and be activated mid-run on agent judgment — but only for agents whose own SkillActivationMode is also Auto (double gate). RequestedOnly (default): the skill is excluded from prompt catalogs entirely and can only be activated when the user explicitly requests it for the run (a /skill mention flowing through ExecuteAgentParams.requestedSkillIDs). All other activation gates (AcceptsSkills, skill Status, per-agent assignment, user Run permission) apply unchanged in both modes.`}) 
-    @MaxLength(20)
-    ActivationMode: string;
-        
     @Field() 
     @MaxLength(100)
     CreatedByUser: string;
@@ -20974,9 +20888,6 @@ export class CreateMJAISkillInput {
     @Field({ nullable: true })
     CreatedByUserID?: string;
 
-    @Field({ nullable: true })
-    ActivationMode?: string;
-
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -21013,9 +20924,6 @@ export class UpdateMJAISkillInput {
 
     @Field({ nullable: true })
     CreatedByUserID?: string;
-
-    @Field({ nullable: true })
-    ActivationMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -21357,11 +21265,11 @@ export class MJAIVendorType_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Vendor: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Type: string;
         
 }
@@ -21531,7 +21439,7 @@ export class MJAIVendor_ {
     CredentialTypeID?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     CredentialType?: string;
         
     @Field(() => [MJAICredentialBinding_])
@@ -21810,11 +21718,11 @@ export class MJAPIApplicationScope_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Application: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Scope: string;
         
 }
@@ -22192,11 +22100,11 @@ export class MJAPIKeyApplication_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     APIKey: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Application: string;
         
 }
@@ -22365,11 +22273,11 @@ export class MJAPIKeyScope_ {
     Priority: number;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     APIKey: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Scope: string;
         
 }
@@ -22589,11 +22497,11 @@ export class MJAPIKeyUsageLog_ {
     DeniedReason?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     APIKey: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Application?: string;
         
 }
@@ -22811,7 +22719,7 @@ export class MJAPIKey_ {
     @MaxLength(255)
     Label: string;
         
-    @Field({nullable: true, description: `Optional detailed description of the key's intended use, integration details, or other notes.`}) 
+    @Field({nullable: true, description: `Optional detailed description of the key`}) 
     @MaxLength(1000)
     Description?: string;
         
@@ -22840,11 +22748,11 @@ export class MJAPIKey_ {
     KeyPrefix?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     CreatedByUser: string;
         
     @Field(() => [MJAPIKeyApplication_])
@@ -23102,7 +23010,7 @@ export class MJAPIScope_ {
     UIConfig?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -23342,15 +23250,15 @@ export class MJApplicationEntity_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Application: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     EntityBaseTable: string;
         
     @Field({nullable: true}) 
@@ -23532,11 +23440,11 @@ export class MJApplicationRole_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Application: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Role: string;
         
 }
@@ -23709,7 +23617,7 @@ export class MJApplicationSetting_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Application?: string;
         
 }
@@ -23888,14 +23796,14 @@ export class MJApplication_ {
     @MaxLength(20)
     Color?: string;
         
-    @Field({nullable: true, description: `JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()`}) 
+    @Field({nullable: true, description: `JSON array of default navigation items for this application. Parsed by BaseApplication."GetNavItems"()`}) 
     DefaultNavItems?: string;
         
     @Field({nullable: true, description: `TypeScript class name for ClassFactory registration (e.g., CRMApplication)`}) 
     @MaxLength(255)
     ClassName?: string;
         
-    @Field(() => Int, {description: `Default sequence position when adding this application to a new user's User Applications. Lower values appear first. Used when DefaultForNewUser is true.`}) 
+    @Field(() => Int, {description: `Default sequence position when adding this application to a new user`}) 
     DefaultSequence: number;
         
     @Field({description: `Application lifecycle status. Pending = not yet ready, Active = available for use, Disabled = temporarily unavailable, Deprecated = being phased out. Only Active applications are shown to users.`}) 
@@ -24265,7 +24173,7 @@ export class MJApplicationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Archive Configuration Entities
 //****************************************************************************
-@ObjectType({ description: `Per-entity configuration within an archive pipeline. Allows overriding the parent configuration\'s defaults for mode, retention, batch size, and filtering on a per-entity basis.` })
+@ObjectType({ description: `Per-entity configuration within an archive pipeline. Allows overriding the parent configuration` })
 export class MJArchiveConfigurationEntity_ {
     @Field() 
     @MaxLength(36)
@@ -24279,21 +24187,21 @@ export class MJArchiveConfigurationEntity_ {
     @MaxLength(36)
     EntityID: string;
         
-    @Field({nullable: true, description: `Archive mode override for this entity. NULL inherits from the parent configuration's DefaultMode.`}) 
+    @Field({nullable: true, description: `Archive mode override for this entity. NULL inherits from the parent configuration`}) 
     @MaxLength(20)
     Mode?: string;
         
-    @Field(() => Int, {nullable: true, description: `Retention period override in days. NULL inherits from the parent configuration's DefaultRetentionDays.`}) 
+    @Field(() => Int, {nullable: true, description: `Retention period override in days. NULL inherits from the parent configuration`}) 
     RetentionDays?: number;
         
     @Field({description: `The date field on the entity used to determine record age for retention policy evaluation. Defaults to __mj_CreatedAt.`}) 
     @MaxLength(100)
     DateField: string;
         
-    @Field({nullable: true, description: `Optional SQL WHERE clause fragment to further filter which records are eligible for archiving (e.g., "Status = 'Closed'").`}) 
+    @Field({nullable: true, description: `Optional SQL WHERE clause fragment to further filter which records are eligible for archiving (e.g., "Status = `}) 
     FilterExpression?: string;
         
-    @Field(() => Int, {nullable: true, description: `Batch size override for this entity. NULL inherits from the parent configuration's DefaultBatchSize.`}) 
+    @Field(() => Int, {nullable: true, description: `Batch size override for this entity. NULL inherits from the parent configuration`}) 
     BatchSize?: number;
         
     @Field(() => Int, {description: `Processing priority — lower numbers are archived first. Default is 100.`}) 
@@ -24319,11 +24227,11 @@ export class MJArchiveConfigurationEntity_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ArchiveConfiguration: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
 }
@@ -24583,11 +24491,11 @@ export class MJArchiveConfiguration_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     StorageAccount?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     CreatedByUser: string;
         
     @Field(() => [MJArchiveConfigurationEntity_])
@@ -24868,7 +24776,7 @@ export class MJArchiveRunDetail_ {
     ArchiveRun: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
 }
@@ -25109,11 +25017,11 @@ export class MJArchiveRun_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ArchiveConfiguration: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field(() => [MJArchiveRunDetail_])
@@ -25361,15 +25269,15 @@ export class MJArtifactPermission_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Artifact: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     SharedByUser?: string;
         
 }
@@ -25563,7 +25471,7 @@ export class MJArtifactType_ {
     @MaxLength(36)
     ParentID?: string;
         
-    @Field({nullable: true, description: `JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty ('name'|'description'|'displayMarkdown'|'displayHtml'|null), extractor (JavaScript code string). Child types inherit parent rules and can override by name.`}) 
+    @Field({nullable: true, description: `JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty (`}) 
     ExtractRules?: string;
         
     @Field({nullable: true, description: `Driver class name for the artifact viewer plugin. References Angular component registered with @RegisterClass decorator.`}) 
@@ -25574,7 +25482,7 @@ export class MJArtifactType_ {
     @MaxLength(255)
     Icon?: string;
         
-    @Field({description: `Classifies whether this artifact type stores text content ('Text', the default for all existing types) or a binary file in MJStorage ('File'). Used by AgentRunner and viewer components to route file-based artifacts correctly.`}) 
+    @Field({description: `Classifies whether this artifact type stores text content (`}) 
     @MaxLength(10)
     ContentCategory: string;
         
@@ -25585,7 +25493,7 @@ export class MJArtifactType_ {
     @Field(() => Int, {description: `Deterministic tiebreaker when multiple Artifact Types match the same MIME pattern. Higher values win. Within a specificity tier (exact > subtype-wildcard), the resolver sorts by Priority desc, then SystemSupplied = false beats SystemSupplied = true, then lowest ID wins.`}) 
     Priority: number;
         
-    @Field({description: `How artifacts of this type are delivered to the LLM by default. Inline: emitted as an inline content block (image_url, audio_url, small text, etc.) when the model supports the modality and the size is under the inline cap. ToolsOnly: never inlined; the agent reaches the bytes only through tool calls (get_full, library-specific tools). Per-instance override is one-way via ConversationArtifactVersion.ForceToolsOnly — an instance can opt out of inline but never opt in when the type default is ToolsOnly.`}) 
+    @Field({description: `How artifacts of this type are delivered to the LLM by default. Inline: emitted as an inline content block (image_url, audio_url, small text, etc.) when the model supports the modality and the size is under the inline cap. ToolsOnly: never inlined; the agent reaches the bytes only through tool calls (get_full, library-specific tools). Per-instance override is one-way via ConversationArtifactVersion."ForceToolsOnly" — an instance can opt out of inline but never opt in when the type default is ToolsOnly.`}) 
     @MaxLength(20)
     DefaultDeliveryMode: string;
         
@@ -25593,7 +25501,7 @@ export class MJArtifactType_ {
     SystemSupplied: boolean;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -25889,12 +25797,12 @@ export class MJArtifactUse_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field() 
+    @MaxLength(510)
+    ArtifactVersion: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
 }
@@ -26054,14 +25962,14 @@ export class MJArtifactVersionAttribute_ {
     @MaxLength(255)
     Name: string;
         
-    @Field({description: `TypeScript type definition of the value (e.g., 'string', 'number', 'Date', 'Array<{x: number, y: string}>')`}) 
+    @Field({description: `TypeScript type definition of the value (e.g., `}) 
     @MaxLength(500)
     Type: string;
         
     @Field({nullable: true, description: `JSON-serialized extracted value`}) 
     Value?: string;
         
-    @Field({nullable: true, description: `Maps this attribute to a standard property for UI rendering: 'name', 'description', 'displayMarkdown', 'displayHtml', or NULL for custom attributes`}) 
+    @Field({nullable: true, description: `Maps this attribute to a standard property for UI rendering: `}) 
     @MaxLength(50)
     StandardProperty?: string;
         
@@ -26071,9 +25979,9 @@ export class MJArtifactVersionAttribute_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field() 
+    @MaxLength(510)
+    ArtifactVersion: string;
         
 }
 
@@ -26260,45 +26168,45 @@ export class MJArtifactVersion_ {
     @MaxLength(500)
     ContentHash?: string;
         
-    @Field({nullable: true, description: `Name of this artifact version. Can differ from Artifact.Name as it may evolve with versions.`}) 
+    @Field({nullable: true, description: `Name of this artifact version. Can differ from Artifact."Name" as it may evolve with versions.`}) 
     @MaxLength(255)
     Name?: string;
         
-    @Field({nullable: true, description: `Description of this artifact version. Can differ from Artifact.Description as it may evolve with versions.`}) 
+    @Field({nullable: true, description: `Description of this artifact version. Can differ from Artifact."Description" as it may evolve with versions.`}) 
     Description?: string;
         
-    @Field({nullable: true, description: `Foreign key to the MJ: Files entity. When ContentMode is 'File', this references the binary file stored in MJStorage. NULL when ContentMode is 'Text'.`}) 
+    @Field({nullable: true, description: `Foreign key to the MJ: Files entity. When ContentMode is `}) 
     @MaxLength(36)
     FileID?: string;
         
-    @Field({description: `Determines how artifact content is stored. 'Text' (default) means the Content column holds the data. 'File' means FileID references a binary file in MJStorage and Content is unused.`}) 
+    @Field({description: `Determines how artifact content is stored. `}) 
     @MaxLength(10)
     ContentMode: string;
         
-    @Field({nullable: true, description: `MIME type of the stored file (e.g. application/pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`}) 
+    @Field({nullable: true, description: `MIME type of the stored file (e.g. application/pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is `}) 
     @MaxLength(200)
     MimeType?: string;
         
-    @Field({nullable: true, description: `Original filename of the stored file (e.g. report.pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`}) 
+    @Field({nullable: true, description: `Original filename of the stored file (e.g. report.pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is `}) 
     @MaxLength(500)
     FileName?: string;
         
-    @Field(() => Int, {nullable: true, description: `Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is 'File'.`}) 
+    @Field(() => Int, {nullable: true, description: `Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is `}) 
     ContentSizeBytes?: number;
         
-    @Field(() => Boolean, {description: `One-way override that forces this artifact version to be delivered via tools regardless of the Artifact Type's DefaultDeliveryMode. When true, the resolver never emits an inline content block for this version. There is no inverse override — an instance cannot be widened from ToolsOnly to Inline. Default false.`}) 
+    @Field(() => Boolean, {description: `One-way override that forces this artifact version to be delivered via tools regardless of the Artifact Type`}) 
     ForceToolsOnly: boolean;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Artifact: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(500)
+    @MaxLength(1000)
     File?: string;
         
     @Field(() => [MJArtifactVersionAttribute_])
@@ -26627,15 +26535,15 @@ export class MJArtifact_ {
     Visibility: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Environment: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Type: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field(() => [MJArtifactVersion_])
@@ -26866,11 +26774,11 @@ export class MJAuditLogType_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Parent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Authorization?: string;
         
     @Field({nullable: true}) 
@@ -27099,19 +27007,19 @@ export class MJAuditLog_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     AuditLogType: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Authorization?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity?: string;
         
 }
@@ -27295,7 +27203,7 @@ export class MJAuthorizationRole_ {
     @MaxLength(36)
     RoleID: string;
         
-    @Field({description: `Specifies whether this authorization is granted to ('grant') or explicitly denied ('deny') for the role.`}) 
+    @Field({description: `Specifies whether this authorization is granted to (`}) 
     @MaxLength(10)
     Type: string;
         
@@ -27306,11 +27214,11 @@ export class MJAuthorizationRole_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Authorization: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Role: string;
         
 }
@@ -27490,7 +27398,7 @@ export class MJAuthorization_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -27721,7 +27629,7 @@ export class MJAuthorizationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Cluster Analysis
 //****************************************************************************
-@ObjectType({ description: `A saved cluster analysis: the configuration, computed metrics, and projected 2D/3D layout of a clustering run over an entity\'s embedding vectors. First-class, queryable, and shareable — replaces the prior approach of stashing analyses in a User Settings JSON blob / browser localStorage. Owner-private; explicit shares are recorded in ResourcePermission against the "Cluster Analysis" ResourceType.` })
+@ObjectType({ description: `A saved cluster analysis: the configuration, computed metrics, and projected 2D/3D layout of a clustering run over an entity` })
 export class MJClusterAnalysis_ {
     @Field() 
     @MaxLength(36)
@@ -27752,7 +27660,7 @@ export class MJClusterAnalysis_ {
     @Field({nullable: true, description: `JSON of computed quality/shape metrics for the run — e.g. silhouette score, inertia, resolved cluster count, point count. Used to display analysis quality and to compare runs.`}) 
     Metrics?: string;
         
-    @Field({nullable: true, description: `JSON array of the projected points (2D or 3D coordinates) with each point's record key and assigned cluster index. Persisted because dimensionality reduction (UMAP) is stochastic — re-running would not reproduce the same layout — so the rendered scatter is reconstructed from this snapshot rather than recomputed.`}) 
+    @Field({nullable: true, description: `JSON array of the projected points (2D or 3D coordinates) with each point`}) 
     ProjectedPoints?: string;
         
     @Field({nullable: true, description: `JSON describing the saved viewport for the visualization (pan / zoom, and rotation for 3D) so the analysis reopens framed exactly as the user left it.`}) 
@@ -27769,11 +27677,11 @@ export class MJClusterAnalysis_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity?: string;
         
     @Field(() => [MJClusterAnalysisCluster_])
@@ -27968,7 +27876,7 @@ export class MJClusterAnalysisResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Cluster Analysis Clusters
 //****************************************************************************
-@ObjectType({ description: `One named cluster within a saved ClusterAnalysis. Holds the cluster\'s label (LLM-generated or user-edited), member count, and display color, so labels can be regenerated or hand-edited per cluster without re-running the whole analysis.` })
+@ObjectType({ description: `One named cluster within a saved ClusterAnalysis. Holds the cluster` })
 export class MJClusterAnalysisCluster_ {
     @Field() 
     @MaxLength(36)
@@ -27978,7 +27886,7 @@ export class MJClusterAnalysisCluster_ {
     @MaxLength(36)
     ClusterAnalysisID: string;
         
-    @Field(() => Int, {description: `Zero-based index of this cluster within the analysis, matching the cluster assignments stored in ClusterAnalysis.ProjectedPoints. Unique per analysis.`}) 
+    @Field(() => Int, {description: `Zero-based index of this cluster within the analysis, matching the cluster assignments stored in ClusterAnalysis."ProjectedPoints". Unique per analysis.`}) 
     ClusterIndex: number;
         
     @Field({nullable: true, description: `Display label for the cluster (e.g. an LLM-generated theme name like "Renewal & retention"). Nullable until named.`}) 
@@ -27992,7 +27900,7 @@ export class MJClusterAnalysisCluster_ {
     @MaxLength(20)
     Color?: string;
         
-    @Field(() => Boolean, {description: `True when a user has manually edited this cluster's label/color, so regenerating LLM labels for the analysis can skip user-curated clusters.`}) 
+    @Field(() => Boolean, {description: `True when a user has manually edited this cluster`}) 
     IsUserEdited: boolean;
         
     @Field() 
@@ -28002,7 +27910,7 @@ export class MJClusterAnalysisCluster_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ClusterAnalysis: string;
         
 }
@@ -28190,12 +28098,12 @@ export class MJCollectionArtifact_ {
     Preload: boolean;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Collection: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field() 
+    @MaxLength(510)
+    ArtifactVersion: string;
         
 }
 
@@ -28383,15 +28291,15 @@ export class MJCollectionPermission_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Collection: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     SharedByUser?: string;
         
 }
@@ -28598,15 +28506,15 @@ export class MJCollection_ {
     OwnerID?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Environment: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Owner?: string;
         
     @Field({nullable: true}) 
@@ -29077,15 +28985,15 @@ export class MJCommunicationLog_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     CommunicationProvider: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     CommunicationProviderMessageType: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     CommunicationRun?: string;
         
 }
@@ -29287,11 +29195,11 @@ export class MJCommunicationProviderMessageType_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     CommunicationProvider: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     CommunicationBaseMessageType: string;
         
     @Field(() => [MJCommunicationLog_])
@@ -29733,7 +29641,7 @@ export class MJCommunicationRun_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field(() => [MJCommunicationLog_])
@@ -29928,7 +29836,7 @@ export class MJCompany_ {
     @MaxLength(100)
     Website?: string;
         
-    @Field({nullable: true, description: `URL pointing to the company's logo image, used for branding in the UI.`}) 
+    @Field({nullable: true, description: `URL pointing to the company`}) 
     @MaxLength(500)
     LogoURL?: string;
         
@@ -30236,11 +30144,11 @@ export class MJCompanyIntegrationEntityMap_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     CompanyIntegration: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field(() => [MJCompanyIntegrationFieldMap_])
@@ -30516,7 +30424,7 @@ export class MJCompanyIntegrationFieldMap_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(500)
+    @MaxLength(1000)
     EntityMap: string;
         
 }
@@ -30739,11 +30647,11 @@ export class MJCompanyIntegrationRecordMap_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     CompanyIntegration: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
 }
@@ -30922,7 +30830,7 @@ export class MJCompanyIntegrationRunAPILog_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     CompanyIntegrationRun: string;
         
 }
@@ -31115,7 +31023,7 @@ export class MJCompanyIntegrationRunDetail_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field({nullable: true}) 
@@ -31339,15 +31247,15 @@ export class MJCompanyIntegrationRun_ {
     ScheduledJobRunID?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Integration: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Company: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     RunByUser: string;
         
     @Field(() => [MJCompanyIntegrationRunAPILog_])
@@ -31602,7 +31510,7 @@ export class MJCompanyIntegrationSyncWatermark_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(500)
+    @MaxLength(1000)
     EntityMap: string;
         
 }
@@ -31792,7 +31700,7 @@ export class MJCompanyIntegration_ {
     @MaxLength(255)
     APIKey?: string;
         
-    @Field({nullable: true, description: `The company's identifier in the external system, used for API calls.`}) 
+    @Field({nullable: true, description: `The company`}) 
     @MaxLength(100)
     ExternalSystemID?: string;
         
@@ -31870,19 +31778,19 @@ export class MJCompanyIntegration_ {
     ScheduledJobID?: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Company: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Integration: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     DriverClassName?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     DriverImportPath?: string;
         
     @Field({nullable: true}) 
@@ -32262,11 +32170,11 @@ export class MJComponentDependency_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(500)
+    @MaxLength(1000)
     Component: string;
         
     @Field() 
-    @MaxLength(500)
+    @MaxLength(1000)
     DependencyComponent: string;
         
 }
@@ -32695,11 +32603,11 @@ export class MJComponentLibraryLink_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(500)
+    @MaxLength(1000)
     Component: string;
         
     @Field() 
-    @MaxLength(500)
+    @MaxLength(1000)
     Library: string;
         
 }
@@ -33138,11 +33046,11 @@ export class MJComponent_ {
     @Field({nullable: true, description: `The ID of the AI model used to generate the vector embedding for the functional requirements`}) 
     FunctionalRequirementsVectorEmbeddingModelID?: string;
         
-    @Field(() => Boolean, {description: `Indicates whether the component has any custom properties that are marked as required. This is auto-calculated based on the component's properties array to identify components with mandatory custom configuration.`}) 
+    @Field(() => Boolean, {description: `Indicates whether the component has any custom properties that are marked as required. This is auto-calculated based on the component`}) 
     HasRequiredCustomProps: boolean;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     SourceRegistry?: string;
         
     @Field(() => [MJComponentDependency_])
@@ -33672,9 +33580,9 @@ export class MJContentItemAttribute_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(250)
-    ContentItem?: string;
+    @Field() 
+    @MaxLength(500)
+    ContentItem: string;
         
 }
 
@@ -33855,16 +33763,16 @@ export class MJContentItemDuplicate_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(250)
-    ContentItemA?: string;
+    @Field() 
+    @MaxLength(500)
+    ContentItemA: string;
+        
+    @Field() 
+    @MaxLength(500)
+    ContentItemB: string;
         
     @Field({nullable: true}) 
-    @MaxLength(250)
-    ContentItemB?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     ResolvedByUser?: string;
         
 }
@@ -34065,19 +33973,19 @@ export class MJContentItemTag_ {
     @MaxLength(36)
     AIPromptRunID?: string;
         
-    @Field({nullable: true, description: `The LLM's reasoning / justification for assigning this tag to the content item, captured at extraction time. Surfaced in the item drilldown so users can audit why a tag was applied without re-parsing the AI Prompt Run result JSON. Nullable when no reasoning was produced.`}) 
+    @Field({nullable: true, description: `The LLM`}) 
     Reasoning?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(250)
-    Item?: string;
+    @Field() 
+    @MaxLength(500)
+    Item: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Tag_Virtual?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     AIPromptRun?: string;
         
 }
@@ -34281,7 +34189,7 @@ export class MJContentItem_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.`}) 
+    @Field({nullable: true, description: `For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD."EntityID" + ERD."RecordID". NULL for non-entity sources.`}) 
     @MaxLength(36)
     EntityRecordDocumentID?: string;
         
@@ -34303,28 +34211,28 @@ export class MJContentItem_ {
     @Field({nullable: true, description: `Timestamp of the most recent successful autotagging run for this content item.`}) 
     LastTaggedAt?: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ContentSource?: string;
+    @Field() 
+    @MaxLength(510)
+    ContentSource: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ContentType: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ContentSourceType: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ContentFileType: string;
         
     @Field({nullable: true}) 
-    @MaxLength(450)
+    @MaxLength(900)
     EntityRecordDocument?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     EmbeddingModel?: string;
         
     @Field(() => [MJContentItemAttribute_])
@@ -34656,16 +34564,16 @@ export class MJContentProcessRunDetail_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ContentProcessRun?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ContentSource?: string;
+    @Field() 
+    @MaxLength(510)
+    ContentProcessRun: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
+    ContentSource: string;
+        
+    @Field() 
+    @MaxLength(510)
     ContentSourceType: string;
         
     @Field(() => [MJContentProcessRunPromptRun_])
@@ -34902,9 +34810,9 @@ export class MJContentProcessRunPromptRun_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    AIPromptRun?: string;
+    @Field() 
+    @MaxLength(510)
+    AIPromptRun: string;
         
 }
 
@@ -35097,12 +35005,12 @@ export class MJContentProcessRun_ {
     @Field({nullable: true, description: `JSON snapshot of the pipeline configuration used for this run. Conforms to the IContentProcessRunConfiguration interface. Includes batch size, rate limits, error thresholds, and duplicate detection settings.`}) 
     Configuration?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Source?: string;
+    @Field() 
+    @MaxLength(510)
+    Source: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     StartedByUser?: string;
         
     @Field(() => [MJContentProcessRunDetail_])
@@ -35338,9 +35246,9 @@ export class MJContentSourceParam_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ContentSource?: string;
+    @Field() 
+    @MaxLength(510)
+    ContentSource: string;
         
 }
 
@@ -35922,35 +35830,35 @@ export class MJContentSource_ {
     ScheduledActionID?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ContentType: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ContentSourceType: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ContentFileType: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     EmbeddingModel?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     VectorIndex?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(250)
+    @MaxLength(500)
     EntityDocument?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ScheduledAction?: string;
         
     @Field(() => [MJContentItem_])
@@ -36413,15 +36321,15 @@ export class MJContentType_ {
     Configuration?: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     AIModel: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     EmbeddingModel?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     VectorIndex?: string;
         
     @Field(() => [MJContentSource_])
@@ -36642,7 +36550,7 @@ export class MJConversationArtifactPermission_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ConversationArtifact: string;
         
 }
@@ -36811,7 +36719,7 @@ export class MJConversationArtifactVersion_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ConversationArtifact: string;
         
     @Field(() => [MJConversationDetail_])
@@ -37010,12 +36918,12 @@ export class MJConversationArtifact_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Conversation?: string;
+    @Field() 
+    @MaxLength(510)
+    Conversation: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     ArtifactType: string;
         
     @Field(() => [MJConversationArtifactPermission_])
@@ -37236,13 +37144,12 @@ export class MJConversationDetailArtifact_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    ConversationDetail?: string;
+    @Field() 
+    ConversationDetail: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field() 
+    @MaxLength(510)
+    ArtifactVersion: string;
         
 }
 
@@ -37381,7 +37288,7 @@ export class MJConversationDetailArtifactResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Detail Attachments
 //****************************************************************************
-@ObjectType({ description: `DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework\'s standard handling of Status=\'Deprecated\'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.` })
+@ObjectType({ description: `DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework` })
 export class MJConversationDetailAttachment_ {
     @Field() 
     @MaxLength(36)
@@ -37441,20 +37348,19 @@ export class MJConversationDetailAttachment_ {
     @MaxLength(36)
     ArtifactVersionID?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    ConversationDetail?: string;
+    @Field() 
+    ConversationDetail: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Modality: string;
         
     @Field({nullable: true}) 
-    @MaxLength(500)
+    @MaxLength(1000)
     File?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ArtifactVersion?: string;
         
 }
@@ -37686,12 +37592,11 @@ export class MJConversationDetailRating_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    ConversationDetail?: string;
+    @Field() 
+    ConversationDetail: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
 }
@@ -37948,32 +37853,31 @@ export class MJConversationDetail_ {
     @MaxLength(20)
     MediaType?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Conversation?: string;
+    @Field() 
+    @MaxLength(510)
+    Conversation: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Artifact?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ArtifactVersion?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
     Parent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Agent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     TestRun?: string;
         
     @Field({nullable: true}) 
@@ -38418,11 +38322,11 @@ export class MJConversation_ {
     @Field(() => Boolean, {description: `Indicates if this conversation has been archived and should not appear in active lists.`}) 
     IsArchived: boolean;
         
-    @Field({nullable: true, description: `Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.`}) 
+    @Field({nullable: true, description: `Generic `}) 
     @MaxLength(36)
     LinkedEntityID?: string;
         
-    @Field({nullable: true, description: `The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, int, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (NVARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).`}) 
+    @Field({nullable: true, description: `The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, INTEGER, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (VARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).`}) 
     @MaxLength(500)
     LinkedRecordID?: string;
         
@@ -38455,19 +38359,19 @@ export class MJConversation_ {
     @MaxLength(36)
     TestRunID?: string;
         
-    @Field({description: `Controls where this conversation surfaces in the UI. Global = appears in the main Chat app (no application binding). Application = scoped to a specific Application's embedded chat surface (e.g. the Form Builder cockpit); hidden from the main chat list by default. Both = explicitly promoted to appear in BOTH the main chat list and the bound Application's embedded surface. Defaults to Global so pre-existing conversations stay visible in main chat. Paired with ApplicationID via a cross-column CHECK constraint: Global => ApplicationID IS NULL; Application or Both => ApplicationID IS NOT NULL.`}) 
+    @Field({description: `Controls where this conversation surfaces in the UI. Global = appears in the main Chat app (no application binding). Application = scoped to a specific Application`}) 
     @MaxLength(20)
     ApplicationScope: string;
         
-    @Field({nullable: true, description: `Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.`}) 
+    @Field({nullable: true, description: `Optional Application this conversation is bound to. Required when ApplicationScope is `}) 
     @MaxLength(36)
     ApplicationID?: string;
         
-    @Field({nullable: true, description: `Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.`}) 
+    @Field({nullable: true, description: `Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation."DefaultAgentID" > embedder`}) 
     @MaxLength(36)
     DefaultAgentID?: string;
         
-    @Field({nullable: true, description: `Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.`}) 
+    @Field({nullable: true, description: `Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it`}) 
     AdditionalData?: string;
         
     @Field({nullable: true, description: `For a Meeting-Room conversation, the MJ: Files row holding the room-level composite recording (the LiveKit egress MP4, copied into MJStorage). NULL when the meeting was not recorded.`}) 
@@ -38479,35 +38383,35 @@ export class MJConversation_ {
     EgressID?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     LinkedEntity?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     DataContext?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Environment: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Project?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     TestRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Application?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     DefaultAgent?: string;
         
     @Field({nullable: true}) 
@@ -38534,9 +38438,6 @@ export class MJConversation_ {
     
     @Field(() => [MJAIAgentSession_])
     MJAIAgentSessions_ConversationIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
-    
-    @Field(() => [MJUserRoutine_])
-    MJUserRoutines_ConversationIDArray: MJUserRoutine_[]; // Link to MJUserRoutines
     
 }
 
@@ -38812,16 +38713,6 @@ export class MJConversationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessions')} WHERE ${provider.QuoteIdentifier('ConversationID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Sessions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjconversation_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Sessions', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJUserRoutine_])
-    async MJUserRoutines_ConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Routines', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutines')} WHERE ${provider.QuoteIdentifier('ConversationID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routines', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjconversation_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routines', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -39117,7 +39008,7 @@ export class MJCredentialCategory_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -39336,9 +39227,6 @@ export class MJCredentialType_ {
     @Field(() => [MJIntegration_])
     MJIntegrations_CredentialTypeIDArray: MJIntegration_[]; // Link to MJIntegrations
     
-    @Field(() => [MJExternalDataSourceType_])
-    MJExternalDataSourceTypes_RequiredCredentialTypeIDArray: MJExternalDataSourceType_[]; // Link to MJExternalDataSourceTypes
-    
     @Field(() => [MJAIVendor_])
     MJAIVendors_CredentialTypeIDArray: MJAIVendor_[]; // Link to MJAIVendors
     
@@ -39495,16 +39383,6 @@ export class MJCredentialTypeResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJExternalDataSourceType_])
-    async MJExternalDataSourceTypes_RequiredCredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: External Data Source Types', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExternalDataSourceTypes')} WHERE ${provider.QuoteIdentifier('RequiredCredentialTypeID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: External Data Source Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjcredentialtype_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: External Data Source Types', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJAIVendor_])
     async MJAIVendors_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Vendors', userPayload);
@@ -39597,11 +39475,11 @@ export class MJCredential_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     CredentialType: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Category?: string;
         
     @Field(() => [MJOAuthToken_])
@@ -39627,9 +39505,6 @@ export class MJCredential_ {
     
     @Field(() => [MJSignatureAccount_])
     MJSignatureAccounts_CredentialIDArray: MJSignatureAccount_[]; // Link to MJSignatureAccounts
-    
-    @Field(() => [MJExternalDataSource_])
-    MJExternalDataSources_CredentialIDArray: MJExternalDataSource_[]; // Link to MJExternalDataSources
     
 }
 
@@ -39864,16 +39739,6 @@ export class MJCredentialResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJExternalDataSource_])
-    async MJExternalDataSources_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: External Data Sources', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExternalDataSources')} WHERE ${provider.QuoteIdentifier('CredentialID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: External Data Sources', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjcredential_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: External Data Sources', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @Mutation(() => MJCredential_)
     async CreateMJCredential(
         @Arg('input', () => CreateMJCredentialInput) input: CreateMJCredentialInput,
@@ -39934,11 +39799,11 @@ export class MJDashboardCategory_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Parent?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
@@ -40154,15 +40019,15 @@ export class MJDashboardCategoryLink_ {
     @MaxLength(36)
     UserID: string;
         
-    @Field({nullable: true, description: `The category in the user's personal folder structure. NULL means the dashboard appears at root level.`}) 
+    @Field({nullable: true, description: `The category in the user`}) 
     @MaxLength(36)
     DashboardCategoryID?: string;
         
-    @Field({nullable: true, description: `Optional user-friendly alias for the dashboard within this user's view. If NULL, uses the original dashboard name.`}) 
+    @Field({nullable: true, description: `Optional user-friendly alias for the dashboard within this user`}) 
     @MaxLength(255)
     DisplayName?: string;
         
-    @Field(() => Int, {description: `Display order of this dashboard within the user's category. Lower values appear first.`}) 
+    @Field(() => Int, {description: `Display order of this dashboard within the user`}) 
     Sequence: number;
         
     @Field() 
@@ -40172,15 +40037,15 @@ export class MJDashboardCategoryLink_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Dashboard: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     DashboardCategory?: string;
         
 }
@@ -40369,15 +40234,15 @@ export class MJDashboardCategoryPermission_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     DashboardCategory: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     SharedByUser?: string;
         
 }
@@ -40785,15 +40650,15 @@ export class MJDashboardPermission_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Dashboard: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     SharedByUser?: string;
         
 }
@@ -40989,15 +40854,15 @@ export class MJDashboardUserPreference_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Dashboard: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Application?: string;
         
 }
@@ -41173,11 +41038,11 @@ export class MJDashboardUserState_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Dashboard: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
 }
@@ -41362,7 +41227,7 @@ export class MJDashboard_ {
     @MaxLength(36)
     ApplicationID?: string;
         
-    @Field({nullable: true, description: `Specifies the runtime class that will be used for the Dashboard when Type is set to 'Code'. This class contains the custom logic and implementation for code-based dashboards.`}) 
+    @Field({nullable: true, description: `Specifies the runtime class that will be used for the Dashboard when Type is set to `}) 
     @MaxLength(255)
     DriverClass?: string;
         
@@ -41375,19 +41240,19 @@ export class MJDashboard_ {
     EnvironmentID: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Category?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Application?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Environment: string;
         
     @Field(() => [MJDashboardCategoryLink_])
@@ -41659,7 +41524,7 @@ export class MJDataContextItem_ {
     @MaxLength(36)
     EntityID?: string;
         
-    @Field({nullable: true, description: `The Primary Key value for the record, only used when Type='single_record'`}) 
+    @Field({nullable: true, description: `The Primary Key value for the record, only used when Type=`}) 
     @MaxLength(450)
     RecordID?: string;
         
@@ -41686,19 +41551,19 @@ export class MJDataContextItem_ {
     CodeName?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     DataContext: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     View?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Query?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity?: string;
         
 }
@@ -41913,7 +41778,7 @@ export class MJDataContext_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field(() => [MJDataContextItem_])
@@ -42139,11 +42004,11 @@ export class MJDatasetItem_ {
     Columns?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Dataset: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
 }
@@ -42554,11 +42419,11 @@ export class MJDuplicateRunDetailMatch_ {
     LLMProposedFieldMap?: string;
         
     @Field() 
-    @MaxLength(500)
+    @MaxLength(1000)
     DuplicateRunDetail: string;
         
     @Field({nullable: true}) 
-    @MaxLength(450)
+    @MaxLength(900)
     RecordMergeLog?: string;
         
     @Field({nullable: true}) 
@@ -42817,7 +42682,7 @@ export class MJDuplicateRunDetail_ {
     @Field({nullable: true, description: `If MatchStatus=Skipped, this field can be used to store the reason why the record was skipped`}) 
     SkippedReason?: string;
         
-    @Field({nullable: true, description: `If MatchStatus='Error' this field can be used to track the error from that phase of the process for logging/diagnostics.`}) 
+    @Field({nullable: true, description: `If MatchStatus=`}) 
     MatchErrorMessage?: string;
         
     @Field({description: `Status of any merge operations for this record (Not Applicable, Pending, Complete, Failed).`}) 
@@ -42843,7 +42708,7 @@ export class MJDuplicateRunDetail_ {
     EndedAt?: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     DuplicateRun: string;
         
     @Field(() => [MJDuplicateRunDetailMatch_])
@@ -43102,19 +42967,19 @@ export class MJDuplicateRun_ {
     CancellationRequested: boolean;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     StartedByUser: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     SourceList?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     ApprovedByUser?: string;
         
     @Field(() => [MJDuplicateRunDetail_])
@@ -43353,7 +43218,7 @@ export class MJEmployeeCompanyIntegration_ {
     @MaxLength(36)
     CompanyIntegrationID: string;
         
-    @Field({description: `The employee's unique identifier in the external integrated system.`}) 
+    @Field({description: `The employee`}) 
     @MaxLength(750)
     ExternalSystemRecordID: string;
         
@@ -43366,12 +43231,12 @@ export class MJEmployeeCompanyIntegration_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(81)
-    Employee?: string;
+    @Field() 
+    @MaxLength(162)
+    Employee: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     CompanyIntegration: string;
         
 }
@@ -43537,12 +43402,12 @@ export class MJEmployeeRole_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(81)
-    Employee?: string;
+    @Field() 
+    @MaxLength(162)
+    Employee: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Role: string;
         
 }
@@ -43696,12 +43561,12 @@ export class MJEmployeeSkill_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(81)
-    Employee?: string;
+    @Field() 
+    @MaxLength(162)
+    Employee: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Skill: string;
         
 }
@@ -43845,11 +43710,11 @@ export class MJEmployee_ {
     @MaxLength(36)
     BCMID: string;
         
-    @Field({description: `Employee's first name or given name.`}) 
+    @Field({description: `Employee`}) 
     @MaxLength(30)
     FirstName: string;
         
-    @Field({description: `Employee's last name or surname.`}) 
+    @Field({description: `Employee`}) 
     @MaxLength(50)
     LastName: string;
         
@@ -43861,15 +43726,15 @@ export class MJEmployee_ {
     @MaxLength(36)
     SupervisorID?: string;
         
-    @Field({nullable: true, description: `Employee's job title or position within the organization.`}) 
+    @Field({nullable: true, description: `Employee`}) 
     @MaxLength(50)
     Title?: string;
         
-    @Field({description: `Employee's primary email address, must be unique across the system.`}) 
+    @Field({description: `Employee`}) 
     @MaxLength(100)
     Email: string;
         
-    @Field({nullable: true, description: `Employee's primary phone number for business contact.`}) 
+    @Field({nullable: true, description: `Employee`}) 
     @MaxLength(20)
     Phone?: string;
         
@@ -43883,23 +43748,23 @@ export class MJEmployee_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(81)
+    @MaxLength(162)
     FirstLast?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(81)
+    @MaxLength(162)
     Supervisor?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(30)
+    @MaxLength(60)
     SupervisorFirstName?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     SupervisorLastName?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     SupervisorEmail?: string;
         
     @Field(() => [MJEmployeeCompanyIntegration_])
@@ -44617,11 +44482,11 @@ export class MJEncryptionKey_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     EncryptionKeySource: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     EncryptionAlgorithm: string;
         
     @Field(() => [MJEntityField_])
@@ -44857,7 +44722,7 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `When set to 0, CodeGen no longer generates a base view for the entity.`}) 
     BaseViewGenerated: boolean;
         
-    @Field({description: `Database schema containing this entity's table and view.`}) 
+    @Field({description: `Database schema containing this entity`}) 
     @MaxLength(255)
     SchemaName: string;
         
@@ -44904,7 +44769,7 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `Indicates if the full-text catalog was auto-generated by CodeGen.`}) 
     FullTextCatalogGenerated: boolean;
         
-    @Field({nullable: true, description: `Name of the full-text index on this entity's table.`}) 
+    @Field({nullable: true, description: `Name of the full-text index on this entity`}) 
     @MaxLength(255)
     FullTextIndex?: string;
         
@@ -44945,7 +44810,7 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0`}) 
     CascadeDeletes: boolean;
         
-    @Field({description: `Hard deletes physically remove rows from the underlying BaseTable. Soft deletes do not remove rows but instead mark the row as deleted by using the special field __mj_DeletedAt which will automatically be added to the entity's basetable by the CodeGen tool.`}) 
+    @Field({description: `Hard deletes physically remove rows from the underlying BaseTable. Soft deletes do not remove rows but instead mark the row as deleted by using the special field __mj_DeletedAt which will automatically be added to the entity`}) 
     @MaxLength(10)
     DeleteType: string;
         
@@ -45029,7 +44894,7 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.`}) 
     AutoUpdateAllowUserSearchAPI: boolean;
         
-    @Field(() => Boolean, {description: `When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity.Save() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.`}) 
+    @Field(() => Boolean, {description: `When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity."Save"() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.`}) 
     TrustServerCacheCompletely: boolean;
         
     @Field(() => Boolean, {description: `When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).`}) 
@@ -45038,19 +44903,11 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.`}) 
     AutoUpdateSupportsGeoCoding: boolean;
         
-    @Field(() => Boolean, {description: `Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. This column is the single source of truth at runtime; schema-level defaults are applied at CodeGen time via newEntityDefaults.AllowCachingBySchema.`}) 
+    @Field(() => Boolean, {description: `Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. This column is the single source of truth at runtime; schema-level defaults are applied at CodeGen time via newEntityDefaults."AllowCachingBySchema".`}) 
     AllowCaching: boolean;
         
     @Field(() => Boolean, {description: `When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.`}) 
     DetectExternalChanges: boolean;
-        
-    @Field({nullable: true}) 
-    @MaxLength(36)
-    ExternalDataSourceID?: string;
-        
-    @Field({nullable: true, description: `Remote object name (table / view / collection) on the external system that backs this entity. Resolved against the data source DefaultSchema/DefaultDatabase when unqualified. Only meaningful when ExternalDataSourceID is set.`}) 
-    @MaxLength(255)
-    ExternalObjectName?: string;
         
     @Field({nullable: true, description: `Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`}) 
     CodeName?: string;
@@ -45062,15 +44919,15 @@ export class MJEntity_ {
     BaseTableCodeName?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ParentEntity?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ParentBaseTable?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ParentBaseView?: string;
         
     @Field({nullable: true}) 
@@ -45265,6 +45122,9 @@ export class MJEntity_ {
     
     @Field(() => [MJProcessRunDetail_])
     MJProcessRunDetails_EntityIDArray: MJProcessRunDetail_[]; // Link to MJProcessRunDetails
+    
+    @Field(() => [MJSystemEvent_])
+    MJSystemEvents_EntityIDArray: MJSystemEvent_[]; // Link to MJSystemEvents
     
     @Field(() => [MJProcessRun_])
     MJProcessRuns_EntityIDArray: MJProcessRun_[]; // Link to MJProcessRuns
@@ -45474,12 +45334,6 @@ export class CreateMJEntityInput {
     @Field(() => Boolean, { nullable: true })
     DetectExternalChanges?: boolean;
 
-    @Field({ nullable: true })
-    ExternalDataSourceID: string | null;
-
-    @Field({ nullable: true })
-    ExternalObjectName: string | null;
-
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -45672,12 +45526,6 @@ export class UpdateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     DetectExternalChanges?: boolean;
-
-    @Field({ nullable: true })
-    ExternalDataSourceID?: string | null;
-
-    @Field({ nullable: true })
-    ExternalObjectName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -46383,6 +46231,16 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJSystemEvent_])
+    async MJSystemEvents_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: System Events', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSystemEvents')} WHERE ${provider.QuoteIdentifier('EntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: System Events', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: System Events', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJProcessRun_])
     async MJProcessRuns_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Process Runs', userPayload);
@@ -46503,7 +46361,7 @@ export class MJEntityActionFilter_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(425)
+    @MaxLength(850)
     EntityAction: string;
         
     @Field() 
@@ -46853,11 +46711,11 @@ export class MJEntityActionInvocation_ {
     RuntimeUXDriverClass?: string;
         
     @Field() 
-    @MaxLength(425)
+    @MaxLength(850)
     EntityAction: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     InvocationType: string;
         
 }
@@ -47034,11 +46892,11 @@ export class MJEntityActionParam_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(425)
+    @MaxLength(850)
     EntityAction: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ActionParam: string;
         
 }
@@ -47215,11 +47073,11 @@ export class MJEntityAction_ {
     ID: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(425)
+    @MaxLength(850)
     Action: string;
         
     @Field(() => [MJEntityActionFilter_])
@@ -47455,19 +47313,19 @@ export class MJEntityAIAction_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     AIModel: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     AIAction: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     OutputEntity?: string;
         
 }
@@ -47695,7 +47553,7 @@ export class MJEntityCommunicationField_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     EntityCommunicationMessageType: string;
         
 }
@@ -47859,11 +47717,11 @@ export class MJEntityCommunicationMessageType_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     BaseMessageType: string;
         
     @Field(() => [MJEntityCommunicationField_])
@@ -48043,7 +47901,7 @@ export class MJEntityDocumentRun_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(250)
+    @MaxLength(500)
     EntityDocument: string;
         
 }
@@ -48216,7 +48074,7 @@ export class MJEntityDocumentSetting_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(250)
+    @MaxLength(500)
     EntityDocument: string;
         
 }
@@ -48571,7 +48429,7 @@ export class MJEntityDocument_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `Optional foreign key to the specific Vector Index where this entity document's embeddings should be stored. When specified, the vectorization pipeline will upsert vectors directly to this index rather than auto-creating or looking up an index based on VectorDatabaseID + AIModelID. This enables explicit control over which Pinecone/Weaviate/etc. index is used per entity document, supporting multi-index architectures and shared indexes across entity types.`}) 
+    @Field({nullable: true, description: `Optional foreign key to the specific Vector Index where this entity document`}) 
     @MaxLength(36)
     VectorIndexID?: string;
         
@@ -48601,27 +48459,27 @@ export class MJEntityDocument_ {
     AutomationLevel: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Type: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     VectorDatabase: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Template: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     AIModel: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     VectorIndex?: string;
         
     @Field({nullable: true}) 
@@ -48936,11 +48794,11 @@ export class MJEntityFieldValue_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     EntityField: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
@@ -49170,7 +49028,7 @@ export class MJEntityField_ {
     @MaxLength(20)
     ValueListType: string;
         
-    @Field({nullable: true, description: `Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.`}) 
+    @Field({nullable: true, description: `Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to `}) 
     @MaxLength(50)
     ExtendedType?: string;
         
@@ -49294,7 +49152,7 @@ export class MJEntityField_ {
     @Field(() => Boolean, {description: `When 1, indicates RelatedEntityID/RelatedEntityFieldName were set via metadata (not a database constraint). Protects these fields from being cleared by schema sync.`}) 
     IsSoftForeignKey: boolean;
         
-    @Field({nullable: true, description: `JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`}) 
+    @Field({nullable: true, description: `JSON configuration for additional fields to join from the related entity into this entity`}) 
     RelatedEntityJoinFields?: string;
         
     @Field({nullable: true, description: `The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.`}) 
@@ -49320,26 +49178,26 @@ export class MJEntityField_ {
     @Field(() => Boolean, {description: `When true (default), CodeGen can automatically suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, GeoAddress, etc.) during LLM field categorization. Set to 0 to lock admin-specified ExtendedType.`}) 
     AutoUpdateExtendedType: boolean;
         
-    @Field(() => Boolean, {description: `When 1, this field is a SQL Server computed column or PostgreSQL generated column — physically present in the base table but read-only at the SQL layer. Distinct from IsVirtual, which means the column is not in the base table at all (e.g., joined name lookups in the base view). A computed column has both IsVirtual=1 (read-only at the API layer) and IsComputed=1 (physically in the table). The difference matters for base-view JOIN target selection: when an FK's related Name Field is computed, the generated view joins to the related entity's base table instead of its view.`}) 
+    @Field(() => Boolean, {description: `When 1, this field is a SQL Server computed column or PostgreSQL generated column — physically present in the base table but read-only at the SQL layer. Distinct from IsVirtual, which means the column is not in the base table at all (e.g., joined name lookups in the base view). A computed column has both IsVirtual=1 (read-only at the API layer) and IsComputed=1 (physically in the table). The difference matters for base-view JOIN target selection: when an FK`}) 
     IsComputed: boolean;
         
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     SchemaName: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     BaseTable: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     BaseView: string;
         
     @Field({nullable: true}) 
@@ -49349,19 +49207,19 @@ export class MJEntityField_ {
     EntityClassName?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     RelatedEntity?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     RelatedEntitySchemaName?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     RelatedEntityBaseTable?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     RelatedEntityBaseView?: string;
         
     @Field({nullable: true}) 
@@ -49812,7 +49670,7 @@ export class MJEntityFieldResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Entity Form Overrides
 //****************************************************************************
-@ObjectType({ description: `Points an Entity at a Component to serve as its form at runtime. Scoped to User > Role > Global with priority-based resolution. When present and Active, takes precedence over the entity\'s @RegisterClass-registered or CodeGen-generated Angular form.` })
+@ObjectType({ description: `Points an Entity at a Component to serve as its form at runtime. Scoped to User > Role > Global with priority-based resolution. When present and Active, takes precedence over the entity` })
 export class MJEntityFormOverride_ {
     @Field() 
     @MaxLength(36)
@@ -49822,7 +49680,7 @@ export class MJEntityFormOverride_ {
     @MaxLength(36)
     EntityID: string;
         
-    @Field({description: `Foreign key to Component — the component that renders the form. Must declare componentRole='form' and implement the FormHostProps contract.`}) 
+    @Field({description: `Foreign key to Component — the component that renders the form. Must declare componentRole=`}) 
     @MaxLength(36)
     ComponentID: string;
         
@@ -49837,11 +49695,11 @@ export class MJEntityFormOverride_ {
     @MaxLength(20)
     Scope: string;
         
-    @Field({nullable: true, description: `Required when Scope='User'. The single user this override applies to.`}) 
+    @Field({nullable: true, description: `Required when Scope=`}) 
     @MaxLength(36)
     UserID?: string;
         
-    @Field({nullable: true, description: `Required when Scope='Role'. The role whose members see this override.`}) 
+    @Field({nullable: true, description: `Required when Scope=`}) 
     @MaxLength(36)
     RoleID?: string;
         
@@ -49862,19 +49720,19 @@ export class MJEntityFormOverride_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(500)
+    @MaxLength(1000)
     Component: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Role?: string;
         
 }
@@ -50090,7 +49948,7 @@ export class MJEntityOrganicKeyRelatedEntity_ {
     @MaxLength(255)
     RelatedEntityJoinFieldName?: string;
         
-    @Field({nullable: true, description: `Tab/section label override. If NULL, defaults to the related entity's display name.`}) 
+    @Field({nullable: true, description: `Tab/section label override. If NULL, defaults to the related entity`}) 
     @MaxLength(255)
     DisplayName?: string;
         
@@ -50105,7 +49963,7 @@ export class MJEntityOrganicKeyRelatedEntity_ {
     @Field({nullable: true, description: `JSON configuration passed to the display component.`}) 
     DisplayComponentConfiguration?: string;
         
-    @Field(() => Int, {description: `Tab ordering within this organic key's related entities. Lower values appear first.`}) 
+    @Field(() => Int, {description: `Tab ordering within this organic key`}) 
     Sequence: number;
         
     @Field() 
@@ -50115,11 +49973,11 @@ export class MJEntityOrganicKeyRelatedEntity_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     EntityOrganicKey: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     RelatedEntity: string;
         
 }
@@ -50327,10 +50185,10 @@ export class MJEntityOrganicKey_ {
     @MaxLength(255)
     Name: string;
         
-    @Field({nullable: true, description: `Optional explanation of the key's purpose and matching semantics.`}) 
+    @Field({nullable: true, description: `Optional explanation of the key`}) 
     Description?: string;
         
-    @Field({description: `Comma-delimited field names in the owning entity that constitute the key. Single value for simple keys (e.g., "EmailAddress"), multiple for compound keys (e.g., "FirstName,LastName,DateOfBirth"). Field names must match EntityField.Name values.`}) 
+    @Field({description: `Comma-delimited field names in the owning entity that constitute the key. Single value for simple keys (e.g., "EmailAddress"), multiple for compound keys (e.g., "FirstName,LastName,DateOfBirth"). Field names must match EntityField."Name" values.`}) 
     @MaxLength(500)
     MatchFieldNames: string;
         
@@ -50338,7 +50196,7 @@ export class MJEntityOrganicKey_ {
     @MaxLength(50)
     NormalizationStrategy: string;
         
-    @Field({nullable: true, description: `SQL expression template when NormalizationStrategy is Custom. Uses {{FieldName}} as placeholder. Example: "REPLACE(REPLACE({{FieldName}}, '-', ''), ' ', '')" for phone number normalization.`}) 
+    @Field({nullable: true, description: `SQL expression template when NormalizationStrategy is Custom. Uses {{FieldName}} as placeholder. Example: "REPLACE(REPLACE({{FieldName}}, `}) 
     CustomNormalizationExpression?: string;
         
     @Field(() => Boolean, {description: `When true, a future discovery process will automatically scan entities and create EntityOrganicKeyRelatedEntity rows for entities with matching field patterns.`}) 
@@ -50358,7 +50216,7 @@ export class MJEntityOrganicKey_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field(() => [MJEntityOrganicKeyRelatedEntity_])
@@ -50600,31 +50458,31 @@ export class MJEntityPermission_ {
     Type: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     RoleName: string;
         
     @Field({nullable: true}) 
-    @MaxLength(250)
+    @MaxLength(500)
     RoleSQLName?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     CreateRLSFilter?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     ReadRLSFilter?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     UpdateRLSFilter?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     DeleteRLSFilter?: string;
         
 }
@@ -50864,15 +50722,15 @@ export class MJEntityRecordDocument_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(250)
+    @MaxLength(500)
     EntityDocument: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     VectorIndex: string;
         
     @Field(() => [MJContentItem_])
@@ -51321,27 +51179,27 @@ export class MJEntityRelationship_ {
     AutoUpdateAdditionalFieldsToInclude: boolean;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     EntityBaseTable: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     EntityBaseView: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     RelatedEntity: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     RelatedEntityBaseTable: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     RelatedEntityBaseView: string;
         
     @Field({nullable: true}) 
@@ -51354,7 +51212,7 @@ export class MJEntityRelationship_ {
     RelatedEntityBaseTableCodeName?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     DisplayUserViewName?: string;
         
 }
@@ -51639,7 +51497,7 @@ export class MJEntitySetting_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
 }
@@ -51831,9 +51689,6 @@ export class MJEnvironment_ {
     @Field(() => [MJConversation_])
     MJConversations_EnvironmentIDArray: MJConversation_[]; // Link to MJConversations
     
-    @Field(() => [MJUserRoutine_])
-    MJUserRoutines_EnvironmentIDArray: MJUserRoutine_[]; // Link to MJUserRoutines
-    
 }
 
 //****************************************************************************
@@ -52015,16 +51870,6 @@ export class MJEnvironmentResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJUserRoutine_])
-    async MJUserRoutines_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Routines', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutines')} WHERE ${provider.QuoteIdentifier('EnvironmentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routines', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjenvironment_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routines', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @Mutation(() => MJEnvironment_)
     async CreateMJEnvironment(
         @Arg('input', () => CreateMJEnvironmentInput) input: CreateMJEnvironmentInput,
@@ -52100,11 +51945,11 @@ export class MJErrorLog_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     CompanyIntegrationRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(450)
+    @MaxLength(900)
     CompanyIntegrationRunDetail?: string;
         
 }
@@ -53163,530 +53008,6 @@ export class MJExplorerNavigationItemResolver extends ResolverBase {
 }
 
 //****************************************************************************
-// ENTITY CLASS for MJ: External Data Source Types
-//****************************************************************************
-@ObjectType()
-export class MJExternalDataSourceType_ {
-    @Field() 
-    @MaxLength(36)
-    ID: string;
-        
-    @Field({description: `Display name of the external data source driver type (e.g. Snowflake, Oracle, MongoDB, PostgreSQL).`}) 
-    @MaxLength(100)
-    Name: string;
-        
-    @Field({nullable: true, description: `Human-readable description of the driver type and what remote systems it targets.`}) 
-    Description?: string;
-        
-    @Field({description: `Driver class resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseExternalDataSourceDriver, DriverClass). MUST match the @RegisterClass key on the concrete driver (e.g. 'SnowflakeExternalDriver').`}) 
-    @MaxLength(255)
-    DriverClass: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(36)
-    RequiredCredentialTypeID?: string;
-        
-    @Field({description: `How the metadata-introspection command hydrates Entity/EntityField rows from this driver family: InformationSchema (ANSI INFORMATION_SCHEMA), NativeCatalog (vendor catalog views), SampledDocuments (infer shape from sampled documents, e.g. MongoDB), or Manual (no automated introspection).`}) 
-    @MaxLength(17)
-    MetadataIntrospectionStrategy: string;
-        
-    @Field({description: `Dialect the driver expects for RunView filter pass-through: tsql, ansi, pgsql, mysql, oracle, or mongo-ast (MongoDB filter AST translated within the driver).`}) 
-    @MaxLength(9)
-    FilterDialect: string;
-        
-    @Field({description: `Pagination mechanism the driver uses: OffsetFetch (SQL Server OFFSET/FETCH), LimitOffset (Postgres/MySQL LIMIT/OFFSET), TopSkip, or Cursor.`}) 
-    @MaxLength(11)
-    PagingStrategy: string;
-        
-    @Field(() => Boolean, {description: `Whether the driver can introspect remote schema metadata to assist Entity/EntityField generation.`}) 
-    SupportsSchemaIntrospection: boolean;
-        
-    @Field(() => Boolean, {description: `Whether the driver supports native-dialect query execution for MJ Queries that set ExternalDataSourceID.`}) 
-    SupportsNativeQueries: boolean;
-        
-    @Field(() => Boolean, {description: `Reserved for a future write-capable phase. Always 0 in the current read-only design; external entities are read-only.`}) 
-    SupportsReadWrite: boolean;
-        
-    @Field({description: `Lifecycle status of the driver-type catalog entry: Active or Deprecated.`}) 
-    @MaxLength(10)
-    Status: string;
-        
-    @Field() 
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    _mj__UpdatedAt: Date;
-        
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    RequiredCredentialType?: string;
-        
-    @Field(() => [MJExternalDataSource_])
-    MJExternalDataSources_TypeIDArray: MJExternalDataSource_[]; // Link to MJExternalDataSources
-    
-}
-
-//****************************************************************************
-// INPUT TYPE for MJ: External Data Source Types
-//****************************************************************************
-@InputType()
-export class CreateMJExternalDataSourceTypeInput {
-    @Field({ nullable: true })
-    ID?: string;
-
-    @Field({ nullable: true })
-    Name?: string;
-
-    @Field({ nullable: true })
-    Description: string | null;
-
-    @Field({ nullable: true })
-    DriverClass?: string;
-
-    @Field({ nullable: true })
-    RequiredCredentialTypeID: string | null;
-
-    @Field({ nullable: true })
-    MetadataIntrospectionStrategy?: string;
-
-    @Field({ nullable: true })
-    FilterDialect?: string;
-
-    @Field({ nullable: true })
-    PagingStrategy?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    SupportsSchemaIntrospection?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    SupportsNativeQueries?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    SupportsReadWrite?: boolean;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for MJ: External Data Source Types
-//****************************************************************************
-@InputType()
-export class UpdateMJExternalDataSourceTypeInput {
-    @Field()
-    ID: string;
-
-    @Field({ nullable: true })
-    Name?: string;
-
-    @Field({ nullable: true })
-    Description?: string | null;
-
-    @Field({ nullable: true })
-    DriverClass?: string;
-
-    @Field({ nullable: true })
-    RequiredCredentialTypeID?: string | null;
-
-    @Field({ nullable: true })
-    MetadataIntrospectionStrategy?: string;
-
-    @Field({ nullable: true })
-    FilterDialect?: string;
-
-    @Field({ nullable: true })
-    PagingStrategy?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    SupportsSchemaIntrospection?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    SupportsNativeQueries?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    SupportsReadWrite?: boolean;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
-//****************************************************************************
-// RESOLVER for MJ: External Data Source Types
-//****************************************************************************
-@ObjectType()
-export class RunMJExternalDataSourceTypeViewResult {
-    @Field(() => [MJExternalDataSourceType_])
-    Results: MJExternalDataSourceType_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(MJExternalDataSourceType_)
-export class MJExternalDataSourceTypeResolver extends ResolverBase {
-    @Query(() => RunMJExternalDataSourceTypeViewResult)
-    async RunMJExternalDataSourceTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunMJExternalDataSourceTypeViewResult)
-    async RunMJExternalDataSourceTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunMJExternalDataSourceTypeViewResult)
-    async RunMJExternalDataSourceTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        input.EntityName = 'MJ: External Data Source Types';
-        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
-    }
-    @Query(() => MJExternalDataSourceType_, { nullable: true })
-    async MJExternalDataSourceType(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJExternalDataSourceType_ | null> {
-        this.CheckUserReadPermissions('MJ: External Data Source Types', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExternalDataSourceTypes')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: External Data Source Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.MapFieldNamesToCodeNames('MJ: External Data Source Types', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-    
-    @FieldResolver(() => [MJExternalDataSource_])
-    async MJExternalDataSources_TypeIDArray(@Root() mjexternaldatasourcetype_: MJExternalDataSourceType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: External Data Sources', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExternalDataSources')} WHERE ${provider.QuoteIdentifier('TypeID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: External Data Sources', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjexternaldatasourcetype_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: External Data Sources', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @Mutation(() => MJExternalDataSourceType_)
-    async CreateMJExternalDataSourceType(
-        @Arg('input', () => CreateMJExternalDataSourceTypeInput) input: CreateMJExternalDataSourceTypeInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.CreateRecord('MJ: External Data Source Types', input, provider, userPayload, pubSub)
-    }
-        
-    @Mutation(() => MJExternalDataSourceType_)
-    async UpdateMJExternalDataSourceType(
-        @Arg('input', () => UpdateMJExternalDataSourceTypeInput) input: UpdateMJExternalDataSourceTypeInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.UpdateRecord('MJ: External Data Source Types', input, provider, userPayload, pubSub);
-    }
-    
-    @Mutation(() => MJExternalDataSourceType_)
-    async DeleteMJExternalDataSourceType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadWriteProvider(providers);
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('MJ: External Data Source Types', key, options, provider, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
-// ENTITY CLASS for MJ: External Data Sources
-//****************************************************************************
-@ObjectType()
-export class MJExternalDataSource_ {
-    @Field() 
-    @MaxLength(36)
-    ID: string;
-        
-    @Field({description: `Display name of this configured external data source instance.`}) 
-    @MaxLength(100)
-    Name: string;
-        
-    @Field({nullable: true, description: `Human-readable description of what this data source connects to and what it is used for.`}) 
-    Description?: string;
-        
-    @Field() 
-    @MaxLength(36)
-    TypeID: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(36)
-    CredentialID?: string;
-        
-    @Field({nullable: true, description: `Default schema/namespace to resolve unqualified ExternalObjectName values against on the remote system (e.g. a SQL schema, Snowflake schema).`}) 
-    @MaxLength(255)
-    DefaultSchema?: string;
-        
-    @Field({nullable: true, description: `Default database/catalog on the remote system (e.g. Snowflake database, MongoDB dbName). Nullable when the driver derives it from connection config.`}) 
-    @MaxLength(255)
-    DefaultDatabase?: string;
-        
-    @Field({nullable: true, description: `JSON blob of NON-SECRET driver configuration (host, port, region, warehouse, replica-set name, pool sizing). All secrets flow through CredentialID -> Credential -> CredentialEngine; never store secrets here.`}) 
-    ConnectionConfig?: string;
-        
-    @Field(() => Int, {description: `Default server-side cache TTL (seconds) for reads against this source. External reads use time-based TTL because no event-driven invalidation is possible on remote systems. Default 300.`}) 
-    DefaultCacheTTLSeconds: number;
-        
-    @Field({description: `Operational status of this data source: Active (usable), Disabled (RunView fails fast), or TestFailed (last connection test failed).`}) 
-    @MaxLength(10)
-    Status: string;
-        
-    @Field({nullable: true, description: `Timestamp of the most recent connection test against this source.`}) 
-    LastConnectionTestAt?: Date;
-        
-    @Field({nullable: true, description: `Result message from the most recent connection test (success detail or error text).`}) 
-    LastConnectionTestResult?: string;
-        
-    @Field() 
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(100)
-    Type: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    Credential?: string;
-        
-    @Field(() => [MJQuery_])
-    MJQueries_ExternalDataSourceIDArray: MJQuery_[]; // Link to MJQueries
-    
-    @Field(() => [MJEntity_])
-    MJEntities_ExternalDataSourceIDArray: MJEntity_[]; // Link to MJEntities
-    
-}
-
-//****************************************************************************
-// INPUT TYPE for MJ: External Data Sources
-//****************************************************************************
-@InputType()
-export class CreateMJExternalDataSourceInput {
-    @Field({ nullable: true })
-    ID?: string;
-
-    @Field({ nullable: true })
-    Name?: string;
-
-    @Field({ nullable: true })
-    Description: string | null;
-
-    @Field({ nullable: true })
-    TypeID?: string;
-
-    @Field({ nullable: true })
-    CredentialID: string | null;
-
-    @Field({ nullable: true })
-    DefaultSchema: string | null;
-
-    @Field({ nullable: true })
-    DefaultDatabase: string | null;
-
-    @Field({ nullable: true })
-    ConnectionConfig: string | null;
-
-    @Field(() => Int, { nullable: true })
-    DefaultCacheTTLSeconds?: number;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field({ nullable: true })
-    LastConnectionTestAt: Date | null;
-
-    @Field({ nullable: true })
-    LastConnectionTestResult: string | null;
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for MJ: External Data Sources
-//****************************************************************************
-@InputType()
-export class UpdateMJExternalDataSourceInput {
-    @Field()
-    ID: string;
-
-    @Field({ nullable: true })
-    Name?: string;
-
-    @Field({ nullable: true })
-    Description?: string | null;
-
-    @Field({ nullable: true })
-    TypeID?: string;
-
-    @Field({ nullable: true })
-    CredentialID?: string | null;
-
-    @Field({ nullable: true })
-    DefaultSchema?: string | null;
-
-    @Field({ nullable: true })
-    DefaultDatabase?: string | null;
-
-    @Field({ nullable: true })
-    ConnectionConfig?: string | null;
-
-    @Field(() => Int, { nullable: true })
-    DefaultCacheTTLSeconds?: number;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field({ nullable: true })
-    LastConnectionTestAt?: Date | null;
-
-    @Field({ nullable: true })
-    LastConnectionTestResult?: string | null;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
-//****************************************************************************
-// RESOLVER for MJ: External Data Sources
-//****************************************************************************
-@ObjectType()
-export class RunMJExternalDataSourceViewResult {
-    @Field(() => [MJExternalDataSource_])
-    Results: MJExternalDataSource_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(MJExternalDataSource_)
-export class MJExternalDataSourceResolver extends ResolverBase {
-    @Query(() => RunMJExternalDataSourceViewResult)
-    async RunMJExternalDataSourceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunMJExternalDataSourceViewResult)
-    async RunMJExternalDataSourceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunMJExternalDataSourceViewResult)
-    async RunMJExternalDataSourceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        input.EntityName = 'MJ: External Data Sources';
-        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
-    }
-    @Query(() => MJExternalDataSource_, { nullable: true })
-    async MJExternalDataSource(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJExternalDataSource_ | null> {
-        this.CheckUserReadPermissions('MJ: External Data Sources', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExternalDataSources')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: External Data Sources', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.MapFieldNamesToCodeNames('MJ: External Data Sources', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-    
-    @FieldResolver(() => [MJQuery_])
-    async MJQueries_ExternalDataSourceIDArray(@Root() mjexternaldatasource_: MJExternalDataSource_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Queries', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwQueries')} WHERE ${provider.QuoteIdentifier('ExternalDataSourceID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Queries', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjexternaldatasource_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Queries', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJEntity_])
-    async MJEntities_ExternalDataSourceIDArray(@Root() mjexternaldatasource_: MJExternalDataSource_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Entities', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntities')} WHERE ${provider.QuoteIdentifier('ExternalDataSourceID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjexternaldatasource_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entities', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @Mutation(() => MJExternalDataSource_)
-    async CreateMJExternalDataSource(
-        @Arg('input', () => CreateMJExternalDataSourceInput) input: CreateMJExternalDataSourceInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.CreateRecord('MJ: External Data Sources', input, provider, userPayload, pubSub)
-    }
-        
-    @Mutation(() => MJExternalDataSource_)
-    async UpdateMJExternalDataSource(
-        @Arg('input', () => UpdateMJExternalDataSourceInput) input: UpdateMJExternalDataSourceInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.UpdateRecord('MJ: External Data Sources', input, provider, userPayload, pubSub);
-    }
-    
-    @Mutation(() => MJExternalDataSource_)
-    async DeleteMJExternalDataSource(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadWriteProvider(providers);
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('MJ: External Data Sources', key, options, provider, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
 // ENTITY CLASS for MJ: File Categories
 //****************************************************************************
 @ObjectType({ description: `Organizes files into categories for classification, access control, and lifecycle management across the file storage system.` })
@@ -53713,7 +53034,7 @@ export class MJFileCategory_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -53908,11 +53229,11 @@ export class MJFileEntityRecordLink_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(500)
+    @MaxLength(1000)
     File: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
 }
@@ -54087,15 +53408,15 @@ export class MJFileStorageAccountPermission_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     FileStorageAccount: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Role?: string;
         
 }
@@ -54284,11 +53605,11 @@ export class MJFileStorageAccount_ {
     IncludeInGlobalSearch: boolean;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Provider: string;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     Credential: string;
         
     @Field(() => [MJAIAgentType_])
@@ -54554,7 +53875,7 @@ export class MJFileStorageProvider_ {
     @Field(() => Boolean, {description: `Indicates whether this storage provider supports native full-text search across file names and content. Providers with native search APIs (Google Drive, SharePoint, Dropbox, Box) have this set to true.`}) 
     SupportsSearch: boolean;
         
-    @Field({nullable: true, description: `Optional JSON configuration for providers that don't use Credential Engine. Used as fallback when CredentialID is not set on FileStorageAccount.`}) 
+    @Field({nullable: true, description: `Optional JSON configuration for providers that don`}) 
     Configuration?: string;
         
     @Field(() => Boolean, {description: `If true, this provider requires OAuth authentication. Enterprise OAuth integration via Credential Engine is planned but not yet implemented.`}) 
@@ -54838,11 +54159,11 @@ export class MJFile_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Category?: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Provider: string;
         
     @Field(() => [MJFileEntityRecordLink_])
@@ -55134,7 +54455,7 @@ export class MJGeneratedCodeCategory_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -55356,15 +54677,15 @@ export class MJGeneratedCode_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Category: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     GeneratedByModel: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     LinkedEntity?: string;
         
 }
@@ -55558,7 +54879,7 @@ export class MJInstanceConfiguration_ {
     @MaxLength(36)
     ID: string;
         
-    @Field({description: `Unique dot-notation key identifying the feature, e.g. Shell.SearchBar.Enabled.`}) 
+    @Field({description: `Unique dot-notation key identifying the feature, e.g. Shell."SearchBar"."Enabled".`}) 
     @MaxLength(200)
     FeatureKey: string;
         
@@ -55775,7 +55096,7 @@ export class MJIntegrationObjectField_ {
     @MaxLength(100)
     Category?: string;
         
-    @Field({description: `Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.`}) 
+    @Field({description: `Data type of the field (e.g., TEXT, INTEGER, datetime, decimal, bit). Uses same type vocabulary as EntityField.`}) 
     @MaxLength(100)
     Type: string;
         
@@ -55839,11 +55160,11 @@ export class MJIntegrationObjectField_ {
     MetadataSource: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     IntegrationObject: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     RelatedIntegrationObject?: string;
         
 }
@@ -56165,11 +55486,11 @@ export class MJIntegrationObject_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `API path for create/update operations when different from the read APIPath. If NULL, the read APIPath is used for writes as well.`}) 
+    @Field({nullable: true, description: `DEPRECATED v5.39.x — superseded by CreateAPIPath/UpdateAPIPath. Will be removed in a future release. Generic CRUD in BaseRESTIntegrationConnector reads only the per-operation columns.`}) 
     @MaxLength(500)
     WriteAPIPath?: string;
         
-    @Field({nullable: true, description: `HTTP method for create operations. Defaults to POST.`}) 
+    @Field({nullable: true, description: `DEPRECATED v5.39.x — superseded by CreateMethod/UpdateMethod. Will be removed in a future release.`}) 
     @MaxLength(10)
     WriteMethod?: string;
         
@@ -56191,7 +55512,7 @@ export class MJIntegrationObject_ {
     @MaxLength(50)
     CreateBodyShape?: string;
         
-    @Field({nullable: true, description: `Wrapper key for create body when CreateBodyShape=wrapped. Example: 'member' for YourMembership which wraps body as {member:{...}}.`}) 
+    @Field({nullable: true, description: `Wrapper key for create body when CreateBodyShape=wrapped. Example: `}) 
     @MaxLength(100)
     CreateBodyKey?: string;
         
@@ -56214,14 +55535,14 @@ export class MJIntegrationObject_ {
     @MaxLength(100)
     UpdateBodyKey?: string;
         
-    @Field({nullable: true, description: `For update: where the target record ID is located in the request — typically 'path' (substituted into UpdateAPIPath URL template).`}) 
+    @Field({nullable: true, description: `For update: where the target record ID is located in the request — typically `}) 
     @MaxLength(20)
     UpdateIDLocation?: string;
         
     @Field({nullable: true, description: `HTTP path template for delete operations. Typically contains {ID} placeholder. NULL means delete not supported via metadata-driven path. (Existing DeleteMethod column carries the verb.)`}) 
     DeleteAPIPath?: string;
         
-    @Field({nullable: true, description: `For delete: where the target record ID is located — typically 'path'.`}) 
+    @Field({nullable: true, description: `For delete: where the target record ID is located — typically `}) 
     @MaxLength(20)
     DeleteIDLocation?: string;
         
@@ -56233,28 +55554,28 @@ export class MJIntegrationObject_ {
     @MaxLength(20)
     MetadataSource: string;
         
-    @Field(() => Boolean, {description: `Whether this object supports record creation in the external system (per-operation granularity beyond SupportsWrite). Drives whether the generic CreateRecord path is wired and whether the object is offered for write-back create.`}) 
+    @Field(() => Boolean) 
     SupportsCreate: boolean;
         
-    @Field(() => Boolean, {description: `Whether this object supports record updates in the external system (per-operation granularity beyond SupportsWrite).`}) 
+    @Field(() => Boolean) 
     SupportsUpdate: boolean;
         
-    @Field(() => Boolean, {description: `Whether this object supports record deletion/tombstoning in the external system (per-operation granularity beyond SupportsWrite).`}) 
+    @Field(() => Boolean) 
     SupportsDelete: boolean;
         
-    @Field({nullable: true, description: `Declared incremental sync strategy for this object (e.g. WatermarkIncremental, ContentHash, FullSnapshot). Informs how the engine narrows subsequent syncs.`}) 
+    @Field({nullable: true}) 
     @MaxLength(50)
     SyncStrategy?: string;
         
-    @Field(() => Boolean, {description: `Whether per-record content hashing is meaningful for this object (false for append-only/event streams where every row is new). Controls whether the engine uses content-hash to skip unchanged-row writes.`}) 
+    @Field(() => Boolean) 
     ContentHashApplicable: boolean;
         
-    @Field({nullable: true, description: `Stable, monotonic ordering column (usually the PK) used for keyset/no-watermark resume of a scan. Null when the object has no stable key.`}) 
+    @Field({nullable: true}) 
     @MaxLength(255)
     StableOrderingKey?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Integration: string;
         
     @Field(() => [MJIntegrationObjectField_])
@@ -56863,15 +56184,15 @@ export class MJIntegrationURLFormat_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Integration: string;
         
     @Field({nullable: true}) 
-    @MaxLength(500)
+    @MaxLength(1000)
     NavigationBaseURL?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(1000)
+    @MaxLength(2000)
     FullURLFormat?: string;
         
 }
@@ -57072,11 +56393,11 @@ export class MJIntegration_ {
     @Field({nullable: true, description: `Icon for the integration. Supports Font Awesome CSS classes, image URLs, or base64 data URIs.`}) 
     Icon?: string;
         
-    @Field({nullable: true, description: `Integration-level connector configuration JSON (e.g. out-of-scope object families, vendor-specific tuning). Free-form JSON the connector reads at runtime.`}) 
+    @Field({nullable: true}) 
     Configuration?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     CredentialType?: string;
         
     @Field(() => [MJCompanyIntegration_])
@@ -57357,7 +56678,7 @@ export class MJKnowledgeHubSavedSearch_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
 }
@@ -57750,7 +57071,7 @@ export class MJLibraryItem_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Library: string;
         
 }
@@ -57918,11 +57239,11 @@ export class MJListCategory_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Parent?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
@@ -58129,7 +57450,7 @@ export class MJListDetail_ {
     AdditionalData?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     List: string;
         
 }
@@ -58321,11 +57642,11 @@ export class MJListInvitation_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     List: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     CreatedByUser: string;
         
 }
@@ -58518,11 +57839,11 @@ export class MJListShare_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     List: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
 }
@@ -58707,7 +58028,7 @@ export class MJList_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `Optional ID of the User View this list was materialized from. NULL for hand-built lists. When set, the list can be refreshed against this view via ListOperations.RefreshFromSource.`}) 
+    @Field({nullable: true, description: `Optional ID of the User View this list was materialized from. NULL for hand-built lists. When set, the list can be refreshed against this view via ListOperations."RefreshFromSource".`}) 
     @MaxLength(36)
     SourceViewID?: string;
         
@@ -58729,27 +58050,27 @@ export class MJList_ {
     UseSnapshot: boolean;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Category?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     CompanyIntegration?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     SourceView?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     LastRefreshedByUser?: string;
         
     @Field(() => [MJDuplicateRun_])
@@ -59316,7 +58637,7 @@ export class MJMagicLinkInviteAllowedPathResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Magic Link Invite Applications
 //****************************************************************************
-@ObjectType({ description: `Join row granting a magic-link invite access to one Application. An invite may eventually carry several; today create/redeem write exactly one (mirroring MagicLinkInvite.ApplicationID) while multi-scope enforcement is being designed.` })
+@ObjectType({ description: `Join row granting a magic-link invite access to one Application. An invite may eventually carry several; today create/redeem write exactly one (mirroring MagicLinkInvite."ApplicationID") while multi-scope enforcement is being designed.` })
 export class MJMagicLinkInviteApplication_ {
     @Field() 
     @MaxLength(36)
@@ -59337,7 +58658,7 @@ export class MJMagicLinkInviteApplication_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Application: string;
         
 }
@@ -59471,7 +58792,7 @@ export class MJMagicLinkInviteApplicationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Magic Link Invite Roles
 //****************************************************************************
-@ObjectType({ description: `Join row granting a magic-link invite a Role. An invite may eventually carry several; today create/redeem write exactly one (mirroring MagicLinkInvite.RoleID) while multi-scope enforcement is being designed.` })
+@ObjectType({ description: `Join row granting a magic-link invite a Role. An invite may eventually carry several; today create/redeem write exactly one (mirroring MagicLinkInvite."RoleID") while multi-scope enforcement is being designed.` })
 export class MJMagicLinkInviteRole_ {
     @Field() 
     @MaxLength(36)
@@ -59492,7 +58813,7 @@ export class MJMagicLinkInviteRole_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Role: string;
         
 }
@@ -59636,7 +58957,7 @@ export class MJMagicLinkInvite_ {
     @MaxLength(128)
     TokenHash: string;
         
-    @Field({nullable: true, description: `Email address the invite was issued to and delivered at. Becomes the provisioned user's email on first redemption.`}) 
+    @Field({nullable: true, description: `Email address the invite was issued to and delivered at. Becomes the provisioned user`}) 
     @MaxLength(255)
     Email?: string;
         
@@ -59644,7 +58965,7 @@ export class MJMagicLinkInvite_ {
     @MaxLength(36)
     ApplicationID: string;
         
-    @Field({description: `Foreign key to Role — the restricted role assigned to the redeeming user. This role's entity permissions are the real authorization boundary that confines the external user to the shared app's data.`}) 
+    @Field({description: `Foreign key to Role — the restricted role assigned to the redeeming user. This role`}) 
     @MaxLength(36)
     RoleID: string;
         
@@ -59668,19 +58989,19 @@ export class MJMagicLinkInvite_ {
     @MaxLength(20)
     Status: string;
         
-    @Field({description: `Identity resolution mode. 'email' (default, legacy): redemption provisions/links a per-email user and enforcement rides that user's DB roles. 'anonymous': all redemptions resolve to the shared Anonymous principal (an attribution anchor, not a permission holder); scope is carried per-session in the minted JWT claims, never as roles on that user.`}) 
+    @Field({description: `Identity resolution mode. `}) 
     @MaxLength(20)
     IdentityMode: string;
         
-    @Field({description: `Invite kind, gating which scope columns/claims are valid and which issuance capability check applies. 'app-session' (default): the legacy app+role session. 'resource-share': scoped to a single resource (ResourceTypeID/ResourceID). 'anonymous-embed': framed in an external site (requires allowed domains + tier capability).`}) 
+    @Field({description: `Invite kind, gating which scope columns/claims are valid and which issuance capability check applies. `}) 
     @MaxLength(30)
     Kind: string;
         
-    @Field({nullable: true, description: `For resource-share/embed kinds: the ResourceType of the single resource this link shares. The link's reach to dependent data is admitted at runtime via FK-reachable resource-pinned row-level security, not an enumerated list. NULL for app-session invites.`}) 
+    @Field({nullable: true, description: `For resource-share/embed kinds: the ResourceType of the single resource this link shares. The link`}) 
     @MaxLength(36)
     ResourceTypeID?: string;
         
-    @Field({nullable: true, description: `For resource-share/embed kinds: the primary-key value of the specific shared resource (stringified to support any resource's key type). NULL for app-session invites.`}) 
+    @Field({nullable: true, description: `For resource-share/embed kinds: the primary-key value of the specific shared resource (stringified to support any resource`}) 
     @MaxLength(450)
     ResourceID?: string;
         
@@ -59691,19 +59012,19 @@ export class MJMagicLinkInvite_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Application: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Role: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     CreatedByUser: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ResourceType?: string;
         
     @Field(() => [MJMagicLinkInviteAllowedDomain_])
@@ -59987,11 +59308,11 @@ export class MJMagicLinkRedemption_ {
     @Field({description: `Timestamp of the redemption attempt (UTC). Defaults to the time of insert.`}) 
     AttemptedAt: Date;
         
-    @Field({description: `Outcome of the attempt: 'success', or one of the redemption error codes (not_found, expired, consumed, revoked, invalid, provisioning_failed, server_error). Mirrors the RedeemErrorCode union in the server code.`}) 
+    @Field({description: `Outcome of the attempt: `}) 
     @MaxLength(30)
     Outcome: string;
         
-    @Field({nullable: true, description: `Client IP address the redemption came from, as captured by the request middleware. May be stored full, truncated, hashed, or omitted per the deployment's magicLink.audit.ipStorage policy. NULL when unavailable or policy is 'none'.`}) 
+    @Field({nullable: true, description: `Client IP address the redemption came from, as captured by the request middleware. May be stored full, truncated, hashed, or omitted per the deployment`}) 
     @MaxLength(64)
     IPAddress?: string;
         
@@ -60014,7 +59335,7 @@ export class MJMagicLinkRedemption_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     ProvisionedUser?: string;
         
 }
@@ -60212,15 +59533,15 @@ export class MJMCPServerConnectionPermission_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     MCPServerConnection: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Role?: string;
         
 }
@@ -60408,12 +59729,12 @@ export class MJMCPServerConnectionTool_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     MCPServerConnection: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    MCPServerTool?: string;
+    @Field() 
+    @MaxLength(510)
+    MCPServerTool: string;
         
 }
 
@@ -60631,15 +59952,15 @@ export class MJMCPServerConnection_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     MCPServer: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     Credential?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Company?: string;
         
     @Field(() => [MJMCPServerConnectionTool_])
@@ -60990,15 +60311,15 @@ export class MJMCPServerTool_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     MCPServer: string;
         
     @Field({nullable: true}) 
-    @MaxLength(425)
+    @MaxLength(850)
     GeneratedAction?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     GeneratedActionCategory?: string;
         
     @Field(() => [MJMCPServerConnectionTool_])
@@ -61322,7 +60643,7 @@ export class MJMCPServer_ {
     OAuthRequirePKCE: boolean;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     CredentialType?: string;
         
     @Field(() => [MJOAuthClientRegistration_])
@@ -61668,15 +60989,15 @@ export class MJMCPToolExecutionLog_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     MCPServerConnection: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     MCPServerTool?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
 }
@@ -61891,12 +61212,12 @@ export class MJMCPToolFavorite_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    MCPServerTool?: string;
+    @Field() 
+    @MaxLength(510)
+    MCPServerTool: string;
         
 }
 
@@ -64095,11 +63416,11 @@ export class MJOAuthAuthorizationState_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     MCPServerConnection: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
 }
@@ -64376,11 +63697,11 @@ export class MJOAuthClientRegistration_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     MCPServerConnection: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     MCPServer: string;
         
 }
@@ -64634,11 +63955,11 @@ export class MJOAuthToken_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     MCPServerConnection: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     Credential?: string;
         
 }
@@ -64818,7 +64139,7 @@ export class MJOpenAppDependency_ {
     @MaxLength(36)
     OpenAppID: string;
         
-    @Field({description: `Name of the app that this app depends on (matches OpenApp.Name)`}) 
+    @Field({description: `Name of the app that this app depends on (matches OpenApp."Name")`}) 
     @MaxLength(64)
     DependsOnAppName: string;
         
@@ -64845,11 +64166,11 @@ export class MJOpenAppDependency_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(64)
+    @MaxLength(128)
     OpenApp: string;
         
     @Field({nullable: true}) 
-    @MaxLength(64)
+    @MaxLength(128)
     DependsOnApp?: string;
         
 }
@@ -65065,11 +64386,11 @@ export class MJOpenAppInstallHistory_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(64)
+    @MaxLength(128)
     OpenApp: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     ExecutedByUser: string;
         
 }
@@ -65351,7 +64672,7 @@ export class MJOpenApp_ {
     Subpath?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     InstalledByUser: string;
         
     @Field(() => [MJOpenAppDependency_])
@@ -66131,7 +65452,7 @@ export class MJPermissionDomain_ {
     @Field({nullable: true, description: `Detailed description of what this permission domain covers and how permissions are enforced.`}) 
     Description?: string;
         
-    @Field({description: `ClassFactory key used to instantiate this provider. Must match the key passed to @RegisterClass(PermissionProviderBase, 'ClassName'). Convention: prefix with MJ for built-in providers (e.g., MJEntityPermissionProvider).`}) 
+    @Field({description: `ClassFactory key used to instantiate this provider. Must match the key passed to @RegisterClass(PermissionProviderBase, `}) 
     @MaxLength(500)
     ProviderClassName: string;
         
@@ -67025,11 +66346,11 @@ export class MJProject_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Environment: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -67281,7 +66602,7 @@ export class MJPublicLink_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
 }
@@ -67511,7 +66832,7 @@ export class MJQuery_ {
     @Field(() => Boolean, {description: `When true, all executions of this query will be logged to the Audit Log system for tracking and compliance`}) 
     AuditQueryRuns: boolean;
         
-    @Field(() => Boolean, {description: `When true, enables query result caching. Caching behavior depends on CacheValidationSQL: (1) If CacheValidationSQL is NULL, uses simple server-side TTL caching based on CacheTTLMinutes - results are cached on the server and expire after the TTL period. (2) If CacheValidationSQL is set, enables smart client-side caching with freshness validation - client sends cache fingerprint (maxUpdatedAt + rowCount) to server, server validates using CacheValidationSQL and returns 'current' (use cached) or 'stale' (with fresh data). Smart caching provides real-time accuracy while minimizing data transfer.`}) 
+    @Field(() => Boolean, {description: `When true, enables query result caching. Caching behavior depends on CacheValidationSQL: (1) If CacheValidationSQL is NULL, uses simple server-side TTL caching based on CacheTTLMinutes - results are cached on the server and expire after the TTL period. (2) If CacheValidationSQL is set, enables smart client-side caching with freshness validation - client sends cache fingerprint (maxUpdatedAt + rowCount) to server, server validates using CacheValidationSQL and returns `}) 
     CacheEnabled: boolean;
         
     @Field(() => Int, {nullable: true, description: `Time-to-live in minutes for cached query results. NULL uses default TTL.`}) 
@@ -67527,7 +66848,7 @@ export class MJQuery_ {
     @MaxLength(36)
     EmbeddingModelID?: string;
         
-    @Field({nullable: true, description: `SQL query used to validate cache freshness for smart caching. When set (and CacheEnabled=true), enables smart cache validation instead of simple TTL expiration. This query MUST return exactly two columns: MaxUpdatedAt (datetime/datetimeoffset) and TotalRows (int). The query has access to the same Nunjucks parameters as the main query SQL. When NULL, caching uses TTL-only behavior based on CacheTTLMinutes. Example: SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM Orders WHERE Status = '{{ status }}'`}) 
+    @Field({nullable: true, description: `SQL query used to validate cache freshness for smart caching. When set (and CacheEnabled=true), enables smart cache validation instead of simple TTL expiration. This query MUST return exactly two columns: MaxUpdatedAt (datetime/datetimeoffset) and TotalRows (INTEGER). The query has access to the same Nunjucks parameters as the main query SQL. When NULL, caching uses TTL-only behavior based on CacheTTLMinutes. Example: SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS TotalRows FROM Orders WHERE Status = `}) 
     CacheValidationSQL?: string;
         
     @Field({description: `The SQL dialect that the SQL column is written in. Defaults to T-SQL for backward compatibility.`}) 
@@ -67538,24 +66859,16 @@ export class MJQuery_ {
     Reusable: boolean;
         
     @Field({nullable: true}) 
-    @MaxLength(36)
-    ExternalDataSourceID?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Category?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     EmbeddingModel?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     SQLDialect: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    ExternalDataSource?: string;
         
     @Field(() => [MJDataContextItem_])
     MJDataContextItems_QueryIDArray: MJDataContextItem_[]; // Link to MJDataContextItems
@@ -67654,9 +66967,6 @@ export class CreateMJQueryInput {
     @Field(() => Boolean, { nullable: true })
     Reusable?: boolean;
 
-    @Field({ nullable: true })
-    ExternalDataSourceID: string | null;
-
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -67732,9 +67042,6 @@ export class UpdateMJQueryInput {
 
     @Field(() => Boolean, { nullable: true })
     Reusable?: boolean;
-
-    @Field({ nullable: true })
-    ExternalDataSourceID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -67952,11 +67259,11 @@ export class MJQueryCategory_ {
     CacheInheritanceEnabled: boolean;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Parent?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
@@ -68192,11 +67499,11 @@ export class MJQueryDependency_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Query: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     DependsOnQuery: string;
         
 }
@@ -68382,11 +67689,11 @@ export class MJQueryEntity_ {
     AutoDetectConfidenceScore?: number;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Query: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
 }
@@ -68552,11 +67859,11 @@ export class MJQueryField_ {
     @Field(() => Int, {description: `Display order of this field in query results.`}) 
     Sequence: number;
         
-    @Field({description: `The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn't include type parameters. The SQLFullType field provides that information.`}) 
+    @Field({description: `The base type, not including parameters, in SQL. For example this field would be TEXT or decimal, and wouldn`}) 
     @MaxLength(50)
     SQLBaseType: string;
         
-    @Field({description: `The full SQL type for the field, for example datetime or nvarchar(10) etc.`}) 
+    @Field({description: `The full SQL type for the field, for example datetime or VARCHAR(10) etc.`}) 
     @MaxLength(100)
     SQLFullType: string;
         
@@ -68577,7 +67884,7 @@ export class MJQueryField_ {
     @Field(() => Boolean, {description: `Whether this field represents an aggregate or summary value.`}) 
     IsSummary: boolean;
         
-    @Field({nullable: true, description: `Description of what this summary field represents and how it's aggregated.`}) 
+    @Field({nullable: true, description: `Description of what this summary field represents and how it`}) 
     SummaryDescription?: string;
         
     @Field() 
@@ -68594,11 +67901,11 @@ export class MJQueryField_ {
     AutoDetectConfidenceScore?: number;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Query: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     SourceEntity?: string;
         
 }
@@ -68851,7 +68158,7 @@ export class MJQueryParameter_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Query: string;
         
 }
@@ -69054,11 +68361,11 @@ export class MJQueryPermission_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Query: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Role: string;
         
 }
@@ -69216,11 +68523,11 @@ export class MJQuerySQL_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Query: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     SQLDialect: string;
         
 }
@@ -69402,7 +68709,7 @@ export class MJQueueTask_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Queue: string;
         
 }
@@ -69843,7 +69150,7 @@ export class MJQueue_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     QueueType: string;
         
     @Field(() => [MJQueueTask_])
@@ -70105,7 +69412,7 @@ export class MJRecommendationItem_ {
     Recommendation: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     DestinationEntity: string;
         
 }
@@ -70448,11 +69755,11 @@ export class MJRecommendationRun_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     RecommendationProvider: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     RunByUser: string;
         
     @Field(() => [MJRecommendation_])
@@ -70647,11 +69954,11 @@ export class MJRecommendation_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     RecommendationRun: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     SourceEntity: string;
         
     @Field(() => [MJRecommendationItem_])
@@ -70831,7 +70138,7 @@ export class MJRecordChangeReplayRun_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field(() => [MJRecordChange_])
@@ -71052,7 +70359,7 @@ export class MJRecordChange_ {
     @Field({description: `Field UpdatedAt for entity Record Changes.`}) 
     UpdatedAt: Date;
         
-    @Field({nullable: true, description: `When this RecordChange was produced by a restore operation, points at the historical RecordChange whose state was restored. NULL for ordinary changes. Together with Source='Restore' this builds the version-chain lineage for auditing and timeline navigation.`}) 
+    @Field({nullable: true, description: `When this RecordChange was produced by a restore operation, points at the historical RecordChange whose state was restored. NULL for ordinary changes. Together with Source=`}) 
     @MaxLength(36)
     RestoredFromID?: string;
         
@@ -71060,23 +70367,23 @@ export class MJRecordChange_ {
     RestoreReason?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     ReplayRun?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Integration?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(750)
+    @MaxLength(1500)
     RestoredFrom?: string;
         
     @Field({nullable: true}) 
@@ -71370,7 +70677,7 @@ export class MJRecordGeoCode_ {
     @Field(() => Int, {description: `Number of geocoding attempts. Used for exponential backoff in the scheduled retry job. Stops retrying at configurable maxRetries (default 3).`}) 
     RetryCount: number;
         
-    @Field({nullable: true, description: `SHA-256 hash of the source field values that produced this geocode. When source fields change on save, the hash won't match and re-geocoding is triggered. Format: SHA-256(concat(field1, "|", field2, ...)).`}) 
+    @Field({nullable: true, description: `SHA-256 hash of the source field values that produced this geocode. When source fields change on save, the hash won`}) 
     @MaxLength(64)
     SourceFieldHash?: string;
         
@@ -71388,15 +70695,15 @@ export class MJRecordGeoCode_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     Country?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     StateProvince?: string;
         
 }
@@ -71641,11 +70948,11 @@ export class MJRecordLink_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     SourceEntity: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     TargetEntity: string;
         
 }
@@ -71837,7 +71144,7 @@ export class MJRecordMergeDeletionLog_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(450)
+    @MaxLength(900)
     RecordMergeLog: string;
         
 }
@@ -72032,15 +71339,15 @@ export class MJRecordMergeLog_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     InitiatedByUser: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     ApprovedByUser?: string;
         
     @Field(() => [MJDuplicateRunDetailMatch_])
@@ -73693,11 +73000,11 @@ export class MJReportCategory_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Parent?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
@@ -73897,11 +73204,11 @@ export class MJReportSnapshot_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Report: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
 }
@@ -74065,11 +73372,11 @@ export class MJReportUserState_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Report: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
 }
@@ -74242,7 +73549,7 @@ export class MJReportVersion_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Report: string;
         
 }
@@ -74478,43 +73785,42 @@ export class MJReport_ {
     EnvironmentID: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Category?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Conversation?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     DataContext?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     OutputTriggerType?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     OutputFormatType?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     OutputDeliveryType?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     OutputWorkflow?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Environment: string;
         
     @Field(() => [MJReportSnapshot_])
@@ -74806,11 +74112,11 @@ export class MJResourceLink_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ResourceType: string;
         
 }
@@ -75007,19 +74313,19 @@ export class MJResourcePermission_ {
     SharedByUserID?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ResourceType: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Role?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     SharedByUser?: string;
         
 }
@@ -75241,11 +74547,11 @@ export class MJResourceType_ {
     DriverClass?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     CategoryEntity?: string;
         
     @Field(() => [MJWorkspaceItem_])
@@ -76101,11 +75407,11 @@ export class MJScheduledActionParam_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ScheduledAction: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ActionParam: string;
         
 }
@@ -76319,11 +75625,11 @@ export class MJScheduledAction_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     CreatedByUser: string;
         
     @Field() 
-    @MaxLength(425)
+    @MaxLength(850)
     Action: string;
         
     @Field(() => [MJScheduledActionParam_])
@@ -76559,7 +75865,7 @@ export class MJScheduledJobRun_ {
     @MaxLength(36)
     ScheduledJobID: string;
         
-    @Field({description: `Timestamp when this job execution began. Set immediately before calling the job plugin's Execute method.`}) 
+    @Field({description: `Timestamp when this job execution began. Set immediately before calling the job plugin`}) 
     StartedAt: Date;
         
     @Field({nullable: true, description: `Timestamp when this job execution completed (successfully or with failure). NULL while the job is still running.`}) 
@@ -76569,10 +75875,10 @@ export class MJScheduledJobRun_ {
     @MaxLength(20)
     Status: string;
         
-    @Field(() => Boolean, {nullable: true, description: `Whether the job execution completed successfully. NULL while running, TRUE if successful, FALSE if failed. This is the job-level success from the plugin's Execute method, separate from domain-specific success tracking.`}) 
+    @Field(() => Boolean, {nullable: true, description: `Whether the job execution completed successfully. NULL while running, TRUE if successful, FALSE if failed. This is the job-level success from the plugin`}) 
     Success?: boolean;
         
-    @Field({nullable: true, description: `Error message if the job failed. NULL for successful runs. Contains exception messages or error details from the plugin's Execute method.`}) 
+    @Field({nullable: true, description: `Error message if the job failed. NULL for successful runs. Contains exception messages or error details from the plugin`}) 
     ErrorMessage?: string;
         
     @Field({nullable: true, description: `Job-type specific execution details stored as JSON. May include references to domain-specific run records (e.g., {"AgentRunID": "...", "TokensUsed": 5000}), performance metrics, or other execution metadata. Schema is defined by the job type plugin.`}) 
@@ -76592,11 +75898,11 @@ export class MJScheduledJobRun_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     ScheduledJob: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     ExecutedByUser?: string;
         
     @Field(() => [MJProcessRun_])
@@ -77027,7 +76333,7 @@ export class MJScheduledJob_ {
     @MaxLength(200)
     Name: string;
         
-    @Field({nullable: true, description: `Detailed description of the job's purpose, what it does, and any important notes about its execution.`}) 
+    @Field({nullable: true, description: `Detailed description of the job`}) 
     Description?: string;
         
     @Field({description: `Cron expression defining when the job should execute (e.g., "0 30 9 * * MON-FRI" for weekdays at 9:30 AM). Uses standard cron syntax with seconds precision.`}) 
@@ -77117,15 +76423,15 @@ export class MJScheduledJob_ {
     MaxRuntimeMinutes?: number;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     JobType: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     OwnerUser?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     NotifyUser?: string;
         
     @Field(() => [MJScheduledJobRun_])
@@ -77896,7 +77202,7 @@ export class MJScopedPromptPartResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Search Execution Logs
 //****************************************************************************
-@ObjectType({ description: `One row per SearchEngine.search invocation. Populated by SearchEngine\'s post-fusion logging hook (Phase 3.2). Read by the Knowledge Hub Search Analytics dashboard (Phase 3.3) and the per-scope tuning CSV export (Phase 3.4).` })
+@ObjectType({ description: `One row per SearchEngine.search invocation. Populated by SearchEngine` })
 export class MJSearchExecutionLog_ {
     @Field() 
     @MaxLength(36)
@@ -77914,7 +77220,7 @@ export class MJSearchExecutionLog_ {
     @MaxLength(36)
     AIAgentID?: string;
         
-    @Field({description: `Raw query string the user / agent submitted. NVARCHAR(MAX) because some queries are long (full sentences, snippets). Stored verbatim for analytics — do NOT rely on this for permission decisions.`}) 
+    @Field({description: `Raw query string the user / agent submitted. TEXT because some queries are long (full sentences, snippets). Stored verbatim for analytics — do NOT rely on this for permission decisions.`}) 
     Query: string;
         
     @Field(() => Int, {description: `End-to-end search duration in milliseconds, measured at the SearchEngine.search call boundary (provider runs + fusion + rerank + permission filter + enrichment).`}) 
@@ -77923,18 +77229,18 @@ export class MJSearchExecutionLog_ {
     @Field(() => Int, {description: `Number of results returned to the caller after permission filtering, deduplication, and score-threshold trimming. Use this as the hit-rate denominator (rows where ResultCount > 0).`}) 
     ResultCount: number;
         
-    @Field({nullable: true, description: `BaseReRanker.Name of the reranker that ran (e.g. 'Cohere', 'Voyage', 'OpenAI', 'BGE', 'NoopReRanker'). NULL when no rerank stage executed for this invocation.`}) 
+    @Field({nullable: true, description: `BaseReRanker."Name" of the reranker that ran (e.g. `}) 
     @MaxLength(100)
     RerankerName?: string;
         
-    @Field(() => Float, {nullable: true, description: `Total reranker spend in cents for this invocation, populated from the BaseReRanker.CostReporter callback via RerankerBudgetGuard. NULL when no rerank ran or no real-provider cost was incurred (Noop / BGE).`}) 
+    @Field(() => Float, {nullable: true, description: `Total reranker spend in cents for this invocation, populated from the BaseReRanker."CostReporter" callback via RerankerBudgetGuard. NULL when no rerank ran or no real-provider cost was incurred (Noop / BGE).`}) 
     RerankerCostCents?: number;
         
-    @Field({description: `Outcome of the search: 'Success' (results returned, possibly empty), 'Failure' (an exception bubbled out — see FailureReason), 'Forbidden' (the caller lacked SearchScopePermission for the requested scope). Constrained by CK_SearchExecutionLog_Status.`}) 
+    @Field({description: `Outcome of the search: `}) 
     @MaxLength(20)
     Status: string;
         
-    @Field({nullable: true, description: `Short human-readable failure reason when Status = 'Failure' or 'Forbidden'. NULL on success.`}) 
+    @Field({nullable: true, description: `Short human-readable failure reason when Status = `}) 
     @MaxLength(500)
     FailureReason?: string;
         
@@ -77948,15 +77254,15 @@ export class MJSearchExecutionLog_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     SearchScope?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     AIAgent?: string;
         
 }
@@ -78199,7 +77505,7 @@ export class MJSearchProvider_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     Credential?: string;
         
     @Field(() => [MJSearchScopeProvider_])
@@ -78420,10 +77726,10 @@ export class MJSearchScopeEntity_ {
     @MaxLength(36)
     EntityID: string;
         
-    @Field({nullable: true, description: `Optional SQL filter applied to this entity's search within this scope. Example: Status='Published' AND DepartmentID='abc'. Rendered as a Nunjucks template with SearchContext variables for multi-tenant filtering.`}) 
+    @Field({nullable: true, description: `Optional SQL filter applied to this entity`}) 
     ExtraFilter?: string;
         
-    @Field({nullable: true, description: `Optional override for the UserSearchString passed to RunView for this entity within this scope. Nunjucks template (e.g., "{{ query }} AND type:policy"). NULL = pass the user's actual query through as-is.`}) 
+    @Field({nullable: true, description: `Optional override for the UserSearchString passed to RunView for this entity within this scope. Nunjucks template (e.g., "{{ query }} AND type:policy"). NULL = pass the user`}) 
     UserSearchString?: string;
         
     @Field() 
@@ -78433,11 +77739,11 @@ export class MJSearchScopeEntity_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     SearchScope: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
 }
@@ -78597,18 +77903,18 @@ export class MJSearchScopeExternalIndex_ {
     @MaxLength(40)
     IndexType: string;
         
-    @Field({nullable: true, description: `FK to VectorIndex. REQUIRED when IndexType='Vector'. NULL for all other IndexType values.`}) 
+    @Field({nullable: true, description: `FK to VectorIndex. REQUIRED when IndexType=`}) 
     @MaxLength(36)
     VectorIndexID?: string;
         
-    @Field({nullable: true, description: `For non-vector IndexTypes: the remote engine's index/collection/alias name (e.g., Elasticsearch index "kb_docs_v3", Typesense collection "articles"). NULL for IndexType='Vector' (VectorIndexID resolves the name instead).`}) 
+    @Field({nullable: true, description: `For non-vector IndexTypes: the remote engine`}) 
     @MaxLength(400)
     ExternalIndexName?: string;
         
     @Field({nullable: true, description: `JSON with extra connection/config hints the provider needs (cluster alias, routing key, custom analyzer, etc.). Provider-interpreted.`}) 
     ExternalIndexConfig?: string;
         
-    @Field({nullable: true, description: `JSON filter expression applied as a native metadata filter on the remote engine. Pinecone/Qdrant/PGVector metadata filter, or Elasticsearch filter DSL, etc. Rendered as a Nunjucks template so SearchContext.PrimaryScopeRecordID and SearchContext.SecondaryScopes.* can be interpolated for multi-tenant filtering.`}) 
+    @Field({nullable: true, description: `JSON filter expression applied as a native metadata filter on the remote engine. Pinecone/Qdrant/PGVector metadata filter, or Elasticsearch filter DSL, etc. Rendered as a Nunjucks template so SearchContext."PrimaryScopeRecordID" and SearchContext."SecondaryScopes".* can be interpolated for multi-tenant filtering.`}) 
     MetadataFilter?: string;
         
     @Field() 
@@ -78618,11 +77924,11 @@ export class MJSearchScopeExternalIndex_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     SearchScope: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     VectorIndex?: string;
         
 }
@@ -78780,7 +78086,7 @@ export class MJSearchScopeExternalIndexResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Search Scope Permissions
 //****************************************************************************
-@ObjectType({ description: `Per-user or per-role permission grant on a SearchScope. Exactly one of UserID or RoleID is set on each row; the other is NULL. PermissionLevel is one of None, Read, Search, Manage. Combined with AIAgent.SearchScopeAccess for agent-side fallbacks via the SearchScopePermissionResolver.` })
+@ObjectType({ description: `Per-user or per-role permission grant on a SearchScope. Exactly one of UserID or RoleID is set on each row; the other is NULL. PermissionLevel is one of None, Read, Search, Manage. Combined with AIAgent."SearchScopeAccess" for agent-side fallbacks via the SearchScopePermissionResolver.` })
 export class MJSearchScopePermission_ {
     @Field({description: `Primary key. Auto-generated.`}) 
     @MaxLength(36)
@@ -78809,15 +78115,15 @@ export class MJSearchScopePermission_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     SearchScope: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Role?: string;
         
 }
@@ -78980,13 +78286,13 @@ export class MJSearchScopeProvider_ {
     @Field(() => Boolean, {description: `Whether this provider is active for this scope. Lets an admin toggle providers off per-scope without deleting the row.`}) 
     Enabled: boolean;
         
-    @Field(() => Int, {nullable: true, description: `Override the max-results value for this provider within this scope. NULL = use the provider's default.`}) 
+    @Field(() => Int, {nullable: true, description: `Override the max-results value for this provider within this scope. NULL = use the provider`}) 
     MaxResultsOverride?: number;
         
     @Field({nullable: true, description: `JSON override for provider-specific configuration within this scope. Provider interprets.`}) 
     ProviderConfigOverride?: string;
         
-    @Field({nullable: true, description: `Optional FK to Templates. When set, the user/agent query is rewritten through this Template before being sent to this provider. Lets vector providers get a chunk-shaped rewrite while FTS providers get keyword extraction within the same scope. Resolution order: this > AIAgentSearchScope.QueryTemplateID > raw lastUserMessage.`}) 
+    @Field({nullable: true, description: `Optional FK to Templates. When set, the user/agent query is rewritten through this Template before being sent to this provider. Lets vector providers get a chunk-shaped rewrite while FTS providers get keyword extraction within the same scope. Resolution order: this > AIAgentSearchScope."QueryTemplateID" > raw lastUserMessage.`}) 
     @MaxLength(36)
     QueryTransformTemplateID?: string;
         
@@ -78997,15 +78303,15 @@ export class MJSearchScopeProvider_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     SearchScope: string;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     SearchProvider: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     QueryTransformTemplate?: string;
         
 }
@@ -79177,7 +78483,7 @@ export class MJSearchScopeStorageAccount_ {
     @MaxLength(36)
     FileStorageAccountID: string;
         
-    @Field({nullable: true, description: `Optional folder path restriction. NULL = entire storage account. Example: /policies/hr/. Rendered as a Nunjucks template with SearchContext variables so platforms can do per-tenant folder routing like /tenants/{{ context.PrimaryScopeRecordID }}/.`}) 
+    @Field({nullable: true, description: `Optional folder path restriction. NULL = entire storage account. Example: /policies/hr/. Rendered as a Nunjucks template with SearchContext variables so platforms can do per-tenant folder routing like /tenants/{{ context."PrimaryScopeRecordID" }}/.`}) 
     @MaxLength(1000)
     FolderPath?: string;
         
@@ -79188,11 +78494,11 @@ export class MJSearchScopeStorageAccount_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     SearchScope: string;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     FileStorageAccount: string;
         
 }
@@ -79342,11 +78648,11 @@ export class MJSearchScopeTestQuery_ {
     @MaxLength(36)
     SearchScopeID: string;
         
-    @Field({description: `Short human-readable label for the test query, shown in the form's test-query grid (e.g. "VIP customer escalation", "expense reimbursement policy").`}) 
+    @Field({description: `Short human-readable label for the test query, shown in the form`}) 
     @MaxLength(200)
     Label: string;
         
-    @Field({description: `The query text itself. NVARCHAR(MAX) because canonical queries can be full sentences or chunks of natural-language context.`}) 
+    @Field({description: `The query text itself. TEXT because canonical queries can be full sentences or chunks of natural-language context.`}) 
     Query: string;
         
     @Field({nullable: true, description: `Optional MJ entity name (e.g. "Contacts", "Documents") of the expected top result. When set together with ExpectedTopResultRecordID, lets the test runner assert that the tuned scope returns the right record at rank #1 — a regression tripwire for fusion / reranker changes.`}) 
@@ -79367,7 +78673,7 @@ export class MJSearchScopeTestQuery_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     SearchScope: string;
         
 }
@@ -79568,7 +78874,7 @@ export class MJSearchScope_ {
     @Field({nullable: true, description: `JSON defining available multi-tenant SearchContext dimensions, inheritance modes, and validation rules. Uses the SecondaryScopeConfig structure shared with the agent memory system (@memberjunction/ai-core-plus). NULL = scope is not multi-tenant aware.`}) 
     SearchContextConfig?: string;
         
-    @Field(() => Int, {nullable: true, description: `Optional cap on reranker spend (in cents) per search invocation against this scope. NULL means uncapped — existing behavior. When set, the SearchEngine's budget guard short-circuits any reranker call whose projected cost would push the run total past this value, and accumulates actual post-call cost via each reranker's CostReporter callback (BaseReRanker.CostReporter). Real-provider rerankers (Cohere, Voyage, OpenAI) report cost; NoopReRanker and BGEReRanker report zero (local / pass-through).`}) 
+    @Field(() => Int, {nullable: true, description: `Optional cap on reranker spend (in cents) per search invocation against this scope. NULL means uncapped — existing behavior. When set, the SearchEngine`}) 
     RerankerBudgetCents?: number;
         
     @Field() 
@@ -79578,7 +78884,7 @@ export class MJSearchScope_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     OwnerUser?: string;
         
     @Field(() => [MJSearchScopeEntity_])
@@ -79922,15 +79228,15 @@ export class MJSignatureAccount_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     SignatureProvider: string;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     Credential: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Company?: string;
         
     @Field(() => [MJSignatureRequest_])
@@ -80129,7 +79435,7 @@ export class MJSignatureProvider_ {
     @MaxLength(100)
     Name: string;
         
-    @Field({description: `Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseSignatureProvider, ServerDriverKey). MUST match the @RegisterClass key on the concrete driver (e.g. 'DocuSign').`}) 
+    @Field({description: `Driver key resolved at runtime via MJGlobal."ClassFactory"."CreateInstance"(BaseSignatureProvider, ServerDriverKey). MUST match the @RegisterClass key on the concrete driver (e.g. `}) 
     @MaxLength(100)
     ServerDriverKey: string;
         
@@ -80373,15 +79679,15 @@ export class MJSignatureRequestDocument_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     SignatureRequest: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Artifact?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ArtifactVersion?: string;
         
 }
@@ -80574,7 +79880,7 @@ export class MJSignatureRequestLog_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     SignatureRequest?: string;
         
 }
@@ -80775,7 +80081,7 @@ export class MJSignatureRequestRecipient_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     SignatureRequest: string;
         
 }
@@ -80995,11 +80301,11 @@ export class MJSignatureRequest_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     SignatureAccount: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity?: string;
         
     @Field(() => [MJSignatureRequestLog_])
@@ -81241,7 +80547,7 @@ export class MJSkill_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -81692,7 +80998,7 @@ export class MJStateProvince_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     Country: string;
         
     @Field(() => [MJRecordGeoCode_])
@@ -81873,6 +81179,180 @@ export class MJStateProvinceResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: System Events
+//****************************************************************************
+@ObjectType()
+export class MJSystemEvent_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field() 
+    @MaxLength(50)
+    Type: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    EntityID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Entity?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: System Events
+//****************************************************************************
+@InputType()
+export class CreateMJSystemEventInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    EntityID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: System Events
+//****************************************************************************
+@InputType()
+export class UpdateMJSystemEventInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: System Events
+//****************************************************************************
+@ObjectType()
+export class RunMJSystemEventViewResult {
+    @Field(() => [MJSystemEvent_])
+    Results: MJSystemEvent_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJSystemEvent_)
+export class MJSystemEventResolver extends ResolverBase {
+    @Query(() => RunMJSystemEventViewResult)
+    async RunMJSystemEventViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSystemEventViewResult)
+    async RunMJSystemEventViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSystemEventViewResult)
+    async RunMJSystemEventDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: System Events';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJSystemEvent_, { nullable: true })
+    async MJSystemEvent(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSystemEvent_ | null> {
+        this.CheckUserReadPermissions('MJ: System Events', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSystemEvents')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: System Events', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: System Events', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJSystemEvent_)
+    async CreateMJSystemEvent(
+        @Arg('input', () => CreateMJSystemEventInput) input: CreateMJSystemEventInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: System Events', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJSystemEvent_)
+    async UpdateMJSystemEvent(
+        @Arg('input', () => UpdateMJSystemEventInput) input: UpdateMJSystemEventInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: System Events', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJSystemEvent_)
+    async DeleteMJSystemEvent(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: System Events', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Tag Audit Logs
 //****************************************************************************
 @ObjectType({ description: `Immutable audit trail for all tag taxonomy changes. Each row records a single action with before/after details in JSON.` })
@@ -81907,15 +81387,15 @@ export class MJTagAuditLog_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Tag: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     PerformedByUser: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     RelatedTag?: string;
         
 }
@@ -82094,11 +81574,11 @@ export class MJTagCoOccurrence_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     TagA: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     TagB: string;
         
 }
@@ -82258,7 +81738,7 @@ export class MJTagScope_ {
     @MaxLength(36)
     ScopeEntityID: string;
         
-    @Field({description: `Primary key value of the scope record. Stored as NVARCHAR(450) to match the polymorphic RecordID convention used by TaggedItem.`}) 
+    @Field({description: `Primary key value of the scope record. Stored as VARCHAR(450) to match the polymorphic RecordID convention used by TaggedItem.`}) 
     @MaxLength(450)
     ScopeRecordID: string;
         
@@ -82269,11 +81749,11 @@ export class MJTagScope_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Tag: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ScopeEntity: string;
         
 }
@@ -82431,10 +81911,10 @@ export class MJTagSuggestion_ {
     @MaxLength(36)
     BestMatchTagID?: string;
         
-    @Field(() => Float, {nullable: true, description: `Cosine similarity score (0.000-1.000) between the proposed name embedding and BestMatchTagID's embedding, when applicable.`}) 
+    @Field(() => Float, {nullable: true, description: `Cosine similarity score (0.000-1.000) between the proposed name embedding and BestMatchTagID`}) 
     BestMatchScore?: number;
         
-    @Field({description: `Why this suggestion was created. Free-form NVARCHAR for forward compatibility; conventional values include ConstrainedMode, BelowThreshold, ParentFrozen, AutoGrowDisabled, MaxChildrenExceeded, MaxDepthExceeded, BelowMinWeight, RequiresReview, MergeCandidate, LowUsage, WideNode.`}) 
+    @Field({description: `Why this suggestion was created. Free-form TEXT for forward compatibility; conventional values include ConstrainedMode, BelowThreshold, ParentFrozen, AutoGrowDisabled, MaxChildrenExceeded, MaxDepthExceeded, BelowMinWeight, RequiresReview, MergeCandidate, LowUsage, WideNode.`}) 
     @MaxLength(50)
     Reason: string;
         
@@ -82474,27 +81954,27 @@ export class MJTagSuggestion_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ProposedParent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     BestMatchTag?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(250)
+    @MaxLength(500)
     SourceContentItem?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     SourceContentSource?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ResolvedTag?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     ReviewedByUser?: string;
         
 }
@@ -82694,7 +82174,7 @@ export class MJTagSuggestionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Tag Synonyms
 //****************************************************************************
-@ObjectType({ description: `Alternate names that should resolve to a Tag during autotagging. Consulted before exact/fuzzy/semantic match tiers in TagEngine.ResolveTag.` })
+@ObjectType({ description: `Alternate names that should resolve to a Tag during autotagging. Consulted before exact/fuzzy/semantic match tiers in TagEngine."ResolveTag".` })
 export class MJTagSynonym_ {
     @Field() 
     @MaxLength(36)
@@ -82723,7 +82203,7 @@ export class MJTagSynonym_ {
     Status: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Tag: string;
         
 }
@@ -82897,11 +82377,11 @@ export class MJTaggedItem_ {
     Weight: number;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Tag: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
 }
@@ -83103,7 +82583,7 @@ export class MJTag_ {
     @Field(() => Boolean, {description: `When 1, every classifier-applied use of this tag is routed to the TagSuggestion queue for human approval before being persisted as a ContentItemTag → TaggedItem.`}) 
     RequiresReview: boolean;
         
-    @Field({nullable: true, description: `JSON-encoded numeric vector representing the tag's embedding under the model identified by EmbeddingModelID. Refreshed automatically on Save() when Name or Description changes. Used to seed the in-memory tag vector cache without a cold-start LLM round-trip.`}) 
+    @Field({nullable: true, description: `JSON-encoded numeric vector representing the tag`}) 
     EmbeddingVector?: string;
         
     @Field({nullable: true, description: `AI model whose embedding produced EmbeddingVector. When the configured tag-embedding model differs from this value, the cached vector is treated as stale and recomputed.`}) 
@@ -83111,15 +82591,15 @@ export class MJTag_ {
     EmbeddingModelID?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     MergedIntoTag?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     EmbeddingModel?: string;
         
     @Field({nullable: true}) 
@@ -83533,11 +83013,11 @@ export class MJTaskDependency_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Task: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     DependsOnTask: string;
         
 }
@@ -83904,31 +83384,30 @@ export class MJTask_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Type: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Environment: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Project?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     User?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Agent?: string;
         
     @Field({nullable: true}) 
@@ -84205,11 +83684,11 @@ export class MJTemplateCategory_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
@@ -84588,11 +84067,11 @@ export class MJTemplateContent_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Template: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Type: string;
         
     @Field(() => [MJTemplateParam_])
@@ -84817,15 +84296,15 @@ export class MJTemplateParam_ {
     TemplateContentID?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Template: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     TemplateContent?: string;
         
 }
@@ -85065,11 +84544,11 @@ export class MJTemplate_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Category?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field(() => [MJTemplateContent_])
@@ -85095,9 +84574,6 @@ export class MJTemplate_ {
     
     @Field(() => [MJEntityDocument_])
     MJEntityDocuments_TemplateIDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
-    
-    @Field(() => [MJUserRoutine_])
-    MJUserRoutines_NotificationTemplateIDArray: MJUserRoutine_[]; // Link to MJUserRoutines
     
 }
 
@@ -85314,16 +84790,6 @@ export class MJTemplateResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJUserRoutine_])
-    async MJUserRoutines_NotificationTemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Routines', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutines')} WHERE ${provider.QuoteIdentifier('NotificationTemplateID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routines', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjtemplate_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routines', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @Mutation(() => MJTemplate_)
     async CreateMJTemplate(
         @Arg('input', () => CreateMJTemplateInput) input: CreateMJTemplateInput,
@@ -85394,7 +84860,7 @@ export class MJTestRubric_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Type: string;
         
 }
@@ -85594,11 +85060,11 @@ export class MJTestRunFeedback_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     TestRun: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     ReviewerUser: string;
         
 }
@@ -85981,11 +85447,11 @@ export class MJTestRunOutput_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     TestRun: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     OutputType: string;
         
 }
@@ -86210,7 +85676,7 @@ export class MJTestRun_ {
     @MaxLength(100)
     TargetType?: string;
         
-    @Field({nullable: true, description: `ID of the target execution log (e.g., AIAgentRun.ID, WorkflowRun.ID). This is a soft FK - the actual entity depends on TargetType. The target entity should have a reverse FK back to TestRun for bidirectional navigation.`}) 
+    @Field({nullable: true, description: `ID of the target execution log (e.g., AIAgentRun."ID", WorkflowRun."ID"). This is a soft FK - the actual entity depends on TargetType. The target entity should have a reverse FK back to TestRun for bidirectional navigation.`}) 
     @MaxLength(36)
     TargetLogID?: string;
         
@@ -86296,19 +85762,19 @@ export class MJTestRun_ {
     ResolvedVariables?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Test: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     TestSuiteRun?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     RunByUser: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     TargetLogEntity?: string;
         
     @Field(() => [MJTestRunOutput_])
@@ -86780,15 +86246,15 @@ export class MJTestSuiteRun_ {
     @Field({nullable: true, description: `JSON object containing extensible execution context: osType, osVersion, nodeVersion, timezone, locale, ipAddress, and CI/CD metadata (ciProvider, pipelineId, buildNumber, branch, prNumber). Allows detailed environment tracking without schema changes.`}) 
     RunContextDetails?: string;
         
-    @Field({nullable: true, description: `JSON object containing the variable values provided at suite run level. These values were applied to all tests in the suite run and can be seen on individual TestRun.ResolvedVariables with source="suite".`}) 
+    @Field({nullable: true, description: `JSON object containing the variable values provided at suite run level. These values were applied to all tests in the suite run and can be seen on individual TestRun."ResolvedVariables" with source="suite".`}) 
     ResolvedVariables?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Suite: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     RunByUser: string;
         
     @Field(() => [MJTestRun_])
@@ -87110,11 +86576,11 @@ export class MJTestSuiteTest_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Suite: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Test: string;
         
 }
@@ -87306,7 +86772,7 @@ export class MJTestSuite_ {
     Variables?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -87519,7 +86985,7 @@ export class MJTestSuiteResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Test Types
 //****************************************************************************
-@ObjectType({ description: `Defines test type drivers that can be dynamically instantiated via MJGlobal.Instance.ClassFactory.CreateInstance(BaseTestDriver, DriverClass). Each test type represents a different category of testing (e.g., Agent Evals, Workflow Tests, Code Generation Tests).` })
+@ObjectType({ description: `Defines test type drivers that can be dynamically instantiated via MJGlobal."Instance"."ClassFactory"."CreateInstance"(BaseTestDriver, DriverClass). Each test type represents a different category of testing (e.g., Agent Evals, Workflow Tests, Code Generation Tests).` })
 export class MJTestType_ {
     @Field() 
     @MaxLength(36)
@@ -87778,11 +87244,11 @@ export class MJTest_ {
     @Field(() => Int, {nullable: true, description: `Maximum execution time in milliseconds for this test. If NULL, uses default (300000ms = 5 minutes). Can be overridden by Configuration JSON maxExecutionTime field for backward compatibility.`}) 
     MaxExecutionTimeMS?: number;
         
-    @Field({nullable: true, description: `JSON configuration for which test type variables are exposed by this test, along with test-level defaults, locks, and value restrictions. References variables defined in the parent TestType.VariablesSchema.`}) 
+    @Field({nullable: true, description: `JSON configuration for which test type variables are exposed by this test, along with test-level defaults, locks, and value restrictions. References variables defined in the parent TestType."VariablesSchema".`}) 
     Variables?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Type: string;
         
     @Field(() => [MJTestRun_])
@@ -88038,15 +87504,15 @@ export class MJUserApplicationEntity_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Application: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
 }
@@ -88200,7 +87666,7 @@ export class MJUserApplication_ {
     @MaxLength(36)
     ApplicationID: string;
         
-    @Field(() => Int, {description: `Display order of this application in the user's navigation.`}) 
+    @Field(() => Int, {description: `Display order of this application in the user`}) 
     Sequence: number;
         
     @Field(() => Boolean, {description: `Whether this application is currently visible to the user.`}) 
@@ -88213,11 +87679,11 @@ export class MJUserApplication_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Application: string;
         
     @Field(() => [MJUserApplicationEntity_])
@@ -88401,15 +87867,15 @@ export class MJUserFavorite_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     EntityBaseTable: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     EntityBaseView: string;
         
 }
@@ -88582,11 +88048,11 @@ export class MJUserNotificationPreference_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     NotificationType: string;
         
 }
@@ -88750,7 +88216,7 @@ export class MJUserNotificationType_ {
     @MaxLength(36)
     ID: string;
         
-    @Field({description: `Unique name for the notification type (e.g., 'Agent Completion')`}) 
+    @Field({description: `Unique name for the notification type (e.g., `}) 
     @MaxLength(100)
     Name: string;
         
@@ -88799,11 +88265,11 @@ export class MJUserNotificationType_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     EmailTemplate?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     SMSTemplate?: string;
         
     @Field(() => [MJUserNotification_])
@@ -89068,15 +88534,15 @@ export class MJUserNotification_ {
     NotificationTypeID?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     ResourceType?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     NotificationType?: string;
         
 }
@@ -89286,27 +88752,27 @@ export class MJUserRecordLog_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     UserName: string;
         
     @Field({nullable: true}) 
-    @MaxLength(101)
+    @MaxLength(202)
     UserFirstLast?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     UserEmail: string;
         
     @Field({nullable: true}) 
-    @MaxLength(81)
+    @MaxLength(162)
     UserSupervisor?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     UserSupervisorEmail?: string;
         
 }
@@ -89485,11 +88951,11 @@ export class MJUserRole_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     Role: string;
         
 }
@@ -89631,849 +89097,6 @@ export class MJUserRoleResolver extends ResolverBase {
 }
 
 //****************************************************************************
-// ENTITY CLASS for MJ: User Routine Recipients
-//****************************************************************************
-@ObjectType()
-export class MJUserRoutineRecipient_ {
-    @Field() 
-    @MaxLength(36)
-    ID: string;
-        
-    @Field({description: `Routine this recipient belongs to.`}) 
-    @MaxLength(36)
-    RoutineID: string;
-        
-    @Field({nullable: true, description: `Internal MJ user recipient (when notifying an existing user). Either UserID or Email is set.`}) 
-    @MaxLength(36)
-    UserID?: string;
-        
-    @Field({nullable: true, description: `External email recipient (when notifying a non-user). Either UserID or Email is set.`}) 
-    @MaxLength(255)
-    Email?: string;
-        
-    @Field({description: `Delivery channel for this recipient: InApp or Email.`}) 
-    @MaxLength(20)
-    Channel: string;
-        
-    @Field(() => Int, {description: `Explicit display/notification ordering of recipients within a routine (ascending).`}) 
-    Sequence: number;
-        
-    @Field() 
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(255)
-    Routine: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    User?: string;
-        
-}
-
-//****************************************************************************
-// INPUT TYPE for MJ: User Routine Recipients
-//****************************************************************************
-@InputType()
-export class CreateMJUserRoutineRecipientInput {
-    @Field({ nullable: true })
-    ID?: string;
-
-    @Field({ nullable: true })
-    RoutineID?: string;
-
-    @Field({ nullable: true })
-    UserID: string | null;
-
-    @Field({ nullable: true })
-    Email: string | null;
-
-    @Field({ nullable: true })
-    Channel?: string;
-
-    @Field(() => Int, { nullable: true })
-    Sequence?: number;
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for MJ: User Routine Recipients
-//****************************************************************************
-@InputType()
-export class UpdateMJUserRoutineRecipientInput {
-    @Field()
-    ID: string;
-
-    @Field({ nullable: true })
-    RoutineID?: string;
-
-    @Field({ nullable: true })
-    UserID?: string | null;
-
-    @Field({ nullable: true })
-    Email?: string | null;
-
-    @Field({ nullable: true })
-    Channel?: string;
-
-    @Field(() => Int, { nullable: true })
-    Sequence?: number;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
-//****************************************************************************
-// RESOLVER for MJ: User Routine Recipients
-//****************************************************************************
-@ObjectType()
-export class RunMJUserRoutineRecipientViewResult {
-    @Field(() => [MJUserRoutineRecipient_])
-    Results: MJUserRoutineRecipient_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(MJUserRoutineRecipient_)
-export class MJUserRoutineRecipientResolver extends ResolverBase {
-    @Query(() => RunMJUserRoutineRecipientViewResult)
-    async RunMJUserRoutineRecipientViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunMJUserRoutineRecipientViewResult)
-    async RunMJUserRoutineRecipientViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunMJUserRoutineRecipientViewResult)
-    async RunMJUserRoutineRecipientDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        input.EntityName = 'MJ: User Routine Recipients';
-        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
-    }
-    @Query(() => MJUserRoutineRecipient_, { nullable: true })
-    async MJUserRoutineRecipient(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJUserRoutineRecipient_ | null> {
-        this.CheckUserReadPermissions('MJ: User Routine Recipients', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRecipients')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Recipients', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.MapFieldNamesToCodeNames('MJ: User Routine Recipients', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-    
-    @Mutation(() => MJUserRoutineRecipient_)
-    async CreateMJUserRoutineRecipient(
-        @Arg('input', () => CreateMJUserRoutineRecipientInput) input: CreateMJUserRoutineRecipientInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.CreateRecord('MJ: User Routine Recipients', input, provider, userPayload, pubSub)
-    }
-        
-    @Mutation(() => MJUserRoutineRecipient_)
-    async UpdateMJUserRoutineRecipient(
-        @Arg('input', () => UpdateMJUserRoutineRecipientInput) input: UpdateMJUserRoutineRecipientInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.UpdateRecord('MJ: User Routine Recipients', input, provider, userPayload, pubSub);
-    }
-    
-    @Mutation(() => MJUserRoutineRecipient_)
-    async DeleteMJUserRoutineRecipient(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadWriteProvider(providers);
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('MJ: User Routine Recipients', key, options, provider, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
-// ENTITY CLASS for MJ: User Routine Runs
-//****************************************************************************
-@ObjectType()
-export class MJUserRoutineRun_ {
-    @Field() 
-    @MaxLength(36)
-    ID: string;
-        
-    @Field({description: `Routine this run belongs to.`}) 
-    @MaxLength(36)
-    RoutineID: string;
-        
-    @Field({description: `When the run started.`}) 
-    StartedAt: Date;
-        
-    @Field({nullable: true, description: `When the run completed (null while running).`}) 
-    CompletedAt?: Date;
-        
-    @Field({description: `Run outcome.`}) 
-    @MaxLength(20)
-    Status: string;
-        
-    @Field({nullable: true, description: `Linked AI Agent Run when the routine target is an agent.`}) 
-    @MaxLength(36)
-    AgentRunID?: string;
-        
-    @Field({nullable: true, description: `For Prompt targets, links to the MJ: AI Prompt Runs record for this execution — tokens, cost, and full telemetry live there (never duplicated here).`}) 
-    @MaxLength(36)
-    PromptRunID?: string;
-        
-    @Field({nullable: true, description: `For Action targets, links to the MJ: Action Execution Logs record for this execution — params, results, and telemetry live there (never duplicated here).`}) 
-    @MaxLength(36)
-    ActionExecutionLogID?: string;
-        
-    @Field({nullable: true, description: `Human-readable summary of the run result.`}) 
-    ResultSummary?: string;
-        
-    @Field({nullable: true, description: `Hash of the result, compared against the routine LastResultHash for OnChange detection.`}) 
-    @MaxLength(100)
-    ResultHash?: string;
-        
-    @Field(() => Boolean, {description: `Whether a notification was dispatched for this run.`}) 
-    NotificationSent: boolean;
-        
-    @Field({nullable: true, description: `Error detail when Status is Failed.`}) 
-    ErrorMessage?: string;
-        
-    @Field() 
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(255)
-    Routine: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    AgentRun?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    PromptRun?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(425)
-    ActionExecutionLog?: string;
-        
-}
-
-//****************************************************************************
-// INPUT TYPE for MJ: User Routine Runs
-//****************************************************************************
-@InputType()
-export class CreateMJUserRoutineRunInput {
-    @Field({ nullable: true })
-    ID?: string;
-
-    @Field({ nullable: true })
-    RoutineID?: string;
-
-    @Field({ nullable: true })
-    StartedAt?: Date;
-
-    @Field({ nullable: true })
-    CompletedAt: Date | null;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field({ nullable: true })
-    AgentRunID: string | null;
-
-    @Field({ nullable: true })
-    PromptRunID: string | null;
-
-    @Field({ nullable: true })
-    ActionExecutionLogID: string | null;
-
-    @Field({ nullable: true })
-    ResultSummary: string | null;
-
-    @Field({ nullable: true })
-    ResultHash: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    NotificationSent?: boolean;
-
-    @Field({ nullable: true })
-    ErrorMessage: string | null;
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for MJ: User Routine Runs
-//****************************************************************************
-@InputType()
-export class UpdateMJUserRoutineRunInput {
-    @Field()
-    ID: string;
-
-    @Field({ nullable: true })
-    RoutineID?: string;
-
-    @Field({ nullable: true })
-    StartedAt?: Date;
-
-    @Field({ nullable: true })
-    CompletedAt?: Date | null;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field({ nullable: true })
-    AgentRunID?: string | null;
-
-    @Field({ nullable: true })
-    PromptRunID?: string | null;
-
-    @Field({ nullable: true })
-    ActionExecutionLogID?: string | null;
-
-    @Field({ nullable: true })
-    ResultSummary?: string | null;
-
-    @Field({ nullable: true })
-    ResultHash?: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    NotificationSent?: boolean;
-
-    @Field({ nullable: true })
-    ErrorMessage?: string | null;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
-//****************************************************************************
-// RESOLVER for MJ: User Routine Runs
-//****************************************************************************
-@ObjectType()
-export class RunMJUserRoutineRunViewResult {
-    @Field(() => [MJUserRoutineRun_])
-    Results: MJUserRoutineRun_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(MJUserRoutineRun_)
-export class MJUserRoutineRunResolver extends ResolverBase {
-    @Query(() => RunMJUserRoutineRunViewResult)
-    async RunMJUserRoutineRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunMJUserRoutineRunViewResult)
-    async RunMJUserRoutineRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunMJUserRoutineRunViewResult)
-    async RunMJUserRoutineRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        input.EntityName = 'MJ: User Routine Runs';
-        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
-    }
-    @Query(() => MJUserRoutineRun_, { nullable: true })
-    async MJUserRoutineRun(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJUserRoutineRun_ | null> {
-        this.CheckUserReadPermissions('MJ: User Routine Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRuns')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.MapFieldNamesToCodeNames('MJ: User Routine Runs', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-    
-    @Mutation(() => MJUserRoutineRun_)
-    async CreateMJUserRoutineRun(
-        @Arg('input', () => CreateMJUserRoutineRunInput) input: CreateMJUserRoutineRunInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.CreateRecord('MJ: User Routine Runs', input, provider, userPayload, pubSub)
-    }
-        
-    @Mutation(() => MJUserRoutineRun_)
-    async UpdateMJUserRoutineRun(
-        @Arg('input', () => UpdateMJUserRoutineRunInput) input: UpdateMJUserRoutineRunInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.UpdateRecord('MJ: User Routine Runs', input, provider, userPayload, pubSub);
-    }
-    
-    @Mutation(() => MJUserRoutineRun_)
-    async DeleteMJUserRoutineRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadWriteProvider(providers);
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('MJ: User Routine Runs', key, options, provider, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
-// ENTITY CLASS for MJ: User Routines
-//****************************************************************************
-@ObjectType()
-export class MJUserRoutine_ {
-    @Field() 
-    @MaxLength(36)
-    ID: string;
-        
-    @Field({description: `Owner of the routine. Routines are private to their owner (row-level access).`}) 
-    @MaxLength(36)
-    UserID: string;
-        
-    @Field({nullable: true, description: `Optional environment scope for the routine.`}) 
-    @MaxLength(36)
-    EnvironmentID?: string;
-        
-    @Field({description: `User-facing routine name.`}) 
-    @MaxLength(255)
-    Name: string;
-        
-    @Field({nullable: true, description: `Optional description of what the routine does.`}) 
-    Description?: string;
-        
-    @Field({description: `Lifecycle status: Active (eligible to run), Paused (temporarily off), Disabled (off).`}) 
-    @MaxLength(20)
-    Status: string;
-        
-    @Field({description: `Scheduled (always notify per NotifyCondition) or Monitoring (intended for OnChange detection via result hashing).`}) 
-    @MaxLength(20)
-    RoutineType: string;
-        
-    @Field({description: `What kind of target this routine runs: Agent, Action, or Prompt. Determines how TargetID is interpreted.`}) 
-    @MaxLength(20)
-    TargetType: string;
-        
-    @Field({description: `Polymorphic reference resolved by TargetType (AIAgent.ID, Action.ID, or AIPrompt.ID). No FK because the target table varies.`}) 
-    @MaxLength(36)
-    TargetID: string;
-        
-    @Field({nullable: true, description: `For Agent targets, the user message sent to the agent on each run.`}) 
-    InitialMessage?: string;
-        
-    @Field({nullable: true, description: `Optional JSON starting payload passed to the target on each run.`}) 
-    StartingPayload?: string;
-        
-    @Field({nullable: true, description: `Optional JSON array of MJ: AI Skills IDs to pre-activate when the routine target is an Agent — threaded as ExecuteAgentParams.requestedSkillIDs so the agent starts each scheduled run with the requested skills' instructions and tools in effect (subject to all availability gates; ActivationMode does not gate this explicit-request path). Ignored for Action/Prompt targets.`}) 
-    RequestedSkillIDs?: string;
-        
-    @Field({description: `Standard cron expression evaluated by the dispatcher to determine when the routine is due.`}) 
-    @MaxLength(100)
-    CronExpression: string;
-        
-    @Field({nullable: true, description: `Optional activation window start. An Active routine does not run before this time; once current time passes StartAt the dispatcher begins scheduling it. NULL = eligible immediately.`}) 
-    StartAt?: Date;
-        
-    @Field({nullable: true, description: `Optional activation window end. An Active routine stops running once current time passes EndAt — automatic sunset without changing Status. NULL = no end.`}) 
-    EndAt?: Date;
-        
-    @Field({nullable: true, description: `Optional MJ Template used to render routine notifications from the runs output data (result summary, status, target info) via the standard MJ templating architecture. When NULL, the system default routine-notification template (seeded via metadata, resolvable per instance — not hardcoded) is used.`}) 
-    @MaxLength(36)
-    NotificationTemplateID?: string;
-        
-    @Field({description: `IANA timezone used when evaluating CronExpression (e.g. America/Chicago).`}) 
-    @MaxLength(100)
-    Timezone: string;
-        
-    @Field({nullable: true, description: `Next scheduled run time, computed after each run.`}) 
-    NextRunAt?: Date;
-        
-    @Field({nullable: true, description: `Timestamp of the most recent run.`}) 
-    LastRunAt?: Date;
-        
-    @Field({nullable: true, description: `Outcome of the most recent run.`}) 
-    @MaxLength(20)
-    LastRunStatus?: string;
-        
-    @Field({nullable: true, description: `Hash of the most recent result, used by Monitoring routines to detect change for OnChange notifications.`}) 
-    @MaxLength(100)
-    LastResultHash?: string;
-        
-    @Field({description: `When to notify: Always, OnSuccess, OnFailure, or OnChange (result differs from prior run).`}) 
-    @MaxLength(20)
-    NotifyCondition: string;
-        
-    @Field(() => Boolean, {description: `Deliver notifications via in-app notification.`}) 
-    NotifyViaInApp: boolean;
-        
-    @Field(() => Boolean, {description: `Deliver notifications via email.`}) 
-    NotifyViaEmail: boolean;
-        
-    @Field() 
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    _mj__UpdatedAt: Date;
-        
-    @Field({nullable: true, description: `The dedicated conversation this routine's Agent runs append to (created on first conversation-mode run, Application-scoped so it stays out of the default chat list). NULL when the routine has never run in conversation mode.`}) 
-    @MaxLength(36)
-    ConversationID?: string;
-        
-    @Field() 
-    @MaxLength(100)
-    User: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Environment?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    NotificationTemplate?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    Conversation?: string;
-        
-    @Field(() => [MJUserRoutineRun_])
-    MJUserRoutineRuns_RoutineIDArray: MJUserRoutineRun_[]; // Link to MJUserRoutineRuns
-    
-    @Field(() => [MJUserRoutineRecipient_])
-    MJUserRoutineRecipients_RoutineIDArray: MJUserRoutineRecipient_[]; // Link to MJUserRoutineRecipients
-    
-}
-
-//****************************************************************************
-// INPUT TYPE for MJ: User Routines
-//****************************************************************************
-@InputType()
-export class CreateMJUserRoutineInput {
-    @Field({ nullable: true })
-    ID?: string;
-
-    @Field({ nullable: true })
-    UserID?: string;
-
-    @Field({ nullable: true })
-    EnvironmentID: string | null;
-
-    @Field({ nullable: true })
-    Name?: string;
-
-    @Field({ nullable: true })
-    Description: string | null;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field({ nullable: true })
-    RoutineType?: string;
-
-    @Field({ nullable: true })
-    TargetType?: string;
-
-    @Field({ nullable: true })
-    TargetID?: string;
-
-    @Field({ nullable: true })
-    InitialMessage: string | null;
-
-    @Field({ nullable: true })
-    StartingPayload: string | null;
-
-    @Field({ nullable: true })
-    RequestedSkillIDs: string | null;
-
-    @Field({ nullable: true })
-    CronExpression?: string;
-
-    @Field({ nullable: true })
-    StartAt: Date | null;
-
-    @Field({ nullable: true })
-    EndAt: Date | null;
-
-    @Field({ nullable: true })
-    NotificationTemplateID: string | null;
-
-    @Field({ nullable: true })
-    Timezone?: string;
-
-    @Field({ nullable: true })
-    NextRunAt: Date | null;
-
-    @Field({ nullable: true })
-    LastRunAt: Date | null;
-
-    @Field({ nullable: true })
-    LastRunStatus: string | null;
-
-    @Field({ nullable: true })
-    LastResultHash: string | null;
-
-    @Field({ nullable: true })
-    NotifyCondition?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    NotifyViaInApp?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    NotifyViaEmail?: boolean;
-
-    @Field({ nullable: true })
-    ConversationID: string | null;
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for MJ: User Routines
-//****************************************************************************
-@InputType()
-export class UpdateMJUserRoutineInput {
-    @Field()
-    ID: string;
-
-    @Field({ nullable: true })
-    UserID?: string;
-
-    @Field({ nullable: true })
-    EnvironmentID?: string | null;
-
-    @Field({ nullable: true })
-    Name?: string;
-
-    @Field({ nullable: true })
-    Description?: string | null;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field({ nullable: true })
-    RoutineType?: string;
-
-    @Field({ nullable: true })
-    TargetType?: string;
-
-    @Field({ nullable: true })
-    TargetID?: string;
-
-    @Field({ nullable: true })
-    InitialMessage?: string | null;
-
-    @Field({ nullable: true })
-    StartingPayload?: string | null;
-
-    @Field({ nullable: true })
-    RequestedSkillIDs?: string | null;
-
-    @Field({ nullable: true })
-    CronExpression?: string;
-
-    @Field({ nullable: true })
-    StartAt?: Date | null;
-
-    @Field({ nullable: true })
-    EndAt?: Date | null;
-
-    @Field({ nullable: true })
-    NotificationTemplateID?: string | null;
-
-    @Field({ nullable: true })
-    Timezone?: string;
-
-    @Field({ nullable: true })
-    NextRunAt?: Date | null;
-
-    @Field({ nullable: true })
-    LastRunAt?: Date | null;
-
-    @Field({ nullable: true })
-    LastRunStatus?: string | null;
-
-    @Field({ nullable: true })
-    LastResultHash?: string | null;
-
-    @Field({ nullable: true })
-    NotifyCondition?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    NotifyViaInApp?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    NotifyViaEmail?: boolean;
-
-    @Field({ nullable: true })
-    ConversationID?: string | null;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
-//****************************************************************************
-// RESOLVER for MJ: User Routines
-//****************************************************************************
-@ObjectType()
-export class RunMJUserRoutineViewResult {
-    @Field(() => [MJUserRoutine_])
-    Results: MJUserRoutine_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(MJUserRoutine_)
-export class MJUserRoutineResolver extends ResolverBase {
-    @Query(() => RunMJUserRoutineViewResult)
-    async RunMJUserRoutineViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunMJUserRoutineViewResult)
-    async RunMJUserRoutineViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunMJUserRoutineViewResult)
-    async RunMJUserRoutineDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        input.EntityName = 'MJ: User Routines';
-        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
-    }
-    @Query(() => MJUserRoutine_, { nullable: true })
-    async MJUserRoutine(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJUserRoutine_ | null> {
-        this.CheckUserReadPermissions('MJ: User Routines', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutines')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routines', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.MapFieldNamesToCodeNames('MJ: User Routines', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-    
-    @FieldResolver(() => [MJUserRoutineRun_])
-    async MJUserRoutineRuns_RoutineIDArray(@Root() mjuserroutine_: MJUserRoutine_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Routine Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRuns')} WHERE ${provider.QuoteIdentifier('RoutineID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjuserroutine_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Runs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJUserRoutineRecipient_])
-    async MJUserRoutineRecipients_RoutineIDArray(@Root() mjuserroutine_: MJUserRoutine_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Routine Recipients', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRecipients')} WHERE ${provider.QuoteIdentifier('RoutineID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Recipients', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjuserroutine_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Recipients', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @Mutation(() => MJUserRoutine_)
-    async CreateMJUserRoutine(
-        @Arg('input', () => CreateMJUserRoutineInput) input: CreateMJUserRoutineInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.CreateRecord('MJ: User Routines', input, provider, userPayload, pubSub)
-    }
-        
-    @Mutation(() => MJUserRoutine_)
-    async UpdateMJUserRoutine(
-        @Arg('input', () => UpdateMJUserRoutineInput) input: UpdateMJUserRoutineInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.UpdateRecord('MJ: User Routines', input, provider, userPayload, pubSub);
-    }
-    
-    @Mutation(() => MJUserRoutine_)
-    async DeleteMJUserRoutine(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadWriteProvider(providers);
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('MJ: User Routines', key, options, provider, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
 // ENTITY CLASS for MJ: User Settings
 //****************************************************************************
 @ObjectType({ description: `Generic key-value store for per-user settings. Allows any application or feature to persist user preferences.` })
@@ -90486,7 +89109,7 @@ export class MJUserSetting_ {
     @MaxLength(36)
     UserID: string;
         
-    @Field({description: `The setting key/name. Use namespaced keys like "DataExplorer.ViewMode" or "Dashboard.AI.CollapsedSections" to avoid collisions.`}) 
+    @Field({description: `The setting key/name. Use namespaced keys like "DataExplorer."ViewMode"" or "Dashboard."AI"."CollapsedSections"" to avoid collisions.`}) 
     @MaxLength(255)
     Setting: string;
         
@@ -90500,7 +89123,7 @@ export class MJUserSetting_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
 }
@@ -90672,15 +89295,15 @@ export class MJUserViewCategory_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     Parent?: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
@@ -91045,11 +89668,11 @@ export class MJUserViewRun_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     UserView: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     RunByUser: string;
         
     @Field(() => [MJUserViewRunDetail_])
@@ -91230,13 +89853,13 @@ export class MJUserView_ {
     @Field(() => Boolean, {description: `Whether this view is shared with other users.`}) 
     IsShared: boolean;
         
-    @Field(() => Boolean, {description: `Whether this is the user's default view for the entity.`}) 
+    @Field(() => Boolean, {description: `Whether this is the user`}) 
     IsDefault: boolean;
         
     @Field({nullable: true, description: `JSON storing complete grid configuration including columns, widths, and formatting.`}) 
     GridState?: string;
         
-    @Field({nullable: true, description: `JSON storing the view's filter configuration.`}) 
+    @Field({nullable: true, description: `JSON storing the view`}) 
     FilterState?: string;
         
     @Field(() => Boolean, {description: `Indicates if custom filters beyond standard options are applied.`}) 
@@ -91260,7 +89883,7 @@ export class MJUserView_ {
     @Field(() => Boolean, {description: `Indicates if a custom WHERE clause is used instead of standard filters.`}) 
     CustomWhereClause: boolean;
         
-    @Field({nullable: true, description: `JSON storing the view's sort configuration.`}) 
+    @Field({nullable: true, description: `JSON storing the view`}) 
     SortState?: string;
         
     @Field() 
@@ -91278,20 +89901,16 @@ export class MJUserView_ {
     @Field({nullable: true, description: `JSON configuration for display mode settings. Stores default display mode (grid/cards/timeline/chart), available modes for sharing, and mode-specific configurations like timeline date field and segmentation. See ViewDisplayState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for schema.`}) 
     DisplayState?: string;
         
-    @Field({nullable: true, description: `Foreign key to the view's default / active ViewType (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...). Supersedes DisplayState.defaultMode as the source of truth for which view type the view opens in. NULL means the system default (Grid). The set of enabled view types and each type's configuration remain in the DisplayState JSON column.`}) 
-    @MaxLength(36)
-    ViewTypeID?: string;
-        
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     UserName: string;
         
     @Field({nullable: true}) 
-    @MaxLength(101)
+    @MaxLength(202)
     UserFirstLast?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     UserEmail: string;
         
     @Field() 
@@ -91299,12 +89918,16 @@ export class MJUserView_ {
     UserType: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     EntityBaseView: string;
+        
+    @Field({nullable: true, description: `Foreign key to the view`}) 
+    @MaxLength(36)
+    ViewTypeID?: string;
         
     @Field(() => [MJDataContextItem_])
     MJDataContextItems_ViewIDArray: MJDataContextItem_[]; // Link to MJDataContextItems
@@ -91636,15 +90259,15 @@ export class MJUser_ {
     @MaxLength(100)
     Name: string;
         
-    @Field({nullable: true, description: `User's first name or given name.`}) 
+    @Field({nullable: true, description: `User`}) 
     @MaxLength(50)
     FirstName?: string;
         
-    @Field({nullable: true, description: `User's last name or surname.`}) 
+    @Field({nullable: true, description: `User`}) 
     @MaxLength(50)
     LastName?: string;
         
-    @Field({nullable: true, description: `User's professional title or salutation.`}) 
+    @Field({nullable: true, description: `User`}) 
     @MaxLength(50)
     Title?: string;
         
@@ -91689,27 +90312,27 @@ export class MJUser_ {
     UserImageIconClass?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(101)
+    @MaxLength(202)
     FirstLast?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(81)
+    @MaxLength(162)
     EmployeeFirstLast?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     EmployeeEmail?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     EmployeeTitle?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(81)
+    @MaxLength(162)
     EmployeeSupervisor?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(100)
+    @MaxLength(200)
     EmployeeSupervisorEmail?: string;
         
     @Field(() => [MJActionExecutionLog_])
@@ -92032,12 +90655,6 @@ export class MJUser_ {
     
     @Field(() => [MJAISkill_])
     MJAISkills_CreatedByUserIDArray: MJAISkill_[]; // Link to MJAISkills
-    
-    @Field(() => [MJUserRoutine_])
-    MJUserRoutines_UserIDArray: MJUserRoutine_[]; // Link to MJUserRoutines
-    
-    @Field(() => [MJUserRoutineRecipient_])
-    MJUserRoutineRecipients_UserIDArray: MJUserRoutineRecipient_[]; // Link to MJUserRoutineRecipients
     
 }
 
@@ -93284,26 +91901,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJUserRoutine_])
-    async MJUserRoutines_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Routines', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutines')} WHERE ${provider.QuoteIdentifier('UserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routines', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routines', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJUserRoutineRecipient_])
-    async MJUserRoutineRecipients_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Routine Recipients', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRecipients')} WHERE ${provider.QuoteIdentifier('UserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Recipients', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Recipients', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @Mutation(() => MJUser_)
     async CreateMJUser(
         @Arg('input', () => CreateMJUserInput) input: CreateMJUserInput,
@@ -93371,7 +91968,7 @@ export class MJVectorDatabase_ {
     CredentialID?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     Credential?: string;
         
     @Field(() => [MJEntityDocument_])
@@ -93582,7 +92179,7 @@ export class MJVectorIndex_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `The provider's native identifier for this index. For Pinecone this is the index name; for other providers it may be a separate UUID or identifier. Used for syncing operations between MJ metadata and the remote vector database.`}) 
+    @Field({nullable: true, description: `The provider`}) 
     @MaxLength(500)
     ExternalID?: string;
         
@@ -93597,11 +92194,11 @@ export class MJVectorIndex_ {
     ProviderConfig?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     VectorDatabase: string;
         
     @Field() 
-    @MaxLength(50)
+    @MaxLength(100)
     EmbeddingModel: string;
         
     @Field(() => [MJEntityRecordDocument_])
@@ -93875,7 +92472,7 @@ export class MJVersionInstallation_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(302)
+    @MaxLength(604)
     CompleteVersion?: string;
         
 }
@@ -94074,15 +92671,15 @@ export class MJVersionLabelItem_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     VersionLabel: string;
         
     @Field() 
-    @MaxLength(750)
+    @MaxLength(1500)
     RecordChange: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity: string;
         
 }
@@ -94275,15 +92872,15 @@ export class MJVersionLabelRestore_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(200)
+    @MaxLength(400)
     VersionLabel: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     PreRestoreLabel?: string;
         
 }
@@ -94519,15 +93116,15 @@ export class MJVersionLabel_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
+    @MaxLength(510)
     Entity?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(200)
+    @MaxLength(400)
     Parent?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     CreatedByUser: string;
         
     @Field({nullable: true}) 
@@ -94771,13 +93368,13 @@ export class MJVersionLabelResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: View Types
 //****************************************************************************
-@ObjectType({ description: `Registry of available view types (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...) for the entity-viewer plugin system. Each row binds a logical view to its renderer and (optionally) its configuration prop-sheet, so adding a new way to visualize records is a metadata row plus a registered driver class — no change to the host viewer. Whether a given view type is offered for a given entity is decided at runtime by the driver\'s availability predicate (e.g. Timeline needs a date field, Map needs geocoding, Cluster needs an Entity Document with vectors).` })
+@ObjectType({ description: `Registry of available view types (Grid, Cards, Timeline, Map, Cluster, Tag Cloud, ...) for the entity-viewer plugin system. Each row binds a logical view to its renderer and (optionally) its configuration prop-sheet, so adding a new way to visualize records is a metadata row plus a registered driver class — no change to the host viewer. Whether a given view type is offered for a given entity is decided at runtime by the driver` })
 export class MJViewType_ {
     @Field() 
     @MaxLength(36)
     ID: string;
         
-    @Field({description: `Stable internal key for the view type (e.g. "Grid", "Cluster", "TagCloud"). Referenced by UserView.DisplayState (enabledModes / defaultMode). Unique.`}) 
+    @Field({description: `Stable internal key for the view type (e.g. "Grid", "Cluster", "TagCloud"). Referenced by UserView."DisplayState" (enabledModes / defaultMode). Unique.`}) 
     @MaxLength(100)
     Name: string;
         
@@ -94788,11 +93385,11 @@ export class MJViewType_ {
     @Field({nullable: true, description: `Optional description of what the view type does and when it is useful.`}) 
     Description?: string;
         
-    @Field({description: `Name of the registered driver class (via @RegisterClass) that supplies this view type's runtime renderer component and its availability predicate (IsAvailableFor). This is the main view plugin — the component that renders the grid / cards / timeline / scatter, etc.`}) 
+    @Field({description: `Name of the registered driver class (via @RegisterClass) that supplies this view type`}) 
     @MaxLength(255)
     DriverClass: string;
         
-    @Field({nullable: true, description: `Optional name of the registered driver class that supplies this view type's configuration prop-sheet — the panel that snaps into the view's settings area to edit this view type's options (e.g. clustering parameters). NULL when the view type has no configurable options.`}) 
+    @Field({nullable: true, description: `Optional name of the registered driver class that supplies this view type`}) 
     @MaxLength(255)
     PropertySheetDriverClass?: string;
         
@@ -95218,11 +93815,11 @@ export class MJWorkflowRun_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     Workflow: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     WorkflowEngineName: string;
         
 }
@@ -95655,11 +94252,11 @@ export class MJWorkspaceItem_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     Workspace: string;
         
     @Field() 
-    @MaxLength(255)
+    @MaxLength(510)
     ResourceType: string;
         
 }
@@ -95850,7 +94447,7 @@ export class MJWorkspace_ {
     Configuration?: string;
         
     @Field() 
-    @MaxLength(100)
+    @MaxLength(200)
     User: string;
         
     @Field(() => [MJWorkspaceItem_])

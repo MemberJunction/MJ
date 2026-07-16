@@ -87,6 +87,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJClusterAnalysis', sectionName: 'Cluster Analysis', isExpanded: false },
             { sectionKey: 'mJSignatureRequests', sectionName: 'Signature Requests', isExpanded: false },
             { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false },
+            { sectionKey: 'mJSystemEvents', sectionName: 'System Events', isExpanded: false },
             { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
             { sectionKey: 'mJRecordProcessWatermarks', sectionName: 'Record Process Watermarks', isExpanded: false },
             { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },

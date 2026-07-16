@@ -36,8 +36,7 @@ export class MJAIAgentRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false },
             { sectionKey: 'mJDuplicateRunDetailMatches', sectionName: 'Duplicate Run Detail Matches', isExpanded: false },
             { sectionKey: 'mJExperimentSessionIterations', sectionName: 'Experiment Session Iterations', isExpanded: false },
-            { sectionKey: 'mJExperimentSessions', sectionName: 'Experiment Sessions', isExpanded: false },
-            { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false }
+            { sectionKey: 'mJExperimentSessions', sectionName: 'Experiment Sessions', isExpanded: false }
         ]);
     }
 }

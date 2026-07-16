@@ -278,14 +278,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="DetectExternalChanges"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -452,7 +444,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="RowsToPackSampleOrder"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -476,14 +468,6 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="TrustServerCacheCompletely"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="AllowCaching"
             Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -625,16 +609,23 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ExternalDataSourceID"
-            Type="textbox"
+            FieldName="AllowCaching"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ExternalObjectName"
+            FieldName="DetectExternalChanges"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CanonicalSchemaName"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -661,14 +652,6 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="CanonicalSchemaName"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -2251,6 +2234,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJProcessRunDetails', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- System Events Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSystemEvents"
+        SectionName="System Events"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSystemEvents')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: System Events','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: System Events')"
+                [AllowLoad]="IsSectionExpanded('mJSystemEvents')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSystemEvents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -71,6 +71,7 @@ module.exports = {
   // Default for CodeGen with larger batches, if this 
   // isn't in place, hard default of 5 is fallback, much slower
   advancedGeneration: {
+    enableAdvancedGeneration: false,
     batchSize: 15,
   },
 
@@ -396,4 +397,38 @@ module.exports = {
   //
   // Note: If MJAPI_PUBLIC_URL env var is set, it will be used automatically.
   // If neither is set, the server constructs it from baseUrl + port + path.
+
+  dynamicPackages: {
+    server: [
+      {
+        PackageName: '@mj-biz-apps/common-server',
+        StartupExport: 'LoadBizAppsCommonServer',
+        AppName: 'mj-bizapps-common',
+        Enabled: false
+      },
+    ],
+    client: [
+      {
+        PackageName: '@mj-biz-apps/common-ng',
+        AppName: 'mj-bizapps-common',
+        Enabled: false
+      },
+    
+      {
+        PackageName: '@mj-biz-apps/common-entities',
+        AppName: 'mj-bizapps-common',
+        Enabled: false
+      },
+    
+      {
+        PackageName: '@mj-biz-apps/common-actions',
+        AppName: 'mj-bizapps-common',
+        Enabled: false
+      },
+    ]
+  },
+
+  entityPackageName: {
+    '__mj_BizAppsCommon': '@mj-biz-apps/common-entities',
+  },
 };

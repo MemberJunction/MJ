@@ -14,7 +14,10 @@
             "outputPath": "dist/MJExplorer",
             "index": "src/index.html",
             "browser": "src/main.ts",
-            "polyfills": ["@angular/localize/init", "zone.js"],
+            "polyfills": [
+              "@angular/localize/init",
+              "zone.js"
+            ],
             "tsConfig": "tsconfig.app.json",
             "assets": [
               "src/favicon.ico",
@@ -32,9 +35,13 @@
                 "output": "/assets"
               }
             ],
-            "styles": ["src/styles.scss"],
+            "styles": [
+              "src/styles.scss"
+            ],
             "stylePreprocessorOptions": {
-              "includePaths": ["../../node_modules"]
+              "includePaths": [
+                "../../node_modules"
+              ]
             },
             "scripts": []
           },
@@ -124,7 +131,10 @@
           "options": {
             "hmr": true,
             "prebundle": {
-              "exclude": ["@memberjunction/*"]
+              "exclude": [
+                "@memberjunction/*",
+                "@mj-biz-apps/*"
+              ]
             }
           },
           "configurations": {
@@ -146,7 +156,10 @@
         "test": {
           "builder": "@angular-devkit/build-angular:karma",
           "options": {
-            "polyfills": ["zone.js", "zone.js/testing"],
+            "polyfills": [
+              "zone.js",
+              "zone.js/testing"
+            ],
             "tsConfig": "tsconfig.spec.json",
             "assets": [
               "src/favicon.ico",

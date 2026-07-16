@@ -17,6 +17,7 @@ export class MJSchemaInfoFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identifierRange', sectionName: 'Identifier Range', isExpanded: true },
             { sectionKey: 'schemaInformation', sectionName: 'Schema Information', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
