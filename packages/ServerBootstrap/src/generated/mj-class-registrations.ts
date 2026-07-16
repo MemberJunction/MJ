@@ -1185,7 +1185,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (34 classes)
+// @memberjunction/core-entities-server (35 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1211,6 +1211,7 @@ import {
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
     MJQueryEntityServer,
+    MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
     MJSearchScopeEntityServer,
@@ -2217,6 +2218,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
     MJQueryEntityServer,
+    MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
     MJSearchScopeEntityServer,
@@ -2387,7 +2389,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 974;
+export const CLASS_REGISTRATIONS_COUNT = 975;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

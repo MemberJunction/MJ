@@ -1,4 +1,4 @@
-import { IMetadataProvider, IRunViewProvider, LogError, RunMaybeSerial, UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, IRunViewProvider, LogError, RunMaybeSerial, UserInfo, DatabasePlatform } from "@memberjunction/core";
 import {
     MJQueryParameterEntity,
     MJQueryFieldEntity,
@@ -61,9 +61,22 @@ function normalizeParamType(
 }
 
 /**
- * Maps a generic field type to a SQL base/full type pair.
+ * Maps a generic field type to a SQL base/full type pair appropriate for the given platform.
  */
-function defaultSQLTypesForField(fieldType: string): { baseType: string; fullType: string } {
+function defaultSQLTypesForField(fieldType: string, platform: DatabasePlatform = 'sqlserver'): { baseType: string; fullType: string } {
+    if (platform === 'postgresql') {
+        switch (fieldType) {
+            case 'number':
+                return { baseType: 'numeric', fullType: 'numeric(18,2)' };
+            case 'date':
+                return { baseType: 'timestamptz', fullType: 'timestamptz' };
+            case 'boolean':
+                return { baseType: 'boolean', fullType: 'boolean' };
+            default:
+                return { baseType: 'varchar', fullType: 'text' };
+        }
+    }
+    // SQL Server defaults
     switch (fieldType) {
         case 'number':
             return { baseType: 'decimal', fullType: 'decimal(18,2)' };
@@ -226,7 +239,8 @@ export async function SyncFields(
     contextUser: UserInfo,
     metadataProvider: IMetadataProvider,
     runViewProvider: IRunViewProvider,
-    isSaved: boolean
+    isSaved: boolean,
+    platform: DatabasePlatform = 'sqlserver'
 ): Promise<void> {
     try {
         const existingFields = await loadExistingRecords<MJQueryFieldEntity>(
@@ -253,7 +267,7 @@ export async function SyncFields(
             const newField = await metadataProvider.GetEntityObject<MJQueryFieldEntity>(
                 'MJ: Query Fields', contextUser
             );
-            applyFieldValues(newField, queryID, field, i + 1, metadataProvider);
+            applyFieldValues(newField, queryID, field, i + 1, metadataProvider, platform);
             factories.push(() => newField.Save());
         }
 
@@ -290,7 +304,8 @@ function applyFieldValues(
     queryID: string,
     field: ExtractedField,
     sequence: number,
-    md: IMetadataProvider
+    md: IMetadataProvider,
+    platform: DatabasePlatform = 'sqlserver'
 ): void {
     entity.QueryID = queryID;
     entity.Name = field.name;
@@ -302,7 +317,7 @@ function applyFieldValues(
         entity.SQLBaseType = field.sqlBaseType;
         entity.SQLFullType = field.sqlFullType;
     } else {
-        const { baseType, fullType } = defaultSQLTypesForField(field.type);
+        const { baseType, fullType } = defaultSQLTypesForField(field.type, platform);
         entity.SQLBaseType = baseType;
         entity.SQLFullType = fullType;
     }
@@ -334,6 +349,14 @@ function updateFieldIfChanged(
     md: IMetadataProvider
 ): boolean {
     let hasChanges = false;
+
+    // Update name if casing changed (e.g. PascalCase → lowercase for PG).
+    // QueryField names must match the SQL output exactly because result row
+    // property access is case-sensitive — row["JoinYear"] vs row["joinyear"].
+    if (existing.Name !== extracted.name) {
+        existing.Name = extracted.name;
+        hasChanges = true;
+    }
 
     if (existing.Description !== extracted.description) {
         existing.Description = extracted.description;
