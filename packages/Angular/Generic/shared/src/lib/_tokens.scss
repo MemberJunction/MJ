@@ -199,6 +199,23 @@
   --mj-status-info-text: var(--mj-color-info-700);
   --mj-status-info-border: var(--mj-color-info-500);
 
+  /* Data-Visualization Categorical Palette
+     Distinct series colors for charts/diagrams (Venn, donut, treemap, etc.).
+     Components read these instead of hardcoding a hex array; the interactive-
+     component theme bridge exposes them as `styles.chartPalette`. These are the
+     default (theme-agnostic) categorical hues — Phase 2 derivation re-tints them
+     from the org brand by overriding these same tokens. */
+  --mj-viz-1: #2196F3;  /* blue */
+  --mj-viz-2: #4CAF50;  /* green */
+  --mj-viz-3: #FF9800;  /* orange */
+  --mj-viz-4: #E91E63;  /* pink */
+  --mj-viz-5: #9C27B0;  /* purple */
+  --mj-viz-6: #00BCD4;  /* cyan */
+  --mj-viz-7: #F44336;  /* red */
+  --mj-viz-8: #8BC34A;  /* light green */
+  --mj-viz-9: #FF5722;  /* deep orange */
+  --mj-viz-10: #3F51B5; /* indigo */
+
   /* Application Accent (set per-application from metadata)
      Default uses amber accent, but apps can override to use primary/tertiary/custom */
   --mj-app-accent: var(--mj-brand-accent);

@@ -4,6 +4,7 @@
  */
 
 export * from './component-styles';
+export * from './component-library-theming';
 export * from './standard-libraries';
 export * from './library-loader';
 export * from './library-registry';
