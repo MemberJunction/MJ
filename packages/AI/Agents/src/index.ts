@@ -13,6 +13,8 @@ export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';
 export * from './base-agent';
+export * from './prior-turn-tool-result-cache';
+export * from './tool-result-format';
 export * from './prompt-component-resolver';
 export * from './scoped-prompt-config-resolver';
 export * from './agent-run-watchdog';

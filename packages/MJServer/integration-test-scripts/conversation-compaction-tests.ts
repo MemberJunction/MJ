@@ -24,8 +24,11 @@
  */
 import { TestRunner, Assert, AssertEqual } from './lib/harness';
 import { bootstrapAI, AICtx } from './lib/ai-bootstrap';
+import { RunView } from '@memberjunction/core';
 import { ConversationEngine, MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { ConversationToolManager, ConversationSearchHit, ConversationToolMessage } from '@memberjunction/ai-agents';
+import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
+import { BaseAgent, ConversationToolManager, ConversationSearchHit, ConversationToolMessage, PriorTurnToolResultCache } from '@memberjunction/ai-agents';
+import type { CarryForwardStepRecord } from '@memberjunction/ai-agents';
 
 const FIXTURE_TAG = '(mj-integration-test — safe to delete)';
 
@@ -183,10 +186,140 @@ async function main(): Promise<void> {
         AssertEqual(window.length, 2, 'independent window');
     });
 
+    // ── Run-step persistence + carry-forward cache (PR #2732 review follow-ups) ──
+    // BaseAgent internals surface used below — same access pattern as the unit tier
+    // (base-agent-step-save.test.ts); the methods are protected/private by design.
+    interface BaseAgentStepInternals {
+        _activeProvider: unknown;
+        _agentRun: MJAIAgentRunEntityExtended;
+        _executeParams: Record<string, unknown> | undefined;
+        _depth: number;
+        _stepSaveQueue: { Flush(): Promise<{ failures: number }> };
+        createStepEntity(p: Record<string, unknown>): Promise<MJAIAgentRunStepEntityExtended>;
+        loadPriorTurnToolResultSteps(p: Record<string, unknown>): Promise<CarryForwardStepRecord[]>;
+        cachePriorTurnToolResults(): void;
+    }
+    const agentRunFixtures: MJAIAgentRunEntityExtended[] = [];
+    const stepFixtures: MJAIAgentRunStepEntityExtended[] = [];
+
+    /** Creates a real (tagged) AI Agent Run row referencing an existing agent. */
+    async function CreateAgentRunFixture(conversationId?: string): Promise<MJAIAgentRunEntityExtended> {
+        const anyAgent = await new RunView().RunView<{ ID: string }>({
+            EntityName: 'MJ: AI Agents', Fields: ['ID'], MaxRows: 1, ResultType: 'simple',
+        }, ctx.user);
+        Assert(anyAgent.Success && anyAgent.Results.length > 0, 'an existing agent to reference');
+        const run = await ctx.provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', ctx.user);
+        run.AgentID = anyAgent.Results[0].ID;
+        run.Status = 'Running';
+        run.StartedAt = new Date();
+        if (conversationId) {
+            run.ConversationID = conversationId;
+        }
+        Assert(await run.Save(), `run fixture save: ${run.LatestResult?.CompleteMessage}`);
+        agentRunFixtures.push(run);
+        return run;
+    }
+
+    runner.Test('completed-at-creation step persists via a SINGLE INSERT (real spCreate, no UPDATE round trip)', async () => {
+        const run = await CreateAgentRunFixture();
+        const agent = new BaseAgent();
+        const internals = agent as unknown as BaseAgentStepInternals;
+        internals._activeProvider = ctx.provider;
+        internals._agentRun = run;
+
+        const step = await internals.createStepEntity({
+            stepType: 'Compaction',
+            stepName: `Cross-Turn Conversation Compaction (post-turn) ${FIXTURE_TAG}`,
+            contextUser: ctx.user,
+            completed: { success: true, outputData: { fired: true, tokensBefore: 3000, tokensAfter: 1200 } },
+        });
+        stepFixtures.push(step);
+        const flushed = await internals._stepSaveQueue.Flush();
+        AssertEqual(flushed.failures, 0, 'the single INSERT persisted');
+
+        // Fresh read-back through the real view: terminal state landed in ONE write —
+        // __mj_UpdatedAt still equals __mj_CreatedAt (any post-INSERT UPDATE would bump it).
+        const persisted = await new RunView().RunView<{ Status: string; Success: boolean; OutputData: string; __mj_CreatedAt: string; __mj_UpdatedAt: string }>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `ID='${step.ID}'`,
+            Fields: ['Status', 'Success', 'OutputData', '__mj_CreatedAt', '__mj_UpdatedAt'],
+            ResultType: 'simple',
+        }, ctx.user);
+        Assert(persisted.Success && persisted.Results.length === 1, 'step row read back');
+        const row = persisted.Results[0];
+        AssertEqual(row.Status, 'Completed', 'INSERT carried terminal Status');
+        AssertEqual(row.Success, true, 'INSERT carried Success');
+        Assert((row.OutputData || '').includes('"fired":true'), 'INSERT carried OutputData');
+        AssertEqual(new Date(row.__mj_UpdatedAt).getTime(), new Date(row.__mj_CreatedAt).getTime(), 'no UPDATE followed the INSERT');
+    });
+
+    runner.Test('carry-forward loader: DB fallback on cache miss, cache precedence on hit', async () => {
+        const fixture = await CreateConversationFixture(ctx, [{ role: 'User', text: 'cf-1' }]);
+        fixtures.push(fixture);
+        const run = await CreateAgentRunFixture(fixture.conversation.ID);
+
+        // A real completed Tool step on the prior run (direct entity save — the DB-side shape).
+        const toolStep = await ctx.provider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', ctx.user);
+        toolStep.AgentRunID = run.ID;
+        toolStep.StepNumber = 1;
+        toolStep.StepType = 'Tool';
+        toolStep.StepName = `Conversation Tool: getMessageBySequence ${FIXTURE_TAG}`;
+        toolStep.Status = 'Completed';
+        toolStep.OutputData = JSON.stringify({ marker: 'from-db' });
+        Assert(await toolStep.Save(), `tool step fixture save: ${toolStep.LatestResult?.CompleteMessage}`);
+        stepFixtures.push(toolStep);
+        run.Status = 'Completed';
+        Assert(await run.Save(), `run completion save: ${run.LatestResult?.CompleteMessage}`);
+
+        const agent = new BaseAgent();
+        const internals = agent as unknown as BaseAgentStepInternals;
+        internals._activeProvider = ctx.provider;
+        const loadParams = { conversationId: fixture.conversation.ID, contextUser: ctx.user };
+
+        // Miss → the RunView pair against the real run/step rows.
+        PriorTurnToolResultCache.Instance.Clear();
+        const fromDb = await internals.loadPriorTurnToolResultSteps(loadParams);
+        AssertEqual(fromDb.length, 1, 'DB fallback found the prior run tool step');
+        Assert((fromDb[0].OutputData || '').includes('from-db'), 'DB fallback returned the stored OutputData');
+
+        // Hit → the cache wins without touching the DB (distinct marker proves the source).
+        PriorTurnToolResultCache.Instance.Set(fixture.conversation.ID, [{ OutputData: JSON.stringify({ marker: 'from-cache' }) }]);
+        const fromCache = await internals.loadPriorTurnToolResultSteps(loadParams);
+        AssertEqual(fromCache.length, 1, 'cache hit returned one record');
+        Assert((fromCache[0].OutputData || '').includes('from-cache'), 'cache took precedence over the DB rows');
+
+        // Population path: a completing root run publishes its in-memory steps for the next turn.
+        PriorTurnToolResultCache.Instance.Clear();
+        internals._agentRun = run; // Status='Completed', Steps holds the in-memory tool step
+        run.Steps.push(toolStep);
+        internals._executeParams = { conversationId: fixture.conversation.ID };
+        internals._depth = 0;
+        internals.cachePriorTurnToolResults();
+        const populated = PriorTurnToolResultCache.Instance.Get(fixture.conversation.ID);
+        Assert(!!populated && populated.length === 1 && (populated[0].OutputData || '').includes('from-db'),
+            'run completion populated the cache from in-memory steps');
+        PriorTurnToolResultCache.Instance.Clear();
+    });
+
     let failures = 0;
     try {
         failures = await runner.Run();
     } finally {
+        // FK order: steps → runs → conversations.
+        for (const step of stepFixtures) {
+            try {
+                await step.Delete();
+            } catch (error) {
+                console.error('Step fixture cleanup failed:', error);
+            }
+        }
+        for (const run of agentRunFixtures) {
+            try {
+                await run.Delete();
+            } catch (error) {
+                console.error('Agent run fixture cleanup failed:', error);
+            }
+        }
         for (const fixture of fixtures) {
             try {
                 await CleanupFixture(fixture);

@@ -22,6 +22,13 @@ against the dev database. Re-run these after any change to the compaction/retrie
 - Timing note: a turn's own output is not in its own post-turn window, so the fire lands
   on the NEXT Sage turn's pre-turn check. Do not send a message while the previous turn is
   still streaming — the composer silently drops it (known contour).
+- Window-size gotcha: the assembled agent window (`GetAgentContextWindow`) measures far
+  smaller than raw `ConversationDetail` chars/4 when turns produced artifacts or
+  delegation placeholders — reason about the trigger against the window, not the table.
+  Config changes MUST go through the entity path (BaseEntity.Save) or a restart, never a
+  raw sqlcmd UPDATE alone. Also: heavy delegation chains (Marketing → Brand Guardian →
+  Editor) can OOM MJAPI at Node's default ~4GB heap — start with
+  `NODE_OPTIONS=--max-old-space-size=8192` when scripting delegation turns.
 
 ## Scenario intents and assertions
 
@@ -48,6 +55,7 @@ Full transcripts (including stored summaries and edit flags) exported to
 | CPES Membership Retention Analysis | `F1187F6A-4FEF-473E-A0FB-AF6BCD76D71B` | 2026-07-14 | First fire (3378→1716 tok), verbatim recall, summarizeRange ×2 with lineage, reuse (zero re-calls), recursive 2nd boundary (seq 37, delta-only input), edit → $525 re-read, degenerate-budget guard (single warning, no churn) |
 | 2027 Leadership Summit Venue | `E1E58550-30F4-4150-A1EF-FE96C3DBF110` | 2026-07-15 | Post-refactor regression R1–R6: pre-turn fire (3749→1204 tok, no clamp spam), stamped tool step, reuse in 1s, summarizeRange lineage, 500k-budget clamp silent, edit → $6,500 re-read |
 | 2027 Membership Dues Revenue | `6973EE39-6EFC-467A-928B-8ED97DD93F18` | 2026-07-16 | Found-state config (trigger 600): min-gain guard correctly refuses unprofitable fires; verbatim recall + reuse (640) still work without any compaction |
+| 2028 Regional Conference Budget | `42A8C345-033F-4F1E-A033-FA8381AD89EA` | 2026-07-16 | PR-#2732 review follow-ups, live: carry-forward LRU cache hit on both paths (log: "served from cache (0/1 step(s), no DB lookup)"), reuse turn 0:02 vs 0:06 tool turn; pre-turn fire 5596→1204 tok recorded as a SINGLE-WRITE Compaction step (`__mj_CreatedAt = __mj_UpdatedAt`), boundary seq 16 + SummaryPromptRunID lineage |
 
 Prior-session seeded corpora: "Compaction Tests — Project Nightingale", "Compaction Demo —
 Project Falcon" (contour testing that produced the three fixes in commit `3a38f65fc7`).

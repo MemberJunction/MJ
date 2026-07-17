@@ -319,6 +319,26 @@ baseline summary's framing — it can re-summarize any window however the curren
 contents and historical action results; the summary references them by id, never inlines
 them.)
 
+### 5.4 Prior-turn tool-result carry-forward (+ process cache)
+
+Inline tool results live only in the run that produced them — the next turn rebuilds its
+messages from the conversation window, so a result paged in on turn N is gone on turn
+N+1 and the agent would have to re-call the tool. `injectPriorTurnToolResults` re-injects
+the immediately previous completed root run's successful read-tool results (eligibility
+decided structurally by the `toolFamily` stamped in each Tool step's `OutputData`) as one
+transient message (`expirationTurns: 2`, compactable). One-turn memory by construction —
+context never compounds.
+
+The lookup is kept off the hot path by `PriorTurnToolResultCache` (a `BaseSingleton`
+wrapping `MJLruCache`, 500 conversations / 30-min TTL): the completing root run publishes
+its own completed Tool-step projections from memory at `finalizeAgentRun` — **including
+an empty array** for tool-free runs, the common case, which then costs zero DB queries
+per turn — and the loader falls back to the original RunView pair only on a cache miss
+(first turn, restart, other node). Freshness on a node is mutation-driven (each completed
+run replaces the entry); the TTL only bounds idle memory and the multi-node staleness
+window, and both loaders share one typed predicate (`carryForwardPredicate`) so the SQL
+filter and the in-memory projection cannot drift.
+
 ---
 
 ## 6. Edits, deletion, staleness

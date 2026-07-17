@@ -51,6 +51,7 @@ import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
 import { ConversationCompactionManager, CompactionOutcome, EffectiveContextBudget } from './ConversationCompactionManager';
 import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult, ConversationToolSummaryHost, ConversationToolNames } from './ConversationToolManager';
 import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts, CarryForwardToolFamily, CarryForwardToolStepOutput, CarryForwardStepRecord } from './tool-result-format';
+import { PriorTurnToolResultCache } from './prior-turn-tool-result-cache';
 import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
 import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
@@ -5561,13 +5562,25 @@ The context is now within limits. Please retry your request with the recovered c
      * decided structurally by {@link BuildPriorTurnToolResultsMessage} via the
      * `toolFamily` field the executors stamp into OutputData, never by StepName
      * (which is a display label and free to change).
+     *
+     * Consults {@link PriorTurnToolResultCache} first — the completing run populates it
+     * in {@link finalizeAgentRun} from its in-memory steps, so on this node the common
+     * case (including "prior run made no tool calls") costs zero DB queries; the
+     * RunView pair below is the cache-miss fallback (first turn, restart, other node).
      * @private
      */
     private async loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<CarryForwardStepRecord[]> {
+        const cached = PriorTurnToolResultCache.Instance.Get(params.conversationId!);
+        if (cached) {
+            this.logStatus(`[PriorTurnToolResults] Prior-run tool results served from cache (${cached.length} step(s), no DB lookup)`, true, params);
+            return cached;
+        }
+
+        const predicate = BaseAgent.carryForwardPredicate;
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const priorRun = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `ConversationID='${params.conversationId}' AND Status='Completed' AND ParentRunID IS NULL`,
+            ExtraFilter: `ConversationID='${params.conversationId}' AND Status='${predicate.runStatus}' AND ParentRunID IS NULL`,
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
             Fields: ['ID'],
@@ -5580,12 +5593,36 @@ The context is now within limits. Please retry your request with the recovered c
 
         const steps = await rv.RunView<CarryForwardStepRecord>({
             EntityName: 'MJ: AI Agent Run Steps',
-            ExtraFilter: `AgentRunID='${priorRunId}' AND StepType='Tool' AND Status='Completed'`,
+            ExtraFilter: `AgentRunID='${priorRunId}' AND StepType='${predicate.stepType}' AND Status='${predicate.stepStatus}'`,
             OrderBy: 'StartedAt ASC',
             Fields: ['OutputData'],
             ResultType: 'simple',
         }, params.contextUser);
         return steps.Success ? (steps.Results || []) : [];
+    }
+
+    /**
+     * Publishes this run's completed Tool-step results to {@link PriorTurnToolResultCache}
+     * so the conversation's next turn skips the prior-run DB lookups. Applies the same
+     * row predicate as the DB path ({@link carryForwardPredicate}): root runs only, and
+     * only when the run row was persisted with `Status='Completed'` — a failed/feedback
+     * run leaves the previous completed run's entry standing, just as the RunView filter
+     * would. An empty projection is cached too (the negative-cache case that spares
+     * tool-free conversations the queries every turn). Same-node edge semantics (failed
+     * step INSERTs, concurrent completions) are documented on the cache class. Called
+     * from {@link finalizeAgentRun}.
+     * @private
+     */
+    private cachePriorTurnToolResults(): void {
+        const predicate = BaseAgent.carryForwardPredicate;
+        const conversationId = this._executeParams?.conversationId;
+        if (!conversationId || this._depth !== 0 || this._agentRun?.Status !== predicate.runStatus) {
+            return;
+        }
+        const records: CarryForwardStepRecord[] = (this._agentRun.Steps || [])
+            .filter(s => s.StepType === predicate.stepType && s.Status === predicate.stepStatus)
+            .map(s => ({ OutputData: s.OutputData || null }));
+        PriorTurnToolResultCache.Instance.Set(conversationId, records);
     }
 
     /**
@@ -5595,6 +5632,24 @@ The context is now within limits. Please retry your request with the recovered c
      * `StepType='Tool'` steps but must never be replayed as reusable results.
      */
     public static readonly CarryForwardToolFamilies: readonly string[] = Object.values(CarryForwardToolFamily);
+
+    /**
+     * The carry-forward row predicate — the SINGLE source shared by the two places that
+     * must select the same rows or the cache diverges from the DB path: the RunView
+     * `ExtraFilter`s in {@link loadPriorTurnToolResultSteps} (DB fallback) and the
+     * in-memory gate/projection in {@link cachePriorTurnToolResults} (cache population).
+     * Values are typed from the entity unions so a CHECK-constraint change surfaces here
+     * at compile time instead of silently desynchronizing the two loaders.
+     */
+    private static readonly carryForwardPredicate = {
+        stepType: 'Tool',
+        stepStatus: 'Completed',
+        runStatus: 'Completed',
+    } as const satisfies {
+        stepType: MJAIAgentRunStepEntityExtended['StepType'];
+        stepStatus: MJAIAgentRunStepEntityExtended['Status'];
+        runStatus: MJAIAgentRunEntityExtended['Status'];
+    };
 
     /**
      * Display name of the seeded system prompt behind summarizeRange's recursive
@@ -7945,6 +8000,19 @@ The context is now within limits. Please retry your request with the recovered c
          * performed) and Actions/Sub-Agent steps (the skill(s) that granted the tool).
          */
         skills?: AgentSkillInvocation[];
+        /**
+         * For steps whose outcome is fully known BEFORE the row exists (e.g. recording an
+         * already-finished compaction pass): applies {@link finalizeAgentRunStep} in memory
+         * so the single queued INSERT carries the terminal state, and no follow-up
+         * `finalizeStepEntity` UPDATE is needed — one DB write instead of two. Do NOT use
+         * for steps with real work between start and finish; those stay two-phase so a
+         * crash mid-work leaves a visible `Running` row.
+         */
+        completed?: {
+            success: boolean;
+            errorMessage?: string;
+            outputData?: Record<string, unknown>;
+        };
     }): Promise<MJAIAgentRunStepEntityExtended> {
         const stepEntity = await this._activeProvider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', params.contextUser);
         // Client-generate the PK so the step ID is valid IMMEDIATELY (before the INSERT lands) — child
@@ -7991,6 +8059,17 @@ The context is now within limits. Please retry your request with the recovered c
                 : undefined);
         if (skillsForStep && skillsForStep.length > 0) {
             stepEntity.Skills = JSON.stringify(skillsForStep);
+        }
+
+        // Completed-at-creation steps: stamp the terminal state NOW so the INSERT below is the
+        // step's ONLY write (same shared helper + OutputData treatment finalizeStepEntity uses).
+        if (params.completed) {
+            finalizeAgentRunStep(stepEntity, {
+                success: params.completed.success,
+                errorMessage: params.completed.errorMessage,
+                outputData: params.completed.outputData ? CopyScalarsAndArrays(params.completed.outputData, true) : undefined,
+                completedAt: new Date()
+            });
         }
 
         // Fire-and-forget the 'started' INSERT — the agent flow never blocks on a step save. The queue
@@ -12956,6 +13035,11 @@ The context is now within limits. Please retry your request with the recovered c
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }
+            else {
+                // Hand the NEXT turn's carry-forward check this run's tool results straight
+                // from memory, so it can skip its DB lookups (see PriorTurnToolResultCache).
+                this.cachePriorTurnToolResults();
+            }
 
             // Cross-turn compaction (post-turn, the primary path): fire-and-forget AFTER the
             // run row is final so the summary-LLM latency never delays the caller's
@@ -13394,7 +13478,12 @@ The context is now within limits. Please retry your request with the recovered c
         return outcome;
     }
 
-    /** Persists the Compaction run step for a fired or failed pass. @private */
+    /**
+     * Persists the Compaction run step for a fired or failed pass — as a SINGLE INSERT:
+     * the pass is already over when this is called, so the step is created pre-finalized
+     * via `createStepEntity`'s `completed` option instead of paying a second UPDATE
+     * round trip. @private
+     */
     private async recordCompactionRunStep(
         phase: 'pre-turn' | 'post-turn',
         params: ExecuteAgentParams,
@@ -13402,7 +13491,7 @@ The context is now within limits. Please retry your request with the recovered c
         outcome: CompactionOutcome
     ): Promise<void> {
         try {
-            const stepEntity = await this.createStepEntity({
+            await this.createStepEntity({
                 stepType: 'Compaction',
                 stepName: `Cross-Turn Conversation Compaction (${phase})`,
                 contextUser: params.contextUser,
@@ -13412,20 +13501,23 @@ The context is now within limits. Please retry your request with the recovered c
                     phase,
                     conversationId: params.conversationId,
                     budget
+                },
+                completed: {
+                    success: !outcome.ErrorMessage,
+                    errorMessage: outcome.ErrorMessage,
+                    outputData: {
+                        fired: outcome.Fired,
+                        boundarySequence: outcome.BoundarySequence,
+                        tokensBefore: outcome.TokensBefore,
+                        tokensAfter: outcome.TokensAfter,
+                        summaryLength: outcome.SummaryText?.length,
+                        promptRunId: outcome.PromptRunId,
+                        warnings: outcome.Warnings
+                    }
                 }
             });
-            stepEntity.OutputData = JSON.stringify({
-                fired: outcome.Fired,
-                boundarySequence: outcome.BoundarySequence,
-                tokensBefore: outcome.TokensBefore,
-                tokensAfter: outcome.TokensAfter,
-                summaryLength: outcome.SummaryText?.length,
-                promptRunId: outcome.PromptRunId,
-                warnings: outcome.Warnings
-            });
-            await this.finalizeStepEntity(stepEntity, !outcome.ErrorMessage, outcome.ErrorMessage);
             if (phase === 'post-turn') {
-                // finalizeAgentRun's flush has already run — drain this step's saves now.
+                // finalizeAgentRun's flush has already run — drain this step's INSERT now.
                 await this._stepSaveQueue.Flush();
             }
         } catch (error) {

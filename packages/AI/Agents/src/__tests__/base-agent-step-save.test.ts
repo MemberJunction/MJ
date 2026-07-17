@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { BaseAgent } from '../base-agent';
+import { PriorTurnToolResultCache } from '../prior-turn-tool-result-cache';
 
 /** The fire-and-forget save queue's Flush result shape. */
 type FlushResult = { failures: number; rejections: number };
@@ -214,6 +215,45 @@ describe('BaseAgent.createStepEntity / finalizeStepEntity — lifecycle', () => 
     expect(created.TargetID).toBeNull();
   });
 
+  it('completed option: the single INSERT carries the terminal state — no UPDATE is queued', async () => {
+    const log: string[] = [];
+    const step = new MockStep('s', log);
+    const { agent, pending } = makeAgent([step]);
+    await internals(agent).createStepEntity({
+      stepType: 'Compaction',
+      stepName: 'Cross-Turn Conversation Compaction (post-turn)',
+      contextUser: ctx,
+      completed: { success: true, outputData: { fired: true, tokensBefore: 3000, tokensAfter: 1200 } },
+    });
+    await pending();
+    // Exactly ONE Save — the INSERT. finalizeStepEntity's chained UPDATE never happens.
+    expect(step.saveOptions).toHaveLength(1);
+    expect(step.Status).toBe('Completed');
+    expect(step.Success).toBe(true);
+    expect(step.CompletedAt).not.toBeNull();
+    const output = JSON.parse(step.OutputData as string);
+    expect(output.fired).toBe(true);
+    expect(output.tokensBefore).toBe(3000);
+    expect(output.context.success).toBe(true); // standard finalize envelope, same as two-phase steps
+  });
+
+  it('completed option with success=false: the single INSERT records Failed + the error message', async () => {
+    const log: string[] = [];
+    const step = new MockStep('s', log);
+    const { agent, pending } = makeAgent([step]);
+    await internals(agent).createStepEntity({
+      stepType: 'Compaction',
+      stepName: 'Cross-Turn Conversation Compaction (pre-turn)',
+      contextUser: ctx,
+      completed: { success: false, errorMessage: 'summary model unavailable' },
+    });
+    await pending();
+    expect(step.saveOptions).toHaveLength(1);
+    expect(step.Status).toBe('Failed');
+    expect(step.Success).toBe(false);
+    expect(step.ErrorMessage).toBe('summary model unavailable');
+  });
+
   it('force-persists the finalize UPDATE (IgnoreDirtyState) so a fast create→finalize never stays Running', async () => {
     // Regression for the "step stuck at Running" bug: NewRecord() gives the entity a client PK, so the
     // INSERT and the finalize UPDATE mutate the SAME instance. Without IgnoreDirtyState the INSERT's
@@ -304,5 +344,18 @@ describe('BaseAgent.finalizeAgentRun — pending-save drain + run status', () =>
     const result = await finalize(agent, { step: 'Chat', message: 'need more info' });
     expect(result.success).toBe(true);
     expect(run.Status).toBe('AwaitingFeedback');
+  });
+
+  it('a successful root finalize publishes the run tool results to the carry-forward cache', async () => {
+    PriorTurnToolResultCache.Instance.Clear();
+    const conversationId = 'F1F2F3F4-0000-0000-0000-000000000001';
+    const { agent } = makeFinalizeAgent({ failures: 0, rejections: 0 });
+    const a = agent as unknown as { _executeParams: Record<string, unknown>; startPostTurnCompaction(): void };
+    a._executeParams = { conversationId };
+    a.startPostTurnCompaction = () => undefined; // compaction is out of scope here
+
+    await finalize(agent, { step: 'Success', message: 'done' });
+    // Steps is empty → the cached [] is the negative-cache entry that spares the next turn its DB lookups.
+    expect(PriorTurnToolResultCache.Instance.Get(conversationId)).toEqual([]);
   });
 });
