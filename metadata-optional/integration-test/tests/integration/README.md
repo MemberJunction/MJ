@@ -74,20 +74,22 @@ mj test validate --dir=metadata-optional/integration-test/tests/integration
 
 ## Directory Layout
 
-All of the integration metadata lives under the optional sibling root
-`metadata-optional/integration-test/` (kept out of the default-pushed `metadata/` tree):
+The **`Integration Test` TestType** lives in the normal metadata tree
+(`metadata/test-types/.integration-test-type.json`) — it's an inert type definition. Everything
+else (the IT tests, the suite, and the RLS fixtures) lives under the optional sibling root
+`metadata-optional/integration-test/`, kept out of the default-pushed `metadata/` tree:
 
 ```
+metadata/test-types/.integration-test-type.json   # the TestType (normal metadata — pushed everywhere)
+
 metadata-optional/integration-test/
 ├── .mj-sync.json                 # the ONE root config (directoryOrder)
-├── test-types/
-│   └── .integration-test-type.json
 ├── tests/
 │   ├── .mj-sync.json             # entity: MJ: Tests (recursive **/.*.json glob)
 │   └── integration/
 │       ├── .IT01-server-cache.json
 │       ├── .IT02-runquery-cache.json
-│       └── … (.IT03 … .IT23)
+│       └── … (.IT03 … .IT23)   # each @lookup's the TestType by name
 ├── test-suites/
 │   ├── .mj-sync.json             # entity: MJ: Test Suites
 │   └── .integration-suite.json   # "Integration Tests" + ordered MJ: Test Suite Tests (IT03 = Skip)

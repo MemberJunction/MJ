@@ -100,12 +100,14 @@ Check if there are any pending metadata changes (new/updated records in `metadat
    ```bash
    mj sync push --dir ./metadata
    ```
-   > **Do NOT push `metadata-optional/integration-test/` here.** That optional sibling root holds
-   > all the test-only records — the "Integration Test" type, the IT01–IT23 Tests, the integration
-   > suite, and the RLS principals (three synthetic `it-*@integration.test` users + the
-   > "Integration Test: RLS Scoped Reader" role + its grant). It is deliberately kept out of
-   > `metadata/` so none of it enters the generated `Metadata_Sync.sql` migration — and thus never
-   > reaches production. It exists only for the Step 4 smoke test.
+   > This push includes the inert **"Integration Test" TestType** (it lives in the normal
+   > `metadata/test-types/` tree) — that's fine, it's just a type definition. But **do NOT push
+   > `metadata-optional/integration-test/` here.** That optional sibling root holds the actual
+   > test-only records — the IT01–IT23 Tests, the integration suite, and the RLS principals (three
+   > synthetic `it-*@integration.test` users + the "Integration Test: RLS Scoped Reader" role + its
+   > grant). It is deliberately kept out of `metadata/` so none of it enters the generated
+   > `Metadata_Sync.sql` migration — and thus never reaches production. It exists only for the
+   > Step 4 smoke test.
 6. **Grab the generated SQL** from `metadata/sql_logging/` — find the most recent `MetadataSync_Push_*.sql` file
 7. **Copy it to the migrations folder** and rename using the naming convention:
    ```
@@ -155,7 +157,7 @@ RUN_MUTATION_TESTS=1 RUN_AGENT_TESTS=1 npm run test:integration
 
 > ⚠️ **The suite runs against the compiled packages (`dist/`), not source.** Ensure the repo has been built (`npm run build`) before running — a stale `dist/` can produce spurious failures. Run this only **after** migrations + metadata sync (Step 3) so it exercises the current schema. See [Integration Testing Quickstart](guides/INTEGRATION_TESTING_QUICKSTART.md) for full tier/gating details.
 
-**Optional — seed the RLS fixtures so the multi-user checks execute (instead of skip-as-pass).** The `rls-isolation` deterministic checks (RLS8/9/10) skip-as-pass unless the integration-test principals are present in the DB. To upgrade that coverage from *skipped* to *executed*, push the optional integration root into the **throwaway Step-3 database** before running the suite (one push covers the IT type/tests/suite AND the RLS principals):
+**Optional — seed the RLS fixtures so the multi-user checks execute (instead of skip-as-pass).** The `rls-isolation` deterministic checks (RLS8/9/10) skip-as-pass unless the integration-test principals are present in the DB. To upgrade that coverage from *skipped* to *executed*, push the optional integration root into the **throwaway Step-3 database** before running the suite (this covers the IT tests/suite AND the RLS principals; the TestType itself already came in with the Step-3 `metadata/` push):
 
 ```bash
 mj sync push --dir ./metadata-optional/integration-test
@@ -390,7 +392,8 @@ mj migrate
 # Push metadata to database
 mj sync push --dir ./metadata
 
-# Push the optional integration metadata (IT type/tests/suite + RLS principals) —
+# Push the optional integration metadata (IT tests/suite + RLS principals; the TestType
+# itself lives in normal metadata/) —
 # TEST/CI databases ONLY, never production (kept out of ./metadata on purpose)
 mj sync push --dir ./metadata-optional/integration-test
 

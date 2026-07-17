@@ -483,7 +483,7 @@ driver is cheap (the `ComputerUseTestDriver` in `packages/AI/MJComputerUse` prov
 work). To port the AI suites here into metadata-driven tests:
 
 1. **Driver** — `@RegisterClass(BaseTestDriver, 'IntegrationTestDriver') class IntegrationTestDriver extends BaseTestDriver`, implement `Execute(context)`: run the prompt/agent, run the deep verifiers from `lib/ai-bootstrap.ts` as the assertions, and return a `DriverExecutionResult` (`status`, `targetLogId` → the AI Agent Run, `actualOutput`, `durationMs`, `totalCost`). Export it + add a manifest entry (`npm run mj:manifest`).
-2. **TestType seed** — `metadata-optional/integration-test/test-types/.integration-test-type.json` with `DriverClass: "IntegrationTestDriver"`.
+2. **TestType seed** — `metadata/test-types/.integration-test-type.json` with `DriverClass: "IntegrationTestDriver"`.
 3. **Test seeds** — `metadata/tests/...` referencing the type, with `Configuration`/`InputDefinition` carrying the agent/prompt + the expected structural checks. Run via `mj test suite ...`; results land in `MJ: Test Runs`.
 
 **Why we built standalone scripts first (and the gaps to close before migrating):** (a) the reference

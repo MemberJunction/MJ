@@ -15,12 +15,13 @@ name: Integration Tier
 #     pass is needed. (Running one here would also mask the exact metadata-vs-migration drift
 #     that the separate "Test metadata sync push" gate exists to catch.)
 #   * AssociationDB is only required by the Predictive Studio tier, which is gated OFF here.
-#   * `mj sync push --dir=metadata` pushes the default metadata dir. A SECOND push then applies the
-#     sibling `metadata-optional/integration-test/` root, which holds ALL test-only records — the
-#     "Integration Test" type, the IT01–IT23 Tests, the integration suite, AND the RLS security
-#     principals (users + scoped role + grant). It is kept out of `metadata/` so those synthetic
-#     accounts never reach a production DB (R2). Order matters: this root after metadata, and its own
-#     directoryOrder (test-types → tests → test-suites → roles → entity-permissions → users) resolves
+#   * `mj sync push --dir=metadata` pushes the default metadata dir — which includes the inert
+#     "Integration Test" TestType (metadata/test-types/). A SECOND push then applies the sibling
+#     `metadata-optional/integration-test/` root, which holds the actual test-only records — the
+#     IT01–IT23 Tests, the integration suite, AND the RLS security principals (users + scoped role +
+#     grant). It is kept out of `metadata/` so those synthetic accounts never reach a production DB
+#     (R2). Order matters: this root after metadata (the IT records @lookup the TestType by name), and
+#     its own directoryOrder (tests → test-suites → roles → entity-permissions → users) resolves
 #     every @lookup ref.
 #   * The gated tiers all SKIP cleanly here: Predictive Studio (PS_INTEGRATION unset),
 #     Live Model (RUN_AGENT_TESTS unset), and the client suite (no live MJAPI reachable).
@@ -145,13 +146,14 @@ jobs:
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
         run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
 
-      # The optional integration root holds ALL test-only metadata — the "Integration Test" type,
-      # the IT01–IT23 Tests, the integration suite, AND the RLS security principals (users + scoped
-      # role + entity-permission grant). It is deliberately kept OUT of the default-pushed metadata/
-      # tree so those synthetic accounts never reach a production DB (R2). Push it AFTER the main
-      # metadata push; its one directoryOrder (test-types → tests → test-suites → roles →
-      # entity-permissions → users) resolves every @lookup ref in order. Without this the RLS8/9/10
-      # checks skip-as-pass, so the gate stays green either way — but pushing here keeps them exercised.
+      # The optional integration root holds the actual test-only records — the IT01–IT23 Tests, the
+      # integration suite, AND the RLS security principals (users + scoped role + entity-permission
+      # grant). (The inert "Integration Test" TestType itself lives in metadata/ and came in with the
+      # main push above.) This root is deliberately kept OUT of the default-pushed metadata/ tree so
+      # those synthetic accounts never reach a production DB (R2). Push it AFTER the main metadata push
+      # (the IT records @lookup the TestType by name); its own directoryOrder (tests → test-suites →
+      # roles → entity-permissions → users) resolves every @lookup ref in order. Without this the
+      # RLS8/9/10 checks skip-as-pass, so the gate stays green either way — but pushing here keeps them exercised.
       - name: Sync push — seed the optional integration metadata + RLS fixtures
         env:
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'   # same cold-runner headroom as the main push above

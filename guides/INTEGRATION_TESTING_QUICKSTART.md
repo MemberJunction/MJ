@@ -223,7 +223,7 @@ metadata-driven end to end:
 
 ```
 MJ: Test Types ──▶ "Integration Test"  { DriverClass: "IntegrationTestDriver", Status: Active }
-      │                                  metadata-optional/integration-test/test-types/.integration-test-type.json
+      │                                  metadata/test-types/.integration-test-type.json  (normal metadata — inert type def)
       ▼
 MJ: Tests ───────▶ IT01…IT19            Configuration selects bundles + tier + transport
       │                                  metadata-optional/integration-test/tests/integration/.IT*.json
@@ -386,11 +386,14 @@ rather than registry bundles — `lists-tests.ts`, `user-routines-tests.ts`,
 The same bundles, executed through the Testing Framework with results persisted to
 `MJ: Test Runs`.
 
-**One-time setup — push the optional integration root** (the Integration Test type, the IT tests,
-the suite hierarchy, AND the RLS fixture users/roles/permissions all live under one sibling root):
+**One-time setup — push the metadata.** The "Integration Test" TestType lives in the normal
+`metadata/` tree (an inert type definition), so it lands with a normal `metadata/` push. The IT
+tests, the suite hierarchy, and the RLS fixture users/roles/permissions live under the optional
+sibling root:
 
 ```bash
-npx mj sync push --dir=metadata-optional/integration-test
+npx mj sync push --dir=metadata                       # includes the Integration Test TestType
+npx mj sync push --dir=metadata-optional/integration-test   # IT tests + suite + RLS fixtures
 ```
 
 **Run** — two things are load-bearing:
@@ -795,7 +798,8 @@ scripts.
 |---|---|
 | [`packages/TestingFramework/testing-integration/`](../packages/TestingFramework/testing-integration/) | The library: driver, registry, bundles, bootstrap, tiers, instrumented cache |
 | [`packages/MJServer/integration-test-scripts/`](../packages/MJServer/integration-test-scripts/) | Runnable suites + `run-all.ts` aggregator (+ [README](../packages/MJServer/integration-test-scripts/README.md) deep dive) |
-| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the Integration Test type, the IT01–IT19 Tests, the suite hierarchy, AND the seeded RLS test users/role/permission. Kept out of the default-pushed `metadata/` tree so these test-only records never reach production |
+| [`metadata/test-types/.integration-test-type.json`](../metadata/test-types/.integration-test-type.json) | The `Integration Test` TestType — an inert type definition, kept in the normal `metadata/` tree |
+| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the IT01–IT19 Tests, the suite hierarchy, AND the seeded RLS test users/role/permission. Kept out of the default-pushed `metadata/` tree so these test-only records never reach production |
 | [`packages/TestingFramework/Engine/`](../packages/TestingFramework/Engine/) | `TestEngine`, `BaseTestDriver`, suite fixture lifecycle |
 | [`packages/TestingFramework/CLI/`](../packages/TestingFramework/CLI/) | `mj test run` / `suite` / `list` / `validate` / `history` |
 | [`.github/workflows/integration.yml`](../.github/workflows/integration.yml) | The CI gate |
