@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT22 - User Routines Dispatcher",
+    "Description": "Live, deterministic proof of the User Routines feature (P1.5): the entity servers + the UserRoutineDispatcherDriver end to end (no LLM calls — the executable fixture targets the pure-computation 'Calculate Expression' core Action). UR1-UR5 exercise MJUserRoutineEntityServer NextRunAt/StartAt/claim/invalid-cron/missing-target rules; UR6-UR8 the recipient User-xor-Email exclusivity; UR9 due-evaluation + the SQL prefilter agreeing on window edges; UR10-UR14 a full dispatcher pass (seed-not-run, claim-before-run, run linkage + ResultHash, LastRun* rollup, in-app notify, OnChange no-renotify, cascade delete); UR15-UR16 EnsureRoutineConversation (hidden Application-scoped conversation + idempotency). The bundle creates + tears down every routine/recipient/run/notification/conversation it makes.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Entity-server rules enforced; due-evaluation matches the SQL prefilter; a full dispatcher pass runs, links, rolls up, notifies (Always) / suppresses (OnChange), and cascade-deletes; routine conversations are hidden + idempotent."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "user-routines"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "7584CCE3-2D46-435C-8D9C-E43D047607BF"
+  }
+}

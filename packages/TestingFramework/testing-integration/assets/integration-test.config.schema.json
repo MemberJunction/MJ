@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Integration Test Configuration",
+  "description": "Shape parsed off MJTestEntity.Configuration for the 'Integration Test' TestType (DriverClass IntegrationTestDriver). Authored as a package asset (NOT under metadata/test-types/schemas/, which an mj-sync glob owns).",
+  "type": "object",
+  "required": ["checks"],
+  "properties": {
+    "checks": {
+      "type": "array",
+      "description": "Ordered list of integration checks to run in ONE Execute() against one bootstrapped context. Order is significant (stateful pairs like S1→S2 depend on it).",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Registry key resolved at runtime via IntegrationCheckRegistry.Get(id), e.g. 'server-cache.S1'."
+          },
+          "config": {
+            "type": "object",
+            "description": "Optional per-check knobs (reserved for later phases)."
+          }
+        }
+      }
+    },
+    "requiresEnv": {
+      "type": "string",
+      "description": "Env var that must equal '1' for the test to run; otherwise the run is skip-passed with a gate note."
+    },
+    "transport": {
+      "type": "string",
+      "enum": ["server", "client"],
+      "description": "'server' = SQLServerDataProvider only; 'client' = also needs a running MJAPI + MJ_API_KEY (deferred past Phase 1)."
+    }
+  }
+}

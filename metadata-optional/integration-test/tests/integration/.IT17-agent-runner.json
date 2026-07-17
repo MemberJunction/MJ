@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT17 - Agent Live Run Deep Persistence",
+    "Description": "LIVE-MODEL tier (gated by RUN_AGENT_TESTS). Runs each configured agent through the real AgentRunner and deep-verifies the persisted run end-to-end: the MJ: AI Agent Runs header, every MJ: AI Agent Run Steps row (each terminal + CompletedAt set — never stuck at Running), and the records each step points at via TargetLogID (Prompt steps → AI Prompt Runs, Actions/Tool → Action Execution Logs, Sub-Agent → child runs, recursively). The live end-to-end regression guard for the fire-and-forget save queue across runs/steps/logs. Skips-as-pass when RUN_AGENT_TESTS is unset.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Each agent run persists a correct run + steps + prompt runs + action logs, all terminal with CompletedAt set."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-runner"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "D0C8129C-DD0F-4EE7-9322-415177B3A9AA"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T19:15:10.485Z",
+    "checksum": "a530ea61b6cae4f2c80ea575783f8cce41cec557b46c97aa074aab49a41e11ab"
+  }
+}

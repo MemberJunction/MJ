@@ -1,0 +1,20 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: RLS Scoped Reader",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own AI Agent Runs"
+    },
+    "primaryKey": {
+      "ID": "A6FE647E-AA4A-48C0-B670-B04B0F292872"
+    },
+    "sync": {
+      "lastModified": "2026-07-02T19:44:54.185Z",
+      "checksum": "6a4bfc0cb919471e8b086febe10016d5a18dd8046de6b1905abe8c3e82625d59"
+    }
+  }
+]
