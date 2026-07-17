@@ -980,13 +980,13 @@ export class SQLParser {
             const exprType = expr['type'] as string | undefined;
 
             if (exprType === 'column_ref') {
-                const columnName = expr['column'] as string;
-                const table = expr['table'] as string | null;
+                const columnName = SQLParser.unwrapIdentifier(expr['column']) ?? 'UNKNOWN';
+                const table = SQLParser.unwrapIdentifier(expr['table']);
 
                 columns.push({
                     OutputName: asAlias ?? columnName,
                     SourceColumn: columnName,
-                    TableQualifier: table ?? null,
+                    TableQualifier: table,
                     IsExpression: false,
                 });
             } else {
@@ -1002,6 +1002,30 @@ export class SQLParser {
         }
 
         return columns;
+    }
+
+    /**
+     * Unwraps an AST identifier node to a plain string.
+     * node-sql-parser represents PostgreSQL double-quoted identifiers as
+     * `{ expr: { type: 'double_quote_string', value: 'Name' } }` instead
+     * of a plain string `'Name'`. This helper normalizes both representations.
+     */
+    private static unwrapIdentifier(node: unknown): string | null {
+        if (node === null || node === undefined) return null;
+        if (typeof node === 'string') return node;
+        if (typeof node === 'object') {
+            const obj = node as Record<string, unknown>;
+            // PG AST identifier nodes: { type: 'double_quote_string'|'default', value: 'Name' }
+            // 'double_quote_string' = quoted identifier ("Name"), 'default' = unquoted (membershiptype)
+            if (obj['type'] === 'double_quote_string' || obj['type'] === 'single_quote_string' || obj['type'] === 'default') {
+                return (obj['value'] as string) ?? null;
+            }
+            // Wrapped in expr: { expr: { type: 'double_quote_string', value: 'Name' } }
+            if (obj['expr'] && typeof obj['expr'] === 'object') {
+                return SQLParser.unwrapIdentifier(obj['expr']);
+            }
+        }
+        return null;
     }
 
     /**

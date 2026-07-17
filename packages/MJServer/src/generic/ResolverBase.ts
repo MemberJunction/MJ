@@ -673,14 +673,17 @@ export class ResolverBase {
 
     const apiKeyEngine = GetAPIKeyEngine();
 
-    // Check for full_access scope first (god power - bypasses all other checks)
+    // Check for full_access scope first (god power - bypasses all other checks).
+    // Use skipLogging to avoid polluting the usage log with expected denials —
+    // this is a fast-path optimization, not the real authorization decision.
     const fullAccessResult = await apiKeyEngine.Authorize(
       userPayload.apiKeyHash,
       'MJAPI',
       'full_access',
       '*',
       systemUser,
-      { endpoint: '/graphql', method: 'POST' }
+      { endpoint: '/graphql', method: 'POST' },
+      { skipLogging: true }
     );
 
     if (fullAccessResult.Allowed) {
