@@ -99,6 +99,22 @@ export interface EntityDocumentFieldConfig {
      * in search result cards. At most one field should be marked.
      */
     isSnippetField?: boolean;
+
+    /**
+     * How to store this field's value in vector metadata.
+     *
+     * - `'string'` (default): coerce to string via String(val), with truncation applied.
+     * - `'number'`: store as a JS number via Number(val). Skipped when NaN.
+     * - `'boolean'`: store as a JS boolean via Boolean(val).
+     * - `'epochSeconds'`: parse val as a date and store Unix epoch seconds (integer).
+     *   Use for datetime/datetimeoffset fields — enables numeric range filters in Pinecone.
+     * - `'epochMilliseconds'`: same as epochSeconds but millisecond precision.
+     *
+     * SQL integer/float column types are stored as numbers automatically with no
+     * explicit setting needed. Use this option only when you need to override
+     * the default or convert a date to a numeric epoch.
+     */
+    storeAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
 }
 
 /* ------------------------------------------------------------------ */
