@@ -657,3 +657,125 @@ describe('OpenAIRealtime', () => {
         });
     });
 });
+
+describe('OpenAIRealtime GA features (reasoning effort / parallel tool calls / MCP tools)', () => {
+    let driver: TestableOpenAIRealtime;
+
+    beforeEach(() => {
+        driver = new TestableOpenAIRealtime('test-key');
+    });
+
+    /** Finds the start session.update and returns its session payload as a plain record. */
+    async function startAndGetSession(config?: Record<string, unknown>): Promise<Record<string, unknown>> {
+        await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys', Config: config });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            return update.session as Record<string, unknown>;
+        }
+        throw new Error('expected realtime session.update');
+    }
+
+    it('translates Config.reasoningEffort to session reasoning.effort (and never sends the raw key)', async () => {
+        const session = await startAndGetSession({ reasoningEffort: 'high' });
+        expect(session.reasoning).toEqual({ effort: 'high' });
+        expect(session.reasoningEffort).toBeUndefined();
+    });
+
+    it('drops an invalid reasoningEffort value instead of sending it', async () => {
+        const session = await startAndGetSession({ reasoningEffort: 'ultra' });
+        expect(session.reasoning).toBeUndefined();
+        expect(session.reasoningEffort).toBeUndefined();
+    });
+
+    it('translates Config.parallelToolCalls to session parallel_tool_calls (and never sends the raw key)', async () => {
+        const session = await startAndGetSession({ parallelToolCalls: false });
+        expect(session.parallel_tool_calls).toBe(false);
+        expect(session.parallelToolCalls).toBeUndefined();
+    });
+
+    it('omits parallel_tool_calls when the bag key is absent (provider default governs)', async () => {
+        const session = await startAndGetSession({});
+        expect(session.parallel_tool_calls).toBeUndefined();
+    });
+
+    it('appends Config.mcpTools alongside the function tools (and never sends the raw key)', async () => {
+        await driver.StartSession({
+            Model: 'gpt-realtime-2.1',
+            SystemPrompt: 'sys',
+            Tools: [{ Name: 'lookup', Description: 'look up', ParametersSchema: { type: 'object' } }],
+            Config: {
+                mcpTools: [
+                    { type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' },
+                ],
+            },
+        });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const session = update.session as Record<string, unknown>;
+            const tools = session.tools as Array<Record<string, unknown>>;
+            expect(tools).toHaveLength(2);
+            expect(tools[0]).toMatchObject({ type: 'function', name: 'lookup' });
+            expect(tools[1]).toMatchObject({ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com' });
+            expect(session.mcpTools).toBeUndefined();
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+    });
+
+    it('sends MCP tools even when no function tools are registered', async () => {
+        const session = await startAndGetSession({
+            mcpTools: [{ type: 'mcp', server_label: 'cal', connector_id: 'connector_googlecalendar', require_approval: 'never' }],
+        });
+        const tools = session.tools as Array<Record<string, unknown>>;
+        expect(tools).toHaveLength(1);
+        expect(tools[0]).toMatchObject({ type: 'mcp', server_label: 'cal' });
+    });
+
+    it('surfaces an MCP approval request as a recoverable error (no approval UX yet)', async () => {
+        const session = await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        const fn = vi.fn();
+        session.OnError(fn);
+        driver.Fake.Fire({
+            type: 'conversation.item.added',
+            item: { type: 'mcp_approval_request', id: 'a1', server_label: 'kb', name: 'search', arguments: '{}' },
+            event_id: 'e',
+        } as unknown as RealtimeServerEvent);
+        expect(fn).toHaveBeenCalledTimes(1);
+        expect(fn.mock.calls[0][0]).toMatchObject({ Fatal: false });
+    });
+
+    it('surfaces a failed MCP tool call as a recoverable error', async () => {
+        const session = await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        const fn = vi.fn();
+        session.OnError(fn);
+        driver.Fake.Fire({ type: 'response.mcp_call.failed', event_id: 'e', item_id: 'i', output_index: 0 } as unknown as RealtimeServerEvent);
+        expect(fn).toHaveBeenCalledTimes(1);
+        expect(fn.mock.calls[0][0]).toMatchObject({ Fatal: false });
+    });
+
+    it('client-direct: the minted SessionConfig carries the same GA features as server-bridged', async () => {
+        const cd = new ClientDirectTestable('k');
+        const cfg = await cd.CreateClientSession({
+            Model: 'gpt-realtime-2.1',
+            SystemPrompt: 'voice',
+            Config: {
+                reasoningEffort: 'low',
+                parallelToolCalls: true,
+                mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
+                voice: 'sage',
+            },
+        });
+        const sc = cfg.SessionConfig as Record<string, unknown>;
+        expect(sc.reasoning).toEqual({ effort: 'low' });
+        expect(sc.parallel_tool_calls).toBe(true);
+        const tools = sc.tools as Array<Record<string, unknown>>;
+        expect(tools).toHaveLength(1);
+        expect(tools[0]).toMatchObject({ type: 'mcp', server_label: 'kb' });
+        expect((sc.audio as { output?: { voice?: string } }).output?.voice).toBe('sage');
+        // The MJ-idiomatic bag keys never leak into the provider payload.
+        expect(sc.reasoningEffort).toBeUndefined();
+        expect(sc.parallelToolCalls).toBeUndefined();
+        expect(sc.mcpTools).toBeUndefined();
+        expect(sc.voice).toBeUndefined();
+    });
+});

@@ -1,12 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock @memberjunction/global so @RegisterClass is a no-op decorator.
+// Mock @memberjunction/global so @RegisterClass is a no-op decorator (ToJSONSafe rides along for
+// the OpenAI provider's LLM module, which the driver's base-class import chain now loads).
 vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => (target: unknown) => target,
+    ToJSONSafe: (value: unknown) => value,
 }));
 
-// Mock @memberjunction/ai — provide BaseModel/BaseRealtimeModel base classes only. The realtime
-// type aliases (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
+// Mock @memberjunction/ai — the driver now subclasses the OpenAI provider's OpenAIRealtime, and
+// importing `@memberjunction/ai-openai` evaluates that package's whole index (LLM, embeddings,
+// TTS, image, realtime modules), so every base class those modules EXTEND at module-evaluation
+// time must exist here alongside BaseModel/BaseRealtimeModel. The realtime type aliases
+// (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
         protected _apiKey: string;
@@ -14,9 +19,9 @@ vi.mock('@memberjunction/ai', () => {
             this._apiKey = apiKey;
         }
     }
-    // Mirror the real BaseRealtimeModel's default client-direct surface so the driver — which does
-    // NOT override either member (Grok Voice is server-bridged only) — inherits the correct behavior:
-    // SupportsClientDirect defaults to false and CreateClientSession throws unless overridden.
+    // Mirror the real BaseRealtimeModel's default client-direct surface: SupportsClientDirect
+    // defaults to false and CreateClientSession throws unless overridden (OpenAIRealtime — which
+    // xAIRealtime now subclasses — overrides both, matching Grok Voice's real client-direct support).
     class BaseRealtimeModel extends BaseModel {
         public get SupportsClientDirect(): boolean {
             return false;
@@ -25,7 +30,20 @@ vi.mock('@memberjunction/ai', () => {
             throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
         }
     }
-    return { BaseModel, BaseRealtimeModel };
+    // Base classes the OpenAI provider's other modules extend during module evaluation.
+    class BaseLLM extends BaseModel {}
+    class BaseEmbeddings extends BaseModel {}
+    class BaseAudioGenerator extends BaseModel {}
+    class BaseImageGenerator extends BaseModel {}
+    // Static-method error helper referenced by those modules' method bodies.
+    class ErrorAnalyzer {
+        public static analyzeError(): Record<string, never> {
+            return {};
+        }
+    }
+    // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
+    const RealtimeDiagLog = () => { /* no-op in tests */ };
+    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseImageGenerator, ErrorAnalyzer, RealtimeDiagLog };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -654,5 +672,63 @@ describe('xAIRealtime', () => {
             } as RealtimeServerEvent);
             expect(fn).not.toHaveBeenCalled();
         });
+    });
+});
+
+describe('xAIRealtime GA feature gating (profile-driven)', () => {
+    let driver: TestablexAIRealtime;
+
+    beforeEach(() => {
+        driver = new TestablexAIRealtime('test-key');
+    });
+
+    it('scrubs reasoningEffort/parallelToolCalls/mcpTools from the Config bag WITHOUT translating them (unconfirmed on Grok Voice)', async () => {
+        await driver.StartSession({
+            Model: 'grok-voice',
+            SystemPrompt: 'sys',
+            Config: {
+                reasoningEffort: 'high',
+                parallelToolCalls: true,
+                mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com' }],
+            },
+        });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const session = update.session as Record<string, unknown>;
+            // Not translated (profile gates are OFF until xAI documents support)…
+            expect(session.reasoning).toBeUndefined();
+            expect(session.parallel_tool_calls).toBeUndefined();
+            expect(session.tools).toBeUndefined();
+            // …and never leaked raw (Grok would reject unknown fields).
+            expect(session.reasoningEffort).toBeUndefined();
+            expect(session.parallelToolCalls).toBeUndefined();
+            expect(session.mcpTools).toBeUndefined();
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+    });
+
+    it('keeps Grok-required explicit turn detection (create_response) with the shared driver', async () => {
+        await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const turnDetection = (update.session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+            expect(turnDetection).toMatchObject({ type: 'server_vad', create_response: true, interrupt_response: true });
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+    });
+
+    it('meeting mode: disableAutoResponse now flips create_response off while KEEPING detection', async () => {
+        await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', Config: { disableAutoResponse: true } });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const session = update.session as Record<string, unknown>;
+            expect(session.disableAutoResponse).toBeUndefined();
+            const turnDetection = (session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+            expect(turnDetection).toMatchObject({ type: 'server_vad', create_response: false, interrupt_response: true });
+        } else {
+            throw new Error('expected realtime session.update');
+        }
     });
 });
