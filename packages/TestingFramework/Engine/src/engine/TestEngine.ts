@@ -38,7 +38,8 @@ import {
     TestSuiteRunResult,
     TestLogMessage,
     ResolvedTestVariables,
-    TestRunOutputItem
+    TestRunOutputItem,
+    SuiteFixtureContext
 } from '../types';
 import {
     gatherExecutionContext,
@@ -76,6 +77,16 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     private _oracleRegistry = new Map<string, IOracle>();
     private _variableResolver = new VariableResolver();
     private _oraclesRegistered = false;
+
+    /**
+     * Active per-suite-run fixture contexts, keyed by SuiteRunID. Populated in
+     * `RunSuite` before the test loop (so `runSingleTestIteration` can thread it into
+     * each `Execute` via `DriverExecutionContext.fixtures`) and removed in the suite's
+     * `finally`. Stashed here — NOT on the cached driver instance — because one driver
+     * instance is reused per `TypeID` across suites (`_driverCache`), so a per-suite
+     * key prevents one suite run's fixtures from leaking into another.
+     */
+    private _suiteFixtures = new Map<string, SuiteFixtureContext>();
 
     /**
      * Get singleton instance
@@ -333,16 +344,41 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             // JSON degrades gracefully — log a warning and proceed without context.
             const suiteContext = this.extractSuiteContext(suite);
 
-            // Execute tests — parallel or sequential
-            let testResults: TestRunResult[];
-            if (options.parallel && tests.length > 1) {
-                testResults = await this.runTestsParallel(tests, options, contextUser, suiteRun, suiteVariablesJson, suiteContext);
-            } else {
-                testResults = await this.runTestsSequential(tests, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext);
-            }
+            // Suite-scoped fixture lifecycle (D6). Resolve the distinct driver(s) for the
+            // suite's tests, give them ONE shared SuiteFixtureContext keyed by suiteRunId
+            // (stashed in `_suiteFixtures` so `runSingleTestIteration` threads it into each
+            // Execute via DriverExecutionContext.fixtures), run SetupSuite before the tests,
+            // and GUARANTEE TeardownSuite + updateSuiteRun in a finally — so fixtures are
+            // cleaned up on pass, fail, a thrown Execute, and a 'Timeout'. Teardown is
+            // best-effort (it logs and never rethrows, so cleanup can't fail the suite).
+            const fixtures: SuiteFixtureContext = { SuiteRunID: suiteRun.ID, Data: {}, CreatedRecords: [] };
+            this._suiteFixtures.set(suiteRun.ID, fixtures);
+            const suiteDrivers = await this.resolveSuiteDrivers(tests, contextUser);
 
-            // Update TestSuiteRun entity with results
-            await this.updateSuiteRun(suiteRun, testResults, startTime);
+            let testResults: TestRunResult[] = [];
+            try {
+                for (const driver of suiteDrivers) {
+                    await driver.SetupSuite(fixtures, contextUser);
+                }
+
+                // Execute tests — parallel or sequential
+                if (options.parallel && tests.length > 1) {
+                    testResults = await this.runTestsParallel(tests, options, contextUser, suiteRun, suiteVariablesJson, suiteContext);
+                } else {
+                    testResults = await this.runTestsSequential(tests, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext);
+                }
+            } finally {
+                for (const driver of suiteDrivers) {
+                    try {
+                        await driver.TeardownSuite(fixtures, contextUser);
+                    } catch (teardownErr) {
+                        this.logError(`TeardownSuite failed (best-effort, ignored)`, teardownErr as Error);
+                    }
+                }
+                this._suiteFixtures.delete(suiteRun.ID);
+                // Update TestSuiteRun entity with results (guaranteed even on a SetupSuite throw)
+                await this.updateSuiteRun(suiteRun, testResults, startTime);
+            }
 
             // Calculate suite-level metrics
             const passedTests = testResults.filter(r => r.status === 'Passed').length;
@@ -641,6 +677,32 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     }
 
     /**
+     * Resolve the distinct driver instance(s) for a suite's tests, so suite-scoped
+     * `SetupSuite`/`TeardownSuite` hooks fire once per driver regardless of how many
+     * tests share a type. A suite is almost always homogeneous (one TypeID ⇒ one
+     * driver, hooked once); a mixed-type suite hooks each distinct driver once, all
+     * sharing the one `SuiteFixtureContext`. Tests whose type can't be resolved are
+     * skipped here (they fail later in `runSingleTestIteration` with a clear error).
+     * @private
+     */
+    private async resolveSuiteDrivers(tests: MJTestEntity[], contextUser: UserInfo): Promise<BaseTestDriver[]> {
+        const seenTypeIds = new Set<string>();
+        const drivers: BaseTestDriver[] = [];
+        for (const test of tests) {
+            if (seenTypeIds.has(test.TypeID)) {
+                continue;
+            }
+            seenTypeIds.add(test.TypeID);
+            const testType = this.GetTestTypeByID(test.TypeID);
+            if (!testType) {
+                continue;
+            }
+            drivers.push(await this.getDriver(testType, contextUser));
+        }
+        return drivers;
+    }
+
+    /**
      * Get test entity from cache.
      * @private
      */
@@ -689,11 +751,26 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         // Create a map of testId -> sequence for efficient lookup
         const testSequenceMap = new Map<string, number>();
+        const testMembershipStatus = new Map<string, string>();
         for (const st of suiteTests) {
             testSequenceMap.set(st.TestID, st.Sequence);
+            testMembershipStatus.set(st.TestID, st.Status);
         }
 
         let filteredTests = [...tests];
+
+        // Honor the suite-membership Status: only 'Active' memberships execute. A membership
+        // marked 'Skip' or 'Disabled' (MJTestSuiteTest.Status) is excluded from the run — this
+        // is how a suite parks a test it isn't ready to run (e.g. one that needs MJAPI) without
+        // deleting the membership. Missing status is treated as active (defensive).
+        const beforeStatus = filteredTests.length;
+        filteredTests = filteredTests.filter(t => {
+            const status = testMembershipStatus.get(t.ID);
+            return status == null || status === 'Active';
+        });
+        if (filteredTests.length !== beforeStatus) {
+            this.log(`Excluded ${beforeStatus - filteredTests.length} test(s) with non-Active suite membership status`);
+        }
 
         // Filter by selectedTestIds if provided
         if (options.selectedTestIds && options.selectedTestIds.length > 0) {
@@ -1133,18 +1210,43 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             }
         });
 
-        // Execute test via driver
+        // Suite-scoped fixtures for this iteration (if it runs inside a suite). Undefined
+        // for the standalone `mj test run` path — no suite ⇒ SetupSuite never fired.
+        const fixtures = suiteRunId ? this._suiteFixtures.get(suiteRunId) : undefined;
+
+        // Execute test via driver. Harden a thrown Execute into a final 'Error' result so
+        // the TestRun is never left stuck 'Running' (and any suite TeardownSuite cleanup
+        // stays consistent with the run record). The driver contract is to RETURN a result,
+        // not throw; this catch is the safety net for a buggy/edge-case driver.
         this.log(`Executing test via ${testType.DriverClass}`, options.verbose);
-        const driverResult = await driver.Execute({
-            test,
-            testRun,
-            contextUser,
-            options: enhancedOptions,
-            oracleRegistry: this._oracleRegistry,
-            resolvedVariables,
-            workerIndex,
-            suiteContext
-        });
+        let driverResult: DriverExecutionResult;
+        try {
+            driverResult = await driver.Execute({
+                test,
+                testRun,
+                contextUser,
+                options: enhancedOptions,
+                oracleRegistry: this._oracleRegistry,
+                resolvedVariables,
+                workerIndex,
+                suiteContext,
+                fixtures
+            });
+        } catch (execErr) {
+            const message = (execErr as Error)?.message ?? 'Unknown error thrown from driver.Execute';
+            this.logError(`Driver ${testType.DriverClass} threw from Execute — recording TestRun as Error`, execErr as Error);
+            driverResult = {
+                targetType: testType.Name,
+                targetLogId: testRun.ID,
+                status: 'Error',
+                score: 0,
+                oracleResults: [],
+                passedChecks: 0,
+                failedChecks: 0,
+                totalChecks: 0,
+                errorMessage: message
+            };
+        }
 
         // If timeout occurred and driver doesn't support cancellation, add warning to error message
         if (driverResult.status === 'Timeout' && !supportsCancellation) {
