@@ -23,7 +23,14 @@ beforeAll(() => {
   Object.defineProperty(SVGElement.prototype, 'getBBox', { value: stub, configurable: true, writable: true });
 });
 
-afterAll(() => {
+afterAll(async () => {
+  // Every rendering test queues `requestAnimationFrame(() => this.fitToView())` (which calls
+  // getBBox). rAF callbacks run FIFO, so awaiting one queued NOW guarantees all of the tests'
+  // earlier callbacks have already fired — while the stub is still installed. Without this
+  // flush, slow CI runners fire those callbacks AFTER the restore below and every one crashes
+  // as an Unhandled Error ("this.mainG.getBBox is not a function"), failing the run even
+  // though all tests passed.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   if (savedGetBBox) Object.defineProperty(SVGElement.prototype, 'getBBox', savedGetBBox);
   else Reflect.deleteProperty(SVGElement.prototype, 'getBBox');
 });
