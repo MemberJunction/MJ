@@ -20,7 +20,9 @@
     "src/lib/container/record-form-container.component.ts",
     "src/lib/container/record-form-container.component.dom.test.ts",
     "src/lib/toolbar/form-toolbar.component.ts",
-    "src/lib/toolbar/form-toolbar.component.dom.test.ts"
+    "src/lib/toolbar/form-toolbar.component.dom.test.ts",
+    "src/lib/isa-related-panel/isa-related-panel.component.ts",
+    "src/lib/isa-related-panel/isa-related-panel.component.dom.test.ts"
   ],
   "exclude": [
     "node_modules",
