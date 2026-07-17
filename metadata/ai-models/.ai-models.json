@@ -19696,5 +19696,96 @@
       "lastModified": "2026-07-17T00:00:00.000Z",
       "checksum": "32fcbe24912ef9a66b365cd9dadbef216de5d69e9ee6cc6592d5c523555ee0ab"
     }
+  },
+  {
+    "fields": {
+      "Name": "GPT Realtime 2.1-mini",
+      "PowerRank": 9,
+      "Description": "OpenAI's compact speech-to-speech voice model (gpt-realtime-2.1-mini), released July 6, 2026 alongside GPT Realtime 2.1. Brings the GPT Realtime 2.1 reasoning realtime stack — five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool/function calls, 128K token context (32K max output), and audio/text/image input — to a cost-optimized tier for high-volume voice workloads. Multi-channel token pricing: $10/M audio input ($0.30 cached), $20/M audio output, $0.60/M text input ($0.06 cached), $2.40/M text output, $0.80/M image input ($0.08 cached). Streaming full-duplex realtime model driven via BaseRealtimeModel (DriverClass OpenAIRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 10,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "91AAC2FE-8624-4FD6-83F8-56096098B49A"
+          },
+          "sync": {
+            "lastModified": "2026-07-17T00:00:00.000Z",
+            "checksum": "ea8f34ad4c34626c4bb458998247991df9a5a086a71b8fe7b20b50f13cc54701"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAIRealtime",
+            "APIName": "gpt-realtime-2.1-mini",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 32000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "50D69F51-C28A-4AFE-B3E7-EE60E52C1AC3"
+          },
+          "sync": {
+            "lastModified": "2026-07-17T00:00:00.000Z",
+            "checksum": "49ce525a3e7913662d09d16ebe1727fd646b80d86e81dad43ecf318c88814efd"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-07-06T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.6,
+            "OutputPricePerUnit": 2.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-Realtime-2.1-mini has multi-channel token pricing — the rates here ($0.60 input / $2.40 output per 1M) cover the TEXT channel only, with cache read $0.06 (published text cached-input price; OpenAI Family B, no cache-write charge). Audio channels: $10/M audio input ($0.30 cached), $20/M audio output. Image input: $0.80/M ($0.08 cached). Released July 6, 2026; the cost-optimized variant of GPT Realtime 2.1.",
+            "CacheReadPricePerUnit": 0.06,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "695767B6-1745-4B6F-A065-B50CDC875FCE"
+          },
+          "sync": {
+            "lastModified": "2026-07-17T00:00:00.000Z",
+            "checksum": "01e6943460c6e2b849129e6be62f9bb1182cf4a102dceab7ce424bddaf685678"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6B8B9E54-3FDC-49F7-AC39-9CD54D29EA8F"
+    },
+    "sync": {
+      "lastModified": "2026-07-17T00:00:00.000Z",
+      "checksum": "51fb9e949baf15dc88060214cbeecc0be02a1586f2898a5a9d93dc12945748ac"
+    }
   }
 ]

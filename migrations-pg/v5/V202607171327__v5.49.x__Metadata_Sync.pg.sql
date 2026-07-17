@@ -152,3 +152,135 @@ BEGIN
   p_CacheReadPricePerUnit_966f5d74 := 0.4;
   PERFORM __mj."spCreateAIModelCost"(p_ID := p_ID_966f5d74, p_ModelID := p_ModelID_966f5d74, p_VendorID := p_VendorID_966f5d74, p_StartedAt := p_StartedAt_966f5d74, p_EndedAt := p_EndedAt_966f5d74, p_EndedAt_Clear := TRUE, p_Status := p_Status_966f5d74, p_Currency := p_Currency_966f5d74, p_PriceTypeID := p_PriceTypeID_966f5d74, p_InputPricePerUnit := p_InputPricePerUnit_966f5d74, p_OutputPricePerUnit := p_OutputPricePerUnit_966f5d74, p_UnitTypeID := p_UnitTypeID_966f5d74, p_ProcessingType := p_ProcessingType_966f5d74, p_Comments := p_Comments_966f5d74, p_CacheReadPricePerUnit := p_CacheReadPricePerUnit_966f5d74, p_CacheWritePricePerUnit := p_CacheWritePricePerUnit_966f5d74, p_CacheWritePricePerUnit_Clear := TRUE);
 END $mj$;
+
+-- Save MJ: AI Models (core SP call only) — GPT Realtime 2.1-mini
+DO $mj$
+DECLARE
+  p_ID_6b8b9e54 UUID;
+  p_Name_6b8b9e54 VARCHAR(50);
+  p_Description_6b8b9e54 TEXT;
+  p_AIModelTypeID_6b8b9e54 UUID;
+  p_PowerRank_6b8b9e54 INTEGER;
+  p_IsActive_6b8b9e54 BOOLEAN;
+  p_SpeedRank_6b8b9e54 INTEGER;
+  p_CostRank_6b8b9e54 INTEGER;
+  p_ModelSelectionInsights_6b8b9e54 TEXT;
+  p_InheritTypeModalities_6b8b9e54 BOOLEAN;
+  p_PriorVersionID_6b8b9e54 UUID;
+  p_SupportsPrefill_6b8b9e54 BOOLEAN;
+  p_PrefillFallbackText_6b8b9e54 TEXT;
+BEGIN
+  p_ID_6b8b9e54 := '6b8b9e54-3fdc-49f7-ac39-9cd54d29ea8f';
+  p_Name_6b8b9e54 := 'GPT Realtime 2.1-mini';
+  p_Description_6b8b9e54 := 'OpenAI''s compact speech-to-speech voice model (gpt-realtime-2.1-mini), released July 6, 2026 alongside GPT Realtime 2.1. Brings the GPT Realtime 2.1 reasoning realtime stack — five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool/function calls, 128K token context (32K max output), and audio/text/image input — to a cost-optimized tier for high-volume voice workloads. Multi-channel token pricing: $10/M audio input ($0.30 cached), $20/M audio output, $0.60/M text input ($0.06 cached), $2.40/M text output, $0.80/M image input ($0.08 cached). Streaming full-duplex realtime model driven via BaseRealtimeModel (DriverClass OpenAIRealtime).';
+  p_AIModelTypeID_6b8b9e54 := '5F75433E-F36B-1410-8D99-00021F8B792E';
+  p_PowerRank_6b8b9e54 := 9;
+  p_IsActive_6b8b9e54 := TRUE;
+  p_SpeedRank_6b8b9e54 := 9;
+  p_CostRank_6b8b9e54 := 10;
+  p_InheritTypeModalities_6b8b9e54 := TRUE;
+  PERFORM __mj."spCreateAIModel"(p_ID := p_ID_6b8b9e54, p_Name := p_Name_6b8b9e54, p_Description := p_Description_6b8b9e54, p_AIModelTypeID := p_AIModelTypeID_6b8b9e54, p_PowerRank := p_PowerRank_6b8b9e54, p_IsActive := p_IsActive_6b8b9e54, p_SpeedRank := p_SpeedRank_6b8b9e54, p_CostRank := p_CostRank_6b8b9e54, p_ModelSelectionInsights := p_ModelSelectionInsights_6b8b9e54, p_ModelSelectionInsights_Clear := TRUE, p_InheritTypeModalities := p_InheritTypeModalities_6b8b9e54, p_PriorVersionID := p_PriorVersionID_6b8b9e54, p_PriorVersionID_Clear := TRUE, p_SupportsPrefill := p_SupportsPrefill_6b8b9e54, p_SupportsPrefill_Clear := TRUE, p_PrefillFallbackText := p_PrefillFallbackText_6b8b9e54, p_PrefillFallbackText_Clear := TRUE);
+END $mj$;
+
+-- Save MJ: AI Model Vendors (core SP call only) — GPT Realtime 2.1-mini Model Developer
+DO $mj$
+DECLARE
+  p_ID_91aac2fe UUID;
+  p_ModelID_91aac2fe UUID;
+  p_VendorID_91aac2fe UUID;
+  p_Priority_91aac2fe INTEGER;
+  p_Status_91aac2fe VARCHAR(20);
+  p_DriverClass_91aac2fe VARCHAR(100);
+  p_DriverImportPath_91aac2fe VARCHAR(255);
+  p_APIName_91aac2fe VARCHAR(100);
+  p_MaxInputTokens_91aac2fe INTEGER;
+  p_MaxOutputTokens_91aac2fe INTEGER;
+  p_SupportedResponseFormats_91aac2fe VARCHAR(100);
+  p_SupportsEffortLevel_91aac2fe BOOLEAN;
+  p_SupportsStreaming_91aac2fe BOOLEAN;
+  p_TypeID_91aac2fe UUID;
+  p_SupportsPrefill_91aac2fe BOOLEAN;
+  p_PrefillFallbackText_91aac2fe TEXT;
+BEGIN
+  p_ID_91aac2fe := '91aac2fe-8624-4fd6-83f8-56096098b49a';
+  p_ModelID_91aac2fe := '6B8B9E54-3FDC-49F7-AC39-9CD54D29EA8F';
+  p_VendorID_91aac2fe := 'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E';
+  p_Priority_91aac2fe := 0;
+  p_Status_91aac2fe := 'Active';
+  p_SupportedResponseFormats_91aac2fe := 'Any';
+  p_SupportsEffortLevel_91aac2fe := TRUE;
+  p_SupportsStreaming_91aac2fe := TRUE;
+  p_TypeID_91aac2fe := '10DB468E-F2CE-475D-9F39-2DF2DE75D257';
+  PERFORM __mj."spCreateAIModelVendor"(p_ID := p_ID_91aac2fe, p_ModelID := p_ModelID_91aac2fe, p_VendorID := p_VendorID_91aac2fe, p_Priority := p_Priority_91aac2fe, p_Status := p_Status_91aac2fe, p_DriverClass := p_DriverClass_91aac2fe, p_DriverClass_Clear := TRUE, p_DriverImportPath := p_DriverImportPath_91aac2fe, p_DriverImportPath_Clear := TRUE, p_APIName := p_APIName_91aac2fe, p_APIName_Clear := TRUE, p_MaxInputTokens := p_MaxInputTokens_91aac2fe, p_MaxInputTokens_Clear := TRUE, p_MaxOutputTokens := p_MaxOutputTokens_91aac2fe, p_MaxOutputTokens_Clear := TRUE, p_SupportedResponseFormats := p_SupportedResponseFormats_91aac2fe, p_SupportsEffortLevel := p_SupportsEffortLevel_91aac2fe, p_SupportsStreaming := p_SupportsStreaming_91aac2fe, p_TypeID := p_TypeID_91aac2fe, p_SupportsPrefill := p_SupportsPrefill_91aac2fe, p_SupportsPrefill_Clear := TRUE, p_PrefillFallbackText := p_PrefillFallbackText_91aac2fe, p_PrefillFallbackText_Clear := TRUE);
+END $mj$;
+
+-- Save MJ: AI Model Vendors (core SP call only) — GPT Realtime 2.1-mini Inference Provider
+DO $mj$
+DECLARE
+  p_ID_50d69f51 UUID;
+  p_ModelID_50d69f51 UUID;
+  p_VendorID_50d69f51 UUID;
+  p_Priority_50d69f51 INTEGER;
+  p_Status_50d69f51 VARCHAR(20);
+  p_DriverClass_50d69f51 VARCHAR(100);
+  p_DriverImportPath_50d69f51 VARCHAR(255);
+  p_APIName_50d69f51 VARCHAR(100);
+  p_MaxInputTokens_50d69f51 INTEGER;
+  p_MaxOutputTokens_50d69f51 INTEGER;
+  p_SupportedResponseFormats_50d69f51 VARCHAR(100);
+  p_SupportsEffortLevel_50d69f51 BOOLEAN;
+  p_SupportsStreaming_50d69f51 BOOLEAN;
+  p_TypeID_50d69f51 UUID;
+  p_SupportsPrefill_50d69f51 BOOLEAN;
+  p_PrefillFallbackText_50d69f51 TEXT;
+BEGIN
+  p_ID_50d69f51 := '50d69f51-c28a-4afe-b3e7-ee60e52c1ac3';
+  p_ModelID_50d69f51 := '6B8B9E54-3FDC-49F7-AC39-9CD54D29EA8F';
+  p_VendorID_50d69f51 := 'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E';
+  p_Priority_50d69f51 := 1;
+  p_Status_50d69f51 := 'Active';
+  p_DriverClass_50d69f51 := 'OpenAIRealtime';
+  p_APIName_50d69f51 := 'gpt-realtime-2.1-mini';
+  p_MaxInputTokens_50d69f51 := 128000;
+  p_MaxOutputTokens_50d69f51 := 32000;
+  p_SupportedResponseFormats_50d69f51 := 'Any';
+  p_SupportsEffortLevel_50d69f51 := TRUE;
+  p_SupportsStreaming_50d69f51 := TRUE;
+  p_TypeID_50d69f51 := '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3';
+  PERFORM __mj."spCreateAIModelVendor"(p_ID := p_ID_50d69f51, p_ModelID := p_ModelID_50d69f51, p_VendorID := p_VendorID_50d69f51, p_Priority := p_Priority_50d69f51, p_Status := p_Status_50d69f51, p_DriverClass := p_DriverClass_50d69f51, p_DriverImportPath := p_DriverImportPath_50d69f51, p_DriverImportPath_Clear := TRUE, p_APIName := p_APIName_50d69f51, p_MaxInputTokens := p_MaxInputTokens_50d69f51, p_MaxOutputTokens := p_MaxOutputTokens_50d69f51, p_SupportedResponseFormats := p_SupportedResponseFormats_50d69f51, p_SupportsEffortLevel := p_SupportsEffortLevel_50d69f51, p_SupportsStreaming := p_SupportsStreaming_50d69f51, p_TypeID := p_TypeID_50d69f51, p_SupportsPrefill := p_SupportsPrefill_50d69f51, p_SupportsPrefill_Clear := TRUE, p_PrefillFallbackText := p_PrefillFallbackText_50d69f51, p_PrefillFallbackText_Clear := TRUE);
+END $mj$;
+
+-- Save MJ: AI Model Costs (core SP call only) — GPT Realtime 2.1-mini
+DO $mj$
+DECLARE
+  p_ID_695767b6 UUID;
+  p_ModelID_695767b6 UUID;
+  p_VendorID_695767b6 UUID;
+  p_StartedAt_695767b6 TIMESTAMPTZ;
+  p_EndedAt_695767b6 TIMESTAMPTZ;
+  p_Status_695767b6 VARCHAR(20);
+  p_Currency_695767b6 CHAR(3);
+  p_PriceTypeID_695767b6 UUID;
+  p_InputPricePerUnit_695767b6 NUMERIC(18,8);
+  p_OutputPricePerUnit_695767b6 NUMERIC(18,8);
+  p_UnitTypeID_695767b6 UUID;
+  p_ProcessingType_695767b6 VARCHAR(20);
+  p_Comments_695767b6 TEXT;
+  p_CacheReadPricePerUnit_695767b6 NUMERIC(18,8);
+  p_CacheWritePricePerUnit_695767b6 NUMERIC(18,8);
+BEGIN
+  p_ID_695767b6 := '695767b6-1745-4b6f-a065-b50cdc875fce';
+  p_ModelID_695767b6 := '6B8B9E54-3FDC-49F7-AC39-9CD54D29EA8F';
+  p_VendorID_695767b6 := 'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E';
+  p_StartedAt_695767b6 := '2026-07-06T00:00:00.000Z';
+  p_Status_695767b6 := 'Active';
+  p_Currency_695767b6 := 'USD';
+  p_PriceTypeID_695767b6 := 'ECE2BCB7-C854-4BF7-A517-D72793A40652';
+  p_InputPricePerUnit_695767b6 := 0.6;
+  p_OutputPricePerUnit_695767b6 := 2.4;
+  p_UnitTypeID_695767b6 := '54208F7D-331C-40AB-84E8-163338EE9EA1';
+  p_ProcessingType_695767b6 := 'Realtime';
+  p_Comments_695767b6 := 'GPT-Realtime-2.1-mini has multi-channel token pricing — the rates here ($0.60 input / $2.40 output per 1M) cover the TEXT channel only, with cache read $0.06 (published text cached-input price; OpenAI Family B, no cache-write charge). Audio channels: $10/M audio input ($0.30 cached), $20/M audio output. Image input: $0.80/M ($0.08 cached). Released July 6, 2026; the cost-optimized variant of GPT Realtime 2.1.';
+  p_CacheReadPricePerUnit_695767b6 := 0.06;
+  PERFORM __mj."spCreateAIModelCost"(p_ID := p_ID_695767b6, p_ModelID := p_ModelID_695767b6, p_VendorID := p_VendorID_695767b6, p_StartedAt := p_StartedAt_695767b6, p_EndedAt := p_EndedAt_695767b6, p_EndedAt_Clear := TRUE, p_Status := p_Status_695767b6, p_Currency := p_Currency_695767b6, p_PriceTypeID := p_PriceTypeID_695767b6, p_InputPricePerUnit := p_InputPricePerUnit_695767b6, p_OutputPricePerUnit := p_OutputPricePerUnit_695767b6, p_UnitTypeID := p_UnitTypeID_695767b6, p_ProcessingType := p_ProcessingType_695767b6, p_Comments := p_Comments_695767b6, p_CacheReadPricePerUnit := p_CacheReadPricePerUnit_695767b6, p_CacheWritePricePerUnit := p_CacheWritePricePerUnit_695767b6, p_CacheWritePricePerUnit_Clear := TRUE);
+END $mj$;

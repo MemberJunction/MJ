@@ -240,3 +240,241 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_966f5d74,
   @CacheWritePricePerUnit_Clear = 1;
 
 GO
+
+-- Save MJ: AI Models (core SP call only) — GPT Realtime 2.1-mini
+DECLARE @ID_6b8b9e54 UNIQUEIDENTIFIER,
+@Name_6b8b9e54 NVARCHAR(50),
+@Description_6b8b9e54 NVARCHAR(MAX),
+@AIModelTypeID_6b8b9e54 UNIQUEIDENTIFIER,
+@PowerRank_6b8b9e54 INT,
+@IsActive_6b8b9e54 BIT,
+@SpeedRank_6b8b9e54 INT,
+@CostRank_6b8b9e54 INT,
+@ModelSelectionInsights_6b8b9e54 NVARCHAR(MAX),
+@InheritTypeModalities_6b8b9e54 BIT,
+@PriorVersionID_6b8b9e54 UNIQUEIDENTIFIER,
+@SupportsPrefill_6b8b9e54 BIT,
+@PrefillFallbackText_6b8b9e54 NVARCHAR(MAX)
+SET
+  @ID_6b8b9e54 = '6b8b9e54-3fdc-49f7-ac39-9cd54d29ea8f'
+SET
+  @Name_6b8b9e54 = N'GPT Realtime 2.1-mini'
+SET
+  @Description_6b8b9e54 = N'OpenAI''s compact speech-to-speech voice model (gpt-realtime-2.1-mini), released July 6, 2026 alongside GPT Realtime 2.1. Brings the GPT Realtime 2.1 reasoning realtime stack — five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool/function calls, 128K token context (32K max output), and audio/text/image input — to a cost-optimized tier for high-volume voice workloads. Multi-channel token pricing: $10/M audio input ($0.30 cached), $20/M audio output, $0.60/M text input ($0.06 cached), $2.40/M text output, $0.80/M image input ($0.08 cached). Streaming full-duplex realtime model driven via BaseRealtimeModel (DriverClass OpenAIRealtime).'
+SET
+  @AIModelTypeID_6b8b9e54 = '5F75433E-F36B-1410-8D99-00021F8B792E'
+SET
+  @PowerRank_6b8b9e54 = 9
+SET
+  @IsActive_6b8b9e54 = 1
+SET
+  @SpeedRank_6b8b9e54 = 9
+SET
+  @CostRank_6b8b9e54 = 10
+SET
+  @InheritTypeModalities_6b8b9e54 = 1
+EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_6b8b9e54,
+  @Name = @Name_6b8b9e54,
+  @Description = @Description_6b8b9e54,
+  @AIModelTypeID = @AIModelTypeID_6b8b9e54,
+  @PowerRank = @PowerRank_6b8b9e54,
+  @IsActive = @IsActive_6b8b9e54,
+  @SpeedRank = @SpeedRank_6b8b9e54,
+  @CostRank = @CostRank_6b8b9e54,
+  @ModelSelectionInsights = @ModelSelectionInsights_6b8b9e54,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_6b8b9e54,
+  @PriorVersionID = @PriorVersionID_6b8b9e54,
+  @PriorVersionID_Clear = 1,
+  @SupportsPrefill = @SupportsPrefill_6b8b9e54,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_6b8b9e54,
+  @PrefillFallbackText_Clear = 1;
+
+GO
+
+-- Save MJ: AI Model Vendors (core SP call only) — GPT Realtime 2.1-mini Model Developer
+DECLARE @ID_91aac2fe UNIQUEIDENTIFIER,
+@ModelID_91aac2fe UNIQUEIDENTIFIER,
+@VendorID_91aac2fe UNIQUEIDENTIFIER,
+@Priority_91aac2fe INT,
+@Status_91aac2fe NVARCHAR(20),
+@DriverClass_91aac2fe NVARCHAR(100),
+@DriverImportPath_91aac2fe NVARCHAR(255),
+@APIName_91aac2fe NVARCHAR(100),
+@MaxInputTokens_91aac2fe INT,
+@MaxOutputTokens_91aac2fe INT,
+@SupportedResponseFormats_91aac2fe NVARCHAR(100),
+@SupportsEffortLevel_91aac2fe BIT,
+@SupportsStreaming_91aac2fe BIT,
+@TypeID_91aac2fe UNIQUEIDENTIFIER,
+@SupportsPrefill_91aac2fe BIT,
+@PrefillFallbackText_91aac2fe NVARCHAR(MAX)
+SET
+  @ID_91aac2fe = '91aac2fe-8624-4fd6-83f8-56096098b49a'
+SET
+  @ModelID_91aac2fe = '6B8B9E54-3FDC-49F7-AC39-9CD54D29EA8F'
+SET
+  @VendorID_91aac2fe = 'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
+SET
+  @Priority_91aac2fe = 0
+SET
+  @Status_91aac2fe = N'Active'
+SET
+  @SupportedResponseFormats_91aac2fe = N'Any'
+SET
+  @SupportsEffortLevel_91aac2fe = 1
+SET
+  @SupportsStreaming_91aac2fe = 1
+SET
+  @TypeID_91aac2fe = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_91aac2fe,
+  @ModelID = @ModelID_91aac2fe,
+  @VendorID = @VendorID_91aac2fe,
+  @Priority = @Priority_91aac2fe,
+  @Status = @Status_91aac2fe,
+  @DriverClass = @DriverClass_91aac2fe,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_91aac2fe,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_91aac2fe,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_91aac2fe,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_91aac2fe,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_91aac2fe,
+  @SupportsEffortLevel = @SupportsEffortLevel_91aac2fe,
+  @SupportsStreaming = @SupportsStreaming_91aac2fe,
+  @TypeID = @TypeID_91aac2fe,
+  @SupportsPrefill = @SupportsPrefill_91aac2fe,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_91aac2fe,
+  @PrefillFallbackText_Clear = 1;
+
+GO
+
+-- Save MJ: AI Model Vendors (core SP call only) — GPT Realtime 2.1-mini Inference Provider
+DECLARE @ID_50d69f51 UNIQUEIDENTIFIER,
+@ModelID_50d69f51 UNIQUEIDENTIFIER,
+@VendorID_50d69f51 UNIQUEIDENTIFIER,
+@Priority_50d69f51 INT,
+@Status_50d69f51 NVARCHAR(20),
+@DriverClass_50d69f51 NVARCHAR(100),
+@DriverImportPath_50d69f51 NVARCHAR(255),
+@APIName_50d69f51 NVARCHAR(100),
+@MaxInputTokens_50d69f51 INT,
+@MaxOutputTokens_50d69f51 INT,
+@SupportedResponseFormats_50d69f51 NVARCHAR(100),
+@SupportsEffortLevel_50d69f51 BIT,
+@SupportsStreaming_50d69f51 BIT,
+@TypeID_50d69f51 UNIQUEIDENTIFIER,
+@SupportsPrefill_50d69f51 BIT,
+@PrefillFallbackText_50d69f51 NVARCHAR(MAX)
+SET
+  @ID_50d69f51 = '50d69f51-c28a-4afe-b3e7-ee60e52c1ac3'
+SET
+  @ModelID_50d69f51 = '6B8B9E54-3FDC-49F7-AC39-9CD54D29EA8F'
+SET
+  @VendorID_50d69f51 = 'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
+SET
+  @Priority_50d69f51 = 1
+SET
+  @Status_50d69f51 = N'Active'
+SET
+  @DriverClass_50d69f51 = N'OpenAIRealtime'
+SET
+  @APIName_50d69f51 = N'gpt-realtime-2.1-mini'
+SET
+  @MaxInputTokens_50d69f51 = 128000
+SET
+  @MaxOutputTokens_50d69f51 = 32000
+SET
+  @SupportedResponseFormats_50d69f51 = N'Any'
+SET
+  @SupportsEffortLevel_50d69f51 = 1
+SET
+  @SupportsStreaming_50d69f51 = 1
+SET
+  @TypeID_50d69f51 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_50d69f51,
+  @ModelID = @ModelID_50d69f51,
+  @VendorID = @VendorID_50d69f51,
+  @Priority = @Priority_50d69f51,
+  @Status = @Status_50d69f51,
+  @DriverClass = @DriverClass_50d69f51,
+  @DriverImportPath = @DriverImportPath_50d69f51,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_50d69f51,
+  @MaxInputTokens = @MaxInputTokens_50d69f51,
+  @MaxOutputTokens = @MaxOutputTokens_50d69f51,
+  @SupportedResponseFormats = @SupportedResponseFormats_50d69f51,
+  @SupportsEffortLevel = @SupportsEffortLevel_50d69f51,
+  @SupportsStreaming = @SupportsStreaming_50d69f51,
+  @TypeID = @TypeID_50d69f51,
+  @SupportsPrefill = @SupportsPrefill_50d69f51,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_50d69f51,
+  @PrefillFallbackText_Clear = 1;
+
+GO
+
+-- Save MJ: AI Model Costs (core SP call only) — GPT Realtime 2.1-mini
+DECLARE @ID_695767b6 UNIQUEIDENTIFIER,
+@ModelID_695767b6 UNIQUEIDENTIFIER,
+@VendorID_695767b6 UNIQUEIDENTIFIER,
+@StartedAt_695767b6 DATETIMEOFFSET,
+@EndedAt_695767b6 DATETIMEOFFSET,
+@Status_695767b6 NVARCHAR(20),
+@Currency_695767b6 NCHAR(3),
+@PriceTypeID_695767b6 UNIQUEIDENTIFIER,
+@InputPricePerUnit_695767b6 DECIMAL(18, 8),
+@OutputPricePerUnit_695767b6 DECIMAL(18, 8),
+@UnitTypeID_695767b6 UNIQUEIDENTIFIER,
+@ProcessingType_695767b6 NVARCHAR(20),
+@Comments_695767b6 NVARCHAR(MAX),
+@CacheReadPricePerUnit_695767b6 DECIMAL(18, 8),
+@CacheWritePricePerUnit_695767b6 DECIMAL(18, 8)
+SET
+  @ID_695767b6 = '695767b6-1745-4b6f-a065-b50cdc875fce'
+SET
+  @ModelID_695767b6 = '6B8B9E54-3FDC-49F7-AC39-9CD54D29EA8F'
+SET
+  @VendorID_695767b6 = 'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
+SET
+  @StartedAt_695767b6 = '2026-07-06T00:00:00.000Z'
+SET
+  @Status_695767b6 = N'Active'
+SET
+  @Currency_695767b6 = N'USD'
+SET
+  @PriceTypeID_695767b6 = 'ECE2BCB7-C854-4BF7-A517-D72793A40652'
+SET
+  @InputPricePerUnit_695767b6 = 0.6
+SET
+  @OutputPricePerUnit_695767b6 = 2.4
+SET
+  @UnitTypeID_695767b6 = '54208F7D-331C-40AB-84E8-163338EE9EA1'
+SET
+  @ProcessingType_695767b6 = N'Realtime'
+SET
+  @Comments_695767b6 = N'GPT-Realtime-2.1-mini has multi-channel token pricing — the rates here ($0.60 input / $2.40 output per 1M) cover the TEXT channel only, with cache read $0.06 (published text cached-input price; OpenAI Family B, no cache-write charge). Audio channels: $10/M audio input ($0.30 cached), $20/M audio output. Image input: $0.80/M ($0.08 cached). Released July 6, 2026; the cost-optimized variant of GPT Realtime 2.1.'
+SET
+  @CacheReadPricePerUnit_695767b6 = 0.06
+EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_695767b6,
+  @ModelID = @ModelID_695767b6,
+  @VendorID = @VendorID_695767b6,
+  @StartedAt = @StartedAt_695767b6,
+  @EndedAt = @EndedAt_695767b6,
+  @EndedAt_Clear = 1,
+  @Status = @Status_695767b6,
+  @Currency = @Currency_695767b6,
+  @PriceTypeID = @PriceTypeID_695767b6,
+  @InputPricePerUnit = @InputPricePerUnit_695767b6,
+  @OutputPricePerUnit = @OutputPricePerUnit_695767b6,
+  @UnitTypeID = @UnitTypeID_695767b6,
+  @ProcessingType = @ProcessingType_695767b6,
+  @Comments = @Comments_695767b6,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_695767b6,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_695767b6,
+  @CacheWritePricePerUnit_Clear = 1;
+
+GO
