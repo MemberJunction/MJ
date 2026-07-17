@@ -1,0 +1,19 @@
+{
+  "entity": "MJ: Test Suites",
+  "filePattern": "**/.*.json",
+  "pull": {
+    "filter": "Name LIKE 'Integration Tests%'",
+    "lookupFields": {
+      "TypeID": {
+        "entity": "MJ: Test Types",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": {
+        "entity": "MJ: Test Suite Tests",
+        "foreignKey": "SuiteID"
+      }
+    }
+  }
+}

@@ -12,6 +12,7 @@ import { loadCLIConfig } from '../utils/config-loader';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
 import { parseVariableFlags } from '../utils/variable-parser';
 import { loadOraclesModule } from '../utils/oracle-module-loader';
+import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
 
 /**
  * Suite command - Execute a test suite
@@ -28,6 +29,24 @@ export class SuiteCommand {
      */
     async execute(suiteId: string | undefined, flags: SuiteFlags, contextUser?: UserInfo): Promise<void> {
         try {
+            // Integration tests must install the instrumented cache as the FIRST caller
+            // (before any provider setup) or its counters are a silent no-op. Opt-in via
+            // MJ_INTEGRATION_TEST=1 so every other suite run is byte-for-byte unchanged.
+            // A null return means the cache was ALREADY initialized elsewhere — fail fast with an
+            // actionable message rather than proceeding uninstrumented and failing later with a
+            // confusing "cache not installed first" error (S10).
+            if (process.env.MJ_INTEGRATION_TEST === '1') {
+                const installed = await installInstrumentedCacheFirst();
+                if (installed === null) {
+                    console.error(OutputFormatter.formatError(
+                        'MJ_INTEGRATION_TEST=1 but the local cache was already initialized by another component, ' +
+                        'so the instrumented cache could not be installed first. Run integration tests in a dedicated ' +
+                        'process (they cannot run inside a live MJAPI).'
+                    ));
+                    process.exit(2);
+                }
+            }
+
             // Initialize MJ provider (database connection and metadata)
             console.log('Initializing MJ provider...');
             await initializeMJProvider();
@@ -99,12 +118,18 @@ export class SuiteCommand {
                 : '';
             this.spinner.start(`Running test suite: ${suite.Name}${flakyMsg}...`);
 
+            // Integration tests share process-global singletons (LocalCacheManager, its
+            // instrumented counters, UserCache, Metadata.Provider). Two bundles running
+            // concurrently in one process would corrupt each other's counters and cache slots,
+            // so integration suites MUST run strictly serially (CANONICAL D). Force serial
+            // execution under MJ_INTEGRATION_TEST=1 regardless of any --parallel flag.
+            const integrationSerial = process.env.MJ_INTEGRATION_TEST === '1';
             const result = await engine.RunSuite(suite.ID, {
                 verbose: flags.verbose,
                 variables,
                 delayBetweenTests: flags.delay,
-                parallel: flags.parallel,
-                maxParallel: flags.maxParallel,
+                parallel: integrationSerial ? false : flags.parallel,
+                maxParallel: integrationSerial ? 1 : flags.maxParallel,
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
             }, contextUser);
 

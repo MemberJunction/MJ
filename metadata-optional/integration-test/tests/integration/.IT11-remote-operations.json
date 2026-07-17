@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT11 - Remote Operations (4th Data Primitive)",
+    "Description": "Full-stack (in-process) proof of the Remote Operations architecture (BaseRemotableOperation). Each op is invoked exactly as any caller would — new Op().Execute(input, { provider, user }) — routing through the real provider dispatch (ClassFactory → RouteOperation → ExecuteServer → Authorize → InternalExecute → engine → SQL). Deterministic, no model calls. RO1: Template.Run renders by ID with data (exact output). RO2: a non-existent template fails cleanly (Success=false, no throw). RO3: RecordProcess.RunNow { dryRun: true } previews and writes nothing. RO5: RunNow (LongRunning) emits typed RemoteOpProgress to an attached onProgress callback. RO4: { dryRun: false } applies the rule set (DB rows updated). RO6: GetRunStatus returns status + counts by ProcessRunID. RO7: Pause/Resume/Cancel control ops toggle CancellationRequested. Creates + deletes its own Template/Content/Category/Record Process fixtures.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Template.Run renders (and fails cleanly on missing); RecordProcess.RunNow dry-run/apply/progress/status/control ops all route through the real op stack and behave as specified."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "remote-operations"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "6C919410-08A7-4D75-BAA3-E433ED923220"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T18:38:01.351Z",
+    "checksum": "1a23089522b82cda246e8b802e789df4a7686fe97085be3a2a5e1472fa9de589"
+  }
+}

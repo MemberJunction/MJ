@@ -1,0 +1,6 @@
+{
+    "name": "fixture-not-built-pkg",
+    "private": true,
+    "type": "module",
+    "main": "built/index.js"
+}

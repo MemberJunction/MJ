@@ -1,4 +1,4 @@
-import { EntityInfo, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, RoleInfo, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 
 /**
  * Options for {@link createFakeProvider}.
@@ -27,6 +27,13 @@ export interface FakeProviderOptions<T = unknown> {
    * which exercises the "entity not found" guard).
    */
   entities?: Array<Partial<EntityInfo>>;
+
+  /**
+   * Rows for `provider.Roles` — the role catalog components read for permission/role UIs
+   * (`md.Roles.find(r => r.Name === '...')`). Only the fields the component reads need to be
+   * present (commonly `Name` + `ID`); pass minimal stubs. Defaults to `[]`.
+   */
+  roles?: Array<Partial<RoleInfo>>;
 }
 
 /**
@@ -50,6 +57,7 @@ export function createFakeProvider<T = unknown>(options: FakeProviderOptions<T> 
   const fake = {
     CurrentUser: { ID: 'test-user-id', Name: 'Test User', Email: 'test@example.com', ...options.currentUser },
     Entities: options.entities ?? [],
+    Roles: options.roles ?? [],
     RunView: async (params: RunViewParams): Promise<RunViewResult> => toResult(rowsFor(params)),
     RunViews: async (paramsList: RunViewParams[]): Promise<RunViewResult[]> => paramsList.map((p) => toResult(rowsFor(p))),
     EntityByName: (name: string): EntityInfo | undefined => options.entityByName?.(name),

@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT20 - Lists Keyset Pagination",
+    "Description": "Live proof of the v5.48 ListSource keyset-pagination change (StartRow/OFFSET → AfterKey seek over ListDetail.ID), deterministic (no model calls). LS1: full iteration returns every member exactly once in ID-seek pages. LS2: resume from a persisted keyset cursor on a fresh instance continues without overlap or gaps. LS3: a legacy Offset cursor is honored for its resume batch and converts to keyset. The bundle creates + tears down its own throwaway MJ: Lists row + members.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Keyset iteration is exhaustive and unique; a persisted cursor resumes cleanly; a legacy Offset cursor converts to keyset."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "lists"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E146A783-2E67-4BCF-B480-F5A935F76B65"
+  }
+}

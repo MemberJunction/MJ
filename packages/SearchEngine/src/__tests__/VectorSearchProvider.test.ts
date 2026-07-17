@@ -314,6 +314,7 @@ describe('VectorSearchProvider', () => {
             queryText: string,
             topK: number,
             filter: object | undefined,
+            providerConfig: Record<string, unknown> | undefined,
             contextUser: UserInfo
         ) => Promise<Array<{ Score: number }>>;
 
@@ -338,7 +339,7 @@ describe('VectorSearchProvider', () => {
 
             const queryOneIndex = (provider as unknown as { queryOneIndex: QueryOneIndex }).queryOneIndex;
             const results = await queryOneIndex.call(
-                provider, { Name: 'idx', VectorDatabaseID: 'db-1' }, [0.1, 0.2], 'climate policy', 5, undefined, contextUser
+                provider, { Name: 'idx', VectorDatabaseID: 'db-1' }, [0.1, 0.2], 'climate policy', 5, undefined, undefined, contextUser
             );
 
             expect(tryWire).toHaveBeenCalledTimes(1);
@@ -370,7 +371,7 @@ describe('VectorSearchProvider', () => {
 
             const queryOneIndex = (provider as unknown as { queryOneIndex: QueryOneIndex }).queryOneIndex;
             const results = await queryOneIndex.call(
-                provider, { Name: 'idx', VectorDatabaseID: 'db-1' }, [0.1], 'q', 5, undefined, contextUser
+                provider, { Name: 'idx', VectorDatabaseID: 'db-1' }, [0.1], 'q', 5, undefined, undefined, contextUser
             );
 
             expect(queryIndex).toHaveBeenCalledTimes(1);

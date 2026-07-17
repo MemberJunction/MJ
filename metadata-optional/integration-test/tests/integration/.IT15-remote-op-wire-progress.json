@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT15 - Remote Operations Over-The-Wire Progress",
+    "Description": "Over-the-wire RO-3 proof (CLIENT transport, needs a live MJAPI): a GraphQLDataProvider client calls RecordProcess.RunNow with an onProgress callback and asserts the typed RemoteOpProgress emitted server-side arrives over the RemoteOperationProgress GraphQL subscription (client subscribe → mutation → server emitProgress → PubSub → subscription → client onProgress). WIRE1 creates its fixtures over the wire (2 Action Categories + a FieldRules Record Process) and tears them down. Parked (seeded Skip) in the deterministic suite until MJAPI is provisioned in CI — exactly like IT03; the standalone dispatcher skips cleanly when MJAPI is unreachable.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "RunNow over the wire returns the run summary AND streams typed progress to the attached onProgress callback."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "remote-op-wire-progress"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "8B8DA057-B50A-4B61-88D1-4A037A6FFE8E"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T19:15:10.420Z",
+    "checksum": "14042c70e8ad42fb2b3e4efe6bda80e2e35e5de06b3ad902cf86e5c6c0481714"
+  }
+}
