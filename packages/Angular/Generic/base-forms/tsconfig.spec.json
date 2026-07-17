@@ -18,7 +18,9 @@
     "src/lib/panel-slot/form-panel-slot.component.ts",
     "src/lib/panel-slot/form-panel-slot.component.dom.test.ts",
     "src/lib/container/record-form-container.component.ts",
-    "src/lib/container/record-form-container.component.dom.test.ts"
+    "src/lib/container/record-form-container.component.dom.test.ts",
+    "src/lib/toolbar/form-toolbar.component.ts",
+    "src/lib/toolbar/form-toolbar.component.dom.test.ts"
   ],
   "exclude": [
     "node_modules",
