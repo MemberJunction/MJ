@@ -26,6 +26,7 @@
     "@memberjunction/core-entities": "5.48.0",
     "@memberjunction/testing-engine": "5.48.0",
     "@memberjunction/testing-engine-base": "5.48.0",
+    "@memberjunction/testing-integration": "5.48.0",
     "@memberjunction/sqlserver-dataprovider": "5.48.0",
     "@oclif/core": "^3.27.0",
     "ora-classic": "^5.4.2",

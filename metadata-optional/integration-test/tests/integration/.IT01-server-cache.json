@@ -1,0 +1,31 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT01 - Server RunView Cache Integrity",
+    "Description": "Server RunView cache integrity (S1-S31, plus the security pin S31b) against a live SQLServerDataProvider with an InstrumentedLocalStorageProvider. Deterministic checks always run; the mutation checks (S17/S23/S24/S29/S30/S31b) run only when the selector sets runMutationTests. Beyond field projection and hit/miss shape symmetry, dedup/linger, keyset and count_only non-poisoning, and no-cache entities, the bundle verifies OrderBy is part of the cache identity (S27), IgnoreMaxRows returns all rows on capped entities (S28), stored views honor their own WhereClause (S29), cached child rows refresh when a denormalized parent is renamed (S30), read-permission is enforced on cache hits (S31), and a read-denied user is never served a cached ViewID-only saved-view result a permitted user warmed (S31b).",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Cache hit/miss/shape assertions hold with counters scoped to RunViewCache; ordering inside the bundle is load-bearing (S1->S2->S3 share the 's1' slot). ASC/DESC never cross-serve; IgnoreMaxRows returns all rows on capped entities; stored views return only their WhereClause rows; renamed-parent denormalized fields refresh; users without read permission are never served cached rows."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "server-cache",
+          "config": {
+            "runMutationTests": false
+          }
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "5348C44D-66A8-41DE-9432-C9FF845D5324"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T18:38:00.917Z",
+    "checksum": "a28a2c17a6aa293280fd0e00f0ceb3c30d6fc2349937135044cf54e44be3bf47"
+  }
+}

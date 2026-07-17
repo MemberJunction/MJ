@@ -1181,10 +1181,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // and MUST be part of the fingerprint to prevent cross-query cache poisoning.
         const userSearch = (params.UserSearchString ?? '').trim();
 
-        // NOTE: ViewID and ViewName are intentionally excluded from the fingerprint.
-        // Views are just containers for entity + filter + orderBy. Two different views
-        // that resolve to the same entity/filter/orderBy produce identical SQL and results,
-        // so they should share the same cache entry.
+        // NOTE: a stored view's identity IS part of the fingerprint (appended below as `vw:`).
+        // The prior assumption — "views are just containers for entity + filter + orderBy" — is
+        // false: a saved view carries its own server-side WhereClause that is NOT reflected in
+        // params.ExtraFilter (it's applied later, in InternalRunView). Without the view segment a
+        // filtered view and a plain unfiltered read of the same entity produce identical
+        // fingerprints and cross-serve — the view is handed the unfiltered slot and returns rows
+        // outside its own WhereClause (a correctness/permission leak). See the `vw:` append below.
 
         // Build human-readable fingerprint with pipe separators
         // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|Connection]
@@ -1197,6 +1200,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             aggHash,                 // Aggregate hash (or '_' for no aggregates)
             userSearch || '_'        // User search string (generates LIKE/FTS clauses)
         ];
+
+        // IgnoreMaxRows skips the entity-level UserViewMaxRows TOP cap, so a request with it
+        // returns a DIFFERENT (larger) row set than the otherwise-identical default (capped)
+        // query for the same entity — the two must never share a cache slot (else the capped
+        // result gets served to an IgnoreMaxRows caller, or vice-versa). Appended only when
+        // true, so the common case keeps producing the exact pre-existing fingerprint and no
+        // existing cache entries are invalidated.
+        if (params.IgnoreMaxRows === true) {
+            parts.push('imr:1');
+        }
 
         // Keyset (AfterKey) seek cursor MUST be part of the fingerprint. Each keyset page
         // sends a different AfterKey but otherwise-identical params; without this, sequential
@@ -1217,6 +1230,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const rls = (rlsWhereClause ?? '').trim();
         if (rls.length > 0) {
             parts.push(`rls:${this.simpleHash(rls)}`);
+        }
+
+        // Stored-view identity. A saved view's WhereClause/OrderBy live on the view, not in
+        // params.ExtraFilter, so a view run and a plain entity read (or a different view) can
+        // otherwise collide on the same fingerprint and be cross-served the wrong rows. Keyed by
+        // ViewID / ViewName / the passed ViewEntity's PK. Appended ONLY when a view identifier is
+        // present, so plain entity+filter queries keep the exact pre-existing fingerprint (no cache
+        // invalidation). Per-view rendering is deterministic; per-user row scoping is the separate
+        // `rls:` segment above.
+        const viewKey = (params.ViewID || params.ViewName || params.ViewEntity?.PrimaryKey?.ToConcatenatedString() || '').trim();
+        if (viewKey.length > 0) {
+            parts.push(`vw:${viewKey}`);
         }
 
         // Only include connection if provided
@@ -1245,6 +1270,50 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             .join(';');
 
         return this.simpleHash(aggString);
+    }
+
+    /**
+     * Reorders cached AggregateResults to match the CALLER's requested Aggregates[] order.
+     *
+     * The aggregate fingerprint (see {@link generateAggregateHash}) is deliberately
+     * order-insensitive — it sorts the aggregates — so two semantically-identical views
+     * requested as [A,B] and [B,A] share a single cache slot (cache-efficient). But the
+     * {@link RunViewResult.AggregateResults} contract is "in same order as input Aggregates
+     * array" — PER caller. A slot warmed as [A,B] therefore hands a [B,A] caller its results
+     * in the wrong order unless we remap on the way out. This does that remap.
+     *
+     * Matching is by (expression, effective alias) — the same identity that produced the
+     * aggHash (a result's alias defaults to its expression when the request omitted one).
+     * Fail-safe: returns the input unchanged when there are no aggregates to reorder, the
+     * counts differ, or any aggregate can't be matched — so a remap is never able to drop or
+     * fabricate a result.
+     */
+    public ReorderAggregateResultsToRequest(
+        cachedResults: AggregateResult[] | undefined,
+        requestedAggregates: AggregateExpression[] | undefined
+    ): AggregateResult[] | undefined {
+        if (!cachedResults || cachedResults.length === 0 || !requestedAggregates || requestedAggregates.length === 0) {
+            return cachedResults;
+        }
+        if (cachedResults.length !== requestedAggregates.length) {
+            return cachedResults; // shape mismatch — don't risk a bad remap
+        }
+        const key = (expression: string, alias: string): string => `${expression} ${alias}`;
+        const remaining = new Map<string, AggregateResult>();
+        for (const r of cachedResults) {
+            remaining.set(key(r.expression, r.alias), r);
+        }
+        const reordered: AggregateResult[] = [];
+        for (const agg of requestedAggregates) {
+            const k = key(agg.expression, agg.alias || agg.expression);
+            const match = remaining.get(k);
+            if (!match) {
+                return cachedResults; // can't confidently remap — leave as-is
+            }
+            remaining.delete(k);
+            reordered.push(match);
+        }
+        return reordered;
     }
 
     /**

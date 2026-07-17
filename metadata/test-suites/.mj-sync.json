@@ -11,7 +11,7 @@
     "relatedEntities": {
       "MJ: Test Suite Tests": {
         "entity": "MJ: Test Suite Tests",
-        "foreignKey": "TestSuiteID"
+        "foreignKey": "SuiteID"
       }
     }
   }

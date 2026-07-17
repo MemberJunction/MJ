@@ -1,0 +1,31 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT07 - Dataset Cache (DatasetCache category)",
+    "Description": "Exercises the dataset cache through GetAndCacheDatasetByName. DS1: a cold call populates the cache (IsDatasetCached false->true) and a warm call serves the same dataset. DS2: the status APIs (IsDatasetCached / IsDatasetCacheUpToDate) agree with the warm state. DS3: after ClearDatasetCache both status APIs return false (a cleared dataset is never reported up-to-date). Assertions are behavioral, not counter-based: the dataset cache writes through the provider's own LocalStorageProvider (separate from the instrumented LocalCacheManager), so counters can't observe it on the server. Uses the real seeded 'MJ_Metadata' dataset; no row mutation.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Cold miss writes DatasetCache; warm hit serves with zero writes; status APIs agree; clearing the cache flips both status APIs back to false."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "dataset-cache",
+          "config": {
+            "datasetName": "MJ_Metadata"
+          }
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "D9B25359-6441-4342-85CE-F11E4970B978"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T18:38:01.213Z",
+    "checksum": "cb2d14b6dfe700e39df50b286262f65d3646085eea9d859141b22488166dd228"
+  }
+}
