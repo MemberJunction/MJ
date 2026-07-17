@@ -123,7 +123,7 @@ jobs:
         run: node scripts/classify-explorer-components.mjs --min 85
 
       - name: Generic DOM coverage ratchet
-        run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=171
+        run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=170
 
       # Decide what to run:
       #  - pull_request: only packages changed since the base branch PLUS everything that
