@@ -573,7 +573,7 @@ export class EntityVectorSyncer extends VectorBase {
         id: vectorId,
         values: embeddingItem.Vector,
         metadata,
-        providerDirectives: vectorDB.buildProviderDirectives(record, providerConfig ?? {}),
+        providerTemporaryDirectives: vectorDB.BuildProviderDirectives(record, providerConfig ?? {}),
       };
     });
 

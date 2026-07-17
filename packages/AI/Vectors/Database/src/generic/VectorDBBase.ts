@@ -226,7 +226,7 @@ export abstract class VectorDBBase {
      *
      * Called by the generic sync pipeline once per source database row, before the
      * {@link VectorRecord} is constructed. The returned object is stored on
-     * `VectorRecord.providerDirectives` and passed to {@link CreateRecords} alongside
+     * `VectorRecord.providerTemporaryDirectives` and passed to {@link CreateRecords} alongside
      * the stored metadata — but is never itself persisted in the vector index.
      *
      * Providers override this to extract whatever routing values they need from
@@ -243,7 +243,7 @@ export abstract class VectorDBBase {
      * @param _providerConfig - The parsed `VectorIndex.ProviderConfig` JSON blob.
      * @returns An opaque key/value map consumed by this provider's `CreateRecord(s)`.
      */
-    public buildProviderDirectives(
+    public BuildProviderDirectives(
         _sourceRecord: Record<string, unknown>,
         _providerConfig: Record<string, unknown>,
     ): Record<string, unknown> {

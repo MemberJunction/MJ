@@ -231,12 +231,12 @@ describe('VectorDBBase', () => {
     });
   });
 
-  describe('buildProviderDirectives', () => {
+  describe('BuildProviderDirectives', () => {
     let db: TestVectorDB;
     beforeEach(() => { db = new TestVectorDB('test-key'); });
 
     it('default implementation returns an empty object regardless of providerConfig', () => {
-      const directives = db.buildProviderDirectives(
+      const directives = db.BuildProviderDirectives(
         { OrganizationID: 'org-123', Name: 'Acme' },
         { namespaceField: 'OrganizationID' },
       );
@@ -244,7 +244,7 @@ describe('VectorDBBase', () => {
     });
 
     it('returns empty object when providerConfig is empty', () => {
-      const directives = db.buildProviderDirectives({ ID: 'rec-1' }, {});
+      const directives = db.BuildProviderDirectives({ ID: 'rec-1' }, {});
       expect(directives).toEqual({});
     });
   });

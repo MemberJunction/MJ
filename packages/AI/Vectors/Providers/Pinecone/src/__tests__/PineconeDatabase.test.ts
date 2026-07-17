@@ -341,10 +341,10 @@ describe('PineconeDatabase', () => {
     });
   });
 
-  /* ---- buildProviderDirectives ---- */
-  describe('buildProviderDirectives', () => {
+  /* ---- BuildProviderDirectives ---- */
+  describe('BuildProviderDirectives', () => {
     it('returns namespace from namespaceField in providerConfig', () => {
-      const directives = db.buildProviderDirectives(
+      const directives = db.BuildProviderDirectives(
         { OrganizationID: 'org-abc', Name: 'Acme' },
         { namespaceField: 'OrganizationID' },
       );
@@ -352,7 +352,7 @@ describe('PineconeDatabase', () => {
     });
 
     it('returns empty object when namespaceField is not in providerConfig', () => {
-      const directives = db.buildProviderDirectives(
+      const directives = db.BuildProviderDirectives(
         { OrganizationID: 'org-abc' },
         {},
       );
@@ -360,7 +360,7 @@ describe('PineconeDatabase', () => {
     });
 
     it('returns empty object when the named field is absent from the source record', () => {
-      const directives = db.buildProviderDirectives(
+      const directives = db.BuildProviderDirectives(
         { Name: 'Acme' },
         { namespaceField: 'OrganizationID' },
       );
@@ -368,7 +368,7 @@ describe('PineconeDatabase', () => {
     });
 
     it('coerces non-string namespace values to string', () => {
-      const directives = db.buildProviderDirectives(
+      const directives = db.BuildProviderDirectives(
         { TenantID: 42 },
         { namespaceField: 'TenantID' },
       );
@@ -376,9 +376,9 @@ describe('PineconeDatabase', () => {
     });
   });
 
-  /* ---- CreateRecords — namespace routing via providerDirectives ---- */
-  describe('CreateRecords — per-record namespace via providerDirectives', () => {
-    it('groups records by providerDirectives.namespace and upserts per-namespace', async () => {
+  /* ---- CreateRecords — namespace routing via providerTemporaryDirectives ---- */
+  describe('CreateRecords — per-record namespace via providerTemporaryDirectives', () => {
+    it('groups records by providerTemporaryDirectives.namespace and upserts per-namespace', async () => {
       const mockNsAUpsert = vi.fn().mockResolvedValue(undefined);
       const mockNsBUpsert = vi.fn().mockResolvedValue(undefined);
       mockIndexInstance.namespace
@@ -386,9 +386,9 @@ describe('PineconeDatabase', () => {
         .mockReturnValueOnce({ upsert: mockNsBUpsert });
 
       const records = [
-        { id: 'r1', values: [1], providerDirectives: { namespace: 'org-a' } },
-        { id: 'r2', values: [2], providerDirectives: { namespace: 'org-b' } },
-        { id: 'r3', values: [3], providerDirectives: { namespace: 'org-a' } },
+        { id: 'r1', values: [1], providerTemporaryDirectives: { namespace: 'org-a' } },
+        { id: 'r2', values: [2], providerTemporaryDirectives: { namespace: 'org-b' } },
+        { id: 'r3', values: [3], providerTemporaryDirectives: { namespace: 'org-a' } },
       ] as never;
 
       const result = await db.CreateRecords(records);
@@ -406,21 +406,21 @@ describe('PineconeDatabase', () => {
       );
     });
 
-    it('strips providerDirectives from records before upsert', async () => {
+    it('strips providerTemporaryDirectives from records before upsert', async () => {
       const mockNsUpsert = vi.fn().mockResolvedValue(undefined);
       mockIndexInstance.namespace.mockReturnValueOnce({ upsert: mockNsUpsert });
 
       const records = [
-        { id: 'r1', values: [1], metadata: { Entity: 'Contacts' }, providerDirectives: { namespace: 'org-x' } },
+        { id: 'r1', values: [1], metadata: { Entity: 'Contacts' }, providerTemporaryDirectives: { namespace: 'org-x' } },
       ] as never;
 
       await db.CreateRecords(records);
       const upserted = mockNsUpsert.mock.calls[0][0];
-      expect(upserted[0]).not.toHaveProperty('providerDirectives');
+      expect(upserted[0]).not.toHaveProperty('providerTemporaryDirectives');
       expect(upserted[0]).toMatchObject({ id: 'r1', metadata: { Entity: 'Contacts' } });
     });
 
-    it('falls back to providerConfig.namespace for a homogeneous batch with no providerDirectives', async () => {
+    it('falls back to providerConfig.namespace for a homogeneous batch with no providerTemporaryDirectives', async () => {
       mockIndexInstance.namespace.mockReturnValueOnce({ upsert: vi.fn().mockResolvedValue(undefined) });
 
       const records = [{ id: 'r1', values: [1] }] as never;
@@ -436,7 +436,7 @@ describe('PineconeDatabase', () => {
       });
 
       const records = [
-        { id: 'r1', values: [1], providerDirectives: { namespace: 'org-a' } },
+        { id: 'r1', values: [1], providerTemporaryDirectives: { namespace: 'org-a' } },
       ] as never;
 
       const result = await db.CreateRecords(records);

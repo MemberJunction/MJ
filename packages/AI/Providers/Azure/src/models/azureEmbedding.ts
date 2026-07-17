@@ -101,7 +101,7 @@ export class AzureEmbedding extends BaseEmbeddings {
                 body: {
                     input: [params.text], // API requires array
                     model: params.model || "text-embedding-ada-002", // Default model
-                    dimensions: 1536 // Default dimensions
+                    dimensions: params.dimensions ?? 1536 // Caller override, else preserve historical default
                 }
             });
             
@@ -182,7 +182,7 @@ export class AzureEmbedding extends BaseEmbeddings {
                 body: {
                     input: params.texts,
                     model: params.model || "text-embedding-ada-002", // Default model
-                    dimensions: 1536 // Default dimensions
+                    dimensions: params.dimensions ?? 1536 // Caller override, else preserve historical default
                 }
             });
             

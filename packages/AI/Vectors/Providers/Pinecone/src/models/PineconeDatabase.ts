@@ -166,7 +166,7 @@ export class PineconeDatabase extends VectorDBBase {
      * The resolved namespace is returned as `{ namespace: '<value>' }` so CreateRecords
      * can route the vector without embedding org data in the stored metadata.
      */
-    public override buildProviderDirectives(
+    public override BuildProviderDirectives(
         sourceRecord: Record<string, unknown>,
         providerConfig: Record<string, unknown>,
     ): Record<string, unknown> {
@@ -194,17 +194,17 @@ export class PineconeDatabase extends VectorDBBase {
         try{
             const index: Index = this.GetIndex(indexName ? { id: indexName } : undefined).data;
 
-            // Strip providerDirectives before upserting — they are MJ-internal routing
+            // Strip providerTemporaryDirectives before upserting — they are MJ-internal routing
             // hints that the Pinecone SDK does not accept and must not be stored.
-            const stripped = records.map(({ providerDirectives: _pd, ...r }) => r as VectorRecord);
+            const stripped = records.map(({ providerTemporaryDirectives: _pd, ...r }) => r as VectorRecord);
 
             // Multi-namespace path: at least one record carries a per-record namespace
-            // set by buildProviderDirectives (e.g. { namespace: '<orgId>' }).
-            const hasPerRecordNamespace = records.some(r => r.providerDirectives?.['namespace'] != null);
+            // set by BuildProviderDirectives (e.g. { namespace: '<orgId>' }).
+            const hasPerRecordNamespace = records.some(r => r.providerTemporaryDirectives?.['namespace'] != null);
             if (hasPerRecordNamespace) {
                 const groups = new Map<string, VectorRecord[]>();
                 for (let i = 0; i < records.length; i++) {
-                    const ns = String(records[i].providerDirectives?.['namespace'] ?? '');
+                    const ns = String(records[i].providerTemporaryDirectives?.['namespace'] ?? '');
                     const existing = groups.get(ns);
                     if (existing) { existing.push(stripped[i]); } else { groups.set(ns, [stripped[i]]); }
                 }
