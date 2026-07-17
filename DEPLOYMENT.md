@@ -100,11 +100,12 @@ Check if there are any pending metadata changes (new/updated records in `metadat
    ```bash
    mj sync push --dir ./metadata
    ```
-   > **Do NOT push `metadata-integration-fixtures/` here.** That sibling root holds the RLS
-   > integration-test principals (three synthetic `it-*@integration.test` users + the
-   > "Integration Test: RLS Scoped Reader" role + its entity-permission grant). It is deliberately
-   > kept out of `metadata/` so those accounts never enter the generated `Metadata_Sync.sql`
-   > migration — and thus never reach production. They exist only for the Step 4 smoke test.
+   > **Do NOT push `metadata-optional/integration-test/` here.** That optional sibling root holds
+   > all the test-only records — the "Integration Test" type, the IT01–IT23 Tests, the integration
+   > suite, and the RLS principals (three synthetic `it-*@integration.test` users + the
+   > "Integration Test: RLS Scoped Reader" role + its grant). It is deliberately kept out of
+   > `metadata/` so none of it enters the generated `Metadata_Sync.sql` migration — and thus never
+   > reaches production. It exists only for the Step 4 smoke test.
 6. **Grab the generated SQL** from `metadata/sql_logging/` — find the most recent `MetadataSync_Push_*.sql` file
 7. **Copy it to the migrations folder** and rename using the naming convention:
    ```
@@ -154,13 +155,13 @@ RUN_MUTATION_TESTS=1 RUN_AGENT_TESTS=1 npm run test:integration
 
 > ⚠️ **The suite runs against the compiled packages (`dist/`), not source.** Ensure the repo has been built (`npm run build`) before running — a stale `dist/` can produce spurious failures. Run this only **after** migrations + metadata sync (Step 3) so it exercises the current schema. See [Integration Testing Quickstart](guides/INTEGRATION_TESTING_QUICKSTART.md) for full tier/gating details.
 
-**Optional — seed the RLS fixtures so the multi-user checks execute (instead of skip-as-pass).** The `rls-isolation` deterministic checks (RLS8/9/10) skip-as-pass unless the integration-test principals are present in the DB. To upgrade that coverage from *skipped* to *executed*, push the sibling fixtures root into the **throwaway Step-3 database** before running the suite:
+**Optional — seed the RLS fixtures so the multi-user checks execute (instead of skip-as-pass).** The `rls-isolation` deterministic checks (RLS8/9/10) skip-as-pass unless the integration-test principals are present in the DB. To upgrade that coverage from *skipped* to *executed*, push the optional integration root into the **throwaway Step-3 database** before running the suite (one push covers the IT type/tests/suite AND the RLS principals):
 
 ```bash
-mj sync push --dir ./metadata-integration-fixtures
+mj sync push --dir ./metadata-optional/integration-test
 ```
 
-> ⚠️ Only against the scratch Step-3 DB — **never a production database.** These are synthetic test accounts; that is the entire reason they live outside `metadata/`. Skipping this step keeps the suite green (the RLS checks pass as skips and log the exact command above); seeding it just makes the multi-user isolation checks run for real.
+> ⚠️ Only against the scratch Step-3 DB — **never a production database.** These are synthetic test accounts (plus MJ-internal test records); that is the entire reason they live outside `metadata/`. Skipping this step keeps the suite green (the RLS checks pass as skips and log the exact command above); seeding it just makes the multi-user isolation checks run for real.
 
 ### Step 5: Check for New Packages
 
@@ -389,9 +390,9 @@ mj migrate
 # Push metadata to database
 mj sync push --dir ./metadata
 
-# Push the RLS integration-test principals — TEST/CI databases ONLY, never production
-# (kept out of ./metadata on purpose; enables the rls-isolation multi-user checks)
-mj sync push --dir ./metadata-integration-fixtures
+# Push the optional integration metadata (IT type/tests/suite + RLS principals) —
+# TEST/CI databases ONLY, never production (kept out of ./metadata on purpose)
+mj sync push --dir ./metadata-optional/integration-test
 
 # SQL logs appear in
 metadata/sql_logging/MetadataSync_Push_*.sql

@@ -1,0 +1,13 @@
+{
+  "entity": "MJ: Tests",
+  "filePattern": "**/.*.json",
+  "pull": {
+    "filter": "TypeID IN (SELECT ID FROM __mj.TestType WHERE Name = 'Integration Test')",
+    "lookupFields": {
+      "TypeID": {
+        "entity": "MJ: Test Types",
+        "field": "Name"
+      }
+    }
+  }
+}

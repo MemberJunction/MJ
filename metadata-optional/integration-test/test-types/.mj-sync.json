@@ -1,0 +1,7 @@
+{
+  "entity": "MJ: Test Types",
+  "filePattern": "**/.*.json",
+  "pull": {
+    "filter": "Name = 'Integration Test'"
+  }
+}

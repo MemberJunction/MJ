@@ -4,6 +4,9 @@
     "autoCreateMissingRecords": true
   },
   "directoryOrder": [
+    "test-types",
+    "tests",
+    "test-suites",
     "roles",
     "entity-permissions",
     "users"

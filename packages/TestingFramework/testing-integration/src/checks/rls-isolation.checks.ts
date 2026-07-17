@@ -70,7 +70,7 @@ function skipIfUnusable(fx: RlsFixture | undefined, checkId: string): fx is RlsF
 /**
  * Emails of the purpose-built RLS test users seeded via version-controlled metadata. These
  * principals (users + the "Integration Test: RLS Scoped Reader" role + its entity-permission grant)
- * live in the SIBLING `metadata-integration-fixtures/` root — NOT the default-pushed `metadata/`
+ * live in the SIBLING `metadata-optional/integration-test/` root — NOT the default-pushed `metadata/`
  * tree — so they never land in a production DB that only syncs `metadata/`. A/B are each in
  * ONLY that role → genuinely scoped (non-exempt) on SEEDED_RLS_ENTITY; the no-grant user has no
  * roles. Kept in sync with the fixtures by convention (change both together).
@@ -81,7 +81,7 @@ const SEEDED_NOGRANT_EMAIL = 'it-nogrant@integration.test';
 /** The entity the seeded scoped role grants read on (with the `{{UserID}}` RLS filter). */
 const SEEDED_RLS_ENTITY = 'MJ: AI Agent Runs';
 /** The exact command that seeds the RLS principals — printed in every skip-as-pass warning below. */
-const SEED_FIXTURES_COMMAND = 'npx mj sync push --dir=metadata-integration-fixtures';
+const SEED_FIXTURES_COMMAND = 'npx mj sync push --dir=metadata-optional/integration-test';
 
 /** Case-insensitive user-by-email lookup for the seeded fixtures. */
 function findUserByEmail(users: UserInfo[], email: string): UserInfo | undefined {

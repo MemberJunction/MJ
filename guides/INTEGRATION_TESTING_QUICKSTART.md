@@ -223,15 +223,15 @@ metadata-driven end to end:
 
 ```
 MJ: Test Types ──▶ "Integration Test"  { DriverClass: "IntegrationTestDriver", Status: Active }
-      │                                  metadata/test-types/.integration-test-type.json
+      │                                  metadata-optional/integration-test/test-types/.integration-test-type.json
       ▼
 MJ: Tests ───────▶ IT01…IT19            Configuration selects bundles + tier + transport
-      │                                  metadata/tests/integration/.IT*.json
+      │                                  metadata-optional/integration-test/tests/integration/.IT*.json
       ▼
 MJ: Test Suites ─▶ "Integration Tests"  (parent)
                    ├─ "Integration Tests — Deterministic"   IT01–IT15  (the blocking tier)
                    └─ "Integration Tests — Live Model"      IT16–IT19  (opt-in)
-                                         metadata/test-suites/.integration-suite.json
+                                         metadata-optional/integration-test/test-suites/.integration-suite.json
       ▼
 MJ: Test Runs ───▶ one row per execution; ResultDetails = the per-check OracleResult[]
 ```
@@ -307,12 +307,12 @@ strategies together:
   predicates from the live user cache + provider RLS filters. Nothing is created, so teardown
   is a no-op; on databases with only RLS-exempt admins the dependent checks degrade to
   skip-as-pass with a note.
-- **Seeded, purpose-built users** — these live in the **sibling `metadata-integration-fixtures/`
-  root, NOT the default-pushed `metadata/` tree**, so the synthetic `IsActive` accounts never land
-  in a production DB that only syncs `metadata/`:
-  [`metadata-integration-fixtures/users/.integration-test-users.json`](../metadata-integration-fixtures/users/.integration-test-users.json),
-  [`metadata-integration-fixtures/roles/.integration-test-roles.json`](../metadata-integration-fixtures/roles/.integration-test-roles.json),
-  [`metadata-integration-fixtures/entity-permissions/.integration-test-permissions.json`](../metadata-integration-fixtures/entity-permissions/.integration-test-permissions.json).
+- **Seeded, purpose-built users** — these live in the **optional sibling root
+  `metadata-optional/integration-test/`, NOT the default-pushed `metadata/` tree**, so the synthetic
+  `IsActive` accounts never land in a production DB that only syncs `metadata/`:
+  [`metadata-optional/integration-test/users/.integration-test-users.json`](../metadata-optional/integration-test/users/.integration-test-users.json),
+  [`metadata-optional/integration-test/roles/.integration-test-roles.json`](../metadata-optional/integration-test/roles/.integration-test-roles.json),
+  [`metadata-optional/integration-test/entity-permissions/.integration-test-permissions.json`](../metadata-optional/integration-test/entity-permissions/.integration-test-permissions.json).
   `it-rls-a@integration.test` / `it-rls-b@integration.test` each hold ONLY the
   **`Integration Test: RLS Scoped Reader`** role (read on `MJ: AI Agent Runs`, scoped to the
   caller's own UserID via the `UI: Own AI Agent Runs` RLS filter) — genuinely non-exempt users
@@ -386,12 +386,11 @@ rather than registry bundles — `lists-tests.ts`, `user-routines-tests.ts`,
 The same bundles, executed through the Testing Framework with results persisted to
 `MJ: Test Runs`.
 
-**One-time setup — push the metadata** (test type, tests, suites, and the RLS fixture
-users/roles/permissions):
+**One-time setup — push the optional integration root** (the Integration Test type, the IT tests,
+the suite hierarchy, AND the RLS fixture users/roles/permissions all live under one sibling root):
 
 ```bash
-npx mj sync push --dir=metadata --include=test-types,tests,test-suites
-npx mj sync push --dir=metadata-integration-fixtures                       # RLS fixtures (sibling root)
+npx mj sync push --dir=metadata-optional/integration-test
 ```
 
 **Run** — two things are load-bearing:
@@ -634,7 +633,7 @@ export * from './checks/my-area.checks';
 
 **3. Build:** `cd packages/TestingFramework/testing-integration && npm run build`.
 
-**4. Add the Test row** — `metadata/tests/integration/.IT20-my-area.json` (omit
+**4. Add the Test row** — `metadata-optional/integration-test/tests/integration/.IT20-my-area.json` (omit
 `primaryKey`/`sync`; the sync tool populates them):
 
 ```json
@@ -659,7 +658,7 @@ For a **client-transport** bundle, set `"transport": "client"` explicitly (or ad
 name to the driver's `CLIENT_BUNDLES` set so inference covers it).
 
 **5. Add suite membership** — in
-[`metadata/test-suites/.integration-suite.json`](../metadata/test-suites/.integration-suite.json),
+[`metadata-optional/integration-test/test-suites/.integration-suite.json`](../metadata-optional/integration-test/test-suites/.integration-suite.json),
 append to the right child suite's `MJ: Test Suite Tests`:
 
 ```json
@@ -796,8 +795,7 @@ scripts.
 |---|---|
 | [`packages/TestingFramework/testing-integration/`](../packages/TestingFramework/testing-integration/) | The library: driver, registry, bundles, bootstrap, tiers, instrumented cache |
 | [`packages/MJServer/integration-test-scripts/`](../packages/MJServer/integration-test-scripts/) | Runnable suites + `run-all.ts` aggregator (+ [README](../packages/MJServer/integration-test-scripts/README.md) deep dive) |
-| [`metadata/test-types/`](../metadata/test-types/) · [`metadata/tests/integration/`](../metadata/tests/integration/) · [`metadata/test-suites/`](../metadata/test-suites/) | The Integration Test type, the IT01–IT19 Tests, the suite hierarchy |
-| [`metadata-integration-fixtures/`](../metadata-integration-fixtures/) | Seeded RLS test users/role/permission — a **sibling root**, kept out of the default-pushed `metadata/` tree so the synthetic accounts never reach production |
+| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the Integration Test type, the IT01–IT19 Tests, the suite hierarchy, AND the seeded RLS test users/role/permission. Kept out of the default-pushed `metadata/` tree so these test-only records never reach production |
 | [`packages/TestingFramework/Engine/`](../packages/TestingFramework/Engine/) | `TestEngine`, `BaseTestDriver`, suite fixture lifecycle |
 | [`packages/TestingFramework/CLI/`](../packages/TestingFramework/CLI/) | `mj test run` / `suite` / `list` / `validate` / `history` |
 | [`.github/workflows/integration.yml`](../.github/workflows/integration.yml) | The CI gate |
@@ -810,7 +808,7 @@ scripts.
   — the design under test per suite, the full check inventories, and the hard-won gotchas
   (linger windows, params mutation, counter categories).
 - **Test metadata authoring:**
-  [`metadata/tests/integration/README.md`](../metadata/tests/integration/README.md).
+  [`metadata-optional/integration-test/tests/integration/README.md`](../metadata-optional/integration-test/tests/integration/README.md).
 - **The Testing Framework generally:**
   [`packages/TestingFramework/README.md`](../packages/TestingFramework/README.md) — the
   `TestType` / `Test` / `TestSuite` / `TestRun` model shared by every test type (agent evals,

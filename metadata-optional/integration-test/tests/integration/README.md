@@ -10,14 +10,15 @@ the Computer-Use regression suite.
 ## Quick Reference
 
 ```bash
-# Push these definitions to the DB (from repo root)
-npx mj sync push --dir=metadata --include=test-types,tests,test-suites
+# Push these definitions to the DB (from repo root). One push covers the Integration Test type,
+# the IT tests, the suite, AND the RLS fixtures — they all live under this optional sibling root.
+npx mj sync push --dir=metadata-optional/integration-test
 
 # Run a single integration test against your local DB (run the LOCAL workspace cli, not a global mj)
 MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test run --name "IT01 - Server RunView Cache Integrity"
 
 # Validate definitions without executing
-mj test validate --dir=metadata/tests/integration
+mj test validate --dir=metadata-optional/integration-test/tests/integration
 ```
 
 > **Run the LOCAL cli.** A globally-installed `mj` ships its own published testing packages and does
@@ -73,15 +74,24 @@ mj test validate --dir=metadata/tests/integration
 
 ## Directory Layout
 
-```
-metadata/tests/integration/
-├── .mj-sync.json            # inherited from metadata/tests/.mj-sync.json (recursive **/.*.json glob)
-├── .IT01-server-cache.json
-├── .IT02-runquery-cache.json
-└── .IT03-client-cache.json
+All of the integration metadata lives under the optional sibling root
+`metadata-optional/integration-test/` (kept out of the default-pushed `metadata/` tree):
 
-metadata/test-suites/
-└── .integration-suite.json  # "Integration Test Suite" + ordered MJ: Test Suite Tests (IT03 = Skip)
+```
+metadata-optional/integration-test/
+├── .mj-sync.json                 # the ONE root config (directoryOrder)
+├── test-types/
+│   └── .integration-test-type.json
+├── tests/
+│   ├── .mj-sync.json             # entity: MJ: Tests (recursive **/.*.json glob)
+│   └── integration/
+│       ├── .IT01-server-cache.json
+│       ├── .IT02-runquery-cache.json
+│       └── … (.IT03 … .IT23)
+├── test-suites/
+│   ├── .mj-sync.json             # entity: MJ: Test Suites
+│   └── .integration-suite.json   # "Integration Tests" + ordered MJ: Test Suite Tests (IT03 = Skip)
+└── roles/ · entity-permissions/ · users/   # the RLS fixtures (each its own entity config)
 ```
 
-See the orientation doc [`guides/INTEGRATION_TESTING_QUICKSTART.md`](../../../guides/INTEGRATION_TESTING_QUICKSTART.md).
+See the orientation doc [`guides/INTEGRATION_TESTING_QUICKSTART.md`](../../../../guides/INTEGRATION_TESTING_QUICKSTART.md).

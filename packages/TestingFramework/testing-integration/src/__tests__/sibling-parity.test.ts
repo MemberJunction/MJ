@@ -3,7 +3,7 @@
  *
  * The check *logic* for an integration suite lives ONCE, in a registry bundle. The two "siblings"
  * are thin pointers to that bundle: a `tsx` dispatcher script (packages/MJServer/integration-test-scripts)
- * and a metadata `Test` record (metadata/tests/integration). This test enforces that every bundle keeps
+ * and a metadata `Test` record (metadata-optional/integration-test/tests/integration). This test enforces that every bundle keeps
  * BOTH siblings in sync, so a bundle can never be added — or an IT record / dispatcher pointed at a
  * bundle that doesn't exist — without a red build.
  *
@@ -23,7 +23,7 @@ function repoRoot(): string {
     for (let i = 0; i < 12; i++) {
         if (
             fs.existsSync(path.join(dir, 'packages/MJServer/integration-test-scripts')) &&
-            fs.existsSync(path.join(dir, 'metadata/tests/integration'))
+            fs.existsSync(path.join(dir, 'metadata-optional/integration-test/tests/integration'))
         ) {
             return dir;
         }
@@ -51,8 +51,10 @@ const NON_SUITE_BUNDLES = new Set<string>([
 
 const ROOT = repoRoot();
 const SCRIPTS_DIR = path.join(ROOT, 'packages/MJServer/integration-test-scripts');
-const META_DIR = path.join(ROOT, 'metadata/tests/integration');
-const SUITE_FILE = path.join(ROOT, 'metadata/test-suites/.integration-suite.json');
+// The integration test/suite metadata was relocated OUT of the default-pushed metadata/ tree into
+// the optional sibling root metadata-optional/integration-test/ (test-only records, never production).
+const META_DIR = path.join(ROOT, 'metadata-optional/integration-test/tests/integration');
+const SUITE_FILE = path.join(ROOT, 'metadata-optional/integration-test/test-suites/.integration-suite.json');
 
 /**
  * `*-tests.ts` dispatchers intentionally NOT wired into the run-all.ts aggregator — special rigs
@@ -124,7 +126,7 @@ describe('tsx↔metadata sibling parity (drift-check)', () => {
 
     it('every registered bundle has an IT metadata record', () => {
         const missing = bundles.filter(b => !metadata.has(b));
-        expect(missing, `bundles with no metadata Test record (add one under metadata/tests/integration): ${missing.join(', ') || 'none'}`).toEqual([]);
+        expect(missing, `bundles with no metadata Test record (add one under metadata-optional/integration-test/tests/integration): ${missing.join(', ') || 'none'}`).toEqual([]);
     });
 
     it('every registered bundle has a tsx dispatcher (except documented driver-only bundles)', () => {
