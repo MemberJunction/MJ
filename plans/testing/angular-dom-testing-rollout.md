@@ -175,8 +175,14 @@ covered **except three documented deferrals**:
 | `mj-livekit-room` (1)          | media (§3)                                                                     |
 | `filter-builder` (3)           | genuine component-side `NG0100`/CD instability — masking is disallowed (§3/§7) |
 
-`conversations` is **partially** covered (5 of 69 — the leaf slot/shared components); the rest is a focused
-follow-up pass (too large for the sweep; many are realtime/streaming components that need careful deferral).
+`conversations` is **partially** covered. Phase 4 added a follow-up pass — the active-tasks/agent-process
+panels, the active-agent indicator, and the presentational **realtime** widgets (agent banner, channel
+strip, composer strip/dock, delegation card, session-timeline card, channel-onboarding) — bringing it to
+27 of 70. The remaining gap is chiefly the `collection`/`conversation`/`message` groups plus the true
+media/streaming realtime components (whiteboard, media, remote-browser, evidence-playback) that are §3
+live-test territory. (Note: these new specs live in a package whose `tsconfig.spec.json` **enumerates**
+included files — each new component + spec pair must be added there or it AOT-compiles without decorator
+metadata and fails DI with NG0202. That gotcha is now called out in the guide.)
 
 **Toolkit grew to meet the rollout** (all in `@memberjunction/ng-test-utils`): `renderComponentFixture`
 (+ `imports`/`declarations`/`autoDetect` for module-declared components), `renderTemplate` (compound /
@@ -227,10 +233,17 @@ The "keep tests honest" half of the tooling gameplan lands here, alongside the c
   in a single-preset package it runs today but drops out the moment the package converts to dual. The guard
   found one real offender on arrival (`ng-markdown`'s service spec), which was relocated next to its source
   per §3d.
-- **Coverage threshold gate ✅ SHIPPED**: `scripts/classify-explorer-components.mjs --min <pct>` exits
-  non-zero when Explorer in-scope DOM coverage drops below the bar; CI runs it at `--min 85` (lenient vs.
-  the current 100%) as a fast pre-build step. New components land as in-scope-uncovered by default, so
-  shipping a testable Explorer component without a DOM spec fails the PR. Ratchet the bar as it holds.
+- **Coverage threshold gates ✅ SHIPPED** (two, both fast pre-build CI steps):
+  - **Explorer**: `scripts/classify-explorer-components.mjs --min 85` — % of in-scope Explorer components
+    that are covered (currently 100; lenient bar).
+  - **Generic**: `scripts/dom-test-report.mjs packages/Angular/Generic --max-none=185` — an ABSOLUTE
+    ratchet on components with no spec *and* no deferral annotation (a % bar is too coarse on a 350+
+    denominator to catch a single new untested component; an absolute count catches exactly one). Ratchet
+    the number DOWN as specs land. Both gates make a testable component shipped without a DOM spec fail
+    the PR before the gap goes silent.
+  - **Flagship gap closed**: `MjFormFieldComponent` (the visibility report's #1 by leverage — 4,144
+    usages, 0 tests) now has 21 DOM specs across its read/edit field-type matrix; the FK-dropdown machinery
+    (reads `LinkedFieldOptionsStore`/`BaseEngineRegistry` singletons) is documented as the deferred half.
 - **Guardrails (tooling-roadmap #4) ✅ SHIPPED (first tranche)**: `scripts/check-spec-antipatterns.mjs`
   lints every `*.dom.test.ts` in CI for the test-theater patterns Phase-3 review kept catching by hand —
   vacuous assertions (`expect(true)`, `|| true`), skipped specs, blanket schemas

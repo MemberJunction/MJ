@@ -136,6 +136,15 @@ the build `tsconfig.json` usually **excludes** `*.test.ts`. So each DOM package 
 }
 ```
 
+> **⚠️ Enumerated-include packages (e.g. `conversations`).** Some packages can't use a broad
+> `src/**/*.ts` include — a heavy component (WebRTC/media/streaming) elsewhere in the tree breaks the
+> AOT TS program — so their `tsconfig.spec.json` lists files explicitly. In those packages you MUST add
+> **both** the component `.ts` **and** its `.dom.test.ts` to the `include` list. If you don't, the
+> Angular AOT compiler processes the component without decorator metadata, so its constructor param
+> types erase and DI fails at render with **`NG0202`** (only for components that inject a service —
+> a dep-free component silently "passes," masking the misconfig). The tell is a vitest warning:
+> *"…contains Angular decorators but is not in the TypeScript program."*
+
 **Also add the `test:types` gate script** alongside it — this is what actually type-checks your
 specs. Vitest/esbuild is transpile-only: it strips types and silently erases broken `import type`
 statements, so a spec can be vitest-green while carrying real type errors (Phase 3 shipped a batch

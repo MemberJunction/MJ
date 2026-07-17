@@ -1,0 +1,19 @@
+---
+"@memberjunction/ng-base-forms": patch
+"@memberjunction/ng-conversations": patch
+---
+
+Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + a scoping-tool CI gate); no runtime change.
+
+- **`MjFormFieldComponent`** — the visibility report's highest-leverage gap (4,144 usages, 0 tests) —
+  gains 21 DOM specs across its read/edit field-type matrix (textbox/textarea/checkbox/dropdown/date/
+  numeric, links, value-list options, label/gating). The FK-dropdown machinery (reads
+  `LinkedFieldOptionsStore`/`BaseEngineRegistry` singletons) is documented as the deferred half.
+- **`conversations`** follow-up pass: 9 new specs (active-tasks panel, agent-process panel, active-agent
+  indicator, and the presentational realtime widgets — agent banner, channel strip, composer, delegation
+  card, session-timeline card, channel-onboarding), 18 → 27 of 70. Each new component + spec pair added to
+  the package's enumerated `tsconfig.spec.json` (required there, or AOT drops decorator metadata → NG0202).
+- **Generic DOM coverage ratchet**: `scripts/dom-test-report.mjs` gains `--max-none`/`--min-solid` CI
+  gates; the workflow runs `--max-none=185` (absolute cap on unspecified Generic components — ratchet down
+  as specs land). Complements the Explorer `--min 85` gate.
+- Guide documents the enumerated-tsconfig/NG0202 gotcha.
