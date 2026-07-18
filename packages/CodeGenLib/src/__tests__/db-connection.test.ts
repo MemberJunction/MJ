@@ -3,7 +3,7 @@
  * connection layer. Exercises the {@link buildSqlConfig} precedence chain for
  * the cross-platform `codegenPool.statementTimeoutMs`:
  *
- *   codegenPool.statementTimeoutMs  →  legacy dbRequestTimeout  →  mssql default (120000)
+ *   codegenPool.statementTimeoutMs  →  legacy dbRequestTimeout  →  CodeGen default (600000)
  *
  * `buildSqlConfig()` is exported solely for testing — production code calls
  * {@link MSSQLConnection} which caches the resolved config and pool.
@@ -56,9 +56,9 @@ describe('buildSqlConfig — codegenPool.statementTimeoutMs precedence', () => {
         configInfo.dbInstanceName = undefined;
     });
 
-    it('uses mssql default 120000ms when neither knob is set', () => {
+    it('uses the CodeGen default 600000ms when neither knob is set', () => {
         const cfg = buildSqlConfig();
-        expect(cfg.options?.requestTimeout).toBe(120000);
+        expect(cfg.options?.requestTimeout).toBe(600000);
     });
 
     it('falls back to legacy dbRequestTimeout when codegenPool.statementTimeoutMs is unset', () => {

@@ -30,7 +30,7 @@ import { configInfo } from './config';
  * that may have been visible at module load time.
  *
  * Exported for unit-test access to the `codegenPool.statementTimeoutMs` →
- * `dbRequestTimeout` → 120000 precedence chain. Production code uses
+ * `dbRequestTimeout` → 600000 precedence chain. Production code uses
  * {@link MSSQLConnection} (which caches the resolved config + pool); this
  * export gives tests a pure-function entry point without forcing them to
  * mock `mssql.connect`.
@@ -49,11 +49,15 @@ export function buildSqlConfig(): mssql.config {
   } = configInfo;
 
   // Resolve the request timeout from the cross-platform knob first, then fall
-  // back to the legacy SQL-Server-only `dbRequestTimeout`, then to mssql's
-  // 120000ms default. Keeps existing configs working while the unified
-  // `codegenPool.statementTimeoutMs` becomes the canonical knob for both
-  // providers.
-  const requestTimeout = codegenPool?.statementTimeoutMs ?? dbRequestTimeout ?? 120000;
+  // back to the legacy SQL-Server-only `dbRequestTimeout`, then to a 600000ms
+  // (10 min) CodeGen default. The final fallback intentionally does NOT use
+  // mssql's 120000ms default: metadata-reconciliation steps (e.g.
+  // spUpdateExistingEntityFieldsFromSchema) scale super-linearly with schema
+  // size and exceed 2 minutes at ~2,000 tables, which made large-schema
+  // codegen fail out-of-the-box. 600000 matches the in-server RSU codegen
+  // pool's own requestTimeout (MJServer/src/index.ts), so standalone and
+  // in-process codegen now share one budget. Explicit configs still win.
+  const requestTimeout = codegenPool?.statementTimeoutMs ?? dbRequestTimeout ?? 600000;
 
   return {
     user: codeGenLogin,
@@ -66,8 +70,8 @@ export function buildSqlConfig(): mssql.config {
        * Request timeout for long-running CodeGen queries. Resolved from
        * `codegenPool.statementTimeoutMs` (cross-platform, preferred) → the legacy
        * `dbRequestTimeout` (SQL Server only) / `MJ_CODEGEN_REQUEST_TIMEOUT` env
-       * var → mssql's 120000ms (2 min) default. Bump when steps like
-       * spUpdateExistingEntityFieldsFromSchema run beyond the default.
+       * var → a 600000ms (10 min) CodeGen default (NOT mssql's 120000ms — large
+       * schemas exceed 2 min in metadata reconciliation; see buildSqlConfig).
        */
       requestTimeout,
       encrypt: true,

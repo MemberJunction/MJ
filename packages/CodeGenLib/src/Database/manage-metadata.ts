@@ -3605,27 +3605,36 @@ export class ManageMetadataBase {
       // for the list of new entities, go through and attempt to generate new entity descriptions
       const ag = new AdvancedGeneration();
       if (ag.featureEnabled('EntityDescriptions')) {
-         // we have the feature enabled, so let's loop through the new entities and generate descriptions for them
+         // we have the feature enabled, so let's loop through the new entities and generate descriptions for them.
+         // Resilience: descriptions are ENRICHMENT — a thrown LLM/provider error for one entity must
+         // neither abort the remaining entities nor propagate up and fail metadata management (codegen
+         // runs at container start in production; an AI outage must never block the boot). Each entity
+         // is isolated in its own try/catch: warn + skip on any failure.
          for (let e of ManageMetadataBase.newEntityList) {
-            const dataResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE Name = '${e}'`);
-            const data = dataResult.recordset;
-            const fieldsResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFields')} WHERE EntityID='${data[0].ID}'`);
-            const fields = fieldsResult.recordset;
+            try {
+               const dataResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE Name = '${e}'`);
+               const data = dataResult.recordset;
+               const fieldsResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFields')} WHERE EntityID='${data[0].ID}'`);
+               const fields = fieldsResult.recordset;
 
-            // Use new API to generate entity description
-            const result = await ag.generateEntityDescription(
-               e,
-               data[0].BaseTable,
-               fields.map((f: any) => ({ Name: f.Name, Type: f.Type, IsNullable: f.AllowsNull, Description: f.Description })),
-               currentUser
-            );
+               // Use new API to generate entity description
+               const result = await ag.generateEntityDescription(
+                  e,
+                  data[0].BaseTable,
+                  fields.map((f: any) => ({ Name: f.Name, Type: f.Type, IsNullable: f.AllowsNull, Description: f.Description })),
+                  currentUser
+               );
 
-            if (result?.entityDescription && result.entityDescription.length > 0) {
-               const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET Description = '${result.entityDescription}' WHERE Name = '${e}'`;
-               await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
+               if (result?.entityDescription && result.entityDescription.length > 0) {
+                  const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET Description = '${result.entityDescription}' WHERE Name = '${e}'`;
+                  await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
+               }
+               else {
+                  console.warn('   >>> Advanced Generation Error: LLM returned invalid result, skipping entity description for entity ' + e);
+               }
             }
-            else {
-               console.warn('   >>> Advanced Generation Error: LLM returned invalid result, skipping entity description for entity ' + e);
+            catch (ex) {
+               console.warn(`   >>> Advanced Generation Error: entity-description generation failed for entity ${e} (${ex instanceof Error ? ex.message : ex}), skipping`);
             }
          }
       }
@@ -4609,14 +4618,21 @@ export class ManageMetadataBase {
    }
 
    protected async newEntityNameWithAdvancedGeneration(ag: AdvancedGeneration, newEntity: any, currentUser: UserInfo): Promise<string> {
-      const result = await ag.generateEntityName(newEntity.TableName, currentUser);
-      if (result?.entityName) {
-         return this.markupEntityName(newEntity.SchemaName, result.entityName);
-      }
-      else {
+      // Resilience: AI naming is an ENRICHMENT — an LLM failure (invalid result OR a thrown
+      // provider/network/credential error) must never fail entity creation. Codegen runs at
+      // container start in production deployments, so an AI outage propagating from here would
+      // become a container-start failure. Always fall back to the deterministic simple name.
+      try {
+         const result = await ag.generateEntityName(newEntity.TableName, currentUser);
+         if (result?.entityName) {
+            return this.markupEntityName(newEntity.SchemaName, result.entityName);
+         }
          console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name');
-         return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
       }
+      catch (e) {
+         console.warn(`   >>> Advanced Generation Error: entity-name LLM call failed (${e instanceof Error ? e.message : e}), falling back to simple generated entity name`);
+      }
+      return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
    }
    
    protected simpleNewEntityName(schemaName: string, tableName: string): string {

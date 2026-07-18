@@ -547,8 +547,8 @@ const configInfoSchema = z.object({
    * **Legacy** — SQL Server request timeout in milliseconds applied to the
    * CodeGen connection pool. Set in `mj.config.cjs` or via the
    * `MJ_CODEGEN_REQUEST_TIMEOUT` environment variable when long-running CodeGen
-   * steps (e.g. spUpdateExistingEntityFieldsFromSchema) exceed the default of
-   * 120000 (2 minutes).
+   * steps (e.g. spUpdateExistingEntityFieldsFromSchema) exceed the CodeGen
+   * default of 600000 (10 minutes).
    *
    * Prefer the cross-platform {@link codegenPool}.statementTimeoutMs for new
    * configs — it applies to both SQL Server (as `requestTimeout`) and
@@ -592,8 +592,9 @@ const configInfoSchema = z.object({
      *
      * - **SQL Server**: mapped to mssql's `requestTimeout` on the pool config.
      *   Takes precedence over the legacy top-level {@link dbRequestTimeout} when both
-     *   are set; falls back to `dbRequestTimeout` (and ultimately mssql's 120000ms
-     *   default) when unset.
+     *   are set; falls back to `dbRequestTimeout` (and ultimately CodeGen's 600000ms
+     *   default — deliberately above mssql's 120000ms, which large schemas exceed
+     *   during metadata reconciliation) when unset.
      * - **PostgreSQL**: applied via the libpq startup option `-c statement_timeout=<ms>`
      *   (carried in pg's connection startup packet), so every backend — including the
      *   verify-SELECT-1 connection — honors it from the very first query. When unset,
