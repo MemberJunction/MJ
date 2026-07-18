@@ -10,6 +10,7 @@ import {
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
     GetProviderVoiceSettings,
+    GetSessionTuningSettings,
     BuildVoiceMannerSection,
     GetNarrationPaceMs,
     EvaluateRuntimeOverrideAuthorization,
@@ -426,5 +427,39 @@ describe('turnTaking — moderator + mode normalization', () => {
 
     it('GetEffectiveTurnMode defaults to proactive when unset', () => {
         expect(GetEffectiveTurnMode(ResolveEffectiveRealtimeConfig(null, null, null))).toBe('proactive');
+    });
+});
+
+describe('C1: GetSessionTuningSettings', () => {
+    it('projects every knob onto the flat driver bag keys', () => {
+        const bag = GetSessionTuningSettings({
+            realtime: {
+                session: {
+                    effortLevel: 85,
+                    parallelToolCalls: false,
+                    mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
+                    inputTranscriptionModel: '  whisper-1  ',
+                },
+            },
+        });
+        expect(bag).toEqual({
+            effortLevel: 85,
+            parallelToolCalls: false,
+            mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
+            inputTranscriptionModel: 'whisper-1',
+        });
+    });
+
+    it('named effort levels pass through as strings', () => {
+        expect(GetSessionTuningSettings({ realtime: { session: { effortLevel: 'xhigh' } } })).toEqual({ effortLevel: 'xhigh' });
+    });
+
+    it('returns null for an absent/empty section (bag construction skipped byte-for-byte)', () => {
+        expect(GetSessionTuningSettings(undefined)).toBeNull();
+        expect(GetSessionTuningSettings({})).toBeNull();
+        expect(GetSessionTuningSettings({ realtime: {} })).toBeNull();
+        expect(GetSessionTuningSettings({ realtime: { session: {} } })).toBeNull();
+        expect(GetSessionTuningSettings({ realtime: { session: { mcpTools: [] } } })).toBeNull();
+        expect(GetSessionTuningSettings({ realtime: { session: { inputTranscriptionModel: '   ' } } })).toBeNull();
     });
 });

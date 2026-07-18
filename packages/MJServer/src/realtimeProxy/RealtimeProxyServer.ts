@@ -52,6 +52,13 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
             return false; // not ours — leave it for the GraphQL WS server
         }
         this.ensureRegistered();
+        // Optional Origin allowlist (MJ_REALTIME_PROXY_ALLOWED_ORIGINS: comma-separated origins).
+        // Unset ⇒ prior behavior (the single-use short-TTL ticket remains the primary guard);
+        // set ⇒ a browser page on a foreign origin cannot ride a leaked ticket id.
+        if (!RealtimeProxyServer.originAllowed(request.headers?.origin)) {
+            RealtimeProxyServer.rejectUpgrade(socket, 403, 'Forbidden');
+            return true;
+        }
         const ticketId = url.searchParams.get('ticket') ?? '';
         const entry = RealtimeProxyRegistry.Instance.Consume(ticketId);
         if (!entry) {
@@ -60,6 +67,28 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
         }
         this.wss.handleUpgrade(request, socket, head, (browserWs) => this.openTunnel(browserWs, entry));
         return true;
+    }
+
+    /**
+     * Evaluates the optional Origin allowlist. Comparison is exact on the normalized origin
+     * (scheme://host[:port], lowercased, no trailing slash). An upgrade WITHOUT an Origin header
+     * (non-browser client, e.g. a native app or test rig) passes — the allowlist targets
+     * cross-origin BROWSER pages, which always send the header.
+     *
+     * @param origin The upgrade request's Origin header, if any.
+     * @returns True when allowed (or no allowlist is configured).
+     */
+    private static originAllowed(origin: string | undefined): boolean {
+        const raw = process.env['MJ_REALTIME_PROXY_ALLOWED_ORIGINS'];
+        if (!raw || raw.trim().length === 0) {
+            return true; // no allowlist configured — prior behavior
+        }
+        if (!origin) {
+            return true; // non-browser upgrade (no Origin header) — tickets remain the guard
+        }
+        const normalize = (value: string): string => value.trim().toLowerCase().replace(/\/+$/, '');
+        const allowed = raw.split(',').map(normalize).filter((v) => v.length > 0);
+        return allowed.includes(normalize(origin));
     }
 
     /** Opens the upstream leg and wires a bidirectional pump between the browser socket and it. */
@@ -118,9 +147,21 @@ export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> impl
  * then pumps both directions byte-transparently (text and binary alike). Closing either side closes the other.
  */
 class RealtimeProxyTunnel {
+    /** How long the upstream websocket may take to OPEN before the tunnel is torn down (ms). */
+    private static readonly UPSTREAM_OPEN_TIMEOUT_MS = 15_000;
+    /**
+     * Cap on frames buffered browser→upstream before the upstream opens. A half-connected
+     * upstream (TCP accepted, WS handshake never completes) must not let a browser streaming PCM
+     * grow an unbounded in-memory array on MJAPI; past the cap the OLDEST frames are dropped
+     * (voice frames are perishable — late delivery of stale audio is worthless anyway).
+     */
+    private static readonly MAX_PENDING_FRAMES = 512;
+
     private upstream: WsClient | null = null;
     /** Frames the browser sent before the upstream opened; flushed in order once it's ready. */
     private readonly pending: Array<{ data: RawData; isBinary: boolean }> = [];
+    private openDeadline: ReturnType<typeof setTimeout> | null = null;
+    private droppedPendingFrames = 0;
     private closed = false;
 
     constructor(
@@ -135,7 +176,24 @@ class RealtimeProxyTunnel {
         const upstream = new WsClient(this.entry.UpstreamUrl, { headers });
         this.upstream = upstream;
 
-        upstream.on('open', () => this.flushPending());
+        // Deadline: an upstream that accepts TCP but never completes the WS handshake would
+        // otherwise hold the tunnel (and its buffer) open forever.
+        this.openDeadline = setTimeout(() => {
+            this.openDeadline = null;
+            if (!this.closed && upstream.readyState !== WsClient.OPEN) {
+                console.warn(`[RealtimeProxy] upstream did not open within ${RealtimeProxyTunnel.UPSTREAM_OPEN_TIMEOUT_MS}ms — closing tunnel`);
+                this.Close();
+            }
+        }, RealtimeProxyTunnel.UPSTREAM_OPEN_TIMEOUT_MS);
+        (this.openDeadline as { unref?: () => void }).unref?.();
+
+        upstream.on('open', () => {
+            if (this.openDeadline) {
+                clearTimeout(this.openDeadline);
+                this.openDeadline = null;
+            }
+            this.flushPending();
+        });
         upstream.on('message', (data: RawData, isBinary: boolean) => this.forward(this.browser, data, isBinary));
         upstream.on('close', () => this.Close());
         upstream.on('error', () => this.Close());
@@ -151,6 +209,13 @@ class RealtimeProxyTunnel {
             this.forward(this.upstream, data, isBinary);
         } else {
             this.pending.push({ data, isBinary });
+            if (this.pending.length > RealtimeProxyTunnel.MAX_PENDING_FRAMES) {
+                this.pending.shift(); // drop-oldest: stale voice frames are worthless anyway
+                this.droppedPendingFrames++;
+                if (this.droppedPendingFrames === 1 || this.droppedPendingFrames % 100 === 0) {
+                    console.warn(`[RealtimeProxy] pre-open buffer cap hit — dropped ${this.droppedPendingFrames} oldest frame(s) awaiting upstream open`);
+                }
+            }
         }
     }
 
@@ -179,6 +244,10 @@ class RealtimeProxyTunnel {
 
     /** Closes both legs and detaches the tunnel from the server. Idempotent. */
     public Close(): void {
+        if (this.openDeadline) {
+            clearTimeout(this.openDeadline);
+            this.openDeadline = null;
+        }
         if (this.closed) {
             return;
         }

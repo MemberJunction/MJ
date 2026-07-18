@@ -163,3 +163,14 @@ If you write a new driver, follow the same shape: every wire/hardware boundary b
 - `@memberjunction/ai-agents` — `RealtimeSessionRunner`, `RealtimeToolBroker`, `RealtimeClientSessionService`
 - `@memberjunction/ng-conversations` — the Angular host (overlay, channels, session review)
 - `@memberjunction/ng-whiteboard` — the generic whiteboard the Whiteboard channel surfaces
+
+## OpenAI-protocol client family architecture
+
+The OpenAI-protocol drivers share two stacked layers in `generic/openAIProtocolClient.ts`:
+
+- **`OpenAIProtocolRealtimeClient`** — the transport-agnostic protocol brain: inbound event dispatch (GA + beta frame names), the response state machine, narration-kind tagging, tool-result queueing, and the outbound actions (`SendText`, `SendToolResult`, `SendContextNote`, `RequestSpokenUpdate`, `CancelActiveResponse`, `SetMuted`).
+- **`OpenAIProtocolWebSocketRealtimeClient`** — the websocket + client-owned PCM transport: socket lifecycle with a **connect-phase deadline** (`connectTimeoutMs`, default 15s, covering open AND the optional `session.created` wait — socket death, consumer `Disconnect`, and the deadline all reject the awaited `Connect`), the shared mic-capture/playout plumbing, and open-gated sends.
+
+`OpenAIRealtimeClient` (WebRTC) extends the brain directly; `xAIRealtimeClient` and `HuggingFaceRealtimeClient` are thin subclasses of the websocket layer.
+
+**Turn-discipline guarantees** (all drivers): a cancelled turn's trailing `response.done` cannot release the busy lock out from under a locally-initiated replacement response (stale-done protection); a TRUE user barge-in drops the queued tool-result auto-trigger — the result item is already in the conversation and the user's next turn voices it, so the model never speaks over a user who just took the floor.

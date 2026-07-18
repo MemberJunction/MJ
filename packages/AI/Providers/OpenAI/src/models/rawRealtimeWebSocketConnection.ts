@@ -40,6 +40,7 @@ export class RawRealtimeWebSocketConnection implements IOpenAIRealtimeConnection
     private errorListeners: Array<(error: OpenAIRealtimeError) => void> = [];
     private closeListeners: Array<() => void> = [];
     private opened = false;
+    private closed = false;
     private pendingSends: string[] = [];
 
     /** The `socket` shim the driver uses to detect UNEXPECTED closure (see `IOpenAIRealtimeConnection.socket`). */
@@ -74,8 +75,14 @@ export class RawRealtimeWebSocketConnection implements IOpenAIRealtimeConnection
             }
         };
         this.ws.onmessage = (event) => this.handleMessage(event.data);
-        this.ws.onerror = () => this.emitError(this.makeError('realtime websocket transport error'));
+        this.ws.onerror = () => {
+            // A transport error before open means the buffered frames can never be delivered.
+            this.pendingSends = [];
+            this.emitError(this.makeError('realtime websocket transport error'));
+        };
         this.ws.onclose = () => {
+            this.closed = true;
+            this.pendingSends = [];
             for (const listener of [...this.closeListeners]) {
                 listener();
             }
@@ -112,8 +119,14 @@ export class RawRealtimeWebSocketConnection implements IOpenAIRealtimeConnection
         }
     }
 
-    /** JSON-serializes one client frame; buffered until the socket opens, sent immediately after. */
+    /**
+     * JSON-serializes one client frame; buffered until the socket opens, sent immediately after.
+     * A send after the socket closed is a safe no-op (the session teardown path may still emit).
+     */
     public send(event: RealtimeClientEvent): void {
+        if (this.closed) {
+            return;
+        }
         const frame = JSON.stringify(event);
         if (!this.opened) {
             this.pendingSends.push(frame);
@@ -124,6 +137,7 @@ export class RawRealtimeWebSocketConnection implements IOpenAIRealtimeConnection
 
     /** Closes the underlying socket (pending buffered sends are dropped). */
     public close(): void {
+        this.closed = true;
         this.pendingSends = [];
         this.ws.close();
     }
@@ -141,9 +155,15 @@ export class RawRealtimeWebSocketConnection implements IOpenAIRealtimeConnection
             return; // non-JSON frame — ignore, matching the prior raw-socket drivers
         }
         if (parsed.type === 'error') {
+            // ALWAYS attach a provider payload — even for a bodyless `{type:'error'}` frame. The
+            // downstream classifier treats "no .error payload" as a TRANSPORT failure (fatal); a
+            // provider error FRAME is recoverable by contract regardless of how sparse the compat
+            // endpoint's payload is, so a minimal payload is synthesized when absent.
             const providerError = parsed.error;
-            const error = this.makeError(providerError?.message ?? 'realtime provider error');
-            error.error = providerError;
+            const fallbackMessage = (parsed as { message?: string }).message;
+            const message = providerError?.message ?? fallbackMessage ?? 'realtime provider error';
+            const error = this.makeError(message);
+            error.error = providerError ?? { type: 'server_error', message };
             this.emitError(error);
             return;
         }

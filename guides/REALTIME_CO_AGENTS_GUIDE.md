@@ -732,3 +732,34 @@ attribute stays `false` and the original turn-state keyframe animations remain i
 | Session / channel custom entity forms (incl. the review deep link) | `packages/Angular/Explorer/core-entity-forms/src/lib/custom/AIAgentSessions/`, `.../AIAgentChannels/` |
 | Schema | `migrations/v5/V202606090930__v5.41.x__AI_Agent_Sessions_Channels.sql` |
 | Seeds | `metadata/agents/.voice-co-agent.json` (Realtime Co-Agent), `metadata/prompts/.voice-co-agent-*.json` (Realtime Co-Agent prompts), `metadata/ai-agent-channels/`, `metadata/ai-model-types/`, `metadata/ai-models/` (realtime rows incl. ElevenLabs Agents + AssemblyAI Voice Agent), `metadata/agent-types/` (Realtime), `metadata/artifact-types/` (Whiteboard) |
+
+## Session tuning, cost attribution & resilience (QA-hardening wave, v5.49)
+
+### `realtime.session` — provider-session tuning knobs
+The effective co-agent config gained a `session` sub-section that flows into the driver's open Config bag on **both** topologies (same cascade `voice` rides; the runtime bag wins per key):
+
+```jsonc
+{
+  "realtime": {
+    "session": {
+      "effortLevel": 85,                 // MJ-normalized (ChatParams.effortLevel vocabulary: 1–100 or named)
+      "parallelToolCalls": true,
+      "mcpTools": [{ "type": "mcp", "server_label": "kb", "server_url": "https://…", "require_approval": "never" }],
+      "inputTranscriptionModel": "whisper-1"
+    }
+  }
+}
+```
+
+`GetSessionTuningSettings` projects the section onto the flat bag keys; each driver translates a key to its native wire field **only when its profile confirms support** and scrubs it otherwise — a shared config is safe on every provider (Gemini additionally warns on scrubbed foreign keys via `REALTIME_SHARED_CONFIG_KEYS`). Grok's GA gates are OFF pending xAI docs; flipping them is a one-line profile change.
+
+### Multi-channel cost attribution
+`RealtimeUsage` now carries per-modality token detail (`InputTokenDetails`/`OutputTokenDetails`: text/audio/image/cached). The OpenAI driver maps the GA `response.done` detail blocks, the session runner accumulates them field-wise across turns, and the checkpoint persists the detail as JSON on the realtime `AIPromptRun.Result` — so audio-vs-text pricing (audio-in ~8× text-in on GPT Realtime 2.1) is attributable instead of blended.
+
+### Resilience & lifecycle
+- **Connect/readiness deadlines everywhere** — client WS drivers reject an awaited `Connect` on a silent endpoint (15s, overridable), and the server session's `WaitForConfigApplied` has a matching readiness deadline; no path can hang forever.
+- **Cancellation** — the session runner observes the chained agent cancellation signal (`RealtimeSessionRunnerDeps.AbortSignal`): an abort stops + finalizes (usage flushed) instead of waiting on the janitor.
+- **Bounded transport reconnect** — a fatal socket drop triggers up to `MaxTransportReconnects` (default 1) fresh-session reconnects with rewired handlers + a context note; usage/transcripts span the reconnect; exhausted budget finalizes.
+- **MCP approval** — with no approval UX yet, an `mcp_approval_request` is auto-DENIED (correct correlation id) so the model voices the refusal instead of dead-air blocking; declare servers `require_approval: 'never'` to skip the round-trip.
+- **Barge-in floor rule** — on a TRUE user barge-in, queued tool-result auto-triggers are dropped (the result item is already in the conversation; the user's next turn voices it) — the model never speaks over a user who just took the floor.
+- **Proxy hardening (HF client-direct)** — optional `MJ_REALTIME_PROXY_ALLOWED_ORIGINS` origin allowlist (403 before ticket consumption), 15s upstream-open deadline, bounded pre-open frame buffer. Multi-instance deployments need sticky routing for the in-memory ticket registry.

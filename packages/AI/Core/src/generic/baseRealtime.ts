@@ -187,6 +187,26 @@ export abstract class BaseRealtimeModel extends BaseModel {
     }
 }
 
+/**
+ * The MJ-side Config-bag keys shared across the realtime driver family that are NEVER provider
+ * wire fields: feature knobs the OpenAI-protocol family translates (and gates per profile) plus
+ * transport settings for self-hosted/proxied drivers. NON-OpenAI-protocol drivers (Gemini,
+ * ElevenLabs, AssemblyAI, Inworld) MUST scrub these before forwarding an open config bag to their
+ * SDK/wire — a co-agent config carrying them must be safe on every provider.
+ */
+export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
+    'effortLevel',
+    'reasoningEffort',
+    'parallelToolCalls',
+    'mcpTools',
+    'inputTranscriptionModel',
+    'voice',
+    'disableAutoResponse',
+    'endpoint',
+    'sampleRate',
+    'proxyBaseUrl',
+] as const;
+
 /** A selectable provider-native voice — `ID` is sent to the provider, `Name` is the human label. */
 export interface RealtimeVoiceOption {
     /** The provider-native voice id (e.g. `echo`) — what gets written to the session config. */
@@ -588,6 +608,14 @@ export interface RealtimeTranscript {
      * Whether this is the final transcript for the turn (`true`) or an interim delta (`false`).
      */
     IsFinal: boolean;
+
+    /**
+     * When true, this FINAL transcript REPLACES the previous final for the same in-flight turn —
+     * providers that STREAM their "completed" transcription (each event carrying the full growing
+     * text, e.g. Grok) set this so consumers collapse the stream into one in-place-updating turn
+     * instead of a stack of growing duplicates. Absent/false: a normal, append-worthy final.
+     */
+    ReplacesPrevious?: boolean;
 }
 
 /**
@@ -647,6 +675,35 @@ export interface RealtimeUsage {
      * Number of output tokens reported in this usage update.
      */
     OutputTokens: number;
+
+    /**
+     * Per-modality breakdown of the input tokens, when the provider reports one. Realtime models
+     * bill audio and text tokens at very different rates (e.g. GPT Realtime 2.1: $32/M audio in
+     * vs $4/M text in), so cost attribution REQUIRES this split — the totals alone force a wrong
+     * blended rate. Absent when the provider reports only totals.
+     */
+    InputTokenDetails?: RealtimeUsageModalityDetail;
+
+    /**
+     * Per-modality breakdown of the output tokens, when the provider reports one.
+     * See {@link RealtimeUsage.InputTokenDetails}.
+     */
+    OutputTokenDetails?: RealtimeUsageModalityDetail;
+}
+
+/**
+ * Per-modality token counts inside a {@link RealtimeUsage} update. All fields optional — providers
+ * report different subsets (OpenAI GA: text/audio/cached on input, text/audio on output).
+ */
+export interface RealtimeUsageModalityDetail {
+    /** Text-modality tokens. */
+    TextTokens?: number;
+    /** Audio-modality tokens. */
+    AudioTokens?: number;
+    /** Image-modality tokens (input only on current providers). */
+    ImageTokens?: number;
+    /** Tokens served from the provider's prompt cache (billed at the cached rate). */
+    CachedTokens?: number;
 }
 
 /**
