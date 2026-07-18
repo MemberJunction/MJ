@@ -815,6 +815,35 @@ describe('QA re-audit fixes (S1/S3)', () => {
         expect(client.Fake.Sent.length).toBeGreaterThan(before);
     });
 
+    it('S1b: a narration create REJECTED while idle (no response.created ever comes) clears the PHANTOM busy flag — IsBusy does not wedge', async () => {
+        await connect(client);
+        // Idle → RequestSpokenUpdate sets responseActive EAGERLY (before the send) and fires a local
+        // response.create. The provider rejects it (error, NO response.created) — e.g. a compat endpoint
+        // that won't voice a bare instruction.
+        client.RequestSpokenUpdate('say a quick status');
+        expect(client.IsBusy).toBe(true); // eager
+        client.Emit({ type: 'error', error: { message: 'response.create rejected', code: 'invalid' } });
+        // Pre-fix: responseActive stuck true forever (no done ever comes) → IsBusy wedged, every future
+        // RequestSpokenUpdate silently skipped. Fixed: the phantom is cleared because no CONFIRMED
+        // response is active.
+        expect(client.IsBusy).toBe(false);
+        const before = client.Fake.Sent.length;
+        client.RequestSpokenUpdate('try again'); // must NOT be skipped by a stuck responseActive
+        expect(client.Fake.Sent.length).toBeGreaterThan(before);
+    });
+
+    it('S1c: a REJECTED narration create clears its pending narration-kind so a subsequent VAD turn is tagged normal (not ephemeral narration)', async () => {
+        await connect(client);
+        const { transcripts } = collect(client);
+        client.RequestSpokenUpdate('narrate'); // sets pendingNarrationKind + eager responseActive
+        client.Emit({ type: 'error', error: { message: 'rejected', code: 'invalid' } }); // no response.created
+        // A genuine user turn now drives a VAD response. Pre-fix the leftover narration kind tagged this
+        // real assistant answer 'narration' → the host discards it as ephemeral. Fixed: kind is 'normal'.
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.output_audio_transcript.delta', delta: 'Here is the real answer' });
+        expect(transcripts.at(-1)).toEqual({ Role: 'Assistant', Text: 'Here is the real answer', IsFinal: false, Kind: 'normal' });
+    });
+
     it('S1: an unrelated error frame floors the counter at 0 (never negative)', async () => {
         await connect(client);
         client.Emit({ type: 'error', error: { message: 'transient' } }); // no local create outstanding

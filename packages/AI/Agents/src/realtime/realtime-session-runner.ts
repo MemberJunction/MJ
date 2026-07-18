@@ -743,7 +743,14 @@ export class RealtimeSessionRunner {
      * sequential tool calls seconds apart can never narrate faster than the interval).
      */
     private beginDelegationBurst(): void {
-        if (this.activeDelegations === 0) {
+        // Anchor a fresh burst either when nothing else is in flight OR when the burst state was reset
+        // (narrationBurstStartedAt === 0) by a {@link cancelPendingNarration} — e.g. a reconnect that
+        // aborted the prior delegation(s). The second condition matters when a prior delegation FAILED
+        // to honor its abort and left {@link activeDelegations} elevated: without it this new delegation
+        // would inherit the dead burst's stale anchor (collapsing the 5s first-narration delay) and its
+        // climbing update count. Decoupling the re-anchor from the counter keeps burst timing correct
+        // regardless of a stuck delegate.
+        if (this.activeDelegations === 0 || this.narrationBurstStartedAt === 0) {
             this.narrationBurstStartedAt = Date.now();
             this.narrationCount = 0;
             this.pendingNarrationMessages = [];
@@ -851,13 +858,22 @@ export class RealtimeSessionRunner {
         );
     }
 
-    /** Cancels any deferred spoken update and drops the digest buffer. */
+    /**
+     * Cancels any deferred spoken update, drops the digest buffer, and RESETS the burst-timing state
+     * (anchor time, spoken-update count, dedup tail). Callers invoke this exactly when the current
+     * burst is ending or being torn down (delegation done, barge-in, reconnect, Stop), so clearing the
+     * anchor to 0 marks "no active burst" — {@link beginDelegationBurst} then re-anchors the next
+     * delegation cleanly even if {@link activeDelegations} is still elevated by a stuck delegate.
+     */
     private cancelPendingNarration(): void {
         if (this.narrationTimer) {
             clearTimeout(this.narrationTimer);
             this.narrationTimer = null;
         }
         this.pendingNarrationMessages = [];
+        this.narrationBurstStartedAt = 0;
+        this.narrationCount = 0;
+        this.lastNarratedTail = '';
     }
 
     /**

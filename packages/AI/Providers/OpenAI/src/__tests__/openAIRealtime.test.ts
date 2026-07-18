@@ -485,8 +485,8 @@ describe('OpenAIRealtime', () => {
                 response_id: 'r',
             } as RealtimeServerEvent);
             expect(transcripts).toEqual([
-                { Role: 'assistant', Text: 'Hel', IsFinal: false },
-                { Role: 'assistant', Text: 'Hello', IsFinal: true },
+                { Role: 'assistant', Text: 'Hel', IsFinal: false, ReplacesPrevious: false },
+                { Role: 'assistant', Text: 'Hello', IsFinal: true, ReplacesPrevious: false },
             ]);
         });
 
@@ -508,8 +508,30 @@ describe('OpenAIRealtime', () => {
                 usage: { type: 'tokens', input_tokens: 1, output_tokens: 1, total_tokens: 2 },
             } as RealtimeServerEvent);
             expect(transcripts).toEqual([
-                { Role: 'user', Text: 'wha', IsFinal: false },
-                { Role: 'user', Text: 'what is the weather', IsFinal: true },
+                { Role: 'user', Text: 'wha', IsFinal: false, ReplacesPrevious: false },
+                { Role: 'user', Text: 'what is the weather', IsFinal: true, ReplacesPrevious: false },
+            ]);
+        });
+
+        it('flags the 2nd+ streamed user transcription completed ReplacesPrevious (one row, not duplicates); resets on the next turn', () => {
+            // Grok streams input_audio_transcription.completed repeatedly (full growing text). The first
+            // completed of a turn is a normal final; the rest REPLACE it in place. A new turn (marked by
+            // speech_started) resets, so its first completed is a normal final again.
+            const transcripts: Array<{ Role: string; Text: string; IsFinal: boolean; ReplacesPrevious?: boolean }> = [];
+            session.OnTranscript((t) => transcripts.push(t));
+            const completed = (transcript: string) => driver.Fake.Fire({
+                type: 'conversation.item.input_audio_transcription.completed', transcript, content_index: 0, event_id: 'e', item_id: 'i',
+            } as RealtimeServerEvent);
+            completed('set');            // turn 1, first caption
+            completed('set a');          // turn 1, growing → replaces
+            completed('set a timer');    // turn 1, growing → replaces
+            driver.Fake.Fire({ type: 'input_audio_buffer.speech_started', audio_start_ms: 1, event_id: 'e', item_id: 'i' } as RealtimeServerEvent); // new turn
+            completed('cancel');         // turn 2, first caption → NOT replacing
+            expect(transcripts).toEqual([
+                { Role: 'user', Text: 'set', IsFinal: true, ReplacesPrevious: false },
+                { Role: 'user', Text: 'set a', IsFinal: true, ReplacesPrevious: true },
+                { Role: 'user', Text: 'set a timer', IsFinal: true, ReplacesPrevious: true },
+                { Role: 'user', Text: 'cancel', IsFinal: true, ReplacesPrevious: false },
             ]);
         });
 

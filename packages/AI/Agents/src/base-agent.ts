@@ -2422,21 +2422,30 @@ export class BaseAgent {
             return detail.ID;
         }
 
-        // ── FINAL: update the in-flight row (or create+finalize when no interim was seen) ─────────
-        // ReplacesPrevious (streamed-final providers, e.g. Grok): each final carries the full
-        // growing text and REPLACES the prior final for the SAME turn. Keep the in-flight key so the
-        // next replacing-final updates this same row in place — dropping it would orphan the row and
-        // spawn a duplicate ConversationDetail per replacing-final. A normal (non-replacing) final
-        // clears the key so the next turn starts fresh.
+        // ── FINAL: update the in-flight row, or create+finalize a fresh turn ──────────────────────
+        // Three real provider shapes must all yield exactly ONE row per turn:
+        //   1. interim-based (OpenAI): delta(s) create the In-Progress row → final finalizes it;
+        //   2. streamed re-finals (Grok user captions): the SAME turn emits repeated finals, each the
+        //      full growing text — the 2nd+ carry ReplacesPrevious=true (stamped by the driver) and
+        //      must REPLACE the turn's row, not append;
+        //   3. finals-only single (+ ElevenLabs corrections): one non-replacing final, optionally
+        //      followed by a ReplacesPrevious correction.
+        //
+        // The reuse decision disambiguates the overloaded non-replacing final ("finalize this turn's
+        // interim row" vs "start a new turn") by the loaded row's STATUS: an In-Progress row is this
+        // turn's open interim (reuse); a Complete row under the key is a leaked streamed-final key from
+        // a PRIOR turn (do not reuse — this is a new turn). ReplacesPrevious always reuses.
         const inFlightId = this.realtimeInFlightTurns.get(roleKey);
-        if (!transcript.ReplacesPrevious) {
-            this.realtimeInFlightTurns.delete(roleKey);
+        let detail: MJConversationDetailEntity | null = null;
+        if (inFlightId) {
+            const candidate = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+            if (await candidate.Load(inFlightId) && (transcript.ReplacesPrevious || candidate.Status === 'In-Progress')) {
+                detail = candidate; // update the existing row in place → not a new turn
+            }
         }
-        let detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
         let created = false;
-        if (inFlightId && await detail.Load(inFlightId)) {
-            // updating the existing streaming row → not a new turn
-        } else {
+        if (!detail) {
+            detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
             detail.NewRecord();
             detail.ConversationID = conversationID;
             detail.Role = mjRole;
@@ -2452,18 +2461,22 @@ export class BaseAgent {
         if (this.realtimeRecording) {
             detail.UtteranceEndMs = this.realtimeRecording.NowOffsetMs();
         }
-        if (!await detail.Save()) {
+        const saved = await detail.Save();
+        if (!saved) {
             this.logError(`Failed to finalize realtime transcript turn: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
                 agent: params.agent, category: 'RealtimeSession'
             });
         }
-        // ReplacesPrevious streamed finals: point the in-flight key at THIS row so the next
-        // replacing final updates it in place — this is the ONLY set point that covers a
-        // FINALS-ONLY provider (e.g. Grok user captions, ElevenLabs corrections) that never emits
-        // an interim delta, where the interim set-point above never runs. A subsequent non-replacing
-        // final clears the key (see the delete above) so the following turn starts fresh.
-        if (transcript.ReplacesPrevious) {
+        // Key management for the NEXT event in this role:
+        //  - ReplacesPrevious, or a freshly-created streamed final → point the key at THIS row so a
+        //    subsequent replacing final updates it in place (only bound when the Save produced a real
+        //    id — a failed create leaves an empty id that would otherwise poison the next lookup);
+        //  - a non-replacing final that finalized an In-Progress interim row → the turn is done, so
+        //    clear the key and let the next turn start fresh.
+        if ((transcript.ReplacesPrevious || created) && saved && detail.ID) {
             this.realtimeInFlightTurns.set(roleKey, detail.ID);
+        } else if (!transcript.ReplacesPrevious && !created) {
+            this.realtimeInFlightTurns.delete(roleKey);
         }
         return created ? detail.ID : null;
     }

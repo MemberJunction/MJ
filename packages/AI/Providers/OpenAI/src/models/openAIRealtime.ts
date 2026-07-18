@@ -700,6 +700,18 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     protected responseActive = false;
 
     /**
+     * Whether the CURRENT user turn has already produced at least one finalized input transcription.
+     * Streamed-transcription providers (Grok) emit `input_audio_transcription.completed` REPEATEDLY
+     * for one utterance, each carrying the full growing text; without this flag every repeat lands as
+     * a fresh non-replacing final and the persistence layer mints a duplicate `ConversationDetail`
+     * row per caption. The second-and-later completeds are flagged {@link RealtimeTranscript.ReplacesPrevious}
+     * so they REPLACE the turn's row in place — exactly the client-direct driver's behavior, kept in
+     * sync here so the two topologies persist identically. Reset on each `speech_started` (new turn).
+     * Harmless for single-completed providers (OpenAI): the flag is always false on the one completed.
+     */
+    private userTurnTranscribed = false;
+
+    /**
      * @param connection The injectable provider-connection seam.
      * @param profile The provider profile (defaults to OpenAI's so existing direct construction keeps working).
      */
@@ -1047,11 +1059,22 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
                 return this.emitTranscript('assistant', event.transcript, true);
             case 'conversation.item.input_audio_transcription.delta':
                 return this.emitTranscript('user', event.delta ?? '', false);
-            case 'conversation.item.input_audio_transcription.completed':
-                return this.emitTranscript('user', event.transcript, true);
+            case 'conversation.item.input_audio_transcription.completed': {
+                // Streamed transcription (Grok): the 2nd+ completed of a turn REPLACES the turn's row
+                // in place rather than appending a duplicate. The first completed of the turn is a
+                // normal (non-replacing) final. Flag flips here and resets on the next speech_started.
+                const replacesPrevious = this.userTurnTranscribed;
+                this.userTurnTranscribed = true;
+                return this.emitTranscript('user', event.transcript, true, replacesPrevious);
+            }
             case 'response.function_call_arguments.done':
                 return this.handleFunctionCall(event.call_id, event.name, event.arguments);
             case 'input_audio_buffer.speech_started':
+                // A new user turn begins — reset the streamed-transcription flag so its first
+                // completed is a fresh (non-replacing) final. Do this UNCONDITIONALLY (not only on
+                // true barge-in): handleInterruption gates its handler on responseActive, but the
+                // turn boundary is real regardless of whether the model was mid-response.
+                this.userTurnTranscribed = false;
                 return this.handleInterruption();
             case 'response.created':
                 // A response is in flight (whether server-VAD-triggered or locally triggered).
@@ -1121,12 +1144,18 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         this.outputHandler?.(this.decodeBase64(deltaBase64));
     }
 
-    /** Emits a transcript event, skipping empty/whitespace text — empty captions are pure noise. */
-    private emitTranscript(role: 'user' | 'assistant', text: string, isFinal: boolean): void {
+    /**
+     * Emits a transcript event, skipping empty/whitespace text — empty captions are pure noise.
+     *
+     * @param replacesPrevious When true, this final REPLACES the current turn's persisted row in
+     *   place (streamed-transcription providers whose repeated completeds carry the full growing
+     *   text) rather than appending a new turn. Defaults to false (append/normal final).
+     */
+    private emitTranscript(role: 'user' | 'assistant', text: string, isFinal: boolean, replacesPrevious = false): void {
         if (!text || text.trim().length === 0) {
             return;
         }
-        this.transcriptHandler?.({ Role: role, Text: text, IsFinal: isFinal });
+        this.transcriptHandler?.({ Role: role, Text: text, IsFinal: isFinal, ReplacesPrevious: replacesPrevious });
     }
 
     /** Forwards a completed function call to the tool-call handler. */

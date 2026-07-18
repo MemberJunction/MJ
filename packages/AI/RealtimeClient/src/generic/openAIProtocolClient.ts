@@ -212,6 +212,16 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      */
     protected pendingLocalResponseCreates = 0;
     /**
+     * True while a response the provider has CONFIRMED (`response.created` seen, `response.done` not
+     * yet) is in flight. Distinct from {@link responseActive}, which is set EAGERLY before a local
+     * `response.create` is even sent: if the provider REJECTS that create (an `error` frame with no
+     * `response.created`), `responseActive` would otherwise stay stuck true forever. This flag lets
+     * {@link onErrorFrame} tell "the eager flag is a phantom for a rejected create" (no confirmed
+     * response) from "a real response is genuinely active" (e.g. a concurrent VAD turn), so it clears
+     * the phantom without disturbing a live turn. Set on `response.created`, cleared on `response.done`.
+     */
+    protected confirmedResponseActive = false;
+    /**
      * Set by {@link RequestSpokenUpdate} just before it sends its `response.create`, and
      * CONSUMED by the very next `response.created` frame, which stamps
      * {@link activeResponseKind} for that turn. Narration is only requested while the model is
@@ -501,16 +511,25 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
             case 'input_audio_buffer.speech_started':
                 this.onSpeechStartedFrame();
                 break;
-            case 'response.created':
+            case 'response.created': {
                 this.responseActive = true;
-                if (this.pendingLocalResponseCreates > 0) {
+                this.confirmedResponseActive = true; // a real response is now in flight
+                // Only a LOCALLY-initiated create (counter-tracked) can be our narration. A VAD /
+                // unsolicited response.created arrives with the counter already at 0 — it must NOT
+                // consume the pending narration kind, or it would mistag a genuine user turn as
+                // ephemeral narration (and lose the flag meant for our own create).
+                const wasLocalCreate = this.pendingLocalResponseCreates > 0;
+                if (wasLocalCreate) {
                     this.pendingLocalResponseCreates--;
                 }
                 // Stamp the kind of THIS response: 'narration' only when the flag was set by
-                // RequestSpokenUpdate immediately before its response.create (consumed here).
-                this.activeResponseKind = this.pendingNarrationKind ? 'narration' : 'normal';
-                this.pendingNarrationKind = false;
+                // RequestSpokenUpdate immediately before ITS OWN local response.create (consumed here).
+                this.activeResponseKind = (wasLocalCreate && this.pendingNarrationKind) ? 'narration' : 'normal';
+                if (wasLocalCreate) {
+                    this.pendingNarrationKind = false;
+                }
                 break;
+            }
             case 'output_audio_buffer.started':
                 this.onOutputAudioBufferStarted();
                 break;
@@ -519,6 +538,9 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
                 this.onOutputAudioBufferStopped();
                 break;
             case 'response.done':
+                // The confirmed response that was in flight has ended (whether this is its real done
+                // or the trailing done of a since-cancelled one) — no response.created is outstanding.
+                this.confirmedResponseActive = false;
                 // A STALE done (the trailing frame of a response we just cancelled while our own
                 // replacement response.create is in flight) must not release the lock, flush the
                 // queue, or flip the state out from under the response we just started — the real
@@ -645,6 +667,20 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     private onErrorFrame(event: OAIProtocolErrorEvent): void {
         if (this.pendingLocalResponseCreates > 0) {
             this.pendingLocalResponseCreates--;
+            // The counter dropping here means this error plausibly REJECTED one of our local
+            // response.creates (rejected creates emit an error and NO response.created). If no
+            // provider-CONFIRMED response is in flight, the eager responseActive / narration-kind /
+            // 'speaking' state we set before that create is a phantom nothing will ever clear — reset
+            // it so IsBusy doesn't wedge (the bug the counter self-heal alone left open) and a stale
+            // narration kind can't tag a later turn. A genuinely-active response (concurrent VAD turn)
+            // has confirmedResponseActive=true and is left untouched — its response.done clears it.
+            if (!this.confirmedResponseActive) {
+                this.responseActive = false;
+                this.pendingNarrationKind = false;
+                if (this.currentState === 'speaking') {
+                    this.setState('listening');
+                }
+            }
         }
         this.emitError({
             Message: event.error?.message ?? 'Unknown provider error',
@@ -693,6 +729,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     protected resetResponseState(): void {
         this.pendingAssistantText = '';
         this.responseActive = false;
+        this.confirmedResponseActive = false;
         this.pendingResultResponse = false;
         this.pendingLocalResponseCreates = 0;
         this.pendingNarrationKind = false;

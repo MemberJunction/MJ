@@ -1340,6 +1340,53 @@ describe('QA re-audit: reconnect × abort × delegation interaction seams', () =
         vi.useRealTimers();
     });
 
+    it('SEAM-2c: after a reconnect aborts a STUCK delegation, a new delegation re-anchors its narration burst (fresh 5s first-delay) instead of inheriting the dead burst timing', async () => {
+        vi.useFakeTimers();
+        class NarratingSession extends MockRealtimeSession {
+            public SpokenUpdates: string[] = [];
+            SendContextNote(): void { /* noise-free for this test */ }
+            RequestSpokenUpdate(instructions: string): void { this.SpokenUpdates.push(instructions); }
+        }
+        const model = new (class extends BaseRealtimeModel {
+            public Sessions: NarratingSession[] = [];
+            constructor() { super('k'); }
+            async StartSession(): Promise<IRealtimeSession> { const s = new NarratingSession(); this.Sessions.push(s); return s; }
+        })();
+        // Delegates HANG forever ignoring their abort signal (a delegate that never honors barge-in) —
+        // this is what pins activeDelegations across the reconnect. Capture each call's OnProgress.
+        const progressByCall = new Map<string, NonNullable<DelegateToTargetRequest['OnProgress']>>();
+        const delegate = vi.fn((req: DelegateToTargetRequest) => new Promise<DelegatedResult>(() => {
+            if (req.OnProgress) progressByCall.set(req.CallID, req.OnProgress);
+        }));
+        const h = buildHarness({ Model: model, DelegateToTarget: delegate, NarrationInstructionsTemplate: 'Update {{ updateNumber }}: {{ progressMessage }}' });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+        // Delegation A on session 0 anchors a burst at t=0 (but never narrates — we reconnect first):
+        model.Sessions[0].fireToolCall({ CallID: 'call-A', ToolName: INVOKE_TARGET_AGENT_TOOL_NAME, Arguments: '{}' });
+        await Promise.resolve(); await Promise.resolve();
+        progressByCall.get('call-A')!({ step: 'prompt_execution', message: 'A working' }); // schedules A's narration for t=5000
+        await vi.advanceTimersByTimeAsync(3000); // t=3000, before A's narration fires
+        // Fatal drop → reconnect: AbortInFlight signals A (ignored, still pending → activeDelegations stays 1),
+        // cancelPendingNarration cancels A's timer AND resets the burst anchor.
+        model.Sessions[0].fireError({ Message: 'drop', Fatal: true });
+        await Promise.resolve(); await Promise.resolve();
+        expect(model.Sessions).toHaveLength(2);
+        expect(model.Sessions[0].SpokenUpdates).toHaveLength(0); // A never narrated
+        // New delegation B on the fresh session — activeDelegations is still elevated by stuck A, so the
+        // burst re-anchor MUST come from the reset (narrationBurstStartedAt===0), not the counter:
+        model.Sessions[1].fireToolCall({ CallID: 'call-B', ToolName: INVOKE_TARGET_AGENT_TOOL_NAME, Arguments: '{}' });
+        await Promise.resolve(); await Promise.resolve();
+        progressByCall.get('call-B')!({ step: 'prompt_execution', message: 'B working' });
+        // Post-fix B re-anchors at t=3000 → first narration at t=8000. Pre-fix it inherited A's stale
+        // anchor (t=0) → would fire at t=5000 (inside this 4999ms window). Assert it has NOT fired:
+        await vi.advanceTimersByTimeAsync(4999); // t≈7999
+        expect(model.Sessions[1].SpokenUpdates).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(1); // t≈8000
+        expect(model.Sessions[1].SpokenUpdates).toHaveLength(1);
+        expect(model.Sessions[1].SpokenUpdates[0]).toContain('Update 1:'); // count reset → #1, not a climbing number
+        vi.useRealTimers();
+    });
+
     it('C7 session-identity: a LATE fatal from the OLD session does not tear down the reconnected session', async () => {
         const model = new (class extends BaseRealtimeModel {
             public Sessions: MockRealtimeSession[] = [];
