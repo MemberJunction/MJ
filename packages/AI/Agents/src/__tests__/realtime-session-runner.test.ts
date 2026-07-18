@@ -1312,6 +1312,34 @@ describe('QA re-audit: reconnect × abort × delegation interaction seams', () =
         expect(result.FinalUsage).toEqual({ InputTokens: 35, OutputTokens: 10 });
     });
 
+    it('W-usage post-Stop: a usage frame flushed on the closing socket AFTER Stop() finalized does NOT accumulate and does NOT arm a post-finalize checkpoint timer', async () => {
+        vi.useFakeTimers();
+        const checkpoints: RealtimeUsage[] = [];
+        const model = new (class extends BaseRealtimeModel {
+            public Sessions: MockRealtimeSession[] = [];
+            constructor() { super('k'); }
+            async StartSession(): Promise<IRealtimeSession> { const s = new MockRealtimeSession(); this.Sessions.push(s); return s; }
+        })();
+        const h = buildHarness({
+            Model: model,
+            CheckpointUsage: async (u) => { checkpoints.push(u); },
+            UsageCheckpointDebounceMs: 5000
+        });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+        const s = model.Sessions[0];
+        s.fireUsage({ InputTokens: 10, OutputTokens: 4 });     // legit, before Stop
+        const result = await runner.Stop();                    // flushes 10/4 and finalizes (stopped=true)
+        expect(result.FinalUsage).toEqual({ InputTokens: 10, OutputTokens: 4 });
+        const checkpointsAfterStop = checkpoints.length;
+        // The provider flushes a trailing usage frame on the socket it is closing — this arrives AFTER
+        // Stop() returned. It must be ignored: no accumulation, and crucially NO new debounce timer.
+        s.fireUsage({ InputTokens: 999, OutputTokens: 999 });
+        await vi.advanceTimersByTimeAsync(10_000);             // give any armed timer a chance to fire
+        expect(checkpoints.length).toBe(checkpointsAfterStop); // no post-finalize checkpoint write
+        vi.useRealTimers();
+    });
+
     it('C7 session-identity: a LATE fatal from the OLD session does not tear down the reconnected session', async () => {
         const model = new (class extends BaseRealtimeModel {
             public Sessions: MockRealtimeSession[] = [];

@@ -463,8 +463,11 @@ export class RealtimeSessionRunner {
         session.OnToolCall((call) => { if (this.session === session) void this.handleToolCall(call); });
         // Usage is runner-GLOBAL (cumulative across the whole session lifetime incl. reconnects),
         // NOT session-scoped — so a late usage frame from a just-superseded session must still
-        // accumulate (never dropped by the identity guard). Every OTHER handler stays guarded.
-        session.OnUsage((u) => this.handleUsage(u));
+        // accumulate (never dropped by the session-identity guard the other handlers use). The gate
+        // here is the RUNNER lifecycle instead: once Stop() has finalized (`stopped`), a trailing
+        // usage frame flushed on the closing socket must NOT accumulate — it would diverge from the
+        // already-returned FinalUsage AND arm a fresh debounce timer that checkpoints post-finalize.
+        session.OnUsage((u) => { if (!this.stopped) this.handleUsage(u); });
         session.OnInterruption(() => { if (this.session === session) this.handleInterruption(); });
         session.OnError((error) => { if (this.session === session) this.handleSessionError(error); });
     }
