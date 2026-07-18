@@ -226,6 +226,15 @@ LANGUAGE plpgsql AS $func$
 DECLARE
   v_is_scoped BOOLEAN := FALSE;
 BEGIN
+  -- [Large Schema Series] Force hash/merge joins for the catalog-introspection
+  -- reconciliation below. In the scoped Pass-2 codegen path this SP runs AFTER
+  -- the SQL-generation phase has created thousands of base views + functions,
+  -- when pg_catalog stats are stale and the introspection view is misestimated
+  -- at rows=1 → nested-loop catalog re-scans. See the matching guard + rationale
+  -- in spDeleteUnneededEntityFields. SET LOCAL scopes it to this call only and
+  -- needs no ANALYZE privileges on pg_catalog.
+  SET LOCAL enable_nestloop = off;
+
   DROP TABLE IF EXISTS _uef_excluded;
   CREATE TEMP TABLE _uef_excluded AS
     SELECT TRIM(s) AS schema_name
@@ -238,6 +247,33 @@ BEGIN
     FROM unnest(string_to_array(COALESCE(p_EntityIDs, ''), ',')) AS v
     WHERE TRIM(v) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   v_is_scoped := EXISTS (SELECT 1 FROM _uef_scope);
+
+  -- [Large Schema Series] Materialize the catalog-introspection views into
+  -- ANALYZE'd temp tables BEFORE the reconciliation join below. These views are
+  -- function-based scans over pg_catalog (vwSQLColumnsAndEntityFields computes
+  -- col_description/pg_get_expr/regex per column; the FK/PK/UK views scan
+  -- pg_index/pg_constraint), so the planner has NO row statistics for them and
+  -- defaults every join estimate to rows=1 → a cascade of nested loops that
+  -- re-scan the whole catalog per outer row. Measured on a 600-table schema:
+  -- one call to this function = ~78s, and it grows super-linearly (O(N^2)) as
+  -- codegen adds objects mid-run. Materializing each view exactly once + ANALYZE
+  -- gives the planner real cardinalities so the reconciliation join hash-joins
+  -- instead of nested-looping.
+  DROP TABLE IF EXISTS _uef_cols;
+  CREATE TEMP TABLE _uef_cols AS SELECT * FROM __mj."vwSQLColumnsAndEntityFields";
+  ANALYZE _uef_cols;
+
+  DROP TABLE IF EXISTS _uef_fk;
+  CREATE TEMP TABLE _uef_fk AS SELECT * FROM __mj."vwForeignKeys";
+  ANALYZE _uef_fk;
+
+  DROP TABLE IF EXISTS _uef_pk;
+  CREATE TEMP TABLE _uef_pk AS SELECT * FROM __mj."vwTablePrimaryKeys";
+  ANALYZE _uef_pk;
+
+  DROP TABLE IF EXISTS _uef_uk;
+  CREATE TEMP TABLE _uef_uk AS SELECT * FROM __mj."vwTableUniqueKeys";
+  ANALYZE _uef_uk;
 
   DROP TABLE IF EXISTS _uef_filtered;
   CREATE TEMP TABLE _uef_filtered AS
@@ -299,16 +335,18 @@ BEGIN
     -- sequence" while the modified-entity RETURN stays material-only.
     (ef."Sequence" <> sq."Sequence") AS is_sequence_change
   FROM __mj."EntityField" ef
-  INNER JOIN __mj."vwSQLColumnsAndEntityFields" sq
+  -- [Large Schema Series] joins repointed from the catalog views to the ANALYZE'd
+  -- temp tables materialized above (identical column sets via SELECT *).
+  INNER JOIN _uef_cols sq
     ON ef."EntityID" = sq."EntityID" AND ef."Name"::text = sq."FieldName"::text
   INNER JOIN __mj."Entity" e ON ef."EntityID" = e."ID"
-  LEFT JOIN __mj."vwForeignKeys" fk
+  LEFT JOIN _uef_fk fk
     ON ef."Name"::text = fk."column"::text AND e."BaseTable"::text = fk."table"::text AND e."SchemaName"::text = fk."schema_name"::text
   LEFT JOIN __mj."Entity" re
     ON re."BaseTable"::text = fk."referenced_table"::text AND re."SchemaName"::text = fk."referenced_schema"::text
-  LEFT JOIN __mj."vwTablePrimaryKeys" pk
+  LEFT JOIN _uef_pk pk
     ON e."BaseTable"::text = pk."TableName"::text AND ef."Name"::text = pk."ColumnName"::text AND e."SchemaName"::text = pk."SchemaName"::text
-  LEFT JOIN __mj."vwTableUniqueKeys" uk
+  LEFT JOIN _uef_uk uk
     ON e."BaseTable"::text = uk."TableName"::text AND ef."Name"::text = uk."ColumnName"::text AND e."SchemaName"::text = uk."SchemaName"::text
   LEFT JOIN _uef_excluded ex ON e."SchemaName"::text = ex.schema_name
   WHERE e."VirtualEntity" = FALSE
@@ -445,6 +483,21 @@ LANGUAGE plpgsql AS $func$
 DECLARE
   v_is_scoped BOOLEAN := FALSE;
 BEGIN
+  -- [Large Schema Series] Force hash/merge joins for this reconciliation.
+  -- This SP runs in codegen Pass 2, immediately AFTER the SQL-generation phase
+  -- has created thousands of base views + CRUD functions. At that moment PG's
+  -- pg_catalog statistics are stale (autoanalyze hasn't caught up), so the
+  -- catalog-introspection view (vwSQLColumnsAndEntityFields → pg_class/pg_attribute)
+  -- is estimated at rows=1 and the planner picks a cascade of nested loops that
+  -- re-scan the freshly-ballooned catalog per row — measured at ~500s on a
+  -- 2,000-table schema, even though the same call runs in <1s once stats settle.
+  -- enable_nestloop=off sidesteps the stale-stats misestimate directly (the
+  -- correct strategy here is always hash/merge over these large introspection
+  -- scans). SET LOCAL scopes it to this call's transaction only. This does NOT
+  -- require ANALYZE privileges on pg_catalog (which a codegen role may lack on
+  -- managed PostgreSQL).
+  SET LOCAL enable_nestloop = off;
+
   DROP TABLE IF EXISTS _del_scope;
   CREATE TEMP TABLE _del_scope AS
     SELECT DISTINCT TRIM(v)::uuid AS entity_id
@@ -484,6 +537,9 @@ BEGIN
     AND ef."EntityID" NOT IN (SELECT entity_id FROM _del_ext_entities) -- exclude external-data-source entities (see note above)
     AND ex.v IS NULL
     AND (NOT v_is_scoped OR ef."EntityID" IN (SELECT s.entity_id FROM _del_scope s));
+  -- [Large Schema Series] ANALYZE so the planner has real cardinalities for the
+  -- orphan join below. Without stats it estimates rows=1 and nested-loops.
+  ANALYZE _del_ef;
 
   -- actual columns present in the database
   DROP TABLE IF EXISTS _del_actual;
@@ -491,6 +547,10 @@ BEGIN
   SELECT sq."EntityID" AS entity_id, sq."FieldName"::text AS field_name
   FROM __mj."vwSQLColumnsAndEntityFields" sq
   WHERE (NOT v_is_scoped OR sq."EntityID" IN (SELECT s.entity_id FROM _del_scope s));
+  -- [Large Schema Series] _del_actual is a single materialization of the heavy
+  -- function-based introspection view; ANALYZE it before the orphan join so the
+  -- LEFT JOIN below hash-joins instead of re-scanning the catalog per row.
+  ANALYZE _del_actual;
 
   -- orphans: metadata field with no matching DB column
   DROP TABLE IF EXISTS _del_deleted;
