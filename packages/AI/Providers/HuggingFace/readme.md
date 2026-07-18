@@ -33,6 +33,9 @@ All deployment config — no `mj.config.cjs` changes required:
 
 > The realtime resolver requires a *resolvable* API key for a model to be selectable, so a keyless endpoint should set `AI_VENDOR_API_KEY__HuggingFaceRealtime=none`.
 
+> [!IMPORTANT]
+> **Provision the LLM backend with ≥ 32k context.** MJ's realtime co-agent system prompt (identity framing + tool schemas + injected memory + conversation history) is large and burns context quickly, so the HF pipeline's LLM stage should run with a context window of **at least ~32k tokens** — a smaller window starves mid-conversation (the model loses the prompt/tools partway through). Confirmed during live bring-up. This is a provisioning requirement on your HF deployment, not an MJ setting.
+
 ## Metadata
 
 Seeded as the `HuggingFace Speech-to-Speech` model (`MJ: AI Models`, type `Realtime`) under the `Hugging Face` vendor, `DriverClass: HuggingFaceRealtime`. Its `PowerRank` is intentionally low so it is **opt-in**, never the default realtime provider.
