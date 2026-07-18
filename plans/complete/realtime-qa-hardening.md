@@ -111,9 +111,32 @@ Severity legend: 🔴 fix-critical · 🟠 medium · 🟡 low · ⚪ info/hygien
 
 ## Completion checklist
 
-- [ ] All A/B/C items checked off with tests
-- [ ] Package READMEs updated: ai-openai, ai-xai, ai-huggingface, ai-realtime-client, MJServer (proxy), Agents (realtime)
-- [ ] `guides/REALTIME_CO_AGENTS_GUIDE.md` updated (new config knobs, usage detail, reconnect, MCP deny, timeouts)
-- [ ] Changesets (minor) for all touched packages
-- [ ] Full repo build green; full repo unit tests green
-- [ ] Plan moved to `/plans/complete/realtime-qa-hardening.md`
+- [x] All A/B/C items checked off with tests
+- [x] Package READMEs updated: ai-openai, ai-xai, ai-huggingface (incl. proxy env), ai-realtime-client, Agents (realtime)
+- [x] `guides/REALTIME_CO_AGENTS_GUIDE.md` updated (new config knobs, usage detail, reconnect, MCP deny, timeouts, proxy hardening)
+- [x] Changesets for all touched packages (`.changeset/realtime-qa-hardening.md`)
+- [x] Full repo build green (299/299); full repo unit tests green (594/594)
+- [x] Plan moved to `/plans/complete/realtime-qa-hardening.md`
+
+**Completed 2026-07-18** on `fix/realtime-qa-hardening`. Suite totals: ai-openai 147 · ai-realtime-client 391 · ai-agents 1653 · ai-gemini 87 · ai-xai 50 · ai-huggingface 34 · MJServer proxy 8.
+
+---
+
+## Second-pass adversarial re-audit — findings fixed (2026-07-18)
+
+A three-reviewer re-audit of the hardening work itself found holes in several of the fixes (mostly untested edges the fixes introduced). All fixed with regression tests:
+
+- [x] **C1-DARK 🔴 CRIT** — `normalizeConfig` never propagated the new `realtime.session` field, so `GetSessionTuningSettings` always returned null in production → all tuning knobs were inert (C1 still dark). Added `normalizeSession` (typed validation) wired into the effective-config resolver; end-to-end propagation + service-fold + driver-shape tests.
+- [x] **S1 🔴 HIGH** — B2 counter (`pendingLocalResponseCreates`) wedged the client forever when a `response.create` was rejected (error frame, no `response.created`) — reachable via the ordinary SendText barge-in. Fix: decrement (floor 0) on an error frame (self-heals to pre-counter behavior). Test: reject-then-done → not stuck busy.
+- [x] **SEAM-1 🔴 HIGH** — C7 reconnect racing abort/Stop leaked a live session (no `this.stopped` re-check after the `StartSession` await). Fix: re-check + close the fresh session and bail. Test: gated StartSession + Stop mid-open.
+- [x] **SEAM-2 🔴 HIGH** — C7 reconnect relayed a stale `call_id` to the fresh session and didn't reset delegation/narration state. Fix: `AbortInFlight()` + narration reset at reconnect start, AND a session-identity guard on the tool-result relay (`handleToolCall` captures the originating session; `dispatchToolResult` drops if swapped). Test: in-flight delegation across reconnect → stale result not relayed.
+- [x] **C4-window 🟠** — an abort firing DURING the `StartSession` await was lost (listener attached post-await on an already-fired signal). Fix: `if (signal.aborted) Stop()` after attach. Test: gated StartSession + abort mid-open.
+- [x] **C7 re-entrancy + identity 🟠** — no re-entrancy flag (double reconnect at budget ≥ 2) and no session-identity guard (old session's late fatal killed the fresh one). Fix: `reconnecting` flag + identity-guarded `wireHandlers`. Tests: two-fatals-one-reconnect, late-old-fatal-ignored.
+- [x] **S2 🟠** — client connect deadline timer leaked + could reject a later Connect when `openProviderSocket` throws synchronously. Fix: socket build + wiring moved inside the try; `unref()` added.
+- [x] **S3 🟠** — reused-instance late `onclose`/`onerror` from the OLD socket corrupted the new session. Fix: reset `socketOpen` at Connect entry + identity-guard every socket handler. Test: old-socket-close-after-reconnect ignored.
+- [x] **S5 🟡** — `model` was not a protected wire field (a bag `model` could pin a different model in the client-direct pact). Fix: added `model` to the scrub. Tests: both topologies.
+- [x] **C8 🟡** — `persistRealtimeTranscript` ignored `ReplacesPrevious` → latent duplicate turns for future streamed-final server drivers. Fix: keep the in-flight key on a replacing final. Test: two replacing finals → one row.
+- [x] **W3 🟡** — `effortLevel: 0`/negative was floored to `'minimal'` instead of dropped (+ a contradictory test name). Fix: drop non-positive numerics; test asserts the corrected behavior.
+- [x] **W1/W2/SEAM-4 (test quality)** — strengthened the happy-reconnect usage test (fire before AND after the drop, assert the sum), rewrote the misleading HF "reconnection" reset test to actually prove queued-trigger reset on instance reuse, and added an end-to-end config-tuning-bag → driver-session-payload shape test proving the two halves agree on key names.
+
+**Re-audit verification**: full repo build 299/299, unit tests 594/594. Suite deltas: ai-openai 152 · ai-realtime-client 394 · ai-agents 1668 · ai-gemini 87 · ai-xai 50 · ai-huggingface 34 · MJServer proxy 8.

@@ -103,9 +103,19 @@ class TestxAIClient extends xAIRealtimeClient {
     /** The driver's mic-chunk callback, captured so tests can simulate worklet frames. */
     public OnPcmChunk: ((base64Pcm16: string) => void) | null = null;
 
+    /** Optional override for the NEXT createSocket call (reuse/reconnect tests); consumed once. */
+    private nextSocket: FakeSocket | null = null;
+    public SetNextSocket(socket: FakeSocket): void {
+        this.nextSocket = socket;
+    }
+
     protected override createSocket(url: string, subprotocol: string): IOpenAIProtocolClientSocket {
         this.LastUrl = url;
         this.LastSubprotocol = subprotocol;
+        if (this.nextSocket) {
+            this.Fake = this.nextSocket;
+            this.nextSocket = null;
+        }
         return this.Fake;
     }
     protected override async createMicCapture(
@@ -779,5 +789,60 @@ describe('QA hardening: B3 barge-in floor protection', () => {
         } finally {
             vi.useRealTimers();
         }
+    });
+});
+
+describe('QA re-audit fixes (S1/S3)', () => {
+    let client: TestxAIClient;
+
+    beforeEach(() => {
+        client = new TestxAIClient();
+    });
+
+    it('S1: a rejected response.create (error frame, no response.created) SELF-HEALS — the client never wedges', async () => {
+        await connect(client);
+        // A locally-initiated response.create that the provider REJECTS: error frame, no created echo.
+        client.Emit({ type: 'response.created' }); // an active response (VAD/narration)
+        client.SendText('barge in'); // cancel + inject + local response.create (counter=1, awaiting created)
+        // Provider rejects the new create as overlapping → error frame, NO response.created:
+        client.Emit({ type: 'error', error: { message: 'conversation already has an active response', code: 'conflict' } });
+        // The cancelled turn's trailing done arrives. Pre-fix this would take the stale branch forever.
+        client.Emit({ type: 'response.done', response: {} });
+        // Self-healed: the client is NOT stuck busy, and a fresh spoken update goes out.
+        expect(client.IsBusy).toBe(false);
+        const before = client.Fake.Sent.length;
+        expect(client.RequestSpokenUpdate('now speak')).not.toBe(false);
+        expect(client.Fake.Sent.length).toBeGreaterThan(before);
+    });
+
+    it('S1: an unrelated error frame floors the counter at 0 (never negative)', async () => {
+        await connect(client);
+        client.Emit({ type: 'error', error: { message: 'transient' } }); // no local create outstanding
+        client.Emit({ type: 'error', error: { message: 'another' } });
+        // A normal turn still round-trips cleanly:
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.IsBusy).toBe(false);
+    });
+
+    it('S3: a PREVIOUS socket\'s late onclose does not corrupt the reconnected session', async () => {
+        await connect(client);
+        const oldSocket = client.Fake;
+        await client.Disconnect();
+        // Reconnect on the SAME instance with a fresh socket:
+        const newSocket = new FakeSocket();
+        client.SetNextSocket(newSocket);
+        const seen = collect(client);
+        const promise = client.Connect(makeConfig(), new FakeMediaStream([new FakeTrack()]));
+        newSocket.Open();
+        await promise;
+        // The OLD socket now fires its async close (post-reconnect) — must be ignored:
+        oldSocket.onclose?.();
+        oldSocket.onerror?.('stale error');
+        expect(seen.errors).toHaveLength(0); // fresh session not driven to error
+        expect(seen.states.at(-1)).toBe('listening'); // still healthy
+        // The new socket still sends:
+        client.SendContextNote('works');
+        expect(newSocket.SentFrames().some((f) => f.type === 'conversation.item.create')).toBe(true);
     });
 });

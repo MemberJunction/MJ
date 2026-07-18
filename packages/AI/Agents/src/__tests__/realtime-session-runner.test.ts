@@ -40,6 +40,7 @@ class MockRealtimeSession implements IRealtimeSession {
     public Closed = false;
     public CloseError: Error | null = null;
     public SentToolResults: { CallID: string; Output: string }[] = [];
+    public ContextNotes: string[] = [];
 
     private transcriptHandler: ((t: RealtimeTranscript) => void) | null = null;
     private toolCallHandler: ((call: RealtimeToolCall) => void) | null = null;
@@ -63,6 +64,10 @@ class MockRealtimeSession implements IRealtimeSession {
 
     async SendToolResult(callID: string, output: string): Promise<void> {
         this.SentToolResults.push({ CallID: callID, Output: output });
+    }
+
+    SendContextNote(text: string): void {
+        this.ContextNotes.push(text);
     }
 
     async Close(): Promise<void> {
@@ -1163,5 +1168,161 @@ describe('C7: bounded transport reconnect', () => {
         await new Promise((r) => setTimeout(r, 0));
         expect(model.Sessions).toHaveLength(1); // untouched
         expect(model.Sessions[0].Closed).toBe(false);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// QA re-audit fixes — reconnect interaction seams (SEAM-1/SEAM-2, C4-window, C7 re-entrancy/identity)
+// ════════════════════════════════════════════════════════════════════
+
+describe('QA re-audit: reconnect × abort × delegation interaction seams', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    /** A model whose StartSession can be gated on a manual promise, and hands back fresh sessions. */
+    class GatedReconnectModel extends BaseRealtimeModel {
+        public Sessions: MockRealtimeSession[] = [];
+        public GateNext = false;
+        private release: (() => void) | null = null;
+        constructor() { super('mock-api-key'); }
+        public ReleaseStart(): void { this.release?.(); this.release = null; }
+        async StartSession(_params: RealtimeSessionParams): Promise<IRealtimeSession> {
+            const s = new MockRealtimeSession();
+            if (this.GateNext) {
+                this.GateNext = false;
+                await new Promise<void>((resolve) => { this.release = resolve; });
+            }
+            this.Sessions.push(s);
+            return s;
+        }
+    }
+
+    it('SEAM-1: abort/Stop DURING the reconnect StartSession await closes the fresh session and leaks nothing', async () => {
+        const model = new GatedReconnectModel();
+        const h = buildHarness({ Model: model });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+        const first = model.Sessions[0];
+        model.GateNext = true;              // the RECONNECT's StartSession will block
+        first.fireError({ Message: 'drop', Fatal: true }); // triggers reconnect → awaits StartSession
+        await Promise.resolve();
+        // Consumer stops the runner while the reconnect is mid-open:
+        const stopPromise = runner.Stop();
+        model.ReleaseStart();               // reconnect's StartSession now resolves
+        await stopPromise;
+        await new Promise((r) => setTimeout(r, 0));
+        // The fresh session was created but immediately closed — nothing left live:
+        expect(model.Sessions).toHaveLength(2);
+        expect(model.Sessions[1].Closed).toBe(true);
+    });
+
+    it('SEAM-2: a reconnect aborts the in-flight delegation and does NOT relay a stale call_id to the fresh session', async () => {
+        let releaseDelegate: (() => void) | null = null;
+        const delegateSpy = vi.fn(async (req: DelegateToTargetRequest): Promise<DelegatedResult> => {
+            await new Promise<void>((resolve) => { releaseDelegate = resolve; });
+            return { CallID: req.CallID, Success: true, Output: 'late' };
+        });
+        const model = new (class extends BaseRealtimeModel {
+            public Sessions: MockRealtimeSession[] = [];
+            constructor() { super('k'); }
+            async StartSession(): Promise<IRealtimeSession> { const s = new MockRealtimeSession(); this.Sessions.push(s); return s; }
+        })();
+        const h = buildHarness({ Model: model, DelegateToTarget: delegateSpy });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+        // Delegation in flight on session 0:
+        model.Sessions[0].fireToolCall({ CallID: 'call-OLD', ToolName: INVOKE_TARGET_AGENT_TOOL_NAME, Arguments: '{"message":"hi"}' });
+        await Promise.resolve();
+        // Fatal drop → reconnect:
+        model.Sessions[0].fireError({ Message: 'drop', Fatal: true });
+        await new Promise((r) => setTimeout(r, 0));
+        expect(model.Sessions).toHaveLength(2);
+        // The delegate finally returns — its stale result must NOT be relayed to the fresh session:
+        releaseDelegate?.();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(model.Sessions[1].SentToolResults.find((r) => r.CallID === 'call-OLD')).toBeUndefined();
+    });
+
+    it('C7 session-identity: a LATE fatal from the OLD session does not tear down the reconnected session', async () => {
+        const model = new (class extends BaseRealtimeModel {
+            public Sessions: MockRealtimeSession[] = [];
+            constructor() { super('k'); }
+            async StartSession(): Promise<IRealtimeSession> { const s = new MockRealtimeSession(); this.Sessions.push(s); return s; }
+        })();
+        const h = buildHarness({ Model: model, MaxTransportReconnects: 1 });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+        const old = model.Sessions[0];
+        old.fireError({ Message: 'drop', Fatal: true });
+        await new Promise((r) => setTimeout(r, 0));
+        expect(model.Sessions).toHaveLength(2);
+        const fresh = model.Sessions[1];
+        // The OLD (now-detached) session emits a late fatal — identity guard must ignore it:
+        old.fireError({ Message: 'stale fatal from dead socket', Fatal: true });
+        await new Promise((r) => setTimeout(r, 0));
+        expect(fresh.Closed).toBe(false);       // fresh session untouched
+        expect(model.Sessions).toHaveLength(2); // no extra reconnect consumed
+    });
+
+    it('C7 re-entrancy: two fatals before the reconnect settles launch only ONE reconnect (budget 2)', async () => {
+        const model = new GatedReconnectModel();
+        const h = buildHarness({ Model: model, MaxTransportReconnects: 2 });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+        model.GateNext = true; // first reconnect blocks in StartSession
+        model.Sessions[0].fireError({ Message: 'drop 1', Fatal: true });
+        await Promise.resolve();
+        // A SECOND fatal arrives while the reconnect is in flight — must be ignored (reconnecting flag):
+        model.Sessions[0].fireError({ Message: 'drop 2', Fatal: true });
+        await Promise.resolve();
+        model.ReleaseStart();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(model.Sessions).toHaveLength(2); // exactly one reconnect, not two concurrent
+    });
+
+    it('SEAM-3/W1: accumulated usage from BEFORE the drop survives the reconnect (summed with post-reconnect usage)', async () => {
+        const model = new (class extends BaseRealtimeModel {
+            public Sessions: MockRealtimeSession[] = [];
+            constructor() { super('k'); }
+            async StartSession(): Promise<IRealtimeSession> { const s = new MockRealtimeSession(); this.Sessions.push(s); return s; }
+        })();
+        const h = buildHarness({ Model: model });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+        model.Sessions[0].fireUsage({ InputTokens: 40, OutputTokens: 10 }); // BEFORE the drop
+        model.Sessions[0].fireError({ Message: 'drop', Fatal: true });
+        await new Promise((r) => setTimeout(r, 0));
+        model.Sessions[1].fireUsage({ InputTokens: 9, OutputTokens: 4 });   // AFTER the reconnect
+        const result = await runner.Stop();
+        expect(result.FinalUsage).toEqual({ InputTokens: 49, OutputTokens: 14 }); // spans the reconnect
+    });
+});
+
+describe('C4 re-audit: abort during the StartSession await is not lost', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('a signal that fires DURING StartSession still finalizes the session (post-attach recheck)', async () => {
+        const controller = new AbortController();
+        const gated = new (class extends BaseRealtimeModel {
+            public Session = new MockRealtimeSession();
+            private release: (() => void) | null = null;
+            constructor() { super('k'); }
+            public Release(): void { this.release?.(); }
+            async StartSession(): Promise<IRealtimeSession> {
+                await new Promise<void>((resolve) => { this.release = resolve; });
+                return this.Session;
+            }
+        })();
+        const h = buildHarness({ Model: gated, AbortSignal: controller.signal });
+        const runner = new RealtimeSessionRunner(h.deps);
+        const startPromise = runner.Start();
+        controller.abort();   // fires WHILE StartSession is awaiting (listener not attached yet)
+        gated.Release();
+        await startPromise;
+        await new Promise((r) => setTimeout(r, 0));
+        expect(gated.Session.Closed).toBe(true); // post-attach recheck caught the already-fired abort
     });
 });

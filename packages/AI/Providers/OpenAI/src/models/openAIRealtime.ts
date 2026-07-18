@@ -76,7 +76,9 @@ export function MapEffortLevelToOpenAIRealtime(effortLevel: string): RealtimeRea
         return named as RealtimeReasoningEffort;
     }
     const numValue = Number.parseInt(named, 10);
-    if (Number.isNaN(numValue)) {
+    // A non-numeric OR non-positive value is nonsensical for a 1–100 scale — drop it (no override)
+    // rather than silently flooring 0/negatives to a real 'minimal' reasoning setting.
+    if (Number.isNaN(numValue) || numValue <= 0) {
         return undefined;
     }
     if (numValue <= 20) return 'minimal';
@@ -314,13 +316,16 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     // silently dropping the prompt AND tools); `instructions` is the server-authored co-agent
     // identity; `tools` is the server-authored tool authority. `audio` remains an intentional,
     // documented override channel.
-    const protectedBag = rest as JSONObject & { type?: unknown; instructions?: unknown; tools?: unknown };
-    if (protectedBag.type !== undefined || protectedBag.instructions !== undefined || protectedBag.tools !== undefined) {
-        RealtimeDiagLog('[OpenAIRealtime][diag] Scrubbing protected wire field(s) (type/instructions/tools) from the session Config bag — these are server-authored and cannot be overridden per session');
+    const protectedBag = rest as JSONObject & { type?: unknown; instructions?: unknown; tools?: unknown; model?: unknown };
+    if (protectedBag.type !== undefined || protectedBag.instructions !== undefined || protectedBag.tools !== undefined || protectedBag.model !== undefined) {
+        RealtimeDiagLog('[OpenAIRealtime][diag] Scrubbing protected wire field(s) (type/instructions/tools/model) from the session Config bag — these are server-authored and cannot be overridden per session');
     }
     delete protectedBag.type;
     delete protectedBag.instructions;
     delete protectedBag.tools;
+    // `model` is server-authoritative on the client-direct minted session (set from params.Model) —
+    // a bag override would let a browser pin a different model in the ephemeral pact.
+    delete protectedBag.model;
 
     // Per-session transcription-model override + MJ-side transport settings. All scrubbed
     // unconditionally — none of these are wire fields on ANY provider in the family.

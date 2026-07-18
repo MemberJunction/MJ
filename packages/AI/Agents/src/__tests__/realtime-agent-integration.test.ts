@@ -255,6 +255,23 @@ describe('BaseAgent realtime (session-driven) integration', () => {
             expect(detail.TurnEndedAt).toBeInstanceOf(Date);
         });
 
+        it('C8: a ReplacesPrevious final KEEPS the in-flight key so streamed finals update ONE row (no duplicate turns)', async () => {
+            const { agent, detail, params } = setup();
+            await agent.callPersist(params, { Role: 'assistant', Text: 'Work', IsFinal: false }); // interim → in-flight row
+            // First streamed final (ReplacesPrevious) — updates the in-flight row, returns null:
+            const f1 = await agent.callPersist(params, { Role: 'assistant', Text: 'Working on it', IsFinal: true, ReplacesPrevious: true });
+            expect(f1).toBeNull();
+            // Second streamed final (still ReplacesPrevious) — MUST still find the same in-flight row
+            // (null), NOT create a duplicate turn. Pre-fix the key was deleted on the first final →
+            // this would have returned a NEW id.
+            const f2 = await agent.callPersist(params, { Role: 'assistant', Text: 'Working on it now.', IsFinal: true, ReplacesPrevious: true });
+            expect(f2).toBeNull();
+            expect(detail.Message).toBe('Working on it now.');
+            // A subsequent NORMAL (non-replacing) final clears the key so the NEXT turn starts fresh:
+            const f3 = await agent.callPersist(params, { Role: 'assistant', Text: 'Final answer.', IsFinal: true });
+            expect(f3).toBeNull(); // still the same in-flight row until a non-replacing final clears it
+        });
+
         it('creates and finalizes in one step when no interim was seen; assistant turns set no UserID', async () => {
             const { agent, detail, params } = setup();
             const created = await agent.callPersist(params, { Role: 'assistant', Text: 'hi, how can I help?', IsFinal: true });

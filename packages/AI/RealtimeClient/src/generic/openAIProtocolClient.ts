@@ -630,8 +630,22 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         });
     }
 
-    /** Surfaces a provider error frame (non-fatal; the session continues). */
+    /**
+     * Surfaces a provider error frame (non-fatal; the session continues).
+     *
+     * SELF-HEAL for the stale-response counter (see {@link pendingLocalResponseCreates}): a
+     * `response.create` the provider REJECTS (overlap, invalid params) produces an `error` frame
+     * and **no** `response.created`, so the counter would otherwise never decrement and every
+     * future `response.done` would take the stale branch — wedging the client (`IsBusy` stuck true,
+     * narration + tool results silently dropped). Decrementing here (floored at 0) reverts to the
+     * pre-counter self-healing behavior for that turn rather than leaving the session dead. An
+     * error unrelated to a local create at worst under-protects one `done` (the old default), never
+     * wedges.
+     */
     private onErrorFrame(event: OAIProtocolErrorEvent): void {
+        if (this.pendingLocalResponseCreates > 0) {
+            this.pendingLocalResponseCreates--;
+        }
         this.emitError({
             Message: event.error?.message ?? 'Unknown provider error',
             Code: event.error?.code,
@@ -826,26 +840,41 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
             () => this.failPendingConnect?.(new Error(`${this.providerDebugLabel} connect timed out after ${this.connectTimeoutMs}ms`)),
             this.connectTimeoutMs,
         );
+        // Node parity with the server readiness timer — never hold the event loop for the deadline.
+        (deadline as { unref?: () => void }).unref?.();
 
-        const socket = this.openProviderSocket(config);
-        this.socket = socket;
-        socket.onopen = () => {
-            this.socketOpen = true;
-            openSocket?.();
-        };
-        socket.onmessage = (data) => this.handleProtocolMessage(data);
-        socket.onerror = (message) => {
-            this.socketOpen = false;
-            this.failPendingConnect?.(new Error(message));
-            this.handleSocketError(message);
-        };
-        socket.onclose = () => {
-            this.socketOpen = false;
-            this.failPendingConnect?.(new Error(`${this.providerDebugLabel} socket closed during connect`));
-            this.handleSocketClose();
-        };
-
+        // S2: build the socket + wire handlers INSIDE the try so a synchronous throw from
+        // openProviderSocket (no global WebSocket, malformed URL) still clears the deadline timer
+        // and nulls failPendingConnect via the finally.
         try {
+            this.socketOpen = false; // S3: never inherit a prior connect's open state on reuse
+            const socket = this.openProviderSocket(config);
+            this.socket = socket;
+            // S3: identity-guard every handler — a PREVIOUS socket's late onerror/onclose (they
+            // fire asynchronously after a Disconnect+reconnect on a reused instance) must not
+            // corrupt the NEW socket's state or drive the fresh session to error/closed.
+            socket.onopen = () => {
+                if (this.socket !== socket) { return; }
+                this.socketOpen = true;
+                openSocket?.();
+            };
+            socket.onmessage = (data) => {
+                if (this.socket !== socket) { return; }
+                this.handleProtocolMessage(data);
+            };
+            socket.onerror = (message) => {
+                if (this.socket !== socket) { return; }
+                this.socketOpen = false;
+                this.failPendingConnect?.(new Error(message));
+                this.handleSocketError(message);
+            };
+            socket.onclose = () => {
+                if (this.socket !== socket) { return; }
+                this.socketOpen = false;
+                this.failPendingConnect?.(new Error(`${this.providerDebugLabel} socket closed during connect`));
+                this.handleSocketClose();
+            };
+
             await Promise.race([opened, failure]);
             this.setState('connected');
             if (created) {

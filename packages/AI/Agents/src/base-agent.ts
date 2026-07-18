@@ -2423,8 +2423,15 @@ export class BaseAgent {
         }
 
         // ── FINAL: update the in-flight row (or create+finalize when no interim was seen) ─────────
+        // ReplacesPrevious (streamed-final providers, e.g. Grok): each final carries the full
+        // growing text and REPLACES the prior final for the SAME turn. Keep the in-flight key so the
+        // next replacing-final updates this same row in place — dropping it would orphan the row and
+        // spawn a duplicate ConversationDetail per replacing-final. A normal (non-replacing) final
+        // clears the key so the next turn starts fresh.
         const inFlightId = this.realtimeInFlightTurns.get(roleKey);
-        this.realtimeInFlightTurns.delete(roleKey);
+        if (!transcript.ReplacesPrevious) {
+            this.realtimeInFlightTurns.delete(roleKey);
+        }
         let detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
         let created = false;
         if (inFlightId && await detail.Load(inFlightId)) {
