@@ -56,14 +56,48 @@ export type RealtimeReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'x
 const REALTIME_REASONING_EFFORTS: ReadonlySet<string> = new Set(['minimal', 'low', 'medium', 'high', 'xhigh']);
 
 /**
+ * Maps MJ's NORMALIZED effort level (the same `ChatParams.effortLevel` vocabulary the LLM drivers
+ * consume: a numeric 1–100 value, or a named level) onto OpenAI's realtime
+ * {@link RealtimeReasoningEffort} union. This is the OpenAI implementation of the
+ * {@link OpenAIRealtimeProfile.mapEffortLevel} seam — providers with a DIFFERENT effort vocabulary
+ * override the profile function rather than the protocol code.
+ *
+ * Numeric mapping is quintile-based across OpenAI's five levels: ≤20 → `minimal`, ≤40 → `low`,
+ * ≤60 → `medium`, ≤80 → `high`, >80 → `xhigh`. Named values already in the union pass through.
+ * Unmappable values return `undefined` (dropped with a diag log — never sent raw).
+ *
+ * @param effortLevel The MJ-normalized effort level (numeric string/number 1–100 or named level).
+ * @returns The provider effort literal, or `undefined` when the value cannot be mapped.
+ */
+export function MapEffortLevelToOpenAIRealtime(effortLevel: string): RealtimeReasoningEffort | undefined {
+    const named = effortLevel.trim().toLowerCase();
+    if (REALTIME_REASONING_EFFORTS.has(named)) {
+        return named as RealtimeReasoningEffort;
+    }
+    const numValue = Number.parseInt(named, 10);
+    if (Number.isNaN(numValue)) {
+        return undefined;
+    }
+    if (numValue <= 20) return 'minimal';
+    if (numValue <= 40) return 'low';
+    if (numValue <= 60) return 'medium';
+    if (numValue <= 80) return 'high';
+    return 'xhigh';
+}
+
+/**
  * GA Realtime API session fields that the pinned `openai` SDK's `RealtimeSessionCreateRequest`
  * typings do not yet declare. The wire protocol accepts them (documented for the GA API and the
  * gpt-realtime-2/2.1 reasoning models); this typed extension lets the driver send them without
  * weakening types. Remove once the SDK typings catch up.
+ *
+ * `reasoning.effort` is typed `string` (not the OpenAI union) because the value is produced by
+ * the per-provider {@link OpenAIRealtimeProfile.mapEffortLevel} seam — an OpenAI-compatible
+ * provider may legally emit a different level vocabulary.
  */
 interface RealtimeSessionGAFields {
     /** Session-level reasoning effort for reasoning realtime models (`reasoning.effort`). */
-    reasoning?: { effort: RealtimeReasoningEffort };
+    reasoning?: { effort: string };
     /** Whether the model may call multiple tools in one turn (GA default: true). */
     parallel_tool_calls?: boolean;
 }
@@ -83,13 +117,23 @@ type GARealtimeSessionCreateRequest = RealtimeSessionCreateRequest & RealtimeSes
 export interface OpenAIRealtimeProfile {
     /** The {@link ClientRealtimeSessionConfig.Provider} key the browser uses to pick its client driver. */
     providerKey: string;
-    /** The ASR model for USER input transcription (opt-in pass; see {@link OPENAI_INPUT_TRANSCRIPTION_MODEL}). */
-    inputTranscriptionModel: string;
+    /**
+     * The ASR model for USER input transcription (opt-in pass; see {@link OPENAI_INPUT_TRANSCRIPTION_MODEL}).
+     * `undefined` means the provider transcribes natively (e.g. a cascaded STT stage) and no
+     * transcription block is sent unless the Config bag supplies `inputTranscriptionModel`.
+     */
+    inputTranscriptionModel?: string;
     /**
      * Whether the initial `session.update` must wait for the server's `session.created` frame.
      * OpenAI's socket drops config sent during the handshake; xAI's accepts it immediately.
      */
     deferInitialConfigUntilSessionCreated: boolean;
+    /**
+     * When true, `InitialContext` is folded into the system prompt under a "Prior context" heading
+     * instead of being seeded as a separate user conversation item — for compat endpoints with no
+     * guaranteed history-seeding channel (HuggingFace speech-to-speech).
+     */
+    foldInitialContextIntoPrompt: boolean;
     /** Whether the provider accepts the GA `reasoning.effort` session field. */
     supportsReasoningEffort: boolean;
     /** Whether the provider accepts the GA `parallel_tool_calls` session field. */
@@ -106,6 +150,13 @@ export interface OpenAIRealtimeProfile {
      * `undefined` to omit the block and accept the provider default.
      */
     buildTurnDetection(disableAutoResponse: boolean): RealtimeAudioInputTurnDetection | undefined;
+    /**
+     * Maps MJ's NORMALIZED effort level (numeric 1–100 or named — the same vocabulary as
+     * `ChatParams.effortLevel`) onto THIS provider's realtime effort literals. Providers whose
+     * endpoint uses a different level set override this seam; return `undefined` to drop an
+     * unmappable value (it is never sent raw). Only consulted when `supportsReasoningEffort` is on.
+     */
+    mapEffortLevel(effortLevel: string): string | undefined;
 }
 
 /** The OpenAI provider profile — the defaults every OpenAI-compatible subclass overrides from. */
@@ -113,6 +164,7 @@ export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     providerKey: 'openai',
     inputTranscriptionModel: OPENAI_INPUT_TRANSCRIPTION_MODEL,
     deferInitialConfigUntilSessionCreated: true,
+    foldInitialContextIntoPrompt: false,
     supportsReasoningEffort: true,
     supportsParallelToolCalls: true,
     supportsMcpTools: true,
@@ -122,6 +174,7 @@ export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     // the block is only sent when meeting mode needs create_response disabled.
     buildTurnDetection: (disableAutoResponse) =>
         disableAutoResponse ? { type: 'server_vad', create_response: false, interrupt_response: true } : undefined,
+    mapEffortLevel: MapEffortLevelToOpenAIRealtime,
 };
 
 /**
@@ -129,8 +182,12 @@ export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
  * bag before the remainder is spread into the provider session payload.
  */
 interface ExtractedRealtimeFeatures {
-    /** Validated `reasoningEffort` bag value, if present and one of the allowed levels. */
-    reasoningEffort?: RealtimeReasoningEffort;
+    /**
+     * The raw effort value awaiting the profile's `mapEffortLevel` translation. Sourced from the
+     * provider-native `reasoningEffort` bag key when present (explicit override), else from the
+     * MJ-normalized `effortLevel` key (numeric 1–100 or named — `ChatParams.effortLevel` vocabulary).
+     */
+    effortLevel?: string;
     /** `parallelToolCalls` bag value, if present. */
     parallelToolCalls?: boolean;
     /** Remote MCP server tool declarations from the `mcpTools` bag value, if present. */
@@ -139,6 +196,17 @@ interface ExtractedRealtimeFeatures {
     voice?: string;
     /** The host-neutral meeting flag (`disableAutoResponse`) — never sent raw to a provider. */
     disableAutoResponse: boolean;
+    /** Per-session input-transcription model override (`inputTranscriptionModel` bag key). */
+    inputTranscriptionModel?: string;
+    /**
+     * MJ-side transport settings (`endpoint`, `sampleRate`, `proxyBaseUrl` bag keys) consumed by
+     * self-hosted/proxied drivers — ALWAYS scrubbed so they never leak into a provider payload.
+     */
+    endpoint?: string;
+    /** See {@link ExtractedRealtimeFeatures.endpoint}. */
+    sampleRate?: number;
+    /** See {@link ExtractedRealtimeFeatures.endpoint}. */
+    proxyBaseUrl?: string;
     /** The remaining bag entries, safe to spread into the session payload. */
     rest: JSONObject;
 }
@@ -148,15 +216,18 @@ interface ExtractedRealtimeFeatures {
  * their provider-native session fields only when the profile confirms support, and (b) NEVER
  * leaked raw into a provider payload that would reject unknown fields.
  *
- * Recognized bag keys: `reasoningEffort`, `parallelToolCalls`, `mcpTools`, `voice`,
- * `disableAutoResponse`. Everything else passes through in `rest` (provider-native keys like
- * `tool_choice` or `output_modalities` can be set directly by config authors).
+ * Recognized bag keys: `effortLevel` (MJ-normalized: numeric 1–100 or named), `reasoningEffort`
+ * (provider-native literal — wins over `effortLevel` when both are present), `parallelToolCalls`,
+ * `mcpTools`, `voice`, `disableAutoResponse`. Everything else passes through in `rest`
+ * (provider-native keys like `tool_choice` or `output_modalities` can be set directly by config
+ * authors).
  *
  * @param config The open session Config bag (may be undefined).
  * @returns The extracted features plus the residual bag.
  */
-export function extractRealtimeFeatures(config: JSONObject | undefined): ExtractedRealtimeFeatures {
+export function ExtractRealtimeFeatures(config: JSONObject | undefined): ExtractedRealtimeFeatures {
     const rest = { ...(config ?? {}) } as JSONObject & {
+        effortLevel?: unknown;
         reasoningEffort?: unknown;
         parallelToolCalls?: unknown;
         mcpTools?: unknown;
@@ -164,16 +235,22 @@ export function extractRealtimeFeatures(config: JSONObject | undefined): Extract
         disableAutoResponse?: unknown;
     };
 
-    const rawEffort = rest.reasoningEffort;
+    // The provider-native key is an explicit override; the normalized key is the standard channel.
+    // Both are scrubbed either way so neither ever leaks raw into a provider payload. Numbers are
+    // accepted on effortLevel (ChatParams.effortLevel is a string, but config authors write JSON).
+    const rawNative = rest.reasoningEffort;
     delete rest.reasoningEffort;
-    let reasoningEffort: RealtimeReasoningEffort | undefined;
-    if (typeof rawEffort === 'string') {
-        if (REALTIME_REASONING_EFFORTS.has(rawEffort)) {
-            reasoningEffort = rawEffort as RealtimeReasoningEffort;
-        }
-        else {
-            RealtimeDiagLog(`[OpenAIRealtime][diag] Ignoring invalid reasoningEffort '${rawEffort}' — expected one of ${[...REALTIME_REASONING_EFFORTS].join('/')}`);
-        }
+    const rawNormalized = rest.effortLevel;
+    delete rest.effortLevel;
+    let effortLevel: string | undefined;
+    if (typeof rawNative === 'string' && rawNative.trim().length > 0) {
+        effortLevel = rawNative.trim();
+    }
+    else if (typeof rawNormalized === 'string' && rawNormalized.trim().length > 0) {
+        effortLevel = rawNormalized.trim();
+    }
+    else if (typeof rawNormalized === 'number' && Number.isFinite(rawNormalized)) {
+        effortLevel = String(rawNormalized);
     }
 
     const rawParallel = rest.parallelToolCalls;
@@ -192,13 +269,30 @@ export function extractRealtimeFeatures(config: JSONObject | undefined): Extract
     const disableAutoResponse = rest.disableAutoResponse === true;
     delete rest.disableAutoResponse;
 
-    return { reasoningEffort, parallelToolCalls, mcpTools, voice, disableAutoResponse, rest };
+    // Per-session transcription-model override + MJ-side transport settings. All scrubbed
+    // unconditionally — none of these are wire fields on ANY provider in the family.
+    const bag = rest as JSONObject & { inputTranscriptionModel?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown };
+    const rawItm = bag.inputTranscriptionModel;
+    delete bag.inputTranscriptionModel;
+    const inputTranscriptionModel = typeof rawItm === 'string' && rawItm.trim().length > 0 ? rawItm.trim() : undefined;
+    const rawEndpoint = bag.endpoint;
+    delete bag.endpoint;
+    const endpoint = typeof rawEndpoint === 'string' && rawEndpoint.trim().length > 0 ? rawEndpoint.trim() : undefined;
+    const rawRate = bag.sampleRate;
+    delete bag.sampleRate;
+    const sampleRate = typeof rawRate === 'number' && rawRate > 0 ? rawRate : undefined;
+    const rawProxy = bag.proxyBaseUrl;
+    delete bag.proxyBaseUrl;
+    const proxyBaseUrl = typeof rawProxy === 'string' && rawProxy.trim().length > 0 ? rawProxy.trim() : undefined;
+
+    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, rest };
 }
 
 /**
  * Applies the profile-gated GA features onto a session payload. Features a provider has not
- * confirmed are silently dropped (already scrubbed from the bag by {@link extractRealtimeFeatures})
- * rather than sent and rejected.
+ * confirmed are silently dropped (already scrubbed from the bag by {@link ExtractRealtimeFeatures})
+ * rather than sent and rejected. Effort levels run through the profile's `mapEffortLevel` seam so
+ * each provider translates MJ's normalized vocabulary to its own literals.
  *
  * @param session The session payload under construction.
  * @param features The features extracted from the Config bag.
@@ -209,8 +303,14 @@ function applyGAFeatures(
     features: ExtractedRealtimeFeatures,
     profile: OpenAIRealtimeProfile,
 ): void {
-    if (profile.supportsReasoningEffort && features.reasoningEffort) {
-        session.reasoning = { effort: features.reasoningEffort };
+    if (profile.supportsReasoningEffort && features.effortLevel) {
+        const mapped = profile.mapEffortLevel(features.effortLevel);
+        if (mapped) {
+            session.reasoning = { effort: mapped };
+        }
+        else {
+            RealtimeDiagLog(`[${profile.providerKey}Realtime][diag] Ignoring unmappable effort level '${features.effortLevel}'`);
+        }
     }
     if (profile.supportsParallelToolCalls && features.parallelToolCalls !== undefined) {
         session.parallel_tool_calls = features.parallelToolCalls;
@@ -222,6 +322,37 @@ function applyGAFeatures(
         // recoverable session error (see OpenAIRealtimeSession.dispatch) rather than silently stalling.
         session.tools = [...(session.tools ?? []), ...features.mcpTools];
     }
+}
+
+/**
+ * Assembles the session `audio` block from the profile + extracted features, or `undefined` when
+ * every part is empty (compat endpoints reject/ignore hollow blocks). The transcription model is
+ * the per-session bag override when present, else the profile's default (which may be undefined
+ * for natively-transcribing providers).
+ *
+ * @param profile The provider profile.
+ * @param features The extracted Config-bag features.
+ * @param turnDetection The already-built turn-detection block, if any.
+ * @returns The audio block, or `undefined` to omit it.
+ */
+function BuildAudioBlock(
+    profile: OpenAIRealtimeProfile,
+    features: ReturnType<typeof ExtractRealtimeFeatures>,
+    turnDetection: RealtimeAudioInputTurnDetection | undefined,
+): RealtimeSessionCreateRequest['audio'] | undefined {
+    const transcriptionModel = features.inputTranscriptionModel ?? profile.inputTranscriptionModel;
+    const input = {
+        ...(transcriptionModel ? { transcription: { model: transcriptionModel } } : {}),
+        ...(turnDetection ? { turn_detection: turnDetection } : {}),
+    };
+    const output = profile.supportsVoiceOutput && features.voice ? { voice: features.voice } : undefined;
+    if (Object.keys(input).length === 0 && !output) {
+        return undefined;
+    }
+    return {
+        ...(Object.keys(input).length > 0 ? { input } : {}),
+        ...(output ? { output } : {}),
+    };
 }
 
 /**
@@ -427,7 +558,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
      */
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         const profile = this.Profile;
-        const features = extractRealtimeFeatures(params.Config);
+        const features = ExtractRealtimeFeatures(params.Config);
         const session: GARealtimeSessionCreateRequest = {
             type: 'realtime',
             model: params.Model,
@@ -443,13 +574,10 @@ export class OpenAIRealtime extends BaseRealtimeModel {
         // shaped by GetProviderVoiceSettings) — this is what lets a co-agent's configured voice OR a
         // per-session override actually take effect in the client-direct topology.
         const turnDetection = profile.buildTurnDetection(features.disableAutoResponse);
-        session.audio = {
-            input: {
-                transcription: { model: profile.inputTranscriptionModel },
-                ...(turnDetection ? { turn_detection: turnDetection } : {}),
-            },
-            ...(profile.supportsVoiceOutput && features.voice ? { output: { voice: features.voice } } : {}),
-        };
+        const audio = BuildAudioBlock(profile, features, turnDetection);
+        if (audio) {
+            session.audio = audio;
+        }
         applyGAFeatures(session, features, profile);
         const response = await this.mintClientSecret({ session });
         return {
@@ -487,6 +615,11 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     /** Set by {@link Close} so a consumer-initiated teardown never reports an "unexpected" close. */
     private closedByConsumer = false;
 
+    /** Backing promise for {@link WaitForConfigApplied}; resolve/reject handles null once settled. */
+    private configAppliedPromise: Promise<void>;
+    private resolveConfigApplied: (() => void) | null = null;
+    private rejectConfigApplied: ((error: Error) => void) | null = null;
+
     /**
      * Whether a model response is currently in flight. Minimal response tracking that mirrors the
      * client driver's state machine: set on `response.created` (and eagerly whenever this session
@@ -495,8 +628,12 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * `cancelled` after barge-in, so the flag can never stick. Consumed by
      * {@link OpenAIRealtimeSession.RequestSpokenUpdate} to skip (not collide with) an active
      * response, since the API rejects overlapping `response.create` requests.
+     *
+     * Protected (not private) so compat-endpoint session subclasses can apply provider-specific
+     * robustness tweaks (e.g. HuggingFace marks a response active on the first audio delta and
+     * releases the flag when a tool call yields the floor).
      */
-    private responseActive = false;
+    protected responseActive = false;
 
     /**
      * @param connection The injectable provider-connection seam.
@@ -505,6 +642,12 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     constructor(connection: IOpenAIRealtimeConnection, profile: OpenAIRealtimeProfile = OPENAI_REALTIME_PROFILE) {
         this.connection = connection;
         this.profile = profile;
+        this.configAppliedPromise = new Promise<void>((resolve, reject) => {
+            this.resolveConfigApplied = resolve;
+            this.rejectConfigApplied = reject;
+        });
+        // Not every consumer awaits WaitForConfigApplied — guard unhandled-rejection noise.
+        this.configAppliedPromise.catch(() => undefined);
         this.eventListener = (event: RealtimeServerEvent) => this.dispatch(event);
         this.connection.on('event', this.eventListener);
         this.errorListener = (error: OpenAIRealtimeError) => this.handleConnectionError(error);
@@ -530,11 +673,21 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * @param params The session parameters.
      */
     public applyInitialConfig(params: RealtimeSessionParams): void {
-        if (!this.profile.deferInitialConfigUntilSessionCreated) {
-            this.sendSessionUpdate(params.SystemPrompt, params.Tools, params.Config);
-            if (params.InitialContext && params.InitialContext.length > 0) {
-                this.sendInitialContext(params.InitialContext);
+        // Compat endpoints with no history-seeding channel fold the prior context into the system
+        // prompt instead of seeding a separate user message (profile-driven).
+        const fold = this.profile.foldInitialContextIntoPrompt;
+        const context = params.InitialContext?.trim();
+        const systemPrompt = fold && context ? `${params.SystemPrompt}\n\n## Prior context\n${context}` : params.SystemPrompt;
+        const applyConfig = (): void => {
+            this.sendSessionUpdate(systemPrompt, params.Tools, params.Config);
+            if (!fold && context && context.length > 0) {
+                this.sendInitialContext(context);
             }
+            this.resolveConfigApplied?.();
+            this.resolveConfigApplied = null;
+        };
+        if (!this.profile.deferInitialConfigUntilSessionCreated) {
+            applyConfig();
             return;
         }
         let applied = false;
@@ -544,12 +697,34 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             }
             applied = true;
             this.connection.off('event', applyWhenReady);
-            this.sendSessionUpdate(params.SystemPrompt, params.Tools, params.Config);
-            if (params.InitialContext && params.InitialContext.length > 0) {
-                this.sendInitialContext(params.InitialContext);
-            }
+            applyConfig();
         };
         this.connection.on('event', applyWhenReady);
+    }
+
+    /**
+     * Resolves once the initial session config has been APPLIED (sent on the socket) — immediately
+     * for providers that configure synchronously, or on the server's `session.created` frame for
+     * deferring providers. Rejects if the transport dies (fatal error or unexpected close) or the
+     * consumer closes the session before the config went out.
+     *
+     * The base {@link OpenAIRealtime.StartSession} deliberately does NOT await this (OpenAI
+     * semantics: the session handle is returned while the handshake completes). Drivers whose
+     * contract promises "ready only after config is applied" (HuggingFace) await it in their
+     * `StartSession` override.
+     */
+    public WaitForConfigApplied(): Promise<void> {
+        return this.configAppliedPromise;
+    }
+
+    /** Rejects a still-pending {@link WaitForConfigApplied} (transport death / early consumer close). */
+    private failConfigWait(message: string): void {
+        if (this.rejectConfigApplied) {
+            const reject = this.rejectConfigApplied;
+            this.rejectConfigApplied = null;
+            this.resolveConfigApplied = null;
+            reject(new Error(message));
+        }
     }
 
     // ---- IRealtimeSession outbound ----
@@ -717,6 +892,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     /** @inheritdoc */
     public async Close(): Promise<void> {
         this.closedByConsumer = true;
+        this.failConfigWait('session closed by consumer before the initial config was applied');
         this.connection.off('event', this.eventListener);
         this.connection.off('error', this.errorListener);
         this.connection.close();
@@ -728,9 +904,12 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * Routes a provider server event to the matching contract handler. Each branch delegates to a
      * small, single-purpose handler to keep this dispatcher flat.
      *
+     * Protected (not private) so OpenAI-compatible session subclasses can pre-translate legacy /
+     * beta frame aliases before delegating here.
+     *
      * @param event The OpenAI realtime server event.
      */
-    private dispatch(event: RealtimeServerEvent): void {
+    protected dispatch(event: RealtimeServerEvent): void {
         switch (event.type) {
             case 'response.output_audio.delta':
                 return this.handleAudioDelta(event.delta);
@@ -833,6 +1012,9 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      */
     private handleConnectionError(error: OpenAIRealtimeError): void {
         const isProviderFrame = error.error != null;
+        if (!isProviderFrame) {
+            this.failConfigWait(error.message);
+        }
         this.errorHandler?.({
             Message: error.message,
             Code: error.error?.code ?? undefined,
@@ -849,6 +1031,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         if (this.closedByConsumer) {
             return;
         }
+        this.failConfigWait(this.profile.unexpectedCloseMessage);
         this.errorHandler?.({ Message: this.profile.unexpectedCloseMessage, Fatal: true });
         this.closeHandler?.();
     }
@@ -875,20 +1058,20 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         // on addressing), not the model, decides WHEN to speak — so we disable server-VAD auto-response
         // while KEEPING detection so input transcription and barge-in still work. A 1:1 call (flag absent)
         // keeps the provider's default auto-response.
-        const features = extractRealtimeFeatures(config);
+        const features = ExtractRealtimeFeatures(config);
         const turnDetection = this.profile.buildTurnDetection(features.disableAutoResponse);
 
+        // Opt into USER input transcription — the same opt-in CreateClientSession applies for the
+        // client-direct topology — so user-role transcripts flow server-bridged too (the contract
+        // promises BOTH roles). Providers that transcribe natively (profile model undefined, no bag
+        // override) get no transcription block; an all-empty audio block is omitted entirely. The
+        // residual config bag spreads AFTER the built block so a per-conversation raw `audio`
+        // override can still replace it wholesale.
+        const audio = BuildAudioBlock(this.profile, features, turnDetection);
         const session: GARealtimeSessionCreateRequest = {
             type: 'realtime',
             instructions: systemPrompt,
-            // Opt into USER input transcription — the same opt-in CreateClientSession applies for
-            // the client-direct topology — so user-role transcripts flow server-bridged too (the
-            // contract promises BOTH roles). The config bag spreads after this so a
-            // per-conversation override can still replace the audio block.
-            audio: {
-                input: { transcription: { model: this.profile.inputTranscriptionModel }, ...(turnDetection ? { turn_detection: turnDetection } : {}) },
-                ...(this.profile.supportsVoiceOutput && features.voice ? { output: { voice: features.voice } } : {}),
-            },
+            ...(audio ? { audio } : {}),
             ...features.rest,
         };
         if (tools && tools.length > 0) {

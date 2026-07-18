@@ -2,9 +2,11 @@
 //
 // HuggingFace's open-source speech-to-speech stack (https://github.com/huggingface/speech-to-speech)
 // is a cascaded VAD → STT → LLM → TTS pipeline that can expose an **OpenAI-Realtime-compatible**
-// websocket endpoint (`/v1/realtime`). This driver treats that endpoint as a realtime model, so a
-// self-hosted, private, cost-free voice stack sits side-by-side with the cloud realtime providers
-// (OpenAI, Gemini, ElevenLabs, AssemblyAI) with no host changes.
+// websocket endpoint (`/v1/realtime`). Because the endpoint speaks OpenAI's literal GA wire frames,
+// this driver **subclasses the shared `OpenAIRealtime` protocol implementation** — supplying a
+// provider profile plus a raw-WebSocket connection adapter — instead of maintaining a clone of the
+// event loop. Self-hosted specifics (deployment-config endpoint, keyless-auth sentinels, the MJAPI
+// realtime-proxy client-direct topology, 16 kHz PCM plane) stay here.
 //
 // Because the endpoint is self-hosted (same box as MJAPI or another server the deployment owns), the
 // client-direct topology is implemented through MJAPI's **realtime proxy**: `CreateClientSession`
@@ -20,13 +22,19 @@ import {
     type IRealtimeSession,
     type RealtimeSessionParams,
     type RealtimeToolDefinition,
-    type RealtimeTranscript,
-    type RealtimeToolCall,
-    type RealtimeUsage,
-    type RealtimeSessionError,
+    type RealtimeVoiceOption,
     type JSONObject,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
+import {
+    OpenAIRealtime,
+    OpenAIRealtimeSession,
+    OpenAIRealtimeProfile,
+    IOpenAIRealtimeConnection,
+    MapEffortLevelToOpenAIRealtime,
+    RawRealtimeWebSocketConnection,
+} from '@memberjunction/ai-openai';
+import type { RealtimeServerEvent } from 'openai/resources/realtime/realtime';
 
 /**
  * Default upstream endpoint for a locally-run HuggingFace speech-to-speech server in OpenAI-compatible
@@ -46,60 +54,39 @@ export const HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE = 16000;
 /** Connect-window TTL for the one-time proxy ticket minted for a browser-direct session. */
 export const HUGGINGFACE_PROXY_TICKET_TTL_SECONDS = 300;
 
-// ── Transport seam (typed subset — a fake in tests, a raw WebSocket in prod) ──
-
-/** The minimal outbound surface of the upstream websocket the server-bridged session depends on. */
-export interface HuggingFaceRealtimeSocket {
-    /** Sends one JSON-serialized client frame. */
-    send(data: string): void;
-    /** Terminates the underlying connection. */
-    close(): void;
-}
-
-/** Arguments handed to {@link HuggingFaceRealtime.connectSocket}: the URL, optional auth, and callbacks. */
-export interface HuggingFaceConnectArgs {
-    /** The upstream `ws(s)://…/v1/realtime` URL. */
-    Url: string;
-    /** Optional `Authorization` header value for the upstream socket (self-hosted endpoints are often open). */
-    AuthHeader?: string;
-    /** Invoked with each parsed inbound frame. */
-    OnMessage: (event: HuggingFaceServerEvent) => void;
-    /** Invoked on a websocket-level error (fatal — the session is unusable). */
-    OnError: (message: string) => void;
-    /** Invoked when the websocket closes. */
-    OnClose: (code?: number, reason?: string) => void;
-}
-
-/** Structural subset of the global `WebSocket` constructor used by the production connect seam. */
-interface NativeWebSocketLike {
-    onopen: (() => void) | null;
-    onmessage: ((event: { data: unknown }) => void) | null;
-    onerror: (() => void) | null;
-    onclose: ((event: { code?: number; reason?: string }) => void) | null;
-    send(data: string): void;
-    close(): void;
-}
-
-// ── Inbound OpenAI-Realtime wire events (only the fields this driver reads are typed) ──
-
-/** A parsed inbound frame from the OpenAI-Realtime-compatible endpoint (discriminated by `type`). */
-export interface HuggingFaceServerEvent {
-    type?: string;
-    /** `response.output_audio.delta` (GA) / `response.audio.delta` (beta) — one base64 PCM16 chunk. */
-    delta?: string;
-    /** `*_audio_transcript.done` — the finalized assistant transcript text. */
-    transcript?: string;
-    /** `response.function_call_arguments.done` — the tool name. */
-    name?: string;
-    /** `response.function_call_arguments.done` — correlation id the result must echo. */
-    call_id?: string;
-    /** `response.function_call_arguments.done` — JSON-encoded tool arguments (a STRING per the wire). */
-    arguments?: string;
-    /** `response.done` — usage payload for the completed response. */
-    response?: { usage?: { input_tokens?: number; output_tokens?: number } };
-    /** `error` — the provider error payload. */
-    error?: { message?: string; code?: string };
-}
+/**
+ * The HuggingFace provider profile — the per-provider knobs the shared {@link OpenAIRealtime}
+ * protocol implementation runs with when driving a self-hosted speech-to-speech endpoint:
+ *
+ * - **No default input-transcription model**: the cascade's STT stage transcribes the user
+ *   natively; a transcription block is only sent when the Config bag supplies
+ *   `inputTranscriptionModel` (and only names a model if the compat layer supports selecting one).
+ * - **Config deferred to `session.created`** — the endpoint validates `session.update` against the
+ *   GA shape once the session exists; the readiness gate below rides the same frame.
+ * - **`InitialContext` folds into the system prompt** under a "Prior context" heading — the compat
+ *   protocol has no guaranteed history-seeding channel.
+ * - **GA feature gates OFF**: self-hosted stacks lag the GA reasoning/MCP surface; feature keys in
+ *   a shared co-agent config are scrubbed, never sent raw. Flipping a gate here is all it takes
+ *   once the compat layer supports one.
+ */
+export const HUGGINGFACE_REALTIME_PROFILE: OpenAIRealtimeProfile = {
+    providerKey: 'huggingface',
+    inputTranscriptionModel: undefined,
+    deferInitialConfigUntilSessionCreated: true,
+    foldInitialContextIntoPrompt: true,
+    supportsReasoningEffort: false,
+    supportsParallelToolCalls: false,
+    supportsMcpTools: false,
+    supportsVoiceOutput: true,
+    unexpectedCloseMessage: 'HuggingFace realtime session closed unexpectedly',
+    // No turn-detection override — the cascade's own VAD stage governs turn taking; meeting-mode
+    // create_response gating is not supported by the compat layer, so the flag only suppresses it
+    // being sent raw (the bridge still gates spoken updates itself).
+    buildTurnDetection: () => undefined,
+    // Not consulted while supportsReasoningEffort is false; OpenAI's mapping is the natural default
+    // for an OpenAI-compatible endpoint if the gate is ever flipped.
+    mapEffortLevel: MapEffortLevelToOpenAIRealtime,
+};
 
 /**
  * Real-time, full-duplex driver for a **self-hosted HuggingFace speech-to-speech** server running in
@@ -108,39 +95,72 @@ export interface HuggingFaceServerEvent {
  * self-hosted endpoints are unauthenticated).
  *
  * **Topologies:**
- * - Server-bridged ({@link StartSession}): the driver opens the upstream websocket itself (directly to
- *   the internal endpoint) and translates the OpenAI-Realtime wire protocol into the Core
- *   {@link IRealtimeSession} contract.
+ * - Server-bridged ({@link StartSession}): the driver opens a raw websocket to the internal endpoint
+ *   through {@link RawRealtimeWebSocketConnection} and runs the SHARED OpenAI-protocol session over
+ *   it. Unlike the base driver, `StartSession` resolves only after the session config has been
+ *   applied (the endpoint's `session.created` → `session.update` handshake) so the runner never
+ *   streams audio against an unconfigured model (obligation #7).
  * - Client-direct ({@link CreateClientSession}): the driver mints a one-time **proxy ticket** and returns
  *   a `wss://<mjapi-public>/realtime-proxy?ticket=…` URL. The browser opens its socket to MJAPI's proxy,
  *   which tunnels transparently to the internal endpoint (injecting any auth server-side). The internal
  *   endpoint never reaches the browser and needs no browser-facing ingress.
  *
- * **No managed server object** and **no usage billing**: like AssemblyAI, the entire session config
- * (prompt, tools, voice) is supplied per session; unlike the cloud providers there is no token-usage
- * meter, so `OnUsage` fires only if the compat endpoint happens to report a `response.done` usage block.
+ * **No managed server object** and **no usage billing**: the entire session config (prompt, tools,
+ * voice) is supplied per session; there is no token-usage meter, so `OnUsage` fires only if the
+ * compat endpoint happens to report a `response.done` usage block.
  */
 @RegisterClass(BaseRealtimeModel, 'HuggingFaceRealtime')
-export class HuggingFaceRealtime extends BaseRealtimeModel {
+export class HuggingFaceRealtime extends OpenAIRealtime {
     /**
-     * Opens a server-bridged session: connects the upstream websocket, and (once the endpoint's
-     * `session.created` confirms the socket is live) applies the full session config via `session.update`
-     * before resolving — so the runner never streams audio against an unconfigured model (obligation #7).
+     * @param apiKey The upstream key, or a keyless sentinel (`none` / `self-hosted` / `local` / `n/a`)
+     * for unauthenticated self-hosted endpoints. The inherited SDK client is never used for the
+     * socket (the raw-WS adapter is), so the sentinel is harmless there too.
      */
-    public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
-        const sessionObject = HuggingFaceRealtime.BuildSessionObject(params);
-        const session = new HuggingFaceRealtimeSession(sessionObject);
+    constructor(apiKey: string) {
+        super(apiKey);
+    }
+
+    /** The HuggingFace knobs + GA feature gates the shared protocol implementation runs with. */
+    protected override get Profile(): OpenAIRealtimeProfile {
+        return HUGGINGFACE_REALTIME_PROFILE;
+    }
+
+    /**
+     * The compat layer's TTS stage has no OpenAI-style selectable voice catalog, so the dev voice
+     * picker gets none — overriding away the OpenAI voice list this class would otherwise inherit.
+     * (A `voice` Config value still passes through to `audio.output.voice` for stacks that honor it.)
+     */
+    public override get SupportedVoices(): RealtimeVoiceOption[] {
+        return [];
+    }
+
+    /**
+     * Opens a server-bridged session over the raw-WS adapter and — unlike the base — resolves only
+     * after the initial config has been APPLIED (the endpoint's `session.created` handshake), so the
+     * model is configured before any audio streams. Transport death during startup rejects.
+     */
+    public override async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
+        const connection = this.createRawConnection(this.resolveUpstreamUrl(params));
+        const session = new HuggingFaceRealtimeSession(connection);
         session.SetConnectTimeTools(params.Tools ?? []);
-        const socket = await this.connectSocket({
-            Url: this.resolveUpstreamUrl(params),
-            AuthHeader: this.resolveUpstreamAuthHeader(),
-            OnMessage: (event) => session.HandleServerEvent(event),
-            OnError: (message) => session.HandleTransportError(message),
-            OnClose: (code, reason) => session.HandleTransportClose(code, reason),
-        });
-        session.AttachSocket(socket);
-        await session.WaitForReady();
+        session.applyInitialConfig(params);
+        await session.WaitForConfigApplied();
         return session;
+    }
+
+    /**
+     * Builds the raw-WS connection for the upstream endpoint. Overridable seam for testing — unit
+     * tests return an in-memory fake implementing {@link IOpenAIRealtimeConnection}, so no network.
+     *
+     * NOTE: the platform-global `WebSocket` cannot send an `Authorization` header; upstream auth is
+     * enforced by the endpoint itself or injected server-side by the MJAPI realtime proxy
+     * ({@link resolveUpstreamAuthHeader} feeds the proxy ticket, not this socket).
+     *
+     * @param url The resolved `ws(s)://…/v1/realtime` endpoint URL.
+     * @returns The connection the shared session runs over.
+     */
+    protected createRawConnection(url: string): IOpenAIRealtimeConnection {
+        return new RawRealtimeWebSocketConnection(url);
     }
 
     /** HuggingFace supports client-direct via MJAPI's realtime proxy. */
@@ -154,6 +174,9 @@ export class HuggingFaceRealtime extends BaseRealtimeModel {
      * `{ session, sampleRate }`, where `session` is the OpenAI-Realtime `session.update` payload
      * (server-authored prompt/tools/voice) and `sampleRate` drives the client's PCM audio plane.
      * `EphemeralToken` is the browser-facing `wss://<mjapi-public>/realtime-proxy?ticket=…` URL.
+     *
+     * Fully overrides the base's SDK client-secret mint — a self-hosted endpoint has no
+     * `/realtime/client_secrets` API, and the proxy keeps MJAPI the single ingress.
      */
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         const ticket = RealtimeProxyRegistry.Instance.Issue({
@@ -174,7 +197,9 @@ export class HuggingFaceRealtime extends BaseRealtimeModel {
         };
     }
 
-    // ── Session-object construction (the OpenAI-Realtime `session.update` payload) ──
+    // ── Session-object construction for the CLIENT pact ──
+    // (The server-bridged path uses the shared base builder; this static builds the same-shaped
+    // session object for the `{ session, sampleRate }` client pact the 'huggingface' client applies.)
 
     /**
      * Builds the OpenAI-Realtime `session` object from the Core params:
@@ -274,7 +299,8 @@ export class HuggingFaceRealtime extends BaseRealtimeModel {
      * unauthenticated. Because the realtime resolver requires a *resolvable* API key for a model to be
      * selectable, a keyless self-hosted deployment sets a sentinel value (`none` / `self-hosted` / `local`
      * / `n/a`) for `AI_VENDOR_API_KEY__HuggingFaceRealtime` — treated here as "no auth" so no bogus header
-     * is ever sent upstream.
+     * is ever sent upstream (consumed by the MJAPI realtime proxy; the raw browser/Node socket cannot
+     * carry headers at all).
      */
     protected resolveUpstreamAuthHeader(): string | undefined {
         const key = this.apiKey?.trim();
@@ -323,106 +349,38 @@ export class HuggingFaceRealtime extends BaseRealtimeModel {
         const env = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env;
         return env ? env[name] : undefined;
     }
-
-    // ── Overridable transport seam (tests inject a fake — no network) ──
-
-    /**
-     * Transport seam for the server-bridged upstream websocket. Production speaks the OpenAI-Realtime
-     * protocol over the platform-global `WebSocket` (browsers / Node 22+). Resolves once the socket is
-     * OPEN; unit tests override this to return an in-memory fake.
-     */
-    protected async connectSocket(args: HuggingFaceConnectArgs): Promise<HuggingFaceRealtimeSocket> {
-        const WS = (globalThis as unknown as { WebSocket?: new (url: string) => NativeWebSocketLike }).WebSocket;
-        if (!WS) {
-            throw new Error('HuggingFaceRealtime.StartSession requires a global WebSocket (Node 22+ or a browser runtime).');
-        }
-        return new Promise<HuggingFaceRealtimeSocket>((resolve, reject) => {
-            const ws = new WS(args.Url);
-            let opened = false;
-            ws.onopen = () => {
-                opened = true;
-                resolve({ send: (data) => ws.send(data), close: () => ws.close() });
-            };
-            ws.onmessage = (event) => {
-                try {
-                    args.OnMessage(JSON.parse(String(event.data)) as HuggingFaceServerEvent);
-                } catch {
-                    /* non-JSON frame — ignore */
-                }
-            };
-            ws.onerror = () => {
-                args.OnError('HuggingFace realtime websocket error');
-                if (!opened) {
-                    reject(new Error('HuggingFace realtime websocket failed to open'));
-                }
-            };
-            ws.onclose = (event) => {
-                args.OnClose(event.code, event.reason);
-                if (!opened) {
-                    reject(new Error('HuggingFace realtime websocket closed before opening'));
-                }
-            };
-        });
-    }
 }
 
 /**
- * Concrete {@link IRealtimeSession} backed by a raw OpenAI-Realtime-compatible websocket (the
- * server-bridged topology). Owns the inbound translation (OpenAI wire events → Core events) and the
- * outbound translation (Core calls → OpenAI wire frames). Created by {@link HuggingFaceRealtime.StartSession};
- * never instantiated directly by consumers.
+ * Live realtime session for a self-hosted HuggingFace endpoint — the shared
+ * {@link OpenAIRealtimeSession} protocol implementation bound to {@link HUGGINGFACE_REALTIME_PROFILE},
+ * with three compat-endpoint accommodations layered on top:
  *
- * Provider-behavior notes:
- * - **Readiness is `session.created`** — the first frame once the socket is live and the session exists.
- *   The driver applies the session config (`session.update`) at that point and only then resolves, so the
- *   model is configured before any audio streams.
- * - **`SendContextNote` is NATIVE** — a `system`-role `conversation.item.create` with no `response.create`,
- *   so the note lands without forcing (or interrupting) a spoken reply.
- * - **`RequestSpokenUpdate` is NATIVE** — a `response.create` with per-response instructions; SKIPPED while
- *   a response is in flight (the API rejects overlaps; interim updates are disposable by contract).
- * - **Usage is best-effort** — emitted only if the compat endpoint reports a `response.done` usage block.
+ * - **Beta event aliases**: older speech-to-speech builds emit pre-GA names
+ *   (`response.audio.delta`, `response.audio_transcript.*`); these are translated to their GA
+ *   equivalents before the shared dispatcher runs, so both generations of the stack work.
+ * - **Response-active robustness**: the flag is set on the first audio delta (compat stacks don't
+ *   always emit `response.created`) and released when a tool call yields the floor (deadlock
+ *   guard — the stack may not emit `response.done` after a function call).
+ * - **Tool-set fingerprinting**: {@link RegisterTools} no-ops an order-insensitively identical
+ *   re-registration instead of re-declaring the same schemas on the live session.
  */
-export class HuggingFaceRealtimeSession implements IRealtimeSession {
-    private socket: HuggingFaceRealtimeSocket | null = null;
-
-    private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;
-    private transcriptHandler: ((t: RealtimeTranscript) => void) | null = null;
-    private toolCallHandler: ((call: RealtimeToolCall) => void) | null = null;
-    private interruptionHandler: (() => void) | null = null;
-    private usageHandler: ((u: RealtimeUsage) => void) | null = null;
-    private errorHandler: ((error: RealtimeSessionError) => void) | null = null;
-    private closeHandler: (() => void) | null = null;
-    /** True once Close() ran — an expected close must not surface as a fatal error. */
-    private closedByConsumer = false;
-
-    /** Resolves when `session.created` arrives (config then applied); rejects on transport death. */
-    private readyPromise: Promise<void>;
-    private resolveReady: (() => void) | null = null;
-    private rejectReady: ((error: Error) => void) | null = null;
-    private readyReceived = false;
-
-    /** The OpenAI-Realtime `session` object applied via `session.update` on `session.created`. */
-    private sessionObject: JSONObject;
-
-    /** Whether a model response is currently in flight (`response.created` set, `response.done` clears). */
-    private responseActive = false;
-
+export class HuggingFaceRealtimeSession extends OpenAIRealtimeSession {
     /** Fingerprint of the currently-declared tool set; {@link RegisterTools} no-ops identical re-declares. */
     private currentToolsFingerprint = HuggingFaceRealtime.ToolSetFingerprint([]);
 
-    constructor(sessionObject: JSONObject) {
-        this.sessionObject = sessionObject;
-        this.readyPromise = new Promise<void>((resolve, reject) => {
-            this.resolveReady = resolve;
-            this.rejectReady = reject;
-        });
-        // Always consumed by WaitForReady before any rejection can fire, but guard unhandled-rejection noise.
-        this.readyPromise.catch(() => undefined);
-    }
+    /** Beta (pre-GA) event names older speech-to-speech builds emit, mapped to their GA equivalents. */
+    private static readonly BETA_EVENT_ALIASES: Readonly<Record<string, string>> = {
+        'response.audio.delta': 'response.output_audio.delta',
+        'response.audio_transcript.delta': 'response.output_audio_transcript.delta',
+        'response.audio_transcript.done': 'response.output_audio_transcript.done',
+    };
 
-    /** Binds the underlying socket. Called by the driver once the websocket is open. */
-    public AttachSocket(socket: HuggingFaceRealtimeSocket): void {
-        this.socket = socket;
+    /**
+     * @param connection The raw-WS adapter (or an in-memory fake in tests) speaking OpenAI frames.
+     */
+    constructor(connection: IOpenAIRealtimeConnection) {
+        super(connection, HUGGINGFACE_REALTIME_PROFILE);
     }
 
     /** Records the tool set declared at connect time. Called by {@link HuggingFaceRealtime.StartSession}. */
@@ -430,283 +388,42 @@ export class HuggingFaceRealtimeSession implements IRealtimeSession {
         this.currentToolsFingerprint = HuggingFaceRealtime.ToolSetFingerprint(tools);
     }
 
-    /** Resolves once `session.created` arrives and the config is applied; rejects if transport dies first. */
-    public WaitForReady(): Promise<void> {
-        return this.readyPromise;
-    }
-
-    /** @inheritdoc — streams one PCM16 frame as a base64 `input_audio_buffer.append` chunk. */
-    public SendInput(chunk: ArrayBuffer): void {
-        this.sendFrame({ type: 'input_audio_buffer.append', audio: HuggingFaceRealtimeSession.ArrayBufferToBase64(chunk) });
-    }
-
     /**
-     * @inheritdoc — `tools` is a mutable `session.update` field; an identical set (order-insensitively)
-     * is a silent no-op per the idempotency rule, a different set is applied to the live session.
+     * @inheritdoc — an identical set (order-insensitively) is a silent no-op per the idempotency
+     * rule; a different set is applied to the live session through the shared implementation.
      */
-    public async RegisterTools(tools: RealtimeToolDefinition[]): Promise<void> {
+    public override async RegisterTools(tools: RealtimeToolDefinition[]): Promise<void> {
         const fingerprint = HuggingFaceRealtime.ToolSetFingerprint(tools);
         if (fingerprint === this.currentToolsFingerprint) {
             return;
         }
         this.currentToolsFingerprint = fingerprint;
-        this.sendFrame({
-            // `type: 'realtime'` — the GA session-object discriminator the endpoint requires (see BuildSessionObject).
-            type: 'session.update',
-            session: { type: 'realtime', tools: tools.map((tool) => HuggingFaceRealtime.MapToolToFunction(tool)) },
-        });
-    }
-
-    /** @inheritdoc */
-    public OnOutput(handler: (chunk: ArrayBuffer) => void): void {
-        this.outputHandler = handler;
-    }
-
-    /** @inheritdoc */
-    public OnTranscript(handler: (t: RealtimeTranscript) => void): void {
-        this.transcriptHandler = handler;
-    }
-
-    /** @inheritdoc */
-    public OnToolCall(handler: (call: RealtimeToolCall) => void): void {
-        this.toolCallHandler = handler;
-    }
-
-    /** @inheritdoc */
-    public OnInterruption(handler: () => void): void {
-        this.interruptionHandler = handler;
-    }
-
-    /** @inheritdoc — best-effort; fires only if the compat endpoint reports a `response.done` usage block. */
-    public OnUsage(handler: (u: RealtimeUsage) => void): void {
-        this.usageHandler = handler;
-    }
-
-    /** @inheritdoc */
-    public OnError(handler: (error: RealtimeSessionError) => void): void {
-        this.errorHandler = handler;
-    }
-
-    /** @inheritdoc */
-    public OnClose(handler: () => void): void {
-        this.closeHandler = handler;
+        await super.RegisterTools(tools);
     }
 
     /**
-     * @inheritdoc — completes the tool-call loop: a `function_call_output` conversation item carrying the
-     * result, then a `response.create` so the model continues the turn (flag set eagerly so an interim
-     * spoken update can't collide before the result is voiced).
+     * Pre-translates beta event aliases to their GA names and applies the compat robustness tweaks
+     * (see class docs) before delegating to the shared dispatcher.
      */
-    public async SendToolResult(callID: string, output: string): Promise<void> {
-        this.sendFrame({
-            type: 'conversation.item.create',
-            item: { type: 'function_call_output', call_id: callID, output },
-        });
-        this.sendFrame({ type: 'response.create' });
-        this.responseActive = true;
-    }
-
-    /**
-     * @inheritdoc — NATIVE: a `system`-role conversation item the model can draw on next time it speaks,
-     * with no `response.create`, so it never forces or interrupts a spoken reply.
-     */
-    public SendContextNote(text: string): void {
-        this.sendFrame({
-            type: 'conversation.item.create',
-            item: { type: 'message', role: 'system', content: [{ type: 'input_text', text }] },
-        });
-    }
-
-    /**
-     * @inheritdoc — NATIVE: one short spoken update via `response.create` with per-response instructions.
-     * SKIPPED while a response is active (the API rejects overlapping responses; interim updates are
-     * disposable by contract). Returns whether a `response.create` was issued.
-     */
-    public RequestSpokenUpdate(instructions: string): boolean {
-        if (this.responseActive) {
-            return false;
-        }
-        this.responseActive = true;
-        const hasInstructions = typeof instructions === 'string' && instructions.trim().length > 0;
-        this.sendFrame(hasInstructions ? { type: 'response.create', response: { instructions } } : { type: 'response.create' });
-        return true;
-    }
-
-    /** @inheritdoc — closes the upstream socket; a consumer close is silent (never a "fatal" error). */
-    public async Close(): Promise<void> {
-        this.closedByConsumer = true;
-        this.failReadyWait('session closed by consumer before it was ready');
-        this.socket?.close();
-        this.socket = null;
-        this.clearHandlers();
-    }
-
-    /** Surfaces a websocket-level failure as a FATAL session error (obligation #6). */
-    public HandleTransportError(message: string): void {
-        this.failReadyWait(message);
-        this.errorHandler?.({ Message: message, Fatal: true });
-    }
-
-    /** Surfaces an UNEXPECTED socket close as a fatal error (a consumer-initiated close is silent). */
-    public HandleTransportClose(code?: number, reason?: string): void {
-        if (this.closedByConsumer) {
-            return;
-        }
-        const detail = [code != null ? `code ${code}` : null, reason || null].filter(Boolean).join(' — ');
-        const message = `HuggingFace realtime session closed unexpectedly${detail ? ` (${detail})` : ''}`;
-        this.failReadyWait(message);
-        this.errorHandler?.({ Message: message, Fatal: true });
-        this.closeHandler?.();
-    }
-
-    /**
-     * Entry point for an inbound websocket frame. Multiplexes on `type` (OpenAI-Realtime wire) to focused
-     * per-concern handlers. Accepts both GA and beta transcript/audio event names.
-     */
-    public HandleServerEvent(event: HuggingFaceServerEvent): void {
-        switch (event.type) {
-            case 'session.created':
-                this.handleSessionCreated();
-                break;
+    protected override dispatch(event: RealtimeServerEvent): void {
+        const alias = HuggingFaceRealtimeSession.BETA_EVENT_ALIASES[event.type as string];
+        // Structured clone with the GA discriminator — the beta names are outside the SDK's typed
+        // union, so the re-typed frame requires an explicit cast (narrow, alias-table-driven).
+        const effective = alias ? ({ ...event, type: alias } as unknown as RealtimeServerEvent) : event;
+        switch (effective.type) {
             case 'response.output_audio.delta':
-            case 'response.audio.delta':
-                this.handleAudioDelta(event.delta);
-                break;
-            case 'response.output_audio_transcript.delta':
-            case 'response.audio_transcript.delta':
-                this.emitTranscript('assistant', event.delta, false);
-                break;
-            case 'response.output_audio_transcript.done':
-            case 'response.audio_transcript.done':
-                this.emitTranscript('assistant', event.transcript, true);
-                break;
-            case 'conversation.item.input_audio_transcription.delta':
-                this.emitTranscript('user', event.delta, false);
-                break;
-            case 'conversation.item.input_audio_transcription.completed':
-                this.emitTranscript('user', event.transcript, true);
-                break;
-            case 'response.function_call_arguments.done':
-                this.handleToolCall(event);
-                break;
-            case 'input_audio_buffer.speech_started':
-                this.handleSpeechStarted();
-                break;
-            case 'response.created':
+                // Compat stacks don't always emit response.created — treat audio as proof of an
+                // active response so barge-in gating still works.
                 this.responseActive = true;
                 break;
-            case 'response.done':
-                this.handleResponseDone(event.response?.usage);
-                break;
-            case 'error':
-                this.errorHandler?.({ Message: event.error?.message ?? 'HuggingFace realtime error', Code: event.error?.code, Fatal: false });
+            case 'response.function_call_arguments.done':
+                // The model yielded the floor pending the tool result; release the busy flag so an
+                // interim spoken update can't deadlock if the stack skips response.done here.
+                this.responseActive = false;
                 break;
             default:
-                break; // unknown / future frame types are ignored
+                break;
         }
-    }
-
-    /** On `session.created`: apply the session config, then release the readiness gate (obligation #7). */
-    private handleSessionCreated(): void {
-        if (this.readyReceived) {
-            return; // idempotent — a re-emitted session.created can't double-apply
-        }
-        this.sendFrame({ type: 'session.update', session: this.sessionObject });
-        this.readyReceived = true;
-        const resolve = this.resolveReady;
-        this.resolveReady = null;
-        this.rejectReady = null;
-        resolve?.();
-    }
-
-    /** Decodes one base64 audio delta and forwards it as a raw `ArrayBuffer`. */
-    private handleAudioDelta(deltaBase64: string | undefined): void {
-        if (!deltaBase64) {
-            return;
-        }
-        this.responseActive = true;
-        this.outputHandler?.(HuggingFaceRealtimeSession.Base64ToArrayBuffer(deltaBase64));
-    }
-
-    /**
-     * True barge-in ONLY: the user started speaking over active model output. A `speech_started` while the
-     * model is idle is a normal turn, excluded by the {@link OnInterruption} contract — so it is gated on
-     * {@link responseActive} (the server-bridged proxy for "model output in flight").
-     */
-    private handleSpeechStarted(): void {
-        if (this.responseActive) {
-            this.interruptionHandler?.();
-        }
-    }
-
-    /**
-     * Surfaces a completed function call. The model has yielded the floor pending the result, so the busy
-     * flag is cleared (deadlock guard — obligation #2). `arguments` is already a JSON string on the wire.
-     */
-    private handleToolCall(event: HuggingFaceServerEvent): void {
-        this.responseActive = false;
-        this.toolCallHandler?.({
-            CallID: event.call_id ?? '',
-            ToolName: event.name ?? '',
-            Arguments: typeof event.arguments === 'string' ? event.arguments : JSON.stringify(event.arguments ?? {}),
-        });
-    }
-
-    /** Response boundary: releases the busy flag and emits usage when the endpoint reports it. */
-    private handleResponseDone(usage: { input_tokens?: number; output_tokens?: number } | undefined): void {
-        this.responseActive = false;
-        if (usage) {
-            this.usageHandler?.({ InputTokens: usage.input_tokens ?? 0, OutputTokens: usage.output_tokens ?? 0 });
-        }
-    }
-
-    /** Emits a transcript event, skipping empty text. */
-    private emitTranscript(role: 'user' | 'assistant', text: string | undefined, isFinal: boolean): void {
-        if (!this.transcriptHandler || !text || text.trim().length === 0) {
-            return;
-        }
-        this.transcriptHandler({ Role: role, Text: text, IsFinal: isFinal });
-    }
-
-    /** JSON-serializes and sends one client frame (throws if the socket was never attached). */
-    private sendFrame(frame: JSONObject): void {
-        if (!this.socket) {
-            throw new Error('HuggingFace realtime session is not open (no socket attached or it was closed).');
-        }
-        this.socket.send(JSON.stringify(frame));
-    }
-
-    /** Rejects a still-pending ready wait (transport death / consumer close during startup). */
-    private failReadyWait(message: string): void {
-        if (!this.readyReceived && this.rejectReady) {
-            const reject = this.rejectReady;
-            this.rejectReady = null;
-            this.resolveReady = null;
-            this.readyReceived = true; // nothing further can resolve/reject it
-            reject(new Error(message));
-        }
-    }
-
-    /** Drops all registered handlers so a closed session can't fire stale callbacks. */
-    private clearHandlers(): void {
-        this.outputHandler = null;
-        this.transcriptHandler = null;
-        this.toolCallHandler = null;
-        this.interruptionHandler = null;
-        this.usageHandler = null;
-        this.responseActive = false;
-    }
-
-    /** Base64-encodes a raw audio buffer for the wire. */
-    private static ArrayBufferToBase64(chunk: ArrayBuffer): string {
-        return Buffer.from(new Uint8Array(chunk)).toString('base64');
-    }
-
-    /** Decodes a base64 audio payload into a freshly-allocated `ArrayBuffer`. */
-    private static Base64ToArrayBuffer(base64: string): ArrayBuffer {
-        const bytes = Buffer.from(base64, 'base64');
-        const out = new ArrayBuffer(bytes.byteLength);
-        new Uint8Array(out).set(bytes);
-        return out;
+        super.dispatch(effective);
     }
 }

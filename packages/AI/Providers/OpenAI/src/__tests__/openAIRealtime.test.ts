@@ -33,7 +33,7 @@ vi.mock('openai', () => ({
     }),
 }));
 
-import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection } from '../models/openAIRealtime';
+import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime } from '../models/openAIRealtime';
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeServerEvent, RealtimeClientEvent } from 'openai/resources/realtime/realtime';
 import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
@@ -777,5 +777,55 @@ describe('OpenAIRealtime GA features (reasoning effort / parallel tool calls / M
         expect(sc.parallelToolCalls).toBeUndefined();
         expect(sc.mcpTools).toBeUndefined();
         expect(sc.voice).toBeUndefined();
+    });
+});
+
+describe('OpenAIRealtime effort-level mapping (MJ-normalized → provider literals)', () => {
+    let driver: TestableOpenAIRealtime;
+
+    beforeEach(() => {
+        driver = new TestableOpenAIRealtime('test-key');
+    });
+
+    async function startAndGetSession(config?: Record<string, unknown>): Promise<Record<string, unknown>> {
+        await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys', Config: config });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            return update.session as Record<string, unknown>;
+        }
+        throw new Error('expected realtime session.update');
+    }
+
+    it('maps a numeric MJ-normalized effortLevel (1–100) onto the five OpenAI levels', async () => {
+        const session = await startAndGetSession({ effortLevel: 90 });
+        expect(session.reasoning).toEqual({ effort: 'xhigh' });
+        expect(session.effortLevel).toBeUndefined();
+    });
+
+    it('maps a numeric-string effortLevel too (ChatParams.effortLevel vocabulary)', async () => {
+        const session = await startAndGetSession({ effortLevel: '35' });
+        expect(session.reasoning).toEqual({ effort: 'low' });
+    });
+
+    it('passes a named effortLevel through when it is already a provider literal', async () => {
+        const session = await startAndGetSession({ effortLevel: 'minimal' });
+        expect(session.reasoning).toEqual({ effort: 'minimal' });
+    });
+
+    it('provider-native reasoningEffort wins over the normalized effortLevel when both are set', async () => {
+        const session = await startAndGetSession({ effortLevel: 10, reasoningEffort: 'high' });
+        expect(session.reasoning).toEqual({ effort: 'high' });
+        expect(session.reasoningEffort).toBeUndefined();
+        expect(session.effortLevel).toBeUndefined();
+    });
+
+    it('MapEffortLevelToOpenAIRealtime: quintile boundaries and unmappable values', () => {
+        expect(MapEffortLevelToOpenAIRealtime('20')).toBe('minimal');
+        expect(MapEffortLevelToOpenAIRealtime('21')).toBe('low');
+        expect(MapEffortLevelToOpenAIRealtime('60')).toBe('medium');
+        expect(MapEffortLevelToOpenAIRealtime('80')).toBe('high');
+        expect(MapEffortLevelToOpenAIRealtime('81')).toBe('xhigh');
+        expect(MapEffortLevelToOpenAIRealtime('HIGH')).toBe('high');
+        expect(MapEffortLevelToOpenAIRealtime('ultra')).toBeUndefined();
     });
 });

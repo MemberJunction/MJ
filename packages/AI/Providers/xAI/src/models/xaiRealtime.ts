@@ -5,6 +5,7 @@ import {
     OpenAIRealtimeSession,
     OpenAIRealtimeProfile,
     IOpenAIRealtimeConnection,
+    MapEffortLevelToOpenAIRealtime,
 } from '@memberjunction/ai-openai';
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeClientEvent, RealtimeServerEvent } from 'openai/resources/realtime/realtime';
@@ -44,6 +45,7 @@ export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     // the config is sent synchronously — honoring driver obligation #7 ("Ready" only after the
     // session config is applied) without waiting on a session.created frame.
     deferInitialConfigUntilSessionCreated: false,
+    foldInitialContextIntoPrompt: false,
     supportsReasoningEffort: false,
     supportsParallelToolCalls: false,
     supportsMcpTools: false,
@@ -58,6 +60,10 @@ export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
         create_response: !disableAutoResponse,
         interrupt_response: true,
     }),
+    // Not consulted while supportsReasoningEffort is false. When xAI documents reasoning effort on
+    // Grok Voice, REVISIT: if Grok's level vocabulary differs from OpenAI's five levels, replace
+    // this with a Grok-specific mapping instead of just flipping the gate.
+    mapEffortLevel: MapEffortLevelToOpenAIRealtime,
 };
 
 /**
