@@ -6,10 +6,9 @@ import { IPcmMicCapture } from '../audio/micCapture';
 import { IRealtimePcmPlayback } from '../audio/pcmPlayback';
 import {
     HuggingFaceRealtimeClient,
-    HuggingFaceClientServerEvent,
-    IHuggingFaceClientSocket,
     HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE,
 } from '../drivers/huggingFaceRealtimeClient';
+import { IOpenAIProtocolClientSocket, OpenAIProtocolServerEvent } from '../generic/openAIProtocolClient';
 import { collect, FakeMediaStream, FakeTrack } from './helpers/realtime-fakes';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
@@ -24,7 +23,7 @@ interface ParsedFrame {
 }
 
 /** Fake proxy socket: records sent frames; lets tests fire open/close/server events. */
-class FakeProxySocket implements IHuggingFaceClientSocket {
+class FakeProxySocket implements IOpenAIProtocolClientSocket {
     public onopen: (() => void) | null = null;
     public onmessage: ((data: string) => void) | null = null;
     public onerror: ((message: string) => void) | null = null;
@@ -44,7 +43,7 @@ class FakeProxySocket implements IHuggingFaceClientSocket {
         this.onopen?.();
     }
     /** Injects a provider server event as an inbound JSON frame. */
-    public EmitServer(event: HuggingFaceClientServerEvent | JSONObject): void {
+    public EmitServer(event: OpenAIProtocolServerEvent | JSONObject): void {
         this.onmessage?.(JSON.stringify(event));
     }
     /** Injects a raw (possibly non-JSON) inbound frame. */
@@ -100,7 +99,7 @@ class TestHuggingFaceClient extends HuggingFaceRealtimeClient {
     /** The driver's mic-chunk callback, captured so tests can simulate worklet frames. */
     public OnPcmChunk: ((base64Pcm16: string) => void) | null = null;
 
-    protected override createSocket(url: string): IHuggingFaceClientSocket {
+    protected override createSocket(url: string): IOpenAIProtocolClientSocket {
         this.LastUrl = url;
         return this.Fake;
     }
@@ -119,7 +118,7 @@ class TestHuggingFaceClient extends HuggingFaceRealtimeClient {
     }
 
     /** Drives an inbound OpenAI-Realtime server event through the socket handler. */
-    public Emit(event: HuggingFaceClientServerEvent | JSONObject): void {
+    public Emit(event: OpenAIProtocolServerEvent | JSONObject): void {
         this.Fake.EmitServer(event);
     }
 }

@@ -6,23 +6,6 @@ import {
     IOpenAIProtocolClientSocket,
     OpenAIProtocolClientEvent,
     OpenAIProtocolServerEvent,
-    OAIProtocolTranscriptDelta,
-    OAIProtocolTranscriptDone,
-    OAIProtocolAudioDelta,
-    OAIProtocolInputTranscriptionCompleted,
-    OAIProtocolFunctionCallArgumentsDone,
-    OAIProtocolSpeechStarted,
-    OAIProtocolResponseCreated,
-    OAIProtocolResponseDone,
-    OAIProtocolErrorEvent,
-    OAIProtocolUnknownEvent,
-    OAIProtocolSessionUpdateEvent,
-    OAIProtocolMessageItem,
-    OAIProtocolFunctionCallOutputItem,
-    OAIProtocolConversationItemCreateEvent,
-    OAIProtocolResponseCreateEvent,
-    OAIProtocolResponseCancelEvent,
-    OAIProtocolInputAudioBufferAppendEvent,
 } from '../generic/openAIProtocolClient';
 
 // ── Audio + endpoint constants (xAI Grok Voice wire format) ────────────────────
@@ -48,57 +31,6 @@ export const XAI_CLIENT_SECRET_SUBPROTOCOL_PREFIX = 'xai-client-secret.';
  * down) — there is no per-session format negotiation on this provider.
  */
 export const XAI_PCM_SAMPLE_RATE = 24000;
-
-// ── Back-compat type aliases ────────────────────────────────────────────────────
-// Grok Voice is OpenAI-Realtime-API COMPATIBLE, so the frame model now lives ONCE in
-// ../generic/openAIProtocolClient (shared with the OpenAI/HuggingFace client drivers). These
-// aliases preserve this module's public surface for existing consumers and tests.
-
-/** @see OAIProtocolTranscriptDelta */
-export type XAIResponseAudioTranscriptDelta = OAIProtocolTranscriptDelta;
-/** @see OAIProtocolTranscriptDone */
-export type XAIResponseAudioTranscriptDone = OAIProtocolTranscriptDone;
-/** @see OAIProtocolAudioDelta */
-export type XAIResponseAudioDelta = OAIProtocolAudioDelta;
-/** @see OAIProtocolInputTranscriptionCompleted */
-export type XAIInputAudioTranscriptionCompleted = OAIProtocolInputTranscriptionCompleted;
-/** @see OAIProtocolFunctionCallArgumentsDone */
-export type XAIFunctionCallArgumentsDone = OAIProtocolFunctionCallArgumentsDone;
-/** @see OAIProtocolSpeechStarted */
-export type XAIInputAudioBufferSpeechStarted = OAIProtocolSpeechStarted;
-/** @see OAIProtocolResponseCreated */
-export type XAIResponseCreated = OAIProtocolResponseCreated;
-/** @see OAIProtocolResponseDone */
-export type XAIResponseDone = OAIProtocolResponseDone;
-/** @see OAIProtocolErrorEvent */
-export type XAIErrorEvent = OAIProtocolErrorEvent;
-/** @see OAIProtocolUnknownEvent */
-export type XAIUnknownEvent = OAIProtocolUnknownEvent;
-/** @see OpenAIProtocolServerEvent */
-export type XAIRealtimeEvent = OpenAIProtocolServerEvent;
-/** @see OAIProtocolSessionUpdateEvent */
-export type XAISessionUpdateEvent = OAIProtocolSessionUpdateEvent;
-/** @see OAIProtocolMessageItem */
-export type XAIMessageItem = OAIProtocolMessageItem;
-/** @see OAIProtocolFunctionCallOutputItem */
-export type XAIFunctionCallOutputItem = OAIProtocolFunctionCallOutputItem;
-/** @see OAIProtocolConversationItemCreateEvent */
-export type XAIConversationItemCreateEvent = OAIProtocolConversationItemCreateEvent;
-/** @see OAIProtocolResponseCreateEvent */
-export type XAIResponseCreateEvent = OAIProtocolResponseCreateEvent;
-/** @see OAIProtocolResponseCancelEvent */
-export type XAIResponseCancelEvent = OAIProtocolResponseCancelEvent;
-/** @see OAIProtocolInputAudioBufferAppendEvent */
-export type XAIInputAudioBufferAppendEvent = OAIProtocolInputAudioBufferAppendEvent;
-/** @see OpenAIProtocolClientEvent */
-export type XAIRealtimeClientEvent = OpenAIProtocolClientEvent;
-
-/**
- * The minimal websocket surface this client depends on. Structurally identical to the shared
- * {@link IOpenAIProtocolClientSocket} (kept as this module's own named export for back-compat
- * with existing consumers and tests — structural typing makes the two interchangeable).
- */
-export type IxAIClientSocket = IOpenAIProtocolClientSocket;
 
 /**
  * Structural subset of the platform `WebSocket` used by the production
@@ -174,13 +106,13 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {
      * in-memory fake. Handlers are attached by the shared Connect AFTER this returns, so the
      * implementation must not require them at construction time.
      */
-    protected createSocket(url: string, subprotocol: string): IxAIClientSocket {
+    protected createSocket(url: string, subprotocol: string): IOpenAIProtocolClientSocket {
         const WS = (globalThis as unknown as { WebSocket?: new (url: string, protocols?: string | string[]) => NativeWebSocketLike }).WebSocket;
         if (!WS) {
             throw new Error('xAIRealtimeClient requires a global WebSocket (browser or Node 22+).');
         }
         const ws = new WS(url, subprotocol);
-        const seam: IxAIClientSocket = {
+        const seam: IOpenAIProtocolClientSocket = {
             onopen: null,
             onmessage: null,
             onerror: null,

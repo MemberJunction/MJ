@@ -5,72 +5,7 @@ import { BaseRealtimeClient } from '../generic/baseRealtimeClient';
 import {
     OpenAIProtocolRealtimeClient,
     OpenAIProtocolClientEvent,
-    OpenAIProtocolServerEvent,
-    OAIProtocolTranscriptDelta,
-    OAIProtocolTranscriptDone,
-    OAIProtocolInputTranscriptionCompleted,
-    OAIProtocolFunctionCallArgumentsDone,
-    OAIProtocolSpeechStarted,
-    OAIProtocolResponseCreated,
-    OAIProtocolResponseDone,
-    OAIProtocolOutputAudioBufferStarted,
-    OAIProtocolOutputAudioBufferStopped,
-    OAIProtocolErrorEvent,
-    OAIProtocolUnknownEvent,
-    OAIProtocolSessionUpdateEvent,
-    OAIProtocolMessageItem,
-    OAIProtocolFunctionCallOutputItem,
-    OAIProtocolConversationItemCreateEvent,
-    OAIProtocolResponseCreateEvent,
-    OAIProtocolResponseCancelEvent,
-    OAIProtocolOutputAudioBufferClearEvent,
 } from '../generic/openAIProtocolClient';
-
-// ── Back-compat type aliases ────────────────────────────────────────────────────
-// The OpenAI-protocol frame model now lives ONCE in ../generic/openAIProtocolClient (shared by
-// the OpenAI/xAI/HuggingFace client drivers). These aliases preserve this module's public
-// surface for existing consumers and tests.
-
-/** @see OAIProtocolTranscriptDelta */
-export type OAIResponseAudioTranscriptDelta = OAIProtocolTranscriptDelta;
-/** @see OAIProtocolTranscriptDone */
-export type OAIResponseAudioTranscriptDone = OAIProtocolTranscriptDone;
-/** @see OAIProtocolInputTranscriptionCompleted */
-export type OAIInputAudioTranscriptionCompleted = OAIProtocolInputTranscriptionCompleted;
-/** @see OAIProtocolFunctionCallArgumentsDone */
-export type OAIFunctionCallArgumentsDone = OAIProtocolFunctionCallArgumentsDone;
-/** @see OAIProtocolSpeechStarted */
-export type OAIInputAudioBufferSpeechStarted = OAIProtocolSpeechStarted;
-/** @see OAIProtocolResponseCreated */
-export type OAIResponseCreated = OAIProtocolResponseCreated;
-/** @see OAIProtocolResponseDone */
-export type OAIResponseDone = OAIProtocolResponseDone;
-/** @see OAIProtocolOutputAudioBufferStarted */
-export type OAIOutputAudioBufferStarted = OAIProtocolOutputAudioBufferStarted;
-/** @see OAIProtocolOutputAudioBufferStopped */
-export type OAIOutputAudioBufferStopped = OAIProtocolOutputAudioBufferStopped;
-/** @see OAIProtocolErrorEvent */
-export type OAIErrorEvent = OAIProtocolErrorEvent;
-/** @see OAIProtocolUnknownEvent */
-export type OAIUnknownEvent = OAIProtocolUnknownEvent;
-/** @see OpenAIProtocolServerEvent */
-export type OpenAIRealtimeEvent = OpenAIProtocolServerEvent;
-/** @see OAIProtocolSessionUpdateEvent */
-export type OAISessionUpdateEvent = OAIProtocolSessionUpdateEvent;
-/** @see OAIProtocolMessageItem */
-export type OAIMessageItem = OAIProtocolMessageItem;
-/** @see OAIProtocolFunctionCallOutputItem */
-export type OAIFunctionCallOutputItem = OAIProtocolFunctionCallOutputItem;
-/** @see OAIProtocolConversationItemCreateEvent */
-export type OAIConversationItemCreateEvent = OAIProtocolConversationItemCreateEvent;
-/** @see OAIProtocolResponseCreateEvent */
-export type OAIResponseCreateEvent = OAIProtocolResponseCreateEvent;
-/** @see OAIProtocolResponseCancelEvent */
-export type OAIResponseCancelEvent = OAIProtocolResponseCancelEvent;
-/** @see OAIProtocolOutputAudioBufferClearEvent */
-export type OAIOutputAudioBufferClearEvent = OAIProtocolOutputAudioBufferClearEvent;
-/** @see OpenAIProtocolClientEvent */
-export type OpenAIRealtimeClientEvent = OpenAIProtocolClientEvent;
 
 // ── Structural transport seams (typed subsets of the DOM WebRTC objects) ──────
 // Real `RTCDataChannel` / `RTCPeerConnection` / `HTMLAudioElement` instances satisfy

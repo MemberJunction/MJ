@@ -15,29 +15,6 @@ import {
  */
 export const HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE = 16000;
 
-/**
- * Loosely-typed inbound frame shape kept for back-compat with existing consumers/tests. The
- * shared protocol brain (`OpenAIProtocolServerEvent`) is the operative model; this alias
- * documents the fields the HuggingFace flavor reads.
- */
-export interface HuggingFaceClientServerEvent {
-    type?: string;
-    delta?: string;
-    transcript?: string;
-    name?: string;
-    call_id?: string;
-    arguments?: string;
-    response?: { usage?: { input_tokens?: number; output_tokens?: number } };
-    error?: { message?: string; code?: string };
-}
-
-/**
- * The minimal websocket surface this client depends on. Structurally identical to the shared
- * {@link IOpenAIProtocolClientSocket} (kept as this module's own named export for back-compat —
- * structural typing makes the two interchangeable).
- */
-export type IHuggingFaceClientSocket = IOpenAIProtocolClientSocket;
-
 /** Structural subset of the platform `WebSocket` used by the production {@link HuggingFaceRealtimeClient.createSocket}. */
 interface NativeWebSocketLike {
     onopen: (() => void) | null;
@@ -117,13 +94,13 @@ export class HuggingFaceRealtimeClient extends OpenAIProtocolWebSocketRealtimeCl
     }
 
     /** Creates the websocket to the given URL (the proxy URL). Production wraps the platform `WebSocket`. */
-    protected createSocket(url: string): IHuggingFaceClientSocket {
+    protected createSocket(url: string): IOpenAIProtocolClientSocket {
         const WS = (globalThis as unknown as { WebSocket?: new (url: string) => NativeWebSocketLike }).WebSocket;
         if (!WS) {
             throw new Error('HuggingFaceRealtimeClient requires a global WebSocket (browser or Node 22+).');
         }
         const ws = new WS(url);
-        const seam: IHuggingFaceClientSocket = {
+        const seam: IOpenAIProtocolClientSocket = {
             onopen: null,
             onmessage: null,
             onerror: null,
