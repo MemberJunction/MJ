@@ -364,6 +364,34 @@ describe('BaseAgent realtime (session-driven) integration', () => {
             expect(store.rows.get('detail-1')).toMatchObject({ Status: 'Complete', Message: 'The answer' });
         });
 
+        it('C8 robustness: a turn with BOTH an interim delta AND repeated ReplacesPrevious completeds still collapses to ONE row', async () => {
+            // Not produced by any current driver/ASR pairing, but the `open`-flag model must hold even
+            // if a provider ever emits a user delta AND streamed completeds in one turn — pre-refactor
+            // the first (non-replacing) completed deleted the key and the replacing completed duplicated.
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const params = makeParams({ provider: store.provider(), data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            await agent.callPersist(params, { Role: 'user', Text: 'set', IsFinal: false });                                       // interim → In-Progress detail-1
+            expect(await agent.callPersist(params, { Role: 'user', Text: 'set a', IsFinal: true, ReplacesPrevious: false })).toBeNull();      // finalizes detail-1
+            expect(await agent.callPersist(params, { Role: 'user', Text: 'set a timer', IsFinal: true, ReplacesPrevious: true })).toBeNull(); // replaces detail-1 in place, NOT a duplicate
+            expect(store.rows.size).toBe(1);
+            expect(store.rows.get('detail-1')!.Message).toBe('set a timer');
+        });
+
+        it('C8: an assistant final with NO interim does not suppress the NEXT turn\'s interim streaming row', async () => {
+            // A short assistant turn that emits `done` with no preceding `delta` leaves a CLOSED tracked
+            // row. The next turn's first delta must still open a fresh In-Progress row (pre-refactor the
+            // leaked key made the interim branch return null, silently dropping the live-streaming bubble).
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const params = makeParams({ provider: store.provider(), data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            expect(await agent.callPersist(params, { Role: 'assistant', Text: 'Hi.', IsFinal: true })).toBe('detail-1');   // turn 1: done, no delta
+            expect(await agent.callPersist(params, { Role: 'assistant', Text: 'The', IsFinal: false })).toBe('detail-2');  // turn 2: interim opens a NEW row
+            expect(await agent.callPersist(params, { Role: 'assistant', Text: 'The answer', IsFinal: true })).toBeNull();  // finalizes it
+            expect(store.rows.size).toBe(2);
+            expect(store.rows.get('detail-2')).toMatchObject({ Status: 'Complete', Message: 'The answer' });
+        });
+
         it('creates and finalizes in one step when no interim was seen; assistant turns set no UserID', async () => {
             const { agent, detail, params } = setup();
             const created = await agent.callPersist(params, { Role: 'assistant', Text: 'hi, how can I help?', IsFinal: true });

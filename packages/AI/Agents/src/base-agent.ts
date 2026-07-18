@@ -1706,11 +1706,15 @@ export class BaseAgent {
      */
     // ── Realtime per-session capture state (scoped to one executeRealtimeSession run) ──────────
     /**
-     * In-flight realtime turn rows keyed by transcript role (`'user'`/`'assistant'`), driving the
-     * create-on-start / update-on-complete persistence lifecycle. Reset at the start of every
-     * realtime session so a prior run can never leak an in-flight id into the next.
+     * The current realtime turn row per transcript role (`'user'`/`'assistant'`), driving the
+     * create-on-start / update-on-complete persistence lifecycle. `open` is true while the row is an
+     * unfinalized In-Progress interim (so subsequent interim deltas fold into it and a following final
+     * finalizes it in place); it flips false once finalized, but the entry is KEPT so a streamed
+     * `ReplacesPrevious` re-final can still update the same row. A new turn is detected when the next
+     * interim (or non-replacing final) arrives with the current entry already closed. Reset at the
+     * start of every realtime session so a prior run can never leak a row id into the next.
      */
-    private realtimeInFlightTurns: Map<string, string> = new Map();
+    private realtimeInFlightTurns: Map<string, { id: string; open: boolean }> = new Map();
     /** Active audio recording controller for the current realtime session, or `null` when recording is off. */
     private realtimeRecording: RealtimeRecordingController | null = null;
     /** Storage account id the active recording stores to (RecordingStorageProviderID ?? AttachmentStorageProviderID). */
@@ -2399,9 +2403,12 @@ export class BaseAgent {
 
         // ── INTERIM: create the In-Progress row once per turn (first delta) ───────────────────────
         if (!transcript.IsFinal) {
-            if (this.realtimeInFlightTurns.has(roleKey)) {
-                return null; // already created for this turn; ignore subsequent deltas
+            if (this.realtimeInFlightTurns.get(roleKey)?.open) {
+                return null; // an In-Progress row for THIS turn already exists; fold this delta into it
             }
+            // A closed entry (a prior turn's finalized row still tracked for streamed re-finals) means
+            // THIS delta begins a NEW turn — fall through and create a fresh In-Progress row, replacing
+            // the tracked entry below.
             const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
             detail.NewRecord();
             detail.ConversationID = conversationID;
@@ -2418,28 +2425,30 @@ export class BaseAgent {
                 });
                 return null;
             }
-            this.realtimeInFlightTurns.set(roleKey, detail.ID);
+            this.realtimeInFlightTurns.set(roleKey, { id: detail.ID, open: true });
             return detail.ID;
         }
 
         // ── FINAL: update the in-flight row, or create+finalize a fresh turn ──────────────────────
-        // Three real provider shapes must all yield exactly ONE row per turn:
-        //   1. interim-based (OpenAI): delta(s) create the In-Progress row → final finalizes it;
+        // Every real provider shape must yield exactly ONE row per turn:
+        //   1. interim-based (OpenAI): delta(s) open the In-Progress row → final finalizes it;
         //   2. streamed re-finals (Grok user captions): the SAME turn emits repeated finals, each the
         //      full growing text — the 2nd+ carry ReplacesPrevious=true (stamped by the driver) and
-        //      must REPLACE the turn's row, not append;
+        //      REPLACE the turn's row, not append;
         //   3. finals-only single (+ ElevenLabs corrections): one non-replacing final, optionally
-        //      followed by a ReplacesPrevious correction.
+        //      followed by a ReplacesPrevious correction;
+        //   4. (robustness) a provider that emits BOTH interim deltas AND repeated completeds.
         //
-        // The reuse decision disambiguates the overloaded non-replacing final ("finalize this turn's
-        // interim row" vs "start a new turn") by the loaded row's STATUS: an In-Progress row is this
-        // turn's open interim (reuse); a Complete row under the key is a leaked streamed-final key from
-        // a PRIOR turn (do not reuse — this is a new turn). ReplacesPrevious always reuses.
-        const inFlightId = this.realtimeInFlightTurns.get(roleKey);
+        // Reuse the tracked row iff this final REPLACES the turn (ReplacesPrevious) OR the tracked row
+        // is still an OPEN interim (this final finalizes it). A non-replacing final whose tracked entry
+        // is already CLOSED (a prior turn's finalized row) starts a NEW turn. The entry is then KEPT
+        // (closed) rather than deleted, so a later streamed re-final can still update this same row and
+        // the next interim/non-replacing-final correctly detects the turn boundary via `open`.
+        const inFlight = this.realtimeInFlightTurns.get(roleKey);
         let detail: MJConversationDetailEntity | null = null;
-        if (inFlightId) {
+        if (inFlight && (transcript.ReplacesPrevious || inFlight.open)) {
             const candidate = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
-            if (await candidate.Load(inFlightId) && (transcript.ReplacesPrevious || candidate.Status === 'In-Progress')) {
+            if (await candidate.Load(inFlight.id)) {
                 detail = candidate; // update the existing row in place → not a new turn
             }
         }
@@ -2467,16 +2476,12 @@ export class BaseAgent {
                 agent: params.agent, category: 'RealtimeSession'
             });
         }
-        // Key management for the NEXT event in this role:
-        //  - ReplacesPrevious, or a freshly-created streamed final → point the key at THIS row so a
-        //    subsequent replacing final updates it in place (only bound when the Save produced a real
-        //    id — a failed create leaves an empty id that would otherwise poison the next lookup);
-        //  - a non-replacing final that finalized an In-Progress interim row → the turn is done, so
-        //    clear the key and let the next turn start fresh.
-        if ((transcript.ReplacesPrevious || created) && saved && detail.ID) {
-            this.realtimeInFlightTurns.set(roleKey, detail.ID);
-        } else if (!transcript.ReplacesPrevious && !created) {
-            this.realtimeInFlightTurns.delete(roleKey);
+        // Track this turn's now-finalized (closed) row so a subsequent ReplacesPrevious re-final updates
+        // it in place, and so the next interim / non-replacing final detects the new-turn boundary via
+        // `open === false`. Only bind a real id — a failed create leaves an empty id that would poison
+        // the next lookup, so leave the prior entry untouched in that case.
+        if (saved && detail.ID) {
+            this.realtimeInFlightTurns.set(roleKey, { id: detail.ID, open: false });
         }
         return created ? detail.ID : null;
     }

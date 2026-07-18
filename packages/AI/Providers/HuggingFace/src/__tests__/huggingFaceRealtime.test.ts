@@ -341,6 +341,19 @@ describe('HuggingFaceRealtime', () => {
             expect(seen.toolCalls).toEqual([{ CallID: 'c1', ToolName: 'do_thing', Arguments: '{"x":1}' }]);
         });
 
+        it('flags 2nd+ streamed user completeds ReplacesPrevious via the shared session; resets on speech_started', async () => {
+            // HuggingFace inherits the shared OpenAIRealtimeSession streamed-transcription handling, so a
+            // pipeline that streams growing user captions collapses to one persisted row and resets per turn.
+            const driver = new TestHuggingFaceRealtime('');
+            const session = await startSession(driver, makeParams());
+            const seen = collect(session);
+            driver.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'turn' });
+            driver.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'turn on' });
+            driver.Emit({ type: 'input_audio_buffer.speech_started' }); // new turn
+            driver.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'off' });
+            expect(seen.transcripts.filter((t) => t.Role === 'user').map((t) => t.ReplacesPrevious)).toEqual([false, true, false]);
+        });
+
         it('accepts BETA event aliases from older speech-to-speech builds', async () => {
             const driver = new TestHuggingFaceRealtime('');
             const session = await startSession(driver, makeParams());

@@ -519,7 +519,11 @@ describe('xAIRealtime', () => {
             completed('what');
             completed('what is');
             completed('what is the weather');
-            expect(transcripts.map((t) => t.ReplacesPrevious)).toEqual([false, true, true]);
+            // A new user turn (speech_started) resets the per-turn flag so its first caption is a fresh
+            // non-replacing final again — otherwise every subsequent turn would replace turn 1's row.
+            driver.Fake.Fire({ type: 'input_audio_buffer.speech_started', audio_start_ms: 1, event_id: 'e', item_id: 'i' } as RealtimeServerEvent);
+            completed('and the forecast');
+            expect(transcripts.map((t) => t.ReplacesPrevious)).toEqual([false, true, true, false]);
         });
 
         it('translates a function call to OnToolCall', () => {

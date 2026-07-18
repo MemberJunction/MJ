@@ -844,6 +844,36 @@ describe('QA re-audit fixes (S1/S3)', () => {
         expect(transcripts.at(-1)).toEqual({ Role: 'Assistant', Text: 'Here is the real answer', IsFinal: false, Kind: 'normal' });
     });
 
+    it('S1d: a narration create rejected WHILE a cancelled response is still draining does not mistag the next delegated answer as ephemeral narration', async () => {
+        await connect(client);
+        const { transcripts } = collect(client);
+        client.Emit({ type: 'response.created' });        // a response is in flight (confirmed active)
+        client.CancelActiveResponse();                     // host takes the floor → responseActive=false, but the response is still DRAINING (confirmedResponseActive stays true)
+        client.RequestSpokenUpdate('working on it');       // passes the idle gate → pendingNarrationKind=true, sends a narration response.create
+        client.Emit({ type: 'error', error: { message: 'conversation already has an active response', code: 'conflict' } }); // provider rejects it, NO response.created
+        client.Emit({ type: 'response.done', response: {} }); // the cancelled response's trailing done drains
+        // Delegated work returns → its reply create → the ANSWER turn. Pre-fix the leaked narration kind
+        // (cleared only in the !confirmedResponseActive branch) mistagged this durable answer as
+        // ephemeral 'narration' and its transcript was dropped. It must be 'normal'.
+        client.SendToolResult('c1', '{"ok":true}');
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.output_audio_transcript.delta', delta: 'The result is 42' });
+        expect(transcripts.at(-1)).toEqual({ Role: 'Assistant', Text: 'The result is 42', IsFinal: false, Kind: 'normal' });
+    });
+
+    it('S1e: an error while a CONFIRMED response is still active does NOT drop the busy lock (the confirmedResponseActive guard protects a live/draining turn)', async () => {
+        await connect(client);
+        client.Emit({ type: 'response.created' });   // a provider-CONFIRMED response is active
+        client.CancelActiveResponse();               // floor control: responseActive=false, but the response is still DRAINING (confirmedResponseActive stays true)
+        client.SendToolResult('c1', '{"ok":true}');  // delegated result → a fresh local response.create (counter=1, responseActive=true)
+        expect(client.IsBusy).toBe(true);
+        // An unrelated error arrives while the cancelled response is still draining. The guard must NOT
+        // clear responseActive — that would drop the busy lock mid-turn and cut the pending reply. This
+        // is the whole point of confirmedResponseActive; removing the guard makes IsBusy flip false here.
+        client.Emit({ type: 'error', error: { message: 'transient', code: 'x' } });
+        expect(client.IsBusy).toBe(true);
+    });
+
     it('S1: an unrelated error frame floors the counter at 0 (never negative)', async () => {
         await connect(client);
         client.Emit({ type: 'error', error: { message: 'transient' } }); // no local create outstanding

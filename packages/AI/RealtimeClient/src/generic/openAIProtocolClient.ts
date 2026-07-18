@@ -668,15 +668,20 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         if (this.pendingLocalResponseCreates > 0) {
             this.pendingLocalResponseCreates--;
             // The counter dropping here means this error plausibly REJECTED one of our local
-            // response.creates (rejected creates emit an error and NO response.created). If no
-            // provider-CONFIRMED response is in flight, the eager responseActive / narration-kind /
-            // 'speaking' state we set before that create is a phantom nothing will ever clear — reset
-            // it so IsBusy doesn't wedge (the bug the counter self-heal alone left open) and a stale
-            // narration kind can't tag a later turn. A genuinely-active response (concurrent VAD turn)
-            // has confirmedResponseActive=true and is left untouched — its response.done clears it.
+            // response.creates (rejected creates emit an error and NO response.created). The rejected
+            // create's narration kind belongs to THAT create — it will never arrive, so drop the flag
+            // UNCONDITIONALLY, or it would arm the NEXT local create (e.g. a delegated tool-result
+            // reply) and mistag that durable turn as ephemeral narration. This must NOT be gated on
+            // confirmedResponseActive: a narration create can be rejected while a since-cancelled
+            // response is still draining (confirmedResponseActive still true), and the flag must die
+            // regardless.
+            this.pendingNarrationKind = false;
+            // The EAGER responseActive / 'speaking' state, by contrast, is only a phantom to clear
+            // when NO provider-CONFIRMED response is in flight; a genuinely-active response (concurrent
+            // VAD turn, or a cancelled one still draining) owns that state and its response.done clears
+            // it. Clearing it here would cut a live turn.
             if (!this.confirmedResponseActive) {
                 this.responseActive = false;
-                this.pendingNarrationKind = false;
                 if (this.currentState === 'speaking') {
                     this.setState('listening');
                 }
