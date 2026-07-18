@@ -3842,23 +3842,36 @@ export class ManageMetadataBase {
          if (newEntityFields.length > 0) {
             const transaction = await pool.beginTransaction();
             try {
-               // wrap in a transaction so we get all of it or none of it
+               // wrap in a transaction so we get all of it or none of it.
+               // [Large Schema Series] Batch the per-field INSERTs. Previously this
+               // issued one LogSQLAndExecute — a DB round-trip AND a synchronous
+               // migration-log append — PER field, i.e. ~40k on a 2,000-table
+               // install (~37s). Collect each row's INSERT SQL (unchanged, conflict
+               // guards intact) and flush in chunks through LogSQLBatchAndExecute,
+               // which terminates + joins the statements and sends each chunk as a
+               // single round-trip + single log append while preserving the exact
+               // per-row SQL and the replayable migration-file output. Both dialects.
+               const CHUNK_SIZE = 250;
+               const inserts: string[] = [];
                for (let i = 0; i < newEntityFields.length; ++i) {
                   const n = newEntityFields[i];
                   if (n.EntityID !== null && n.EntityID !== undefined && n.EntityID.length > 0) {
                      // need to check for null entity id = that is because the above query can return candidate Entity Fields but the entities may not have been created if the entities
                      // that would have been created violate rules - such as not having an ID column, etc.
                      const newEntityFieldUUID = this.createNewUUID();
-                     const sSQLInsert = this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n);
-                     try {
-                        await this.LogSQLAndExecute(pool, sSQLInsert, `SQL text to insert new entity field`);
-                        // if we get here, we're okay, otherwise we have an exception, which we want as it blows up transaction
-                     }
-                     catch (e) {
-                        // this is here so we can catch the error for debug. We want the transaction to die
-                        logError(`Error inserting new entity field. SQL: \n${sSQLInsert}`);
-                        throw e;
-                     }
+                     inserts.push(this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n));
+                  }
+               }
+               for (let i = 0; i < inserts.length; i += CHUNK_SIZE) {
+                  const chunk = inserts.slice(i, i + CHUNK_SIZE);
+                  try {
+                     await this.LogSQLBatchAndExecute(pool, chunk, `SQL text to insert ${chunk.length} new entity field(s)`);
+                     // an error blows up the transaction (all-or-nothing), which is what we want
+                  }
+                  catch (e) {
+                     // catch for debug context, then let the transaction die
+                     logError(`Error inserting new entity field batch (rows ${i}..${i + chunk.length}).`);
+                     throw e;
                   }
                }
                await transaction.commit();
