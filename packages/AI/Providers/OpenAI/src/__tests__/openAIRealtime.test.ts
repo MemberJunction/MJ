@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock @memberjunction/global so @RegisterClass is a no-op decorator.
 vi.mock('@memberjunction/global', () => ({
@@ -1169,5 +1169,52 @@ describe('QA hardening regressions (plan A-items)', () => {
             driver.Fake.FireError(new Error('late death') as Parameters<typeof driver.Fake.FireError>[0]);
             await expect(s.WaitForConfigApplied()).resolves.toBeUndefined();
         });
+    });
+});
+
+describe('B1 (server): deferred-config readiness timeout', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('rejects WaitForConfigApplied when session.created never arrives within the deadline', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        const session = new OpenAIRealtimeSession(driver.Fake);
+        session.applyInitialConfig({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        const wait = session.WaitForConfigApplied();
+        const guarded = expect(wait).rejects.toThrow(/endpoint silent/);
+        vi.advanceTimersByTime(15_001);
+        await guarded;
+    });
+
+    it('a LATE session.created after the timeout still applies the config (fire-and-forget flows unaffected)', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        const session = new OpenAIRealtimeSession(driver.Fake);
+        session.applyInitialConfig({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        session.WaitForConfigApplied().catch(() => undefined);
+        vi.advanceTimersByTime(15_001);
+        // The deferred listener survived the timeout — the config still goes out.
+        driver.Fake.Fire({ type: 'session.created' } as RealtimeServerEvent);
+        expect(driver.Fake.Sent.filter((e) => e.type === 'session.update')).toHaveLength(1);
+    });
+
+    it('session.created BEFORE the deadline resolves and cancels the timer', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        const session = new OpenAIRealtimeSession(driver.Fake);
+        session.applyInitialConfig({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        driver.Fake.Fire({ type: 'session.created' } as RealtimeServerEvent);
+        await expect(session.WaitForConfigApplied()).resolves.toBeUndefined();
+        vi.advanceTimersByTime(60_000); // expired timer must not disturb the settled promise
+        await expect(session.WaitForConfigApplied()).resolves.toBeUndefined();
+    });
+
+    it('a non-deferring profile starts no readiness timer at all', () => {
+        const driver = new TestableOpenAIRealtime('k');
+        const session = new OpenAIRealtimeSession(driver.Fake, { ...OPENAI_REALTIME_PROFILE, deferInitialConfigUntilSessionCreated: false });
+        session.applyInitialConfig({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        expect(vi.getTimerCount()).toBe(0);
     });
 });

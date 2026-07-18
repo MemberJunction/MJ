@@ -205,6 +205,13 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     /** Set when a tool result is ready while a response is active; sent on the next response.done. */
     protected pendingResultResponse = false;
     /**
+     * Count of locally-initiated `response.create`s whose `response.created` echo has not arrived
+     * yet. While non-zero, a `response.done` belongs to an EARLIER (typically just-cancelled)
+     * response — it must not clear the busy flag, flush the queued trigger, or flip the state for
+     * the response we just started (usage is still emitted). Consumed by `response.created`.
+     */
+    protected pendingLocalResponseCreates = 0;
+    /**
      * Set by {@link RequestSpokenUpdate} just before it sends its `response.create`, and
      * CONSUMED by the very next `response.created` frame, which stamps
      * {@link activeResponseKind} for that turn. Narration is only requested while the model is
@@ -275,6 +282,10 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      */
     protected onSpeechStartedFrame(): void {
         if (this.responseActive || this.IsAudioPlaying) {
+            // The user took the floor. Drop the queued AUTO-trigger: the tool-result item is
+            // already in the conversation, so the user's next turn (server-VAD response) voices
+            // it contextually instead of a queued response.create stomping the fresh user turn.
+            this.pendingResultResponse = false;
             this.emitInterruption();
         }
         this.setState('listening');
@@ -404,6 +415,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         }
         this.responseActive = true;
         this.pendingNarrationKind = true;
+        this.pendingLocalResponseCreates++;
         this.sendEvent({ type: 'response.create', response: { instructions } });
     }
 
@@ -491,6 +503,9 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
                 break;
             case 'response.created':
                 this.responseActive = true;
+                if (this.pendingLocalResponseCreates > 0) {
+                    this.pendingLocalResponseCreates--;
+                }
                 // Stamp the kind of THIS response: 'narration' only when the flag was set by
                 // RequestSpokenUpdate immediately before its response.create (consumed here).
                 this.activeResponseKind = this.pendingNarrationKind ? 'narration' : 'normal';
@@ -504,6 +519,15 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
                 this.onOutputAudioBufferStopped();
                 break;
             case 'response.done':
+                // A STALE done (the trailing frame of a response we just cancelled while our own
+                // replacement response.create is in flight) must not release the lock, flush the
+                // queue, or flip the state out from under the response we just started — the real
+                // done for OUR response handles all of that. Usage is still emitted (the cancelled
+                // response consumed tokens).
+                if (this.pendingLocalResponseCreates > 0) {
+                    this.emitResponseUsage(event as OAIProtocolResponseDone);
+                    break;
+                }
                 // A turn finished — release the lock and speak any queued tool result so the
                 // model always voices the answer when delegated work comes back. The
                 // transcript-done frame for this turn has already arrived (it precedes
@@ -634,6 +658,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         }
         this.pendingResultResponse = false;
         this.responseActive = true;
+        this.pendingLocalResponseCreates++;
         this.sendEvent({ type: 'response.create' });
         this.setState('speaking');
     }
@@ -645,6 +670,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         }
         this.pendingResultResponse = false;
         this.responseActive = true;
+        this.pendingLocalResponseCreates++;
         this.sendEvent({ type: 'response.create' });
         this.setState('speaking');
     }
@@ -654,6 +680,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         this.pendingAssistantText = '';
         this.responseActive = false;
         this.pendingResultResponse = false;
+        this.pendingLocalResponseCreates = 0;
         this.pendingNarrationKind = false;
         this.activeResponseKind = 'normal';
     }
@@ -730,8 +757,12 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
     protected sessionObject: JSONObject = {};
     /** True once Disconnect ran — an expected socket close must not surface as fatal. */
     protected closedByConsumer = false;
+    /** True while the socket is OPEN — gates every send so a CONNECTING socket never throws. */
+    protected socketOpen = false;
     /** Resolver for the in-flight Connect's `session.created` wait (deferring providers only). */
     private sessionCreatedResolver: (() => void) | null = null;
+    /** Rejects the in-flight Connect (open OR created phase); null outside Connect. */
+    private failPendingConnect: ((error: Error) => void) | null = null;
 
     // ── Per-provider transport hooks ────────────────────────────────────────────
 
@@ -752,6 +783,15 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         return false;
     }
 
+    /**
+     * Connect-phase deadline in milliseconds, covering socket-open AND (when the provider
+     * defers) the `session.created` wait. On expiry `Connect` rejects with a fatal error
+     * instead of hanging forever against a silent endpoint. Override per driver/deployment.
+     */
+    protected get connectTimeoutMs(): number {
+        return 15_000;
+    }
+
     // ── Connection lifecycle ────────────────────────────────────────────────────
 
     /**
@@ -767,34 +807,64 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         this.setState('connecting');
 
         let openSocket: (() => void) | null = null;
-        let failOpen: ((error: Error) => void) | null = null;
-        const opened = new Promise<void>((resolve, reject) => {
+        const opened = new Promise<void>((resolve) => {
             openSocket = resolve;
-            failOpen = reject;
         });
         const created = this.waitsForSessionCreated
             ? new Promise<void>((resolve) => {
                   this.sessionCreatedResolver = resolve;
               })
             : null;
+        // ONE failure channel covers BOTH connect phases (open + created): socket error/close,
+        // a consumer Disconnect, and the connect deadline all reject the in-flight Connect —
+        // no phase can hang an awaited Connect() forever against a silent endpoint.
+        const failure = new Promise<never>((_, reject) => {
+            this.failPendingConnect = reject;
+        });
+        failure.catch(() => undefined); // consumed via Promise.race; guard stray-rejection noise
+        const deadline = setTimeout(
+            () => this.failPendingConnect?.(new Error(`${this.providerDebugLabel} connect timed out after ${this.connectTimeoutMs}ms`)),
+            this.connectTimeoutMs,
+        );
 
         const socket = this.openProviderSocket(config);
         this.socket = socket;
-        socket.onopen = () => openSocket?.();
+        socket.onopen = () => {
+            this.socketOpen = true;
+            openSocket?.();
+        };
         socket.onmessage = (data) => this.handleProtocolMessage(data);
         socket.onerror = (message) => {
-            failOpen?.(new Error(message));
+            this.socketOpen = false;
+            this.failPendingConnect?.(new Error(message));
             this.handleSocketError(message);
         };
         socket.onclose = () => {
-            failOpen?.(new Error(`${this.providerDebugLabel} socket closed during connect`));
+            this.socketOpen = false;
+            this.failPendingConnect?.(new Error(`${this.providerDebugLabel} socket closed during connect`));
             this.handleSocketClose();
         };
 
-        await opened;
-        this.setState('connected');
-        if (created) {
-            await created;
+        try {
+            await Promise.race([opened, failure]);
+            this.setState('connected');
+            if (created) {
+                await Promise.race([created, failure]);
+            }
+        } catch (error) {
+            // Deadline expiry reaches the host ONLY through this rejection — surface it as a
+            // fatal error + error state (socket error/close paths already emitted their own).
+            const message = error instanceof Error ? error.message : String(error);
+            if (message.includes('timed out')) {
+                this.emitError({ Message: message, Fatal: true });
+                this.setState('error');
+                try { this.socket?.close(); } catch { /* already closing */ }
+            }
+            throw error;
+        } finally {
+            clearTimeout(deadline);
+            this.failPendingConnect = null;
+            this.sessionCreatedResolver = null;
         }
         // The server-authored session config (the SessionConfig pact) is applied as the FIRST
         // frame — prompt and tool authority stay server-side (obligation #8).
@@ -818,6 +888,12 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      */
     public async Disconnect(): Promise<void> {
         this.closedByConsumer = true;
+        // Release an in-flight Connect (open or created phase) so the awaited promise cannot
+        // outlive the session the consumer just tore down.
+        this.failPendingConnect?.(new Error(`${this.providerDebugLabel} disconnected during connect`));
+        this.failPendingConnect = null;
+        this.sessionCreatedResolver = null;
+        this.socketOpen = false;
         this.closeAudioMeters();
         this.micStream?.getTracks().forEach((track) => track.stop());
         this.micStream = null;
@@ -842,9 +918,9 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
     // ── Brain seam implementations ─────────────────────────────────────────────
 
-    /** @inheritdoc */
+    /** @inheritdoc — requires an OPEN socket (a CONNECTING raw WebSocket throws on send). */
     protected canSendEvents(): boolean {
-        return this.socket !== null;
+        return this.socket !== null && this.socketOpen;
     }
 
     /** @inheritdoc */
@@ -880,6 +956,8 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
     protected override onSpeechStartedFrame(): void {
         if (this.responseActive || this.IsAudioPlaying) {
             this.playback?.Flush();
+            // Floor to the user — drop the queued auto-trigger (see the brain's docstring).
+            this.pendingResultResponse = false;
             this.emitInterruption();
         }
         this.setState('listening');

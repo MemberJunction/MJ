@@ -47,25 +47,25 @@ Severity legend: 🔴 fix-critical · 🟠 medium · 🟡 low · ⚪ info/hygien
 
 ## B. PRE-EXISTING defects carried forward (client + server robustness)
 
-- [ ] **B1 🔴 No connect/readiness timeout + orphaned `Connect` promise (client WS layer + server base)**
+- [x] **B1 🔴 No connect/readiness timeout + orphaned `Connect` promise (client WS layer + server base)**
   Client: HF `Connect` awaits `session.created` forever if the endpoint opens but stays silent; socket death DURING the created-wait sets error state but never releases the awaited promise; `Disconnect()` doesn't release it either. Server: `WaitForConfigApplied` (awaited by HF `StartSession`) has the same no-timeout gap.
   **Fix**: (client WS layer) a connect-phase deadline (protected `connectTimeoutMs`, default 15s) covering open+created; socket error/close and `Disconnect` during the created-wait reject/release it; `Connect` rejects with a clear fatal error. (server) readiness timeout in the deferred-config path → fails the config wait (drivers that await it get a rejection; OpenAI's non-awaited path is unaffected).
   **Tests** (fake timers): silent-endpoint timeout rejects Connect + emits fatal; error-during-created-wait rejects; close-during-wait rejects; Disconnect-during-wait releases; success path unaffected; server: created-never-arrives rejects `WaitForConfigApplied` after deadline, created-in-time resolves and cancels the timer.
 
-- [ ] **B2 🟠 Stale `response.done` (of a cancelled turn) clears `responseActive` for the NEW in-flight response**
+- [x] **B2 🟠 Stale `response.done` (of a cancelled turn) clears `responseActive` for the NEW in-flight response**
   After `SendText` barge-in (cancel → inject → `response.create`), the cancelled turn's trailing `done` clears the busy flag before the new `response.created` arrives → `IsBusy` reads false; narration can collide; queued results can double-fire.
   **Fix**: track locally-initiated in-flight `response.create`s (counter incremented on send, consumed by `response.created`); `response.done` skips the clear+flush when a local create is in flight (usage still emitted).
   **Tests**: SendText-barge-in → stale done → `IsBusy` stays true, narration skipped in the window, queued trigger fires exactly once on the REAL done; normal turns unaffected; counter never goes negative on VAD-initiated responses.
 
-- [ ] **B3 🟠 Barge-in floor steal: queued tool-result trigger fires on the cancelled turn's `done`, speaking over the user**
+- [x] **B3 🟠 Barge-in floor steal: queued tool-result trigger fires on the cancelled turn's `done`, speaking over the user**
   **Fix (product-decision codified)**: on TRUE user barge-in, clear the queued auto-trigger — the `function_call_output` item is already in the conversation, so the user's next turn (server-VAD response) voices the result contextually instead of stomping the user. Document the invariant change in the brain's docstrings.
   **Tests**: narration + queued result + barge-in → NO response.create on the cancelled done; result item remains delivered; without barge-in the queue still flushes (tool-result-delivery invariant intact).
 
-- [ ] **B4 🟡 `remoteStreamHandlers` never cleared on `Disconnect` (OpenAI WebRTC client)**
+- [x] **B4 🟡 `remoteStreamHandlers` never cleared on `Disconnect` (OpenAI WebRTC client)**
   **Fix**: clear on Disconnect.
   **Tests**: handler registered in session 1 does not fire for session 2's track on a reused instance.
 
-- [ ] **B5 🟡 WS client `canSendEvents()` doesn't check socket-open**
+- [x] **B5 🟡 WS client `canSendEvents()` doesn't check socket-open**
   Pre-open `send()` on a raw CONNECTING WebSocket throws `InvalidStateError`.
   **Fix**: `socketOpen` flag on the WS layer (set when opened resolves, cleared on error/close/Disconnect); `canSendEvents` requires it.
   **Tests**: action invoked between socket-assign and open → clean no-op (no throw, no state pollution); post-open works; post-close no-op.

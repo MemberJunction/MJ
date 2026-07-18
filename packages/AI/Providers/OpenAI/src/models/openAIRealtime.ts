@@ -643,6 +643,8 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private rejectConfigApplied: ((error: Error) => void) | null = null;
     /** The deferred-config listener awaiting `session.created`, tracked so teardown can remove it. */
     private pendingConfigListener: ((event: RealtimeServerEvent) => void) | null = null;
+    /** Deadline timer for the deferred-config readiness wait (see {@link configReadinessTimeoutMs}). */
+    private configReadinessTimer: ReturnType<typeof setTimeout> | null = null;
 
     /**
      * Whether a model response is currently in flight. Minimal response tracking that mirrors the
@@ -707,6 +709,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             if (!fold && context && context.length > 0) {
                 this.sendInitialContext(context);
             }
+            this.clearConfigReadinessTimer();
             this.resolveConfigApplied?.();
             this.resolveConfigApplied = null;
             this.rejectConfigApplied = null;
@@ -727,6 +730,43 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         };
         this.pendingConfigListener = applyWhenReady;
         this.connection.on('event', applyWhenReady);
+        // Readiness deadline: a silent endpoint (socket open, no session.created) must not hang a
+        // driver that AWAITS WaitForConfigApplied (HuggingFace) forever. The timeout rejects the
+        // WAIT only — the deferred listener stays registered, so a late session.created on a
+        // fire-and-forget flow (OpenAI's non-awaiting StartSession) still applies the config.
+        this.configReadinessTimer = setTimeout(() => {
+            this.configReadinessTimer = null;
+            this.failConfigWaitOnly(`session.created not received within ${this.configReadinessTimeoutMs}ms — endpoint silent during startup`);
+        }, this.configReadinessTimeoutMs);
+        // Node-only nicety: never let a readiness timer keep the process alive (browser bundles
+        // of this server package don't exist; unref is feature-detected anyway).
+        (this.configReadinessTimer as { unref?: () => void }).unref?.();
+    }
+
+    /**
+     * Readiness deadline in milliseconds for the deferred-config wait. Only affects consumers of
+     * {@link WaitForConfigApplied}; the deferred apply itself is not cancelled. Overridable.
+     */
+    protected get configReadinessTimeoutMs(): number {
+        return 15_000;
+    }
+
+    /** Rejects a pending config wait WITHOUT removing the deferred listener (timeout semantics). */
+    private failConfigWaitOnly(message: string): void {
+        if (this.rejectConfigApplied) {
+            const reject = this.rejectConfigApplied;
+            this.rejectConfigApplied = null;
+            this.resolveConfigApplied = null;
+            reject(new Error(message));
+        }
+    }
+
+    /** Clears the readiness-deadline timer (config applied, or session torn down). */
+    private clearConfigReadinessTimer(): void {
+        if (this.configReadinessTimer) {
+            clearTimeout(this.configReadinessTimer);
+            this.configReadinessTimer = null;
+        }
     }
 
     /** Removes a still-pending deferred-config listener (teardown before `session.created`). */
@@ -754,6 +794,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     /** Rejects a still-pending {@link WaitForConfigApplied} (transport death / early consumer close). */
     private failConfigWait(message: string): void {
+        this.clearConfigReadinessTimer();
         this.clearPendingConfigListener();
         if (this.rejectConfigApplied) {
             const reject = this.rejectConfigApplied;
