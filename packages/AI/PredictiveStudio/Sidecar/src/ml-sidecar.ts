@@ -146,6 +146,14 @@ export class MLSidecar {
   private readonly requestTimeoutMs: number;
   private stopping = false;
   private cleanupRegistered = false;
+  /**
+   * In-flight `spawnManaged()` promise, so concurrent `start()` callers await the
+   * SAME spawn instead of each racing `IsRunning` (false until the port is
+   * announced) and forking a second Python process. Cleared once the spawn
+   * settles (success or failure) so a subsequent `start()` after a failed/stopped
+   * sidecar spawns fresh rather than replaying a rejected promise.
+   */
+  private startPromise: Promise<void> | null = null;
 
   constructor(options?: MLSidecarOptions) {
     const url = options?.url ?? process.env.PREDICTIVE_STUDIO_SIDECAR_URL?.trim();
@@ -190,8 +198,14 @@ export class MLSidecar {
     if (this.IsRunning) {
       return;
     }
+    if (this.startPromise) {
+      return this.startPromise;
+    }
     this.stopping = false;
-    await this.spawnManaged();
+    this.startPromise = this.spawnManaged().finally(() => {
+      this.startPromise = null;
+    });
+    return this.startPromise;
   }
 
   private async spawnManaged(): Promise<void> {
