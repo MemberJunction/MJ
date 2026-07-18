@@ -50,6 +50,7 @@ export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsParallelToolCalls: false,
     supportsMcpTools: false,
     supportsVoiceOutput: false,
+    supportsLiveReconfigure: true,
     unexpectedCloseMessage: 'xAI Grok Voice realtime connection closed unexpectedly',
     // Explicit server-VAD with create_response is REQUIRED on Grok: without it the model hears +
     // transcribes the user (speech_started + input_audio_transcription.* arrive) but never

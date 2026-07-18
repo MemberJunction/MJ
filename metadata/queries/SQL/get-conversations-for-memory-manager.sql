@@ -67,7 +67,7 @@ WHERE EXISTS (
     SELECT 1 FROM [__mj].[vwConversationDetails] cd_new
     WHERE cd_new.ConversationID = c.ID
     {% if since %}
-    AND cd_new.__mj_CreatedAt >= '{{ since }}'
+    AND cd_new.__mj_CreatedAt >= {{ since | sqlDate }}
     {% endif %}
 )
 

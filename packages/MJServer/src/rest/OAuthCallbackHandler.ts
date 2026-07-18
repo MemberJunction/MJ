@@ -98,7 +98,8 @@ export class OAuthCallbackHandler {
      * Renders a success page after OAuth authorization completes.
      */
     private handleSuccessPage(req: express.Request, res: express.Response): void {
-        const { state, connectionId } = req.query;
+        const { connectionId } = req.query;
+        const safeConnectionId = connectionId ? this.escapeHtml(String(connectionId)) : '';
         res.status(200).send(`
 <!DOCTYPE html>
 <html lang="en">
@@ -120,7 +121,7 @@ export class OAuthCallbackHandler {
         <div class="icon">✅</div>
         <h1>Authorization Successful</h1>
         <p>Your MCP server connection has been authorized. You can close this window and return to MemberJunction.</p>
-        ${connectionId ? `<div class="details">Connection ID: ${connectionId}</div>` : ''}
+        ${safeConnectionId ? `<div class="details">Connection ID: ${safeConnectionId}</div>` : ''}
     </div>
 </body>
 </html>
@@ -132,8 +133,8 @@ export class OAuthCallbackHandler {
      */
     private handleErrorPage(req: express.Request, res: express.Response): void {
         const { error, error_description } = req.query;
-        const errorCode = error ? String(error) : 'unknown_error';
-        const errorMessage = error_description ? String(error_description) : 'An error occurred during authorization.';
+        const errorCode = this.escapeHtml(error ? String(error) : 'unknown_error');
+        const errorMessage = this.escapeHtml(error_description ? String(error_description) : 'An error occurred during authorization.');
 
         res.status(200).send(`
 <!DOCTYPE html>
@@ -541,6 +542,23 @@ export class OAuthCallbackHandler {
     // ========================================
     // Helper Methods
     // ========================================
+
+    /**
+     * Escapes HTML-special characters in a string so untrusted (e.g. query-string-derived)
+     * values can be safely interpolated into an HTML response without introducing
+     * reflected-XSS. Escapes `&`, `<`, `>`, `"`, and `'`.
+     *
+     * @param value - The raw string to escape
+     * @returns The HTML-escaped string
+     */
+    private escapeHtml(value: string): string {
+        return value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
 
     /**
      * Gets the system user from cache.

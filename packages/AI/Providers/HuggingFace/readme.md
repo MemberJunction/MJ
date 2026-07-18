@@ -49,3 +49,10 @@ Seeded as the `HuggingFace Speech-to-Speech` model (`MJ: AI Models`, type `Realt
 - **Session shape**: the endpoint validates `session.update` against the GA OpenAI-Realtime schema, which requires the session object to be discriminated by `type: 'realtime'`. The driver stamps this automatically; without it the endpoint rejects the update and the prompt + tools are silently dropped.
 
 See the [Real-Time Co-Agents Guide](../../../../guides/REALTIME_CO_AGENTS_GUIDE.md) for the full realtime architecture.
+
+## Architecture note: shared OpenAI-protocol driver
+
+`HuggingFaceRealtime` **subclasses** the shared `OpenAIRealtime` implementation (`@memberjunction/ai-openai`) — the self-hosted `/v1/realtime` endpoint speaks OpenAI's literal GA frames, so the driver is `HUGGINGFACE_REALTIME_PROFILE` plus the reusable `RawRealtimeWebSocketConnection` adapter (raw WS → the shared connection seam). HF-specific behavior preserved by the profile/subclass: ready-after-config `StartSession` (awaits `WaitForConfigApplied`, 15s readiness deadline), `InitialContext` folded into the prompt, beta event-name aliases, order-insensitive tool-set fingerprinting, native STT (no default transcription block), NO live turn-mode reconfigure (`CanReconfigureTurnMode: false`), and the MJAPI proxy-ticket client-direct topology.
+
+### Proxy hardening
+The MJAPI realtime proxy supports an optional Origin allowlist — set `MJ_REALTIME_PROXY_ALLOWED_ORIGINS` (comma-separated origins) to reject foreign browser origins with 403 *before* the single-use ticket is consumed. The tunnel enforces a 15s upstream-open deadline and caps the pre-open frame buffer (512 frames, drop-oldest). NOTE: the in-memory ticket registry requires sticky routing (mint and upgrade on the same MJAPI instance) in multi-instance deployments, and upgrade requests carry no authenticated principal, so tickets — single-use, short-TTL — remain the primary guard.

@@ -673,3 +673,111 @@ function collectUsage(client: BaseRealtimeClient): { usage: Array<{ InputTokens?
     client.OnUsage((u) => usage.push(u));
     return { usage };
 }
+
+describe('QA hardening: B2 stale response.done protection', () => {
+    let client: TestxAIClient;
+
+    beforeEach(() => {
+        client = new TestxAIClient();
+    });
+
+    it('the cancelled turn\'s trailing done does NOT release the busy lock while our replacement create is in flight', async () => {
+        await connect(client);
+        client.Emit({ type: 'response.created' }); // narration/VAD response active
+        client.SendText('barge in with text'); // cancel + inject + response.create (local, in flight)
+        expect(client.IsBusy).toBe(true);
+        client.Emit({ type: 'response.done', response: {} }); // STALE done of the cancelled turn
+        expect(client.IsBusy).toBe(true); // window closed — the stale done cannot clear it
+        // Narration cannot collide in the window either:
+        const before = client.Fake.Sent.length;
+        client.RequestSpokenUpdate('should be skipped');
+        expect(client.Fake.Sent.length).toBe(before);
+        // The REAL lifecycle then proceeds normally:
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.IsBusy).toBe(false);
+    });
+
+    it('a queued tool-result trigger fires exactly once, on the REAL done — never doubled by the stale done', async () => {
+        await connect(client);
+        client.RequestSpokenUpdate('narrating…'); // local create #1 in flight
+        client.Emit({ type: 'response.created' }); // consumed
+        client.SendToolResult('c1', '{"r":1}'); // queues behind the narration
+        client.SendText('typed barge-in'); // cancel + create #2 (also consumes queued debt immediately)
+        const createsAfterBarge = client.Fake.SentFrames().filter((f) => f.type === 'response.create').length;
+        client.Emit({ type: 'response.done', response: {} }); // stale done of cancelled narration
+        // No extra response.create fired off the stale done:
+        expect(client.Fake.SentFrames().filter((f) => f.type === 'response.create').length).toBe(createsAfterBarge);
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.Fake.SentFrames().filter((f) => f.type === 'response.create').length).toBe(createsAfterBarge);
+    });
+
+    it('usage from a stale done is still emitted (the cancelled response consumed tokens)', async () => {
+        const usage: Array<{ InputTokens?: number }> = [];
+        client.OnUsage((u) => usage.push(u));
+        await connect(client);
+        client.Emit({ type: 'response.created' });
+        client.SendText('barge');
+        client.Emit({ type: 'response.done', response: { usage: { input_tokens: 5, output_tokens: 2 } } });
+        expect(usage).toHaveLength(1);
+    });
+
+    it('VAD-initiated responses never underflow the local-create counter', async () => {
+        await connect(client);
+        // Two pure-VAD cycles (no local creates at all):
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.IsBusy).toBe(false);
+        // A local create afterwards still round-trips correctly:
+        client.SendToolResult('c9', '{}');
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.IsBusy).toBe(false);
+    });
+});
+
+describe('QA hardening: B3 barge-in floor protection', () => {
+    let client: TestxAIClient;
+
+    beforeEach(() => {
+        client = new TestxAIClient();
+    });
+
+    it('a TRUE user barge-in drops the queued auto-trigger — the cancelled turn\'s done fires NO response.create', async () => {
+        await connect(client);
+        client.RequestSpokenUpdate('narrating…');
+        client.Emit({ type: 'response.created' });
+        client.SendToolResult('c1', '{"r":1}'); // item out now; trigger queued
+        const beforeCreates = client.Fake.SentFrames().filter((f) => f.type === 'response.create').length;
+        client.Emit({ type: 'input_audio_buffer.speech_started' }); // user takes the floor
+        client.Emit({ type: 'response.done', response: {} }); // cancelled narration's trailing done
+        expect(client.Fake.SentFrames().filter((f) => f.type === 'response.create').length).toBe(beforeCreates);
+        // The result ITEM was still delivered — the model voices it on the user's next natural turn.
+        expect(client.Fake.SentFrames().some((f) => f.item?.type === 'function_call_output' && f.item?.call_id === 'c1')).toBe(true);
+    });
+
+    it('WITHOUT a barge-in the queued trigger still flushes (tool-result-delivery invariant intact)', async () => {
+        await connect(client);
+        client.RequestSpokenUpdate('narrating…');
+        client.Emit({ type: 'response.created' });
+        client.SendToolResult('c1', '{"r":1}');
+        const beforeCreates = client.Fake.SentFrames().filter((f) => f.type === 'response.create').length;
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.Fake.SentFrames().filter((f) => f.type === 'response.create').length).toBe(beforeCreates + 1);
+    });
+
+    it('open-phase connect timeout: a socket that never opens rejects Connect at the deadline', async () => {
+        vi.useFakeTimers();
+        try {
+            const promise = client.Connect(makeConfig(), new FakeMediaStream([new FakeTrack()]));
+            const guarded = expect(promise).rejects.toThrow(/timed out/);
+            await vi.advanceTimersByTimeAsync(15_001); // never Open()
+            await guarded;
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});

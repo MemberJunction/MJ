@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import { BaseRealtimeClient } from '../generic/baseRealtimeClient';
@@ -455,6 +455,7 @@ describe('HuggingFaceRealtimeClient (extended edge coverage)', () => {
         it('CancelActiveResponse preserves a queued tool-result trigger across the cancel', async () => {
             await connect(client);
             client.RequestSpokenUpdate('narrating…');
+            client.Emit({ type: 'response.created' }); // server echo for the narration (real wire ordering)
             client.SendToolResult('c1', '{"r":1}'); // queues behind the narration
             client.CancelActiveResponse();
             client.Emit({ type: 'response.done', response: {} }); // trailing done of the cancelled turn
@@ -547,5 +548,77 @@ describe('HuggingFaceRealtimeClient (extended edge coverage)', () => {
             client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: text });
             expect(seen.transcripts).toContainEqual({ Role: 'User', Text: text, IsFinal: true, Kind: 'normal' });
         });
+    });
+});
+
+describe('QA hardening: B1 connect lifecycle (timeout + orphaned-promise fixes)', () => {
+    let client: TestHuggingFaceClient;
+
+    beforeEach(() => {
+        client = new TestHuggingFaceClient();
+    });
+
+    it('rejects Connect (fatal error, error state) when the endpoint opens but stays SILENT past the deadline', async () => {
+        vi.useFakeTimers();
+        try {
+            const seen = collect(client);
+            const promise = client.Connect(makeConfig(), new FakeMediaStream([new FakeTrack()]));
+            const guarded = expect(promise).rejects.toThrow(/timed out/);
+            client.Fake.Open(); // socket opens…
+            await vi.advanceTimersByTimeAsync(15_001); // …but session.created never arrives
+            await guarded;
+            expect(seen.errors.some((e) => e.Fatal && /timed out/.test(e.Message))).toBe(true);
+            expect(seen.states.at(-1)).toBe('error');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('rejects Connect when the socket ERRORS during the session.created wait (previously hung forever)', async () => {
+        const promise = client.Connect(makeConfig(), new FakeMediaStream([new FakeTrack()]));
+        const guarded = expect(promise).rejects.toThrow('proxy died mid-handshake');
+        client.Fake.Open();
+        await flushAsync();
+        client.Fake.onerror?.('proxy died mid-handshake');
+        await guarded;
+    });
+
+    it('rejects Connect when the socket CLOSES during the session.created wait', async () => {
+        const promise = client.Connect(makeConfig(), new FakeMediaStream([new FakeTrack()]));
+        const guarded = expect(promise).rejects.toThrow(/closed during connect/);
+        client.Fake.Open();
+        await flushAsync();
+        client.Fake.onclose?.();
+        await guarded;
+    });
+
+    it('releases a pending Connect when the consumer Disconnects mid-handshake (no orphaned promise)', async () => {
+        const promise = client.Connect(makeConfig(), new FakeMediaStream([new FakeTrack()]));
+        const guarded = expect(promise).rejects.toThrow(/disconnected during connect/);
+        client.Fake.Open();
+        await flushAsync();
+        await client.Disconnect();
+        await guarded;
+    });
+
+    it('the happy path is unaffected by the deadline machinery', async () => {
+        await connect(client); // helper drives open + session.created
+        expect(client.IsBusy).toBe(false);
+    });
+});
+
+describe('QA hardening: B5 pre-open send guard', () => {
+    it('an action invoked after socket-assign but BEFORE open is a clean no-op (no throw, no frame)', async () => {
+        const client = new TestHuggingFaceClient();
+        const promise = client.Connect(makeConfig(), new FakeMediaStream([new FakeTrack()]));
+        // Socket exists (createSocket ran synchronously) but onopen has not fired.
+        expect(() => client.SendContextNote('too early')).not.toThrow();
+        expect(client.Fake.Sent).toHaveLength(0);
+        client.Fake.Open();
+        await flushAsync();
+        client.Fake.EmitServer({ type: 'session.created' });
+        await promise;
+        client.SendContextNote('now it works');
+        expect(client.Fake.Frames().some((f) => f.type === 'conversation.item.create')).toBe(true);
     });
 });

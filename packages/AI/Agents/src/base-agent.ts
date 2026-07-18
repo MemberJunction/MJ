@@ -37,6 +37,8 @@ import {
     BuildVoiceMannerSection,
     GetNarrationPaceMs,
     GetProviderVoiceSettings,
+    GetSessionTuningSettings,
+    DeepMergeConfigs,
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
 } from './realtime/realtime-coagent-config';
@@ -2075,6 +2077,10 @@ export class BaseAgent {
             Recording: this.realtimeRecording ?? undefined,
             FinalizeRecording: () => this.finalizeRealtimeRecording(params),
             CheckpointUsage: (usage) => this.checkpointRealtimeUsage(promptRun, usage),
+            // The chained agent cancellation signal (caller token + agent timeout) — the runner
+            // observes it so a realtime session honors the same wall-clock/cancel semantics as
+            // every other agent run instead of living until the janitor sweeps it.
+            AbortSignal: params.cancellationToken,
             // DB-driven spoken-progress wording (shared lookup with the client-direct path);
             // null → the runner's documented built-in first-person fallback.
             NarrationInstructionsTemplate: ResolveNarrationInstructionsTemplate(),
@@ -2121,16 +2127,21 @@ export class BaseAgent {
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
 
-        // Provider-matched voice settings (realtime.voice.providers.<provider>) flow into the
-        // driver's open Config bag — the same pact every other config entry rides.
+        // Provider-matched voice settings (realtime.voice.providers.<provider>) AND session-tuning
+        // knobs (realtime.session) flow into the driver's open Config bag — the same pact every
+        // other config entry rides, mirroring the client-direct builder's cascade exactly.
         const providerVoice = GetProviderVoiceSettings(effectiveConfig, driverClass ?? null);
+        const sessionTuning = GetSessionTuningSettings(effectiveConfig);
+        const configBag = (sessionTuning || providerVoice)
+            ? (DeepMergeConfigs(sessionTuning, providerVoice) as JSONObject)
+            : undefined;
 
         return {
             Model: modelApiName,
             SystemPrompt: systemPrompt,
             InitialContext: memoryContext || undefined,
-            // JSONObjectLike -> JSONObject: safe — the settings object came from JSON.parse.
-            Config: providerVoice ? (providerVoice as JSONObject) : undefined
+            // JSONObjectLike -> JSONObject: safe — the settings objects came from JSON.parse.
+            Config: configBag
         };
     }
 
@@ -2591,6 +2602,18 @@ export class BaseAgent {
         promptRun.TokensPrompt = usage.InputTokens;
         promptRun.TokensCompletion = usage.OutputTokens;
         promptRun.TokensUsed = usage.InputTokens + usage.OutputTokens;
+        // Per-modality detail (audio vs text vs cached) — REQUIRED for correct multi-channel cost
+        // attribution (audio-in bills ~8x text-in on GPT Realtime 2.1). The realtime prompt run's
+        // Result column is otherwise unused (a live session has no single prompt output), so the
+        // detail rides there as JSON for the cost pipeline / dashboards to consume.
+        if (usage.InputTokenDetails || usage.OutputTokenDetails) {
+            promptRun.Result = JSON.stringify({
+                realtimeUsageDetails: {
+                    input: usage.InputTokenDetails ?? null,
+                    output: usage.OutputTokenDetails ?? null,
+                },
+            });
+        }
         if (!await promptRun.Save()) {
             this.logError(`Failed to checkpoint realtime usage: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
                 category: 'RealtimeSession'

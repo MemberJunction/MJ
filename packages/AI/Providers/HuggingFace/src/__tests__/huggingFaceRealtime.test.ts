@@ -510,3 +510,64 @@ describe('HuggingFaceRealtime edge coverage (shared-driver surface)', () => {
         expect(cfg.EphemeralToken.startsWith('wss://api.deployment.io:8443/realtime-proxy?ticket=')).toBe(true);
     });
 });
+
+describe('QA hardening regressions (plan A-items, HF-specific)', () => {
+    it('A1 end-to-end: a bodyless provider error frame is RECOVERABLE and does not kill startup', async () => {
+        // Drive through the real adapter (not the fake connection) so the synthesized payload path runs.
+        const { RawRealtimeWebSocketConnection } = await import('@memberjunction/ai-openai');
+        class FakeWS {
+            public static Last: FakeWS | null = null;
+            public onopen: (() => void) | null = null;
+            public onmessage: ((event: { data: unknown }) => void) | null = null;
+            public onerror: (() => void) | null = null;
+            public onclose: ((event: { code?: number; reason?: string }) => void) | null = null;
+            public Sent: string[] = [];
+            constructor(public Url: string) { FakeWS.Last = this; }
+            public send(d: string): void { this.Sent.push(d); }
+            public close(): void { /* noop */ }
+        }
+        const conn = new RawRealtimeWebSocketConnection('ws://x/v1/realtime', FakeWS as unknown as new (u: string) => FakeWS);
+        const ws = FakeWS.Last!;
+        const session = new HuggingFaceRealtimeSession(conn);
+        session.applyInitialConfig({ Model: 'speech-to-speech', SystemPrompt: 'sys' });
+        const errors: Array<{ Fatal?: boolean }> = [];
+        session.OnError((e) => errors.push(e));
+        ws.onopen?.();
+        // Bodyless error frame BEFORE session.created — must be recoverable, must NOT reject readiness.
+        ws.onmessage?.({ data: JSON.stringify({ type: 'error' }) });
+        expect(errors).toEqual([expect.objectContaining({ Fatal: false })]);
+        ws.onmessage?.({ data: JSON.stringify({ type: 'session.created' }) });
+        await expect(session.WaitForConfigApplied()).resolves.toBeUndefined();
+    });
+
+    it('A2: HF reports CanReconfigureTurnMode false and Reconfigure sends nothing', async () => {
+        const driver = new TestHuggingFaceRealtime('');
+        const session = await startSession(driver, makeParams());
+        expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: false });
+        const before = driver.Fake.Sent.length;
+        session.Reconfigure({ DisableAutoResponse: true });
+        expect(driver.Fake.Sent.length).toBe(before);
+    });
+
+    it('A3: a Config bag `type` key cannot break the strict-endpoint session.update', async () => {
+        const driver = new TestHuggingFaceRealtime('');
+        await startSession(driver, makeParams({ Config: { type: 'not-realtime', instructions: 'pwned' } }));
+        const first = driver.Fake.Sent[0];
+        if (first.type === 'session.update' && first.session.type === 'realtime') {
+            expect(first.session.type).toBe('realtime');
+            expect(first.session.instructions).toBe('You are a helpful voice agent.');
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+    });
+
+    it('A5: HF suppresses empty transcript payloads again (old-driver parity)', async () => {
+        const driver = new TestHuggingFaceRealtime('');
+        const session = await startSession(driver, makeParams());
+        const seen: Array<{ Text: string }> = [];
+        session.OnTranscript((t) => seen.push(t));
+        driver.Emit({ type: 'conversation.item.input_audio_transcription.delta' }); // undefined delta
+        driver.Emit({ type: 'response.output_audio_transcript.done', transcript: '  ' });
+        expect(seen).toHaveLength(0);
+    });
+});

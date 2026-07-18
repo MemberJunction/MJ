@@ -221,6 +221,68 @@ export interface RealtimeConfigSection {
      * with the accumulated union rather than the array-replaced top layer.
      */
     allowedAgents?: RealtimeAllowedAgent[];
+    /**
+     * Provider-session tuning knobs, folded into the driver's open Config bag by the session
+     * builders (both topologies) — the SAME pact `voice`/`disableAutoResponse` ride. Drivers
+     * translate each key to their native wire field ONLY when their profile confirms support and
+     * scrub it otherwise, so a shared co-agent config is safe on every provider.
+     */
+    session?: RealtimeSessionTuningConfig;
+}
+
+/**
+ * Provider-session tuning for a Realtime co-agent — the config-cascade source for the driver
+ * feature keys ({@link GetSessionTuningSettings} projects these onto the flat bag keys the
+ * drivers consume). Every field is optional; absent fields contribute NOTHING to the bag.
+ */
+export interface RealtimeSessionTuningConfig {
+    /**
+     * MJ-normalized effort level (the `ChatParams.effortLevel` vocabulary: numeric 1–100 or a
+     * named level). Providers with reasoning realtime models (OpenAI gpt-realtime-2.x) map it to
+     * their native literals; others scrub it.
+     */
+    effortLevel?: string | number;
+    /** Whether the model may run tool calls in parallel (GA reasoning realtime models). */
+    parallelToolCalls?: boolean;
+    /**
+     * Remote MCP server tool declarations (provider-native `{ type:'mcp', server_label,
+     * server_url|connector_id, … }` objects) for providers that support MCP in `session.tools`.
+     * Until an approval UX exists, declare servers with `require_approval: 'never'` — an approval
+     * request is auto-denied by the driver.
+     */
+    mcpTools?: JSONObjectLike[];
+    /** Per-session input-transcription model override (OpenAI-protocol providers). */
+    inputTranscriptionModel?: string;
+}
+
+/**
+ * Projects the effective config's `realtime.session` tuning section onto the FLAT Config-bag keys
+ * the realtime drivers consume (`effortLevel`, `parallelToolCalls`, `mcpTools`,
+ * `inputTranscriptionModel`). Returns `null` when the section is absent or contributes nothing —
+ * callers then skip the merge entirely, preserving the prior bag byte-for-byte.
+ *
+ * @param config The effective configuration.
+ * @returns The flat tuning bag, or `null` when nothing is configured.
+ */
+export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | undefined): JSONObjectLike | null {
+    const tuning = config?.realtime?.session;
+    if (!tuning) {
+        return null;
+    }
+    const bag: JSONObjectLike = {};
+    if (typeof tuning.effortLevel === 'string' || typeof tuning.effortLevel === 'number') {
+        bag['effortLevel'] = tuning.effortLevel;
+    }
+    if (typeof tuning.parallelToolCalls === 'boolean') {
+        bag['parallelToolCalls'] = tuning.parallelToolCalls;
+    }
+    if (Array.isArray(tuning.mcpTools) && tuning.mcpTools.length > 0) {
+        bag['mcpTools'] = tuning.mcpTools;
+    }
+    if (typeof tuning.inputTranscriptionModel === 'string' && tuning.inputTranscriptionModel.trim().length > 0) {
+        bag['inputTranscriptionModel'] = tuning.inputTranscriptionModel.trim();
+    }
+    return Object.keys(bag).length > 0 ? bag : null;
 }
 
 /** The fully-normalized effective configuration for a Realtime co-agent. */
