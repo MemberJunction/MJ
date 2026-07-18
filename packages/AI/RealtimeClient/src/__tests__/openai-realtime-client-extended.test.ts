@@ -267,7 +267,7 @@ describe('OpenAIRealtimeClient (extended)', () => {
             expect(channel.Sent).toHaveLength(0);
         });
 
-        it('LOCKS CURRENT BEHAVIOR: RequestSpokenUpdate on a non-open channel sets IsBusy without sending', () => {
+        it('RequestSpokenUpdate on a non-open channel neither sends NOR flags busy (guard improved by the shared protocol brain)', () => {
             // Known quirk: RequestSpokenUpdate only guards on channel presence, not readyState.
             // The response.create is silently dropped by sendEvent, but responseActive flips
             // true with no response.done ever coming to clear it. Hosts gate narration on
@@ -275,7 +275,7 @@ describe('OpenAIRealtimeClient (extended)', () => {
             client.InitChannel(channel);
             client.RequestSpokenUpdate('too early');
             expect(channel.Sent).toHaveLength(0);
-            expect(client.IsBusy).toBe(true);
+            expect(client.IsBusy).toBe(false);
         });
 
         it('should no-op SetMuted before any Connect (no mic stream)', () => {

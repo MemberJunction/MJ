@@ -1,4 +1,5 @@
 export * from './generic/baseRealtimeClient';
+export * from './generic/openAIProtocolClient';
 export * from './audio/pcmUtils';
 export * from './audio/audioMeter';
 export * from './audio/pcmPlayback';
