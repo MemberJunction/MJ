@@ -142,6 +142,12 @@ export interface OpenAIRealtimeProfile {
     supportsMcpTools: boolean;
     /** Whether the provider accepts an output voice at `audio.output.voice`. */
     supportsVoiceOutput: boolean;
+    /**
+     * Whether the provider supports LIVE turn-mode reconfiguration via a partial `session.update`
+     * (drives both the session's `Capabilities.CanReconfigureTurnMode` and whether `Reconfigure`
+     * emits anything). Compat endpoints without `create_response` gating set false.
+     */
+    supportsLiveReconfigure: boolean;
     /** The fatal-error message surfaced when the socket closes unexpectedly. */
     unexpectedCloseMessage: string;
     /**
@@ -169,6 +175,7 @@ export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsParallelToolCalls: true,
     supportsMcpTools: true,
     supportsVoiceOutput: true,
+    supportsLiveReconfigure: true,
     unexpectedCloseMessage: 'OpenAI realtime connection closed unexpectedly',
     // OpenAI's default turn detection (server VAD with auto-response) is correct for 1:1 calls, so
     // the block is only sent when meeting mode needs create_response disabled.
@@ -268,6 +275,19 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
 
     const disableAutoResponse = rest.disableAutoResponse === true;
     delete rest.disableAutoResponse;
+
+    // PROTECTED WIRE FIELDS — never overridable through the open bag. `type` is the GA session
+    // discriminator (a clobbered value makes strict endpoints reject the WHOLE session.update,
+    // silently dropping the prompt AND tools); `instructions` is the server-authored co-agent
+    // identity; `tools` is the server-authored tool authority. `audio` remains an intentional,
+    // documented override channel.
+    const protectedBag = rest as JSONObject & { type?: unknown; instructions?: unknown; tools?: unknown };
+    if (protectedBag.type !== undefined || protectedBag.instructions !== undefined || protectedBag.tools !== undefined) {
+        RealtimeDiagLog('[OpenAIRealtime][diag] Scrubbing protected wire field(s) (type/instructions/tools) from the session Config bag — these are server-authored and cannot be overridden per session');
+    }
+    delete protectedBag.type;
+    delete protectedBag.instructions;
+    delete protectedBag.tools;
 
     // Per-session transcription-model override + MJ-side transport settings. All scrubbed
     // unconditionally — none of these are wire fields on ANY provider in the family.
@@ -559,14 +579,6 @@ export class OpenAIRealtime extends BaseRealtimeModel {
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         const profile = this.Profile;
         const features = ExtractRealtimeFeatures(params.Config);
-        const session: GARealtimeSessionCreateRequest = {
-            type: 'realtime',
-            model: params.Model,
-            instructions: params.SystemPrompt,
-        };
-        if (params.Tools && params.Tools.length > 0) {
-            session.tools = mapRealtimeTools(params.Tools);
-        }
         // Enable transcription of the user's mic input so BOTH sides of the conversation are
         // captured (live captions + persisted ConversationDetail turns). Realtime models accept
         // audio natively, so input transcription is a separate ASR pass that must be opted into.
@@ -575,8 +587,18 @@ export class OpenAIRealtime extends BaseRealtimeModel {
         // per-session override actually take effect in the client-direct topology.
         const turnDetection = profile.buildTurnDetection(features.disableAutoResponse);
         const audio = BuildAudioBlock(profile, features, turnDetection);
-        if (audio) {
-            session.audio = audio;
+        const session: GARealtimeSessionCreateRequest = {
+            type: 'realtime',
+            model: params.Model,
+            instructions: params.SystemPrompt,
+            ...(audio ? { audio } : {}),
+            // The residual (feature-scrubbed, wire-field-protected) Config bag applies here EXACTLY
+            // as on the server-bridged session.update — same construction ORDER too, so a raw
+            // `audio` override behaves identically on both topologies.
+            ...features.rest,
+        };
+        if (params.Tools && params.Tools.length > 0) {
+            session.tools = mapRealtimeTools(params.Tools);
         }
         applyGAFeatures(session, features, profile);
         const response = await this.mintClientSecret({ session });
@@ -619,6 +641,8 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private configAppliedPromise: Promise<void>;
     private resolveConfigApplied: (() => void) | null = null;
     private rejectConfigApplied: ((error: Error) => void) | null = null;
+    /** The deferred-config listener awaiting `session.created`, tracked so teardown can remove it. */
+    private pendingConfigListener: ((event: RealtimeServerEvent) => void) | null = null;
 
     /**
      * Whether a model response is currently in flight. Minimal response tracking that mirrors the
@@ -685,6 +709,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             }
             this.resolveConfigApplied?.();
             this.resolveConfigApplied = null;
+            this.rejectConfigApplied = null;
         };
         if (!this.profile.deferInitialConfigUntilSessionCreated) {
             applyConfig();
@@ -697,9 +722,19 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             }
             applied = true;
             this.connection.off('event', applyWhenReady);
+            this.pendingConfigListener = null;
             applyConfig();
         };
+        this.pendingConfigListener = applyWhenReady;
         this.connection.on('event', applyWhenReady);
+    }
+
+    /** Removes a still-pending deferred-config listener (teardown before `session.created`). */
+    private clearPendingConfigListener(): void {
+        if (this.pendingConfigListener) {
+            this.connection.off('event', this.pendingConfigListener);
+            this.pendingConfigListener = null;
+        }
     }
 
     /**
@@ -719,6 +754,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     /** Rejects a still-pending {@link WaitForConfigApplied} (transport death / early consumer close). */
     private failConfigWait(message: string): void {
+        this.clearPendingConfigListener();
         if (this.rejectConfigApplied) {
             const reject = this.rejectConfigApplied;
             this.rejectConfigApplied = null;
@@ -824,9 +860,9 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         return true; // a response.create was issued — the bridge may hold the floor for this turn
     }
 
-    /** @inheritdoc — the OpenAI-protocol `session.update` is runtime-mutable, so a live turn-mode change is supported. */
+    /** @inheritdoc — profile-gated: only providers whose endpoint honors a live partial `session.update`. */
     public get Capabilities(): RealtimeSessionCapabilities {
-        return { CanReconfigureTurnMode: true };
+        return { CanReconfigureTurnMode: this.profile.supportsLiveReconfigure };
     }
 
     /**
@@ -837,17 +873,29 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * transcription block is re-sent alongside so the partial update can't drop it.
      */
     public Reconfigure(params: RealtimeReconfigureParams): void {
+        if (!this.profile.supportsLiveReconfigure) {
+            // The profile declares no live-reconfigure support — advertising Capabilities false is
+            // the primary guard; this no-op is defense-in-depth against callers that skip the check.
+            RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] Reconfigure ignored — profile declares no live turn-mode support`);
+            return;
+        }
         const disable = params.DisableAutoResponse === true;
         const turnDetection: RealtimeAudioInputTurnDetection = {
             type: 'server_vad',
             create_response: !disable,
             interrupt_response: true,
         };
+        // Re-send the transcription block alongside ONLY when this profile transcribes via an
+        // opt-in model — a partial update must not fabricate `transcription: { model: undefined }`
+        // for natively-transcribing providers.
+        const transcription = this.profile.inputTranscriptionModel
+            ? { transcription: { model: this.profile.inputTranscriptionModel } }
+            : {};
         this.connection.send({
             type: 'session.update',
             session: {
                 type: 'realtime',
-                audio: { input: { transcription: { model: this.profile.inputTranscriptionModel }, turn_detection: turnDetection } },
+                audio: { input: { ...transcription, turn_detection: turnDetection } },
             },
         });
     }
@@ -893,6 +941,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     public async Close(): Promise<void> {
         this.closedByConsumer = true;
         this.failConfigWait('session closed by consumer before the initial config was applied');
+        this.clearPendingConfigListener();
         this.connection.off('event', this.eventListener);
         this.connection.off('error', this.errorListener);
         this.connection.close();
@@ -978,8 +1027,11 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         this.outputHandler?.(this.decodeBase64(deltaBase64));
     }
 
-    /** Emits a transcript event to the transcript handler. */
+    /** Emits a transcript event, skipping empty/whitespace text — empty captions are pure noise. */
     private emitTranscript(role: 'user' | 'assistant', text: string, isFinal: boolean): void {
+        if (!text || text.trim().length === 0) {
+            return;
+        }
         this.transcriptHandler?.({ Role: role, Text: text, IsFinal: isFinal });
     }
 

@@ -10,37 +10,37 @@ Severity legend: 🔴 fix-critical · 🟠 medium · 🟡 low · ⚪ info/hygien
 
 ## A. NEW regressions introduced by PR #3177 (driver layer)
 
-- [ ] **A1 🔴 HF: payload-less provider `error` frame misclassified FATAL**
+- [x] **A1 🔴 HF: payload-less provider `error` frame misclassified FATAL**
   `RawRealtimeWebSocketConnection.handleMessage` sets `error.error = undefined` for a bare `{type:'error'}`/`{type:'error', message}` frame → base `handleConnectionError` sees no payload → `Fatal: true` + rejects the readiness gate. Old HF treated ALL provider error frames as recoverable.
   **Fix**: the adapter synthesizes a minimal provider payload for ANY inbound `error` frame (message from `error.message ?? message ?? default`), so downstream always classifies provider frames recoverable; transport failures remain payload-less/fatal.
   **Tests**: bodyless frame → recoverable downstream (drive through a real `OpenAIRealtimeSession`, assert `Fatal:false` AND config-wait not rejected); `{type:'error', message}` variant; transport error still fatal.
 
-- [ ] **A2 🔴 HF falsely advertises `CanReconfigureTurnMode` + contradictory inherited `Reconfigure`**
+- [x] **A2 🔴 HF falsely advertises `CanReconfigureTurnMode` + contradictory inherited `Reconfigure`**
   HF inherits base `Capabilities` (`CanReconfigureTurnMode: true`) and a `Reconfigure` that sends `transcription:{model:undefined}` + `server_vad`/`create_response` — both unsupported per its own profile.
   **Fix**: base `Reconfigure` becomes profile-aware (skip transcription block when profile model undefined; consult `buildTurnDetection`); add `supportsLiveReconfigure` to the profile; base `Capabilities` reads it; HF profile sets false (Capabilities false + Reconfigure no-ops with diag).
   **Tests**: HF `Capabilities` false + `Reconfigure` sends nothing; OpenAI/xAI unchanged (still true, correct payloads incl. per-profile transcription model).
 
-- [ ] **A3 🔴 Config-bag rest-spread can override `type`/`instructions` (tools already protected)**
+- [x] **A3 🔴 Config-bag rest-spread can override `type`/`instructions` (tools already protected)**
   `sendSessionUpdate` builds `{type, instructions, audio?, ...rest}` — a bag with `type` or `instructions` keys overrides the GA discriminator / system prompt. On HF's strict endpoint a clobbered `type` kills the whole `session.update` (prompt AND tools silently dropped). New exposure for HF; pre-existing for xAI/OpenAI.
   **Fix**: scrub `type`, `instructions`, `tools` from `rest` in `ExtractRealtimeFeatures` (protected wire fields — never overridable via the open bag); keep documented `audio` override.
   **Tests**: bag with `type`/`instructions`/`tools` keys → protected values win, keys not present raw; `audio` override still works; `tool_choice`/`output_modalities` passthrough unaffected.
 
-- [ ] **A4 🟡 Deferred-config listener leak when session closes before `session.created`**
+- [x] **A4 🟡 Deferred-config listener leak when session closes before `session.created`**
   `applyWhenReady` self-removes only when it fires; `Close()`/fatal paths never remove it.
   **Fix**: track the pending deferred listener on the session; remove it in `Close()` and on config-wait failure.
   **Tests**: listener count on the fake connection drops to 0 after `Close()` pre-`session.created`; also after fatal error pre-created.
 
-- [ ] **A5 🟡 Empty-transcript emissions (HF regression; noise family-wide)**
+- [x] **A5 🟡 Empty-transcript emissions (HF regression; noise family-wide)**
   Base `emitTranscript` forwards empty/whitespace text the old HF driver suppressed.
   **Fix**: base skips empty/whitespace-only transcript text (deltas AND finals) — deliberate family-wide cleanup (empty captions are pure noise on every provider).
   **Tests**: empty + whitespace delta/final/user-completed emit nothing on OpenAI, xAI, HF; non-empty unaffected.
 
-- [ ] **A6 🟠 Client-direct vs server-bridged divergence: `features.rest` not applied to the minted SessionConfig**
+- [x] **A6 🟠 Client-direct vs server-bridged divergence: `features.rest` not applied to the minted SessionConfig**
   Docstrings claim the topologies are behaviorally identical; residual native keys (`tool_choice`, …) apply server-bridged only.
   **Fix**: `CreateClientSession` applies the (now-hardened per A3) `features.rest` spread to the minted session too — making the invariant TRUE; correct docstrings.
   **Tests**: `tool_choice` in Config appears in the minted SessionConfig; protected keys cannot be injected client-direct either.
 
-- [ ] **A7 ⚪ Hygiene: settle-handle + adapter edge cleanup**
+- [x] **A7 ⚪ Hygiene: settle-handle + adapter edge cleanup**
   `rejectConfigApplied` not nulled after resolve (harmless double-settle); adapter leaves `pendingSends` unflushed on error-before-open and `opened` never resets on close.
   **Fix**: null both handles on any settle; adapter clears `pendingSends` and guards `send()` after close.
   **Tests**: double-settle path (resolve then fatal) has no rejection leak; error-before-open clears the buffer; send-after-close is a safe no-op.
