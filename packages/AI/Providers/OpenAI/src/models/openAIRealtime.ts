@@ -10,6 +10,7 @@ import {
     RealtimeTranscript,
     RealtimeToolCall,
     RealtimeUsage,
+    RealtimeUsageModalityDetail,
     RealtimeSessionError,
     RealtimeVoiceOption,
     JSONObject,
@@ -104,6 +105,38 @@ interface RealtimeSessionGAFields {
 
 /** The SDK session-create request widened with the GA fields the SDK typings don't declare yet. */
 type GARealtimeSessionCreateRequest = RealtimeSessionCreateRequest & RealtimeSessionGAFields;
+
+/** The GA `response.done` usage payload fields this driver reads (totals + per-modality detail). */
+interface GARealtimeResponseUsage {
+    input_tokens?: number;
+    output_tokens?: number;
+    input_token_details?: GARealtimeUsageDetail;
+    output_token_details?: GARealtimeUsageDetail;
+}
+
+/** Wire shape of a per-modality usage-detail block on the GA API. */
+interface GARealtimeUsageDetail {
+    text_tokens?: number;
+    audio_tokens?: number;
+    image_tokens?: number;
+    cached_tokens?: number;
+}
+
+/**
+ * Maps a GA per-modality usage-detail block onto the Core {@link RealtimeUsageModalityDetail}
+ * shape. Returns `undefined` when the provider reported no detail block (totals-only flows).
+ */
+export function MapUsageModalityDetail(detail: GARealtimeUsageDetail | undefined): RealtimeUsageModalityDetail | undefined {
+    if (!detail) {
+        return undefined;
+    }
+    const mapped: RealtimeUsageModalityDetail = {};
+    if (typeof detail.text_tokens === 'number') mapped.TextTokens = detail.text_tokens;
+    if (typeof detail.audio_tokens === 'number') mapped.AudioTokens = detail.audio_tokens;
+    if (typeof detail.image_tokens === 'number') mapped.ImageTokens = detail.image_tokens;
+    if (typeof detail.cached_tokens === 'number') mapped.CachedTokens = detail.cached_tokens;
+    return Object.keys(mapped).length > 0 ? mapped : undefined;
+}
 
 /**
  * Provider profile for the OpenAI-Realtime-protocol driver family.
@@ -1022,7 +1055,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             case 'response.done':
                 // Emitted for every terminal status (completed, cancelled, failed) — always clears.
                 this.responseActive = false;
-                return this.handleResponseDone(event.response.usage);
+                return this.handleResponseDone(event.response.usage as GARealtimeResponseUsage | undefined);
             default:
                 return this.dispatchMcpEvent(event);
         }
@@ -1053,9 +1086,24 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             default:
                 // mcp_approval_request arrives as a conversation item add — detect it structurally.
                 if (event.type === 'conversation.item.added' && event.item?.type === 'mcp_approval_request') {
-                    RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] MCP approval requested but no approval UX exists — declare MCP servers with require_approval:'never'`);
+                    // DEFENSIVE AUTO-DENY: no approval UX exists yet, and the model BLOCKS forever
+                    // awaiting an mcp_approval_response — dead air from the user's perspective. A
+                    // denial lets the model continue and voice the refusal instead of wedging the
+                    // turn. Config authors who want silent MCP flow declare require_approval:'never'.
+                    const approvalRequestId = event.item.id;
+                    if (approvalRequestId) {
+                        this.connection.send({
+                            type: 'conversation.item.create',
+                            item: {
+                                type: 'mcp_approval_response',
+                                approval_request_id: approvalRequestId,
+                                approve: false,
+                            },
+                        } as RealtimeClientEvent);
+                        RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] MCP approval request AUTO-DENIED (no approval UX yet) — request ${approvalRequestId}`);
+                    }
                     this.errorHandler?.({
-                        Message: "An MCP server requested tool approval, which this driver cannot yet grant — declare the server with require_approval: 'never'",
+                        Message: "An MCP server requested tool approval; no approval UX exists yet, so it was automatically DENIED (the model continues and voices the refusal). Declare the server with require_approval: 'never' to avoid the round-trip.",
                         Fatal: false,
                     });
                 }
@@ -1129,15 +1177,28 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         this.closeHandler?.();
     }
 
-    /** Translates a response's usage block into a {@link RealtimeUsage} update. */
-    private handleResponseDone(usage: { input_tokens?: number; output_tokens?: number } | undefined): void {
+    /**
+     * Translates a response's usage block into a {@link RealtimeUsage} update, INCLUDING the
+     * per-modality token details the GA API reports — realtime cost attribution is impossible
+     * without the audio/text/cached split (audio-in bills ~8x text-in on GPT Realtime 2.1).
+     */
+    private handleResponseDone(usage: GARealtimeResponseUsage | undefined): void {
         if (!usage) {
             return;
         }
-        this.usageHandler?.({
+        const update: RealtimeUsage = {
             InputTokens: usage.input_tokens ?? 0,
             OutputTokens: usage.output_tokens ?? 0,
-        });
+        };
+        const input = MapUsageModalityDetail(usage.input_token_details);
+        if (input) {
+            update.InputTokenDetails = input;
+        }
+        const output = MapUsageModalityDetail(usage.output_token_details);
+        if (output) {
+            update.OutputTokenDetails = output;
+        }
+        this.usageHandler?.(update);
     }
 
     // ---- Config helpers ----

@@ -31,6 +31,7 @@ import {
     type JSONObject,
     type JSONValue,
     type RealtimeSessionCapabilities,
+    REALTIME_SHARED_CONFIG_KEYS,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -334,6 +335,29 @@ export class GeminiRealtime extends BaseRealtimeModel {
             const cfg = { ...(params.Config as Record<string, unknown>) };
             const disableAutoResponse = cfg.disableAutoResponse === true;
             delete cfg.disableAutoResponse;
+            // Scrub the MJ-side keys shared across the realtime driver family (OpenAI-protocol
+            // feature knobs + transport settings). They are NOT Gemini config keys — a co-agent
+            // config carrying e.g. `effortLevel` or `mcpTools` must be SAFE on a Gemini session,
+            // not spread raw into the Live SDK where strictness varies by version. Scrubbed keys
+            // are diag-logged so config typos / cross-provider keys stop being silent.
+            const scrubbed: string[] = [];
+            for (const key of REALTIME_SHARED_CONFIG_KEYS) {
+                if (key === 'disableAutoResponse') {
+                    continue; // consumed above (Gemini-native translation)
+                }
+                if (key in cfg) {
+                    // `voice` IS meaningful to Gemini through its provider-voice settings pact —
+                    // only scrub the keys Gemini has no native mapping for.
+                    if (key === 'voice') {
+                        continue;
+                    }
+                    delete cfg[key];
+                    scrubbed.push(key);
+                }
+            }
+            if (scrubbed.length > 0) {
+                console.warn(`[GeminiRealtime] Scrubbed non-Gemini config key(s) from the session bag: ${scrubbed.join(', ')} — these are OpenAI-protocol/transport keys and do not apply to Gemini Live.`);
+            }
             Object.assign(config, cfg as Partial<LiveConnectConfig>);
             if (disableAutoResponse) {
                 config.realtimeInputConfig = {

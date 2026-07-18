@@ -33,7 +33,7 @@ vi.mock('openai', () => ({
     }),
 }));
 
-import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime, OPENAI_REALTIME_PROFILE } from '../models/openAIRealtime';
+import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime, OPENAI_REALTIME_PROFILE, MapUsageModalityDetail } from '../models/openAIRealtime';
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeServerEvent, RealtimeClientEvent } from 'openai/resources/realtime/realtime';
 import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
@@ -1216,5 +1216,88 @@ describe('B1 (server): deferred-config readiness timeout', () => {
         const session = new OpenAIRealtimeSession(driver.Fake, { ...OPENAI_REALTIME_PROFILE, deferInitialConfigUntilSessionCreated: false });
         session.applyInitialConfig({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
         expect(vi.getTimerCount()).toBe(0);
+    });
+});
+
+describe('C2: per-modality usage detail mapping', () => {
+    let driver: TestableOpenAIRealtime;
+
+    beforeEach(() => {
+        driver = new TestableOpenAIRealtime('test-key');
+    });
+
+    it('surfaces input/output token details verbatim from response.done', async () => {
+        const session = await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        const usage: Array<Record<string, unknown>> = [];
+        session.OnUsage((u) => usage.push(u as unknown as Record<string, unknown>));
+        driver.Fake.Fire({
+            type: 'response.done',
+            response: {
+                usage: {
+                    input_tokens: 100,
+                    output_tokens: 50,
+                    input_token_details: { text_tokens: 20, audio_tokens: 70, cached_tokens: 10 },
+                    output_token_details: { text_tokens: 10, audio_tokens: 40 },
+                },
+            },
+        } as unknown as RealtimeServerEvent);
+        expect(usage[0]).toEqual({
+            InputTokens: 100,
+            OutputTokens: 50,
+            InputTokenDetails: { TextTokens: 20, AudioTokens: 70, CachedTokens: 10 },
+            OutputTokenDetails: { TextTokens: 10, AudioTokens: 40 },
+        });
+    });
+
+    it('degrades to totals-only when the provider reports no detail blocks', async () => {
+        const session = await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        const usage: Array<Record<string, unknown>> = [];
+        session.OnUsage((u) => usage.push(u as unknown as Record<string, unknown>));
+        driver.Fake.Fire({ type: 'response.done', response: { usage: { input_tokens: 7, output_tokens: 3 } } } as unknown as RealtimeServerEvent);
+        expect(usage[0]).toEqual({ InputTokens: 7, OutputTokens: 3 });
+        expect(usage[0].InputTokenDetails).toBeUndefined();
+    });
+
+    it('MapUsageModalityDetail: partial blocks map only the present fields; empty blocks map to undefined', () => {
+        expect(MapUsageModalityDetail({ audio_tokens: 5 })).toEqual({ AudioTokens: 5 });
+        expect(MapUsageModalityDetail({ image_tokens: 2, cached_tokens: 0 })).toEqual({ ImageTokens: 2, CachedTokens: 0 });
+        expect(MapUsageModalityDetail({})).toBeUndefined();
+        expect(MapUsageModalityDetail(undefined)).toBeUndefined();
+    });
+});
+
+describe('C5: MCP approval auto-deny (dead-air prevention)', () => {
+    it('responds to an approval request with approve:false (correct correlation id) + a recoverable error', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        const session = await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        const errors: Array<{ Fatal?: boolean }> = [];
+        session.OnError((e) => errors.push(e));
+        const before = driver.Fake.Sent.length;
+        driver.Fake.Fire({
+            type: 'conversation.item.added',
+            item: { type: 'mcp_approval_request', id: 'req_777', server_label: 'kb', name: 'search', arguments: '{}' },
+            event_id: 'e',
+        } as unknown as RealtimeServerEvent);
+        const denial = driver.Fake.Sent.slice(before).find((e) => e.type === 'conversation.item.create');
+        expect(denial).toBeDefined();
+        if (denial?.type === 'conversation.item.create') {
+            expect(denial.item).toMatchObject({ type: 'mcp_approval_response', approval_request_id: 'req_777', approve: false });
+        }
+        expect(errors).toEqual([expect.objectContaining({ Fatal: false })]);
+    });
+
+    it('an approval request WITHOUT an id gets the error but no unaddressable denial frame', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        const session = await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        const errors: Array<{ Fatal?: boolean }> = [];
+        session.OnError((e) => errors.push(e));
+        const before = driver.Fake.Sent.length;
+        driver.Fake.Fire({
+            type: 'conversation.item.added',
+            item: { type: 'mcp_approval_request', server_label: 'kb', name: 'search', arguments: '{}' },
+            event_id: 'e',
+        } as unknown as RealtimeServerEvent);
+        expect(driver.Fake.Sent.slice(before).filter((e) => e.type === 'conversation.item.create')).toHaveLength(0);
+        expect(errors).toHaveLength(1);
     });
 });

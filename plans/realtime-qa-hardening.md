@@ -72,40 +72,40 @@ Severity legend: 🔴 fix-critical · 🟠 medium · 🟡 low · ⚪ info/hygien
 
 ## C. Architecture gaps (realtime co-agent stack)
 
-- [ ] **C1 🔴 New driver features are DARK — no agent-layer producer for `effortLevel`/`parallelToolCalls`/`mcpTools`/`inputTranscriptionModel`**
+- [x] **C1 🔴 New driver features are DARK — no agent-layer producer for `effortLevel`/`parallelToolCalls`/`mcpTools`/`inputTranscriptionModel`**
   Only `voice` + `disableAutoResponse` reach the Config bag today; `RealtimeCoAgentConfig` has no fields for the new knobs; vendor-row `SupportsEffortLevel` never influences realtime.
   **Fix**: extend `RealtimeCoAgentConfig` (typed optional fields: `EffortLevel`, `ParallelToolCalls`, `McpTools`, `InputTranscriptionModel`); fold into `buildSessionConfigBag` AND the server-bridged mirror exactly where `voice`/`disableAutoResponse` flow, preserving the same override cascade.
   **Tests**: Agents-package effective-config tests — each knob flows config→bag on both topologies; absent knobs add no keys; cascade precedence honored.
 
-- [ ] **C2 🔴 Per-modality realtime usage discarded → multi-channel cost attribution wrong**
+- [x] **C2 🔴 Per-modality realtime usage discarded → multi-channel cost attribution wrong**
   Driver reads only total `input_tokens`/`output_tokens`; `input_token_details`/`output_token_details` (audio vs text vs cached) dropped at the edge; runner accumulates two scalars.
   **Fix**: widen `RealtimeUsage` with optional typed `InputTokenDetails`/`OutputTokenDetails` (audio/text/cached counts); OpenAI driver populates from `response.done`; xAI/HF pass through when present; runner accumulates per-modality and persists the detail alongside the totals (existing usage-JSON persistence point). Cost *application* per modality is enabled by the persisted detail; document the calculation path.
   **Tests**: driver surfaces details verbatim; missing-details frames degrade to totals-only; runner accumulation sums per-modality across turns; persistence includes the detail blob.
 
-- [ ] **C3 🟠 HF realtime proxy hardening**
+- [x] **C3 🟠 HF realtime proxy hardening**
   No `Origin` validation; ticket's stored `UserID` never checked at consume; unbounded pre-open frame buffer; no upstream-connect timeout; in-memory registry breaks under multi-instance LB (documented, not silently).
   **Fix**: optional Origin allowlist (env `MJ_REALTIME_PROXY_ALLOWED_ORIGINS`, default off = current behavior); tunnel upstream-open deadline (close + 502 semantics) and bounded pending buffer (cap + drop-oldest with warn); README documents the sticky-routing requirement for HA + the UserID-binding limitation (upgrade requests carry no principal).
   **Tests**: origin allowlist accept/reject; buffer cap enforced; upstream-open timeout closes tunnel; existing single-use/TTL behavior unchanged.
 
-- [ ] **C4 🟠 Runner ignores `cancellationToken`; no session wall-clock enforcement**
+- [x] **C4 🟠 Runner ignores `cancellationToken`; no session wall-clock enforcement**
   The 2h agent timeout is a no-op for realtime sessions; only backstop is the 15-min janitor.
   **Fix**: `RealtimeSessionRunner` observes an abort signal (constructor-injected) → `Stop()` on abort; `StartSession` call wrapped with a connect-phase timeout at the runner too (belt over B1's braces).
   **Tests**: abort mid-session stops + finalizes usage; abort pre-connect rejects cleanly; no-signal behavior unchanged.
 
-- [ ] **C5 🟠 MCP approval request = dead air**
+- [x] **C5 🟠 MCP approval request = dead air**
   Model blocks awaiting `mcp_approval_response`; driver only logs a recoverable error.
   **Fix**: defensive auto-DENY — driver responds with a `mcp_approval_response` item (`approve:false`) so the model continues and voices the denial, plus the existing recoverable error for observability. Documented as the interim behavior until approval UX exists.
   **Tests**: approval-request frame → deny item sent with correct correlation id + recoverable error emitted; `require_approval:'never'` flows send no denial.
 
-- [ ] **C6 🟠 Config bag unvalidated across providers (Gemini blind-spreads foreign keys)**
+- [x] **C6 🟠 Config bag unvalidated across providers (Gemini blind-spreads foreign keys)**
   **Fix**: Gemini driver warns (diag) on foreign/unconsumed keys before its spread and scrubs the OpenAI-family feature keys (`effortLevel`/`reasoningEffort`/`parallelToolCalls`/`mcpTools`/`inputTranscriptionModel` + transport keys) so cross-provider co-agent configs are safe; shared scrub-key list exported from Core so producers/drivers agree.
   **Tests**: Gemini session with OpenAI-family keys → keys not in the SDK connect config + diag warned; legit Gemini keys unaffected.
 
-- [ ] **C7 🟠 No reconnect/resume on fatal transport drop (server-bridged)**
+- [x] **C7 🟠 No reconnect/resume on fatal transport drop (server-bridged)**
   **Fix**: bounded reconnect in the session runner — on a Fatal transport error, up to N (default 1) re-`StartSession` attempts with the same params + a context note (\"reconnected after a transport drop\"), preserving accumulated usage; only then finalize. Gated by a runner option so hosts can disable.
   **Tests**: fatal error → one reconnect attempt → success path resumes (tools re-registered, note sent); second consecutive failure finalizes; usage accumulation spans the reconnect; disabled option preserves old behavior.
 
-- [ ] **C8 🟡 Transcript gaps: `ReplacesPrevious` missing on the server-bridged contract**
+- [x] **C8 🟡 Transcript gaps: `ReplacesPrevious` missing on the server-bridged contract**
   **Fix**: add optional `ReplacesPrevious` to Core `RealtimeTranscript`; providers that stream growing finals can set it; runner forwards it on the transcript event so persistence can collapse in place. (Full transcript→run linkage remains a tracked follow-up — schema change out of scope for this branch; documented.)
   **Tests**: contract field flows driver→session handler; absent by default.
 
