@@ -1,5 +1,14 @@
 # @memberjunction/ng-media-player
 
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ng-base-types@5.48.0
+  - @memberjunction/graphql-dataprovider@5.48.0
+
 ## 5.47.0
 
 ### Patch Changes

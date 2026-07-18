@@ -22,6 +22,7 @@ and it can't count cache reads).
 | `record-process-tests.ts` | **Deterministic** — drives `RecordSetProcessor` over an in-memory source: ProcessRun/Detail persistence (the tracker's fire-and-forget queue), mixed counts, throw-isolation, circuit breaker, batching, bounded concurrency (6 tests) |
 | `rls-isolation-tests.ts` | **Deterministic** — Row-Level Security multi-user isolation: `{{UserID}}` predicate substitution, two users get distinct predicates (cache fingerprint can't leak A→B), adaptive live RunView scoping check (3 tests) |
 | `record-process-facade-tests.ts` | **Deterministic** — the `RecordProcessExecutor` facade: a real `MJ: Record Processes` definition run via `Run()` + `RunByID()`, ScopeType→source mapping, ProcessRun linked back via `RecordProcessID` (2 tests) |
+| `lists-tests.ts` | **Deterministic** — `ListSource` keyset pagination against real `MJ: Lists`/`MJ: List Details` rows: full seek iteration (no dups/gaps), resume from a persisted keyset cursor, legacy Offset-cursor resume + conversion. Self-cleaning fixtures (3 tests) |
 | `api-keys-tests.ts` | **Deterministic** — API Keys engine vs. real seeded metadata: `Config()` loads real scopes/applications, end-to-end `Authorize()` with a real key (explicit allow + deny rules), self-cleaning (3 tests) |
 | `scheduled-jobs-tests.ts` | **Deterministic** — Scheduled Jobs engine lifecycle: `ExecuteScheduledJob` persists a terminal run, the distributed lease is acquired→released, stats increment, job is re-runnable, self-cleaning (2 tests) |
 | `ai-skills-tests.ts` | **Deterministic** — AI Skills end-to-end (no LLM): `AIEngineBase.GetSkillsForAgent` three-layer gate (agent `AcceptsSkills` None/All/Limited × skill catalog `Status` × per-agent grant `Status`), `GetSkillActionIDs`/`GetSkillSubAgentIDs` bundle resolution, `SkillImportExportService` SKILL.md export→re-import round-trip (junctions recreated by name resolution; unknown names → non-fatal warnings), the `AISkill.ExportMarkdown`/`AISkill.ImportMarkdown` Remote Operations invoked in-process, the **v5.45 double activation gate** (`GetAutoActivatableSkillsForAgent`: Auto×Auto required for self-activation, both defaults `RequestedOnly`, requested path ungated, Limited×Auto grant intersection, persisted DB default), and the **v5.45 observability round-trip** (`AIAgentRun.PlanMode` bit + `AIAgentRunStep.Skills` `AgentSkillInvocation[]` JSON read back through the typed `SkillsObject` accessor). Creates + deletes its own Skill/junction/grant/run/step fixtures; references (never mutates) one existing Action + two Agents (21 tests) |
@@ -176,7 +177,7 @@ its registry index asynchronously in a different category.
 
 ## Test inventory
 
-### Server suite (S1–S26)
+### Server suite (S1–S31, plus the security pin S31b)
 
 | # | Verifies |
 |---|---|
@@ -242,7 +243,26 @@ its registry index asynchronously in a different category.
 
 ## Running
 
-Both scripts run from the **repo root** (cwd-relative `.env` / `mj.config.cjs`):
+All scripts run from the **repo root** (cwd-relative `.env` / `mj.config.cjs`).
+
+**The CI entry point is the aggregator** (`run-all.ts`, via `npm run test:integration`). It
+spawns each *deterministic, server-side* suite in its own process (each must own
+`LocalCacheManager.Initialize` as first caller — D1) and collapses the per-suite `0/1/2`
+exit codes into one. It runs `server-cache`, `runquery-cache`, `dataset-cache`,
+`aggregates-cache`, and `rls-isolation`:
+
+```bash
+# Deterministic tier — the single CI gate (exit 0 all-pass / 1 failures / 2 bootstrap)
+npm run test:integration
+```
+
+`run-all.ts` deliberately **excludes** two suites:
+- `client-cache-tests.ts` — needs a running MJAPI the in-process lanes don't provide. Run it
+  directly (below) with MJAPI up + `MJ_API_KEY` set.
+- `cross-server-invalidation-tests.ts` — needs Redis + **two** MJAPI processes; opt-in behind
+  `RUN_CROSS_SERVER=1` (see the cross-server overlay `docker/regression/docker-compose.cross-server.yml`).
+
+Individual suites:
 
 ```bash
 # Server-side suite — needs only the database
@@ -254,9 +274,18 @@ RUN_MUTATION_TESTS=1 npx tsx packages/MJServer/integration-test-scripts/server-c
 
 # Client-side suite — needs MJAPI running (cd packages/MJAPI && npm run start)
 npx tsx packages/MJServer/integration-test-scripts/client-cache-tests.ts
+
+# Cross-server Redis invalidation — needs Redis + two MJAPI processes (A, B) on one DB + one Redis
+RUN_CROSS_SERVER=1 MJAPI_A_URL=http://localhost:14000/ MJAPI_B_URL=http://localhost:14001/ \
+  MJ_API_KEY=<key> npx tsx packages/MJServer/integration-test-scripts/cross-server-invalidation-tests.ts
 ```
 
 Exit codes: `0` all passed · `1` failures · `2` bootstrap/connectivity error.
+
+**PostgreSQL parity:** the suites run the SAME check code against PG via `DB_PLATFORM=postgresql`
+(the bootstrap's platform-selection seam). This lane is non-blocking until its Phase-0
+prerequisites land — a PG migration path in CI and a PG-aware user-cache bootstrap
+(`UserCache.Refresh` is mssql-only today).
 
 These scripts are **not** part of the MJServer build (its tsconfig includes `./src` only)
 and have no package.json footprint — they resolve workspace packages through the monorepo

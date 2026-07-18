@@ -42,6 +42,9 @@ const DEFAULT_SYNC_CONFIG: Partial<MJConfig> = {
   dbEncrypt: process.env.DB_ENCRYPT ?? undefined,
   dbInstanceName: process.env.DB_INSTANCE_NAME,
   mjCoreSchema: process.env.MJ_CORE_SCHEMA ?? '__mj',
+  dbRequestTimeout: process.env.MJ_MIGRATION_REQUEST_TIMEOUT
+    ? parseInt(process.env.MJ_MIGRATION_REQUEST_TIMEOUT, 10)
+    : undefined,
 };
 
 /**

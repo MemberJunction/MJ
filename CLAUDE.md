@@ -352,6 +352,7 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
 
 - **[Conversations UX Stack Guide](guides/CONVERSATIONS_UX_STACK_GUIDE.md)**: The 3-layer architecture for every chat surface in MJ — `@memberjunction/conversations-runtime` (pure-TS engine: agent dispatch, default-agent resolution, mentions, bridge, streaming, client tools, sessions observability) ↔ adapters (`INotificationAdapter` / `IActiveTaskTracker` / `ISessionsAdapter`) ↔ `@memberjunction/ng-conversations` (Angular widget) ↔ your app. Covers: when to use each layer, the slot system (6 slots: `header` / `agentPresence` / `emptyState` / `messageRenderer` / `messageExtra` / `demonstrationSurface` with project / wrap / subclass modes), Before/After cancelable events (`beforeAgentTurn`, `beforeToolInvoked`, `beforeResponseFormSubmitted` with `event.Cancel = true` enforced; `sessionStarted` / `sessionChannelStateChanged` / `sessionEnded` informational), persona inputs (`[showAgentCharacter]` + `agentCharacterConfig`), `--mj-chat-*` design tokens, default-agent resolution chain (explicit → app-scoped → global → code-const Sage fallback), sessions adapter bridging to PR #2787's `VoiceSessionService`, multi-provider scoping, runtime pre-warming via `@RegisterForStartup`. **Read before building any chat surface (overlay, full workspace, embedded panel) OR before forking the widget — slots + events almost certainly cover the use case.**
 
+- **[Integration Testing Quickstart](guides/INTEGRATION_TESTING_QUICKSTART.md)**: The integration-test tier — real provider stack (live DB + GraphQL, real cache managers/engines), headless, sitting between unit tests (mocked) and browser/computer-use regression ("mock the top layer, keep everything else real"). Covers: the one-library-two-front-ends architecture (`@memberjunction/testing-integration` check bundles on one `IntegrationCheckRegistry`, consumed identically by the `tsx` suite scripts / `run-all.ts` aggregator AND the metadata-driven **"Integration Test" `TestType`** dispatched by `IntegrationTestDriver` through `mj test`); the dedicated-process rule (the instrumented cache MUST be `LocalCacheManager`'s first caller — `MJ_INTEGRATION_TEST=1` on the CLI; server-transport suites refuse to run inside a live MJAPI); the two proof techniques (`UniqueFilter` cold-cache determinism with zero mutation + `InstrumentedLocalStorageProvider` per-category counters); tiers/gating (deterministic / mutation / live-model via `RUN_MUTATION_TESTS` / `RUN_AGENT_TESTS`, plus `PS_INTEGRATION` flows); every way to run it (`npm run test:integration`, per-suite `tsx`, `mj test run`/`suite`, the smoke test, the cross-server rig, the golden diff, the CI PR gate) and all four authoring methods (add a check to a bundle · new bundle + Test row + suite membership · metadata-only composition · standalone script). **Read before running or extending the integration suites, or touching anything under `packages/TestingFramework/testing-integration/`.**
 - **[Predictive Studio Guide](guides/PREDICTIVE_STUDIO_GUIDE.md)**: How MJ **trains predictive models on a client's own data** (member retention/renewal, lapse/lead scoring) and scores records with them — core MJ, not an OpenApp, composed onto existing substrates. Covers the **4-layer architecture** (data → feature → model → inference); the **self-managing Python sidecar** (`MLSidecar` in `@memberjunction/predictive-studio-sidecar` — the sqlglot-ts bundled-microservice pattern: managed child-process spawn on an ephemeral port is the **default, Docker-free**; remote-URL mode for scaled deployments; `npm run setup:python`; the `/train`+`/predict`+`/health` contract defined once in `@memberjunction/predictive-studio-core`); the **`FeatureAssemblyExecutor`** correctness backbone (one code path × three contexts; the raw-vs-preprocessing **fit-once/apply-everywhere** anti-skew split with `fitted_preprocessing` travelling with the model; first-class point-in-time **as-of** assembly; the `LeakageGuardEnforcer` deny-list + post-train single-feature-dominance flag → plain-language warning + blocked promotion); **training** (`TrainingEngine` → immutable, versioned `MJ: ML Models` distinct from `MJ: AI Models`, with a **locked holdout** for honest metrics + full lineage); **scoring** (`MLModelInferenceProcessor` — a new **`'ML Model'` Record Set Processing work type** registered via `@RegisterClass` without forking the substrate; ephemeral by default, write-back via `OutputMapping`; on-demand + scheduled); the **generic `Experiment` → `ExperimentSession` → `ExperimentSessionIteration`** primitive + the `ExperimentOrchestrator` **wave loop** (leaderboard / pruning / budget gate, run through RSP waves — reusable beyond ML); the **`MJ: ML Algorithms` / `Use Cases` / `Use Case Rankings`** 6×7 guidance matrix; the (planned) **Remote Operations + Actions + Model Development Agent**; the **lazy-loaded Studio dashboard** (`PredictiveStudioDashboardComponent` + `PredictiveStudioEngine` + 6 panels + embedded `mj-conversation-chat-area` copilot); a train+score walkthrough; and the live integration test (`PS_INTEGRATION=1`). **Read before touching anything under `packages/AI/PredictiveStudio/**`, the `MJ: ML *` / `MJ: Experiment*` entities, the Predictive Studio dashboard, or before adding a trained-model / feature-assembly / experiment-search capability.**
 
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
@@ -433,6 +434,7 @@ npx tsx packages/MJServer/integration-test-scripts/ai-skills-tests.ts
 
 - The **deterministic tier** runs by default: credential-light, self-cleaning fixtures, no LLM cost. The **live-model tier** (real agent/prompt runs) is gated behind `RUN_AGENT_TESTS=1`; the **Predictive Studio tier** behind `PS_INTEGRATION=1`.
 - **Extend the suite with every feature.** When you ship server-side capability (new engine methods, new columns with runtime semantics, new gates), add deterministic cases to the matching `*-tests.ts` script (or create one and register it in `run-all.ts`). New suites must be **self-cleaning** (create + delete their own fixtures, tagged `(mj-integration-test — safe to delete)`) and reference-only toward existing records. Update the folder README's suite table when you do.
+- **A bundle MUST keep both siblings in sync — a `tsx` dispatcher AND a metadata `Test` (IT) record.** The check *logic* lives once, in a registry bundle (`@memberjunction/testing-integration/src/checks/<bundle>.checks.ts`); the two siblings are thin pointers to it — a `<bundle>-tests.ts` dispatcher under [`integration-test-scripts/`](packages/MJServer/integration-test-scripts/) (bootstrap → `GetLifecycle`/`GetBundle` → run, per the `field-rules-bulk-update-tests.ts` template) and a `.IT##-<bundle>.json` under [`metadata-optional/integration-test/tests/integration/`](metadata-optional/integration-test/tests/integration/) joined to the "Integration Tests — Deterministic" suite in [`.integration-suite.json`](metadata-optional/integration-test/test-suites/.integration-suite.json). **When you add a bundle, generate BOTH siblings.** This is enforced automatically: the `sibling-parity.test.ts` drift-check (a `@memberjunction/testing-integration` unit test) fails the build if any bundle is missing a dispatcher or an IT record, or if either points at a non-existent bundle. A bundle that intentionally has no `tsx` dispatcher (driver/MJAPI-only, like `rls-isolation-client`) must be listed — with a reason — in that test's `NO_TSX_DISPATCHER` set and still have an IT record.
 - Suites live against the real DB, so run them AFTER migrations + CodeGen have been applied — they double as a smoke test that the schema, generated types, and engines agree.
 
 ## Unit Testing
@@ -739,6 +741,15 @@ The local check requires your changes to be committed (it diffs against `origin/
 
 The two checker scripts live at `.github/scripts/check-css-hex-tokens.sh` and `.github/scripts/check-mj-btn-override.sh`. Both also accept `--file <path>` for single-file checks.
 
+## Native-ESM Import Guard (Local — Mirror of CI Gate)
+
+The unit-test workflow imports every built `"type": "module"` package's entry point in a fresh native-ESM Node process and fails on the extensionless-relative-specifier signature in a package's own `dist/` (the `ERR_MODULE_NOT_FOUND` bug class that `tsc` + bundler builds tolerate but plain Node / Vitest-externalized deps / non-symlinked installs reject). Run it locally before pushing a `type: module` package change:
+
+- `npm run check:esm` — sweep all built `type: module` packages under `packages/` (needs a prior `npm run build`; unbuilt packages classify `NOT_BUILT` and skip)
+- `npm run check:esm:test` — the guard's own vitest suite (entry-point resolution, failure classification, CLI contract)
+
+The guard lives at `.github/scripts/check-esm-imports.mjs`. Only `OWN_DIST_MISSING_EXT` fails the gate; dependency failures, side-effect crashes, and unbuilt packages are reported but non-gating.
+
 ## Code Style Guide
 - Use TypeScript strict mode and explicit typing
 - Always use MemberJunction generated `BaseEntity` sub-classes for all data work for strong typing
@@ -880,11 +891,12 @@ protected generateSingleOperation(operation: Operation): string {
 - **ALWAYS** use `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` to find correct entity names
 - Entity names are in the `@RegisterClass` decorator JSDoc comments
 - Examples:
-  - `AIPromptEntity` → `"AI Prompts"`
-  - `AIAgentEntity` → `"AI Agents"`
-  - `AIModelEntity` → `"AI Models"`
-  - `AIPromptRunEntity` → `"MJ: AI Prompt Runs"` (newer entities use "MJ: " prefix)
-  - `AIAgentRunEntity` → `"MJ: AI Agent Runs"`
+  - `MJAIPromptEntity` → `"MJ: AI Prompts"`
+  - `MJAIAgentEntity` → `"MJ: AI Agents"`
+  - `MJAIModelEntity` → `"MJ: AI Models"`
+  - `MJAIPromptRunEntity` → `"MJ: AI Prompt Runs"`
+  - `MJAIAgentRunEntity` → `"MJ: AI Agent Runs"`
+- **As of v5.0, ALL core entities use the `MJ: ` prefix** (and `MJ*` class names) — an unprefixed name like `'AI Agents'` no longer resolves and throws `Entity AI Agents not found in metadata`
 
 ### Using Metadata Class
 - Create a single instance: `const md = new Metadata()`
@@ -953,9 +965,9 @@ function gateCacheWrite(name: string, provider?: IMetadataProvider) {
 
 ### 🚨 CRITICAL: Entity Naming Convention Warning
 
-**ALWAYS** use the correct entity names with the "MJ: " prefix where required. To prevent naming collisions on client systems, all new core entities use the "MJ: " prefix, while older entities do not.
+**ALWAYS** use the correct entity names with the "MJ: " prefix. To prevent naming collisions on client systems, ALL core entities use the "MJ: " prefix as of v5.0 — pre-v5 unprefixed names (e.g. `'AI Agents'`) no longer resolve in metadata.
 
-#### Core Entities with "MJ: " Prefix (MUST use full name):
+#### Examples of Core Entities with "MJ: " Prefix (MUST use full name):
 - **AI Entities**: `MJ: AI Agent Prompts`, `MJ: AI Agent Run Steps`, `MJ: AI Agent Runs`, `MJ: AI Agent Types`, `MJ: AI Configuration Params`, `MJ: AI Configurations`, `MJ: AI Model Costs`, `MJ: AI Model Price Types`, `MJ: AI Model Price Unit Types`, `MJ: AI Model Vendors`, `MJ: AI Prompt Models`, `MJ: AI Prompt Runs`, `MJ: AI Vendor Type Definitions`, `MJ: AI Vendor Types`, `MJ: AI Vendors`
 - **Artifact Entities**: `MJ: Artifact Types`, `MJ: Conversation Artifact Permissions`, `MJ: Conversation Artifact Versions`, `MJ: Conversation Artifacts`
 - **Dashboard Entities**: `MJ: Dashboard User Preferences`, `MJ: Dashboard User States`
@@ -964,12 +976,12 @@ function gateCacheWrite(name: string, provider?: IMetadataProvider) {
 #### Common Mistakes to Avoid:
 ```typescript
 // ❌ WRONG - Missing "MJ: " prefix
-const agentRun = await md.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', contextUser);
-const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('AI Agent Prompts', contextUser);
+const agentRun = await md.GetEntityObject<MJAIAgentRunEntity>('AI Agent Runs', contextUser);
+const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('AI Agent Prompts', contextUser);
 
 // ✅ CORRECT - Full entity name with "MJ: " prefix
-const agentRun = await md.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
-const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts', contextUser);
+const agentRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
+const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts', contextUser);
 ```
 
 **Always verify entity names** by checking `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` or the `@RegisterClass` decorator JSDoc comments.
@@ -2008,6 +2020,14 @@ export class EntityFormComponentExtended extends EntityFormComponent {
 - Examples of existing custom forms
 
 ## Metadata Files and mj-sync
+
+### 🚨 Release-Time Sync — Do NOT Author Metadata_Sync Migrations 🚨
+Metadata changes (new AI models, prompts, agents, lookup rows, etc.) ship as **declarative JSON only**:
+- New records include a `primaryKey` whose UUID is generated at the CLI with **`uuidgen`** (never invented/inferred) so IDs are deterministic across environments.
+- New records must **omit the `sync` block** entirely.
+- **Never hand-author a `*__Metadata_Sync.sql` migration for a PR.** At release time the build engineer takes all merged PRs on `next` and runs `mj sync push` against a clean DB at the last released version — generating ONE consolidated metadata-sync migration per build (SQL Server + PostgreSQL) and writing the `sync` blocks back into the JSON. Per-PR sync migrations duplicate that step and fragment the release into many small migrations.
+
+See `metadata/CLAUDE.md` rules 1/1b for details.
 
 ### Metadata File Organization
 The `/metadata/` directory contains declarative JSON files used by mj-sync to manage database records. Follow these conventions:

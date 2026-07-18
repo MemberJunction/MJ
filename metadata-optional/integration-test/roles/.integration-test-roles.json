@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "Integration Test: RLS Scoped Reader",
+      "Description": "Integration-test-only role. Grants read on 'MJ: AI Agent Runs' SCOPED to the caller's own UserID (via the 'UI: Own AI Agent Runs' Row-Level-Security filter, UserID = '{{UserID}}') and grants nothing else — so a user whose ONLY role is this one is genuinely RLS-scoped (non-exempt), unlike internal users who also hold Developer/Integration and are RLS-exempt. Used by the rls-isolation integration suite (IT06) to prove multi-user cache + row isolation deterministically instead of skipping on databases that only have exempt admins. Safe to delete; assign only to the seeded it-rls-* test accounts."
+    },
+    "primaryKey": {
+      "ID": "75DC0C4E-AA29-4A86-9035-132988881331"
+    },
+    "sync": {
+      "lastModified": "2026-07-02T19:44:48.373Z",
+      "checksum": "3b72b267fcc2ece8dc4ad58b154392b037560e24b2336504662115ca498bc160"
+    }
+  }
+]

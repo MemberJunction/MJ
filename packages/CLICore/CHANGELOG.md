@@ -1,5 +1,11 @@
 # @memberjunction/cli-core
 
+## 5.48.0
+
+### Patch Changes
+
+- @memberjunction/global@5.48.0
+
 ## 5.47.0
 
 ### Patch Changes

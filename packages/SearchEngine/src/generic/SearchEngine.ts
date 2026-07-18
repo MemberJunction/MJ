@@ -847,7 +847,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             IndexType: row.IndexType,
             VectorIndexID: row.VectorIndexID ?? undefined,
             ExternalIndexName: row.ExternalIndexName ?? undefined,
-            ExternalIndexConfig: this.parseJson(row.ExternalIndexConfig),
+            ExternalIndexConfig: this.parseJson(RenderScopeTemplate(row.ExternalIndexConfig, searchContext)),
             MetadataFilter: RenderScopeJsonTemplate(row.MetadataFilter, searchContext)
         }));
 

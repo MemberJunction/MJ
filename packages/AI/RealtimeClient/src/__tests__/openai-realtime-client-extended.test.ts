@@ -267,7 +267,7 @@ describe('OpenAIRealtimeClient (extended)', () => {
             expect(channel.Sent).toHaveLength(0);
         });
 
-        it('LOCKS CURRENT BEHAVIOR: RequestSpokenUpdate on a non-open channel sets IsBusy without sending', () => {
+        it('RequestSpokenUpdate on a non-open channel neither sends NOR flags busy (guard improved by the shared protocol brain)', () => {
             // Known quirk: RequestSpokenUpdate only guards on channel presence, not readyState.
             // The response.create is silently dropped by sendEvent, but responseActive flips
             // true with no response.done ever coming to clear it. Hosts gate narration on
@@ -275,7 +275,7 @@ describe('OpenAIRealtimeClient (extended)', () => {
             client.InitChannel(channel);
             client.RequestSpokenUpdate('too early');
             expect(channel.Sent).toHaveLength(0);
-            expect(client.IsBusy).toBe(true);
+            expect(client.IsBusy).toBe(false);
         });
 
         it('should no-op SetMuted before any Connect (no mic stream)', () => {
@@ -628,5 +628,32 @@ describe('OpenAIRealtimeClient (extended)', () => {
             const seamClient = new SeamExposedClient();
             expect(seamClient.CreatePc()).toBeInstanceOf(FakeRTCPeerConnection);
         });
+    });
+});
+
+describe('QA hardening: B4 remote-stream handler lifecycle', () => {
+    function fireTrack(client: OpenAIConnectTestClient): FakeMediaStream {
+        const remoteStream = new FakeMediaStream([new FakeTrack()]);
+        const trackEvent = Object.assign(new Event('track'), {
+            streams: [remoteStream] as ReadonlyArray<MediaStream>,
+        }) as RTCTrackEvent;
+        client.Pc.ontrack?.(trackEvent);
+        return remoteStream;
+    }
+
+    it('handlers registered in session 1 do NOT fire for session 2 on a reused instance', async () => {
+        const client = new OpenAIConnectTestClient();
+        await client.Connect(makeOpenAIConfig(), new FakeMediaStream([new FakeTrack()]));
+        const stale = vi.fn();
+        client.OnRemoteMediaStream(stale);
+        await client.Disconnect();
+        // Session 2 on the SAME instance:
+        await client.Connect(makeOpenAIConfig(), new FakeMediaStream([new FakeTrack()]));
+        fireTrack(client); // remote track lands for session 2
+        expect(stale).not.toHaveBeenCalled();
+        // A fresh handler registered in session 2 works (stream already landed → immediate invoke):
+        const fresh = vi.fn();
+        client.OnRemoteMediaStream(fresh);
+        expect(fresh).toHaveBeenCalledTimes(1);
     });
 });

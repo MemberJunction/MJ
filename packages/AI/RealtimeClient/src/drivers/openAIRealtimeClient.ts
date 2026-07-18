@@ -1,161 +1,11 @@
 import { RegisterClass } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
+import { BaseRealtimeClient } from '../generic/baseRealtimeClient';
 import {
-    BaseRealtimeClient,
-    RealtimeClientState,
-} from '../generic/baseRealtimeClient';
-
-// ── OpenAI Realtime SERVER event interfaces (discriminated union by `type`) ────
-// These model only the frames this client consumes; provider event payloads are far
-// larger, but we type the fields we read so there are no `any` leaks.
-
-/** Streaming delta of the assistant's spoken-text transcript.
- *  GA (gpt-realtime) emits `response.output_audio_transcript.delta`; the older beta
- *  emitted `response.audio_transcript.delta`. We accept both so captions populate
- *  regardless of the model generation. */
-export interface OAIResponseAudioTranscriptDelta {
-    type: 'response.output_audio_transcript.delta' | 'response.audio_transcript.delta';
-    delta: string;
-    response_id?: string;
-    item_id?: string;
-}
-
-/** Final assistant transcript for a turn (GA or beta event name). */
-export interface OAIResponseAudioTranscriptDone {
-    type: 'response.output_audio_transcript.done' | 'response.audio_transcript.done';
-    transcript: string;
-    response_id?: string;
-    item_id?: string;
-}
-
-/** Final transcription of the user's spoken input for a turn. */
-export interface OAIInputAudioTranscriptionCompleted {
-    type: 'conversation.item.input_audio_transcription.completed';
-    transcript: string;
-    item_id?: string;
-}
-
-/** The model finished assembling a function (tool) call and wants it executed. */
-export interface OAIFunctionCallArgumentsDone {
-    type: 'response.function_call_arguments.done';
-    call_id: string;
-    name: string;
-    /** JSON-encoded arguments. */
-    arguments: string;
-}
-
-/** The provider detected the user starting to speak (barge-in). */
-export interface OAIInputAudioBufferSpeechStarted {
-    type: 'input_audio_buffer.speech_started';
-}
-
-/** A new response (turn) started — tracked so we never start a second overlapping response. */
-export interface OAIResponseCreated {
-    type: 'response.created';
-}
-
-/**
- * A full response (turn) completed — carries the GA usage payload for THIS response
- * (`input_tokens` / `output_tokens` plus per-modality detail objects), i.e. per-response
- * DELTAS, which is exactly the `OnUsage` contract shape.
- */
-export interface OAIResponseDone {
-    type: 'response.done';
-    response?: { usage?: { input_tokens?: number; output_tokens?: number; [detail: string]: unknown } };
-}
-
-/**
- * WebRTC-only playback events: the client audio buffer started/stopped PLAYING.
- * Critical distinction from response.done (generation finished): audio plays at
- * realtime while generation runs ahead, so the model can be "idle" while speech
- * is still audibly coming out of the speaker.
- */
-export interface OAIOutputAudioBufferStarted {
-    type: 'output_audio_buffer.started';
-}
-export interface OAIOutputAudioBufferStopped {
-    type: 'output_audio_buffer.stopped' | 'output_audio_buffer.cleared';
-}
-
-/** Provider-side error frame. */
-export interface OAIErrorEvent {
-    type: 'error';
-    error?: { message?: string; code?: string };
-}
-
-/** Events whose `type` we don't explicitly handle still parse to this shape. */
-export interface OAIUnknownEvent {
-    type: string;
-}
-
-export type OpenAIRealtimeEvent =
-    | OAIResponseAudioTranscriptDelta
-    | OAIResponseAudioTranscriptDone
-    | OAIInputAudioTranscriptionCompleted
-    | OAIFunctionCallArgumentsDone
-    | OAIInputAudioBufferSpeechStarted
-    | OAIResponseCreated
-    | OAIResponseDone
-    | OAIOutputAudioBufferStarted
-    | OAIOutputAudioBufferStopped
-    | OAIErrorEvent
-    | OAIUnknownEvent;
-
-// ── OpenAI Realtime CLIENT event interfaces (frames WE send) ──────────────────
-
-/** Applies the server-built session config (instructions + tools) to the live session. */
-export interface OAISessionUpdateEvent {
-    type: 'session.update';
-    session: JSONObject;
-}
-
-/** A user or system `message` conversation item. */
-export interface OAIMessageItem {
-    type: 'message';
-    role: 'user' | 'system';
-    content: Array<{ type: 'input_text'; text: string }>;
-}
-
-/** The output of an executed function (tool) call, correlated by `call_id`. */
-export interface OAIFunctionCallOutputItem {
-    type: 'function_call_output';
-    call_id: string;
-    output: string;
-}
-
-/** Creates a conversation item (message or tool output). */
-export interface OAIConversationItemCreateEvent {
-    type: 'conversation.item.create';
-    item: OAIMessageItem | OAIFunctionCallOutputItem;
-}
-
-/** Asks the model to produce a response, optionally with one-off instructions. */
-export interface OAIResponseCreateEvent {
-    type: 'response.create';
-    response?: { instructions: string };
-}
-
-/** Cancels the model's in-flight response (generation stops; a response.done follows). */
-export interface OAIResponseCancelEvent {
-    type: 'response.cancel';
-}
-
-/**
- * WebRTC-only client event: stops + clears the provider-managed output audio buffer so
- * already-generated speech stops playing immediately (the server replies with an
- * `output_audio_buffer.cleared` frame). Sent on typed-message barge-in.
- */
-export interface OAIOutputAudioBufferClearEvent {
-    type: 'output_audio_buffer.clear';
-}
-
-export type OpenAIRealtimeClientEvent =
-    | OAISessionUpdateEvent
-    | OAIConversationItemCreateEvent
-    | OAIResponseCreateEvent
-    | OAIResponseCancelEvent
-    | OAIOutputAudioBufferClearEvent;
+    OpenAIProtocolRealtimeClient,
+    OpenAIProtocolClientEvent,
+} from '../generic/openAIProtocolClient';
 
 // ── Structural transport seams (typed subsets of the DOM WebRTC objects) ──────
 // Real `RTCDataChannel` / `RTCPeerConnection` / `HTMLAudioElement` instances satisfy
@@ -201,26 +51,23 @@ export interface IRealtimeAudioSink {
  * server's `OpenAIRealtime` driver stamps on its `ClientRealtimeSessionConfig` — so hosts
  * resolve it without referencing this class directly.
  *
- * Owns ALL OpenAI wire concerns extracted from the original voice-session orchestration:
- * - WebRTC connect: mic tracks → peer connection, remote audio → hidden `<audio>` sink,
- *   the `'oai-events'` data channel, and the GA SDP handshake (see {@link performSdpHandshake}).
- * - Event translation: GA + beta transcript event names, input transcription, tool calls,
- *   barge-in, playback-buffer events, and provider error frames.
- * - The response state machine: `responseActive` set on `response.created` / cleared on
- *   `response.done`; tool-result `response.create`s queued while a response is in flight
- *   and flushed on `response.done` so the model ALWAYS voices delegated results.
- * - Narration-kind tagging: {@link RequestSpokenUpdate} marks the NEXT response as
- *   `'narration'` so its transcripts are emitted with `Kind: 'narration'` (ephemeral).
- * - Audible-playback tracking ({@link IsAudioPlaying}) from `output_audio_buffer.*` events.
+ * The OpenAI-protocol brain (event translation, response state machine, narration-kind
+ * tagging, tool-result queueing, the outbound actions) lives in the shared
+ * {@link OpenAIProtocolRealtimeClient}; this class owns only the WebRTC transport:
+ * - Connect: mic tracks → peer connection, remote audio → hidden `<audio>` sink, the
+ *   `'oai-events'` data channel, and the GA SDP handshake (see {@link performSdpHandshake}).
+ * - Audible-playback tracking ({@link IsAudioPlaying}) from the provider-managed
+ *   `output_audio_buffer.*` events (this transport does NOT own playback — the peer
+ *   connection plays the remote track).
+ * - The remote-stream APIs a host uses to mix the agent's voice into a recording.
  */
 @RegisterClass(BaseRealtimeClient, 'openai')
-export class OpenAIRealtimeClient extends BaseRealtimeClient {
+export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
     // ── Transport ──────────────────────────────────────────────────────────────
     private peerConnection: IRealtimePeerConnection | null = null;
     /** Protected so test subclasses can inspect/inject; production code treats it as private. */
     protected dataChannel: IRealtimeDataChannel | null = null;
     private remoteAudioEl: IRealtimeAudioSink | null = null;
-    private micStream: MediaStream | null = null;
     /**
      * The AGENT's remote-audio stream, captured from the peer connection's `ontrack` event
      * (see {@link attachRemoteAudio}). Exposed via {@link GetRemoteMediaStream} so a host can
@@ -234,43 +81,12 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
      * channel opens. Protected so test subclasses can seed it without a full Connect.
      */
     protected sessionConfig: JSONObject | null = null;
-
-    // ── Response state machine ─────────────────────────────────────────────────
-    /** Accumulates the in-flight assistant transcript across delta frames. */
-    private pendingAssistantText = '';
-    /** True while the model has a response in flight; gates narration + queues the tool result. */
-    private responseActive = false;
-    /** Set when a tool result is ready while a response is active; sent on the next response.done. */
-    private pendingResultResponse = false;
-    /**
-     * Set by {@link RequestSpokenUpdate} just before it sends its `response.create`, and
-     * CONSUMED by the very next `response.created` frame, which stamps
-     * {@link activeResponseKind} for that turn. Narration is only requested while the model
-     * is idle (hosts gate on {@link IsBusy}), so under normal ordering the next
-     * `response.created` is ours.
-     */
-    private pendingNarrationKind = false;
-    /**
-     * The kind of the response currently in flight. Event ordering (confirmed against the
-     * live API): `response.created` → transcript deltas → `*_audio_transcript.done` →
-     * `response.done`. The transcript-done frame therefore arrives while the kind is still
-     * set, letting {@link onAssistantDone} classify the turn; `response.done` then resets
-     * the kind to `'normal'`.
-     */
-    private activeResponseKind: 'normal' | 'narration' = 'normal';
     /**
      * True while the model's audio is audibly PLAYING in the browser (WebRTC
-     * `output_audio_buffer` started/stopped). Distinct from {@link responseActive} —
+     * `output_audio_buffer` started/stopped). Distinct from `responseActive` —
      * generation finishes ahead of playback.
      */
     private audioPlaying = false;
-    /**
-     * The client's own view of the session state — mirrors what {@link emitStateChange}
-     * last reported, EXCEPT after a tool call is emitted: the host typically shows its own
-     * busy state then, so the client silently leaves `'speaking'` (no emission) to preserve
-     * the host's indicator until the result reply starts (see {@link handleEvent}).
-     */
-    private currentState: RealtimeClientState = 'closed';
 
     // ── BaseRealtimeClient: connection lifecycle ───────────────────────────────
 
@@ -322,164 +138,54 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
             this.remoteAudioEl = null;
         }
         this.remoteStream = null;
+        // Session-scoped host handlers must not survive into a later Connect on a reused instance.
+        this.remoteStreamHandlers = [];
 
         this.sessionConfig = null;
         this.resetResponseState();
+        this.audioPlaying = false;
         if (this.currentState !== 'error') {
             this.setState('closed');
         }
     }
 
-    // ── BaseRealtimeClient: outbound actions ──────────────────────────────────
+    // ── Brain seam implementations (WebRTC transport) ──────────────────────────
 
-    /**
-     * Injects typed text as a user-role `message` conversation item, then triggers a reply
-     * through the SAME collision-safe path tool results use ({@link requestResultResponse}).
-     * No-op when the data channel isn't open.
-     *
-     * **SendText implies barge-in** (base-contract rule): an active spoken response is
-     * cancelled via {@link CancelActiveResponse} before the text is injected, so the typed
-     * turn takes the floor immediately instead of waiting behind stale speech. When nothing
-     * is active the cancel is a no-op and the reply triggers immediately.
-     */
-    public SendText(text: string): void {
-        const channel = this.dataChannel;
-        if (!channel || channel.readyState !== 'open') {
-            return;
-        }
-        this.CancelActiveResponse();
-        this.sendEvent(channel, {
-            type: 'conversation.item.create',
-            item: {
-                type: 'message',
-                role: 'user',
-                content: [{ type: 'input_text', text }],
-            },
-        });
-        this.requestResultResponse();
+    /** @inheritdoc — events flow over the `'oai-events'` data channel once it is open. */
+    protected canSendEvents(): boolean {
+        return this.dataChannel !== null && this.dataChannel.readyState === 'open';
+    }
+
+    /** @inheritdoc */
+    protected sendProtocolEvent(event: OpenAIProtocolClientEvent): void {
+        this.dataChannel?.send(JSON.stringify(event));
     }
 
     /**
      * @inheritdoc
      *
-     * Sends `response.cancel` (only when a response is actually in flight) and — when audio
-     * is audibly playing — the WebRTC-only `output_audio_buffer.clear` client event so
-     * already-generated speech stops coming out of the speaker immediately. Resets the local
-     * response state machine (active flag, narration kind, accumulated transcript) but
-     * PRESERVES any queued tool-result trigger: delegated work is never affected by a
-     * floor-control cancel, and the queued trigger still fires on the cancelled response's
-     * trailing `response.done`. No-op when idle or when the channel is not open.
+     * This transport does NOT own playback (the peer connection plays the remote track), so a
+     * cancel asks the provider to stop + clear its managed output buffer via the WebRTC-only
+     * `output_audio_buffer.clear` client event — sent only when audio is audibly playing.
      */
-    public CancelActiveResponse(): void {
-        const channel = this.dataChannel;
-        if (!channel || channel.readyState !== 'open') {
-            return;
-        }
-        if (!this.responseActive && !this.audioPlaying) {
-            return; // nothing active — no-op by contract
-        }
-        if (this.responseActive) {
-            this.sendEvent(channel, { type: 'response.cancel' });
-            this.responseActive = false;
-            this.pendingNarrationKind = false;
-            this.activeResponseKind = 'normal';
-            this.pendingAssistantText = '';
-        }
+    protected stopAudioOutput(): void {
         if (this.audioPlaying) {
-            this.sendEvent(channel, { type: 'output_audio_buffer.clear' });
+            this.sendEvent({ type: 'output_audio_buffer.clear' });
             this.audioPlaying = false;
         }
-        if (this.currentState === 'speaking') {
+    }
+
+    /** @inheritdoc — provider-managed playback started. */
+    protected override onOutputAudioBufferStarted(): void {
+        this.audioPlaying = true;
+    }
+
+    /** @inheritdoc — provider-managed playback stopped/cleared. */
+    protected override onOutputAudioBufferStopped(): void {
+        this.audioPlaying = false;
+        if (this.currentState === 'speaking' && !this.responseActive) {
             this.setState('listening');
         }
-    }
-
-    /**
-     * Injects a system-role context item the model can draw on the next time it speaks,
-     * WITHOUT forcing a reply.
-     *
-     * NOTE: role must be 'system' — gpt-realtime rejects 'developer' items
-     * ("Developer messages are only supported for quicksilver sessions").
-     */
-    public SendContextNote(text: string): void {
-        const channel = this.dataChannel;
-        if (!channel) {
-            return;
-        }
-        this.sendEvent(channel, {
-            type: 'conversation.item.create',
-            item: {
-                type: 'message',
-                role: 'system',
-                content: [{ type: 'input_text', text }],
-            },
-        });
-    }
-
-    /**
-     * Triggers ONE short spoken update with the given instructions. Marks the upcoming
-     * response as `'narration'` (flag consumed by the next `response.created`) so its
-     * transcripts are emitted with `Kind: 'narration'` — ephemeral by contract. Sets
-     * {@link responseActive} eagerly so a tool result landing mid-narration queues
-     * instead of colliding.
-     *
-     * **Skips when busy** (base-contract collision rule — drivers MUST queue or skip):
-     * a `response.create` sent while a response is in flight would be rejected/garbled by
-     * the provider, and narration is disposable by contract, so the update is dropped with
-     * a debug log rather than queued to come out late and stale. Hosts SHOULD still gate
-     * on {@link IsBusy} / {@link IsAudioPlaying} for timing quality.
-     */
-    public RequestSpokenUpdate(instructions: string): void {
-        const channel = this.dataChannel;
-        if (!channel) {
-            return;
-        }
-        if (this.responseActive) {
-            console.debug('[OpenAIRealtimeClient] RequestSpokenUpdate skipped — a response is already in flight (narration is disposable).');
-            return;
-        }
-        this.responseActive = true;
-        this.pendingNarrationKind = true;
-        this.sendEvent(channel, {
-            type: 'response.create',
-            response: { instructions },
-        });
-    }
-
-    /**
-     * Sends the tool result back as a `function_call_output` conversation item, then
-     * triggers a reply — immediately if the model is idle, otherwise queued until the
-     * current response (e.g. a progress narration) finishes. Without the queueing the
-     * result's `response.create` would collide with an in-flight narration and be dropped,
-     * leaving the model silent when delegated work comes back.
-     */
-    public SendToolResult(callID: string, outputJson: string): void {
-        const channel = this.dataChannel;
-        if (!channel) {
-            return;
-        }
-        this.sendEvent(channel, {
-            type: 'conversation.item.create',
-            item: {
-                type: 'function_call_output',
-                call_id: callID,
-                output: outputJson,
-            },
-        });
-        this.requestResultResponse();
-    }
-
-    /** Mute / unmute by toggling the mic tracks' `enabled` flag (transport stays up). */
-    public SetMuted(muted: boolean): void {
-        const tracks = this.micStream?.getAudioTracks() ?? [];
-        for (const t of tracks) {
-            t.enabled = !muted;
-        }
-    }
-
-    /** @inheritdoc */
-    public get IsBusy(): boolean {
-        return this.responseActive;
     }
 
     /** @inheritdoc */
@@ -600,8 +306,9 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Adopts + wires the events data channel: applies the session config and reports
-     * `'listening'` on open; translates inbound frames; reports transport errors / closure.
-     * Protected so test subclasses can inject a fake channel directly.
+     * `'listening'` on open; translates inbound frames through the shared protocol brain;
+     * reports transport errors / closure. Protected so test subclasses can inject a fake
+     * channel directly.
      */
     protected adoptDataChannel(channel: IRealtimeDataChannel): void {
         this.dataChannel = channel;
@@ -610,7 +317,7 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
             this.setState('listening');
         };
         channel.onmessage = (e: MessageEvent) => {
-            this.handleChannelMessage(e);
+            this.handleProtocolMessage(String(e.data));
         };
         channel.onerror = (e: Event) => {
             this.emitError({ Message: `Data channel error: ${String(e)}`, Fatal: true });
@@ -641,221 +348,8 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
         if (!this.sessionConfig || Object.keys(this.sessionConfig).length === 0) {
             return;
         }
-        this.sendEvent(channel, { type: 'session.update', session: this.sessionConfig });
-    }
-
-    // ── Inbound event translation ──────────────────────────────────────────────
-
-    /** Parses an inbound channel message and dispatches it to the typed handler. */
-    private handleChannelMessage(e: MessageEvent): void {
-        let event: OpenAIRealtimeEvent;
-        try {
-            event = JSON.parse(e.data as string) as OpenAIRealtimeEvent;
-        } catch {
-            return; // non-JSON frame — ignore
-        }
-        if (event === null || typeof event !== 'object') {
-            return; // valid JSON but not an event object (e.g. "null", a number) — ignore
-        }
-        this.handleEvent(event);
-    }
-
-    /** Dispatches a typed OpenAI realtime server event to the appropriate behavior. */
-    private handleEvent(event: OpenAIRealtimeEvent): void {
-        switch (event.type) {
-            case 'response.output_audio_transcript.delta':
-            case 'response.audio_transcript.delta':
-                this.onAssistantDelta((event as OAIResponseAudioTranscriptDelta).delta);
-                break;
-            case 'response.output_audio_transcript.done':
-            case 'response.audio_transcript.done':
-                this.onAssistantDone((event as OAIResponseAudioTranscriptDone).transcript);
-                break;
-            case 'conversation.item.input_audio_transcription.completed':
-                this.onUserTranscript((event as OAIInputAudioTranscriptionCompleted).transcript);
-                break;
-            case 'response.function_call_arguments.done':
-                this.onToolCallFrame(event as OAIFunctionCallArgumentsDone);
-                break;
-            case 'input_audio_buffer.speech_started':
-                // The user started speaking. This is a TRUE barge-in only when it cut off
-                // active model output (a response in flight or audio audibly playing) —
-                // a normal turn while the model is idle is NOT an interruption, so the
-                // emission is gated (base-contract rule). The provider handles cancelling
-                // its own turn; we reflect that the user has the floor again. NOTE: the
-                // trailing `output_audio_buffer.cleared` frame deliberately does NOT emit —
-                // it also follows our own CancelActiveResponse, and a self-initiated cancel
-                // must never look like a user barge-in (hosts abort delegated work on it).
-                if (this.responseActive || this.audioPlaying) {
-                    this.emitInterruption();
-                }
-                this.setState('listening');
-                break;
-            case 'response.created':
-                this.responseActive = true;
-                // Stamp the kind of THIS response: 'narration' only when the flag was set by
-                // RequestSpokenUpdate immediately before its response.create (consumed here).
-                this.activeResponseKind = this.pendingNarrationKind ? 'narration' : 'normal';
-                this.pendingNarrationKind = false;
-                break;
-            case 'output_audio_buffer.started':
-                this.audioPlaying = true;
-                break;
-            case 'output_audio_buffer.stopped':
-            case 'output_audio_buffer.cleared':
-                this.audioPlaying = false;
-                if (this.currentState === 'speaking' && !this.responseActive) {
-                    this.setState('listening');
-                }
-                break;
-            case 'response.done':
-                // A turn finished — release the lock and speak any queued tool result so the
-                // model always voices the answer when delegated work comes back.
-                // The transcript-done frame for this turn has already arrived (it precedes
-                // response.done), so it's safe to reset the response kind here.
-                this.responseActive = false;
-                this.activeResponseKind = 'normal';
-                this.emitResponseUsage(event as OAIResponseDone);
-                this.flushPendingResultResponse();
-                if (this.currentState === 'speaking') {
-                    this.setState('listening');
-                }
-                break;
-            case 'error':
-                this.onErrorFrame(event as OAIErrorEvent);
-                break;
-            default:
-                // Unhandled event types are expected (the provider emits many); no-op.
-                break;
-        }
-    }
-
-    /** Appends an assistant transcript delta, reflects `'speaking'`, and emits the delta. */
-    private onAssistantDelta(delta: string): void {
-        if (this.currentState !== 'speaking') {
-            this.setState('speaking');
-        }
-        this.pendingAssistantText += delta;
-        this.emitTranscript({ Role: 'Assistant', Text: delta, IsFinal: false, Kind: this.activeResponseKind });
-    }
-
-    /**
-     * Finalizes the assistant turn: emits the final transcript tagged with the ACTIVE
-     * response kind (the transcript-done frame arrives BEFORE `response.done`, so
-     * {@link activeResponseKind} still reflects this turn), then returns to `'listening'`.
-     * Empty turns emit nothing.
-     */
-    private onAssistantDone(transcript: string): void {
-        const finalText = transcript || this.pendingAssistantText;
-        this.pendingAssistantText = '';
-        if (finalText.trim().length > 0) {
-            this.emitTranscript({ Role: 'Assistant', Text: finalText, IsFinal: true, Kind: this.activeResponseKind });
-        }
-        if (this.currentState === 'speaking') {
-            this.setState('listening');
-        }
-    }
-
-    /** Emits the final transcription of the user's spoken input (always `Kind: 'normal'`). */
-    private onUserTranscript(transcript: string): void {
-        this.emitTranscript({ Role: 'User', Text: transcript, IsFinal: true, Kind: 'normal' });
-    }
-
-    /**
-     * Surfaces a completed tool call to the host. The client silently leaves the
-     * `'speaking'` state (NO emission) so a host-rendered busy indicator (e.g. "thinking")
-     * isn't clobbered by this turn's trailing `response.done` / playback-stopped frames —
-     * those only transition when the client still considers itself `'speaking'`.
-     */
-    private onToolCallFrame(call: OAIFunctionCallArgumentsDone): void {
-        if (this.currentState === 'speaking') {
-            this.currentState = 'connected';
-        }
-        this.emitToolCall({ CallID: call.call_id, ToolName: call.name, ArgumentsJson: call.arguments });
-    }
-
-    /**
-     * Emits the completed response's usage to the host as a DELTA (the GA `response.done`
-     * usage payload covers exactly this response, so it is already incremental — the
-     * `OnUsage` contract's preferred shape). Frames without a usage payload emit nothing.
-     */
-    private emitResponseUsage(event: OAIResponseDone): void {
-        const usage = event.response?.usage;
-        if (!usage) {
-            return;
-        }
-        this.emitUsage({
-            InputTokens: typeof usage.input_tokens === 'number' ? usage.input_tokens : undefined,
-            OutputTokens: typeof usage.output_tokens === 'number' ? usage.output_tokens : undefined,
-            Raw: usage,
-        });
-    }
-
-    /** Surfaces a provider error frame (non-fatal; the session continues). */
-    private onErrorFrame(event: OAIErrorEvent): void {
-        this.emitError({
-            Message: event.error?.message ?? 'Unknown provider error',
-            Code: event.error?.code,
-            Fatal: false,
-        });
-    }
-
-    // ── Response state machine ─────────────────────────────────────────────────
-
-    /**
-     * Asks the model to speak (a tool result or typed-text reply) — immediately if it's
-     * idle, otherwise queued until the current response finishes. An immediate trigger
-     * also CONSUMES any queued trigger debt: every payload item is already in the
-     * conversation, so one `response.create` voices everything (e.g. typed text barging
-     * in over a narration that had tool results queued behind it).
-     */
-    private requestResultResponse(): void {
-        if (!this.dataChannel) {
-            return;
-        }
-        if (this.responseActive) {
-            this.pendingResultResponse = true;
-            return;
-        }
-        this.pendingResultResponse = false;
-        this.responseActive = true;
-        this.sendEvent(this.dataChannel, { type: 'response.create' });
-        this.setState('speaking');
-    }
-
-    /** On a turn completing, fire any queued tool-result response so the answer is spoken. */
-    private flushPendingResultResponse(): void {
-        if (!this.pendingResultResponse || !this.dataChannel) {
-            return;
-        }
-        this.pendingResultResponse = false;
-        this.responseActive = true;
-        this.sendEvent(this.dataChannel, { type: 'response.create' });
-        this.setState('speaking');
-    }
-
-    /** Resets the per-session response state machine (used on Disconnect). */
-    private resetResponseState(): void {
-        this.pendingAssistantText = '';
-        this.responseActive = false;
-        this.pendingResultResponse = false;
-        this.pendingNarrationKind = false;
-        this.activeResponseKind = 'normal';
-        this.audioPlaying = false;
-    }
-
-    // ── Helpers ────────────────────────────────────────────────────────────────
-
-    /** Updates the client's own state view and emits the change to the host. */
-    private setState(state: RealtimeClientState): void {
-        this.currentState = state;
-        this.emitStateChange(state);
-    }
-
-    /** Serializes + sends a client event over the data channel (only when open). */
-    private sendEvent(channel: IRealtimeDataChannel, event: OpenAIRealtimeClientEvent): void {
         if (channel.readyState === 'open') {
-            channel.send(JSON.stringify(event));
+            channel.send(JSON.stringify({ type: 'session.update', session: this.sessionConfig }));
         }
     }
 }

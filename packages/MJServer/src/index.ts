@@ -48,7 +48,7 @@ import { createTwilioTelephonyHandler, TWILIO_TELEPHONY_MOUNT_PATH, SetTwilioTel
 import { createVonageTelephonyHandler, VONAGE_TELEPHONY_MOUNT_PATH, SetVonageTelephonyService } from './telephony/index.js';
 import { RingCentralTelephonyService, SetRingCentralTelephonyService } from './telephony/index.js';
 import { createTeamsMeetingsHandler, TEAMS_MEETINGS_MOUNT_PATH, SetTeamsMeetingsService, GetTeamsMeetingsService, StartCalendarScheduler } from './telephony/index.js';
-import { InstallMediaUpgradeDispatcher } from './telephony/index.js';
+import { InstallMediaUpgradeDispatcher, IsGraphQLWsPath } from './telephony/index.js';
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
@@ -867,6 +867,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // lets self-hosted realtime providers — e.g. HuggingFace speech-to-speech — run the shipped client-direct
   // audio topology without the internal endpoint ever being exposed to the browser); everything on the
   // graphql path goes to graphql-ws; anything else is rejected. Must be registered before httpServer.listen().
+  // Path acceptance (including the bare-root/`/graphql` alias) is centralized in `IsGraphQLWsPath` — see
+  // its doc comment for why the alias exists — so this listener and `InstallMediaUpgradeDispatcher`'s
+  // telephony-active replacement listener can never disagree on what counts as "the GraphQL path."
   httpServer.on('upgrade', (request, socket, head) => {
     if (RealtimeProxyServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
       return;
@@ -877,7 +880,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     } catch {
       /* unparseable — fall through to the graphql-path check, which will reject it */
     }
-    if (pathname === graphqlRootPath) {
+    if (IsGraphQLWsPath(pathname, graphqlRootPath)) {
       webSocketServer.handleUpgrade(request, socket, head, (ws) => webSocketServer.emit('connection', ws, request));
     } else {
       socket.destroy();

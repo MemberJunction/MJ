@@ -23,7 +23,8 @@ import {
     ValidationResult,
     ValidationError,
     ValidationWarning,
-    TestLogMessage
+    TestLogMessage,
+    SuiteFixtureContext
 } from '../types';
 
 /**
@@ -365,6 +366,41 @@ export abstract class BaseTestDriver {
      */
     public supportsCancellation(): boolean {
         return false;
+    }
+
+    /**
+     * Suite-scoped setup. Runs ONCE after the suite run is created and before the
+     * first test's `Execute`, when the test runs inside a suite (`mj test suite`).
+     * Provision suite-shared fixtures here — discover/create users, create
+     * Query/Category rows, refresh engine caches — and stash them on
+     * `context.Data` / `context.CreatedRecords` so every `Execute` of the suite
+     * (which receives this same context via `DriverExecutionContext.fixtures`) can
+     * read them, and `TeardownSuite` can clean them up.
+     *
+     * Default is a no-op, so existing drivers (AgentEval, Computer Use) are
+     * unaffected. Does NOT fire for the standalone `mj test run` path (no suite).
+     *
+     * @param context - Per-suite-run fixture bag, keyed by SuiteRunID
+     * @param contextUser - User context for data access
+     */
+    public async SetupSuite(context: SuiteFixtureContext, contextUser: UserInfo): Promise<void> {
+        // no-op by default
+    }
+
+    /**
+     * Suite-scoped teardown. GUARANTEED by `TestEngine.RunSuite` via a `finally`, so
+     * it runs on pass, fail, a thrown `Execute`, and after a `'Timeout'` result.
+     * MUST be best-effort: never throw (the engine logs and ignores any throw),
+     * only clean up. Delete what `SetupSuite` created (the `context.CreatedRecords`
+     * list and any driver-specific payload under `context.Data`).
+     *
+     * Default is a no-op. Does NOT fire for the standalone `mj test run` path.
+     *
+     * @param context - The same per-suite-run fixture bag passed to SetupSuite
+     * @param contextUser - User context for data access
+     */
+    public async TeardownSuite(context: SuiteFixtureContext, contextUser: UserInfo): Promise<void> {
+        // no-op by default
     }
 
     /**

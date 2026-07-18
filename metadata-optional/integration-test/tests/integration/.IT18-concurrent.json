@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT18 - Concurrent Run Persistence",
+    "Description": "LIVE-MODEL tier (gated by RUN_AGENT_TESTS). Fires many prompt/agent runs in parallel and proves each persists its OWN correct run — no cross-run corruption. Stresses the per-entity-instance keying of the fire-and-forget BaseEntitySaveQueue: a slow INSERT in one run must never clobber another's finalize. CC1: N concurrent prompt runs each persist an independent, correct AI Prompt Run (distinct IDs). CC2: concurrent agent runs each persist a correct, independent run. Skips-as-pass when RUN_AGENT_TESTS is unset.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Concurrent prompt/agent runs each persist a distinct, correct run — no shared or clobbered records."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "concurrent"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "25B72FB5-34A2-470B-8FBE-8E9B6C17A606"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T19:15:10.515Z",
+    "checksum": "26617b9acaa8857de5ef28933412257115c30780d7d3e5694a192d6c85b0fba5"
+  }
+}

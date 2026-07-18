@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT10 - Field Rules Bulk Update",
+    "Description": "End-to-end proof of the rules-based bulk-update stack (deterministic, no model calls): FieldRulesProcessor → EntityFieldRules → the pure field-rules engine, applied across a real record set in both modes against throwaway MJ: Action Categories it creates. FR1: DRY-RUN computes the per-record diff and writes NOTHING. FR2: APPLY writes the formula result and MJ's Record Changes versioning captures it. FR3: a rule whose condition is false leaves its field untouched (per-record gating — only the record whose Name ends in -2 flips to Disabled). The bundle creates + tears down its own category fixtures.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Dry-run previews with zero writes; apply writes the formula result; a false condition gates the field per-record."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "field-rules-bulk-update"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "B4AA41D0-BA43-41FF-805D-5C22DA002CBC"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T18:38:01.319Z",
+    "checksum": "35573368eb1307efd26e9b0f7337040163f1fcfd723c585c3f62d54f570c7774"
+  }
+}

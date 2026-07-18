@@ -99,7 +99,11 @@ export class GeminiEmbedding extends BaseEmbeddings {
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
         const model = params.model || DEFAULT_MODEL;
         try {
-            const response = await this._gemini.models.embedContent({ model, contents: params.text });
+            const response = await this._gemini.models.embedContent({
+                model,
+                contents: params.text,
+                ...(params.dimensions ? { config: { outputDimensionality: params.dimensions } } : {}),
+            });
             return {
                 object: 'object',
                 model,
@@ -133,7 +137,7 @@ export class GeminiEmbedding extends BaseEmbeddings {
 
         let vectors: number[][];
         try {
-            vectors = await this.embedTextsConcurrently(texts, model, EMBED_TEXTS_MAX_CONCURRENCY);
+            vectors = await this.embedTextsConcurrently(texts, model, EMBED_TEXTS_MAX_CONCURRENCY, params.dimensions);
         } catch (error) {
             // Preserve the original contract: empty result on failure (no throw), so existing
             // callers that don't wrap EmbedTexts keep degrading gracefully rather than aborting.
@@ -162,7 +166,7 @@ export class GeminiEmbedding extends BaseEmbeddings {
      * Embeds each text with its own `embedContent` call while capping the number of concurrent
      * in-flight requests at `maxConcurrency`. Results are returned in the same order as `texts`.
      */
-    private async embedTextsConcurrently(texts: string[], model: string, maxConcurrency: number): Promise<number[][]> {
+    private async embedTextsConcurrently(texts: string[], model: string, maxConcurrency: number, dimensions?: number): Promise<number[][]> {
         const vectors: number[][] = new Array<number[]>(texts.length);
         let nextIndex = 0;
         let failed = false;
@@ -174,7 +178,7 @@ export class GeminiEmbedding extends BaseEmbeddings {
             // embedContent calls after the batch is already doomed to reject.
             for (let index = nextIndex++; !failed && index < texts.length; index = nextIndex++) {
                 try {
-                    vectors[index] = await this.embedSingleText(texts[index], model);
+                    vectors[index] = await this.embedSingleText(texts[index], model, dimensions);
                 } catch (error) {
                     failed = true;
                     throw error;
@@ -194,14 +198,18 @@ export class GeminiEmbedding extends BaseEmbeddings {
      * times, then throws; {@link EmbedTexts} catches that to apply the batch-level empty-result
      * contract, so a batch never ends up with a silently-corrupt (empty or blended) vector for one text.
      */
-    private async embedSingleText(text: string, model: string): Promise<number[]> {
+    private async embedSingleText(text: string, model: string, dimensions?: number): Promise<number[]> {
         let lastError: unknown;
         for (let n = 0; n <= this.maxEmbedTextsRetries; n++) {
             if (n > 0) {
                 await sleep(this.embedRetryBaseDelayMs * 2 ** (n - 1));
             }
             try {
-                const response = await this._gemini.models.embedContent({ model, contents: text });
+                const response = await this._gemini.models.embedContent({
+                    model,
+                    contents: text,
+                    ...(dimensions ? { config: { outputDimensionality: dimensions } } : {}),
+                });
                 const vector = response.embeddings?.[0]?.values;
                 if (!vector || vector.length === 0) {
                     throw new Error('Gemini returned no embedding for one of the batch texts.');
@@ -233,7 +241,11 @@ export class GeminiEmbedding extends BaseEmbeddings {
             this.ValidateContentSupported(params.content);
             const parts = GeminiLLM.MapMJContentToGeminiParts(params.content);
             const contents: Content[] = [{ parts }];
-            const response = await this._gemini.models.embedContent({ model, contents });
+            const response = await this._gemini.models.embedContent({
+                model,
+                contents,
+                ...(params.dimensions ? { config: { outputDimensionality: params.dimensions } } : {}),
+            });
             return {
                 object: 'object',
                 model,

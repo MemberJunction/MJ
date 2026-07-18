@@ -48,7 +48,12 @@ export class BedrockEmbedding extends BaseEmbeddings {
       let requestBody: any;
       
       if (modelId.startsWith('amazon.titan-embed')) {
-        requestBody = { inputText: params.text };
+        // `dimensions` is supported by Titan Embed Text V2 (256/512/1024); V1 rejects it,
+        // so it is only sent when the caller explicitly opts in.
+        requestBody = {
+          inputText: params.text,
+          ...(params.dimensions ? { dimensions: params.dimensions } : {})
+        };
       } else if (modelId.startsWith('cohere.embed')) {
         requestBody = { texts: [params.text], input_type: "search_document" };
       } else {
@@ -143,7 +148,8 @@ export class BedrockEmbedding extends BaseEmbeddings {
         for (const text of params.texts) {
           const result = await this.EmbedText({
             text: text,
-            model: modelId
+            model: modelId,
+            dimensions: params.dimensions
           });
           
           embeddings.push(result.vector);

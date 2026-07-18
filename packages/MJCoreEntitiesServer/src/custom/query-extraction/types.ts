@@ -1,4 +1,4 @@
-import type { IMetadataProvider, IRunViewProvider, UserInfo } from "@memberjunction/core";
+import type { IMetadataProvider, IRunViewProvider, UserInfo, DatabasePlatform } from "@memberjunction/core";
 import type { MJQueryEntityExtended } from "@memberjunction/core-entities";
 import type { MJParameterInfo, MJParseResult, SQLSelectColumn, SQLTableReference } from "@memberjunction/sql-parser";
 
@@ -115,11 +115,15 @@ export interface ResolveResult {
 export interface QuerySyncContext {
     queryID: string;
     queryName: string;
+    /** The SQL to extract from — resolved for the current platform (from QuerySQLs or base SQL). */
     sql: string;
     isSaved: boolean;
     contextUser: UserInfo;
     metadataProvider: IMetadataProvider;
     runViewProvider: IRunViewProvider;
+    /** The database platform of the connected database. Determines which SQL dialect
+     *  is used for parsing and which SQL types are used for field extraction. */
+    platform: DatabasePlatform;
     /** Caller-provided tested parameter sample values (paramName → sampleValue).
      *  When present, these take highest priority over LLM-generated or heuristic sampleValues. */
     parameterHints?: Map<string, string>;
