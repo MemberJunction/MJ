@@ -140,3 +140,14 @@ A three-reviewer re-audit of the hardening work itself found holes in several of
 - [x] **W1/W2/SEAM-4 (test quality)** — strengthened the happy-reconnect usage test (fire before AND after the drop, assert the sum), rewrote the misleading HF "reconnection" reset test to actually prove queued-trigger reset on instance reuse, and added an end-to-end config-tuning-bag → driver-session-payload shape test proving the two halves agree on key names.
 
 **Re-audit verification**: full repo build 299/299, unit tests 594/594. Suite deltas: ai-openai 152 · ai-realtime-client 394 · ai-agents 1668 · ai-gemini 87 · ai-xai 50 · ai-huggingface 34 · MJServer proxy 8.
+
+## Third-pass adversarial re-audit — findings fixed (2026-07-18)
+
+A third pass against the latest `next` (post-#3183 merge) found three residual seams — each an incomplete edge of a prior fix. All fixed with regression tests that provably fail against the pre-fix code:
+
+- [x] **C8-completeness 🟠** — the C8 fix bound the in-flight key ONLY on the interim branch, so a FINALS-ONLY streamed provider (Grok user captions, ElevenLabs corrections) that never emits an interim delta still took the create+finalize branch and minted a duplicate `ConversationDetail` row per corrected final. Fix: bind the in-flight key in the create+finalize branch too when `ReplacesPrevious`. Test: `C8 finals-only` — first replacing final creates + binds, second updates the SAME row.
+- [x] **SEAM-2b 🟠** — the C7 reconnect blanket-reset `activeDelegations = 0`; combined with each aborted delegation's self-decrementing `finally` (`AbortInFlight` unwinds them), this double-decrements and can steal a CONCURRENT post-reconnect delegation's narration burst (its progress silently drops). Fix: remove the blanket reset — frames self-unwind. Test: `SEAM-2b` — old delegation unwinds AFTER a new one starts; new one still narrates.
+- [x] **W-usage 🟡** — `OnUsage` was identity-gated like every other handler, so a trailing usage frame flushed on the just-dropped socket was discarded. Usage is runner-GLOBAL (cumulative across reconnects), not session-scoped. Fix: un-gate `OnUsage` (every other handler stays guarded). Test: `W-usage` — late usage from the superseded session still sums into `FinalUsage`.
+- [x] **S1 bounded-worst-case (characterization)** — added a test pinning the documented bounded degradation: an UNRELATED error while a legitimate local create is outstanding under-protects exactly ONE `response.done` (releases the lock early) but NEVER wedges the session.
+
+**Third-pass verification**: `@memberjunction/ai-agents` build clean; ai-agents 1671 · ai-realtime-client 395 — all passing. Each new test verified to fail against the reverted (buggy) code, then pass with the fix restored.

@@ -2457,6 +2457,14 @@ export class BaseAgent {
                 agent: params.agent, category: 'RealtimeSession'
             });
         }
+        // ReplacesPrevious streamed finals: point the in-flight key at THIS row so the next
+        // replacing final updates it in place — this is the ONLY set point that covers a
+        // FINALS-ONLY provider (e.g. Grok user captions, ElevenLabs corrections) that never emits
+        // an interim delta, where the interim set-point above never runs. A subsequent non-replacing
+        // final clears the key (see the delete above) so the following turn starts fresh.
+        if (transcript.ReplacesPrevious) {
+            this.realtimeInFlightTurns.set(roleKey, detail.ID);
+        }
         return created ? detail.ID : null;
     }
 

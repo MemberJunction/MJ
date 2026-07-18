@@ -825,6 +825,30 @@ describe('QA re-audit fixes (S1/S3)', () => {
         expect(client.IsBusy).toBe(false);
     });
 
+    it('S1 bounded worst-case: an UNRELATED error while a local create is outstanding under-protects exactly ONE done — releases the lock early but NEVER wedges', async () => {
+        await connect(client);
+        // A legitimate locally-initiated create is outstanding (cancel+recreate in flight): counter=1,
+        // awaiting its response.created.
+        client.Emit({ type: 'response.created' });        // the response we are about to cancel
+        client.SendText('barge in');                       // cancel + inject + local response.create → counter=1
+        // An UNRELATED error frame (e.g. a transient rate-limit note) arrives BEFORE our create's
+        // response.created. The self-heal cannot tell it apart, so it spends the outstanding create's
+        // stale-done credit here (counter 1→0). This is the documented bounded degradation.
+        client.Emit({ type: 'error', error: { message: 'transient rate limit', code: 'rate_limited' } });
+        // The cancelled response's trailing (stale) done now arrives UNPROTECTED → it releases the lock
+        // early instead of being ignored. Acceptable: the session stays LIVE (no wedge), which is the
+        // whole point of flooring at 0 rather than leaving the counter stuck.
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.IsBusy).toBe(false);                 // released early — bounded, not wedged
+        // Crucially the session still functions: our real create's own response.created/done round-trip
+        // cleanly and a fresh spoken update still goes out (never dead-air).
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        const before = client.Fake.Sent.length;
+        expect(client.RequestSpokenUpdate('still alive')).not.toBe(false);
+        expect(client.Fake.Sent.length).toBeGreaterThan(before);
+    });
+
     it('S3: a PREVIOUS socket\'s late onclose does not corrupt the reconnected session', async () => {
         await connect(client);
         const oldSocket = client.Fake;

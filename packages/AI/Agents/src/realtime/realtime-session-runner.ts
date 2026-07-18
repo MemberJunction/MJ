@@ -461,7 +461,10 @@ export class RealtimeSessionRunner {
         // relayed to a provider session that has no matching pending call.
         session.OnTranscript((t) => { if (this.session === session) void this.handleTranscript(t); });
         session.OnToolCall((call) => { if (this.session === session) void this.handleToolCall(call); });
-        session.OnUsage((u) => { if (this.session === session) this.handleUsage(u); });
+        // Usage is runner-GLOBAL (cumulative across the whole session lifetime incl. reconnects),
+        // NOT session-scoped — so a late usage frame from a just-superseded session must still
+        // accumulate (never dropped by the identity guard). Every OTHER handler stays guarded.
+        session.OnUsage((u) => this.handleUsage(u));
         session.OnInterruption(() => { if (this.session === session) this.handleInterruption(); });
         session.OnError((error) => { if (this.session === session) this.handleSessionError(error); });
     }
@@ -506,12 +509,14 @@ export class RealtimeSessionRunner {
         try {
             // SEAM-2: the OLD session is dead — abort any in-flight delegation (its result would
             // otherwise be relayed to the fresh session as a function_call_output carrying a
-            // call_id the new provider session never issued) and reset the narration burst
-            // counters so they don't leak into the new session's timing.
+            // call_id the new provider session never issued) and drop any queued (now-stale)
+            // progress-narration text. We do NOT blanket-reset activeDelegations: each in-flight
+            // delegation frame self-decrements via its own finally (AbortInFlight unwinds them), so
+            // zeroing the shared counter here would corrupt it for a CONCURRENT delegation that
+            // outlives the reconnect (its completion would decrement a count that now belongs to a
+            // newly-started delegation, suppressing the new one's narration).
             this.toolBroker.AbortInFlight();
             this.cancelPendingNarration();
-            this.activeDelegations = 0;
-            this.narrationBurstStartedAt = 0;
 
             try {
                 await this.session?.Close();

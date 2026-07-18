@@ -1244,6 +1244,74 @@ describe('QA re-audit: reconnect × abort × delegation interaction seams', () =
         expect(model.Sessions[1].SentToolResults.find((r) => r.CallID === 'call-OLD')).toBeUndefined();
     });
 
+    it('SEAM-2b: a concurrent delegation that OUTLIVES the reconnect keeps narrating — the reconnect must NOT zero the shared delegation counter (a late abort-unwind of the OLD delegation cannot steal the NEW one\'s burst)', async () => {
+        const model = new (class extends BaseRealtimeModel {
+            public Sessions: MockRealtimeSession[] = [];
+            constructor() { super('k'); }
+            async StartSession(): Promise<IRealtimeSession> { const s = new MockRealtimeSession(); this.Sessions.push(s); return s; }
+        })();
+        // A ignores its abort signal and stays pending until we release it (an in-flight delegate that
+        // hasn't yet observed the barge-in); B parks for the whole test and exposes its OnProgress sink.
+        let releaseA: (() => void) | null = null;
+        let progressB: ((p: { step: string; message: string }) => void) | null = null;
+        const delegateSpy = vi.fn(async (req: DelegateToTargetRequest): Promise<DelegatedResult> => {
+            if (req.CallID === 'call-A') {
+                await new Promise<void>((resolve) => { releaseA = resolve; });
+                return { CallID: req.CallID, Success: true, Output: 'A-late' };
+            }
+            progressB = req.OnProgress ?? null;
+            await new Promise<void>(() => { /* B stays in flight for the whole test */ });
+            return { CallID: req.CallID, Success: true, Output: 'B' };
+        });
+        const h = buildHarness({ Model: model, DelegateToTarget: delegateSpy });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+        // Delegation A in flight on session 0 → activeDelegations = 1:
+        model.Sessions[0].fireToolCall({ CallID: 'call-A', ToolName: INVOKE_TARGET_AGENT_TOOL_NAME, Arguments: '{"message":"a"}' });
+        await new Promise((r) => setTimeout(r, 0));
+        // Fatal drop → reconnect. AbortInFlight signals A (ignored, still pending); with the fix the
+        // counter is NOT blanket-zeroed, so it stays at 1:
+        model.Sessions[0].fireError({ Message: 'drop', Fatal: true });
+        await new Promise((r) => setTimeout(r, 0));
+        expect(model.Sessions).toHaveLength(2);
+        // A NEW delegation B on the fresh session outlives the reconnect → count 1→2 (fix) / 0→1 (old):
+        model.Sessions[1].fireToolCall({ CallID: 'call-B', ToolName: INVOKE_TARGET_AGENT_TOOL_NAME, Arguments: '{"message":"b"}' });
+        await new Promise((r) => setTimeout(r, 0));
+        expect(progressB).not.toBeNull();
+        // NOW the OLD delegation A finally unwinds (its finally → endDelegation):
+        //  - fix: count 2→1 (B still active);
+        //  - old (blanket reset): A's decrement drives count 1→0 → cancelPendingNarration, B wrongly idle.
+        releaseA?.();
+        await new Promise((r) => setTimeout(r, 0));
+        // A progress event for the STILL-in-flight B must reach the fresh session as a context note.
+        // Pre-fix (blanket reset + A's late decrement) activeDelegations===0 → the event is DROPPED.
+        model.Sessions[1].ContextNotes.length = 0;
+        progressB?.({ step: 'subagent_execution', message: 'B still working' });
+        expect(model.Sessions[1].ContextNotes).toContain('[delegated-agent progress] B still working');
+    });
+
+    it('W-usage: a LATE usage frame from the OLD (superseded) session still accumulates — usage is runner-GLOBAL, not session-gated', async () => {
+        const model = new (class extends BaseRealtimeModel {
+            public Sessions: MockRealtimeSession[] = [];
+            constructor() { super('k'); }
+            async StartSession(): Promise<IRealtimeSession> { const s = new MockRealtimeSession(); this.Sessions.push(s); return s; }
+        })();
+        const h = buildHarness({ Model: model });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+        const old = model.Sessions[0];
+        old.fireError({ Message: 'drop', Fatal: true });
+        await new Promise((r) => setTimeout(r, 0));
+        expect(model.Sessions).toHaveLength(2);
+        model.Sessions[1].fireUsage({ InputTokens: 5, OutputTokens: 2 }); // fresh session
+        // The OLD socket flushes a trailing usage frame AFTER being superseded — providers commonly do
+        // this on a dropped connection. It MUST still count (every OTHER handler is identity-gated, but
+        // usage is cumulative for the whole runner lifetime). Pre-fix the identity guard dropped it.
+        old.fireUsage({ InputTokens: 30, OutputTokens: 8 });
+        const result = await runner.Stop();
+        expect(result.FinalUsage).toEqual({ InputTokens: 35, OutputTokens: 10 });
+    });
+
     it('C7 session-identity: a LATE fatal from the OLD session does not tear down the reconnected session', async () => {
         const model = new (class extends BaseRealtimeModel {
             public Sessions: MockRealtimeSession[] = [];

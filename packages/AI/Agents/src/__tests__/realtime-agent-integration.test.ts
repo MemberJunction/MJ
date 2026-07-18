@@ -272,6 +272,21 @@ describe('BaseAgent realtime (session-driven) integration', () => {
             expect(f3).toBeNull(); // still the same in-flight row until a non-replacing final clears it
         });
 
+        it('C8 finals-only: a ReplacesPrevious final with NO preceding interim still binds the in-flight key so the NEXT replacing final updates the SAME row', async () => {
+            // Finals-only streamed providers (e.g. Grok user captions, ElevenLabs corrections) never
+            // emit an interim delta — they arrive straight as ReplacesPrevious finals. That path takes
+            // the create+finalize branch (created=true), where the in-flight key was NEVER set pre-fix,
+            // so every correction minted a NEW ConversationDetail row (duplicate turns).
+            const { agent, detail, params } = setup();
+            // First final — no interim ever seen → creates the row AND now binds the in-flight key:
+            const f1 = await agent.callPersist(params, { Role: 'user', Text: 'set a timer', IsFinal: true, ReplacesPrevious: true });
+            expect(f1).toBe('detail-1'); // genuinely a new turn the first time
+            // Second final (the corrected caption) — MUST resolve to the SAME row (null), not a duplicate:
+            const f2 = await agent.callPersist(params, { Role: 'user', Text: 'set a timer for ten minutes', IsFinal: true, ReplacesPrevious: true });
+            expect(f2).toBeNull(); // pre-fix this returned a NEW id (duplicate turn)
+            expect(detail.Message).toBe('set a timer for ten minutes');
+        });
+
         it('creates and finalizes in one step when no interim was seen; assistant turns set no UserID', async () => {
             const { agent, detail, params } = setup();
             const created = await agent.callPersist(params, { Role: 'assistant', Text: 'hi, how can I help?', IsFinal: true });
