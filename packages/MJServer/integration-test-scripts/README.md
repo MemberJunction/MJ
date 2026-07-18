@@ -10,6 +10,9 @@ browser-driven regression suite: real database, real GraphQL transport, real cac
 managers — but scripted, fast (~10s server / ~25s client), and assertion-precise. It
 tests the **seams between packages** that unit tests mock away and browser tests
 traverse but cannot assert (a browser test never notices a 2-column cached payload,
+
+> **Transport doctrine — client-first (target state).** Integration checks should exercise the stack **through the client layer** — `GraphQLDataProvider` and the other non-visual client-side objects in `@memberjunction/graphql-dataprovider` (NOT the Angular UI) — against a running MJAPI. Driving BaseEntity CRUD, `RunView`/`RunViews`/`RunQuery`, and Remote Operations over the real GraphQL wire exercises serialization, the resolver auth/scope layer, field mapping, and transport framing, catching a class of bugs pure in-process server calls never touch. **Server-side in-process invocation (`bootstrapIntegrationServer`) is the exception**, used only where there is no client surface — server-cache instrumentation (counting the *server's* `LocalCacheManager`), internal provider-SQL-shape probes, or raw `sys.*`/`information_schema` audits. When an otherwise server-only capability needs coverage, **prefer adding a typed Remote Operation** (per [REMOTE_OPERATIONS_GUIDE](../../../guides/REMOTE_OPERATIONS_GUIDE.md) / [TRANSPORT_LAYER_ARCHITECTURE_GUIDE](../../../guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md)) and invoking it client-side over the wire — that makes it wire-testable *and* agent/workflow-invocable. Today most bundles are `bootstrapIntegrationServer` (in-process); migrating them to client transport where a client path exists is tracked in [plans/integration-test-expansion](../../../plans/integration-test-expansion/README.md). Client transport requires MJAPI running (`bootstrapIntegrationClient` fails fast if it isn't).
+
 and it can't count cache reads).
 
 ## Contents
@@ -41,6 +44,19 @@ and it can't count cache reads).
 | `lib/ai-bootstrap.ts` | Live provider stack + `AIEngine.Config` + the deep persisted-record verifiers for the AI suites |
 
 > **Running it.** From the repo root: `npm run test:integration` runs the whole aggregator (`run-all.ts`) — the deterministic tier executes, the live-model tier skips unless `RUN_AGENT_TESTS=1`. For the full gated run: `RUN_AGENT_TESTS=1 npm run test:integration`.
+>
+> **Running it via the CLI (`mj test`) — the metadata-driven path.** The same check definitions run through the Testing Framework's `IntegrationTestDriver` as metadata-defined Tests (`IT01`–`IT23`) grouped into suites. The bodies + fixtures live once in `@memberjunction/testing-integration`; the CLI and `run-all.ts` are two front-ends over the one registry.
+>
+> 1. **Seed the optional test metadata** (once per database — these Test/Suite/fixture rows are *not* pushed by default): `npx mj sync push --dir=metadata-optional/integration-test`. This registers the `IT01`–`IT23` Tests, the `Integration Tests — Deterministic` / `Integration Tests — Live Model` suites, and the RLS fixture users/roles/permissions.
+> 2. **Run a suite** — always in a **dedicated process** with `MJ_INTEGRATION_TEST=1` so the instrumented `LocalCacheManager` installs as the *first* caller (it throws if any other component initialized the cache first):
+>     - Whole deterministic tier: `MJ_INTEGRATION_TEST=1 mj test suite --name "Integration Tests — Deterministic"`
+>     - Live-model tier (real LLM calls, needs credentials): `MJ_INTEGRATION_TEST=1 mj test suite --name "Integration Tests — Live Model"`
+>     - A single check bundle: `MJ_INTEGRATION_TEST=1 mj test run --name "IT01 - Server RunView Cache Integrity"`
+>     - Discover what's registered: `mj test list --suites`
+>
+>    Results persist to `MJ: Test Runs` (per-check detail in `ResultDetails`) — unlike the aggregator, which only prints. That's the CLI path's main advantage: durable, queryable run history + regression compare (`mj test compare`).
+>
+> **Aggregator vs. CLI — which to use.** The CLI (`mj test`) is the forward direction and the future CI entry point, and it gives you persisted history. **But it does not yet cover the Predictive Studio Phase-2 tier** — the `ps-inproc-*` / `ps-live-*` flows are still standalone `tsx` scripts orchestrated only by `run-all.ts`, not graduated into the registry. So today: use **`mj test`** for the deterministic + live-model tiers (IT01–IT23), and the **aggregator** (`npm run test:integration`) when you need the PS flows included in one run. Once the PS scripts are graduated into `src/checks/*.checks.ts` (the remaining migration work), `run-all.ts` can be deprecated in favor of the single CLI entry point.
 >
 > **In CI.** The deterministic tier needs a real, seeded MJ database, so it runs in the **release-validation lane** (`.github/workflows/release-test.yml` → `integration-suite` job) against the regression Docker stack (SQL Server + migrations + CodeGen + metadata) via the `test-runner` container — not the mocked per-PR unit-test gate. When this coverage is lifted into the MJ Testing Framework as the "Integration Test" test type, it will run in the same regression lane via `mj-test`.
 
