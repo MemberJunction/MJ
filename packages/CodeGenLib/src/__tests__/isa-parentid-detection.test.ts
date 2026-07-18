@@ -7,8 +7,9 @@
  *
  *   validateISARelationships / buildISAValidationSQL — FORWARD validation of every DECLARED
  *   relationship, channel-agnostic (it reads the end state of Entity.ParentID, so one check covers
- *   every declaration mechanism). Tiered severity: hard error when the runtime provably cannot
- *   work, warning when the declaration may be valid but cannot be corroborated.
+ *   every declaration mechanism). It reports ONLY provable-cannot-work defects (hard errors); a
+ *   declaration that merely "looks off" but would still function passes silently — flagging it
+ *   would be inference that misfires on correct declarations.
  *
  * Scope matters and is asserted below: the query is gated on `ParentID IS NOT NULL`, so an entity
  * nobody declared as IS-A — including any customer/external schema added to the system — is never
@@ -42,7 +43,6 @@ vi.mock('../Misc/status_logging', () => ({
    logError: vi.fn(),
    logMessage: vi.fn(),
    logStatus: vi.fn(),
-   logWarning: vi.fn(),
 }));
 vi.mock('../Database/sql', () => ({ SQLUtilityBase: class {} }));
 vi.mock('../Misc/advanced_generation', () => ({ AdvancedGeneration: class {} }));
@@ -59,7 +59,7 @@ vi.mock('@memberjunction/aiengine', () => ({ AIEngine: class {} }));
 
 import { ManageMetadataBase } from '../Database/manage-metadata';
 import { SQLLogging } from '../Misc/sql_logging';
-import { logError, logWarning } from '../Misc/status_logging';
+import { logError } from '../Misc/status_logging';
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
 import type { SQLDialect } from '@memberjunction/sql-dialect';
 import type { CodeGenConnection, CodeGenQueryResult, CodeGenQueryRow } from '../Database/codeGenDatabaseProvider';
@@ -85,14 +85,13 @@ class TestableISA extends ManageMetadataBase {
    }
 
    public testBuildValidationSQL(): string { return this.buildISAValidationSQL('__mj'); }
-   public testValidate(): Promise<{ success: boolean; errorCount: number; warningCount: number }> {
+   public testValidate(): Promise<{ success: boolean; errorCount: number }> {
       return this.validateISARelationships({} as CodeGenConnection);
    }
 }
 
 const PARENT_ID = 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA';
 const CHILD_ID = 'BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB';
-const OTHER_ID = 'CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC';
 
 /** A fully-valid declared IS-A row; each test overrides only the field under test. */
 const validationRow = (overrides: Partial<CodeGenQueryRow> = {}): CodeGenQueryRow => ({
@@ -104,9 +103,6 @@ const validationRow = (overrides: Partial<CodeGenQueryRow> = {}): CodeGenQueryRo
    ParentPKCount: 1,
    ChildPKName: 'ID',
    ChildPKType: 'uniqueidentifier',
-   ChildPKRelatedEntityID: PARENT_ID,
-   ChildPKIsSoftForeignKey: false,
-   ChildPKRelatedEntityName: 'Products',
    ParentPKName: 'ID',
    ParentPKType: 'uniqueidentifier',
    ...overrides,
@@ -116,7 +112,6 @@ describe('IS-A relationships (manage-metadata)', () => {
    beforeEach(() => {
       vi.mocked(SQLLogging.LogSQLAndExecute).mockClear();
       vi.mocked(logError).mockClear();
-      vi.mocked(logWarning).mockClear();
    });
 
    describe('buildISAValidationSQL', () => {
@@ -139,9 +134,17 @@ describe('IS-A relationships (manage-metadata)', () => {
          // is never looked at. There is deliberately no schema-shape inference anywhere here.
          const sql = new TestableISA().testBuildValidationSQL().replace(/\s+/g, ' ');
          // The WHERE clause is the whole gate, and it is ONLY the declared-intent check.
-         // (IsSoftForeignKey is SELECTed to report it — selecting is not inferring.)
          const where = sql.slice(sql.lastIndexOf('WHERE'));
          expect(where).toBe('WHERE child.[ParentID] IS NOT NULL');
+      });
+
+      it('carries NO FK/soft-FK columns — nothing that would feed a misfiring inference check', () => {
+         // The query only gathers what the provable-cannot-work checks need (PK counts + types).
+         // It deliberately does NOT select the child PK's FK target or soft-FK flag, because there
+         // is no "warning" tier that would second-guess a valid declaration from those.
+         const sql = new TestableISA().testBuildValidationSQL();
+         expect(sql).not.toContain('RelatedEntityID');
+         expect(sql).not.toContain('IsSoftForeignKey');
       });
 
       it('carries the PK counts and PK types needed by the severity rules', () => {
@@ -160,7 +163,7 @@ describe('IS-A relationships (manage-metadata)', () => {
 
          const result = await t.testValidate();
 
-         expect(result).toEqual({ success: false, errorCount: 1, warningCount: 0 });
+         expect(result).toEqual({ success: false, errorCount: 1 });
          expect(String(vi.mocked(logError).mock.calls[0][0])).toContain('does not resolve');
       });
 
@@ -170,7 +173,7 @@ describe('IS-A relationships (manage-metadata)', () => {
 
          const result = await t.testValidate();
 
-         expect(result).toEqual({ success: false, errorCount: 1, warningCount: 0 });
+         expect(result).toEqual({ success: false, errorCount: 1 });
          expect(String(vi.mocked(logError).mock.calls[0][0])).toContain('composite primary key');
       });
 
@@ -180,7 +183,7 @@ describe('IS-A relationships (manage-metadata)', () => {
 
          const result = await t.testValidate();
 
-         expect(result).toEqual({ success: false, errorCount: 1, warningCount: 0 });
+         expect(result).toEqual({ success: false, errorCount: 1 });
          expect(String(vi.mocked(logError).mock.calls[0][0])).toContain('composite primary key');
       });
 
@@ -191,7 +194,7 @@ describe('IS-A relationships (manage-metadata)', () => {
 
          const result = await t.testValidate();
 
-         expect(result).toEqual({ success: false, errorCount: 1, warningCount: 0 });
+         expect(result).toEqual({ success: false, errorCount: 1 });
          const msg = String(vi.mocked(logError).mock.calls[0][0]);
          expect(msg).toContain('type mismatch');
          expect(msg).toContain('int');
@@ -204,7 +207,7 @@ describe('IS-A relationships (manage-metadata)', () => {
 
          const result = await t.testValidate();
 
-         expect(result).toEqual({ success: true, errorCount: 0, warningCount: 0 });
+         expect(result).toEqual({ success: true, errorCount: 0 });
       });
 
       it('reports ONE verdict per child even when a composite PK fans the join out', async () => {
@@ -217,43 +220,8 @@ describe('IS-A relationships (manage-metadata)', () => {
 
          const result = await t.testValidate();
 
-         expect(result).toEqual({ success: false, errorCount: 1, warningCount: 0 });
+         expect(result).toEqual({ success: false, errorCount: 1 });
          expect(logError).toHaveBeenCalledTimes(1);
-      });
-   });
-
-   describe('validateISARelationships — WARNINGS (valid, just not corroborated)', () => {
-      it('warns (does not fail) when the child PK has no FK to the parent', async () => {
-         // The runtime keys off ParentID and never reads this FK metadata, so this WORKS —
-         // it just usually means a missing DB constraint. Failing here would block a valid IS-A.
-         const t = new TestableISA();
-         t.setRecordset([validationRow({ ChildPKRelatedEntityID: null, ChildPKRelatedEntityName: null })]);
-
-         const result = await t.testValidate();
-
-         expect(result).toEqual({ success: true, errorCount: 0, warningCount: 1 });
-         expect(logError).not.toHaveBeenCalled();
-         expect(String(vi.mocked(logWarning).mock.calls[0][0])).toContain('no foreign key to the parent');
-      });
-
-      it('warns when the child PK is an FK to a different entity than the declared parent', async () => {
-         const t = new TestableISA();
-         t.setRecordset([validationRow({ ChildPKRelatedEntityID: OTHER_ID, ChildPKRelatedEntityName: 'Categories' })]);
-
-         const result = await t.testValidate();
-
-         expect(result).toEqual({ success: true, errorCount: 0, warningCount: 1 });
-         expect(String(vi.mocked(logWarning).mock.calls[0][0])).toContain('DIFFERENT entity');
-      });
-
-      it('accepts a soft-FK-backed declaration with a note', async () => {
-         const t = new TestableISA();
-         t.setRecordset([validationRow({ ChildPKIsSoftForeignKey: true })]);
-
-         const result = await t.testValidate();
-
-         expect(result).toEqual({ success: true, errorCount: 0, warningCount: 1 });
-         expect(String(vi.mocked(logWarning).mock.calls[0][0])).toContain('SOFT foreign key');
       });
    });
 
@@ -264,9 +232,8 @@ describe('IS-A relationships (manage-metadata)', () => {
 
          const result = await t.testValidate();
 
-         expect(result).toEqual({ success: true, errorCount: 0, warningCount: 0 });
+         expect(result).toEqual({ success: true, errorCount: 0 });
          expect(logError).not.toHaveBeenCalled();
-         expect(logWarning).not.toHaveBeenCalled();
       });
 
       it('passes when nothing declares an IS-A relationship at all', async () => {
@@ -275,7 +242,7 @@ describe('IS-A relationships (manage-metadata)', () => {
 
          const result = await t.testValidate();
 
-         expect(result).toEqual({ success: true, errorCount: 0, warningCount: 0 });
+         expect(result).toEqual({ success: true, errorCount: 0 });
       });
 
       it('never mutates metadata — validation is strictly read-only', async () => {

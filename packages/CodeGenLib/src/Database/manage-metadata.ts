@@ -8,7 +8,7 @@ import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, dbPlatform, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExternalDataSourceReadRouter, ExternalSchemaObject, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
-import { logError, logMessage, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
+import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
@@ -1028,37 +1028,31 @@ export class ManageMetadataBase {
     * additionalSchemaInfo "ISARelationships" config, an `@lookup` on ParentID in a metadata-sync
     * file, and any future channel — one check instead of one per declaration mechanism.
     *
-    * The severity split follows a single rule: FAIL only on a CERTAINTY, warn on an inference.
-    *   HARD ERROR (the runtime provably cannot work — the declaration is broken):
+    * Reports ONLY provable-cannot-work defects (hard errors) — never inference. If a declared
+    * IS-A merely "looks off" but would still function, it passes silently: flagging it would
+    * misfire on correct declarations (see the note in the loop). The hard errors:
     *     - Child has a composite PK. The runtime routes ONE shared PK value between child and
     *       parent; it has no model for a multi-column subtype key.
     *     - Parent has a composite PK. Same reason, from the other side.
+    *     - Child PK type <> parent PK type. Parent and child SHARE one PK value (Save() writes the
+    *       child's PK into the parent's PK via ParentEntityFieldNames; loads match the child by the
+    *       parent's PK value), so the value must be legal as BOTH PKs. Note a physical FK already
+    *       guarantees matching types — this only ever fires on a soft/declared IS-A, which is
+    *       exactly the case with no DB constraint to catch it.
     *     - ParentID does not resolve to an existing entity. DEFENSE-IN-DEPTH ONLY: the
     *       FK_Entity_ParentID constraint (Entity.ParentID -> Entity.ID) makes this state
     *       unstorable and vwEntities has no WHERE clause, so it is not reachable in a healthy
     *       database. It is kept because the parent JOIN must be a LEFT JOIN regardless, and
     *       without this branch an unresolved parent would silently SKIP the remaining checks
     *       (ParentPKType would be NULL) rather than fail. Covered by unit test, not live.
-    *     - Child PK type <> parent PK type. Parent and child SHARE one PK value (Save() writes the
-    *       child's PK into the parent's PK via ParentEntityFieldNames; loads match the child by the
-    *       parent's PK value), so the value must be legal as BOTH PKs. Note a physical FK already
-    *       guarantees matching types — this only ever fires on a soft/declared IS-A, which is
-    *       exactly the case with no DB constraint to catch it.
-    *   WARNING (the declaration may be perfectly valid — we just cannot corroborate it):
-    *     - Single PK on both sides and ParentID resolves, but the child PK has no FK to the parent
-    *       PK. The runtime never reads that FK metadata (ParentEntityInfo resolves from ParentID;
-    *       ParentEntityFieldNames never consults RelatedEntityID), so this works at runtime. It is
-    *       reported because it usually means a missing DB constraint, not a broken declaration.
-    *     - The FK backing the declaration is a soft FK. Accepted — just noted.
     *
     * Timing: runs AFTER every ParentID-writing pass (config + any previously-synced @lookup) and
     * BEFORE the 2nd-pass manageParentEntityFields() materializes IS-A virtual fields + view JOINs,
     * so a broken declaration fails before it produces generated code.
     */
-   protected async validateISARelationships(pool: CodeGenConnection): Promise<{ success: boolean; errorCount: number; warningCount: number }> {
+   protected async validateISARelationships(pool: CodeGenConnection): Promise<{ success: boolean; errorCount: number }> {
       const schema = mj_core_schema();
       let errorCount = 0;
-      let warningCount = 0;
       try {
          const results = await this.runQuery(pool, this.buildISAValidationSQL(schema));
          // A composite PK on either side makes the PK LEFT JOINs fan out to one row per PK column.
@@ -1074,40 +1068,28 @@ export class ManageMetadataBase {
             if (!row.ParentEntityName) {
                logError(`    > IS-A INVALID: ${pair} — ParentID does not resolve to any entity. IS-A would silently do nothing at runtime. Fix or remove the declaration.`);
                errorCount++;
-               continue;
-            }
-            if (row.ChildPKCount !== 1) {
+            } else if (row.ChildPKCount !== 1) {
                logError(`    > IS-A INVALID: ${pair} — the child has a composite primary key (${row.ChildPKCount} columns). IS-A requires a single-column primary key shared with the parent.`);
                errorCount++;
-               continue;
-            }
-            if (row.ParentPKCount !== 1) {
+            } else if (row.ParentPKCount !== 1) {
                logError(`    > IS-A INVALID: ${pair} — the parent has a composite primary key (${row.ParentPKCount} columns). IS-A requires a single-column primary key shared with the child.`);
                errorCount++;
-               continue;
-            }
-            if (row.ChildPKType && row.ParentPKType && row.ChildPKType.trim().toLowerCase() !== row.ParentPKType.trim().toLowerCase()) {
+            } else if (row.ChildPKType && row.ParentPKType && row.ChildPKType.trim().toLowerCase() !== row.ParentPKType.trim().toLowerCase()) {
                logError(`    > IS-A INVALID: ${pair} — primary-key type mismatch: child "${row.ChildPKName}" is ${row.ChildPKType}, parent "${row.ParentPKName}" is ${row.ParentPKType}. The parent and child SHARE one primary-key value, so the types must match.`);
                errorCount++;
-               continue;
             }
-            if (!row.ChildPKRelatedEntityID) {
-               logWarning(`    > IS-A UNVERIFIED: ${pair} — declared, but the child's primary key "${row.ChildPKName}" has no foreign key to the parent's primary key. This WORKS at runtime (IS-A keys off ParentID, not the FK), but usually means the database is missing the child->parent FK constraint that enforces the shared key.`);
-               warningCount++;
-            } else if (!UUIDsEqual(row.ChildPKRelatedEntityID, row.ParentID)) {
-               logWarning(`    > IS-A UNVERIFIED: ${pair} — the child's primary key "${row.ChildPKName}" is a foreign key to a DIFFERENT entity ("${row.ChildPKRelatedEntityName}") than the declared parent. Confirm the declaration is correct.`);
-               warningCount++;
-            } else if (row.ChildPKIsSoftForeignKey) {
-               logWarning(`    > IS-A: ${pair} — declaration accepted; note its child->parent link is a SOFT foreign key (no database constraint enforces the shared primary key).`);
-               warningCount++;
-            }
+            // No "warning" tier: any other shape (no physical FK to the parent, an FK to a
+            // different entity, a soft FK) is a VALID, WORKING IS-A — the runtime keys off
+            // ParentID, not the child PK's FK metadata. Flagging those would be inference about
+            // the author's intent that misfires on correct declarations, so we stay silent.
+            // Only provable-cannot-work defects (above) are reported.
          }
       } catch (err) {
          const errMessage = err instanceof Error ? err.message : String(err);
          logError(`    > IS-A validation failed: ${errMessage}`);
-         return { success: false, errorCount, warningCount };
+         return { success: false, errorCount };
       }
-      return { success: errorCount === 0, errorCount, warningCount };
+      return { success: errorCount === 0, errorCount };
    }
 
    /**
@@ -1132,9 +1114,6 @@ export class ManageMetadataBase {
                 ${pkCount(`child.${this.qi('ParentID')}`)} AS ${this.qi('ParentPKCount')},
                 childpk.${this.qi('Name')}                 AS ${this.qi('ChildPKName')},
                 childpk.${this.qi('Type')}                 AS ${this.qi('ChildPKType')},
-                childpk.${this.qi('RelatedEntityID')}      AS ${this.qi('ChildPKRelatedEntityID')},
-                childpk.${this.qi('IsSoftForeignKey')}     AS ${this.qi('ChildPKIsSoftForeignKey')},
-                fkTarget.${this.qi('Name')}                AS ${this.qi('ChildPKRelatedEntityName')},
                 parentpk.${this.qi('Name')}                AS ${this.qi('ParentPKName')},
                 parentpk.${this.qi('Type')}                AS ${this.qi('ParentPKType')}
          FROM ${ev} child
@@ -1145,7 +1124,6 @@ export class ManageMetadataBase {
          LEFT JOIN ${efv} parentpk  ON parentpk.${this.qi('EntityID')} = child.${this.qi('ParentID')}
                                    AND parentpk.${this.qi('IsPrimaryKey')} = ${T}
                                    AND parentpk.${this.qi('IsVirtual')} = ${F}
-         LEFT JOIN ${ev} fkTarget   ON fkTarget.${this.qi('ID')} = childpk.${this.qi('RelatedEntityID')}
          WHERE child.${this.qi('ParentID')} IS NOT NULL`;
    }
 
