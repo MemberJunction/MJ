@@ -8,11 +8,11 @@
  */
 
 import sql from 'mssql';
-import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerProviderConfigData, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DatabaseProviderBase, Metadata, SetProvider, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, Metadata, ResolveStartupMode, SetProvider, StartupManager, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { minimatch } from 'minimatch';
 
@@ -95,7 +95,10 @@ async function initializeSqlServerProvider(config: MJConfig): Promise<DatabasePr
     config.mjCoreSchema || '__mj'
   );
 
-  const sqlProvider = await setupSQLServerClient(providerConfig);
+  // CLI-style process ⇒ 'task' entry-point default: no engine pre-warm, engines lazy-load
+  // on first touch. MJ_STARTUP_MODE or mj.config.cjs startup.mode can override.
+  const startupMode = ResolveStartupMode({ configValue: config.startup?.mode, defaultMode: 'task' });
+  const sqlProvider = await setupSQLServerClient(providerConfig, { mode: startupMode.mode });
   globalProvider = sqlProvider as unknown as DatabaseProviderBase;
   return globalProvider;
 }
@@ -150,6 +153,16 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
   globalProvider = provider;
 
   await refreshUserCacheFromPG(pgPool, coreSchema);
+
+  // Run MJ startup with the same 'task' entry-point default as the SQL Server path
+  // (where setupSQLServerClient runs this internally). Previously the PG path skipped
+  // Startup() entirely — adding it initializes LocalCacheManager and makes an
+  // MJ_STARTUP_MODE=full opt-up actually pre-warm engines on PG too.
+  const startupMode = ResolveStartupMode({ configValue: config.startup?.mode, defaultMode: 'task' });
+  const sysUser = UserCache.Instance.GetSystemUser();
+  const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+  await StartupManager.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: startupMode.mode });
+
   return provider;
 }
 

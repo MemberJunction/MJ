@@ -278,6 +278,14 @@
           "primaryKey": {
             "ID": "DCF3FFDC-5304-423F-B8F2-F55EB7DB2B30"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT24 - Startup Mode",
+            "Sequence": 20,
+            "Status": "Active"
+          }
         }
       ]
     },

@@ -48,6 +48,7 @@ const GROUPS: { Tier: string; Gate: string; Enabled: boolean; Scripts: string[] 
             'api-keys-tests.ts',
             'scheduled-jobs-tests.ts',
             'field-rules-bulk-update-tests.ts',
+            'startup-mode-tests.ts',
             'open-app-teardown-tests.ts',
             'remote-operations-tests.ts',
             'ai-skills-tests.ts',

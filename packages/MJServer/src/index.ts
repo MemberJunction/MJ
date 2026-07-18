@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ResolveStartupMode } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
@@ -324,10 +324,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // Refresh user cache using PostgreSQL
     await refreshUserCacheFromPG(pgPool, mj_core_schema);
 
-    // Run startup actions
+    // Run startup actions — same 'full' entry-point default as the SQL Server path
     const sysUser = UserCache.Instance.GetSystemUser();
     const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
-    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider);
+    const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
+    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode });
 
     // Monkey-patch SQLServerDataProvider.ExecuteSQLWithPool to support PostgreSQL
     // Generated resolvers call this static method with bracket-quoted SQL.
@@ -469,7 +470,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     }
 
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
-    await setupSQLServerClient(config);
+    // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
+    // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
+    const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
+    await setupSQLServerClient(config, { mode: startupMode.mode });
     lap('Metadata + Provider Setup', tPhase);
     startupLog.BeginPhase('Initializing data provider');
     const md = new Metadata(); // global-provider-ok: bootstrap

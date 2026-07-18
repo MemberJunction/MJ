@@ -2,7 +2,7 @@ import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
 import sql from 'mssql';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
-import { RunView, LogStatus, SetProductionStatus } from '@memberjunction/core';
+import { ResolveStartupMode, RunView, LogStatus, SetProductionStatus } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { getValidatedConfig } from '../../config';
@@ -61,7 +61,10 @@ export default class ArtifactsReclassify extends Command {
             pool,
             config.coreSchema ?? '__mj',
         );
-        await setupSQLServerClient(providerConfig);
+        // One-shot CLI command ⇒ 'task' default: skip engine pre-warm; the
+        // ArtifactMetadataEngine.Config() call below lazy-loads what it needs
+        const startupMode = ResolveStartupMode({ configValue: config.startup?.mode, defaultMode: 'task' });
+        await setupSQLServerClient(providerConfig, { mode: startupMode.mode });
         const sysUser = UserCache.Instance.GetSystemUser();
         if (!sysUser) {
             spinner.fail('System user not found in UserCache.');

@@ -59,6 +59,9 @@ function toMJConfig(config: ResolvedConfig) {
     // runner and never the pool that executes the schema DROPs.
     dbRequestTimeout: config.dbRequestTimeout,
     mjCoreSchema: config.coreSchema ?? '__mj',
+    // Pass the startup section through so initializeProvider's mode resolution
+    // (CLI default 'task') can honor an explicit mj.config.cjs startup.mode.
+    startup: config.startup,
   };
 }
 

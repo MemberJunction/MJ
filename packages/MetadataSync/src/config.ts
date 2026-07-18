@@ -10,7 +10,6 @@
  * - Folder-level defaults (.mj-folder.json)
  */
 
-import { cosmiconfigSync } from 'cosmiconfig';
 import path from 'path';
 import fs from 'fs-extra';
 import { configManager } from './lib/config-manager';
@@ -48,6 +47,16 @@ export interface MJConfig {
    * schema) require raising this above the default to avoid a premature request timeout.
    */
   dbRequestTimeout?: number;
+  /**
+   * Startup section from mj.config.cjs. `mode` controls engine pre-warm during provider
+   * bootstrap: 'full' pre-warms all @RegisterForStartup engines at boot; 'task' (the
+   * CLI-process default) skips pre-warm entirely and engines lazy-load on first touch.
+   * Left as a plain string here — validation happens in ResolveStartupMode, and the
+   * MJ_STARTUP_MODE env var overrides this per invocation (highest precedence).
+   */
+  startup?: {
+    mode?: string;
+  };
   /** Schema name for MemberJunction core tables (defaults to __mj) */
   mjCoreSchema?: string;
   /** Allow additional properties for extensibility */

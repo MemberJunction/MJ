@@ -212,6 +212,18 @@ const corsSchema = z.object({
   maxAge: z.number().default(86400),
 });
 
+const startupSchema = z.object({
+  /**
+   * Startup mode for engine pre-warm: 'full' (all @RegisterForStartup engines run at boot —
+   * the right choice for MJAPI) or 'task' (no engines pre-warm; everything lazy-loads on
+   * first touch — the right choice for short-lived CLI/script processes). Because
+   * mj.config.cjs is shared by every process in a repo, this can be overridden per
+   * invocation via the MJ_STARTUP_MODE env var (highest precedence) or programmatically
+   * by each entry point. Unset ⇒ each entry point's own default applies.
+   */
+  mode: z.enum(['full', 'task']).optional(),
+});
+
 const rateLimitSchema = z.object({
   /** Master switch — when false (default), no rate limiting is applied. */
   enabled: z.boolean().default(false),
@@ -498,6 +510,7 @@ const configInfoSchema = z.object({
   feedbackSettings: feedbackSettingsSchema.optional().default({}),
   cors: corsSchema.optional().default({}),
   rateLimiting: rateLimitSchema.optional().default({}),
+  startup: startupSchema.optional().default({}),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -556,6 +569,7 @@ export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettings
 export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type CorsConfig = z.infer<typeof corsSchema>;
 export type RateLimitConfig = z.infer<typeof rateLimitSchema>;
+export type StartupConfig = z.infer<typeof startupSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**

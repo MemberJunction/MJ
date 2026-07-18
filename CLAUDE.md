@@ -1533,6 +1533,41 @@ module.exports = {
 - **Webhook Testing**: Receive callbacks from remote services during development
 - **Hybrid Deployments**: Mix local and cloud services during development/testing
 
+## Startup Mode (`startup.mode` / `MJ_STARTUP_MODE`)
+
+Every server-side MJ process boots through `StartupManager.Instance.Startup()`, which by default pre-warms every imported `@RegisterForStartup` engine. The **startup mode** makes that configurable so short-lived CLI/script processes skip the pre-warm tax:
+
+| Mode | Behavior | Default for |
+|---|---|---|
+| `full` | All registered engines run at boot — sync engines awaited in priority groups, then deferred engines fire (pre-change behavior, byte-for-byte) | MJAPI (SQL Server and PG paths) |
+| `task` | **No** registered engines execute (sync or deferred); every engine lazy-loads on first touch via its own `Config()`/`EnsureLoaded()` call. `LocalCacheManager` init still runs | MJCLI, mj-sync (`initializeProvider`), CodeGen |
+
+Skipping pre-warm is safe by construction: MJ's convention is that every engine consumer calls `await Engine.Instance.Config(false, user, provider)` at entry, which no-ops if loaded and loads on demand otherwise. Startup registration is an optimization, not a correctness requirement.
+
+### Mode resolution precedence (highest wins)
+
+1. **`MJ_STARTUP_MODE` env var** — per-invocation override, e.g. `MJ_STARTUP_MODE=full npx mj sync push`. Invalid values warn and fall through (never crash).
+2. **Programmatic option** passed by the entry point (e.g. `setupSQLServerClient(cfg, { mode: 'task' })`).
+3. **`mj.config.cjs` → `startup.mode`** — note this file is shared by every process in a repo, which is why the env var and programmatic levels outrank it.
+4. **Entry-point default** — `full` for MJAPI, `task` for CLI-style processes.
+
+Resolution lives in ONE shared helper — `ResolveStartupMode()` in `@memberjunction/core` — so every entry point behaves identically. It returns `{ mode, source }` and logs the outcome (non-verbose when an env/config override won, so a server silently switched to task mode by a shared config is visible at boot).
+
+```javascript
+// mj.config.cjs
+module.exports = {
+  startup: {
+    mode: 'task',   // 'full' | 'task' — omit to use each entry point's default
+  },
+};
+```
+
+### Trade-offs to know
+
+- **Fail-fast validators don't run in `task` mode.** `EncryptionStartupValidator` (priority 200, severity `error`) is a boot-time misconfiguration check, not a cache — in `task` mode encryption misconfiguration surfaces at first use instead of at startup. `full` mode (servers) keeps the fail-fast guarantee.
+- **First touch pays the load.** A `task`-mode process's first AI call absorbs the deferred cost — including the ~50MB local-embeddings model download/load on the first `FindSimilar*`-style call (`AIEngine.ensureEmbeddingsGenerated`). The boot log line `MJ startup: task mode — engine pre-warm skipped (N engine(s) deferred to first use)` makes this discoverable.
+- **Opt-up escape hatch**: a process booted in `task` mode can later run `StartupManager.Instance.Startup(true, user, provider, { mode: 'full' })` (`forceRefresh` bypasses the cached result). Client-side startup (`GraphQLDataProvider`, Angular shell) passes no options and always gets `full`.
+
 ## MetadataSync Package
 
 ### Validation System
