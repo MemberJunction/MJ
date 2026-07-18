@@ -19631,11 +19631,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "AF443120-81CE-403C-9749-F8F96722CA7C"
-          },
-          "sync": {
-            "lastModified": "2026-07-17T00:00:00.000Z",
-            "checksum": "ea8f34ad4c34626c4bb458998247991df9a5a086a71b8fe7b20b50f13cc54701"
+            "ID": "79C52DC9-9029-436A-993B-6C97316D2D41"
           }
         },
         {
@@ -19654,11 +19650,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "BA42E030-DA58-4F68-9512-D053EB18F6BD"
-          },
-          "sync": {
-            "lastModified": "2026-07-17T00:00:00.000Z",
-            "checksum": "8a544619eb597ff34d31b516af91b73b0a9f683be633148d2e17ba39165793e5"
+            "ID": "7D46CC51-07BC-4456-8AE8-A887105B742A"
           }
         }
       ],
@@ -19680,21 +19672,13 @@
             "CacheWritePricePerUnit": null
           },
           "primaryKey": {
-            "ID": "966F5D74-2F3E-43F4-95F4-B9B9D8BD652A"
-          },
-          "sync": {
-            "lastModified": "2026-07-17T00:00:00.000Z",
-            "checksum": "925791efeb73b7d10ae08f4d9db03465798c21246e936304787fb61bc4f0b38e"
+            "ID": "4E34EA7E-59BF-4653-A627-5990FD779803"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "A652F84E-9FE5-43A8-BC93-23617DFC624A"
-    },
-    "sync": {
-      "lastModified": "2026-07-17T00:00:00.000Z",
-      "checksum": "32fcbe24912ef9a66b365cd9dadbef216de5d69e9ee6cc6592d5c523555ee0ab"
+      "ID": "C4DD65B6-1A2F-44FF-938E-B6E2961DAF84"
     }
   },
   {
@@ -19722,11 +19706,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "91AAC2FE-8624-4FD6-83F8-56096098B49A"
-          },
-          "sync": {
-            "lastModified": "2026-07-17T00:00:00.000Z",
-            "checksum": "ea8f34ad4c34626c4bb458998247991df9a5a086a71b8fe7b20b50f13cc54701"
+            "ID": "3D61411B-90DD-4221-AB21-6FC217243AD1"
           }
         },
         {
@@ -19745,11 +19725,7 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "50D69F51-C28A-4AFE-B3E7-EE60E52C1AC3"
-          },
-          "sync": {
-            "lastModified": "2026-07-17T00:00:00.000Z",
-            "checksum": "49ce525a3e7913662d09d16ebe1727fd646b80d86e81dad43ecf318c88814efd"
+            "ID": "E050FE60-AE5D-466F-9966-283A05CBBF87"
           }
         }
       ],
@@ -19771,21 +19747,13 @@
             "CacheWritePricePerUnit": null
           },
           "primaryKey": {
-            "ID": "695767B6-1745-4B6F-A065-B50CDC875FCE"
-          },
-          "sync": {
-            "lastModified": "2026-07-17T00:00:00.000Z",
-            "checksum": "01e6943460c6e2b849129e6be62f9bb1182cf4a102dceab7ce424bddaf685678"
+            "ID": "D34ED95A-7715-49FF-8091-69B7A302733C"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "6B8B9E54-3FDC-49F7-AC39-9CD54D29EA8F"
-    },
-    "sync": {
-      "lastModified": "2026-07-17T00:00:00.000Z",
-      "checksum": "51fb9e949baf15dc88060214cbeecc0be02a1586f2898a5a9d93dc12945748ac"
+      "ID": "08C1B881-EAEF-42DB-B8F3-E621DC940C6F"
     }
   }
 ]

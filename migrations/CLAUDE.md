@@ -95,6 +95,7 @@ V[YYYYMMDDHHMM]__v[VERSION].x_[DESCRIPTION].sql
 3. **Schema changes only** - NO data manipulation beyond what's required for the schema change
 
 **NEVER INCLUDE IN MIGRATIONS:**
+- **Metadata-record inserts via `*__Metadata_Sync.sql` migrations** — metadata changes (new AI models, prompts, agents, etc.) ship ONLY as declarative JSON under `/metadata/` (with CLI-`uuidgen` primaryKey UUIDs, no `sync` blocks). At release time the build engineer runs `mj sync push` against a clean DB at the last released version, generating ONE consolidated metadata-sync migration per build (SS + PG) and writing back the `sync` blocks. Do not hand-author per-PR sync migrations. See `metadata/CLAUDE.md` rule 1b.
 - View creation/updates (handled by CodeGen)
 - EntityField inserts/updates — **including `ValueListType` and `EntityFieldValue` rows** (handled by CodeGen)
 - Entity metadata changes (handled by CodeGen)
