@@ -4039,7 +4039,28 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // Use the MJGlobal Class Factory to do our object instantiation - we do NOT use metadata for this anymore, doesn't work well to have file paths with node dynamically at runtime
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
                 try {
-                    const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this);
+                    let newObject: T | null;
+                    try {
+                        newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this);
+                    } catch (instErr) {
+                        // The highest-priority registered class for this entity failed to
+                        // construct in the current runtime context — most commonly a
+                        // server-only entity subclass (e.g. *EntityServer) instantiated
+                        // inside a client/GraphQL process, where its constructor intentionally
+                        // throws. Fall back to the generic BaseEntity (key=null skips the
+                        // subclass lookup and uses the base class), which is exactly what a
+                        // context WITHOUT that subclass registered — a real browser client —
+                        // resolves. Reads/materialization still work over the wire; only
+                        // server-only behaviors are unavailable, which is correct on the client.
+                        LogError(`GetEntityObject: the registered class for '${entityName}' failed to construct (${instErr instanceof Error ? instErr.message : String(instErr)}); falling back to BaseEntity.`);
+                        newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, null, entity, this);
+                    }
+                    if (!newObject) {
+                        // ClassFactory returned null (missing base class / null registration) —
+                        // surface a clear, actionable error rather than letting a null propagate
+                        // to a downstream `.constructor`/`.LoadFromData` crash.
+                        throw new Error(`Entity '${entityName}' could not be instantiated — MJGlobal ClassFactory returned null. Ensure LoadGeneratedEntities()/LoadCoreEntities() has run so the entity's class is registered.`);
+                    }
                     await newObject.Config(actualContextUser);
 
                     // Initialize IS-A parent entity composition chain before any data operations

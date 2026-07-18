@@ -487,6 +487,12 @@ export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(
             // awaits (both no-ops for non-IS-A entities).
             if (!prototype) {
                 prototype = await md.GetEntityObject<T>(entityName, contextUser);
+                if (!prototype) {
+                    // GetEntityObject returned null (its outer catch swallows instantiation
+                    // failures to null). Fail with a clear, actionable message rather than
+                    // dereferencing `.constructor` on null.
+                    throw new Error(`TransformSimpleObjectToEntityObject: could not instantiate an entity object for '${entityName}' — GetEntityObject returned null. The entity's registered class likely failed to construct in this context (e.g. a server-only subclass in a client process); ensure the correct client/server entity subclasses are loaded.`);
+                }
                 SubClassCtor = prototype.constructor as new (entity: EntityInfo, provider: IEntityDataProvider | null) => T;
                 prototype.LoadFromData(item);
                 results[i] = prototype;
