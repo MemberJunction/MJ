@@ -2021,6 +2021,14 @@ export class EntityFormComponentExtended extends EntityFormComponent {
 
 ## Metadata Files and mj-sync
 
+### 🚨 Release-Time Sync — Do NOT Author Metadata_Sync Migrations 🚨
+Metadata changes (new AI models, prompts, agents, lookup rows, etc.) ship as **declarative JSON only**:
+- New records include a `primaryKey` whose UUID is generated at the CLI with **`uuidgen`** (never invented/inferred) so IDs are deterministic across environments.
+- New records must **omit the `sync` block** entirely.
+- **Never hand-author a `*__Metadata_Sync.sql` migration for a PR.** At release time the build engineer takes all merged PRs on `next` and runs `mj sync push` against a clean DB at the last released version — generating ONE consolidated metadata-sync migration per build (SQL Server + PostgreSQL) and writing the `sync` blocks back into the JSON. Per-PR sync migrations duplicate that step and fragment the release into many small migrations.
+
+See `metadata/CLAUDE.md` rules 1/1b for details.
+
 ### Metadata File Organization
 The `/metadata/` directory contains declarative JSON files used by mj-sync to manage database records. Follow these conventions:
 

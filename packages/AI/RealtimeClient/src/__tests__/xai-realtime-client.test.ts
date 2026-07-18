@@ -6,12 +6,11 @@ import { IPcmMicCapture } from '../audio/micCapture';
 import { IRealtimePcmPlayback } from '../audio/pcmPlayback';
 import {
     xAIRealtimeClient,
-    XAIRealtimeEvent,
-    IxAIClientSocket,
     XAI_REALTIME_WS_URL,
     XAI_CLIENT_SECRET_SUBPROTOCOL_PREFIX,
     XAI_PCM_SAMPLE_RATE,
 } from '../drivers/xaiRealtimeClient';
+import { IOpenAIProtocolClientSocket, OpenAIProtocolServerEvent } from '../generic/openAIProtocolClient';
 import { collect, FakeMediaStream, FakeTrack } from './helpers/realtime-fakes';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
@@ -26,7 +25,7 @@ interface ParsedFrame {
 }
 
 /** Fake realtime socket: records sent frames; lets tests fire open/close/server events. */
-class FakeSocket implements IxAIClientSocket {
+class FakeSocket implements IOpenAIProtocolClientSocket {
     public onopen: (() => void) | null = null;
     public onmessage: ((data: string) => void) | null = null;
     public onerror: ((message: string) => void) | null = null;
@@ -46,7 +45,7 @@ class FakeSocket implements IxAIClientSocket {
         this.onopen?.();
     }
     /** Injects a provider server event as an inbound JSON frame. */
-    public EmitServer(event: XAIRealtimeEvent | JSONObject): void {
+    public EmitServer(event: OpenAIProtocolServerEvent | JSONObject): void {
         this.onmessage?.(JSON.stringify(event));
     }
     /** Injects a raw (possibly non-JSON) inbound frame. */
@@ -104,7 +103,7 @@ class TestxAIClient extends xAIRealtimeClient {
     /** The driver's mic-chunk callback, captured so tests can simulate worklet frames. */
     public OnPcmChunk: ((base64Pcm16: string) => void) | null = null;
 
-    protected override createSocket(url: string, subprotocol: string): IxAIClientSocket {
+    protected override createSocket(url: string, subprotocol: string): IOpenAIProtocolClientSocket {
         this.LastUrl = url;
         this.LastSubprotocol = subprotocol;
         return this.Fake;
@@ -124,7 +123,7 @@ class TestxAIClient extends xAIRealtimeClient {
     }
 
     /** Drives an inbound xAI server event through the socket handler. */
-    public Emit(event: XAIRealtimeEvent | JSONObject): void {
+    public Emit(event: OpenAIProtocolServerEvent | JSONObject): void {
         this.Fake.EmitServer(event);
     }
 }
