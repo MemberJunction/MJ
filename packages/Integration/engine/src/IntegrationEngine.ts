@@ -42,10 +42,10 @@ import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
-import { CONTENT_HASH_COLUMN, computeContentHashWithOverflow, contentHashBasis } from './ContentHash.js';
+import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
 import { buildContentHashPrefetchFilter } from './prefetchFilter.js';
 import { serializeKeyValue } from './KeySerialization.js';
-import { CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue } from './CustomOverflow.js';
+import { CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue, foldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
 import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
 import { RateLimiter } from './RateLimiter.js';
 import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
@@ -272,6 +272,38 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private static readonly activeSyncs = new Map<string, Promise<SyncResult>>();
 
     /**
+     * RSU-spec maintenance locks: while a metadata refresh / schema evolution / RSU pipeline is
+     * running for a CompanyIntegration, data syncs MUST NOT start ("locks of sync and scheduled
+     * sync must occur" — the refresh is rewriting the very metadata, field maps and DDL the sync
+     * would read). Held per-CI; RunSync refuses with a clear error while held, and the scheduled
+     * drivers skip with a logged reason. Keyed lowercase like activeSyncs.
+     */
+    private static readonly maintenanceLocks = new Map<string, { Reason: string; AcquiredAt: Date }>();
+
+    /**
+     * Acquires the maintenance lock for a CompanyIntegration. Returns false (does NOT wait) when
+     * a data sync is currently running or another maintenance operation already holds the lock —
+     * the caller decides whether to wait for `GetSyncProgress` to clear or surface the conflict.
+     */
+    public static AcquireMaintenanceLock(companyIntegrationID: string, reason: string): boolean {
+        const key = companyIntegrationID.toLowerCase();
+        if (IntegrationEngine.activeSyncs.has(key)) return false;      // a sync is mid-flight
+        if (IntegrationEngine.maintenanceLocks.has(key)) return false; // refresh already running
+        IntegrationEngine.maintenanceLocks.set(key, { Reason: reason, AcquiredAt: new Date() });
+        return true;
+    }
+
+    /** Releases the maintenance lock (idempotent — safe in a finally). */
+    public static ReleaseMaintenanceLock(companyIntegrationID: string): void {
+        IntegrationEngine.maintenanceLocks.delete(companyIntegrationID.toLowerCase());
+    }
+
+    /** Current maintenance lock for a CompanyIntegration, or undefined when none is held. */
+    public static GetMaintenanceLock(companyIntegrationID: string): { Reason: string; AcquiredAt: Date } | undefined {
+        return IntegrationEngine.maintenanceLocks.get(companyIntegrationID.toLowerCase());
+    }
+
+    /**
      * Per-engine async mutex serializing the DB-WRITE section across concurrently-synced streams.
      * When a layer runs multiple entity maps in parallel (syncConcurrency > 1), they all share ONE
      * provider connection whose transaction state is singular — so concurrent BeginTransaction /
@@ -315,6 +347,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /** Get all active sync progress entries */
     public static GetAllSyncProgress(): Map<string, SyncProgressSnapshot> {
         return new Map(IntegrationEngine._syncProgress);
+    }
+
+    /**
+     * U3 — pure, MONOTONIC progress fold: applies one per-map progress event to the live
+     * snapshot as a high-water mark. Under syncConcurrency > 1 events arrive out of order,
+     * so counters only ever ratchet UP — a progress bar must never go backwards. Totals are
+     * assigned (they're authoritative per event); completed/processed take max().
+     */
+    public static RatchetProgressSnapshot(entry: SyncProgressSnapshot, progress: SyncProgress): void {
+        entry.EntityMapsTotal = progress.TotalEntityMaps;
+        entry.EntityMapsCompleted = Math.max(entry.EntityMapsCompleted, progress.EntityMapIndex);
+        entry.RecordsProcessed = Math.max(entry.RecordsProcessed, progress.RecordsProcessedInCurrentMap);
     }
 
     /** Configurable maximum batch size. Connector batches exceeding this are truncated. */
@@ -480,6 +524,21 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             return existing;
         }
 
+        // RSU-spec: a metadata refresh / schema evolution / RSU pipeline holds the maintenance
+        // lock — a sync starting mid-refresh would read half-rewritten metadata/field maps/DDL.
+        // Refuse loudly (no queueing: the refresh may restart the process; the caller/schedule
+        // simply retries after it completes).
+        const maintenance = IntegrationEngine.maintenanceLocks.get(lockKey);
+        if (maintenance) {
+            const message = `Sync refused: ${maintenance.Reason} is in progress for this connection (since ${maintenance.AcquiredAt.toISOString()}). Retry after it completes.`;
+            console.warn(`[IntegrationEngine] ${message}`);
+            return {
+                Success: false, ErrorMessage: message, RecordsProcessed: 0, RecordsCreated: 0,
+                RecordsUpdated: 0, RecordsDeleted: 0, RecordsErrored: 0, RecordsSkipped: 0,
+                Errors: [], EntityMapResults: [], Duration: 0,
+            };
+        }
+
         // Initialize abort controller and progress tracking
         const abortController = new AbortController();
         IntegrationEngine._abortControllers.set(lockKey, abortController);
@@ -495,14 +554,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             TriggerType: triggerType,
         });
 
-        // Wrap caller's onProgress with internal tracking
+        // Wrap caller's onProgress with internal tracking. U3 — MONOTONIC: with
+        // syncConcurrency > 1 the per-map events arrive out of order (map 3 can emit after
+        // map 7), so raw assignment made the progress bar go BACKWARDS. The snapshot is a
+        // high-water mark, so only ever ratchet the counters upward.
         const wrappedProgress: OnProgressCallback = (progress) => {
             const entry = IntegrationEngine._syncProgress.get(lockKey);
-            if (entry) {
-                entry.EntityMapsTotal = progress.TotalEntityMaps;
-                entry.EntityMapsCompleted = progress.EntityMapIndex;
-                entry.RecordsProcessed = progress.RecordsProcessedInCurrentMap;
-            }
+            if (entry) IntegrationEngine.RatchetProgressSnapshot(entry, progress);
             if (onProgress) onProgress(progress);
         };
 
@@ -1134,8 +1192,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const cfgRaw = ioById.get(ioId)?.Configuration;
             if (cfgRaw) {
                 try {
-                    const cfg = JSON.parse(cfgRaw) as { parentObjectName?: string; ReferencedType?: string };
-                    for (const name of [cfg.parentObjectName, cfg.ReferencedType]) {
+                    const cfg = JSON.parse(cfgRaw) as { parentObjectName?: string; ReferencedType?: string; parentObjectNames?: Record<string, string> };
+                    const softParentNames = [cfg.parentObjectName, cfg.ReferencedType];
+                    // MULTI-LEVEL template-var children declare a per-var parent MAP
+                    // (Configuration.parentObjectNames = {"<var>":"<SiblingObject>"}) instead of the
+                    // single parentObjectName. Include those parents too, or a `/a/{x}/b/{y}/c` child
+                    // orders after only ONE of its parents — the sync DAG must gate it behind ALL of
+                    // them (parents-populated-before-child, RSU-spec §DAG). Matches what the wizard's
+                    // DependsOn exposes, so UI hint and sync ordering agree. Additive edges only
+                    // (cycle-guarded downstream), so this can only make ordering MORE correct.
+                    if (cfg.parentObjectNames && typeof cfg.parentObjectNames === 'object' && !Array.isArray(cfg.parentObjectNames)) {
+                        softParentNames.push(...Object.values(cfg.parentObjectNames).filter((v): v is string => typeof v === 'string'));
+                    }
+                    for (const name of softParentNames) {
                         const parent = name ? ioByName.get(name.toLowerCase()) : undefined;
                         if (parent && parent !== ioId && selectedIoIds.has(parent)) set.add(parent);
                     }
@@ -1593,6 +1662,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const fetchedExternalIDs = new Set<string>(); // Track all IDs seen during this pull for orphan detection
         let orphanTrackingOverflowed = false; // set if the ID set exceeds ORPHAN_DETECTION_MAX_IDS → skip the sweep, don't OOM
         const accumulatedMapped: MappedRecord[] = []; // partition-reconcile mode: collect mapped records, apply post-loop
+        // RSU-spec custom-key stats: in-memory aggregation of every UNMAPPED source key seen this
+        // run, independent of whether the row is written or content-hash-skipped. Bounded memory:
+        // one entry per distinct key + a capped value sample. See CustomKeyStat.
+        const customKeyAgg = new Map<string, CustomKeyAccumulator>();
+        let customKeyTotalRecords = 0;
 
         while (hasMore) {
             if (abortSignal?.aborted) {
@@ -1767,6 +1841,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const mapped = this.fieldMappingEngine.Apply(
                 batch.Records, fieldMaps, entityMap.Entity
             );
+            // RSU-spec custom-key stats: aggregate unmapped keys for EVERY mapped record here —
+            // before any skip decision — so candidates + sizing stats exist even when the
+            // content-hash fast path skips the row (the hash basis deliberately excludes them).
+            foldCustomKeyStats(mapped.map(r => r.UnmappedFields), customKeyAgg);
+            customKeyTotalRecords += mapped.length;
             // Partition (Merkle) reconcile defers match + apply: accumulate mapped records now; the
             // partition-diff + selective apply runs once after the full fetch (applyViaPartitionReconcile).
             if (partitionReconcile) {
@@ -1992,6 +2071,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 `records on the reachable pages were synced normally.`,
                 { skipped: true },
             );
+        }
+
+        // Surface the run's custom-key statistics (RSU-spec out-of-band candidates). Keyed by the
+        // target MJ entity so the post-sync promotion callback can line them up with its scan.
+        if (customKeyAgg.size > 0) {
+            result.CustomKeyStats = {
+                [entityMap.Entity]: [...customKeyAgg.entries()].map(([key, s]) => ({
+                    Key: key,
+                    Occurrences: s.occurrences,
+                    TotalRecords: customKeyTotalRecords,
+                    MaxLength: s.maxLength,
+                    SampleValues: s.samples,
+                })).sort((a, b) => a.Key.localeCompare(b.Key)),
+            };
         }
 
         await this.CreateRunDetail(run, entityMap, result, contextUser);
@@ -2758,7 +2851,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const buckets = partitionRecords(mappedRecords, idOf, partitionOf);
         const newRollups = new Map<string, string>();
         for (const [partition, recs] of buckets) {
-            newRollups.set(partition, partitionRollupHash(recs, r => contentHashBasis(r.MappedFields, r.UnmappedFields)));
+            // RSU-spec hash basis: MAPPED fields only — an unmapped/custom key must never move a
+            // partition rollup (its capture + promotion is handled out-of-band via CustomKeyStats).
+            newRollups.set(partition, partitionRollupHash(recs, r => r.MappedFields));
         }
 
         // Diff against last sync's snapshot; only changed/added partitions need a deep apply. On a FORCED
@@ -3236,7 +3331,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (hasHashColumn) {
                 const storedHash = entity.Get(CONTENT_HASH_COLUMN);
                 if (typeof storedHash === 'string' && storedHash.length > 0
-                    && storedHash === computeContentHashWithOverflow(record.MappedFields ?? {}, record.UnmappedFields)) {
+                    && storedHash === computeContentHash(record.MappedFields ?? {})) {
                     await this.SaveRecordMap(
                         companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                         entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
@@ -3341,7 +3436,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // below is the fallback for entities without the hash column.
         if (precheckHashes) {
             const stored = precheckHashes.get(record.MatchedMJRecordID);
-            if (stored && stored === computeContentHashWithOverflow(record.MappedFields ?? {}, record.UnmappedFields)) {
+            if (stored && stored === computeContentHash(record.MappedFields ?? {})) {
                 result.RecordsSkipped++;
                 // Re-establish the external↔MJ record map even on the content-hash skip. A record can
                 // reach UpdateRecord matched by KEY FIELDS / PK (MatchEngine.FindByKeyFields queries the
@@ -3767,12 +3862,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (hasField('__mj_integration_SyncMessage')) {
             entity.Set('__mj_integration_SyncMessage', null);
         }
-        // Content hash of the mapped values — the cheap change-detection key for
+        // Content hash of the MAPPED values only — the cheap change-detection key for
         // watermark-less sources. On the next sync, a record whose freshly-computed
         // hash equals the stored hash can be skipped without loading it (see
         // PrefetchContentHashes / UpdateRecord). No-op on tables predating the column.
+        // RSU-spec basis: unmapped/custom keys are EXCLUDED — a newly-appearing custom
+        // column must not break the row match (its capture + stats ride CustomKeyStats;
+        // promotion + the schema-change watermark reset backfill it properly). Rows whose
+        // stored hash predates this basis (overflow folded in) mismatch ONCE, rewrite, and
+        // converge on the new basis.
         if (hasField(CONTENT_HASH_COLUMN)) {
-            entity.Set(CONTENT_HASH_COLUMN, computeContentHashWithOverflow(record.MappedFields ?? {}, record.UnmappedFields));
+            entity.Set(CONTENT_HASH_COLUMN, computeContentHash(record.MappedFields ?? {}));
         }
         // Custom-overflow capture (gaps.md §2): park any source keys with no field map as JSON,
         // in THIS same row write (no extra round-trip → a customs-free sync stays byte-identical).
@@ -3935,6 +4035,34 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         if (mapResult.RecordsErrored > 0) {
             aggregate.Success = false;
+        }
+
+        // Merge custom-key stats (RSU-spec out-of-band candidates) by entity name. Two maps
+        // targeting the SAME entity merge per-key: occurrences/totals sum, max length wins,
+        // samples concat under the same bounded cap.
+        if (mapResult.CustomKeyStats) {
+            aggregate.CustomKeyStats ??= {};
+            for (const [entityName, stats] of Object.entries(mapResult.CustomKeyStats)) {
+                const existing = aggregate.CustomKeyStats[entityName];
+                if (!existing) {
+                    aggregate.CustomKeyStats[entityName] = stats;
+                    continue;
+                }
+                const byKey = new Map(existing.map(s => [s.Key, s]));
+                for (const s of stats) {
+                    const prior = byKey.get(s.Key);
+                    if (!prior) {
+                        byKey.set(s.Key, s);
+                    } else {
+                        prior.Occurrences += s.Occurrences;
+                        prior.TotalRecords += s.TotalRecords;
+                        prior.MaxLength = Math.max(prior.MaxLength, s.MaxLength);
+                        const room = 20 - prior.SampleValues.length;
+                        if (room > 0) prior.SampleValues.push(...s.SampleValues.slice(0, room));
+                    }
+                }
+                aggregate.CustomKeyStats[entityName] = [...byKey.values()].sort((a, b) => a.Key.localeCompare(b.Key));
+            }
         }
     }
 
@@ -4220,6 +4348,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 ContextUser: contextUser,
                 SyncedEntityNames: syncedEntityNames,
                 Provider: this._provider,
+                // RSU-spec: the run's in-memory custom-key candidates — needed because the
+                // overflow-column scan alone under-reports once the hash basis excludes
+                // overflow (skipped rows never write their overflow JSON).
+                CustomKeyStats: result.CustomKeyStats,
             });
         } catch (promoteErr) {
             console.warn('[IntegrationEngine] Post-sync schema promotion callback threw:', promoteErr);

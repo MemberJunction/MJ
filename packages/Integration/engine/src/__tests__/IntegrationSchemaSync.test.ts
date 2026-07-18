@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { decideBooleanOverlay, decideAbsentDeactivations, decideSchemaLimitViolations, decideLengthOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
+import { decideBooleanOverlay, decideAbsentDeactivations, decideSchemaLimitViolations, decideLengthOverlay, decideSemanticOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
 
 describe('decideLengthOverlay (U2 — width overlay grows, never shrinks)', () => {
     it('GROWS a persisted width when the rediscovered sample is wider', () => {
@@ -238,5 +238,45 @@ describe('decideSchemaLimitViolations (§B — operator/env table+column caps at
     it('within both caps -> no violation', () => {
         const v = decideSchemaLimitViolations({ TableCount: 3, ColumnCountByTable: cols(['a', 10], ['b', 20]), MaxTables: 10, MaxColumnsPerTable: 50 });
         expect(v).toEqual([]);
+    });
+});
+
+describe('decideSemanticOverlay (RSU spec — external-wins-when-present for semantic attributes)', () => {
+    it('a returned description OVERRIDES the curated one (the HubSpot example)', () => {
+        const r = decideSemanticOverlay('Curated description', 'Vendor-returned description');
+        expect(r.value).toBe('Vendor-returned description');
+        expect(r.changed).toBe(true);
+        expect(r.winner).toBe('Discovered');
+    });
+
+    it('a SILENT source keeps the curated value (undefined)', () => {
+        const r = decideSemanticOverlay('Curated description', undefined);
+        expect(r.value).toBe('Curated description');
+        expect(r.changed).toBe(false);
+        expect(r.winner).toBe('Declared');
+    });
+
+    it('a SILENT source keeps the curated value (null)', () => {
+        expect(decideSemanticOverlay('Curated', null).changed).toBe(false);
+    });
+
+    it('an EMPTY string is silence, never an instruction to blank the curated value', () => {
+        const r = decideSemanticOverlay('Curated', '');
+        expect(r.value).toBe('Curated');
+        expect(r.changed).toBe(false);
+        expect(r.winner).toBe('Declared');
+    });
+
+    it('identical values → no change, Declared credited', () => {
+        const r = decideSemanticOverlay('Same', 'Same');
+        expect(r.changed).toBe(false);
+        expect(r.winner).toBe('Declared');
+    });
+
+    it('fills an empty curated slot from the source', () => {
+        const r = decideSemanticOverlay(null, 'From describe');
+        expect(r.value).toBe('From describe');
+        expect(r.changed).toBe(true);
+        expect(r.winner).toBe('Discovered');
     });
 });

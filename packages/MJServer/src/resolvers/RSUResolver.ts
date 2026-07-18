@@ -77,6 +77,14 @@ export class RSUPipelineStepGQL {
 
     @Field(() => String)
     Message: string;
+
+    /** U11 — 1-based position within the pipeline's expected step sequence (determinate stepper). */
+    @Field(() => Int, { nullable: true })
+    StepIndex?: number;
+
+    /** U11 — expected total steps for the run. */
+    @Field(() => Int, { nullable: true })
+    StepTotal?: number;
 }
 
 @ObjectType()
@@ -158,6 +166,18 @@ export class RSUStatusGQL {
 
     @Field(() => String, { nullable: true })
     LastRunResult?: string | null;
+
+    /** U11 — name of the currently-executing pipeline step (null when idle). */
+    @Field(() => String, { nullable: true })
+    CurrentStepName?: string | null;
+
+    /** U11 — 1-based index of the current step (null when idle). Powers a determinate stepper. */
+    @Field(() => Int, { nullable: true })
+    CurrentStepIndex?: number | null;
+
+    /** U11 — expected total steps for the in-flight run (null when idle). */
+    @Field(() => Int, { nullable: true })
+    StepTotal?: number | null;
 }
 
 @ObjectType()
@@ -188,6 +208,10 @@ export class RSUResolver {
             OutOfSyncSince: status.OutOfSyncSince,
             LastRunAt: status.LastRunAt,
             LastRunResult: status.LastRunResult,
+            // U11 — live determinate step progress
+            CurrentStepName: status.CurrentStepName ?? null,
+            CurrentStepIndex: status.CurrentStepIndex ?? null,
+            StepTotal: status.StepTotal ?? null,
         };
     }
 
@@ -261,6 +285,8 @@ export class RSUResolver {
                 Status: s.Status,
                 DurationMs: s.DurationMs,
                 Message: s.Message,
+                StepIndex: s.StepIndex,
+                StepTotal: s.StepTotal,
             })),
             ErrorMessage: result.ErrorMessage,
             ErrorStep: result.ErrorStep,
@@ -307,6 +333,8 @@ export class RSUResolver {
                     Status: s.Status,
                     DurationMs: s.DurationMs,
                     Message: s.Message,
+                    StepIndex: s.StepIndex,
+                    StepTotal: s.StepTotal,
                 })),
                 ErrorMessage: result.ErrorMessage,
                 ErrorStep: result.ErrorStep,

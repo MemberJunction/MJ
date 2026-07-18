@@ -138,6 +138,14 @@ export interface RSUPipelineStep {
   Status: 'success' | 'failed' | 'skipped';
   DurationMs: number;
   Message: string;
+  /**
+   * U11 — 1-based position of this step in the pipeline's expected sequence, enabling a
+   * DETERMINATE progress stepper (index of total) instead of an indeterminate spinner.
+   * Optional/additive — absent on steps recorded before the counter engaged.
+   */
+  StepIndex?: number;
+  /** U11 — expected total steps for this pipeline run (see {@link StepIndex}). */
+  StepTotal?: number;
 }
 
 /**
@@ -217,6 +225,20 @@ export interface RSUPendingWork {
   SyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
   /** Override sync direction for the created schedule (stored in ScheduledJob.Configuration). */
   ScheduleSyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
+  /**
+   * RSU-spec remove-as-disable: what the post-restart consumer does with existing entity maps
+   * whose object is NOT in SourceObjectNames. 'disable' (default) = Status='Disabled' +
+   * SyncEnabled=false (+ field maps disabled; data kept, re-selection re-enables);
+   * 'ignore' = leave them untouched (additive/subset apply).
+   */
+  UnselectedAction?: 'disable' | 'ignore';
+  /**
+   * RSU-spec refresh diff: when true, entity maps + field maps CREATED by this pending work
+   * are born DISABLED (Status='Disabled', SyncEnabled=false) — the schema-evolution default
+   * for newly-appeared objects ("we enable nothing; the user needs to go turn them on").
+   * Existing maps are never force-disabled by this flag.
+   */
+  CreateDisabled?: boolean;
 }
 
 /**
@@ -239,6 +261,12 @@ export interface RSUStatus {
   OutOfSyncSince: Date | null;
   LastRunAt: Date | null;
   LastRunResult: string | null;
+  /** U11 — name of the step currently executing (null when idle). Powers a determinate stepper. */
+  CurrentStepName?: string | null;
+  /** U11 — 1-based index of the current step within the expected sequence (null when idle). */
+  CurrentStepIndex?: number | null;
+  /** U11 — expected total steps for the in-flight pipeline run (null when idle). */
+  StepTotal?: number | null;
 }
 
 /**
@@ -482,7 +510,42 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       OutOfSyncSince: this._outOfSyncSince,
       LastRunAt: this._lastRunAt,
       LastRunResult: this._lastRunResult,
+      // U11 — live determinate progress (index of total) for the in-flight pipeline run.
+      CurrentStepName: this._currentStepName,
+      CurrentStepIndex: this._currentStepIndex,
+      StepTotal: this._stepTotal,
     };
+  }
+
+  // ── U11 — determinate step progress ────────────────────────────────
+  /**
+   * The expected step sequence of one pipeline run (single-item batch), in execution order.
+   * Used to size the determinate stepper; per-item steps (Write/Execute) repeat per batch
+   * item, so the live total is computed per run in {@link beginStepTracking}.
+   */
+  private static readonly EXPECTED_STEPS_SHARED_PRE = ['ValidateEnvironment', 'ValidateSQL', 'AcquireLock'] as const;
+  private static readonly EXPECTED_STEPS_PER_ITEM = ['WriteMigrationFile', 'ExecuteMigration'] as const;
+  private static readonly EXPECTED_STEPS_SHARED_POST = ['WriteAdditionalSchemaInfo', 'RunCodeGen', 'CompileTypeScript', 'GitCommitAndPR', 'RestartMJAPI'] as const;
+
+  private _currentStepName: string | null = null;
+  private _currentStepIndex: number | null = null;
+  private _stepTotal: number | null = null;
+
+  /** Arms the U11 step counter for a run of `itemCount` migrations. */
+  private beginStepTracking(itemCount: number): void {
+    this._currentStepIndex = 0;
+    this._currentStepName = null;
+    this._stepTotal =
+      RuntimeSchemaManager.EXPECTED_STEPS_SHARED_PRE.length +
+      itemCount * RuntimeSchemaManager.EXPECTED_STEPS_PER_ITEM.length +
+      RuntimeSchemaManager.EXPECTED_STEPS_SHARED_POST.length;
+  }
+
+  /** Clears the U11 step counter when the run finishes (status returns to idle). */
+  private endStepTracking(): void {
+    this._currentStepName = null;
+    this._currentStepIndex = null;
+    this._stepTotal = null;
   }
 
   // ─── Pipeline ────────────────────────────────────────────────────
@@ -525,19 +588,25 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     const sharedSteps: RSUPipelineStep[] = [];
 
-    // Phase 1: Validate
-    const validationFailure = await this.validateBatch(inputs, sharedSteps);
-    if (validationFailure) return validationFailure;
+    // U11 — arm the determinate step counter (index of expected total) for this run.
+    this.beginStepTracking(inputs.length);
+    try {
+      // Phase 1: Validate
+      const validationFailure = await this.validateBatch(inputs, sharedSteps);
+      if (validationFailure) return validationFailure;
 
-    // Phase 2: Execute migrations under lock
-    const itemResults = await this.executeMigrations(inputs, sharedSteps);
+      // Phase 2: Execute migrations under lock
+      const itemResults = await this.executeMigrations(inputs, sharedSteps);
 
-    // Phase 3: Post-migration pipeline (CodeGen, compile, restart, git)
-    const successfulItems = itemResults.filter((r) => r.Success);
-    const postResult = await this.runPostMigrationPipeline(inputs, successfulItems, sharedSteps);
+      // Phase 3: Post-migration pipeline (CodeGen, compile, restart, git)
+      const successfulItems = itemResults.filter((r) => r.Success);
+      const postResult = await this.runPostMigrationPipeline(inputs, successfulItems, sharedSteps);
 
-    // Phase 4: Build per-caller results
-    return this.buildPerCallerResults(itemResults, successfulItems, sharedSteps, postResult);
+      // Phase 4: Build per-caller results
+      return this.buildPerCallerResults(itemResults, successfulItems, sharedSteps, postResult);
+    } finally {
+      this.endStepTracking();
+    }
   }
 
   /** Phase 1: Validate environment and all migration SQL. Returns a batch failure result if validation fails, null on success. */
@@ -1822,18 +1891,26 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    */
   private async runStep<T>(name: string, fn: () => Promise<T>, steps: RSUPipelineStep[]): Promise<T | undefined> {
     const start = Date.now();
-    this.rsuLog(`▶ Starting step: ${name}`);
+    // U11 — advance the live determinate counter (index of expected total) before executing,
+    // so IntegrationGetRSUProgress / RuntimeSchemaUpdateStatus report "step N of M: <name>".
+    if (this._currentStepIndex !== null) {
+      this._currentStepIndex++;
+      this._currentStepName = name;
+    }
+    const stepIndex = this._currentStepIndex ?? undefined;
+    const stepTotal = this._stepTotal ?? undefined;
+    this.rsuLog(`▶ Starting step${stepIndex && stepTotal ? ` ${stepIndex}/${stepTotal}` : ''}: ${name}`);
     try {
       const result = await fn();
       const durationMs = Date.now() - start;
       const msg = `${name} completed successfully`;
-      steps.push({ Name: name, Status: 'success', DurationMs: durationMs, Message: msg });
+      steps.push({ Name: name, Status: 'success', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
       this.rsuLog(`✓ ${name} — ${durationMs}ms`);
       return result;
     } catch (error: unknown) {
       const durationMs = Date.now() - start;
       const msg = error instanceof Error ? error.message : String(error);
-      steps.push({ Name: name, Status: 'failed', DurationMs: durationMs, Message: msg });
+      steps.push({ Name: name, Status: 'failed', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
       this.rsuLog(`✗ ${name} — FAILED after ${durationMs}ms: ${msg}`);
       return undefined;
     }

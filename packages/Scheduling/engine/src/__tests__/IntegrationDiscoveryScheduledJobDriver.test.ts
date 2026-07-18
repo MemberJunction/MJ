@@ -21,7 +21,15 @@ vi.mock('@memberjunction/core', () => ({
 
 const mockPipelineRun = vi.fn();
 vi.mock('@memberjunction/integration-engine', () => ({
-    IntegrationEngine: { Instance: { Config: vi.fn().mockResolvedValue(undefined) } },
+    IntegrationEngine: {
+        Instance: { Config: vi.fn().mockResolvedValue(undefined) },
+        // RSU-spec maintenance lock statics (the driver acquires/releases around the refresh).
+        // Plain functions (not vi.fn) so a resetAllMocks between tests can't strip the
+        // implementation and silently flip Execute onto the lock-skip path.
+        AcquireMaintenanceLock: () => true,
+        ReleaseMaintenanceLock: () => { /* no-op */ },
+        GetMaintenanceLock: () => undefined,
+    },
     ConnectorFactory: { Resolve: vi.fn().mockReturnValue({ /* connector stub */ }) },
     IntegrationConnectorCreationPipeline: class { Run(...a: unknown[]) { return mockPipelineRun(...a); } },
 }));

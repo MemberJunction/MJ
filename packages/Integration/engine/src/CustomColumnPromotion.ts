@@ -228,6 +228,21 @@ export function inferColumnTypeFromSamples(samples: unknown[]): InferredColumnTy
     return stringType(generousStringBound(longest));
 }
 
+/**
+ * Infers a column type from a sync-time custom-key statistic (RSU-spec out-of-band capture):
+ * type from the bounded value sample, string WIDTH widened to cover the TRUE longest observed
+ * value (`maxLength` — tracked across every record, while the sample is capped and may miss
+ * the widest). Same generous 2×/floor/cap sizing rules as {@link inferColumnTypeFromSamples}.
+ */
+export function inferColumnTypeFromStats(samples: unknown[], maxLength: number): InferredColumnType {
+    const inferred = inferColumnTypeFromSamples(samples);
+    if (inferred.SchemaFieldType !== 'string' || maxLength <= 0) return inferred;
+    const widened = generousStringBound(maxLength);
+    if (widened === null) return stringType(null);                                    // genuinely unboundable
+    if (inferred.MaxLength !== null && inferred.MaxLength >= widened) return inferred; // sample already covers it
+    return stringType(widened);
+}
+
 /** Builds a string {@link InferredColumnType}; bound===null ⇒ unbounded (MAX/TEXT). */
 function stringType(bound: number | null): InferredColumnType {
     if (bound === null) {

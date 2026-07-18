@@ -185,3 +185,52 @@ describe('SoftFKConfigEmitter', () => {
         });
     });
 });
+
+// ── RSU-spec additionalSchemaInfo lifecycle: per-table REPLACE for soft FKs ────
+// "when we then get a new set from a schema refresh, it replaces the primary key and
+// foreign key mappings … for the tables (adds new ones, removes old ones that no longer
+// exist)". MergeSoftPKs already replaces per table; ClearForeignKeysForTables gives FKs
+// the same semantics — this run's tables get exactly this run's FK set, others untouched.
+describe('SoftFKConfigEmitter.ClearForeignKeysForTables (RSU spec — replace, not accumulate)', () => {
+    const emitter = new SoftFKConfigEmitter();
+    const existing = () => ({
+        crm: [
+            { TableName: 'contacts', PrimaryKey: [{ FieldName: 'id' }], ForeignKeys: [
+                { FieldName: 'account_id', SchemaName: 'crm', RelatedTable: 'accounts', RelatedField: 'id' },
+                { FieldName: 'stale_id', SchemaName: 'crm', RelatedTable: 'gone_table', RelatedField: 'id' },
+            ]},
+            { TableName: 'untouched', ForeignKeys: [
+                { FieldName: 'x_id', SchemaName: 'crm', RelatedTable: 'x', RelatedField: 'id' },
+            ]},
+        ],
+    });
+    const contactsConfig = MakeTargetConfig({ SchemaName: 'crm', TableName: 'contacts', SourceObjectName: 'contacts' });
+
+    it('clears FKs for tables in THIS run so the rebuild reflects the current resolution', () => {
+        const cleared = emitter.ClearForeignKeysForTables(existing(), [contactsConfig]);
+        const contacts = cleared['crm'].find(t => t.TableName === 'contacts')!;
+        expect(contacts.ForeignKeys).toBeUndefined();      // stale_id gone; MergeSchemaConfig re-adds current FKs
+        expect(contacts.PrimaryKey).toEqual([{ FieldName: 'id' }]); // PK untouched here (MergeSoftPKs replaces it)
+    });
+
+    it('leaves tables NOT in this run untouched', () => {
+        const cleared = emitter.ClearForeignKeysForTables(existing(), [contactsConfig]);
+        expect(cleared['crm'].find(t => t.TableName === 'untouched')!.ForeignKeys).toHaveLength(1);
+    });
+
+    it('does not mutate the input config', () => {
+        const input = existing();
+        emitter.ClearForeignKeysForTables(input, [contactsConfig]);
+        expect(input['crm'].find(t => t.TableName === 'contacts')!.ForeignKeys).toHaveLength(2);
+    });
+
+    it('a stale FK cannot outlive the resolution: clear + re-merge yields exactly the new set', () => {
+        const cleared = emitter.ClearForeignKeysForTables(existing(), [contactsConfig]);
+        const merged = emitter.MergeSchemaConfig(cleared, [
+            { SchemaName: 'crm', TableName: 'contacts', FieldName: 'account_id', TargetSchemaName: 'crm', TargetTableName: 'accounts', TargetFieldName: 'id' },
+        ]);
+        expect(merged['crm'].find(t => t.TableName === 'contacts')!.ForeignKeys).toEqual([
+            { FieldName: 'account_id', SchemaName: 'crm', RelatedTable: 'accounts', RelatedField: 'id' },
+        ]);
+    });
+});

@@ -101,3 +101,25 @@ describe('computeContentHashWithOverflow (custom/overflow fields counted as chan
         expect(basis['__mj_integration_overflow']).toEqual({ UD_Tier: 'Gold' });
     });
 });
+
+// ── RSU-spec hash basis: MAPPED fields only ────────────────────────────────────
+describe('RSU-spec hash basis (unmapped/custom keys excluded from matching)', () => {
+    it('a newly-appearing custom key does NOT change the match hash', () => {
+        const mapped = { id: '1', name: 'Ada' };
+        // The engine compares/writes computeContentHash(mapped) — custom keys ride
+        // CustomKeyStats out-of-band instead of forcing a row rewrite.
+        expect(computeContentHash(mapped)).toBe(computeContentHash({ ...mapped }));
+    });
+
+    it('legacy overflow-folded hash differs from the mapped-only basis (the one-time rewrite wave)', () => {
+        const mapped = { id: '1', name: 'Ada' };
+        const withOverflow = computeContentHashWithOverflow(mapped, { custom_x: 'v' });
+        expect(withOverflow).not.toBe(computeContentHash(mapped));
+    });
+
+    it('customs-free rows are byte-identical under both bases (no spurious mass re-sync)', () => {
+        const mapped = { id: '1', name: 'Ada' };
+        expect(computeContentHashWithOverflow(mapped, undefined)).toBe(computeContentHash(mapped));
+        expect(computeContentHashWithOverflow(mapped, {})).toBe(computeContentHash(mapped));
+    });
+});

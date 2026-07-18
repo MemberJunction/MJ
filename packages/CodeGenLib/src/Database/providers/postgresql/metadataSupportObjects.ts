@@ -290,8 +290,12 @@ BEGIN
       OR COALESCE(ef."RelatedEntityID", '00000000-0000-0000-0000-000000000000'::uuid) <>
          COALESCE(re."ID", '00000000-0000-0000-0000-000000000000'::uuid)
       OR COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '')
-      OR ef."IsPrimaryKey" <> (pk."ColumnName" IS NOT NULL)
-      OR ef."IsUnique" <> (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL)
+      -- U2 — soft-PK guard: a soft primary key (IsSoftPrimaryKey, set from additionalSchemaInfo)
+      -- has NO physical PK/unique constraint, so the physical-schema comparison would flag it as
+      -- "changed" on EVERY run and the UPDATE below would wipe it. Soft-PK rows are excluded from
+      -- the PK/unique material-change predicate and their flags are frozen in the UPDATE.
+      OR (NOT ef."IsSoftPrimaryKey" AND ef."IsPrimaryKey" <> (pk."ColumnName" IS NOT NULL))
+      OR (NOT ef."IsSoftPrimaryKey" AND ef."IsUnique" <> (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL))
       OR (ef."AllowUpdateAPI" = TRUE AND sq."IsVirtual" <> 0 AND ef."IsVirtual" = FALSE)
     ) AS is_material_change,
     -- A pure Sequence renumber: persisted by the UPDATE below (renumbering is real) but NOT
@@ -345,8 +349,9 @@ BEGIN
     "Sequence"      = fr.new_sequence,
     "RelatedEntityID"        = CASE WHEN tgt."AutoUpdateRelatedEntityInfo" THEN fr.related_entity_id ELSE tgt."RelatedEntityID" END,
     "RelatedEntityFieldName" = CASE WHEN tgt."AutoUpdateRelatedEntityInfo" THEN fr.related_entity_field_name ELSE tgt."RelatedEntityFieldName" END,
-    "IsPrimaryKey"  = fr.new_is_primary_key,
-    "IsUnique"      = fr.new_is_unique,
+    -- U2 — soft-PK guard: never let the physical-schema sync wipe a soft PK's flags
+    "IsPrimaryKey"  = CASE WHEN tgt."IsSoftPrimaryKey" THEN tgt."IsPrimaryKey" ELSE fr.new_is_primary_key END,
+    "IsUnique"      = CASE WHEN tgt."IsSoftPrimaryKey" THEN tgt."IsUnique"     ELSE fr.new_is_unique     END,
     -- when a field transitions to virtual it can no longer be written to
     "AllowUpdateAPI" = CASE WHEN fr.new_is_virtual AND NOT tgt."IsVirtual" THEN FALSE ELSE tgt."AllowUpdateAPI" END,
     "__mj_UpdatedAt" = now()

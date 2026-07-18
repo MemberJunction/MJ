@@ -1218,6 +1218,19 @@ SELECT * FROM delete_result`;
      */
     private buildRecordIDFromCTE(entityInfo: EntityInfo, cteAlias: string): string {
         const pkFields = entityInfo.PrimaryKeys;
+        // U4 — keyless entity guard: an entity with NO primary key fields would interpolate an
+        // EMPTY RecordID expression into the record-change CTE, producing malformed SQL
+        // (`SELECT $N::uuid, , …` → a bare comma parse error far from the real cause). A keyless
+        // entity is a resolution/codegen defect (the RSU-spec pipeline drops PK-less objects
+        // before entity generation) — name it precisely so the operator lands on the actual
+        // problem instead of a PG syntax error.
+        if (pkFields.length === 0) {
+            throw new Error(
+                `Entity "${entityInfo.Name}" has no primary key — cannot build a RecordID for record-change tracking. ` +
+                `A keyless entity cannot be saved through the provider; resolve a (soft) primary key for it ` +
+                `(additionalSchemaInfo / IsSoftPrimaryKey) and re-run CodeGen.`
+            );
+        }
         const parts = pkFields.map(pk =>
             `'${pk.CodeName}' || '|' || ${cteAlias}.${pgDialect.QuoteIdentifier(pk.Name)}::text`
         );

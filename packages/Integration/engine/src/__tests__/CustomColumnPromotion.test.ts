@@ -227,3 +227,33 @@ describe('CustomColumnPromotion', () => {
         });
     });
 });
+
+// ── RSU-spec stats-driven type inference ───────────────────────────────────────
+import { inferColumnTypeFromStats } from '../CustomColumnPromotion';
+
+describe('inferColumnTypeFromStats (RSU spec — width from the TRUE observed maximum)', () => {
+    it('widens a string bound to cover a maxLength the capped sample missed', () => {
+        // Sample only saw short values; the true longest observed value was 300 chars.
+        const t = inferColumnTypeFromStats(['short', 'tiny'], 300);
+        expect(t.SchemaFieldType).toBe('string');
+        expect(t.MaxLength).toBeGreaterThanOrEqual(600); // generous 2× of the true max
+    });
+
+    it('keeps the sample-derived bound when it already covers maxLength', () => {
+        const long = 'x'.repeat(200);
+        const fromSamples = inferColumnTypeFromStats([long], 150);
+        expect(fromSamples.MaxLength).toBeGreaterThanOrEqual(400); // 2× of 200 from the sample
+    });
+
+    it('falls to unbounded (MAX/TEXT) when the true max cannot be bounded', () => {
+        const t = inferColumnTypeFromStats(['short'], 3000); // 2× = 6000 > 4000 cap
+        expect(t.MaxLength).toBeNull();
+        expect(t.SqlServerType).toBe('NVARCHAR(MAX)');
+    });
+
+    it('non-string inferences are untouched by maxLength', () => {
+        const t = inferColumnTypeFromStats([true, false], 999);
+        expect(t.SchemaFieldType).toBe('boolean');
+        expect(t.MaxLength).toBeNull();
+    });
+});

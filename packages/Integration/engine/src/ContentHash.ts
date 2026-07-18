@@ -40,19 +40,19 @@ export function computeContentHash(fields: Record<string, unknown>): string {
 const OVERFLOW_HASH_KEY = '__mj_integration_overflow';
 
 /**
- * The basis object a record's content hash is computed over. When the record carries CAPTURED
- * (unmapped) source fields — the ones the engine parks in `__mj_integration_CustomOverflow` —
- * they are folded in under {@link OVERFLOW_HASH_KEY} so a change to a custom/overflow field
- * counts as a real change.
+ * LEGACY basis builder — folds captured (unmapped/overflow) source fields into the hash basis
+ * under {@link OVERFLOW_HASH_KEY}. Retained for back-compat with external callers/tests, but
+ * **the engine no longer uses it for change detection** (RSU-spec rule): the match/write hash
+ * is MAPPED fields only ({@link computeContentHash}), so a newly-appearing custom column does
+ * NOT break the row match and unchanged rows stay skip-cheap. Custom keys still surface — the
+ * engine aggregates them in memory (`SyncResult.CustomKeyStats`) as promotion candidates with
+ * sizing stats regardless of row writes; once PROMOTED to a real column the key becomes a
+ * mapped field and participates in the hash natively (backfilled via the schema-change
+ * watermark reset).
  *
- * Why this exists: the original {@link computeContentHash} hashed MAPPED fields only, from an
- * era before custom-column capture — so a delta that touched ONLY unmapped/custom fields hashed
- * identically and was silently skipped (the captured overflow was never re-written). Including the
- * overflow makes change-detection cover everything that actually lands in MJ.
- *
- * Backward-compatible: a record with NO overflow returns `mappedFields` unchanged, so its hash is
- * byte-identical to the legacy basis (no spurious mass re-sync). Only records that carry overflow
- * get a new basis — and they re-sync once, correctly, on the first sync after this change.
+ * Migration note: rows whose stored hash was computed WITH overflow folded in mismatch ONCE
+ * against the mapped-only basis, rewrite, and converge — a one-time bounded rewrite wave for
+ * overflow-carrying rows only (customs-free rows are byte-identical under both bases).
  */
 export function contentHashBasis(
     mappedFields: Record<string, unknown>,
@@ -65,9 +65,9 @@ export function contentHashBasis(
 }
 
 /**
- * Content hash of a record over its MAPPED fields PLUS its captured (overflow) fields.
- * The change-detection hash for connectors that capture custom columns. Symmetric with
- * {@link contentHashBasis} — use this for the compare AND the write so they always agree.
+ * LEGACY hash over MAPPED fields PLUS captured (overflow) fields. No longer used by the
+ * engine's change detection — see {@link contentHashBasis} for the RSU-spec policy and the
+ * one-time migration behavior. Kept exported for back-compat.
  */
 export function computeContentHashWithOverflow(
     mappedFields: Record<string, unknown>,

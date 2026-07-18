@@ -52,6 +52,29 @@ export class IntegrationDiscoveryScheduledJobDriver extends BaseScheduledJob {
 
         this.log(`Starting integration DISCOVERY refresh for CompanyIntegration: ${config.CompanyIntegrationID}`);
 
+        // RSU-spec sync lock: a discovery refresh REWRITES the IO/IOF metadata a sync reads, so it
+        // holds the maintenance lock for its duration (data syncs refuse/skip while held). If a
+        // sync is currently running, SKIP this fire — the next scheduled fire refreshes normally.
+        if (!IntegrationEngine.AcquireMaintenanceLock(config.CompanyIntegrationID, 'scheduled metadata discovery refresh')) {
+            const message = `Discovery refresh skipped: a sync or another maintenance operation is currently running for this connection.`;
+            this.log(message);
+            return {
+                Success: true,
+                Details: { CompanyIntegrationID: config.CompanyIntegrationID, Skipped: true, SkipReason: message },
+            };
+        }
+        try {
+            return await this.executeRefresh(config, context);
+        } finally {
+            IntegrationEngine.ReleaseMaintenanceLock(config.CompanyIntegrationID);
+        }
+    }
+
+    /** The refresh body — runs under the maintenance lock acquired in {@link Execute}. */
+    private async executeRefresh(
+        config: IntegrationDiscoveryJobConfiguration,
+        context: ScheduledJobExecutionContext
+    ): Promise<ScheduledJobResult> {
         // Ensure the integration engine metadata is loaded (connector cache, etc.).
         await IntegrationEngine.Instance.Config(false, context.ContextUser);
 
@@ -62,6 +85,20 @@ export class IntegrationDiscoveryScheduledJobDriver extends BaseScheduledJob {
                 Success: false,
                 ErrorMessage: `CompanyIntegration "${config.CompanyIntegrationID}" not found`,
                 Details: { CompanyIntegrationID: config.CompanyIntegrationID },
+            };
+        }
+
+        // RSU-spec: deactivating a connector stops it from syncing "nor update its schema from time
+        // to time" (spec §deactivate). The sync path gates on IsActive in IntegrationEngine.RunSync,
+        // but a scheduled DISCOVERY refresh calls the creation pipeline directly and would otherwise
+        // keep rediscovering/evolving the schema of a deactivated connector. Skip when IsActive=false
+        // (boolean|null — only an explicit false skips; null/unset connections predate the flag).
+        if (ci.IsActive === false) {
+            const message = 'Discovery refresh skipped: connector is deactivated (IsActive=false).';
+            this.log(message);
+            return {
+                Success: true,
+                Details: { CompanyIntegrationID: config.CompanyIntegrationID, Skipped: true, SkipReason: message },
             };
         }
         const integration = await provider.GetEntityObject<MJIntegrationEntity>('MJ: Integrations', context.ContextUser);

@@ -177,6 +177,26 @@ export class SoftFKConfigEmitter {
     }
 
     /**
+     * RSU-spec additionalSchemaInfo lifecycle: for each table THIS run resolves, the run's
+     * FK set REPLACES the prior run's entries ("adds new ones, removes old ones that no
+     * longer exist" — soft constraints track the CURRENT resolution). Clears the ForeignKeys
+     * of every table in targetConfigs so the subsequent {@link MergeSchemaConfig} rebuilds
+     * them from exactly the current resolution; a table that lost ALL its FKs simply ends
+     * clear. Tables NOT in this run keep their entries untouched. (PrimaryKey already has
+     * replace semantics in {@link MergeSoftPKs}.)
+     */
+    ClearForeignKeysForTables(existing: AdditionalSchemaInfo, targetConfigs: TargetTableConfig[]): AdditionalSchemaInfo {
+        const result: AdditionalSchemaInfo = JSON.parse(JSON.stringify(existing));
+        for (const config of targetConfigs) {
+            const tableEntry = result[config.SchemaName]?.find(t => t.TableName === config.TableName);
+            if (tableEntry?.ForeignKeys) {
+                delete tableEntry.ForeignKeys;
+            }
+        }
+        return result;
+    }
+
+    /**
      * Produce an EmittedFile with the updated additionalSchemaInfo JSON.
      */
     EmitConfigFile(configPath: string, mergedConfig: AdditionalSchemaInfo): EmittedFile {

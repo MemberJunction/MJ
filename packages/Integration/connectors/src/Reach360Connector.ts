@@ -423,10 +423,11 @@ export class Reach360Connector extends BaseRESTIntegrationConnector {
                 Precision: f.Precision ?? null,
                 Scale: f.Scale ?? null,
                 DefaultValue: f.DefaultValue ?? null,
-                IsPrimaryKey: f.IsPrimaryKey ?? false,
+                // U1 — preserve `undefined` (no opinion); `?? false` fabricated a "not a PK/FK" opinion
+                IsPrimaryKey: f.IsPrimaryKey,
                 IsUniqueKey: f.IsUniqueKey,
                 IsReadOnly: f.IsReadOnly,
-                IsForeignKey: f.IsForeignKey ?? false,
+                IsForeignKey: f.IsForeignKey,
                 ForeignKeyTarget: f.ForeignKeyTarget ?? null,
             }));
             const relationships: SourceRelationshipInfo[] = sourceFields

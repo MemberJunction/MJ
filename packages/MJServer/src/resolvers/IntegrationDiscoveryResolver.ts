@@ -1,6 +1,7 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType, Int, Float } from "type-graphql";
 import { CompositeKey, DatabaseProviderBase, EntityInfo, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
+import { UUIDsEqual } from "@memberjunction/global";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
     MJCompanyIntegrationEntity,
@@ -52,6 +53,7 @@ import { IntegrationProgressReader } from "@memberjunction/integration-progress-
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
+import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
@@ -64,6 +66,10 @@ class RSUStepOutput {
     @Field() Status: string;
     @Field() DurationMs: number;
     @Field() Message: string;
+    /** U11 — 1-based position within the pipeline's expected step sequence (determinate stepper). */
+    @Field(() => Int, { nullable: true }) StepIndex?: number;
+    /** U11 — expected total steps for the run. */
+    @Field(() => Int, { nullable: true }) StepTotal?: number;
 }
 
 @ObjectType()
@@ -100,9 +106,10 @@ class ApplyAllInput {
     @Field({ nullable: true }) CronExpression?: string;
     @Field({ nullable: true }) ScheduleTimezone?: string;
     @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips the sync step after schema + entity maps are created' }) StartSync?: boolean;
-    @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'If true, ignores watermarks and does a full re-fetch' }) FullSync?: boolean;
+    @Field(() => Boolean, { nullable: true, description: 'If true, ignores watermarks and does a full re-fetch. When OMITTED: defaults to TRUE on the connector\'s FIRST apply (no prior entity maps — RSU-spec "always full generally as the default" for the first sync), FALSE thereafter.' }) FullSync?: boolean;
     @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
     @Field({ nullable: true, defaultValue: 'Pull', description: 'SyncDirection applied to all created entity maps: Pull | Push | Bidirectional. Defaults to Pull.' }) DefaultSyncDirection?: string;
+    @Field({ nullable: true, defaultValue: 'disable', description: 'RSU-spec remove-as-disable: what to do with existing entity maps whose object is NOT in this selection. "disable" (default) = Status=Disabled + SyncEnabled=false (+ field maps disabled; data kept, re-selection re-enables). "ignore" = leave them untouched (additive apply — use for subset/partial applies).' }) UnselectedAction?: string;
 }
 
 @ObjectType()
@@ -164,6 +171,7 @@ class ApplyAllBatchInput {
     @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
     @Field({ nullable: true, description: 'Override sync direction for the initial sync: Pull | Push | Bidirectional. Defaults to entity map SyncDirection.' }) SyncDirection?: string;
     @Field({ nullable: true, description: 'Override sync direction stored in the created schedule: Pull | Push | Bidirectional.' }) ScheduleSyncDirection?: string;
+    @Field({ nullable: true, defaultValue: 'disable', description: 'RSU-spec remove-as-disable (same as ApplyAllInput.UnselectedAction): "disable" (default) disables entity maps whose object is absent from each connector\'s selection; "ignore" leaves them untouched.' }) UnselectedAction?: string;
 }
 
 @ObjectType()
@@ -215,6 +223,14 @@ class SchemaEvolutionOutput {
     @Field({ nullable: true }) GitCommitSuccess?: boolean;
     @Field({ nullable: true }) APIRestarted?: boolean;
     @Field(() => [String], { nullable: true }) Warnings?: string[];
+    /** RSU-spec refresh diff: objects newly present in this resolution (tables created; EM/EFMs created DISABLED unless autoEnableNewObjects). */
+    @Field(() => [String], { nullable: true }) NewObjects?: string[];
+    /** RSU-spec refresh diff: objects absent from this resolution — their EM/EFMs were disabled (data kept). */
+    @Field(() => [String], { nullable: true }) RemovedObjects?: string[];
+    /** Continuing objects whose column set / constraints changed this run. */
+    @Field(() => [String], { nullable: true }) ChangedObjects?: string[];
+    /** U10 — objects whose Pull watermark was reset so the next sync backfills the schema change. */
+    @Field(() => [String], { nullable: true }) WatermarksReset?: string[];
 }
 
 // ─── Connector Capabilities Output Type ─────────────────────────────────────
@@ -829,6 +845,10 @@ class OperationProgressOutput {
     @Field({ nullable: true }) RecordsErrored?: number;
     @Field({ nullable: true }) RSUStep?: string;
     @Field({ nullable: true }) RSURunning?: boolean;
+    /** U11 — 1-based index of the current RSU step (determinate stepper). */
+    @Field(() => Int, { nullable: true }) RSUStepIndex?: number;
+    /** U11 — expected total RSU steps for the in-flight run. */
+    @Field(() => Int, { nullable: true }) RSUStepTotal?: number;
     @Field({ nullable: true }) ElapsedMs?: number;
     @Field({ nullable: true }) StartedAt?: string;
 }
@@ -979,6 +999,14 @@ class ListSourceObjectsItem {
     @Field({ nullable: true }) IntegrationObjectID?: string;
     /** True when the source system flags this as user/custom (e.g. SF __c names). */
     @Field() IsCustom: boolean;
+    /**
+     * RSU-spec DAG exposure: the source object names this object DEPENDS ON (its parents in
+     * the sync DAG — hard FK edges via RelatedIntegrationObjectID plus soft-FK declarations
+     * via Configuration.parentObjectName(s)/ReferencedType). Lets a selection UI auto-check
+     * dependencies when this object is picked and warn when a depended-on object is removed.
+     * Empty for root objects; only populated for objects with a persisted IntegrationObject row.
+     */
+    @Field(() => [String], { nullable: true }) DependsOn?: string[];
 }
 
 @ObjectType()
@@ -1117,8 +1145,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     SupportsWrite: true,
                   }) as ExternalObjectSchema);
 
+            // RSU-spec DAG exposure: per-object parent names from the same FK graph the sync
+            // engine layers by, so a consumer can auto-check dependencies at selection time.
+            const depsByName = this.computeObjectDependencyNames(companyIntegration.IntegrationID);
+
             const merged: ListSourceObjectsItem[] = sourceObjects.map(o => {
                 const existing = existingByName.get(o.Name);
+                const dependsOn = depsByName.get(o.Name.toLowerCase());
                 return {
                     Name: o.Name,
                     Label: o.Label,
@@ -1128,6 +1161,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     AlreadyPersisted: existing != null,
                     IntegrationObjectID: existing?.ID,
                     IsCustom: this.isCustomObjectName(o.Name, existing?.IsCustom),
+                    DependsOn: dependsOn && dependsOn.length > 0 ? dependsOn : undefined,
                 };
             });
             merged.sort((a, b) => a.Name.localeCompare(b.Name));
@@ -1172,6 +1206,50 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     private isCustomObjectName(name: string, existingIsCustom: boolean | undefined): boolean {
         if (existingIsCustom != null) return existingIsCustom;
         return name.endsWith('__c');
+    }
+
+    /**
+     * RSU-spec DAG exposure: object name (lowercased) → sorted parent object names, derived from
+     * the SAME dependency edges the sync engine layers by — hard FK pointers
+     * (IntegrationObjectField.RelatedIntegrationObjectID) plus soft-FK declarations in the IO's
+     * Configuration (parentObjectName / parentObjectNames map / ReferencedType). Reads the
+     * engine cache only (no DB round-trip); objects with no persisted IO row have no entry.
+     */
+    private computeObjectDependencyNames(integrationID: string): Map<string, string[]> {
+        const engine = IntegrationEngineBase.Instance;
+        const ios = engine.GetIntegrationObjectsByIntegrationID(integrationID);
+        const nameById = new Map(ios.map(io => [io.ID.toUpperCase(), io.Name] as const));
+        const byLowerName = new Map(ios.map(io => [io.Name.toLowerCase(), io] as const));
+        const deps = new Map<string, string[]>();
+        for (const io of ios) {
+            const parents = new Set<string>();
+            for (const f of engine.GetIntegrationObjectFields(io.ID)) {
+                const parentID = f.RelatedIntegrationObjectID?.toUpperCase();
+                if (!parentID || parentID === io.ID.toUpperCase()) continue;
+                const parentName = nameById.get(parentID);
+                if (parentName) parents.add(parentName);
+            }
+            const cfgRaw = (io as unknown as { Configuration?: string | null }).Configuration;
+            if (cfgRaw) {
+                try {
+                    const cfg = JSON.parse(cfgRaw) as {
+                        parentObjectName?: string; ReferencedType?: string; parentObjectNames?: Record<string, string>;
+                    };
+                    const candidates: string[] = [];
+                    if (cfg.parentObjectName) candidates.push(cfg.parentObjectName);
+                    if (cfg.ReferencedType) candidates.push(cfg.ReferencedType);
+                    if (cfg.parentObjectNames && typeof cfg.parentObjectNames === 'object' && !Array.isArray(cfg.parentObjectNames)) {
+                        candidates.push(...Object.values(cfg.parentObjectNames).filter((v): v is string => typeof v === 'string'));
+                    }
+                    for (const c of candidates) {
+                        const match = byLowerName.get(c.toLowerCase());
+                        if (match && !UUIDsEqual(match.ID, io.ID)) parents.add(match.Name);
+                    }
+                } catch { /* non-JSON Configuration → no soft-FK parents */ }
+            }
+            deps.set(io.Name.toLowerCase(), [...parents].sort());
+        }
+        return deps;
     }
 
     /**
@@ -1266,6 +1344,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("deactivateAbsent", { nullable: true, description: "Comprehensive refresh (default true): objects/fields ABSENT from this discovery are deactivated (Status='Disabled', never deleted, reversible on a later rediscovery). Pass false for a scoped/partial discovery so it never disables what it didn't probe." }) deactivateAbsent: boolean | undefined,
         @Ctx() ctx: AppContext
     ): Promise<RefreshConnectorSchemaOutput> {
+        // RSU-spec sync lock: a metadata refresh rewrites the IO/IOF rows a sync reads.
+        if (!IntegrationEngine.AcquireMaintenanceLock(companyIntegrationID, 'metadata refresh')) {
+            return {
+                Success: false, RunID: 'not-started',
+                Message: 'Refresh not started: a sync or another maintenance operation is currently running for this connection. Retry after it completes.',
+            };
+        }
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
@@ -1327,6 +1412,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Message: `Error: ${this.formatError(e)}`,
                 RunID: 'error',
             };
+        } finally {
+            IntegrationEngine.ReleaseMaintenanceLock(companyIntegrationID);
         }
     }
 
@@ -2501,6 +2588,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const user = this.getAuthenticatedUser(ctx);
             const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
 
+            // 0. RSU-spec: an integration accepts ONE OR MORE credential types — the legacy
+            // Integration.CredentialTypeID plus any IntegrationCredentialType junction rows.
+            // Validate the supplied credential's type against that allowed set (an unconstrained
+            // integration — no legacy value and no junction rows — accepts any type).
+            const allowedCheck = await this.validateCredentialTypeAllowed(input.IntegrationID, input.CredentialTypeID, user);
+            if (!allowedCheck.Allowed) {
+                return { Success: false, Message: allowedCheck.Message };
+            }
+
             // 1. Create Credential record with encrypted values
             const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
             credential.NewRecord();
@@ -3162,7 +3258,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Message: `Batch complete: ${batchResult.SuccessCount} succeeded, ${batchResult.FailureCount} failed`,
                 Items: itemResults,
                 Steps: batchResult.Results[0]?.Steps.map((s: RSUPipelineStep) => ({
-                    Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message,
+                    Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message, StepIndex: s.StepIndex, StepTotal: s.StepTotal,
                 })),
                 GitCommitSuccess: batchResult.Results[0]?.GitCommitSuccess,
                 APIRestarted: batchResult.Results[0]?.APIRestarted,
@@ -3313,6 +3409,20 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 sourceObjectFields[resolvedNames[i]] = resolved.sourceObjects[i].Fields ?? null;
             }
 
+            // RSU-spec: the sync after a connector's FIRST apply defaults to FULL ("always full
+            // generally as the default"); later applies default incremental. "First" = no entity
+            // map existed for this connection before this apply. Explicit input always wins.
+            const priorMapsResult = await new RunView().RunView<{ ID: string }>({
+                EntityName: 'MJ: Company Integration Entity Maps',
+                ExtraFilter: `CompanyIntegrationID='${input.CompanyIntegrationID.replace(/'/g, "''")}'`,
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+                BypassCache: true,
+            }, user);
+            const hadPriorMaps = priorMapsResult.Success && priorMapsResult.Results.length > 0;
+            const effectiveFullSync = input.FullSync ?? !hadPriorMaps;
+
             const pendingPayload = {
                 CompanyIntegrationID: input.CompanyIntegrationID,
                 SourceObjectNames: resolvedNames,
@@ -3321,8 +3431,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 CronExpression: input.CronExpression,
                 ScheduleTimezone: input.ScheduleTimezone,
                 StartSync: input.StartSync,
-                FullSync: input.FullSync ?? false,
+                FullSync: effectiveFullSync,
                 SyncScope: input.SyncScope ?? 'created',
+                UnselectedAction: (input.UnselectedAction ?? 'disable') as 'disable' | 'ignore',
                 CreatedAt: new Date().toISOString(),
             };
             rsuInput.PostRestartFiles = [
@@ -3335,7 +3446,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             const migrationSucceeded = batchResult.SuccessCount > 0;
             const pipelineSteps = batchResult.Results[0]?.Steps.map((s: RSUPipelineStep) => ({
-                Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message,
+                Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message, StepIndex: s.StepIndex, StepTotal: s.StepTotal,
             }));
 
             // If pipeline failed, clean up pending file and return error
@@ -3358,6 +3469,17 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user, provider,
                     input.DefaultSyncDirection ?? 'Pull'
                 );
+                // RSU-spec remove-as-disable: objects absent from THIS selection get their entity
+                // map + field maps disabled (data kept; re-selection re-enables). 'ignore' opts out
+                // for additive/subset applies (e.g. test-harness per-scope runs).
+                if ((input.UnselectedAction ?? 'disable') !== 'ignore') {
+                    const disabledObjects = await DisableUnselectedEntityMaps(
+                        input.CompanyIntegrationID, resolvedNames, user, provider
+                    );
+                    if (disabledObjects.length > 0) {
+                        console.log(`[IntegrationApplyAll] Disabled ${disabledObjects.length} unselected entity map(s): ${disabledObjects.join(', ')}`);
+                    }
+                }
                 const createdMapIDs = entityMapsCreated.map(em => em.EntityMapID).filter(Boolean);
                 const scopedMapIDs = input.SyncScope === 'all' ? undefined : createdMapIDs;
                 // Skip sync when SyncScope='created' but 0 new maps were
@@ -3367,7 +3489,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 const shouldStartSync = input.StartSync !== false &&
                     (input.SyncScope === 'all' || createdMapIDs.length > 0);
                 const syncRunID = shouldStartSync
-                    ? await this.startSyncAfterApply(input.CompanyIntegrationID, user, scopedMapIDs, input.FullSync)
+                    ? await this.startSyncAfterApply(input.CompanyIntegrationID, user, scopedMapIDs, effectiveFullSync)
                     : null;
 
                 // Create schedule if requested
@@ -3531,6 +3653,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
 
         let em: MJCompanyIntegrationEntityMapEntity;
+        const wasDisabled = existing ? existing.Status !== 'Active' || existing.SyncEnabled === false : false;
         if (existing) {
             em = existing; // reuse — keeps the map stable across re-applies
         } else {
@@ -3548,6 +3671,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         if (!await em.Save()) {
             LogError(`IntegrationApplyAll: failed to save entity map for ${obj.SourceObjectName}`);
             return null;
+        }
+
+        // RSU-spec re-add-re-enables: a previously-removed (disabled) object that is re-selected
+        // comes back WITH its field maps — the create-field-maps idempotency below skips existing
+        // rows, so without this they would stay Disabled forever.
+        if (wasDisabled) {
+            await ReenableFieldMapsForEntityMap(em.ID, user, md);
         }
 
         // Discover fields from the source and create 1:1 field maps
@@ -3854,6 +3984,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 return { Success: false, Message: 'Connector is deactivated (IsActive=false); sync not started' };
             }
 
+            // RSU-spec sync lock: refuse while a metadata refresh / schema evolution / RSU pipeline
+            // holds the maintenance lock for this connection (the engine also refuses — this gives
+            // the client an immediate, unambiguous answer).
+            const maintenance = IntegrationEngine.GetMaintenanceLock(companyIntegrationID);
+            if (maintenance) {
+                return { Success: false, Message: `Sync not started: ${maintenance.Reason} is in progress for this connection (since ${maintenance.AcquiredAt.toISOString()}). Retry after it completes.` };
+            }
+
             const syncOptions: { FullSync?: boolean; EntityMapIDs?: string[]; SyncDirection?: 'Pull' | 'Push' | 'Bidirectional' } = {};
             if (fullSync) syncOptions.FullSync = true;
             if (entityMapIDs?.length) syncOptions.EntityMapIDs = entityMapIDs;
@@ -4087,8 +4225,18 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             }
             const jobTypeID = jobTypeResult.Results[0].ID;
 
+            // U7 — SERVER-SIDE uniqueness per (CompanyIntegration, job kind/driver): a client
+            // name-regex is not a guarantee, and duplicate jobs mean duplicate sync/rediscovery
+            // runs. When an active/paused job of this kind already targets this connection,
+            // UPDATE it in place instead of creating a twin.
             const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
-            job.NewRecord();
+            const existingJob = await this.findExistingScheduledJob(jobTypeID, input.CompanyIntegrationID, user);
+            let updatedInPlace = false;
+            if (existingJob) {
+                const loaded = await job.InnerLoad(CompositeKey.FromID(existingJob.ID));
+                if (loaded) updatedInPlace = true;
+            }
+            if (!updatedInPlace) job.NewRecord();
             job.JobTypeID = jobTypeID;
             job.Name = input.Name;
             if (input.Description) job.Description = input.Description;
@@ -4120,11 +4268,91 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 await ci.Save();
             }
 
-            return { Success: true, Message: 'Schedule created', ScheduledJobID: job.ID };
+            return {
+                Success: true,
+                Message: updatedInPlace
+                    ? 'Schedule updated — an active schedule of this kind already existed for this connection (server-side uniqueness)'
+                    : 'Schedule created',
+                ScheduledJobID: job.ID,
+            };
         } catch (e) {
             LogError(`IntegrationCreateSchedule error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+    }
+
+    /**
+     * RSU-spec multi-credential-type: the supplied credential type must be in the integration's
+     * ALLOWED set = legacy Integration.CredentialTypeID ∪ IntegrationCredentialType junction rows.
+     * An integration with NO declared types (legacy null + no junction rows) accepts any type —
+     * back-compat for integrations predating credential-type declaration. UUID comparisons via
+     * UUIDsEqual (SQL Server upper / PostgreSQL lower). The junction entity may not exist yet on
+     * deployments that haven't run CodeGen post-migration — treated as "no junction rows".
+     */
+    private async validateCredentialTypeAllowed(
+        integrationID: string,
+        credentialTypeID: string,
+        user: UserInfo
+    ): Promise<{ Allowed: boolean; Message: string }> {
+        const allowed: string[] = [];
+        const esc = (s: string) => s.replace(/'/g, "''");
+        const rv = new RunView();
+
+        const integ = await rv.RunView<{ CredentialTypeID: string | null }>({
+            EntityName: 'MJ: Integrations',
+            ExtraFilter: `ID='${esc(integrationID)}'`,
+            Fields: ['CredentialTypeID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, user);
+        if (integ.Success && integ.Results[0]?.CredentialTypeID) allowed.push(integ.Results[0].CredentialTypeID);
+
+        try {
+            const junction = await rv.RunView<{ CredentialTypeID: string }>({
+                EntityName: 'MJ: Integration Credential Types',
+                ExtraFilter: `IntegrationID='${esc(integrationID)}'`,
+                Fields: ['CredentialTypeID'],
+                ResultType: 'simple',
+            }, user);
+            if (junction.Success) allowed.push(...junction.Results.map(r => r.CredentialTypeID));
+        } catch {
+            // Junction entity not registered yet (pre-CodeGen deployment) → legacy-only validation.
+        }
+
+        if (allowed.length === 0) return { Allowed: true, Message: '' };
+        if (allowed.some(id => UUIDsEqual(id, credentialTypeID))) return { Allowed: true, Message: '' };
+        return {
+            Allowed: false,
+            Message: `Credential type ${credentialTypeID} is not accepted by this integration — it declares ${allowed.length} allowed credential type(s). Supply one of the integration's declared credential types.`,
+        };
+    }
+
+    /**
+     * U7 — server-side schedule uniqueness: finds an existing (non-deleted) scheduled job of the
+     * given job type that targets the given CompanyIntegration (its Configuration JSON carries
+     * CompanyIntegrationID). Matched case-insensitively across UUID casings (SQL Server upper /
+     * PostgreSQL lower). Returns the newest match or null.
+     */
+    private async findExistingScheduledJob(
+        jobTypeID: string,
+        companyIntegrationID: string,
+        user: UserInfo
+    ): Promise<{ ID: string } | null> {
+        const esc = (s: string) => s.replace(/'/g, "''");
+        const lower = esc(companyIntegrationID.toLowerCase());
+        const upper = esc(companyIntegrationID.toUpperCase());
+        const result = await new RunView().RunView<{ ID: string }>({
+            EntityName: 'MJ: Scheduled Jobs',
+            ExtraFilter:
+                `JobTypeID='${esc(jobTypeID)}' AND Status IN ('Active','Paused') AND ` +
+                `(Configuration LIKE '%${lower}%' OR Configuration LIKE '%${upper}%')`,
+            OrderBy: '__mj_CreatedAt DESC',
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+            BypassCache: true, // uniqueness must see committed jobs, not a stale filtered cache
+        }, user);
+        return result.Success && result.Results.length > 0 ? result.Results[0] : null;
     }
 
     @Mutation(() => MutationResultOutput)
@@ -4491,7 +4719,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     OperationType: 'rsu',
                     IsRunning: true,
                     RSURunning: true,
-                    RSUStep: rsuStatus.LastRunResult ?? 'running',
+                    // U11 — determinate "step N of M: <name>" instead of an indeterminate spinner
+                    RSUStep: rsuStatus.CurrentStepName ?? rsuStatus.LastRunResult ?? 'running',
+                    RSUStepIndex: rsuStatus.CurrentStepIndex ?? undefined,
+                    RSUStepTotal: rsuStatus.StepTotal ?? undefined,
                     StartedAt: rsuStatus.LastRunAt?.toISOString(),
                     ElapsedMs: rsuStatus.LastRunAt ? Date.now() - rsuStatus.LastRunAt.getTime() : undefined,
                 };
@@ -5055,6 +5286,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         SyncScope: input.SyncScope ?? 'created',
                         SyncDirection: input.SyncDirection,
                         ScheduleSyncDirection: input.ScheduleSyncDirection,
+                        UnselectedAction: (input.UnselectedAction ?? 'disable') as 'disable' | 'ignore',
                         CreatedAt: new Date().toISOString(),
                     };
                     rsuInput.PostRestartFiles = [
@@ -5190,7 +5422,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             }
 
             const pipelineSteps = batchResult.Results[0]?.Steps.map((s: RSUPipelineStep) => ({
-                Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message,
+                Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message, StepIndex: s.StepIndex, StepTotal: s.StepTotal,
             }));
 
             const successCount = connectorResults.filter(r => r.Success).length;
@@ -5242,8 +5474,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             }
             const jobTypeID = jobTypeResult.Results[0].ID;
 
+            // U7 — same server-side uniqueness as IntegrationCreateSchedule: update the existing
+            // sync job for this connection in place rather than creating a duplicate.
             const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
-            job.NewRecord();
+            const existingJob = await this.findExistingScheduledJob(jobTypeID, companyIntegrationID, user);
+            const loadedExisting = existingJob ? await job.InnerLoad(CompositeKey.FromID(existingJob.ID)) : false;
+            if (!loadedExisting) job.NewRecord();
             job.JobTypeID = jobTypeID;
             job.Name = `${integrationName} Sync`;
             job.CronExpression = cronExpression;
@@ -5492,8 +5728,18 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
         @Arg("skipGitCommit", { defaultValue: false }) skipGitCommit: boolean,
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
+        @Arg("autoEnableNewObjects", { defaultValue: false, description: 'RSU-spec: newly-appeared objects get their entity maps created DISABLED by default (the user enables them after the refresh). Pass true to auto-enable them instead.' }) autoEnableNewObjects: boolean,
+        @Arg("deactivateAbsent", { nullable: true, description: 'Deactivate IO/IOF absent from this re-discovery (default true — comprehensive refresh; gated on the connector\'s authoritative-discovery getter).' }) deactivateAbsent: boolean | undefined,
         @Ctx() ctx: AppContext
     ): Promise<SchemaEvolutionOutput> {
+        // RSU-spec sync lock: schema evolution rewrites the metadata, field maps and DDL a sync
+        // reads — data syncs (manual + scheduled) must not run while this is in flight.
+        if (!IntegrationEngine.AcquireMaintenanceLock(companyIntegrationID, 'schema evolution')) {
+            return {
+                Success: false, HasChanges: false,
+                Message: 'Schema evolution not started: a sync or another maintenance operation is currently running for this connection. Retry after it completes.',
+            };
+        }
         try {
             const user = this.getAuthenticatedUser(ctx);
             const validatedPlatform = this.validatePlatform(platform);
@@ -5502,25 +5748,67 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const schemaName = this.deriveSchemaName(companyIntegration.Integration);
             const rv = new RunView();
 
-            // Step 1: Get existing entity maps for this CompanyIntegration
-            const entityMapsResult = await rv.RunView<MJCompanyIntegrationEntityMapEntity>({
+            // ── Phase 1 — FULL RE-RESOLUTION (RSU spec: "the exact same algorithm as before") ──
+            // Re-run the creation pipeline: introspect (static + runtime discovery), persist with
+            // the external-wins-when-present overlay, deactivate absent (gated on authoritative
+            // discovery), PK-classify the residual. The diff below is computed against the
+            // RESULT of this resolution, exactly as the first-time flow computed its state.
+            const pipeline = new IntegrationConnectorCreationPipeline();
+            const refresh = await pipeline.Run({
+                Connector: connector,
+                CompanyIntegration: companyIntegration,
+                ContextUser: user,
+                Provider: md,
+                TriggerType: 'Manual',
+                ConsoleMirror: true,
+                DeactivateAbsent: deactivateAbsent ?? this.readConfigBool(companyIntegration.Configuration, 'deactivateAbsent') ?? true,
+            } as unknown as Parameters<typeof pipeline.Run>[0]);
+            if (!refresh.Success) {
+                return { Success: false, HasChanges: false, Message: `Schema evolution aborted — metadata re-resolution failed: ${refresh.FailureMessage ?? 'unknown error'}` };
+            }
+            await md.Refresh();
+            await IntegrationEngine.Instance.Config(true, user, md);
+
+            // ── Phase 2 — DIFF: resolved-Active objects vs prior entity maps ──
+            const activeIOs = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(companyIntegration.IntegrationID);
+            const activeNamesLower = new Set(activeIOs.map(o => o.Name.toLowerCase()));
+            const priorMapsResult = await rv.RunView<MJCompanyIntegrationEntityMapEntity>({
                 EntityName: 'MJ: Company Integration Entity Maps',
                 ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
-                ResultType: 'simple',
-                Fields: ['ID', 'ExternalObjectName', 'EntityID']
+                ResultType: 'entity_object',
+                BypassCache: true, // the diff must read committed state
             }, user);
+            const priorMaps = priorMapsResult.Success ? priorMapsResult.Results : [];
+            const priorByLowerName = new Map(priorMaps.map(m => [(m.ExternalObjectName ?? '').toLowerCase(), m] as const));
 
-            if (!entityMapsResult.Success || entityMapsResult.Results.length === 0) {
-                return {
-                    Success: false, Message: 'No entity maps found — nothing to evolve',
-                    HasChanges: false,
-                };
+            const newObjects = activeIOs.filter(io => !priorByLowerName.has(io.Name.toLowerCase())).map(io => io.Name);
+            const removedObjects = priorMaps
+                .filter(m => m.ExternalObjectName && !activeNamesLower.has(m.ExternalObjectName.toLowerCase()))
+                .map(m => m.ExternalObjectName as string);
+            const continuingMaps = priorMaps.filter(m => m.ExternalObjectName && activeNamesLower.has(m.ExternalObjectName.toLowerCase()));
+
+            // ── Phase 3 — REMOVED objects: disable EM + EFMs (data + tables KEPT) ──
+            // Uses the same remove-as-disable helper as ApplyAll: everything not in the resolved
+            // set is disabled; a later re-appearance re-enables (reactivate-on-rediscover).
+            if (removedObjects.length > 0) {
+                await DisableUnselectedEntityMaps(companyIntegrationID, activeIOs.map(io => io.Name), user, md);
             }
 
-            const sourceObjectNames = entityMapsResult.Results.map(em => em.ExternalObjectName);
-            const objects = this.buildObjectInputsFromNames(sourceObjectNames, schemaName);
+            // ── Phase 4 — schema build over continuing + new objects ──
+            const evolveNames = [...continuingMaps.map(m => m.ExternalObjectName as string), ...newObjects];
+            if (evolveNames.length === 0) {
+                return {
+                    Success: true, HasChanges: removedObjects.length > 0,
+                    Message: removedObjects.length > 0
+                        ? `No objects to evolve — ${removedObjects.length} removed object(s) disabled`
+                        : 'No entity maps and no resolved objects — nothing to evolve',
+                    RemovedObjects: removedObjects.length > 0 ? removedObjects : undefined,
+                };
+            }
+            const objects = this.buildObjectInputsFromNames(evolveNames, schemaName);
 
-            // Step 2: Build ExistingTables from Metadata.Entities matching the schema
+            // Build ExistingTables from Metadata.Entities matching the schema (continuing objects
+            // have a table; new objects don't — SchemaBuilder CREATEs those, ALTERs the rest)
             const existingTables: ExistingTableInfo[] = [];
             for (const obj of objects) {
                 const entityInfo = md.Entities.find(
@@ -5543,14 +5831,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             }
 
-            // Step 3: Introspect current schema from connector
-            const introspect = connector.IntrospectSchema.bind(connector) as
-                (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
-            const sourceSchema = await introspect(companyIntegration, user);
+            // Source of truth for the evolution = the PERSISTED post-resolution rows (the refresh in
+            // Phase 1 just wrote them via the overlay) — no duplicate vendor introspect.
+            const sourceSchema = this.buildSourceSchemaFromPersistedRows(companyIntegration.IntegrationID);
 
             // Normalize names to match source schema casing
             const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
-            const normalizedNames = sourceObjectNames.map(n => nameMap.get(n.toLowerCase()) ?? n);
+            const normalizedNames = evolveNames.map(n => nameMap.get(n.toLowerCase()) ?? n);
             // Also normalize the objects array SourceObjectName
             for (const obj of objects) {
                 const exact = nameMap.get(obj.SourceObjectName.toLowerCase());
@@ -5562,7 +5849,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
             };
 
-            // Step 4: Build target configs and SchemaBuilder input with ExistingTables
+            // Build target configs and SchemaBuilder input with ExistingTables
             const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform, connector);
 
             const schemaInput: SchemaBuilderInput = {
@@ -5578,7 +5865,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntitySettingsForTargets: {}
             };
 
-            // Step 5: Build schema — SchemaBuilder handles evolution (ALTER TABLE) internally
+            // ── Phase 5 — build schema (SchemaBuilder CREATEs new tables, ALTERs changed ones) ──
             const builder = new SchemaBuilder();
             const schemaOutput = builder.BuildSchema(schemaInput);
 
@@ -5591,19 +5878,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 };
             }
 
-            // Step 6: Check if any migration SQL was generated
-            if (schemaOutput.MigrationFiles.length === 0) {
-                return {
-                    Success: true,
-                    Message: 'No schema changes detected',
-                    HasChanges: false,
-                    Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
-                };
-            }
-
-            // Step 7: Count added/modified columns by re-diffing
+            // Per-object DDL diff for CHANGED detection (drives U10 watermark resets + reporting)
             let addedColumns = 0;
             let modifiedColumns = 0;
+            const changedObjects: string[] = [];
             const evolution = new SchemaEvolution();
             for (const existing of existingTables) {
                 const config = targetConfigs.find(
@@ -5616,39 +5894,219 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 const diff = evolution.DiffSchema(sourceObj, config, existing, validatedPlatform);
                 addedColumns += diff.AddedColumns.length;
                 modifiedColumns += diff.ModifiedColumns.length;
+                if (diff.AddedColumns.length > 0 || diff.ModifiedColumns.length > 0) {
+                    changedObjects.push(config.SourceObjectName);
+                }
             }
 
-            // Step 8: Run RSU pipeline
-            const rsuInput = builder.BuildRSUInput(schemaOutput, schemaInput, {
-                SkipGitCommit: skipGitCommit,
-                SkipRestart: skipRestart,
-            });
+            // ── Phase 6 — reconcile CONTINUING maps' field maps to the resolution ──
+            // Added source fields get field maps (Active on enabled maps, Disabled on disabled
+            // maps); field maps whose source field vanished from the resolution are disabled.
+            // Field maps carry no entity FK, so this is restart-safe done here, pre-RSU.
+            const iosByLowerName = new Map(activeIOs.map(io => [io.Name.toLowerCase(), io] as const));
+            for (const em of continuingMaps) {
+                const io = iosByLowerName.get((em.ExternalObjectName ?? '').toLowerCase());
+                if (!io) continue;
+                const fmChanges = await this.reconcileFieldMapsForEntityMap(em, io.ID, user, md);
+                if ((fmChanges.Added > 0 || fmChanges.Disabled > 0) && em.ExternalObjectName && !changedObjects.includes(em.ExternalObjectName)) {
+                    changedObjects.push(em.ExternalObjectName);
+                }
+            }
 
-            const rsm = RuntimeSchemaManager.Instance;
-            const batchResult = await rsm.RunPipelineBatch([rsuInput]);
+            // ── Phase 7 — U10: reset the Pull watermark of every CHANGED object so the next sync
+            // full-fetches + backfills the schema change (content-hash bounds the rewrite cost).
+            const changedLower = new Set(changedObjects.map(n => n.toLowerCase()));
+            const changedMapIDs = continuingMaps
+                .filter(m => m.ExternalObjectName && changedLower.has(m.ExternalObjectName.toLowerCase()))
+                .map(m => m.ID);
+            const resetMapIDs = await ResetPullWatermarks(changedMapIDs, user, md);
+            const watermarksReset = continuingMaps
+                .filter(m => resetMapIDs.some(id => UUIDsEqual(id, m.ID)))
+                .map(m => m.ExternalObjectName as string);
 
-            const pipelineResult = batchResult.Results[0];
-            const pipelineSteps = pipelineResult?.Steps.map((s: RSUPipelineStep) => ({
-                Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message,
-            }));
+            const hasDDLChanges = schemaOutput.MigrationFiles.length > 0;
+            const hasChanges = hasDDLChanges || newObjects.length > 0 || removedObjects.length > 0 || changedObjects.length > 0;
+            if (!hasChanges) {
+                return {
+                    Success: true,
+                    Message: 'No schema changes detected',
+                    HasChanges: false,
+                    Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
+                };
+            }
+
+            // ── Phase 8 — run RSU when DDL changed (migrate → codegen → commit → compile → restart) ──
+            let pipelineSteps: RSUStepOutput[] | undefined;
+            let gitCommitSuccess: boolean | undefined;
+            let apiRestarted: boolean | undefined;
+            if (hasDDLChanges) {
+                const rsuInput = builder.BuildRSUInput(schemaOutput, schemaInput, {
+                    SkipGitCommit: skipGitCommit,
+                    SkipRestart: skipRestart,
+                });
+
+                // NEW objects need entities (post-codegen/restart) before their entity maps can be
+                // created — hand them to the post-restart consumer via the SAME pending-work channel
+                // ApplyAll uses. RSU-spec default: created DISABLED (user enables after the refresh);
+                // autoEnableNewObjects opts in. Removal was already handled in Phase 3 → 'ignore'.
+                if (newObjects.length > 0 && !skipRestart) {
+                    const { join } = await import('node:path');
+                    const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
+                    const pendingFilePath = join(rsuWorkDir, '.rsu_pending', `${Date.now()}-evolution.json`);
+                    rsuInput.PostRestartFiles = [
+                        ...(rsuInput.PostRestartFiles ?? []),
+                        {
+                            Path: pendingFilePath,
+                            Content: JSON.stringify({
+                                CompanyIntegrationID: companyIntegrationID,
+                                SourceObjectNames: newObjects,
+                                SourceObjectFields: Object.fromEntries(newObjects.map(n => [n, null])),
+                                SchemaName: schemaName,
+                                StartSync: false,
+                                SyncScope: 'created',
+                                UnselectedAction: 'ignore',
+                                CreateDisabled: !autoEnableNewObjects,
+                                CreatedAt: new Date().toISOString(),
+                            }, null, 2),
+                        },
+                    ];
+                }
+
+                const rsm = RuntimeSchemaManager.Instance;
+                const batchResult = await rsm.RunPipelineBatch([rsuInput]);
+                const pipelineResult = batchResult.Results[0];
+                pipelineSteps = pipelineResult?.Steps.map((s: RSUPipelineStep) => ({
+                    Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message, StepIndex: s.StepIndex, StepTotal: s.StepTotal,
+                }));
+                gitCommitSuccess = pipelineResult?.GitCommitSuccess;
+                apiRestarted = pipelineResult?.APIRestarted;
+                if (!pipelineResult?.Success) {
+                    return {
+                        Success: false,
+                        Message: `Pipeline failed: ${pipelineResult?.ErrorMessage ?? 'unknown error'}`,
+                        HasChanges: true,
+                        AddedColumns: addedColumns,
+                        ModifiedColumns: modifiedColumns,
+                        Steps: pipelineSteps,
+                        NewObjects: newObjects.length > 0 ? newObjects : undefined,
+                        RemovedObjects: removedObjects.length > 0 ? removedObjects : undefined,
+                        ChangedObjects: changedObjects.length > 0 ? changedObjects : undefined,
+                        Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
+                    };
+                }
+
+                // skipRestart=true: entities exist after provider.Refresh() — create the new
+                // objects' entity maps inline, then apply the disabled-by-default rule.
+                if (newObjects.length > 0 && skipRestart) {
+                    await md.Refresh();
+                    const newObjectInputs = objects.filter(o => newObjects.some(n => n.toLowerCase() === o.SourceObjectName.toLowerCase()));
+                    const created = await this.createEntityAndFieldMaps(
+                        companyIntegrationID, newObjectInputs, connector, companyIntegration, schemaName, user, md, 'Pull'
+                    );
+                    if (!autoEnableNewObjects) {
+                        for (const c of created) {
+                            if (c.EntityMapID) await SetEntityMapEnabled(c.EntityMapID, false, user, md);
+                        }
+                    }
+                }
+            }
+
+            const summary = [
+                newObjects.length > 0 ? `${newObjects.length} new object(s) (${autoEnableNewObjects ? 'enabled' : 'created disabled'})` : null,
+                removedObjects.length > 0 ? `${removedObjects.length} removed object(s) disabled` : null,
+                changedObjects.length > 0 ? `${changedObjects.length} changed object(s), ${addedColumns} column(s) added, ${modifiedColumns} modified` : null,
+                watermarksReset.length > 0 ? `${watermarksReset.length} watermark(s) reset for backfill` : null,
+            ].filter(Boolean).join('; ');
 
             return {
-                Success: pipelineResult?.Success ?? false,
-                Message: pipelineResult?.Success
-                    ? `Schema evolution applied — ${addedColumns} column(s) added, ${modifiedColumns} column(s) modified`
-                    : `Pipeline failed: ${pipelineResult?.ErrorMessage ?? 'unknown error'}`,
+                Success: true,
+                Message: `Schema evolution applied — ${summary || 'no per-object deltas'}`,
                 HasChanges: true,
                 AddedColumns: addedColumns,
                 ModifiedColumns: modifiedColumns,
                 Steps: pipelineSteps,
-                GitCommitSuccess: pipelineResult?.GitCommitSuccess,
-                APIRestarted: pipelineResult?.APIRestarted,
+                GitCommitSuccess: gitCommitSuccess,
+                APIRestarted: apiRestarted,
+                NewObjects: newObjects.length > 0 ? newObjects : undefined,
+                RemovedObjects: removedObjects.length > 0 ? removedObjects : undefined,
+                ChangedObjects: changedObjects.length > 0 ? changedObjects : undefined,
+                WatermarksReset: watermarksReset.length > 0 ? watermarksReset : undefined,
                 Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
             };
         } catch (e) {
             LogError(`IntegrationSchemaEvolution error: ${e}`);
             return { Success: false, Message: this.formatError(e), HasChanges: false };
+        } finally {
+            IntegrationEngine.ReleaseMaintenanceLock(companyIntegrationID);
         }
+    }
+
+    /**
+     * RSU-spec refresh diff (continuing objects): reconciles one entity map's field maps to the
+     * post-resolution IOF set — source fields WITHOUT a field map get one created (Active when
+     * the map is enabled, Disabled when it isn't), and field maps whose source field is no
+     * longer Active in the resolution are DISABLED (never deleted — a later re-appearance
+     * re-enables via the same reconciliation, since a disabled FM whose field returns flips
+     * back with SetFieldMapsStatus on re-enable or is simply left disabled until then).
+     */
+    private async reconcileFieldMapsForEntityMap(
+        em: MJCompanyIntegrationEntityMapEntity,
+        integrationObjectID: string,
+        user: UserInfo,
+        md: IMetadataProvider
+    ): Promise<{ Added: number; Disabled: number }> {
+        const result = { Added: 0, Disabled: 0 };
+        const activeFields = IntegrationEngineBase.Instance
+            .GetIntegrationObjectFields(integrationObjectID)
+            .filter(f => f.Status === 'Active');
+        const activeFieldNames = new Set(activeFields.map(f => f.Name.toLowerCase()));
+        const mapEnabled = em.Status === 'Active' && em.SyncEnabled === true;
+
+        const fms = await new RunView().RunView<MJCompanyIntegrationFieldMapEntity>({
+            EntityName: 'MJ: Company Integration Field Maps',
+            ExtraFilter: `EntityMapID='${em.ID}'`,
+            ResultType: 'entity_object',
+            BypassCache: true,
+        }, user);
+        const existingByLower = new Map(
+            (fms.Success ? fms.Results : []).map(fm => [(fm.SourceFieldName ?? '').toLowerCase(), fm] as const)
+        );
+
+        // Added source fields → new field maps (state follows the map's enabled state)
+        for (const field of activeFields) {
+            const existing = existingByLower.get(field.Name.toLowerCase());
+            if (existing) {
+                // Field is back in the resolution — re-enable a previously-disabled map row.
+                if (existing.Status !== 'Active' && mapEnabled) {
+                    existing.Status = 'Active';
+                    if (await existing.Save()) result.Added++; // counted as a change for reporting
+                }
+                continue;
+            }
+            const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps', user);
+            fm.NewRecord();
+            fm.EntityMapID = em.ID;
+            fm.SourceFieldName = field.Name;
+            fm.DestinationFieldName = field.Name.replace(/[^A-Za-z0-9_]/g, '_');
+            fm.IsKeyField = field.IsUniqueKey === true;
+            fm.IsRequired = field.IsRequired === true;
+            fm.Direction = 'SourceToDest';
+            fm.Status = mapEnabled ? 'Active' : 'Inactive';
+            fm.Priority = 0;
+            if (await fm.Save()) result.Added++;
+            else LogError(`[IntegrationSchemaEvolution] Failed to create field map '${field.Name}' on ${em.ExternalObjectName}: ${fm.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+
+        // Vanished source fields → disable their field maps (data/columns kept)
+        for (const [lowerName, fm] of existingByLower) {
+            if (activeFieldNames.has(lowerName)) continue;
+            if (fm.Status === 'Inactive') continue;
+            fm.Status = 'Inactive';
+            if (await fm.Save()) result.Disabled++;
+            else LogError(`[IntegrationSchemaEvolution] Failed to disable field map '${fm.SourceFieldName}' on ${em.ExternalObjectName}: ${fm.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+
+        return result;
     }
 
     // ── WEBHOOK HELPER ──────────────────────────────────────────────────

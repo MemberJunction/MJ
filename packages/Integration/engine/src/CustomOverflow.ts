@@ -80,6 +80,48 @@ export function hasUnmappedFields(unmapped: Record<string, unknown> | undefined 
     return unmapped != null && Object.keys(unmapped).length > 0;
 }
 
+/** Mutable per-key accumulator used by {@link foldCustomKeyStats}. */
+export interface CustomKeyAccumulator {
+    occurrences: number;
+    maxLength: number;
+    samples: unknown[];
+}
+
+/** Max sample values retained per custom key during sync-time aggregation (bounded memory). */
+export const CUSTOM_KEY_SAMPLE_CAP = 20;
+
+/**
+ * RSU-spec out-of-band custom-key aggregation: folds one batch of unmapped-field objects into
+ * the per-map accumulator — BEFORE any skip decision, so candidates + sizing stats exist even
+ * when the content-hash fast path skips every row (the match hash deliberately excludes
+ * unmapped keys). Pure over its inputs (mutates only `agg`); null/undefined values don't count
+ * as an occurrence; the per-key value sample is capped for bounded memory. `maxLength` tracks
+ * the TRUE longest observed serialized value across every record — the generous-width input
+ * for the eventual promoted column.
+ */
+export function foldCustomKeyStats(
+    unmappedBatch: Array<Record<string, unknown> | undefined | null>,
+    agg: Map<string, CustomKeyAccumulator>,
+): void {
+    for (const unmapped of unmappedBatch) {
+        if (!unmapped) continue;
+        for (const [key, value] of Object.entries(unmapped)) {
+            if (value === null || value === undefined) continue;
+            let entry = agg.get(key);
+            if (!entry) {
+                entry = { occurrences: 0, maxLength: 0, samples: [] };
+                agg.set(key, entry);
+            }
+            entry.occurrences++;
+            const serialized = typeof value === 'string'
+                ? value
+                : typeof value === 'object' ? JSON.stringify(value) : String(value);
+            if (serialized.length > entry.maxLength) entry.maxLength = serialized.length;
+            if (entry.samples.length < CUSTOM_KEY_SAMPLE_CAP) entry.samples.push(value);
+        }
+    }
+}
+
 /**
  * U4 — the value to write to the overflow column when a record is synced: this record's CURRENT
  * unmapped keys as JSON, or `null` when it has none. Returning `null` (instead of skipping the write)

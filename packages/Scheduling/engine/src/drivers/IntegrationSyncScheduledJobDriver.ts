@@ -46,6 +46,20 @@ export class IntegrationSyncScheduledJobDriver extends BaseScheduledJob {
 
         this.log(`Starting integration sync for CompanyIntegration: ${config.CompanyIntegrationID}`);
 
+        // RSU-spec sync lock: skip this scheduled run while a metadata refresh / schema evolution /
+        // RSU pipeline holds the maintenance lock for this connection — a sync mid-refresh would
+        // read half-rewritten metadata/field maps/DDL. Skipping (not failing) is the honest
+        // outcome: the next scheduled fire runs normally after the refresh completes.
+        const maintenance = IntegrationEngine.GetMaintenanceLock(config.CompanyIntegrationID);
+        if (maintenance) {
+            const message = `Scheduled sync skipped: ${maintenance.Reason} is in progress for this connection (since ${maintenance.AcquiredAt.toISOString()}).`;
+            this.log(message);
+            return {
+                Success: true,
+                Details: { CompanyIntegrationID: config.CompanyIntegrationID, Skipped: true, SkipReason: message },
+            };
+        }
+
         // Ensure the integration engine metadata is loaded
         await IntegrationEngine.Instance.Config(false, context.ContextUser);
 

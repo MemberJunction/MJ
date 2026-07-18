@@ -40,9 +40,26 @@ import {
     buildOverflowStats,
     planPromotions,
     sanitizeColumnName,
+    inferColumnTypeFromStats,
     type SchemaPromotionResult,
     type PromotionCandidate,
+    type CustomKeyStat,
+    type InferredColumnType,
 } from '@memberjunction/integration-engine';
+
+/**
+ * A custom-key candidate persisted to CompanyIntegration.Configuration.customKeyCandidates
+ * (RSU-spec out-of-band capture): key identity + sizing statistics + the inferred column
+ * type, NEVER raw sample values (PII-safe — the config row is operator-visible). Written
+ * with REPLACE semantics per synced entity on every sync, so keys that vanish evict.
+ */
+interface PersistedCustomKeyCandidate {
+    Key: string;
+    Occurrences: number;
+    TotalRecords: number;
+    MaxLength: number;
+    Inferred: InferredColumnType;
+}
 import type { BaseEntity } from '@memberjunction/core';
 import { DDLGenerator, type TargetColumnConfig, type DatabasePlatform } from '@memberjunction/integration-schema-builder';
 import { RuntimeSchemaManager, type RSUPipelineInput } from '@memberjunction/schema-engine';
@@ -82,6 +99,14 @@ export function registerIntegrationCustomColumnPromoter(): void {
     IntegrationEngine.Instance.SetPostSyncSchemaPromotionCallback(async (ctx) => {
         const user = ctx.ContextUser as UserInfo;
         const provider = ctx.Provider as IMetadataProvider | undefined;
+        const promoter = new IntegrationCustomColumnPromoter(user, provider);
+        // RSU-spec out-of-band candidates: persist the sync's in-memory custom-key statistics
+        // (REPLACE semantics per synced entity — vanished keys evict) so on-demand
+        // IntegrationListCustomColumnCandidates sees them even when the content-hash fast path
+        // skipped every row (the hash basis excludes overflow, so skipped rows never write it).
+        // Unconditional — runs whether or not auto-promote is on. PII-safe: names/lengths/types
+        // only, never raw values.
+        await promoter.PersistCandidateStats(ctx.CompanyIntegrationID, ctx.SyncedEntityNames, ctx.CustomKeyStats);
         // GATE — promotion runs RSU (ADD COLUMN + register EntityField) + restart, which is disruptive.
         // It is OPT-IN per connection (DEFAULT OFF): by default a sync only CAPTURES unmapped fields into
         // the overflow column; the user triggers promotion on demand via IntegrationPromoteCustomColumns
@@ -94,8 +119,7 @@ export function registerIntegrationCustomColumnPromoter(): void {
             );
             return { Promoted: false, ColumnsAdded: [], SchemaUpdatePending: false };
         }
-        const promoter = new IntegrationCustomColumnPromoter(user, provider);
-        return promoter.PromoteForSync(ctx.CompanyIntegrationID, ctx.SyncedEntityNames);
+        return promoter.PromoteForSync(ctx.CompanyIntegrationID, ctx.SyncedEntityNames, ctx.CustomKeyStats);
     });
     // Verbose-only: this is a boot-time registration confirmation, not operator-actionable at
     // standard level. Routes through the global verbose gate (set from the server's telemetry.level).
@@ -136,6 +160,7 @@ export class IntegrationCustomColumnPromoter {
     public async PromoteForSync(
         companyIntegrationID: string,
         syncedEntityNames: string[],
+        customKeyStats?: Record<string, CustomKeyStat[]>,
     ): Promise<SchemaPromotionResult> {
         const integrationID = await this.resolveIntegrationID(companyIntegrationID);
         if (!integrationID) return NOT_PROMOTED;
@@ -143,7 +168,7 @@ export class IntegrationCustomColumnPromoter {
         const columnsAdded: Array<{ EntityName: string; ColumnName: string }> = [];
         for (const entityName of syncedEntityNames) {
             try {
-                const added = await this.promoteEntity(companyIntegrationID, integrationID, entityName);
+                const added = await this.promoteEntity(companyIntegrationID, integrationID, entityName, customKeyStats?.[entityName]);
                 columnsAdded.push(...added);
             } catch (err) {
                 // One entity's promotion failure must not abort the others, and never the sync.
@@ -164,8 +189,9 @@ export class IntegrationCustomColumnPromoter {
         companyIntegrationID: string,
         integrationID: string,
         entityName: string,
+        inRunStats?: CustomKeyStat[],
     ): Promise<Array<{ EntityName: string; ColumnName: string }>> {
-        const planned = await this.planWorkForEntity(companyIntegrationID, entityName);
+        const planned = await this.planWorkForEntity(companyIntegrationID, entityName, inRunStats);
         if (!planned || planned.work.length === 0) return []; // no overflow / no entity map / already converged
         const { entityInfo, entityMap } = planned;
         let work = planned.work;
@@ -208,14 +234,19 @@ export class IntegrationCustomColumnPromoter {
     private async planWorkForEntity(
         companyIntegrationID: string,
         entityName: string,
+        inRunStats?: CustomKeyStat[],
     ): Promise<{ entityInfo: EntityInfo; entityMap: { ID: string; ExternalObjectName: string }; work: WorkItem[] } | null> {
         const entityInfo = this.provider.EntityByName(entityName);
         if (!entityInfo?.SchemaName || !entityInfo.BaseTable) return null;
         // No overflow column on this table (predates the feature) → nothing to promote.
         if (!entityInfo.Fields.some(f => f.Name === CUSTOM_OVERFLOW_COLUMN)) return null;
 
+        // Candidate sources, most-authoritative first (dedup by key):
+        //  1. live overflow-column scan (rows that were actually written),
+        //  2. THIS run's in-memory stats (rows the content-hash fast path skipped — RSU-spec
+        //     out-of-band capture; the hash basis excludes overflow so skips never write it),
+        //  3. candidates persisted from prior runs (survive restarts for on-demand listing).
         const overflowJson = await this.scanOverflow(entityName);
-        if (overflowJson.length === 0) return null; // no customs captured
 
         // U3 note (rkihm-BC review, #3061): this in-repo promotion path passes no `LockUntilFullSync`, so it
         // does NOT yet enforce "hold promotion until a full sync since the last schema change." The lever
@@ -223,7 +254,11 @@ export class IntegrationCustomColumnPromoter {
         // sync has completed post-rediscovery — DEFERRED and tracked as a follow-up. The engine ships the
         // gate; wiring MJServer's own consumer to set it is a separate change. Until then, this path retains
         // the pre-U3 behavior for a rediscover-then-incremental sequence.
-        const passing = planPromotions(buildOverflowStats(overflowJson), {});
+        const byKey = new Map<string, PromotionCandidate>();
+        for (const c of planPromotions(buildOverflowStats(overflowJson), {})) byKey.set(c.Key, c);
+        for (const c of this.candidatesFromStats(inRunStats)) if (!byKey.has(c.Key)) byKey.set(c.Key, c);
+        for (const c of await this.loadPersistedCandidates(companyIntegrationID, entityName)) if (!byKey.has(c.Key)) byKey.set(c.Key, c);
+        const passing = [...byKey.values()];
         if (passing.length === 0) return null;
 
         const entityMap = await this.findEntityMap(companyIntegrationID, entityName);
@@ -256,6 +291,88 @@ export class IntegrationCustomColumnPromoter {
             InferredType: w.candidate.Inferred.SchemaFieldType,
             NeedsColumn: w.needsColumn,
         }));
+    }
+
+    /** Maps THIS run's in-memory custom-key stats to promotion candidates (RSU-spec out-of-band capture). */
+    private candidatesFromStats(stats?: CustomKeyStat[]): PromotionCandidate[] {
+        if (!stats || stats.length === 0) return [];
+        return stats
+            .filter(s => s.TotalRecords > 0 && s.Occurrences > 0)
+            .map(s => ({
+                Key: s.Key,
+                Coverage: s.Occurrences / s.TotalRecords,
+                Inferred: inferColumnTypeFromStats(s.SampleValues, s.MaxLength),
+            }));
+    }
+
+    /** Loads candidates persisted by {@link PersistCandidateStats} for one entity (empty on any gap). */
+    private async loadPersistedCandidates(companyIntegrationID: string, entityName: string): Promise<PromotionCandidate[]> {
+        try {
+            const ci = await this.provider.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', this.user);
+            if (!(await ci.Load(companyIntegrationID)) || !ci.Configuration) return [];
+            const cfg = JSON.parse(ci.Configuration) as { customKeyCandidates?: Record<string, PersistedCustomKeyCandidate[]> };
+            const persisted = cfg.customKeyCandidates?.[entityName];
+            if (!Array.isArray(persisted)) return [];
+            return persisted
+                .filter(p => p && typeof p.Key === 'string' && p.TotalRecords > 0)
+                .map(p => ({ Key: p.Key, Coverage: p.Occurrences / p.TotalRecords, Inferred: p.Inferred }));
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Persists the sync's custom-key statistics onto CompanyIntegration.Configuration
+     * (`customKeyCandidates`, keyed by entity name) with REPLACE semantics per SYNCED entity:
+     * an entity synced with stats gets exactly this run's key set (vanished keys evict); an
+     * entity synced with NO custom keys has its entry removed. Unsynced entities keep theirs.
+     * PII-safe — key names, counts, lengths and inferred types only, never raw values. Caps
+     * the stored set per entity so a pathological source can't bloat the config row.
+     */
+    public async PersistCandidateStats(
+        companyIntegrationID: string,
+        syncedEntityNames: string[],
+        statsByEntity?: Record<string, CustomKeyStat[]>,
+    ): Promise<void> {
+        const MAX_PERSISTED_KEYS_PER_ENTITY = 200;
+        try {
+            const ci = await this.provider.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', this.user);
+            if (!(await ci.Load(companyIntegrationID))) return;
+            const cfg = (ci.Configuration ? JSON.parse(ci.Configuration) : {}) as Record<string, unknown> & {
+                customKeyCandidates?: Record<string, PersistedCustomKeyCandidate[]>;
+            };
+            const candidates = { ...(cfg.customKeyCandidates ?? {}) };
+            let changed = false;
+            for (const entityName of syncedEntityNames) {
+                const stats = statsByEntity?.[entityName];
+                if (stats && stats.length > 0) {
+                    candidates[entityName] = stats
+                        .filter(s => s.TotalRecords > 0 && s.Occurrences > 0)
+                        .slice(0, MAX_PERSISTED_KEYS_PER_ENTITY)
+                        .map(s => ({
+                            Key: s.Key,
+                            Occurrences: s.Occurrences,
+                            TotalRecords: s.TotalRecords,
+                            MaxLength: s.MaxLength,
+                            Inferred: inferColumnTypeFromStats(s.SampleValues, s.MaxLength),
+                        }));
+                    changed = true;
+                } else if (candidates[entityName]) {
+                    delete candidates[entityName]; // synced clean → evict stale candidates
+                    changed = true;
+                }
+            }
+            if (!changed) return;
+            if (Object.keys(candidates).length > 0) cfg.customKeyCandidates = candidates;
+            else delete cfg.customKeyCandidates;
+            ci.Configuration = JSON.stringify(cfg);
+            if (!await ci.Save()) {
+                LogError(`[CustomColumnPromoter] Failed to persist custom-key candidates for CI ${companyIntegrationID}: ${ci.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        } catch (err) {
+            // Best-effort — candidate persistence must never fail the sync.
+            LogError(`[CustomColumnPromoter] PersistCandidateStats failed for CI ${companyIntegrationID}: ${this.msg(err)}`);
+        }
     }
 
     /** Samples the overflow column (rows where it is non-null) — dialect-agnostic via RunView. */
