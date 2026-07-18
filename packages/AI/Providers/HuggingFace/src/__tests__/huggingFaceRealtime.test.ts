@@ -410,3 +410,103 @@ describe('HuggingFaceRealtime', () => {
         });
     });
 });
+
+describe('HuggingFaceRealtime edge coverage (shared-driver surface)', () => {
+    beforeEach(() => {
+        for (const k of ENV_KEYS) {
+            envSnapshot[k] = process.env[k];
+            delete process.env[k];
+        }
+    });
+    afterEach(() => {
+        for (const k of ENV_KEYS) {
+            if (envSnapshot[k] === undefined) delete process.env[k];
+            else process.env[k] = envSnapshot[k];
+        }
+    });
+
+    it('endpoint precedence: Config.endpoint > HUGGINGFACE_REALTIME_URL env > default', async () => {
+        process.env['HUGGINGFACE_REALTIME_URL'] = 'ws://env-host:8000/v1/realtime';
+        const envDriver = new TestHuggingFaceRealtime('');
+        await startSession(envDriver, makeParams());
+        expect(envDriver.LastUrl).toBe('ws://env-host:8000/v1/realtime');
+        const cfgDriver = new TestHuggingFaceRealtime('');
+        await startSession(cfgDriver, makeParams({ Config: { endpoint: 'ws://cfg-host:9000/v1/realtime' } }));
+        expect(cfgDriver.LastUrl).toBe('ws://cfg-host:9000/v1/realtime');
+    });
+
+    it('client pact honors a sampleRate override end-to-end', async () => {
+        const driver = new TestHuggingFaceRealtime('secret');
+        process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { sampleRate: 24000 } }));
+        expect((cfg.SessionConfig as JSONObject)['sampleRate']).toBe(24000);
+    });
+
+    it('a duplicate session.created cannot double-apply the config', async () => {
+        const driver = new TestHuggingFaceRealtime('');
+        await startSession(driver, makeParams());
+        const updates = driver.Fake.Sent.filter((e) => e.type === 'session.update').length;
+        driver.Emit({ type: 'session.created' });
+        expect(driver.Fake.Sent.filter((e) => e.type === 'session.update').length).toBe(updates);
+    });
+
+    it('surfaces a provider error FRAME as recoverable (session stays open)', async () => {
+        const driver = new TestHuggingFaceRealtime('');
+        const session = await startSession(driver, makeParams());
+        const errors: Array<{ Fatal?: boolean; Code?: string }> = [];
+        session.OnError((e) => errors.push(e));
+        // Provider error frames arrive via the adapter's error channel WITH a payload.
+        const providerError = new Error('bad tool schema') as Parameters<typeof driver.Fake.FireError>[0];
+        providerError.error = { message: 'bad tool schema', type: 'invalid_request_error', code: 'invalid_tools' };
+        driver.Fake.FireError(providerError);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toMatchObject({ Fatal: false, Code: 'invalid_tools' });
+    });
+
+    it('honors a voice from the Config bag on the server-bridged path (supportsVoiceOutput on)', async () => {
+        const driver = new TestHuggingFaceRealtime('');
+        await startSession(driver, makeParams({ Config: { voice: 'nova' } }));
+        const first = driver.Fake.Sent[0];
+        if (first.type === 'session.update' && first.session.type === 'realtime') {
+            const audio = first.session.audio as { output?: { voice?: string } } | undefined;
+            expect(audio?.output?.voice).toBe('nova');
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+    });
+
+    it('the tool-set fingerprint is order-insensitive (reordered identical set is a no-op)', async () => {
+        const driver = new TestHuggingFaceRealtime('');
+        const a = { Name: 'alpha', Description: 'A', ParametersSchema: { type: 'object' } };
+        const b = { Name: 'beta', Description: 'B', ParametersSchema: { type: 'object' } };
+        const session = await startSession(driver, makeParams());
+        await session.RegisterTools([a, b]);
+        const after = driver.Fake.Sent.length;
+        await session.RegisterTools([b, a]); // same set, different order
+        expect(driver.Fake.Sent.length).toBe(after);
+    });
+
+    it('scrubs GA feature keys while gates are off (self-hosted stacks lag the GA surface)', async () => {
+        const driver = new TestHuggingFaceRealtime('');
+        await startSession(driver, makeParams({ Config: { effortLevel: 'high', parallelToolCalls: true, mcpTools: [{ type: 'mcp', server_label: 'kb' }] } }));
+        const first = driver.Fake.Sent[0];
+        if (first.type === 'session.update' && first.session.type === 'realtime') {
+            const session = first.session as Record<string, unknown>;
+            expect(session.reasoning).toBeUndefined();
+            expect(session.parallel_tool_calls).toBeUndefined();
+            expect(session.tools).toBeUndefined();
+            expect(session.effortLevel).toBeUndefined();
+            expect(session.mcpTools).toBeUndefined();
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+    });
+
+    it('proxy base falls back to GRAPHQL_BASE_URL + GRAPHQL_PORT when MJAPI_PUBLIC_URL is unset', async () => {
+        const driver = new TestHuggingFaceRealtime('secret');
+        process.env['GRAPHQL_BASE_URL'] = 'https://api.deployment.io';
+        process.env['GRAPHQL_PORT'] = '8443';
+        const cfg = await driver.CreateClientSession(makeParams());
+        expect(cfg.EphemeralToken.startsWith('wss://api.deployment.io:8443/realtime-proxy?ticket=')).toBe(true);
+    });
+});

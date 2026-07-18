@@ -732,3 +732,99 @@ describe('xAIRealtime GA feature gating (profile-driven)', () => {
         }
     });
 });
+
+describe('xAIRealtime edge coverage (shared-driver surface)', () => {
+    let driver: TestablexAIRealtime;
+
+    beforeEach(() => {
+        driver = new TestablexAIRealtime('test-key');
+    });
+
+    it('resolves WaitForConfigApplied immediately (non-deferring profile sends config synchronously)', async () => {
+        const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
+        await expect(session.WaitForConfigApplied()).resolves.toBeUndefined();
+        // Config already on the socket BEFORE any server frame — xAI accepts it right after connect.
+        expect(driver.Fake.Sent[0]?.type).toBe('session.update');
+    });
+
+    it('honors a per-session inputTranscriptionModel override from the Config bag', async () => {
+        await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', Config: { inputTranscriptionModel: 'whisper-large' } });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const audio = update.session.audio as { input?: { transcription?: { model?: string } } };
+            expect(audio.input?.transcription?.model).toBe('whisper-large');
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+    });
+
+    it('scrubs the MJ-normalized effortLevel key too (not just reasoningEffort) while gates are off', async () => {
+        await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', Config: { effortLevel: 85 } });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const session = update.session as Record<string, unknown>;
+            expect(session.reasoning).toBeUndefined();
+            expect(session.effortLevel).toBeUndefined();
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+    });
+
+    it('keeps voice output OFF for Grok even when a voice is configured (unconfirmed on the endpoint)', async () => {
+        await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', Config: { voice: 'sage' } });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const session = update.session as Record<string, unknown>;
+            const audio = session.audio as { output?: unknown };
+            expect(audio.output).toBeUndefined();
+            expect(session.voice).toBeUndefined(); // scrubbed, never raw
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+    });
+
+    it('client-direct: meeting mode flips create_response off in the minted turn detection', async () => {
+        const cd = new ClientDirectTestablexAI('k');
+        const cfg = await cd.CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'sys', Config: { disableAutoResponse: true } });
+        const sc = cfg.SessionConfig as Record<string, unknown>;
+        const td = (sc.audio as { input?: { turn_detection?: Record<string, unknown> } }).input?.turn_detection;
+        expect(td).toMatchObject({ type: 'server_vad', create_response: false, interrupt_response: true });
+        expect(sc.disableAutoResponse).toBeUndefined();
+    });
+
+    it('seeds InitialContext as a separate user item (fold-context is OFF for Grok)', async () => {
+        await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', InitialContext: 'Earlier chat.' });
+        const seed = driver.Fake.Sent.find((e) => e.type === 'conversation.item.create');
+        expect(seed).toBeDefined();
+        if (seed?.type === 'conversation.item.create' && seed.item.type === 'message') {
+            expect(seed.item.role).toBe('user');
+            expect(seed.item.content[0]).toMatchObject({ type: 'input_text', text: 'Earlier chat.' });
+        }
+    });
+
+    it('inherits the blank-safe RequestSpokenUpdate: a blank value never overrides the session prompt', async () => {
+        const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
+        const before = driver.Fake.Sent.length;
+        expect(session.RequestSpokenUpdate('   ')).toBe(true);
+        const frame = driver.Fake.Sent.slice(before)[0];
+        expect(frame.type).toBe('response.create');
+        if (frame.type === 'response.create') {
+            expect(frame.response).toBeUndefined(); // plain create — the session prompt governs
+        }
+    });
+
+    it('inherits live Reconfigure with the Grok transcription model', async () => {
+        const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
+        expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true });
+        const before = driver.Fake.Sent.length;
+        session.Reconfigure({ DisableAutoResponse: true });
+        const frame = driver.Fake.Sent.slice(before)[0];
+        if (frame.type === 'session.update' && frame.session.type === 'realtime') {
+            const audio = frame.session.audio as { input?: { transcription?: { model?: string }; turn_detection?: Record<string, unknown> } };
+            expect(audio.input?.transcription?.model).toBe('whisper-1');
+            expect(audio.input?.turn_detection).toMatchObject({ create_response: false });
+        } else {
+            throw new Error('expected realtime session.update from Reconfigure');
+        }
+    });
+});

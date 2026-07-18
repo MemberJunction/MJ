@@ -33,7 +33,7 @@ vi.mock('openai', () => ({
     }),
 }));
 
-import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime } from '../models/openAIRealtime';
+import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime, OPENAI_REALTIME_PROFILE } from '../models/openAIRealtime';
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeServerEvent, RealtimeClientEvent } from 'openai/resources/realtime/realtime';
 import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
@@ -827,5 +827,176 @@ describe('OpenAIRealtime effort-level mapping (MJ-normalized → provider litera
         expect(MapEffortLevelToOpenAIRealtime('81')).toBe('xhigh');
         expect(MapEffortLevelToOpenAIRealtime('HIGH')).toBe('high');
         expect(MapEffortLevelToOpenAIRealtime('ultra')).toBeUndefined();
+    });
+});
+
+describe('OpenAIRealtime readiness gate (WaitForConfigApplied)', () => {
+    it('resolves once the deferred config goes out on session.created', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        // Use the raw base path (no session.created auto-fire): build session manually.
+        const session = new OpenAIRealtimeSession(driver.Fake);
+        session.applyInitialConfig({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        let resolved = false;
+        const wait = session.WaitForConfigApplied().then(() => (resolved = true));
+        await Promise.resolve();
+        expect(resolved).toBe(false); // gate holds until the handshake completes
+        driver.Fake.Fire({ type: 'session.created' } as RealtimeServerEvent);
+        await wait;
+        expect(resolved).toBe(true);
+        expect(driver.Fake.Sent.find((e) => e.type === 'session.update')).toBeDefined();
+    });
+
+    it('a re-emitted session.created cannot double-apply the config', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        const updates = driver.Fake.Sent.filter((e) => e.type === 'session.update').length;
+        driver.Fake.Fire({ type: 'session.created' } as RealtimeServerEvent);
+        expect(driver.Fake.Sent.filter((e) => e.type === 'session.update').length).toBe(updates);
+    });
+
+    it('rejects when a FATAL transport error lands before the config was applied', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        const session = new OpenAIRealtimeSession(driver.Fake);
+        session.applyInitialConfig({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        const wait = session.WaitForConfigApplied();
+        driver.Fake.FireError(new Error('socket died') as Parameters<typeof driver.Fake.FireError>[0]);
+        await expect(wait).rejects.toThrow('socket died');
+    });
+
+    it('does NOT reject on a RECOVERABLE provider error frame — the handshake can still finish', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        const session = new OpenAIRealtimeSession(driver.Fake);
+        session.applyInitialConfig({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        const providerError = new Error('bad field') as Parameters<typeof driver.Fake.FireError>[0];
+        providerError.error = { message: 'bad field', type: 'invalid_request_error', code: 'x' };
+        driver.Fake.FireError(providerError);
+        driver.Fake.Fire({ type: 'session.created' } as RealtimeServerEvent);
+        await expect(session.WaitForConfigApplied()).resolves.toBeUndefined();
+    });
+
+    it('rejects when the socket closes unexpectedly before the config was applied', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        const session = new OpenAIRealtimeSession(driver.Fake);
+        session.applyInitialConfig({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        const wait = session.WaitForConfigApplied();
+        driver.Fake.FireSocketClose();
+        await expect(wait).rejects.toThrow(/closed unexpectedly/);
+    });
+
+    it('rejects when the consumer closes the session before the config was applied', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        const session = new OpenAIRealtimeSession(driver.Fake);
+        session.applyInitialConfig({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        const wait = session.WaitForConfigApplied();
+        await session.Close();
+        await expect(wait).rejects.toThrow(/closed by consumer/);
+    });
+
+    it('resolves immediately for a non-deferring profile (config sent synchronously)', async () => {
+        const session = new OpenAIRealtimeSession(new TestableOpenAIRealtime('k').Fake, {
+            ...OPENAI_REALTIME_PROFILE,
+            deferInitialConfigUntilSessionCreated: false,
+        });
+        session.applyInitialConfig({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+        await expect(session.WaitForConfigApplied()).resolves.toBeUndefined();
+    });
+});
+
+describe('OpenAIRealtime config extraction hardening', () => {
+    let driver: TestableOpenAIRealtime;
+
+    beforeEach(() => {
+        driver = new TestableOpenAIRealtime('test-key');
+    });
+
+    async function startAndGetSession(config?: Record<string, unknown>): Promise<Record<string, unknown>> {
+        await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys', Config: config });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            return update.session as Record<string, unknown>;
+        }
+        throw new Error('expected realtime session.update');
+    }
+
+    it('ignores wrong-typed feature values instead of sending garbage', async () => {
+        const session = await startAndGetSession({
+            parallelToolCalls: 'yes',      // string, not boolean
+            mcpTools: 'not-an-array',      // string, not array
+            effortLevel: { level: 5 },     // object, not string/number
+            voice: 42,                      // number, not string
+        });
+        expect(session.parallel_tool_calls).toBeUndefined();
+        expect(session.tools).toBeUndefined();
+        expect(session.reasoning).toBeUndefined();
+        expect(session.audio).toMatchObject({ input: { transcription: { model: 'gpt-4o-mini-transcribe' } } });
+        // None of the malformed keys leak raw.
+        for (const key of ['parallelToolCalls', 'mcpTools', 'effortLevel', 'voice']) {
+            expect(session[key]).toBeUndefined();
+        }
+    });
+
+    it('treats an empty mcpTools array as absent', async () => {
+        const session = await startAndGetSession({ mcpTools: [] });
+        expect(session.tools).toBeUndefined();
+        expect(session.mcpTools).toBeUndefined();
+    });
+
+    it('trims a whitespace-padded voice and drops a blank one', async () => {
+        const padded = await startAndGetSession({ voice: '  sage  ' });
+        expect((padded.audio as { output?: { voice?: string } }).output?.voice).toBe('sage');
+        driver = new TestableOpenAIRealtime('k2');
+        const blank = await startAndGetSession({ voice: '   ' });
+        expect((blank.audio as { output?: unknown }).output).toBeUndefined();
+    });
+
+    it('scrubs MJ-side transport keys (endpoint/sampleRate/proxyBaseUrl) even on OpenAI', async () => {
+        const session = await startAndGetSession({ endpoint: 'ws://x:1/v1/realtime', sampleRate: 24000, proxyBaseUrl: 'https://p' });
+        expect(session.endpoint).toBeUndefined();
+        expect(session.sampleRate).toBeUndefined();
+        expect(session.proxyBaseUrl).toBeUndefined();
+    });
+
+    it('honors a per-session inputTranscriptionModel override from the Config bag', async () => {
+        const session = await startAndGetSession({ inputTranscriptionModel: 'whisper-1' });
+        expect((session.audio as { input?: { transcription?: { model?: string } } }).input?.transcription?.model).toBe('whisper-1');
+        expect(session.inputTranscriptionModel).toBeUndefined();
+    });
+
+    it('a numeric effortLevel of 0 or negative is unmappable and dropped', async () => {
+        // Parse succeeds but the quintile mapping still yields 'minimal' for <=20 — including 0
+        // and negatives, which are treated as the floor rather than dropped (parseInt succeeds).
+        const session = await startAndGetSession({ effortLevel: 0 });
+        expect(session.reasoning).toEqual({ effort: 'minimal' });
+    });
+
+    it('passes provider-native keys through the residual bag spread (tool_choice)', async () => {
+        const session = await startAndGetSession({ tool_choice: 'required' });
+        expect(session.tool_choice).toBe('required');
+    });
+
+    it('keeps OpenAI on the seed-a-user-item path for InitialContext (fold-context is OFF)', async () => {
+        await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys', InitialContext: 'We spoke earlier.' });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            expect(String(update.session.instructions)).not.toContain('Prior context');
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+        const seed = driver.Fake.Sent.find((e) => e.type === 'conversation.item.create');
+        expect(seed).toBeDefined();
+        if (seed?.type === 'conversation.item.create' && seed.item.type === 'message') {
+            expect(seed.item.role).toBe('user');
+        }
+    });
+
+    it('preserves unicode + very large instructions verbatim', async () => {
+        const prompt = '🌍 Väl kömm — ' + 'p'.repeat(30_000);
+        await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: prompt });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            expect(update.session.instructions).toBe(prompt);
+        } else {
+            throw new Error('expected realtime session.update');
+        }
     });
 });
