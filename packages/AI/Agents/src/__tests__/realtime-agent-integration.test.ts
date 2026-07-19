@@ -126,6 +126,54 @@ function makeDetailProvider(detail: MockConversationDetail): IMetadataProvider {
     } as unknown as IMetadataProvider;
 }
 
+/**
+ * A multi-row store: `GetEntityObject` returns a FRESH entity each call (as the real metadata provider
+ * does), new records get distinct auto-incrementing ids on Save, and Load rehydrates a stored row's
+ * fields (incl. Status) — everything the status-disambiguated persist path needs to be exercised across
+ * multiple turns and multiple rows.
+ */
+class MockDetailStore {
+    public rows = new Map<string, { Status: string; Message: string; Role: string }>();
+    private seq = 0;
+    public nextId(): string { return `detail-${++this.seq}`; }
+    public newEntity(): StoreBackedDetail { return new StoreBackedDetail(this); }
+    public provider(): IMetadataProvider {
+        return { GetEntityObject: async () => this.newEntity(), EntityByName: () => undefined } as unknown as IMetadataProvider;
+    }
+}
+
+class StoreBackedDetail {
+    public ID = '';
+    public ConversationID = '';
+    public Role: 'AI' | 'Error' | 'User' = 'User';
+    public Message = '';
+    public Status: 'Complete' | 'Error' | 'In-Progress' = 'In-Progress';
+    public UserID: string | null = null;
+    public AgentSessionID: string | null = null;
+    public TurnEndedAt: Date | null = null;
+    public UtteranceStartMs: number | null = null;
+    public UtteranceEndMs: number | null = null;
+    public MediaType: string | null = null;
+    public LatestResult = { CompleteMessage: '' };
+    private isNew = false;
+    constructor(private store: MockDetailStore) {}
+    public NewRecord(): void { this.isNew = true; this.ID = ''; }
+    public async Save(): Promise<boolean> {
+        if (this.isNew && !this.ID) { this.ID = this.store.nextId(); this.isNew = false; }
+        this.store.rows.set(this.ID, { Status: this.Status, Message: this.Message, Role: this.Role });
+        return true;
+    }
+    public async Load(id: string): Promise<boolean> {
+        const row = this.store.rows.get(id);
+        if (!row) return false;
+        this.ID = id;
+        this.Status = row.Status as StoreBackedDetail['Status'];
+        this.Message = row.Message;
+        this.Role = row.Role as StoreBackedDetail['Role'];
+        return true;
+    }
+}
+
 function makeAgent(overrides: Partial<MJAIAgentEntityExtended> = {}): MJAIAgentEntityExtended {
     return { ID: 'agent-1', Name: 'Realtime Co-Agent', InjectNotes: false, InjectExamples: false, ...overrides } as unknown as MJAIAgentEntityExtended;
 }
@@ -253,6 +301,95 @@ describe('BaseAgent realtime (session-driven) integration', () => {
             expect(detail.Status).toBe('Complete');
             expect(detail.Message).toBe('hello there');
             expect(detail.TurnEndedAt).toBeInstanceOf(Date);
+        });
+
+        it('C8 streamed captions (Grok): repeated growing finals collapse into ONE row; the next turn is a NEW row', async () => {
+            // Grok streams input transcription: repeated input_audio_transcription.completed, each the
+            // full growing text. The driver stamps the 2nd+ ReplacesPrevious=true (the first is a normal
+            // final). All must land in ONE ConversationDetail; the next user turn (a fresh non-replacing
+            // final) must be a DISTINCT row.
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const params = makeParams({ provider: store.provider(), data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            const c1 = await agent.callPersist(params, { Role: 'user', Text: 'set', IsFinal: true, ReplacesPrevious: false });
+            expect(c1).toBe('detail-1'); // first caption of the turn → a real new turn
+            const c2 = await agent.callPersist(params, { Role: 'user', Text: 'set a', IsFinal: true, ReplacesPrevious: true });
+            expect(c2).toBeNull(); // replaces the turn's row in place
+            const c3 = await agent.callPersist(params, { Role: 'user', Text: 'set a timer', IsFinal: true, ReplacesPrevious: true });
+            expect(c3).toBeNull();
+            expect(store.rows.size).toBe(1);
+            expect(store.rows.get('detail-1')!.Message).toBe('set a timer');
+            // A new user turn: its first (non-replacing) final must NOT overwrite turn 1 — it's a new row.
+            const next = await agent.callPersist(params, { Role: 'user', Text: 'cancel', IsFinal: true, ReplacesPrevious: false });
+            expect(next).toBe('detail-2');
+            expect(store.rows.size).toBe(2);
+            expect(store.rows.get('detail-1')!.Message).toBe('set a timer'); // turn 1 preserved (not clobbered)
+        });
+
+        it('C8 interim→final (OpenAI): one row per turn, and the next turn is a distinct row', async () => {
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const params = makeParams({ provider: store.provider(), data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            expect(await agent.callPersist(params, { Role: 'user', Text: 'hel', IsFinal: false })).toBe('detail-1'); // interim → In-Progress row
+            expect(await agent.callPersist(params, { Role: 'user', Text: 'hello', IsFinal: true })).toBeNull();     // final reuses + clears key
+            expect(store.rows.size).toBe(1);
+            expect(store.rows.get('detail-1')).toMatchObject({ Status: 'Complete', Message: 'hello' });
+            // Next turn's interim must start a FRESH row (the key was cleared by the non-replacing final):
+            expect(await agent.callPersist(params, { Role: 'user', Text: 'next', IsFinal: false })).toBe('detail-2');
+            expect(store.rows.size).toBe(2);
+        });
+
+        it('C8 correction (ElevenLabs): a ReplacesPrevious correction updates the SAME row; a later normal final is a new turn', async () => {
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const params = makeParams({ provider: store.provider(), data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            const first = await agent.callPersist(params, { Role: 'assistant', Text: 'The answer is 42', IsFinal: true, ReplacesPrevious: false });
+            expect(first).toBe('detail-1');
+            const corrected = await agent.callPersist(params, { Role: 'assistant', Text: 'The answer is 43', IsFinal: true, ReplacesPrevious: true });
+            expect(corrected).toBeNull();
+            expect(store.rows.size).toBe(1);
+            expect(store.rows.get('detail-1')!.Message).toBe('The answer is 43');
+            const nextTurn = await agent.callPersist(params, { Role: 'assistant', Text: 'Anything else?', IsFinal: true, ReplacesPrevious: false });
+            expect(nextTurn).toBe('detail-2');
+            expect(store.rows.size).toBe(2);
+        });
+
+        it('C8 assistant delta→done: interim then final collapse into ONE row', async () => {
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const params = makeParams({ provider: store.provider(), data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            expect(await agent.callPersist(params, { Role: 'assistant', Text: 'The', IsFinal: false })).toBe('detail-1');
+            expect(await agent.callPersist(params, { Role: 'assistant', Text: 'The answer', IsFinal: true })).toBeNull();
+            expect(store.rows.size).toBe(1);
+            expect(store.rows.get('detail-1')).toMatchObject({ Status: 'Complete', Message: 'The answer' });
+        });
+
+        it('C8 robustness: a turn with BOTH an interim delta AND repeated ReplacesPrevious completeds still collapses to ONE row', async () => {
+            // Not produced by any current driver/ASR pairing, but the `open`-flag model must hold even
+            // if a provider ever emits a user delta AND streamed completeds in one turn — pre-refactor
+            // the first (non-replacing) completed deleted the key and the replacing completed duplicated.
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const params = makeParams({ provider: store.provider(), data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            await agent.callPersist(params, { Role: 'user', Text: 'set', IsFinal: false });                                       // interim → In-Progress detail-1
+            expect(await agent.callPersist(params, { Role: 'user', Text: 'set a', IsFinal: true, ReplacesPrevious: false })).toBeNull();      // finalizes detail-1
+            expect(await agent.callPersist(params, { Role: 'user', Text: 'set a timer', IsFinal: true, ReplacesPrevious: true })).toBeNull(); // replaces detail-1 in place, NOT a duplicate
+            expect(store.rows.size).toBe(1);
+            expect(store.rows.get('detail-1')!.Message).toBe('set a timer');
+        });
+
+        it('C8: an assistant final with NO interim does not suppress the NEXT turn\'s interim streaming row', async () => {
+            // A short assistant turn that emits `done` with no preceding `delta` leaves a CLOSED tracked
+            // row. The next turn's first delta must still open a fresh In-Progress row (pre-refactor the
+            // leaked key made the interim branch return null, silently dropping the live-streaming bubble).
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const params = makeParams({ provider: store.provider(), data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            expect(await agent.callPersist(params, { Role: 'assistant', Text: 'Hi.', IsFinal: true })).toBe('detail-1');   // turn 1: done, no delta
+            expect(await agent.callPersist(params, { Role: 'assistant', Text: 'The', IsFinal: false })).toBe('detail-2');  // turn 2: interim opens a NEW row
+            expect(await agent.callPersist(params, { Role: 'assistant', Text: 'The answer', IsFinal: true })).toBeNull();  // finalizes it
+            expect(store.rows.size).toBe(2);
+            expect(store.rows.get('detail-2')).toMatchObject({ Status: 'Complete', Message: 'The answer' });
         });
 
         it('creates and finalizes in one step when no interim was seen; assistant turns set no UserID', async () => {

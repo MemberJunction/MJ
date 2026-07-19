@@ -103,9 +103,19 @@ class TestxAIClient extends xAIRealtimeClient {
     /** The driver's mic-chunk callback, captured so tests can simulate worklet frames. */
     public OnPcmChunk: ((base64Pcm16: string) => void) | null = null;
 
+    /** Optional override for the NEXT createSocket call (reuse/reconnect tests); consumed once. */
+    private nextSocket: FakeSocket | null = null;
+    public SetNextSocket(socket: FakeSocket): void {
+        this.nextSocket = socket;
+    }
+
     protected override createSocket(url: string, subprotocol: string): IOpenAIProtocolClientSocket {
         this.LastUrl = url;
         this.LastSubprotocol = subprotocol;
+        if (this.nextSocket) {
+            this.Fake = this.nextSocket;
+            this.nextSocket = null;
+        }
         return this.Fake;
     }
     protected override async createMicCapture(
@@ -779,5 +789,143 @@ describe('QA hardening: B3 barge-in floor protection', () => {
         } finally {
             vi.useRealTimers();
         }
+    });
+});
+
+describe('QA re-audit fixes (S1/S3)', () => {
+    let client: TestxAIClient;
+
+    beforeEach(() => {
+        client = new TestxAIClient();
+    });
+
+    it('S1: a rejected response.create (error frame, no response.created) SELF-HEALS — the client never wedges', async () => {
+        await connect(client);
+        // A locally-initiated response.create that the provider REJECTS: error frame, no created echo.
+        client.Emit({ type: 'response.created' }); // an active response (VAD/narration)
+        client.SendText('barge in'); // cancel + inject + local response.create (counter=1, awaiting created)
+        // Provider rejects the new create as overlapping → error frame, NO response.created:
+        client.Emit({ type: 'error', error: { message: 'conversation already has an active response', code: 'conflict' } });
+        // The cancelled turn's trailing done arrives. Pre-fix this would take the stale branch forever.
+        client.Emit({ type: 'response.done', response: {} });
+        // Self-healed: the client is NOT stuck busy, and a fresh spoken update goes out.
+        expect(client.IsBusy).toBe(false);
+        const before = client.Fake.Sent.length;
+        expect(client.RequestSpokenUpdate('now speak')).not.toBe(false);
+        expect(client.Fake.Sent.length).toBeGreaterThan(before);
+    });
+
+    it('S1b: a narration create REJECTED while idle (no response.created ever comes) clears the PHANTOM busy flag — IsBusy does not wedge', async () => {
+        await connect(client);
+        // Idle → RequestSpokenUpdate sets responseActive EAGERLY (before the send) and fires a local
+        // response.create. The provider rejects it (error, NO response.created) — e.g. a compat endpoint
+        // that won't voice a bare instruction.
+        client.RequestSpokenUpdate('say a quick status');
+        expect(client.IsBusy).toBe(true); // eager
+        client.Emit({ type: 'error', error: { message: 'response.create rejected', code: 'invalid' } });
+        // Pre-fix: responseActive stuck true forever (no done ever comes) → IsBusy wedged, every future
+        // RequestSpokenUpdate silently skipped. Fixed: the phantom is cleared because no CONFIRMED
+        // response is active.
+        expect(client.IsBusy).toBe(false);
+        const before = client.Fake.Sent.length;
+        client.RequestSpokenUpdate('try again'); // must NOT be skipped by a stuck responseActive
+        expect(client.Fake.Sent.length).toBeGreaterThan(before);
+    });
+
+    it('S1c: a REJECTED narration create clears its pending narration-kind so a subsequent VAD turn is tagged normal (not ephemeral narration)', async () => {
+        await connect(client);
+        const { transcripts } = collect(client);
+        client.RequestSpokenUpdate('narrate'); // sets pendingNarrationKind + eager responseActive
+        client.Emit({ type: 'error', error: { message: 'rejected', code: 'invalid' } }); // no response.created
+        // A genuine user turn now drives a VAD response. Pre-fix the leftover narration kind tagged this
+        // real assistant answer 'narration' → the host discards it as ephemeral. Fixed: kind is 'normal'.
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.output_audio_transcript.delta', delta: 'Here is the real answer' });
+        expect(transcripts.at(-1)).toEqual({ Role: 'Assistant', Text: 'Here is the real answer', IsFinal: false, Kind: 'normal' });
+    });
+
+    it('S1d: a narration create rejected WHILE a cancelled response is still draining does not mistag the next delegated answer as ephemeral narration', async () => {
+        await connect(client);
+        const { transcripts } = collect(client);
+        client.Emit({ type: 'response.created' });        // a response is in flight (confirmed active)
+        client.CancelActiveResponse();                     // host takes the floor → responseActive=false, but the response is still DRAINING (confirmedResponseActive stays true)
+        client.RequestSpokenUpdate('working on it');       // passes the idle gate → pendingNarrationKind=true, sends a narration response.create
+        client.Emit({ type: 'error', error: { message: 'conversation already has an active response', code: 'conflict' } }); // provider rejects it, NO response.created
+        client.Emit({ type: 'response.done', response: {} }); // the cancelled response's trailing done drains
+        // Delegated work returns → its reply create → the ANSWER turn. Pre-fix the leaked narration kind
+        // (cleared only in the !confirmedResponseActive branch) mistagged this durable answer as
+        // ephemeral 'narration' and its transcript was dropped. It must be 'normal'.
+        client.SendToolResult('c1', '{"ok":true}');
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.output_audio_transcript.delta', delta: 'The result is 42' });
+        expect(transcripts.at(-1)).toEqual({ Role: 'Assistant', Text: 'The result is 42', IsFinal: false, Kind: 'normal' });
+    });
+
+    it('S1e: an error while a CONFIRMED response is still active does NOT drop the busy lock (the confirmedResponseActive guard protects a live/draining turn)', async () => {
+        await connect(client);
+        client.Emit({ type: 'response.created' });   // a provider-CONFIRMED response is active
+        client.CancelActiveResponse();               // floor control: responseActive=false, but the response is still DRAINING (confirmedResponseActive stays true)
+        client.SendToolResult('c1', '{"ok":true}');  // delegated result → a fresh local response.create (counter=1, responseActive=true)
+        expect(client.IsBusy).toBe(true);
+        // An unrelated error arrives while the cancelled response is still draining. The guard must NOT
+        // clear responseActive — that would drop the busy lock mid-turn and cut the pending reply. This
+        // is the whole point of confirmedResponseActive; removing the guard makes IsBusy flip false here.
+        client.Emit({ type: 'error', error: { message: 'transient', code: 'x' } });
+        expect(client.IsBusy).toBe(true);
+    });
+
+    it('S1: an unrelated error frame floors the counter at 0 (never negative)', async () => {
+        await connect(client);
+        client.Emit({ type: 'error', error: { message: 'transient' } }); // no local create outstanding
+        client.Emit({ type: 'error', error: { message: 'another' } });
+        // A normal turn still round-trips cleanly:
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.IsBusy).toBe(false);
+    });
+
+    it('S1 bounded worst-case: an UNRELATED error while a local create is outstanding under-protects exactly ONE done — releases the lock early but NEVER wedges', async () => {
+        await connect(client);
+        // A legitimate locally-initiated create is outstanding (cancel+recreate in flight): counter=1,
+        // awaiting its response.created.
+        client.Emit({ type: 'response.created' });        // the response we are about to cancel
+        client.SendText('barge in');                       // cancel + inject + local response.create → counter=1
+        // An UNRELATED error frame (e.g. a transient rate-limit note) arrives BEFORE our create's
+        // response.created. The self-heal cannot tell it apart, so it spends the outstanding create's
+        // stale-done credit here (counter 1→0). This is the documented bounded degradation.
+        client.Emit({ type: 'error', error: { message: 'transient rate limit', code: 'rate_limited' } });
+        // The cancelled response's trailing (stale) done now arrives UNPROTECTED → it releases the lock
+        // early instead of being ignored. Acceptable: the session stays LIVE (no wedge), which is the
+        // whole point of flooring at 0 rather than leaving the counter stuck.
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.IsBusy).toBe(false);                 // released early — bounded, not wedged
+        // Crucially the session still functions: our real create's own response.created/done round-trip
+        // cleanly and a fresh spoken update still goes out (never dead-air).
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        const before = client.Fake.Sent.length;
+        expect(client.RequestSpokenUpdate('still alive')).not.toBe(false);
+        expect(client.Fake.Sent.length).toBeGreaterThan(before);
+    });
+
+    it('S3: a PREVIOUS socket\'s late onclose does not corrupt the reconnected session', async () => {
+        await connect(client);
+        const oldSocket = client.Fake;
+        await client.Disconnect();
+        // Reconnect on the SAME instance with a fresh socket:
+        const newSocket = new FakeSocket();
+        client.SetNextSocket(newSocket);
+        const seen = collect(client);
+        const promise = client.Connect(makeConfig(), new FakeMediaStream([new FakeTrack()]));
+        newSocket.Open();
+        await promise;
+        // The OLD socket now fires its async close (post-reconnect) — must be ignored:
+        oldSocket.onclose?.();
+        oldSocket.onerror?.('stale error');
+        expect(seen.errors).toHaveLength(0); // fresh session not driven to error
+        expect(seen.states.at(-1)).toBe('listening'); // still healthy
+        // The new socket still sends:
+        client.SendContextNote('works');
+        expect(newSocket.SentFrames().some((f) => f.type === 'conversation.item.create')).toBe(true);
     });
 });

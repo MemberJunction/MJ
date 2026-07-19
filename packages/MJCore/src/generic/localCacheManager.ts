@@ -1655,7 +1655,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param deletedRecordIDs - Record IDs (in CompositeKey concatenated string format) that have been deleted
      * @param primaryKeyFieldName - The name of the primary key field (or first PK field for composite keys)
      * @param newMaxUpdatedAt - The new maxUpdatedAt timestamp after applying the delta
-     * @param _serverRowCount - DEPRECATED: This parameter is ignored. rowCount is always derived from merged results.length.
+     * @param serverRowCount - The database's authoritative total row count (fresh COUNT(*) over the
+     *   view) from the smart-cache check. Used as the merged entry's `totalRowCount` when it exceeds
+     *   the cached slice size — this keeps paginated / MaxRows-limited slots from undercounting the
+     *   true total. The visible `rowCount` is still derived from the merged results length.
      * @param aggregateResults - Optional fresh aggregate results (since aggregates can't be differentially computed)
      * @param provider - The IMetadataProvider that produced these results (for AllowCaching gating
      *   in multi-provider scenarios). Falls back to global Metadata.Provider when omitted.
@@ -1668,7 +1671,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         deletedRecordIDs: string[],
         primaryKeyFieldName: string,
         newMaxUpdatedAt: string,
-        _serverRowCount?: number,
+        serverRowCount?: number,
         aggregateResults?: AggregateResult[],
         provider?: IMetadataProvider
     ): Promise<CachedRunViewResult | null> {
@@ -1708,9 +1711,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Convert map back to array
             const mergedResults = Array.from(resultMap.values());
 
-            // For differential updates, the merged result count IS the new total
-            // (differential applies to full-dataset caches, not paginated ones)
-            const mergedTotalRowCount = mergedResults.length;
+            // TotalRowCount must reflect the DATABASE total, not the size of the cached
+            // slice. The server sends the authoritative fresh COUNT(*) over the view in
+            // `serverRowCount` (via the smart-cache check). Collapsing the total to
+            // `mergedResults.length` is only correct for a FULL-dataset cache slot, where the
+            // cached rows ARE every matching row. For a paginated / MaxRows-limited slot the
+            // cached rows are a SUBSET, so `mergedResults.length` silently UNDERCOUNTS the true
+            // total — the exact defect behind the RunView TotalRowCount discrepancy where a
+            // fresh `count_only` read reported a LARGER count than a cached paginated read of
+            // the same entity. Take the max so the total is never below the rows we actually
+            // hold and always honors the server's (larger) authoritative count when provided.
+            const mergedTotalRowCount = serverRowCount != null && serverRowCount > mergedResults.length
+                ? serverRowCount
+                : mergedResults.length;
 
             // Store the updated cache with optional aggregate results
             // Note: If aggregateResults not provided, cached aggregates are cleared (they'd be stale)
@@ -1813,7 +1826,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
                 const updatedResults = Array.from(resultMap.values());
 
-                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
+                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt,
+                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length });
             } catch (e) {
                 LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
                 return false;
@@ -1864,7 +1878,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
                 const updatedResults = Array.from(resultMap.values());
 
-                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
+                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt,
+                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length });
             } catch (e) {
                 LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
                 return false;
@@ -1875,16 +1890,31 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     /**
      * Stores updated results array back to the cache and updates the registry.
      * Shared by UpsertSingleEntity and RemoveSingleEntity to avoid duplication.
+     *
+     * `prior` carries the pre-mutation total + row count so `totalRowCount` (the DATABASE
+     * total) is MAINTAINED across the in-place add/remove rather than dropped. Dropping it
+     * made reads fall back to `results.length`, which for a paginated / MaxRows-limited slot
+     * is only a SUBSET of the rows — so after the first save/delete event the slot's total
+     * collapsed to the cached slice size, undercounting the true total. That is the RunView
+     * TotalRowCount discrepancy where a fresh `count_only` reported a larger count than a
+     * cached paginated read. We adjust the prior total by the net row delta (add/remove) so a
+     * full-dataset slot is unchanged (prior total == prior length) while a subset slot keeps a
+     * correct total.
      */
     private async storeCachedResults(
         fingerprint: string,
         updatedResults: unknown[],
-        newMaxUpdatedAt: string
+        newMaxUpdatedAt: string,
+        prior?: { totalRowCount?: number; rowCount: number }
     ): Promise<boolean> {
         const data: CachedRunViewData = {
             results: updatedResults,
             maxUpdatedAt: newMaxUpdatedAt
         };
+        if (prior?.totalRowCount != null) {
+            const delta = updatedResults.length - prior.rowCount;
+            data.totalRowCount = Math.max(updatedResults.length, prior.totalRowCount + delta);
+        }
         // Estimate size by sampling rows (eviction accounting only); the actual stored
         // value is the native object. This runs on every save/delete event per matching
         // unfiltered fingerprint, so avoiding a full serialization here matters most.
