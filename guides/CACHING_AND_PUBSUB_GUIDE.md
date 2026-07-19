@@ -332,9 +332,12 @@ graph LR
 
 The index is rebuilt from the registry on startup and maintained during Set/Invalidate/Evict operations.
 
-### Important: Derived rowCount
+### Important: Derived `rowCount` vs. maintained `totalRowCount`
 
-`rowCount` in the registry is **always derived from `results.length`**, never persisted independently. This prevents stale data bugs where the count and actual data could diverge. On every read, `rowCount` is computed fresh from the stored results array.
+Two distinct counts, and the distinction is load-bearing:
+
+- **`rowCount` — the number of *cached* rows.** This is **always derived from `results.length`**, never persisted independently. On every read it's computed fresh from the stored results array, so the count and the actual cached data can never diverge.
+- **`totalRowCount` — the total number of rows matching the query in the database.** For a **full-dataset** slot this equals `rowCount`, but for a **subset slot** (a paginated / `MaxRows`-limited RunView) the total is *larger* than the cached-rows count. It therefore **must be maintained separately** — carried from the server's authoritative `COUNT(*)` on the initial store, and updated across the net row delta on differential updates and in-place upsert/remove. **Deriving `totalRowCount` from `results.length` is a bug**: on a subset slot it collapses the reported total to the cached-subset size the first time a mutation touches the entry, so a cached paginated read under-reports its total (while `count_only`, which is cache-ineligible and always runs a fresh COUNT, stays correct). See the `localCacheManager` `totalRowCount` maintenance in `ApplyDifferentialUpdate` / `storeCachedResults`.
 
 ---
 
@@ -354,7 +357,7 @@ flowchart TD
     E --> F[Apply updates/inserts: merge into Map]
     F --> G[Convert Map back to array]
     G --> H[Persist with new maxUpdatedAt]
-    H --> I[Update registry with derived rowCount]
+    H --> I[Update registry: derived rowCount + maintained totalRowCount across the net delta]
     I --> J[Return merged CachedRunViewResult]
 ```
 
