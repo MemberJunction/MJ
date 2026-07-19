@@ -85,6 +85,7 @@ const GROUPS: { Tier: string; Gate: string; Enabled: boolean; Scripts: string[] 
         Scripts: [
             'prompt-runner-tests.ts',
             'agent-runner-tests.ts',
+            'agent-memory-tests.ts',
             'concurrent-tests.ts',
             'remote-op-ai-authoring-tests.ts',
         ],
