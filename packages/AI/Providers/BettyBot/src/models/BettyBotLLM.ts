@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
+import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import * as Config from '../config';
@@ -26,14 +26,61 @@ export class BettyBotLLM extends BaseLLM {
     }
 
     /**
+     * Determines whether an error (or the current state of the signal) represents a caller-initiated
+     * cancellation rather than a genuine API failure. Axios rejects with a CanceledError when the
+     * request config carries a signal that aborts.
+     */
+    private isCancellation(error: unknown, signal?: AbortSignal): boolean {
+        if (signal?.aborted) {
+            return true;
+        }
+        if (axios.isCancel(error)) {
+            return true;
+        }
+        return error instanceof Error && error.name === 'AbortError';
+    }
+
+    /**
+     * Builds the ChatResult returned when a request is cancelled through ChatParams.cancellationToken
+     * (caller abort or AIPromptRunner timeout). Marked Fatal / non-failover so no layer retries a request
+     * the caller explicitly gave up on.
+     */
+    private buildCancelledResult(startTime: Date): ChatResult {
+        const errorInfo: AIErrorInfo = {
+            errorType: 'Unknown',
+            severity: 'Fatal',
+            canFailover: false,
+            providerErrorCode: 'request_cancelled',
+            context: { provider: 'BettyBot', cancelled: true }
+        };
+
+        const result = new ChatResult(false, startTime, new Date());
+        result.statusText = 'cancelled';
+        result.errorMessage = 'Request cancelled via cancellationToken';
+        result.exception = null;
+        result.errorInfo = errorInfo;
+        result.data = {
+            choices: [],
+            usage: new ModelUsage(0, 0)
+        };
+        return result;
+    }
+
+    /**
      * Implementation of non-streaming chat completion for Betty Bot
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
+        const cancellationToken = params.cancellationToken;
         try{
             const startTime = new Date();
-            
+
+            // Already cancelled before we even dial out — don't open a socket at all
+            if (cancellationToken?.aborted) {
+                return this.buildCancelledResult(startTime);
+            }
+
             //ensure the jwt token is up to date
-            const jwtResponse = await this.GetJWTToken();
+            const jwtResponse = await this.GetJWTToken(false, cancellationToken);
             if(!jwtResponse || jwtResponse.status !== 'SUCCESS'){
                 // Create an error result
                 const errorResult = new ChatResult(false, startTime, startTime);
@@ -43,10 +90,13 @@ export class BettyBotLLM extends BaseLLM {
             }
 
             const endpoint: string = Config.BETTY_BOT_BASE_URL + 'response';
+            // Forward the cancellation token to axios so an abort tears down the underlying HTTP socket
+            // rather than merely abandoning this promise.
             const config: AxiosRequestConfig = {
                 headers: {
                     Authorization: `Bearer ${this.JWTToken}`
-                }
+                },
+                signal: cancellationToken
             };
 
             const userMessage = params.messages.find(m => m.role === ChatMessageRole.user);
@@ -132,6 +182,12 @@ export class BettyBotLLM extends BaseLLM {
             return response;
         }
         catch(ex){
+            // A caller-initiated abort (or AIPromptRunner timeout) is not a Betty failure — report it
+            // as a cancellation so no layer retries a request the caller gave up on.
+            if(this.isCancellation(ex, cancellationToken)){
+                return this.buildCancelledResult(new Date());
+            }
+
             if(axios.isAxiosError(ex)){
                 const axiosError: AxiosError = ex;
                 if(axiosError.response){
@@ -192,7 +248,12 @@ export class BettyBotLLM extends BaseLLM {
         throw new Error("Method not implemented.");
     }
 
-    public async GetJWTToken(forceRefresh?: boolean): Promise<SettingsResponse | null> {
+    /**
+     * Retrieves (and caches) the Betty Bot JWT used to authorize chat requests.
+     * @param forceRefresh when true, bypasses the cached token
+     * @param cancellationToken optional signal that aborts the underlying HTTP request
+     */
+    public async GetJWTToken(forceRefresh?: boolean, cancellationToken?: AbortSignal): Promise<SettingsResponse | null> {
         try {
 
             if(this.JWTToken && !forceRefresh){
@@ -213,7 +274,7 @@ export class BettyBotLLM extends BaseLLM {
             };
 
             const endpoint: string = Config.BETTY_BOT_BASE_URL + 'settings';
-            const response = await axios.post<SettingsResponse>(endpoint, data);
+            const response = await axios.post<SettingsResponse>(endpoint, data, { signal: cancellationToken });
 
             if(response.data){
                 this.JWTToken = response.data.token;
@@ -222,6 +283,11 @@ export class BettyBotLLM extends BaseLLM {
             return response.data;
         } 
         catch (error) {
+            // Don't swallow a cancellation as a generic token failure — let the caller report it as one
+            if(this.isCancellation(error, cancellationToken)){
+                throw error;
+            }
+
             if(axios.isAxiosError(error)){
                 const axiosError = error as AxiosError;
                 if(axiosError.response){

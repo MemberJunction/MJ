@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks                                                     */
@@ -19,6 +19,7 @@ vi.mock('@google/genai', () => ({
 
 vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (_target: unknown) => {},
+  ToJSONSafe: (v: unknown) => (v == null ? null : JSON.parse(JSON.stringify(v))),
 }));
 
 vi.mock('@memberjunction/ai', () => {
@@ -484,6 +485,125 @@ describe('GeminiLLM', () => {
       const result = callProcessStreamingChunk({});
       expect(result.content).toBe('');
       expect(result.finishReason).toBeUndefined();
+    });
+  });
+
+  /* ---- cancellation (ChatParams.cancellationToken) ---- */
+  describe('cancellation', () => {
+    type ChatMocks = { sendMessage: Mock; sendMessageStream: Mock };
+    type ChatResultLike = { success: boolean; statusText: string; errorMessage: string | null; exception: unknown };
+
+    let chatMocks: ChatMocks;
+
+    beforeEach(() => {
+      // Inject a client stub directly — the module-level GoogleGenAI mock uses an arrow
+      // implementation, which cannot be `new`-ed by createClient().
+      chatMocks = { sendMessage: vi.fn(), sendMessageStream: vi.fn() };
+      const client = { chats: { create: vi.fn().mockReturnValue(chatMocks) } };
+      (llm as unknown as Record<string, unknown>)['_gemini'] = client;
+    });
+
+    const getChatMocks = async (): Promise<ChatMocks> => chatMocks;
+
+    const buildParams = (token?: AbortSignal) => ({
+      model: 'gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'hello' }],
+      cancellationToken: token,
+    });
+
+    const callNonStreaming = (token?: AbortSignal): Promise<ChatResultLike> => {
+      const fn = (llm as unknown as Record<string, (p: unknown) => Promise<ChatResultLike>>)['nonStreamingChatCompletion'].bind(llm);
+      return fn(buildParams(token));
+    };
+
+    const callCreateStream = (token?: AbortSignal): Promise<unknown> => {
+      const fn = (llm as unknown as Record<string, (p: unknown) => Promise<unknown>>)['createStreamingRequest'].bind(llm);
+      return fn(buildParams(token));
+    };
+
+    const okResponse = {
+      candidates: [{ content: { parts: [{ text: 'hi' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 },
+    };
+
+    it('forwards the token to @google/genai as config.abortSignal (non-streaming)', async () => {
+      const controller = new AbortController();
+      const mocks = await getChatMocks();
+      mocks.sendMessage.mockResolvedValue(okResponse);
+
+      await callNonStreaming(controller.signal);
+
+      const config = mocks.sendMessage.mock.calls[0][0].config as Record<string, unknown>;
+      expect(config.abortSignal).toBe(controller.signal);
+    });
+
+    it('does not set abortSignal when no token is supplied', async () => {
+      const mocks = await getChatMocks();
+      mocks.sendMessage.mockResolvedValue(okResponse);
+
+      await callNonStreaming(undefined);
+
+      const config = mocks.sendMessage.mock.calls[0][0].config as Record<string, unknown>;
+      expect(config.abortSignal).toBeUndefined();
+    });
+
+    it('forwards the token to @google/genai as config.abortSignal (streaming)', async () => {
+      const controller = new AbortController();
+      const mocks = await getChatMocks();
+      mocks.sendMessageStream.mockResolvedValue({});
+
+      await callCreateStream(controller.signal);
+
+      const config = mocks.sendMessageStream.mock.calls[0][0].config as Record<string, unknown>;
+      expect(config.abortSignal).toBe(controller.signal);
+    });
+
+    it('returns a cancelled ChatResult without calling the SDK when pre-aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+      const mocks = await getChatMocks();
+
+      const result = await callNonStreaming(controller.signal);
+
+      expect(mocks.sendMessage).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('Cancelled');
+    });
+
+    it('maps a mid-flight AbortError to a cancelled ChatResult (not a generic error)', async () => {
+      const controller = new AbortController();
+      const abortError = new Error('The operation was aborted');
+      abortError.name = 'AbortError';
+      const mocks = await getChatMocks();
+      mocks.sendMessage.mockRejectedValue(abortError);
+
+      const result = await callNonStreaming(controller.signal);
+
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('Cancelled');
+      expect(result.exception).toBe(abortError);
+    });
+
+    it('still reports non-cancellation failures as normal errors', async () => {
+      const mocks = await getChatMocks();
+      mocks.sendMessage.mockRejectedValue(new Error('boom'));
+
+      const result = await callNonStreaming(undefined);
+
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('boom');
+    });
+
+    it('finalizeStreamingResponse reports cancellation when the stream was aborted mid-flight', () => {
+      const controller = new AbortController();
+      (llm as unknown as Record<string, AbortSignal | null>)['_streamingCancellationToken'] = controller.signal;
+      controller.abort();
+
+      const fn = (llm as unknown as Record<string, (...a: unknown[]) => ChatResultLike>)['finalizeStreamingResponse'].bind(llm);
+      const result = fn('partial text', null, null);
+
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('Cancelled');
     });
   });
 });
