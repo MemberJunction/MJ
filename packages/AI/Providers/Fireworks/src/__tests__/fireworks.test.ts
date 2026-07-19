@@ -166,4 +166,41 @@ describe('FireworksLLM', () => {
       }
     }, 15000);
   });
+
+  describe('Cancellation', () => {
+    const buildParams = (signal: AbortSignal): ChatParams => {
+      const params = new ChatParams();
+      params.model = 'accounts/fireworks/models/llama-v3p1-8b-instruct';
+      params.messages = [{ role: ChatMessageRole.user, content: 'Hello' }];
+      params.cancellationToken = signal;
+      return params;
+    };
+
+    it('should return a cancelled result (non-streaming) when the token is already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const result = await fireworks.ChatCompletion(buildParams(controller.signal));
+
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('cancelled');
+      expect(result.errorInfo?.canFailover).toBe(false);
+      expect(result.errorInfo?.severity).toBe('Fatal');
+    });
+
+    it('should return a cancelled result (streaming) when the token is already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const params = buildParams(controller.signal);
+      params.streaming = true;
+      params.streamingCallbacks = { OnContent: () => { /* no-op */ } };
+
+      const result = await fireworks.ChatCompletion(params);
+
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('cancelled');
+      expect(result.errorInfo?.canFailover).toBe(false);
+    });
+  });
 });

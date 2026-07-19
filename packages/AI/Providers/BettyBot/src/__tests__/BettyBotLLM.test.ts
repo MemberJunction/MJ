@@ -6,13 +6,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /* ------------------------------------------------------------------ */
 const mockAxiosPost = vi.hoisted(() => vi.fn());
 const mockAxiosIsAxiosError = vi.hoisted(() => vi.fn().mockReturnValue(false));
+const mockAxiosIsCancel = vi.hoisted(() => vi.fn().mockReturnValue(false));
 
 vi.mock('axios', () => ({
   default: {
     post: mockAxiosPost,
     isAxiosError: mockAxiosIsAxiosError,
+    isCancel: mockAxiosIsCancel,
   },
   isAxiosError: mockAxiosIsAxiosError,
+  isCancel: mockAxiosIsCancel,
 }));
 
 vi.mock('../config', () => ({
@@ -133,6 +136,7 @@ describe('BettyBotLLM', () => {
       expect(mockAxiosPost).toHaveBeenCalledWith(
         'https://betty-api.test.co/settings',
         { token: 'test-api-key' },
+        { signal: undefined },
       );
     });
 
@@ -271,6 +275,68 @@ describe('BettyBotLLM', () => {
       expect(data.choices).toHaveLength(3);
       expect(data.choices[1].message.content).toContain('Doc 1');
       expect(data.choices[2].finish_reason).toBe('references_json');
+    });
+  });
+
+  /* ---- cancellationToken ---- */
+  describe('cancellationToken', () => {
+    const callNonStreaming = (params: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      return (llm as unknown as { nonStreamingChatCompletion: (p: unknown) => Promise<Record<string, unknown>> })
+        .nonStreamingChatCompletion(params);
+    };
+
+    it('should return a cancelled result without any HTTP call when already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const result = await callNonStreaming({
+        messages: [{ role: ChatMessageRole.user, content: 'hi' }],
+        model: 'betty',
+        cancellationToken: controller.signal,
+      });
+
+      expect(mockAxiosPost).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('cancelled');
+    });
+
+    it('should forward the token to axios on both the settings and response calls', async () => {
+      const controller = new AbortController();
+      mockAxiosPost.mockResolvedValueOnce({
+        data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
+      });
+      mockAxiosPost.mockResolvedValueOnce({
+        data: { status: 'ok', errorMessage: '', conversationId: 1, response: 'Hi', references: [] },
+      });
+
+      await callNonStreaming({
+        messages: [{ role: ChatMessageRole.user, content: 'hi' }],
+        model: 'betty',
+        cancellationToken: controller.signal,
+      });
+
+      expect(mockAxiosPost.mock.calls[0][2]).toEqual({ signal: controller.signal });
+      const responseConfig = mockAxiosPost.mock.calls[1][2] as { signal?: AbortSignal };
+      expect(responseConfig.signal).toBe(controller.signal);
+    });
+
+    it('should report an axios cancellation as a cancelled result', async () => {
+      const controller = new AbortController();
+      mockAxiosPost.mockResolvedValueOnce({
+        data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
+      });
+      const canceled = new Error('canceled');
+      mockAxiosIsCancel.mockReturnValueOnce(true);
+      mockAxiosPost.mockRejectedValueOnce(canceled);
+
+      const result = await callNonStreaming({
+        messages: [{ role: ChatMessageRole.user, content: 'hi' }],
+        model: 'betty',
+        cancellationToken: controller.signal,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('cancelled');
     });
   });
 
