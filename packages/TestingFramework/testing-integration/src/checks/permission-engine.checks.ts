@@ -969,7 +969,11 @@ export const PermissionEngineChecks: NamedCheck[] = [
     { Id: 'permission-engine.PE10', Name: 'PE10: a role-less user can execute ZERO Authorizations (capability gate fails closed)', Fn: CheckPe10_RolelessUserHasNoAuthorizations },
     { Id: 'permission-engine.PE11', Name: 'PE11: a domain naming an unregistered provider class is contained (real domains intact, nothing granted)', Fn: CheckPe11_UnresolvableProviderIsContained, RequiresMutation: true },
     { Id: 'permission-engine.PE12', Name: 'PE12: an async-throwing provider does not crash the GetAllUserPermissions fan-out', Fn: CheckPe12_ThrowingProviderDoesNotCrashFanOut, RequiresMutation: true },
-    { Id: 'permission-engine.PE13', Name: 'PE13: ⚠ KNOWN-RED — an unresolvable provider class must not poison the GetAllUserPermissions fan-out', Fn: CheckPe13_UnresolvableProviderPoisonsFanOut, RequiresMutation: true }
+    // Was KNOWN-RED when authored; the defect it pinned (B34) is fixed in #3197 — ClassFactory
+    // now reports resolution failure explicitly instead of returning a hollow base instance, and
+    // the fan-out defers each provider call so a SYNCHRONOUS throw becomes a rejection allSettled
+    // can isolate. Verified green end-to-end 2026-07-19. It stays as the regression pin.
+    { Id: 'permission-engine.PE13', Name: 'PE13: an unresolvable provider class must not poison the GetAllUserPermissions fan-out', Fn: CheckPe13_UnresolvableProviderPoisonsFanOut, RequiresMutation: true }
 ];
 
 for (const check of PermissionEngineChecks) {
