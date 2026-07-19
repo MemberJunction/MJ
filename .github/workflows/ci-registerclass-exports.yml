@@ -1,0 +1,53 @@
+name: "@RegisterClass export invariant"
+
+# Every class decorated with @RegisterClass must be exported from its package's
+# public API. @RegisterClass plugs a class into MJ's ClassFactory resolution
+# chain, and the pre-built class manifests emit a NAMED IMPORT for each
+# registered class — so an unexported one makes the manifest unloadable outside
+# a bundler. See .github/scripts/check-registerclass-exports.mjs for the full
+# rationale and the allowlist policy.
+#
+# The sweep is whole-repo and fast (a few seconds — it parses only the export
+# graph reachable from each package entry, not a full type-check), so it runs on
+# any source change rather than trying to map changed files to owning packages.
+
+on:
+  pull_request:
+    branches:
+      - next
+    paths:
+      - 'packages/**/*.ts'
+      - '.github/scripts/check-registerclass-exports.mjs'
+      - '.github/scripts/ci/registerclass-export-allowlist.txt'
+      - '.github/workflows/ci-registerclass-exports.yml'
+
+jobs:
+  check-registerclass-exports:
+    name: Check @RegisterClass classes are exported
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # The checker's only dependency is the TypeScript compiler API, which it uses
+      # to PARSE (never type-check) the export graph. Installing just that keeps
+      # this gate independent of a full workspace install — it runs in seconds.
+      # The version is read from the root manifest so this can't drift from the
+      # compiler the repo actually builds with.
+      - name: Install TypeScript
+        run: |
+          TS_VERSION="$(node -p "require('./package.json').devDependencies.typescript")"
+          echo "Installing typescript@${TS_VERSION} (from root devDependencies)"
+          npm install --no-save --no-audit --no-fund "typescript@${TS_VERSION}"
+
+      - name: Check @RegisterClass export invariant
+        run: npm run check:registerclass
+
+      # NOTE: the guard-script unit tests (.github/scripts/__tests__/**) are run by
+      # test.yml, which already triggers on that path. They are deliberately not
+      # duplicated here.
