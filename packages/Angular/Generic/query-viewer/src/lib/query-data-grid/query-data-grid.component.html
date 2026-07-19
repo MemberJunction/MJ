@@ -8,7 +8,11 @@
         @if (ShowRowCount) {
           <span class="row-count">
             <i class="fa-solid fa-table-list"></i>
-            {{ RowCount | number }} {{ RowCount === 1 ? 'row' : 'rows' }}
+            @if (TotalRowCount > RowCount) {
+              {{ RowCount | number }} of {{ TotalRowCount | number }} {{ TotalRowCount === 1 ? 'row' : 'rows' }}
+            } @else {
+              {{ RowCount | number }} {{ RowCount === 1 ? 'row' : 'rows' }}
+            }
           </span>
         }
         <!-- Selection count -->

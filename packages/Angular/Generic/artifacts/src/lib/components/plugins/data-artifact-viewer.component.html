@@ -10,7 +10,7 @@
             <span class="live-badge">Live</span>
           }
           @if (DisplayRowCount != null) {
-            <span class="row-count">{{ DisplayRowCount }} rows</span>
+            <span class="row-count">{{ DisplayRowCount | number }} rows</span>
           }
           @if (DisplayExecutionTime != null) {
             <span class="exec-time">{{ DisplayExecutionTime }}ms</span>
