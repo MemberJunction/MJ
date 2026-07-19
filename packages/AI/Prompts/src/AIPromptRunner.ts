@@ -3734,10 +3734,11 @@ export class AIPromptRunner {
    * `'Chat completion was cancelled'` error the previous implementation produced, so cancellation
    * semantics are unchanged.
    *
-   * CAVEAT: the losing `ChatCompletion()` promise is abandoned, not aborted — no shipped driver
-   * currently forwards `ChatParams.cancellationToken` to its SDK/HTTP layer, so the underlying
-   * socket may stay open until the provider closes it. The composed signal is already on
-   * `ChatParams.cancellationToken`, so drivers become fully abortable the moment they honor it.
+   * NOTE: `Promise.race` ignores the losing `ChatCompletion()` promise's eventual result, but the
+   * underlying request IS torn down — the composed signal is on `ChatParams.cancellationToken`, and
+   * all 19 drivers now forward it to their SDK/HTTP layer, so aborting the signal (which is exactly
+   * what makes the model call lose the race on a timeout or cancellation) aborts the socket rather
+   * than leaving it open until the provider closes it.
    */
   private async runChatCompletionBounded(llm: BaseLLM, chatParams: ChatParams, bound: ExecutionBound): Promise<ChatResult> {
     const signal = bound.Signal;

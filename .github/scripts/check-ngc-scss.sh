@@ -249,6 +249,12 @@ while IFS= read -r ts_abs; do
                         "-> $style_repo_rel"
                 fi
                 ;;
+            *.css)
+                # RULE 1 only — a .css styleUrl embedded raw by ngc is dead in production
+                # for stray &__elem / &--modifier residue exactly like a .scss one. RULE 2
+                # (the .scss -> .css rename) doesn't apply to a file that is already .css.
+                check_stylesheet "$style_abs"
+                ;;
         esac
     done <<< "$refs"
 done < <(list_component_ts)
