@@ -176,6 +176,19 @@ describe('HuggingFaceRealtime', () => {
             expect(HuggingFaceRealtime.ResolveSampleRate(makeParams({ Config: { sampleRate: 16000 } }))).toBe(16000);
         });
 
+        it('the SERVER-BRIDGED session declares HF-native 16 kHz in/out (not the 24 kHz bridge default), honoring Config.sampleRate', async () => {
+            // Without a declared rate the bridge falls back to 24 kHz and feeds it into HF's 16 kHz
+            // pipeline — the documented "silent on the bridge" footgun. The session must report 16 kHz.
+            const driver = new TestHuggingFaceRealtime('');
+            const session = await startSession(driver, makeParams());
+            expect(session.InputSampleRate).toBe(16000);
+            expect(session.OutputSampleRate).toBe(16000);
+            // A deployment whose pipeline runs at a different rate can override it:
+            const overridden = await startSession(new TestHuggingFaceRealtime(''), makeParams({ Config: { sampleRate: 24000 } }));
+            expect(overridden.InputSampleRate).toBe(24000);
+            expect(overridden.OutputSampleRate).toBe(24000);
+        });
+
         it('converts http(s) origins to ws(s) and drops any path', () => {
             expect(HuggingFaceRealtime.HttpOriginToWs('http://localhost:4000')).toBe('ws://localhost:4000');
             expect(HuggingFaceRealtime.HttpOriginToWs('https://api.example.com/graphql')).toBe('wss://api.example.com');
@@ -321,11 +334,24 @@ describe('HuggingFaceRealtime', () => {
             driver.Emit({ type: 'input_audio_buffer.speech_started' }); // barge-in over active output
             driver.Emit({ type: 'response.function_call_arguments.done', call_id: 'c1', name: 'do_thing', arguments: '{"x":1}' });
 
-            expect(seen.transcripts).toContainEqual({ Role: 'user', Text: 'Hello there', IsFinal: true } as RealtimeTranscript);
-            expect(seen.transcripts).toContainEqual({ Role: 'assistant', Text: 'Hi', IsFinal: false } as RealtimeTranscript);
+            expect(seen.transcripts).toContainEqual({ Role: 'user', Text: 'Hello there', IsFinal: true, ReplacesPrevious: false } as RealtimeTranscript);
+            expect(seen.transcripts).toContainEqual({ Role: 'assistant', Text: 'Hi', IsFinal: false, ReplacesPrevious: false } as RealtimeTranscript);
             expect(seen.output.length).toBe(1);
             expect(seen.interruptions).toBe(1);
             expect(seen.toolCalls).toEqual([{ CallID: 'c1', ToolName: 'do_thing', Arguments: '{"x":1}' }]);
+        });
+
+        it('flags 2nd+ streamed user completeds ReplacesPrevious via the shared session; resets on speech_started', async () => {
+            // HuggingFace inherits the shared OpenAIRealtimeSession streamed-transcription handling, so a
+            // pipeline that streams growing user captions collapses to one persisted row and resets per turn.
+            const driver = new TestHuggingFaceRealtime('');
+            const session = await startSession(driver, makeParams());
+            const seen = collect(session);
+            driver.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'turn' });
+            driver.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'turn on' });
+            driver.Emit({ type: 'input_audio_buffer.speech_started' }); // new turn
+            driver.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'off' });
+            expect(seen.transcripts.filter((t) => t.Role === 'user').map((t) => t.ReplacesPrevious)).toEqual([false, true, false]);
         });
 
         it('accepts BETA event aliases from older speech-to-speech builds', async () => {
@@ -336,8 +362,8 @@ describe('HuggingFaceRealtime', () => {
             driver.Emit({ type: 'response.audio_transcript.delta', delta: 'partial' });
             driver.Emit({ type: 'response.audio_transcript.done', transcript: 'full sentence' });
             expect(seen.output.length).toBe(1);
-            expect(seen.transcripts).toContainEqual({ Role: 'assistant', Text: 'partial', IsFinal: false } as RealtimeTranscript);
-            expect(seen.transcripts).toContainEqual({ Role: 'assistant', Text: 'full sentence', IsFinal: true } as RealtimeTranscript);
+            expect(seen.transcripts).toContainEqual({ Role: 'assistant', Text: 'partial', IsFinal: false, ReplacesPrevious: false } as RealtimeTranscript);
+            expect(seen.transcripts).toContainEqual({ Role: 'assistant', Text: 'full sentence', IsFinal: true, ReplacesPrevious: false } as RealtimeTranscript);
         });
 
         it('audio delta marks a response active even without response.created (compat robustness)', async () => {
