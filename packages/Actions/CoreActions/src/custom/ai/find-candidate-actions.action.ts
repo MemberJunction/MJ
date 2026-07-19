@@ -30,7 +30,7 @@ import { MJActionParamEntity } from "@memberjunction/core-entities";
  * ```
  */
 @RegisterClass(BaseAction, "Find Candidate Actions")
-export class FindBestActionAction extends BaseAction {
+export class FindCandidateActionsAction extends BaseAction {
     /**
      * Executes the Find Candidate Actions action.
      *
