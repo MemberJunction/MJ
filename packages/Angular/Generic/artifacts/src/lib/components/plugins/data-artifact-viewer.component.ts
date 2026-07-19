@@ -152,6 +152,14 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   public get DisplayRowCount(): number | null {
+    // In live/paged mode the pager tracks the TRUE total row count
+    // (PagerTotalRowCount, from RunQueryResult.TotalRowCount) — surface that as
+    // the headline count so the title reflects the full result size, not just the
+    // current page (which the bottom pager already shows as a range). Falls back
+    // to the page/inline row count when there's no paged total.
+    if (this.PagerTotalRowCount > 0) {
+      return this.PagerTotalRowCount;
+    }
     return this.liveRowCount ?? this.spec?.metadata?.rowCount ?? null;
   }
 
