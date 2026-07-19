@@ -101,6 +101,8 @@ interface ModelSelectionResult {
   vendorDriverClass?: string;
   vendorApiName?: string;
   vendorSupportsEffortLevel?: boolean;
+  /** Whether the selected model-vendor supports native, provider-enforced structured output. */
+  vendorSupportsStructuredOutput?: boolean;
   modelEffortLevel?: number;
   selectionInfo?: AIModelSelectionInfo;
   allCandidates: ModelVendorCandidate[];
@@ -130,6 +132,8 @@ interface ModelVendorCandidate {
   driverClass: string;
   apiName?: string;
   supportsEffortLevel?: boolean;
+  /** Whether this model-vendor supports native, provider-enforced structured output. */
+  supportsStructuredOutput?: boolean;
   effortLevel?: number;
   isPreferredVendor: boolean;
   priority: number; // Higher is better
@@ -928,6 +932,7 @@ export class AIPromptRunner {
     let vendorDriverClass = existingSelection?.vendorDriverClass;
     let vendorApiName = existingSelection?.vendorApiName;
     let vendorSupportsEffortLevel = existingSelection?.vendorSupportsEffortLevel;
+    let vendorSupportsStructuredOutput = existingSelection?.vendorSupportsStructuredOutput;
     let modelEffortLevel = existingSelection?.modelEffortLevel;
     let allCandidates: ModelVendorCandidate[] = existingSelection?.allCandidates ?? [];
     // Credential probes already done during selection — reused by failover so it doesn't
@@ -947,6 +952,7 @@ export class AIPromptRunner {
       vendorDriverClass = modelResult.vendorDriverClass;
       vendorApiName = modelResult.vendorApiName;
       vendorSupportsEffortLevel = modelResult.vendorSupportsEffortLevel;
+      vendorSupportsStructuredOutput = modelResult.vendorSupportsStructuredOutput;
       modelEffortLevel = modelResult.modelEffortLevel;
       modelSelectionInfo = modelResult.selectionInfo;
       allCandidates = modelResult.allCandidates || [];
@@ -981,7 +987,8 @@ export class AIPromptRunner {
       vendorApiName,
       vendorSupportsEffortLevel,
       modelEffortLevel, // Pass model-specific effort level
-      credentialAvailability // Reuse credential probes from selection
+      credentialAvailability, // Reuse credential probes from selection
+      vendorSupportsStructuredOutput
     );
 
     // Calculate execution metrics
@@ -1787,6 +1794,7 @@ export class AIPromptRunner {
         vendorDriverClass: selected.driverClass,
         vendorApiName: selected.apiName,
         vendorSupportsEffortLevel: selected.supportsEffortLevel,
+        vendorSupportsStructuredOutput: selected.supportsStructuredOutput,
         modelEffortLevel: selected.effortLevel, // Pass through model-specific effort level
         allCandidates: candidates,
         credentialAvailability,
@@ -2186,6 +2194,7 @@ export class AIPromptRunner {
       driverClass: modelVendor.DriverClass || model.DriverClass,
       apiName: modelVendor.APIName || model.APIName,
       supportsEffortLevel: modelVendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
+      supportsStructuredOutput: modelVendor.SupportsStructuredOutput ?? false,
       effortLevel: promptModel.EffortLevel ?? undefined, // Model-specific effort level override
       isPreferredVendor: false,
       priority: computedPriority,
@@ -2217,6 +2226,7 @@ export class AIPromptRunner {
         driverClass: vendor.DriverClass || model.DriverClass,
         apiName: vendor.APIName || model.APIName,
         supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
+        supportsStructuredOutput: vendor.SupportsStructuredOutput ?? false,
         isPreferredVendor: false,
         priority: computedPriority,
         source: 'prompt-model'
@@ -2230,6 +2240,7 @@ export class AIPromptRunner {
         driverClass: model.DriverClass,
         apiName: model.APIName,
         supportsEffortLevel: model.SupportsEffortLevel ?? false,
+        supportsStructuredOutput: false, // vendor-only capability; no model-level fallback
         isPreferredVendor: false,
         priority: computedPriority,
         source: 'prompt-model'
@@ -2479,6 +2490,7 @@ export class AIPromptRunner {
           driverClass: preferredVendor.DriverClass || model.DriverClass,
           apiName: preferredVendor.APIName || model.APIName,
           supportsEffortLevel: preferredVendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
+          supportsStructuredOutput: preferredVendor.SupportsStructuredOutput ?? false,
           isPreferredVendor: true,
           priority: basePriority + 1000, // Boost priority for preferred vendor
           source
@@ -2496,6 +2508,7 @@ export class AIPromptRunner {
           driverClass: vendor.DriverClass || model.DriverClass,
           apiName: vendor.APIName || model.APIName,
           supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
+          supportsStructuredOutput: vendor.SupportsStructuredOutput ?? false,
           isPreferredVendor: false,
           priority: basePriority + (vendor.Priority || 0),
           source
@@ -2510,6 +2523,7 @@ export class AIPromptRunner {
         driverClass: model.DriverClass,
         apiName: model.APIName,
         supportsEffortLevel: model.SupportsEffortLevel ?? false,
+        supportsStructuredOutput: false, // vendor-only capability; no model-level fallback
         isPreferredVendor: false,
         priority: basePriority,
         source
@@ -3057,7 +3071,8 @@ export class AIPromptRunner {
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
     modelEffortLevel?: number,
-    credentialAvailability?: Map<string, boolean>
+    credentialAvailability?: Map<string, boolean>,
+    vendorSupportsStructuredOutput?: boolean
   ): Promise<ChatResult> {
     // Get failover configuration (used for errorScope filtering)
     const failoverConfig = this.getFailoverConfiguration(prompt);
@@ -3067,7 +3082,8 @@ export class AIPromptRunner {
       return this.executeModel(
         model, renderedPrompt, prompt, params, vendorId,
         conversationMessages, templateMessageRole, cancellationToken,
-        vendorDriverClass, vendorApiName, vendorSupportsEffortLevel, modelEffortLevel
+        vendorDriverClass, vendorApiName, vendorSupportsEffortLevel, modelEffortLevel,
+        vendorSupportsStructuredOutput
       );
     }
 
@@ -3148,7 +3164,8 @@ export class AIPromptRunner {
           candidate.driverClass,
           candidate.apiName,
           candidate.supportsEffortLevel,
-          candidate.effortLevel
+          candidate.effortLevel,
+          candidate.supportsStructuredOutput
         );
 
         // CRITICAL FIX: Check if result failed but is retriable (network errors, rate limits, etc.)
@@ -3293,6 +3310,7 @@ export class AIPromptRunner {
           driverClass: model.DriverClass,
           apiName: model.APIName,
           supportsEffortLevel: model.SupportsEffortLevel ?? false,
+          supportsStructuredOutput: false, // vendor-only capability; no model-level fallback
           isPreferredVendor: false,
           priority: model.PowerRank || 0,
           source: 'power-rank'
@@ -3307,6 +3325,7 @@ export class AIPromptRunner {
             driverClass: vendor.DriverClass || model.DriverClass,
             apiName: vendor.APIName || model.APIName,
             supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
+            supportsStructuredOutput: vendor.SupportsStructuredOutput ?? false,
             isPreferredVendor: vendor.Priority > 0,
             priority: (model.PowerRank || 0) + (vendor.Priority || 0),
             source: 'power-rank'
@@ -3419,7 +3438,8 @@ export class AIPromptRunner {
     vendorDriverClass?: string,
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
-    modelEffortLevel?: number
+    modelEffortLevel?: number,
+    vendorSupportsStructuredOutput?: boolean
   ): Promise<ChatResult> {
     // define these variables here to ensure they're available in the catch block
     let driverClass: string;
@@ -3433,6 +3453,8 @@ export class AIPromptRunner {
 
       // Determine if effort level is supported
       let supportsEffortLevel: boolean = false;
+      // Determine if native structured output is supported (vendor-level capability only)
+      let supportsStructuredOutput: boolean = false;
 
       // Get vendor-specific configuration
       // Use passed vendor info if available, otherwise fall back to vendor lookup
@@ -3442,12 +3464,15 @@ export class AIPromptRunner {
         apiName = vendorApiName;
         // Use provided vendorSupportsEffortLevel, or default to false
         supportsEffortLevel = vendorSupportsEffortLevel ?? false;
+        supportsStructuredOutput = vendorSupportsStructuredOutput ?? false;
       } else {
         // Fallback to model defaults or vendor lookup
         driverClass = model.DriverClass;
         apiName = model.APIName;
         // Start with model's SupportsEffortLevel setting
         supportsEffortLevel = model.SupportsEffortLevel ?? false;
+        // Structured output is vendor-only; there is no model-level fallback, so start false
+        supportsStructuredOutput = false;
 
         if (vendorId) {
           // Find the AIModelVendor record for this specific vendor - must be an inference provider
@@ -3460,6 +3485,8 @@ export class AIPromptRunner {
             apiName = modelVendor.APIName || apiName;
             // Use modelVendor's SupportsEffortLevel if available
             supportsEffortLevel = modelVendor.SupportsEffortLevel ?? supportsEffortLevel;
+            // Use modelVendor's SupportsStructuredOutput if available
+            supportsStructuredOutput = modelVendor.SupportsStructuredOutput ?? supportsStructuredOutput;
           } else {
             // Log warning if vendor was specified but not found or not an inference provider
             this.logStatus(`⚠️ Vendor ${vendorId} not found or is not an inference provider for model ${model.Name}, using model defaults`, true, params);
@@ -3554,6 +3581,16 @@ export class AIPromptRunner {
       } else {
         // if response format is not set or set to Any (prompt or override), stay silent
         chatParams.responseFormat = undefined;
+      }
+
+      // Signal native structured-output support to the driver only when BOTH the selected
+      // model-vendor is marked as supporting it AND the effective response format actually asks
+      // for structured JSON. Drivers that implement constrained decoding honor this hint (e.g.
+      // attach a provider json_schema response format); drivers that don't ignore it, so this
+      // never changes behavior for providers lacking the capability — preserving portability.
+      if (supportsStructuredOutput &&
+          (chatParams.responseFormat === 'JSON' || chatParams.responseFormat === 'ModelSpecific')) {
+        chatParams.supportsStructuredOutput = true;
       }
 
       // Build message array with rendered prompt and conversation messages
@@ -4052,7 +4089,8 @@ export class AIPromptRunner {
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
     modelEffortLevel?: number,
-    credentialAvailability?: Map<string, boolean>
+    credentialAvailability?: Map<string, boolean>,
+    vendorSupportsStructuredOutput?: boolean
   ): Promise<{
     modelResult: ChatResult;
     parsedResult: { result: unknown; validationResult?: ValidationResult };
@@ -4100,7 +4138,8 @@ export class AIPromptRunner {
           vendorApiName,
           vendorSupportsEffortLevel,
           modelEffortLevel,
-          credentialAvailability // Reuse credential probes from selection
+          credentialAvailability, // Reuse credential probes from selection
+          vendorSupportsStructuredOutput
         );
 
         // Check for fatal errors - don't attempt validation/retry on these
@@ -4492,6 +4531,7 @@ export class AIPromptRunner {
     driverClass: string;
     apiName: string | undefined;
     supportsEffortLevel: boolean;
+    supportsStructuredOutput: boolean;
   } | null> {
     // Select next candidate using failover strategy
     const nextCandidates = this.selectFailoverCandidates(
@@ -4525,7 +4565,8 @@ export class AIPromptRunner {
       vendorId: nextCandidate.vendorId,
       driverClass: nextCandidate.driverClass,
       apiName: nextCandidate.apiName,
-      supportsEffortLevel: nextCandidate.supportsEffortLevel || false
+      supportsEffortLevel: nextCandidate.supportsEffortLevel || false,
+      supportsStructuredOutput: nextCandidate.supportsStructuredOutput || false
     };
   }
 

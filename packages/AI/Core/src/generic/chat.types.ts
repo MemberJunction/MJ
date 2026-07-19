@@ -196,6 +196,20 @@ export class ChatParams extends BaseParams  {
      * If the model supports effort levels, this parameter can be used to specify the effort level.
      */
     effortLevel?: string;
+
+    /**
+     * Signals that the selected model-vendor is marked as supporting native, provider-enforced
+     * structured output (constrained JSON decoding against a schema). Set by AIPromptRunner from
+     * AIModelVendor.SupportsStructuredOutput, and only when the effective `responseFormat` actually
+     * requests structured JSON ('JSON' or 'ModelSpecific').
+     *
+     * This is a capability hint, not a schema. Drivers that implement constrained decoding SHOULD
+     * honor it (e.g. attach a provider `json_schema` / structured-output response format); drivers
+     * that don't can safely ignore it, so setting it never breaks a provider — preserving MJ's
+     * cross-provider portability. Schema derivation (from the prompt's OutputExample) is handled
+     * separately and is not carried on this flag.
+     */
+    supportsStructuredOutput?: boolean;
     
     /**
      * Whether to enable caching for this request.

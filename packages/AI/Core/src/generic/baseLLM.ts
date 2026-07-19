@@ -182,6 +182,19 @@ export abstract class BaseLLM extends BaseModel {
     }
 
     /**
+     * Whether this LLM provider supports native, provider-enforced structured output
+     * (constrained JSON decoding against a schema — e.g. OpenAI Structured Outputs / json_schema
+     * response formats). This is a code-level default used when database metadata
+     * (AIModelVendor.SupportsStructuredOutput) is null; database values of true/false override this
+     * getter. Providers that implement constrained decoding should override this to return true AND
+     * honor {@link ChatParams.supportsStructuredOutput} in their completion path. Providers that do
+     * not implement it leave this false and ignore the ChatParams hint, preserving portability.
+     */
+    public get SupportsStructuredOutput(): boolean {
+        return false;
+    }
+
+    /**
      * Returns the native file input capabilities of this LLM driver, or null if
      * the driver does not support file attachments. Subclasses that accept files
      * (PDFs, images, etc.) should override this method.
