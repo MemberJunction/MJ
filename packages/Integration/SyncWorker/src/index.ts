@@ -63,7 +63,7 @@ async function bootstrap(): Promise<void> {
             keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
             enablePubSub: true,
         });
-        (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redis);
+        (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redis); // global-provider-ok: bootstrap (Redis cache wiring for the worker process)
         await redis.StartListening();
         LogStatus(`[SyncWorker] Redis cache invalidation connected: ${process.env.REDIS_URL}`);
     } else {
