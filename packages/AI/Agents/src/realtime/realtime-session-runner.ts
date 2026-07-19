@@ -27,6 +27,7 @@ import {
     RealtimeTranscript,
     RealtimeToolCall,
     RealtimeUsage,
+    RealtimeUsageModalityDetail,
     RealtimeToolDefinition,
     RealtimeSessionError,
     RealtimeMediaKind,
@@ -157,6 +158,22 @@ export interface RealtimeSessionRunnerDeps {
      */
     CheckpointUsage: (usage: RealtimeUsage) => Promise<void>;
 
+    /**
+     * Optional abort signal (the agent layer passes the chained caller-token + agent-timeout
+     * signal). When it fires, the runner stops + finalizes the session — realtime sessions honor
+     * the same cancellation/wall-clock semantics as every other agent run instead of relying on
+     * the janitor's coarse staleness sweep. Absent ⇒ prior behavior.
+     */
+    AbortSignal?: AbortSignal;
+
+    /**
+     * Maximum bounded RECONNECT attempts after a FATAL transport drop (socket death, credential
+     * teardown) before the runner finalizes. Each attempt opens a fresh provider session with the
+     * SAME params + tool set, re-wires handlers, and injects a context note so the model knows
+     * the line dropped. Accumulated usage/transcripts span the reconnect. Default 1; 0 disables.
+     */
+    MaxTransportReconnects?: number;
+
     /** Optional debounce window (ms) for usage checkpoints. Defaults to 5000ms. */
     UsageCheckpointDebounceMs?: number;
 
@@ -226,6 +243,10 @@ export class RealtimeSessionRunner {
 
     /** Accumulated usage across all `OnUsage` deltas, flushed to the checkpoint on debounce/close. */
     private accumulatedUsage: RealtimeUsage = { InputTokens: 0, OutputTokens: 0 };
+    /** The registered abort listener (removed on Stop so a late signal can't touch a dead runner). */
+    private abortListener: (() => void) | null = null;
+    /** Fatal-transport reconnect attempts consumed so far (bounded by deps.MaxTransportReconnects). */
+    private reconnectAttempts = 0;
     /** Whether there is accumulated usage that has not yet been checkpointed. */
     private usageDirty = false;
     /** Pending debounce timer handle for usage checkpoints. */
@@ -367,9 +388,24 @@ export class RealtimeSessionRunner {
         // providers like Gemini Live, the ONLY effective) registration path. A post-start
         // RegisterTools with the identical set would be a contract-mandated no-op, so the
         // runner does not make that redundant call.
+        // Cancellation semantics (C4): realtime sessions honor the same chained caller-token +
+        // agent-timeout signal as every other agent run. Already-aborted ⇒ never open the socket.
+        const signal = this.deps.AbortSignal;
+        if (signal?.aborted) {
+            throw new Error('Realtime session aborted before start (cancellation signal already fired).');
+        }
+
         this.session = await this.deps.Model.StartSession(params);
         this.wireHandlers(this.session);
         this.attachRecording(this.session);
+
+        if (signal) {
+            this.abortListener = () => {
+                this.deps.LogStatus?.('🛑 Cancellation signal fired — stopping the realtime session.', false);
+                void this.Stop();
+            };
+            signal.addEventListener('abort', this.abortListener, { once: true });
+        }
 
         this.deps.LogStatus?.(
             `🎙️ Realtime session started with ${tools.length} tool(s) (target-independent set).`,
@@ -429,10 +465,48 @@ export class RealtimeSessionRunner {
     private handleSessionError(error: RealtimeSessionError): void {
         const code = error.Code ? ` [${error.Code}]` : '';
         if (error.Fatal) {
+            const maxReconnects = this.deps.MaxTransportReconnects ?? 1;
+            if (!this.stopped && this.reconnectAttempts < maxReconnects) {
+                this.reconnectAttempts++;
+                this.deps.LogError?.(`Fatal realtime session error${code} — attempting bounded reconnect ${this.reconnectAttempts}/${maxReconnects}: ${error.Message}`);
+                void this.attemptTransportReconnect();
+                return;
+            }
             this.deps.LogError?.(`Fatal realtime session error${code} — finalizing session: ${error.Message}`);
             void this.Stop();
         } else {
             this.deps.LogError?.(`Realtime session error (non-fatal)${code}: ${error.Message}`);
+        }
+    }
+
+    /**
+     * Attempts ONE transport reconnect after a fatal drop: quietly discards the dead session,
+     * opens a fresh provider session with the SAME params + tool set, re-wires handlers +
+     * recording, and injects a context note so the model can acknowledge the blip. Accumulated
+     * usage and transcript counts span the reconnect (the same long-lived AIPromptRun continues).
+     * A failed attempt finalizes via {@link Stop} (further fatal errors on the new session
+     * consume the remaining attempt budget).
+     */
+    private async attemptTransportReconnect(): Promise<void> {
+        try {
+            try {
+                await this.session?.Close();
+            } catch {
+                /* the dead socket may throw on close — irrelevant */
+            }
+            this.session = null;
+
+            const tools = this.BuildToolSet();
+            const params: RealtimeSessionParams = { ...this.deps.SessionParams, Tools: tools };
+            const fresh = await this.deps.Model.StartSession(params);
+            this.session = fresh;
+            this.wireHandlers(fresh);
+            this.attachRecording(fresh);
+            fresh.SendContextNote?.('NOTE: the audio connection dropped briefly and has been re-established. Briefly acknowledge the interruption if the user was mid-conversation, then continue where things left off.');
+            this.deps.LogStatus?.('🔁 Realtime transport reconnected after a fatal drop — session resumed.', false);
+        } catch (reconnectError) {
+            this.logError(reconnectError, 'reconnecting after a fatal transport drop');
+            void this.Stop();
         }
     }
 
@@ -497,10 +571,39 @@ export class RealtimeSessionRunner {
     private handleUsage(usage: RealtimeUsage): void {
         this.accumulatedUsage = {
             InputTokens: this.accumulatedUsage.InputTokens + usage.InputTokens,
-            OutputTokens: this.accumulatedUsage.OutputTokens + usage.OutputTokens
+            OutputTokens: this.accumulatedUsage.OutputTokens + usage.OutputTokens,
+            ...(this.sumModalityDetail(this.accumulatedUsage.InputTokenDetails, usage.InputTokenDetails)
+                ? { InputTokenDetails: this.sumModalityDetail(this.accumulatedUsage.InputTokenDetails, usage.InputTokenDetails)! }
+                : {}),
+            ...(this.sumModalityDetail(this.accumulatedUsage.OutputTokenDetails, usage.OutputTokenDetails)
+                ? { OutputTokenDetails: this.sumModalityDetail(this.accumulatedUsage.OutputTokenDetails, usage.OutputTokenDetails)! }
+                : {}),
         };
         this.usageDirty = true;
         this.scheduleUsageCheckpoint();
+    }
+
+    /**
+     * Sums two per-modality detail blocks field-wise (absent fields contribute 0; a field present
+     * in EITHER side appears in the sum). Returns `undefined` when both sides are absent, so
+     * totals-only providers never grow phantom empty detail blocks.
+     */
+    private sumModalityDetail(
+        a: RealtimeUsageModalityDetail | undefined,
+        b: RealtimeUsageModalityDetail | undefined
+    ): RealtimeUsageModalityDetail | undefined {
+        if (!a && !b) {
+            return undefined;
+        }
+        const sum: RealtimeUsageModalityDetail = {};
+        for (const key of ['TextTokens', 'AudioTokens', 'ImageTokens', 'CachedTokens'] as const) {
+            const av = a?.[key];
+            const bv = b?.[key];
+            if (typeof av === 'number' || typeof bv === 'number') {
+                sum[key] = (av ?? 0) + (bv ?? 0);
+            }
+        }
+        return sum;
     }
 
     /**
@@ -530,7 +633,9 @@ export class RealtimeSessionRunner {
         this.usageDirty = false;
         const snapshot: RealtimeUsage = {
             InputTokens: this.accumulatedUsage.InputTokens,
-            OutputTokens: this.accumulatedUsage.OutputTokens
+            OutputTokens: this.accumulatedUsage.OutputTokens,
+            ...(this.accumulatedUsage.InputTokenDetails ? { InputTokenDetails: { ...this.accumulatedUsage.InputTokenDetails } } : {}),
+            ...(this.accumulatedUsage.OutputTokenDetails ? { OutputTokenDetails: { ...this.accumulatedUsage.OutputTokenDetails } } : {}),
         };
         try {
             await this.deps.CheckpointUsage(snapshot);
@@ -713,6 +818,12 @@ export class RealtimeSessionRunner {
         }
         this.stopped = true;
 
+        // Detach the cancellation listener — a late signal must not touch a finalized runner.
+        if (this.abortListener && this.deps.AbortSignal) {
+            this.deps.AbortSignal.removeEventListener('abort', this.abortListener);
+            this.abortListener = null;
+        }
+
         // Cancel any pending debounce and force a final flush so partial usage is never lost.
         if (this.usageDebounceTimer) {
             clearTimeout(this.usageDebounceTimer);
@@ -764,7 +875,9 @@ export class RealtimeSessionRunner {
             Success: success,
             FinalUsage: {
                 InputTokens: this.accumulatedUsage.InputTokens,
-                OutputTokens: this.accumulatedUsage.OutputTokens
+                OutputTokens: this.accumulatedUsage.OutputTokens,
+                ...(this.accumulatedUsage.InputTokenDetails ? { InputTokenDetails: { ...this.accumulatedUsage.InputTokenDetails } } : {}),
+                ...(this.accumulatedUsage.OutputTokenDetails ? { OutputTokenDetails: { ...this.accumulatedUsage.OutputTokenDetails } } : {}),
             },
             TranscriptTurnCount: this.transcriptTurnCount,
             ErrorMessage: errorMessage

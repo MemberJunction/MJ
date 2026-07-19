@@ -95,6 +95,17 @@ export type VectorRecord<T extends RecordMetadata = RecordMetadata> = {
      * Any metadata associated with this record.
      */
     metadata?: T;
+    /**
+     * Provider-specific routing and operational directives set by
+     * {@link VectorDBBase.BuildProviderDirectives} during ingestion. This field
+     * is MJ-internal and must be stripped before the record is sent to any
+     * external vector database — it is never persisted in the index.
+     *
+     * Providers read keys they care about from this object in `CreateRecord(s)`,
+     * then discard it before the actual upsert call. Example: Pinecone reads
+     * `providerTemporaryDirectives.namespace` to route each record to the correct namespace.
+     */
+    providerTemporaryDirectives?: Record<string, unknown>;
 };
 
 export type BaseRequestParams = {

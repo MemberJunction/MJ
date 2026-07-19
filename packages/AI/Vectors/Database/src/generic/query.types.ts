@@ -20,6 +20,15 @@ export type QueryParamsBase = {
      * This parameter allows you to modify your query with a metadata filter.
      */
     filter?: object;
+    /**
+     * Optional opaque configuration blob passed through to the vector DB driver.
+     * Each driver reads the keys it understands and ignores the rest — callers
+     * do not need to know which driver is in use. Populated from the rendered
+     * `ExternalIndexConfig` on the scope's external-index row.
+     *
+     * Example: Pinecone reads `providerConfig.namespace` for tenant isolation.
+     */
+    providerConfig?: Record<string, unknown>;
 };
 
 export type QueryByRecordId = QueryParamsBase & {

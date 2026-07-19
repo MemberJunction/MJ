@@ -19604,5 +19604,156 @@
       "lastModified": "2026-07-14T20:47:45.854Z",
       "checksum": "2f09ea352c82dd1cd9206466470e8bea46e2153907dc35dc35f5b26dec3e1e18"
     }
+  },
+  {
+    "fields": {
+      "Name": "GPT Realtime 2.1",
+      "PowerRank": 11,
+      "Description": "OpenAI's speech-to-speech voice model released July 6, 2026 — the 2.1 update to GPT Realtime 2. Delivers GPT-5-class reasoning through the audio modality with five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool/function calls, and a 128K token context (32K max output). Improves on GPT Realtime 2 with better alphanumeric recognition, silence/noise handling, and interruption/barge-in behavior, plus ~25% lower p95 latency from improved caching; pricing is unchanged from GPT Realtime 2. Multi-channel token pricing: $32/M audio input ($0.40 cached), $64/M audio output, $4/M text input ($0.40 cached), $24/M text output, $5/M image input ($0.50 cached). Streaming full-duplex realtime model driven via BaseRealtimeModel (DriverClass OpenAIRealtime). A smaller gpt-realtime-2.1-mini variant also exists.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 8,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT Realtime 2"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "79C52DC9-9029-436A-993B-6C97316D2D41"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAIRealtime",
+            "APIName": "gpt-realtime-2.1",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 32000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7D46CC51-07BC-4456-8AE8-A887105B742A"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-07-06T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4,
+            "OutputPricePerUnit": 24,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-Realtime-2.1 has multi-channel token pricing — the rates here ($4 input / $24 output per 1M) cover the TEXT channel only, with cache read $0.40 (published text cached-input price; OpenAI Family B, no cache-write charge). Audio channels: $32/M audio input ($0.40 cached), $64/M audio output. Image input: $5/M ($0.50 cached). Released July 6, 2026 alongside gpt-realtime-2.1-mini; pricing identical to GPT Realtime 2.",
+            "CacheReadPricePerUnit": 0.4,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "4E34EA7E-59BF-4653-A627-5990FD779803"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C4DD65B6-1A2F-44FF-938E-B6E2961DAF84"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT Realtime 2.1-mini",
+      "PowerRank": 9,
+      "Description": "OpenAI's compact speech-to-speech voice model (gpt-realtime-2.1-mini), released July 6, 2026 alongside GPT Realtime 2.1. Brings the GPT Realtime 2.1 reasoning realtime stack — five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool/function calls, 128K token context (32K max output), and audio/text/image input — to a cost-optimized tier for high-volume voice workloads. Multi-channel token pricing: $10/M audio input ($0.30 cached), $20/M audio output, $0.60/M text input ($0.06 cached), $2.40/M text output, $0.80/M image input ($0.08 cached). Streaming full-duplex realtime model driven via BaseRealtimeModel (DriverClass OpenAIRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 10,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "3D61411B-90DD-4221-AB21-6FC217243AD1"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAIRealtime",
+            "APIName": "gpt-realtime-2.1-mini",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 32000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E050FE60-AE5D-466F-9966-283A05CBBF87"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-07-06T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.6,
+            "OutputPricePerUnit": 2.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-Realtime-2.1-mini has multi-channel token pricing — the rates here ($0.60 input / $2.40 output per 1M) cover the TEXT channel only, with cache read $0.06 (published text cached-input price; OpenAI Family B, no cache-write charge). Audio channels: $10/M audio input ($0.30 cached), $20/M audio output. Image input: $0.80/M ($0.08 cached). Released July 6, 2026; the cost-optimized variant of GPT Realtime 2.1.",
+            "CacheReadPricePerUnit": 0.06,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "D34ED95A-7715-49FF-8091-69B7A302733C"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "08C1B881-EAEF-42DB-B8F3-E621DC940C6F"
+    }
   }
 ]
