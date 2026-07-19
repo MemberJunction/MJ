@@ -60,7 +60,7 @@ const GROUPS: { Tier: string; Gate: string; Enabled: boolean; Scripts: string[] 
         Tier: 'Deterministic · client',
         Gate: 'needs a live MJAPI (skips if unreachable)',
         Enabled: true,
-        Scripts: ['remote-op-wire-progress-tests.ts', 'app-wiring-tests.ts', 'view-execution-tests.ts'],
+        Scripts: ['remote-op-wire-progress-tests.ts', 'app-wiring-tests.ts', 'view-execution-tests.ts', 'permission-engine-tests.ts', 'entity-writes-tests.ts'],
     },
     {
         Tier: 'Predictive Studio flows',

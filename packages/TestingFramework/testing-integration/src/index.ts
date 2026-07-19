@@ -47,6 +47,8 @@ export * from './checks/user-routines.checks';
 export * from './checks/view-execution.checks';
 export * from './checks/metadata-consistency.checks';
 export * from './checks/app-wiring.checks';
+export * from './checks/permission-engine.checks';
+export * from './checks/entity-writes.checks';
 
 // Side-effect only: the permanent Phase-0 smoke check (no exports of its own).
 import './checks/self-test.check';

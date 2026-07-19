@@ -203,6 +203,29 @@ export interface ListsFixture {
 }
 
 /**
+ * Shared fixture for the `entity-writes` bundle: the resolved entity IDs the write-side checks need
+ * plus the FK-safe teardown accumulators. Nothing is created in Setup — each mutating check creates
+ * exactly the throwaway rows it needs and appends their IDs here, so teardown can delete them in
+ * REVERSE creation order (children before parents, which is FK-safe for the self-referencing
+ * `MJ: Action Categories.ParentID`). `StartedAtIso` bounds the Record Changes query window so RC
+ * fidelity never has to scan the entity's whole history.
+ */
+export interface EntityWritesFixture {
+    /** `EntityInfo.ID` of `MJ: Action Categories` — the low-risk throwaway fixture entity. */
+    ActionCategoryEntityID: string;
+    /** `EntityInfo.ID` of `MJ: Record Changes` — for the "versioning does not version itself" leg. */
+    RecordChangeEntityID: string;
+    /** Unique per-run name prefix stamped on every fixture row. */
+    Prefix: string;
+    /** ISO instant captured before any fixture write — the lower bound of the Record Changes window. */
+    StartedAtIso: string;
+    /** Every `MJ: Action Categories` row the bundle created, in creation order. */
+    CategoryIds: string[];
+    /** Every `MJ: Lists` row the bundle created, in creation order. */
+    ListIds: string[];
+}
+
+/**
  * Shared fixture for the `open-app-teardown` bundle: the throwaway `__mj` metadata rows seeded for the
  * teardown scenario (a used app's SchemaInfo/Entity/EntityField + a blocking RecordChange + a link-less
  * nav Application), reused by OAT1/OAT2 and removed in FK-safe order in teardown.
@@ -233,6 +256,25 @@ export interface UserRoutinesFixture {
     RoutineSunset?: MJUserRoutineEntity;
     RoutineSeed?: MJUserRoutineEntity;
     FirstRunId?: string | null;
+}
+
+/**
+ * Shared fixture for the `permission-engine` bundle's MUTATION checks only (PE11/PE12). Setup is
+ * gated on `IsTierEnabled('mutation')`, so on the deterministic path this fixture is undefined and
+ * those two checks skip-as-pass — PE1–PE10 are entirely read-only. The rows are two throwaway
+ * `MJ: Permission Domains` records: one naming a class that is NEVER registered (proving an
+ * unresolvable domain is skipped, not fatal) and one naming a deliberately-throwing provider
+ * (proving the `GetAllUserPermissions` fan-out is fault-isolated).
+ */
+export interface PermissionEngineFixture {
+    /** Name of the domain row whose `ProviderClassName` is never registered on the ClassFactory. */
+    UnresolvableDomainName: string;
+    /** Name of the domain row bound to the deliberately-throwing provider class. */
+    ThrowingDomainName: string;
+    /** Every domain Name this bundle created — used to exclude them when auditing REAL domains. */
+    CreatedDomainNames: string[];
+    /** IDs of the created domain rows, deleted in a best-effort Teardown. */
+    CreatedDomainIds: string[];
 }
 
 /** The bootstrapped, run-scoped real provider stack handed to every check. */
@@ -271,8 +313,12 @@ export interface IntegrationCheckContext {
     ListsFixture?: ListsFixture;
     /** Shared fixture for the `open-app-teardown` bundle. */
     OpenAppTeardownFixture?: OpenAppTeardownFixture;
+    /** Shared fixture for the `entity-writes` bundle (client transport, mutating). */
+    EntityWritesFixture?: EntityWritesFixture;
     /** Shared fixture for the `user-routines` bundle. */
     UserRoutinesFixture?: UserRoutinesFixture;
+    /** Shared fixture for the `permission-engine` bundle's mutation checks (PE11/PE12) only. */
+    PermissionEngineFixture?: PermissionEngineFixture;
     /**
      * The opaque per-selector `config` bag from `Test.Configuration.checks[].config`,
      * set by the driver/script before each bundle runs. Bundles read their own keys

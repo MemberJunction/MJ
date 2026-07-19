@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT27 - Core Entity Write-Side",
+    "Description": "Client-first (GraphQL wire) proof of the core data write-side contract — Domain 2 of the integration-test expansion catalog. EW1: create + 2 targeted updates produce exactly 3 Record Changes with the correct Type and before/after ChangesJSON, and the versioning table does not version itself. EW2: a save returns correct VIEW-only virtual-field values (Parent / RootParentID) on both INSERT and UPDATE — no result-column skew. EW3: an AfterKey keyset walk over a known fixture set visits every row exactly once and signals end-of-data with a short page. EW4: AfterKey guardrails refuse StartRow / non-PK OrderBy / wrong-shape keys while the otherwise-identical valid call succeeds (positive control). EW5: a save inside the dedup linger window invalidates the lingered RunView so the next identical view sees the new row. EW6: an UPPERCASE FK saved over the wire is found by both lowercase and uppercase filters. EW7: a non-UTC-offset datetimeoffset survives save → Load → RunView to the millisecond. EW8: a save that passes CLIENT validation is refused by the server-only *EntityServer invariant, proving the resolver instantiated the server subclass. Six of the eight checks mutate and are gated behind RUN_MUTATION_TESTS; the bundle creates and tears down its own throwaway MJ: Action Categories / MJ: Lists rows and never touches a pre-existing record.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Record changes are faithful, virtual fields are captured in the right order, keyset pagination is complete and guarded, saves invalidate lingered views, UUID FKs are case-insensitive, datetimeoffset instants round-trip exactly, and the resolver resolves server entity subclasses."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "entity-writes"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "99099250-2F8A-4E07-A4C1-B8EBF3DA5219"
+  }
+}

@@ -311,6 +311,28 @@
           "primaryKey": {
             "ID": "BC2A96AD-CC56-4B42-9ACA-AB28290EBDE8"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT27 - Core Entity Write-Side",
+            "Sequence": 23,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "20B1EED7-1B55-4129-A8EF-C1A2BA281CC2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT28 - Permission Engine & Scope Enforcement",
+            "Sequence": 24,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5A354F75-94F6-40D0-9E3D-8751BE3B376C"
+          }
         }
       ]
     },

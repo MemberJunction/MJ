@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT28 - Permission Engine & Scope Enforcement",
+    "Description": "Live, client-first proof of the unified permission model (guides/UNIFIED_PERMISSIONS_GUIDE.md). PE1-PE3: the MJ: Permission Domains catalog fans out to ClassFactory-instantiated providers, every provider conforms to the normalized PermissionAction/GranteeType vocabulary, and the catalog row's declared actions/grantees match the provider class metadata (drift detector). PE3b: the SupportsDeny leg asserted asymmetrically — over-advertising Deny is a hard failure (an operator's Deny grant would be silently ignored), under-advertising is a fail-safe warning. PE4-PE5: unknown domains and stranger/null resource ids fail CLOSED with self-explaining Reasons. PE6-PE7: the two-access-path contract for AI Agents and AI Skills — the cached runtime helper is OPEN by default (View+Run for a non-owner) while the unified provider over the SAME table is CLOSED by default ([], Execute denied); the asymmetry is BY DESIGN and is pinned here. PE8: any grant row switches the open default OFF for non-matching users, and Delete=>Edit=>Run=>View collapses downward only (no upward escalation). PE9-PE10: two REAL identities — the seeded role-less user it-nogrant@integration.test has no entity CRUD permission where the context user does, and can execute ZERO Authorizations. PE11-PE12 (mutation tier, RUN_MUTATION_TESTS=1): an unresolvable provider class is contained (real domains intact, nothing granted), and an async-throwing provider does not crash the GetAllUserPermissions fan-out. PE13 (mutation tier) is KNOWN-RED by design, pinning a real defect this bundle found: ClassFactory.CreateInstance returns the abstract base rather than null for an unknown key, so PermissionEngine.instantiateProviders()'s skip branch is dead code and a method-less stub is installed as a live provider; GetAllUserPermissions then throws synchronously inside .map(), before Promise.allSettled can isolate it, so one bad catalog row rejects the entire unified aggregate for every user. Every check is a DENY, a DIFFERENCE between identities/paths, or a SHAPE assertion — never an allow-only result that a high-privilege context user would satisfy vacuously.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Domain fan-out is complete and drift-free; unknown domains and ungranted resources fail closed; the helper/provider open-vs-closed asymmetry holds for agents and skills; grants close the open default and the permission hierarchy never escalates upward; a role-less identity is denied entity CRUD and all authorizations; a bad or throwing provider degrades gracefully."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "permission-engine"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "61AA5742-7D5E-45C9-AA16-D92B496A63A5"
+  }
+}

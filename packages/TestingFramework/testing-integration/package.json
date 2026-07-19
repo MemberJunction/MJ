@@ -25,6 +25,7 @@
     "@memberjunction/sqlserver-dataprovider": "5.48.0",
     "@memberjunction/graphql-dataprovider": "5.48.0",
     "@memberjunction/server-bootstrap-lite": "5.48.0",
+    "@memberjunction/ai-engine-base": "5.48.0",
     "@memberjunction/aiengine": "5.48.0",
     "@memberjunction/ai-core-plus": "5.48.0",
     "@memberjunction/ai-agents": "5.48.0",
