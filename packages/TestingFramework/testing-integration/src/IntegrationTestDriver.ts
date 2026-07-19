@@ -39,9 +39,9 @@ import {
     getActiveIntegrationBootstrap,
     getActiveIntegrationClientBootstrap,
     bootstrapIntegrationServer,
-    bootstrapIntegrationClient,
     serverProcessAlreadyClaimed
 } from './bootstrap';
+import { bootstrapIntegrationClient } from './bootstrap-client';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import type { IntegrationCheckContext, RlsFixture } from './check';
 import { IntegrationCheckRegistry } from './check-registry';

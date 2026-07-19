@@ -26,7 +26,10 @@
  *
  * Exit code: 0 = no bug-class failures, 1 = failures found, 2 = bootstrap/connectivity error.
  */
-import { bootstrapIntegrationClient } from './lib/harness';
+// Import the client bootstrap from the server-FREE `./client` subpath (NOT the barrel /
+// lib/harness), so this process stays browser-faithful: only client entity subclasses are
+// registered, exactly like MJExplorer — never the server-only *EntityServer classes.
+import { bootstrapIntegrationClient } from '@memberjunction/testing-integration/client';
 import { Metadata, RunView, EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 
 type ProbeName = 'count_only' | 'full_width' | 'fields_projection' | 'entity_object' | 'count_parity';

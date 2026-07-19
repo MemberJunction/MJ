@@ -9,6 +9,10 @@ export * from './tiers';
 export * from './instrumented-cache';
 export * from './test-runner';
 export * from './bootstrap';
+// bootstrapIntegrationClient lives in the server-FREE bootstrap-client module (so client
+// dispatchers can import it via the `./client` subpath without dragging in server packages).
+// Re-exported here for backward-compat barrel consumers (the driver / server dispatchers).
+export * from './bootstrap-client';
 export * from './ai-verify';
 export * from './check';
 export * from './check-registry';

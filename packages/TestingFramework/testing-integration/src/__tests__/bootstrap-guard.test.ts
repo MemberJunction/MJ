@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { LocalCacheManager } from '@memberjunction/core';
-import { bootstrapIntegrationServer, bootstrapIntegrationClient, serverProcessAlreadyClaimed } from '../bootstrap';
+import { bootstrapIntegrationServer, serverProcessAlreadyClaimed } from '../bootstrap';
+import { bootstrapIntegrationClient } from '../bootstrap-client';
 
 /**
  * Proves the D1 anti-corruption guard WITHOUT a DB: when LocalCacheManager is

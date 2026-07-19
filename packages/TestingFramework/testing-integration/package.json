@@ -53,5 +53,15 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/bootstrap-client.d.ts",
+      "default": "./dist/bootstrap-client.js"
+    }
   }
 }
