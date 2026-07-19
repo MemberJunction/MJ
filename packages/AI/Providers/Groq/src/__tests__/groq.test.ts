@@ -10,9 +10,18 @@ const MockGroq = vi.hoisted(() => vi.fn().mockImplementation(function (this: Rec
     };
 }));
 
+// Stand-in for the SDK's abort error class
+const MockAPIUserAbortError = vi.hoisted(() => class MockAPIUserAbortError extends Error {
+    constructor() {
+        super('Request was aborted.');
+        this.name = 'APIUserAbortError';
+    }
+});
+
 // Mock the groq-sdk
 vi.mock('groq-sdk', () => ({
-    default: MockGroq
+    default: MockGroq,
+    APIUserAbortError: MockAPIUserAbortError
 }));
 
 // Mock @memberjunction/global
@@ -395,6 +404,88 @@ describe('GroqLLM', () => {
             expect(content).toHaveLength(2);
             expect(content[0]).toEqual({ type: 'text', text: 'What is this?' });
             expect(content[1]).toEqual({ type: 'image_url', image_url: { url: 'https://example.com/img.png' } });
+        });
+    });
+
+    describe('cancellationToken', () => {
+        type CancellableResult = { success: boolean; statusText: string | null; errorMessage: string | null };
+
+        const callNonStreaming = async (params: Record<string, unknown>): Promise<CancellableResult> => {
+            return (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'].bind(instance)(params) as Promise<CancellableResult>;
+        };
+        const callCreateStream = async (params: Record<string, unknown>): Promise<AsyncIterable<unknown>> => {
+            return (instance as ReturnType<typeof Object.create>)['createStreamingRequest'].bind(instance)(params) as Promise<AsyncIterable<unknown>>;
+        };
+        const callFinalize = (content: string): CancellableResult => {
+            return (instance as ReturnType<typeof Object.create>)['finalizeStreamingResponse'].bind(instance)(content, null, null) as CancellableResult;
+        };
+
+        const baseParams = (signal: AbortSignal) => ({
+            model: 'llama-3.1-70b',
+            messages: [{ role: ChatMessageRole.user, content: 'Hello' }],
+            cancellationToken: signal
+        });
+
+        it('should forward the cancellation token to the SDK on the non-streaming path', async () => {
+            mockCreate.mockResolvedValue({
+                choices: [{ message: { role: 'assistant', content: 'hi' } }],
+                usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+            });
+            const controller = new AbortController();
+
+            await callNonStreaming(baseParams(controller.signal));
+
+            expect(mockCreate.mock.calls[0][1]).toEqual({ signal: controller.signal });
+        });
+
+        it('should return a cancelled result without calling the SDK when already aborted', async () => {
+            const controller = new AbortController();
+            controller.abort();
+
+            const result = await callNonStreaming(baseParams(controller.signal));
+
+            expect(mockCreate).not.toHaveBeenCalled();
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('cancelled');
+        });
+
+        it('should return a cancelled result when the SDK raises an abort error', async () => {
+            mockCreate.mockRejectedValue(new MockAPIUserAbortError());
+
+            const result = await callNonStreaming(baseParams(new AbortController().signal));
+
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('cancelled');
+        });
+
+        it('should rethrow non-cancellation SDK errors on the non-streaming path', async () => {
+            mockCreate.mockRejectedValue(new Error('boom'));
+
+            await expect(callNonStreaming(baseParams(new AbortController().signal))).rejects.toThrow('boom');
+        });
+
+        it('should forward the cancellation token on the streaming path and report a mid-stream abort as cancelled', async () => {
+            const controller = new AbortController();
+            mockCreate.mockResolvedValue({
+                async *[Symbol.asyncIterator]() {
+                    yield { choices: [{ delta: { content: 'partial' } }] };
+                    controller.abort();
+                    throw new MockAPIUserAbortError();
+                }
+            });
+
+            const stream = await callCreateStream(baseParams(controller.signal));
+            expect(mockCreate.mock.calls[0][1]).toEqual({ signal: controller.signal });
+
+            const chunks: unknown[] = [];
+            for await (const chunk of stream) {
+                chunks.push(chunk);
+            }
+
+            expect(chunks).toHaveLength(1);
+            const result = callFinalize('partial');
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('cancelled');
         });
     });
 });

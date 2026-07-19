@@ -1,6 +1,6 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
+import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
-import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
+import { Cerebras, APIUserAbortError } from '@cerebras/cerebras_cloud_sdk';
 import { Chat, ChatCompletion } from '@cerebras/cerebras_cloud_sdk/resources/chat';
 
 /**
@@ -9,7 +9,13 @@ import { Chat, ChatCompletion } from '@cerebras/cerebras_cloud_sdk/resources/cha
 @RegisterClass(BaseLLM, "CerebrasLLM")
 export class CerebrasLLM extends BaseLLM {
     private _client: Cerebras;
-    
+    /**
+     * Set when the in-flight streaming request was cancelled via ChatParams.cancellationToken.
+     * Reset at the start and end of every streaming request by resetStreamingState().
+     */
+    private streamCancelled: boolean = false;
+
+
     /**
      * Creates a new instance of the CerebrasLLM class
      * @param apiKey The Cerebras API key to use for authentication
@@ -49,6 +55,92 @@ export class CerebrasLLM extends BaseLLM {
     }
 
     /**
+     * Determines whether an error (or the current state of the signal) represents a caller-initiated
+     * cancellation rather than a genuine API failure. The Cerebras SDK raises APIUserAbortError when
+     * the request options carry a signal that aborts.
+     */
+    private isCancellation(error: unknown, signal?: AbortSignal): boolean {
+        if (signal?.aborted) {
+            return true;
+        }
+        if (error instanceof APIUserAbortError) {
+            return true;
+        }
+        return error instanceof Error && error.name === 'AbortError';
+    }
+
+    /**
+     * Builds the ChatResult returned when a request is cancelled through ChatParams.cancellationToken
+     * (caller abort or AIPromptRunner timeout). Marked Fatal / non-failover so no layer retries a request
+     * the caller explicitly gave up on.
+     */
+    private buildCancelledResult(startTime: Date): ChatResult {
+        const errorInfo: AIErrorInfo = {
+            errorType: 'Unknown',
+            severity: 'Fatal',
+            canFailover: false,
+            providerErrorCode: 'request_cancelled',
+            context: { provider: 'cerebras', cancelled: true }
+        };
+
+        const result = new ChatResult(false, startTime, new Date());
+        result.statusText = 'cancelled';
+        result.errorMessage = 'Request cancelled via cancellationToken';
+        result.exception = null;
+        result.errorInfo = errorInfo;
+        result.data = {
+            choices: [],
+            usage: new ModelUsage(0, 0)
+        };
+        return result;
+    }
+
+    /**
+     * Wraps the Cerebras stream so that an abort ends iteration cleanly (flagging the cancellation for
+     * finalizeStreamingResponse) instead of surfacing as a mid-stream exception that the base class
+     * would otherwise swallow and report as a truncated success.
+     */
+    private async *iterateWithCancellation(
+        stream: AsyncIterable<ChatCompletion>,
+        signal?: AbortSignal
+    ): AsyncGenerator<ChatCompletion> {
+        try {
+            for await (const chunk of stream) {
+                if (signal?.aborted) {
+                    this.streamCancelled = true;
+                    return;
+                }
+                yield chunk;
+            }
+            if (signal?.aborted) {
+                this.streamCancelled = true;
+            }
+        } catch (error) {
+            if (this.isCancellation(error, signal)) {
+                this.streamCancelled = true;
+                return;
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * An already-exhausted stream, used when the request was cancelled before it was sent.
+     */
+    private async *emptyStream(): AsyncGenerator<ChatCompletion> {
+        // intentionally yields nothing
+    }
+
+    /**
+     * Clear per-request streaming state. Invoked by the base class at the start and end of every
+     * streaming request.
+     */
+    protected override resetStreamingState(): void {
+        super.resetStreamingState();
+        this.streamCancelled = false;
+    }
+
+    /**
      * Set the reasoning_effort parameter for Cerebras models
      * Currently only supported for OpenAI GPT OSS models
      */
@@ -84,6 +176,11 @@ export class CerebrasLLM extends BaseLLM {
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
+
+        // Already cancelled before we even dial out — don't open a socket at all
+        if (params.cancellationToken?.aborted) {
+            return this.buildCancelledResult(startTime);
+        }
 
         // Convert messages to format expected by Cerebras
         const messages = params.messages.map(m => {
@@ -135,7 +232,17 @@ export class CerebrasLLM extends BaseLLM {
                 break;
         }
 
-        const chatResponse = await this.client.chat.completions.create(cerebrasParams);
+        // Forward the cancellation token to the Cerebras SDK's RequestOptions so an abort tears down the
+        // underlying HTTP socket rather than merely abandoning this promise.
+        let chatResponse: ChatCompletion;
+        try {
+            chatResponse = await this.client.chat.completions.create(cerebrasParams, { signal: params.cancellationToken });
+        } catch (error) {
+            if (this.isCancellation(error, params.cancellationToken)) {
+                return this.buildCancelledResult(startTime);
+            }
+            throw error;
+        }
         const endTime = new Date();
 
         // Cast to any to extract the choices
@@ -197,11 +304,19 @@ export class CerebrasLLM extends BaseLLM {
     /**
      * Create a streaming request for Cerebras
      */
-    protected async createStreamingRequest(params: ChatParams): Promise<any> {
+    protected async createStreamingRequest(params: ChatParams): Promise<AsyncIterable<ChatCompletion>> {
         // Initialize streaming state for thinking extraction if supported
         if (this.supportsThinkingModels()) {
             this.initializeThinkingStreamState();
         }
+
+        // Already cancelled before we dial out — hand back an empty stream; finalizeStreamingResponse
+        // will report the cancellation.
+        if (params.cancellationToken?.aborted) {
+            this.streamCancelled = true;
+            return this.emptyStream();
+        }
+
         // Convert messages to format expected by Cerebras
         const messages = params.messages.map(m => {
             if (typeof m.content === 'string') {
@@ -249,9 +364,12 @@ export class CerebrasLLM extends BaseLLM {
                 break;
         }
 
-        return this.client.chat.completions.create(cerebrasParams);
+        // Forward the cancellation token so an abort closes the streaming socket, and wrap the stream
+        // so the abort is reported as a cancellation rather than a truncated success.
+        const stream = await this.client.chat.completions.create(cerebrasParams, { signal: params.cancellationToken });
+        return this.iterateWithCancellation(stream as AsyncIterable<ChatCompletion>, params.cancellationToken);
     }
-    
+
     /**
      * Process a streaming chunk from Cerebras
      */
@@ -304,6 +422,12 @@ export class CerebrasLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
+        // If the stream was aborted via the cancellation token, report a cancellation instead of
+        // presenting whatever partial content we managed to accumulate as a successful response.
+        if (this.streamCancelled) {
+            return this.buildCancelledResult(new Date());
+        }
+
         // Extract finish reason from last chunk if available
         let finishReason = 'stop';
         if (lastChunk?.choices && lastChunk.choices.length > 0 && lastChunk.choices[0].finish_reason) {

@@ -1,0 +1,29 @@
+# ngc/Sass trap — RULE 2 allowlist
+#
+# Files listed here may keep a `.scss` extension while being referenced from a
+# component's styleUrls in an ngc-only package (no Sass compilation step).
+#
+# This waives the EXTENSION rule ONLY. RULE 1 (Sass-only constructs: `&__`/`&--`
+# concatenation, `//` comments, `@use`/`@mixin`/`$vars`/`#{}`) is NEVER waived —
+# those constructs are dead in production regardless of what this file says.
+#
+# Add an entry only when the file is verifiably Sass-free AND has a reason to
+# keep the extension. Document the reason.
+#
+# Gate: .github/scripts/check-ngc-scss.sh   (see MemberJunction/MJ#3105)
+
+# --- @memberjunction/ng-ui-components -------------------------------------
+# page-header.scss is ALSO shipped as a standalone global asset (see the
+# package's `copy-assets` script, which cpy's it into dist/lib/page-header).
+# Consumers may reference it by path, so the extension is part of its public
+# surface. Verified Sass-free: plain CSS + native nesting only.
+packages/Angular/Generic/ui-components/src/lib/page-header/page-header.scss
+
+# --- @memberjunction/ng-archive-manager -----------------------------------
+# Verified Sass-free (plain CSS + native `&:hover`-style nesting, which the
+# browser handles natively). Kept as-is to avoid churn; new files in this
+# package must be `.css`.
+packages/Angular/Generic/archive-manager/src/lib/archive-config/archive-config-admin.component.scss
+packages/Angular/Generic/archive-manager/src/lib/archive-run-viewer/archive-run-viewer.component.scss
+packages/Angular/Generic/archive-manager/src/lib/archive-restore/archive-restore-dialog.component.scss
+packages/Angular/Generic/archive-manager/src/lib/archive-status/archive-status-badge.component.scss
