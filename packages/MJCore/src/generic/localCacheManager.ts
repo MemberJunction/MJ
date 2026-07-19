@@ -448,7 +448,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
     /**
      * Extracts the entity name from a RunView fingerprint.
-     * Fingerprint format: `EntityName|Filter|OrderBy|ResultType|MaxRows|StartRow|AggHash[|Connection]`
+     * Fingerprint format: `Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|…]`
+     * (built in GenerateRunViewFingerprint below — that array is the ground truth). NOTE:
+     * `ResultType` is deliberately NOT a segment; the cache stores plain JSON regardless and
+     * transformation happens post-cache. An earlier version of this comment listed it, which
+     * would put any new segment-indexing predicate one position off — MaxRows is [3], not [4].
      * @param fingerprint - The RunView cache fingerprint
      * @returns The entity name, or null if the fingerprint is malformed
      */
