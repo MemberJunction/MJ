@@ -1,3 +1,4 @@
+import { RequiresSubclass } from '@memberjunction/global';
 import { UserInfo } from './securityInfo';
 import { LogError } from './logging';
 import { RunView } from '../views/runView';
@@ -175,6 +176,7 @@ export interface IPermissionProvider {
  * }
  * ```
  */
+@RequiresSubclass()
 export abstract class PermissionProviderBase implements IPermissionProvider {
     /**
      * Opt-in marker read by `ClassFactory` (see `ClassResolutionResult`): this class CANNOT
@@ -187,8 +189,6 @@ export abstract class PermissionProviderBase implements IPermissionProvider {
      * `{Resolved: false, Instance: null}` — both of which `PermissionEngine` handles by skipping
      * the domain.
      */
-    public static readonly RequiresSubclass = true;
-
     abstract readonly DomainName: string;
     abstract readonly Description: string;
     abstract readonly SupportedGranteeTypes: GranteeType[];

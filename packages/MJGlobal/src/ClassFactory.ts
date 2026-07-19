@@ -7,6 +7,7 @@
  ******************************************************************************************************/
 
 import { GetRootClass, IsRootClass } from './ClassUtils';
+import { ClassRequiresSubclass } from './RequiresSubclass';
 
 /**
  * Type for constructor functions that have a name property
@@ -61,7 +62,7 @@ export type ClassResolutionResult<T> = {
      * The instance to use, or `null`.
      *
      * - `Resolved: true` → the registered subclass instance.
-     * - `Resolved: false` and the anchor base declares `static RequiresSubclass = true` → `null`
+     * - `Resolved: false` and the anchor base is marked `@RequiresSubclass()` → `null`
      *   (the base cannot function standalone, so no fallback is produced).
      * - `Resolved: false` and no marker → the base-class fallback instance. This is a legitimate,
      *   long-standing pattern (e.g. `BaseEntity`, which is fully functional standalone).
@@ -78,7 +79,10 @@ export type ClassResolutionResult<T> = {
  * JS will happily `new` an abstract class — so abstractness cannot be introspected. Bases that
  * genuinely cannot function without a subclass therefore declare this static marker explicitly.
  */
-type SubclassRequiringClass = { RequiresSubclass?: boolean };
+// NOTE: resolved via ClassRequiresSubclass(), which performs an OWN-property check. A plain
+// `cls.RequiresSubclass` read walks the constructor prototype chain, so every SUBCLASS of a
+// marked base would also report true — and resolving against a concrete subclass would then
+// wrongly throw. See RequiresSubclass.ts.
 
 /**
  * ClassFactory is used to register and create instances of classes. It is a singleton class that can be used to register a sub-class for a given base class and key. Do NOT directly attempt to instantiate this class,
@@ -169,7 +173,7 @@ export class ClassFactory {
      *
      * Falls back to instantiating the base class directly if no registration is found even
      * after lazy loading (same behavior as the sync CreateInstance) — including throwing when the
-     * anchor base declares `static RequiresSubclass = true`.
+     * anchor base is marked `@RequiresSubclass()`.
      */
     public async CreateInstanceAsync<T>(baseClass: unknown, key: string | null = null, ...params: unknown[]): Promise<T | null> {
         if (!baseClass) {
@@ -278,7 +282,7 @@ export class ClassFactory {
      * whether the key actually resolved.
      *
      * @throws when the key does not resolve AND the anchor base class declares
-     *         `static RequiresSubclass = true` (i.e. it cannot function standalone). Bases without
+     *         `@RequiresSubclass()` (i.e. it cannot function standalone). Bases without
      *         that marker keep the historical fallback behavior and only emit a structured warning.
      */
     public CreateInstance<T>(baseClass: unknown, key: string | null = null, ...params: unknown[]): T | null {
@@ -328,7 +332,7 @@ export class ClassFactory {
         }
 
         // ── Fallback path: the requested key did not resolve to any registered subclass. ──
-        const requiresSubclass = (baseClass as SubclassRequiringClass).RequiresSubclass === true;
+        const requiresSubclass = ClassRequiresSubclass(baseClass);
         const reason = this.describeResolutionFailure(baseClass, key, requiresSubclass);
         this.reportResolutionFailure(baseClass, key, requiresSubclass, reason);
 
@@ -360,11 +364,11 @@ export class ClassFactory {
             `Registered keys for '${baseClassName}': ${knownText}. ` +
             `RequiresSubclass=${requiresSubclass}. ` +
             (requiresSubclass
-                ? `'${baseClassName}' declares 'static RequiresSubclass = true', so it CANNOT be used as a fallback — ` +
+                ? `'${baseClassName}' is marked '@RequiresSubclass()', so it CANNOT be used as a fallback — ` +
                   `no instance was created. Likely causes: a typo in the key, a class that was never imported ` +
                   `(tree-shaken out — check the class-registration manifest), or a missing @RegisterClass decorator.`
                 : `Falling back to an instance of '${baseClassName}' itself. If that base cannot function standalone, ` +
-                  `declare 'static readonly RequiresSubclass = true' on it so this becomes a hard error.`)
+                  `apply the '@RequiresSubclass()' decorator to it so this becomes a hard error.`)
         );
     }
 
