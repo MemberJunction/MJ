@@ -49,7 +49,7 @@ Each bundle keeps two siblings in sync (enforced by `sibling-parity.test.ts`): a
 Toward a **1000+-factor** suite (checks × entities × apps × queries). Domains from the plan's [test-catalog](../../../plans/integration-test-expansion/test-catalog.md):
 
 - **Domain 0 — Exhaustive RunView + RunQuery** (client-first): RunView matrix swept across all 379 entities; every catalog query run with valid parameter permutations. *(First bundle landing: `runview-matrix-tests.ts` — a client-first RunView sweep.)*
-- **1** Metadata↔DB consistency audit · **2** Core write-side & transactions · **3** Security & permissions · **4** AI stack (cost, permissions, memory guards, + the stand-in-LLM harness for deterministic agent-loop coverage) · **5** Actions & background processing · **6** Entity-server invariants · **7** Communication/Templates · **8** PostgreSQL parity · **9** Metadata tooling · **10** Realtime/PS · **11** Viewing system · **12** All shipped apps.
+- **1** Metadata↔DB consistency audit · **2** Core write-side & transactions · **3** Security & permissions · **4** AI stack (cost, permissions, memory guards, + the stand-in-LLM harness for deterministic agent-loop coverage) · **5** Actions & background processing · **6** Entity-server invariants · **7** Communication/Templates · **8** PostgreSQL parity · **9** Metadata tooling · **10** Realtime/PS · **11** Viewing system · **12** All shipped apps · **13** Unified Search (client-first via `GraphQLSearchClient` — SearchEntities/FullTextSearch/SearchEngine + result permission scoping).
 
 Target: ~355 authored checks → many-thousand effective assertions (the parameterized sweeps dominate).
 

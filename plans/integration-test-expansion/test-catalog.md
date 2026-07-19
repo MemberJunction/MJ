@@ -304,6 +304,21 @@ The untested majority (~30 of ~40 server subclasses). Mostly DET (pure validator
 | O2 | Post-install: entities in OpenApp's `schema.name` have `CanonicalSchemaName` set → readable | DET | P3 | metadataSupportObjects.ts:590-594 |
 | O3 | OpenApp-created apps/nav pass the G1–G8 wiring contract unchanged | DET | P3 | (inherits app-wiring) |
 
+## Domain 13 — Unified Search  *(new bundle: `search`)*
+The unified search stack has **client helper classes** (`GraphQLSearchClient` in `@memberjunction/graphql-dataprovider`, plus `SearchEngine` cross-source), so it's a first-class client-first target. Covers the decision-tree APIs from the Search Overview guide.
+
+| ID | Check | Tier | Anchor |
+|---|---|---|---|
+| SR1 | `SearchEntity`/`SearchEntities` per-entity ranked hybrid search over the wire returns relevance-ordered results; empty query / no-match returns clean empty | DET | graphQLSearchClient.ts:299 |
+| SR2 | `FullTextSearch` multi-entity DB-level search returns hits across entities; empty catalog → clean empty (no throw) | DET | providerBase FullTextSearch |
+| SR3 | `SearchEngine.Search` cross-source unified search with a scope resolves + ranks across sources | DET | SearchEngine.Search |
+| SR4 | **Search-result permission scoping (security)** — results filtered to what the caller can read; a stranger never gets titles/snippets of forbidden records | DET | SearchEntitiesResolver permission filter |
+| SR5 | System-user search variant (`SearchKnowledgeAsSystemUser`) is unreachable by a normal user (`@RequireSystemUser`) but produces identical scoping semantics | MUT | SearchKnowledgeSystemUserResolver |
+| SR6 | Search scope selector can't be steered to escape the user's permitted scope (`PrimaryScopeEntityID`/`SecondaryScopes`) | DET | SearchScopePermission |
+| SR7 | `GraphQLSearchClient` result shape/paging round-trips over the wire (ranked list, scores, source attribution) | DET | graphQLSearchClient.ts |
+
+*Note: some legs need pre-seeded vectors or a configured search provider to stay LLM-free — use the keyword/full-text path where possible; flag the semantic legs that require a live embedding provider as gated.*
+
 ---
 
 ## Transport exceptions (the only non-client checks)
