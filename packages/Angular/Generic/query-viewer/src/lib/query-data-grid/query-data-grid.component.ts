@@ -1172,6 +1172,9 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         // matched on those columns collided to the same id and ag-Grid dropped all
         // but one (silently collapsing aggregate/GROUP BY results, or any query
         // without an ID column). A per-row synthetic id can never collide.
+        // Trade-off: the id is per-object (not value-derived), so an id-less row
+        // loses its selection across a data refresh — acceptable for query results,
+        // where NOT dropping rows matters far more than preserving a selection.
         let synthetic = this._syntheticRowIds.get(data);
         if (!synthetic) {
             synthetic = `mjrow_${this._syntheticRowIdSeq++}`;

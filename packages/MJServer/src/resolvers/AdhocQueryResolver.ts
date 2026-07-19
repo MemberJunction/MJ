@@ -6,6 +6,7 @@ import { AppContext } from '../types.js';
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { RunQueryResultType } from './QueryResolver.js';
+import { exactTotalFromPage, resolveAdhocTotalRowCount } from './adhoc-query-helpers.js';
 import sql from 'mssql';
 
 /**
@@ -84,9 +85,11 @@ export class AdhocQueryResolver extends ResolverBase {
             // path (GenericDatabaseProvider.InternalRunQuery → WrapWithPaging).
             // (Previously paging was gated on StartRow > 0, so page 1 fell back to
             // a TOP-N cap with TotalRowCount = page size — hiding the pager.)
-            const startRow = Number.isInteger(input.StartRow) ? input.StartRow! : 0;
+            // Clamp StartRow to a non-negative integer. A negative offset must not slip
+            // past the paging gate (which would then run the query with no row cap at all).
+            const startRow = Math.max(0, Number.isInteger(input.StartRow) ? input.StartRow! : 0);
             const maxRows = input.MaxRows;
-            const usePaging = maxRows != null && Number.isInteger(maxRows) && maxRows > 0 && startRow >= 0;
+            const usePaging = maxRows != null && Number.isInteger(maxRows) && maxRows > 0;
 
             let dataSQL: string;
             let countSQL: string | null = null;
@@ -103,10 +106,11 @@ export class AdhocQueryResolver extends ResolverBase {
                 return this.buildErrorResult(`Ad-hoc query rendering failed: ${renderMsg}`);
             }
 
-            // 5. Execute the page (and, when paging, the count) under a shared timeout
-            const timeoutMs = (input.TimeoutSeconds ?? 30) * 1000;
+            // 5. Execute the page (and, only when a full page needs it, the count) under
+            // a shared wall-clock deadline derived from the request's timeout budget.
+            const deadline = startTime + (input.TimeoutSeconds ?? 30) * 1000;
             const { recordset, totalRowCount } = await this.executeDataAndCount(
-                readOnlyDS, dataSQL, countSQL, timeoutMs
+                readOnlyDS, dataSQL, countSQL, startRow, usePaging ? maxRows! : null, deadline
             );
             const executionTimeMs = Date.now() - startTime;
 
@@ -160,50 +164,71 @@ export class AdhocQueryResolver extends ResolverBase {
     }
 
     /**
-     * Executes the page's data SQL and — when paging is active — the COUNT(*)
-     * SQL in parallel under a single shared timeout. Returns the page recordset
-     * plus the true total row count (from the count query, falling back to the
-     * returned row count when no count query ran).
+     * Runs the page's data SQL, then — only when the page is FULL (so more rows may
+     * exist) — a COUNT(*) for the true total. A short (or unpaged) page needs no
+     * count: the exact total is `startRow + rowsReturned` (see {@link exactTotalFromPage}).
+     *
+     * The count is NON-FATAL: some queries page fine but cannot be counted — e.g.
+     * duplicate column names are legal in a result set but rejected inside the COUNT
+     * CTE wrap. A count failure must never sink the whole result, so we log it and
+     * report a lower-bound total (`startRow + rowsReturned`) and let the data render.
      */
     private async executeDataAndCount(
         ds: sql.ConnectionPool,
         dataSQL: string,
         countSQL: string | null,
-        timeoutMs: number,
+        startRow: number,
+        maxRows: number | null,
+        deadline: number,
     ): Promise<{ recordset: Record<string, unknown>[]; totalRowCount: number }> {
-        const runData = new sql.Request(ds).query<Record<string, unknown>>(dataSQL);
-        const runCount: Promise<sql.IResult<{ TotalRowCount: number }> | null> = countSQL
-            ? new sql.Request(ds).query<{ TotalRowCount: number }>(countSQL)
-            : Promise.resolve(null);
-
-        const [dataResult, countResult] = await Promise.race([
-            Promise.all([runData, runCount]),
-            new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('Query timeout exceeded')), timeoutMs)
-            )
-        ]);
-
+        const dataResult = await this.runSqlWithDeadline<Record<string, unknown>>(ds, dataSQL, deadline);
         const recordset = (dataResult.recordset ?? []) as Record<string, unknown>[];
-        return { recordset, totalRowCount: this.resolveTotalRowCount(countResult, recordset.length) };
+
+        // Total already known from the page alone (unpaged, or a short page)? Skip the count.
+        const exact = exactTotalFromPage(startRow, recordset.length, maxRows);
+        if (exact != null || !countSQL) {
+            return { recordset, totalRowCount: exact ?? recordset.length };
+        }
+
+        // Full page — a COUNT(*) is required to know the true total.
+        const lowerBound = startRow + recordset.length;
+        try {
+            const countResult = await this.runSqlWithDeadline<{ TotalRowCount: number }>(ds, countSQL, deadline);
+            return { recordset, totalRowCount: resolveAdhocTotalRowCount(countResult.recordset, lowerBound) };
+        } catch (countErr) {
+            const msg = countErr instanceof Error ? countErr.message : String(countErr);
+            LogError(`Ad-hoc query row-count failed; reporting a lower-bound total (${lowerBound}). ${msg}`);
+            return { recordset, totalRowCount: lowerBound };
+        }
     }
 
     /**
-     * Reads the total row count from the COUNT(*) query result. Falls back to the
-     * page's own returned row count when no count query ran (unpaged) or the count
-     * result's shape is unexpected — so the total is never a misleading value.
+     * Executes one SQL statement on the read-only pool, racing it against the shared
+     * wall-clock `deadline`. The timer is always cleared on completion so a settled
+     * query never leaves a dangling timeout armed.
      */
-    private resolveTotalRowCount(
-        countResult: sql.IResult<{ TotalRowCount: number }> | null,
-        returnedRowCount: number,
-    ): number {
-        const raw = countResult?.recordset?.[0]?.TotalRowCount;
-        if (raw != null) {
-            const n = Number(raw);
-            if (Number.isFinite(n) && n >= 0) {
-                return Math.floor(n);
+    private async runSqlWithDeadline<T>(
+        ds: sql.ConnectionPool,
+        sqlText: string,
+        deadline: number,
+    ): Promise<sql.IResult<T>> {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+            throw new Error('Query timeout exceeded');
+        }
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            return await Promise.race([
+                new sql.Request(ds).query<T>(sqlText),
+                new Promise<never>((_, reject) => {
+                    timer = setTimeout(() => reject(new Error('Query timeout exceeded')), remaining);
+                }),
+            ]);
+        } finally {
+            if (timer) {
+                clearTimeout(timer);
             }
         }
-        return returnedRowCount;
     }
 
     private buildErrorResult(errorMessage: string): RunQueryResultType {
