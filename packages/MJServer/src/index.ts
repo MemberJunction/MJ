@@ -897,7 +897,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       // This prevents re-validating (and re-logging) on every subscription message.
       onConnect: async (ctx) => {
         try {
-          const token = String(ctx.connectionParams?.Authorization);
+          // Only coerce a value that's actually present — `String(undefined)` yields the
+          // literal string "undefined" (truthy, 9 chars), which slips past getUserPayload's
+          // `!token` guard and fails later as 'Invalid token payload' (a full stack-trace log)
+          // instead of the quiet, routine 'Missing token' path. A WS client that connects
+          // before its auth handshake (extremely common) must land on the quiet path.
+          const token = ctx.connectionParams?.Authorization ? String(ctx.connectionParams.Authorization) : '';
           // Carry API keys from connectionParams so API-key / MCP / Node clients can authenticate the socket
           // (validated the same way as the HTTP x-mj-api-key / x-mj-user-api-key headers).
           const systemApiKey = ctx.connectionParams?.['x-mj-api-key'] ? String(ctx.connectionParams['x-mj-api-key']) : undefined;

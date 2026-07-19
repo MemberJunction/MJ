@@ -258,9 +258,11 @@ describe('createUnifiedAuthMiddleware', () => {
   });
 
   describe('Authentication failures', () => {
-    it('should return 401 when no authorization header is provided', async () => {
+    it('should return 401 when no authorization header is provided, quietly (no stack-trace log)', async () => {
       mockGetReadOnlyDS.mockReturnValue(MOCK_POOL);
       mockGetReadWriteDS.mockReturnValue(MOCK_POOL);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       // No auth header → empty bearer token → empty token after strip → "Missing token"
       const req = makeMockReq({ headers: {} });
       const res = makeMockRes();
@@ -270,7 +272,14 @@ describe('createUnifiedAuthMiddleware', () => {
 
       expect(next).not.toHaveBeenCalled();
       expect(res._status).toBe(401);
-      expect(res._json).toEqual({ error: 'Authentication failed' });
+      expect(res._json).toEqual({ error: 'Authentication required' });
+      // An anonymous/unauthenticated request (health check, CORS-preflight-adjacent probe,
+      // a client mid-handshake) is routine — it must NOT log a warning or a stack trace.
+      // Same treatment as the existing TokenExpiredError branch.
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(errorSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
     });
 
     it('should return 401 with JWT_EXPIRED code for expired tokens', async () => {
@@ -301,10 +310,11 @@ describe('createUnifiedAuthMiddleware', () => {
       });
     });
 
-    it('should return 401 when jwt.decode returns null (corrupt token)', async () => {
+    it('should return 401 when jwt.decode returns null (corrupt token), and still log it in full', async () => {
       mockGetReadOnlyDS.mockReturnValue(MOCK_POOL);
       mockGetReadWriteDS.mockReturnValue(MOCK_POOL);
       mockJwtDecode.mockReturnValue(null);
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const req = makeMockReq({
         headers: { authorization: 'Bearer corrupt-token' },
@@ -317,6 +327,11 @@ describe('createUnifiedAuthMiddleware', () => {
       expect(next).not.toHaveBeenCalled();
       expect(res._status).toBe(401);
       expect(res._json).toEqual({ error: 'Authentication failed' });
+      // Unlike a bare "no credentials supplied" request, a token that IS present but
+      // fails to decode is worth a human's attention — the quiet path above is scoped
+      // to the "Missing token" case only, not a blanket suppression of auth logging.
+      expect(errorSpy).toHaveBeenCalledWith('Auth error:', expect.any(Error));
+      errorSpy.mockRestore();
     });
 
     it('should return 401 when verifyUserRecord returns null', async () => {
