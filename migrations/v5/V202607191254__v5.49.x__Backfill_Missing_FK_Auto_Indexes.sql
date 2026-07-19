@@ -22,9 +22,9 @@
 --      convention entirely and were never backfilled when it was introduced.
 --
 --   Both share the same mechanism: CodeGen *does* generate the correct index
---   DDL for all six on every run (see the checked-in
---   `SQL Scripts/generated/__mj/<Table>.index.generated.sql` files, which
---   already contain these exact statements), but the DDL is only executed /
+--   DDL for all six on every run (see the checked-in per-table
+--   `<Table>.index.generated.sql` files under the generated SQL Scripts
+--   folder, which already contain these exact statements), but the DDL is only executed /
 --   appended to a migration for entities present in
 --   ManageMetadataBase.newEntityList or modifiedEntityList for that run. These
 --   entities were unchanged at the time, so the generated SQL was written to
