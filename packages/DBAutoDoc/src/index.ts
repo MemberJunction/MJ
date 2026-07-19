@@ -27,3 +27,10 @@ export * from './generators/index.js';
 
 // Utilities
 export * from './utils/index.js';
+
+// @RegisterClass plugin classes — must be exported so the ClassFactory
+// registration is backed by an importable public API (see
+// .github/scripts/check-registerclass-exports.mjs).
+export * from './drivers/MySQLDriver.js';
+export * from './drivers/PostgreSQLDriver.js';
+export * from './drivers/SQLServerDriver.js';

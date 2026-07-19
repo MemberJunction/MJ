@@ -554,7 +554,18 @@ function suggestFix(v) {
 }
 
 function printHuman(report, opts) {
-    const { violations, uncertain, allowlisted, totals } = report;
+    const { violations, uncertain, allowlisted, deferredGenerated, totals } = report;
+
+    if (deferredGenerated.length > 0) {
+        const pkgs = [...new Set(deferredGenerated.map((v) => v.pkgName))];
+        console.log('');
+        console.log(`DEFERRED — CodeGen defect (${deferredGenerated.length} classes in ${pkgs.length} package(s)): NOT gating.`);
+        console.log('  Generated files are not hand-editable, so these cannot be fixed in a PR.');
+        console.log('  Emitter: packages/CodeGenLib/src/Angular/angular-codegen.ts (generated-forms.module.ts template)');
+        console.log('  It imports each @RegisterClass form component for the NgModule declarations but never');
+        console.log('  re-exports it, so the class is reachable to Angular DI yet not importable by name.');
+        for (const p of pkgs) console.log(`    - ${p}: ${deferredGenerated.filter((v) => v.pkgName === p).length}`);
+    }
 
     if (!opts.quiet && uncertain.length > 0) {
         console.log('');
@@ -596,7 +607,8 @@ function printHuman(report, opts) {
     console.log('─────────────────────────────────────────');
     console.log(
         `@RegisterClass export invariant: ${totals.registered} registered classes in ${totals.packages} packages — ` +
-            `${totals.passed} exported, ${violations.length} violations, ${uncertain.length} uncertain, ${allowlisted.length} allowlisted`
+            `${totals.passed} exported, ${violations.length} violations, ${deferredGenerated.length} deferred (generated), ` +
+            `${uncertain.length} uncertain, ${allowlisted.length} allowlisted`
     );
     console.log('─────────────────────────────────────────');
 
@@ -690,12 +702,21 @@ function main() {
     const allViolationsRaw = results.flatMap((r) => r.violations);
     const uncertain = results.flatMap((r) => r.uncertain);
 
-    // Partition against the allowlist.
+    // Partition: allowlisted -> generated (deferred, non-gating) -> gating violations.
+    //
+    // GENERATED_DEFERRAL: a violation inside a `generated/` directory is a CodeGen
+    // defect, not something a contributor can fix — hand-editing generated files is
+    // forbidden and the next codegen run would revert it. Those are reported loudly
+    // but do NOT gate, so this check can be turned on today without either
+    // suppressing 379 real findings in an opaque allowlist or blocking every PR on
+    // a generator change. Fixing the emitter flips them to gating automatically.
     const allowlisted = [];
+    const deferredGenerated = [];
     const violations = [];
     for (const v of allViolationsRaw) {
         const reason = allowlist.get(`${v.file}|${v.className}`);
         if (reason) allowlisted.push({ ...v, reason });
+        else if (v.isGenerated) deferredGenerated.push(v);
         else violations.push(v);
     }
 
@@ -712,12 +733,12 @@ function main() {
         packages: results.length,
         registered: results.reduce((n, r) => n + r.registeredCount, 0),
         passed: results.reduce((n, r) => n + r.passed, 0),
-        generatedViolations: scopedViolations.filter((v) => v.isGenerated).length,
+        generatedDeferred: deferredGenerated.length,
         handWrittenViolations: scopedViolations.filter((v) => !v.isGenerated).length,
         noEntryPackages: results.filter((r) => r.noEntry).length,
     };
 
-    const report = { violations: scopedViolations, uncertain: scopedUncertain, allowlisted, totals };
+    const report = { violations: scopedViolations, uncertain: scopedUncertain, allowlisted, deferredGenerated, totals };
 
     if (opts.json) console.log(JSON.stringify(report, null, 2));
     else printHuman(report, opts);

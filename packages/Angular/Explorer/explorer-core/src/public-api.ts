@@ -72,3 +72,11 @@ export * from './app-routing.module'
 export * from './module';
 // Unified Ctrl+K command palette (OmnibarProvider registry + palette component)
 export * from './lib/omnibar/index';
+
+// @RegisterClass plugin classes — must be exported so the ClassFactory
+// registration is backed by an importable public API (see
+// .github/scripts/check-registerclass-exports.mjs).
+export * from './lib/resource-wrappers/chat-collections-resource.component';
+export * from './lib/resource-wrappers/chat-tasks-resource.component';
+export * from './lib/resource-wrappers/livekit-room-resource.component';
+export * from './lib/resource-wrappers/notifications-resource.component';

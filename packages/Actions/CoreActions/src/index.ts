@@ -145,3 +145,9 @@ export * from './custom/search/search.action';
 export * from './custom/search/scoped-search.action';
 
 
+
+// @RegisterClass plugin classes — must be exported so the ClassFactory
+// registration is backed by an importable public API (see
+// .github/scripts/check-registerclass-exports.mjs).
+export * from './custom/ai/betty.action.js';
+export * from './custom/crud/get-records.action.js';

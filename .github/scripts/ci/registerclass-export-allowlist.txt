@@ -1,0 +1,55 @@
+# Allowlist for the @RegisterClass export invariant
+# (.github/scripts/check-registerclass-exports.mjs)
+#
+# Format, one per line:
+#     <repo-relative-file-path>|<ClassName>   # reason
+#
+# The trailing "# reason" is REQUIRED — the checker exits 2 on an entry without
+# one, so suppressions cannot accumulate silently.
+#
+# An entry here is a DEFERRAL, not an exemption. Every line below should have a
+# path to removal.
+
+# ---------------------------------------------------------------------------
+# 1. Duplicate class names in CoreActions  (needs a human decision — rename)
+# ---------------------------------------------------------------------------
+# find-candidate-actions.action.ts and find-candidate-agents.action.ts were
+# copy-pasted from their find-best-* siblings and the class name was never
+# renamed. Each pair registers under DISTINCT ClassFactory keys ("Find Best
+# Action" vs "Find Candidate Actions"), so runtime resolution is correct, but
+# the two files declare classes with the SAME TypeScript name. Exporting both
+# from src/index.ts is therefore impossible — tsc rejects it with TS2308
+# ("has already exported a member named 'FindBestActionAction'").
+#
+# The correct fix is to rename the copy-pasted classes to match their files and
+# registration keys (FindCandidateActionsAction / FindCandidateAgentsAction).
+# That renames a currently-exported symbol, i.e. a public API change, so it is
+# deliberately left for the repo owner rather than done silently here.
+packages/Actions/CoreActions/src/custom/ai/find-best-action.action.ts|FindBestActionAction   # duplicate class name with find-candidate-actions.action.ts (TS2308); needs a rename decision
+packages/Actions/CoreActions/src/custom/ai/find-best-agent.action.ts|FindBestAgentAction    # duplicate class name with find-candidate-agents.action.ts (TS2308); needs a rename decision
+
+# ---------------------------------------------------------------------------
+# 2. CodeGen-emitted entity forms  (CodeGen defect — do not hand-edit)
+# ---------------------------------------------------------------------------
+# All 379 generated entity form components under
+#   packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/**
+# carry @RegisterClass(BaseFormComponent, '<Entity>') but are never re-exported
+# from the package's public API.
+#
+# The generated barrel (lib/generated/generated-forms.module.ts) IMPORTS each
+# form component so it can list it in the NgModule's declarations, but never
+# re-exports the classes. public-api.ts exports the module, so the components
+# are reachable to Angular's DI but NOT importable by name — which is exactly
+# what a manifest named import requires.
+#
+# Emitter:  packages/CodeGenLib/src/Angular/angular-codegen.ts
+#           (the generated-forms.module.ts template)
+# Fix:      have that generator additionally emit a re-export barrel for the
+#           form components (or add `export *` lines alongside the imports).
+#
+# These files are CodeGen-owned and are NOT hand-edited; the entries are
+# suppressed by directory below rather than listed individually.
+#
+# NOTE: this allowlist matches exact paths, so the 379 generated entries are
+# instead skipped via the generated-code rule in the checker itself
+# (isGenerated) — see GENERATED_DEFERRAL in check-registerclass-exports.mjs.

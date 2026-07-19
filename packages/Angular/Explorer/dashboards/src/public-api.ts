@@ -224,3 +224,12 @@ export * from './archiving-dashboards.module';
 
 // Routines app — schedule AI agents to run on a cron cadence
 export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserRoutines/user-routines-resource.component';
+
+// @RegisterClass plugin classes — must be exported so the ClassFactory
+// registration is backed by an importable public API (see
+// .github/scripts/check-registerclass-exports.mjs).
+export { BulkOperationsContainerComponent } from './BulkOperations/bulk-operations-container.component';
+export { BulkOperationsOperationsComponent } from './BulkOperations/bulk-operations-operations.component';
+export { BulkOperationsRunHistoryComponent } from './BulkOperations/bulk-operations-run-history.component';
+export { FeaturePipelinesResourceComponent } from './KnowledgeHub/components/feature-pipelines/feature-pipelines-resource.component';
+export { SchedulingResourceComponent } from './KnowledgeHub/components/scheduling/scheduling-resource.component';

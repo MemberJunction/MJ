@@ -44,3 +44,13 @@ export { FlowAgentFormSectionComponent } from './lib/custom/AIAgents/FlowAgentTy
 
 // NOTE: Action Test Harness components have moved to @memberjunction/ng-actions
  
+
+// @RegisterClass plugin classes — must be exported so the ClassFactory
+// registration is backed by an importable public API (see
+// .github/scripts/check-registerclass-exports.mjs).
+export { MJAIBridgeAgentIdentityFormComponentExtended } from './lib/custom/BridgeAgentIdentities/bridge-agent-identity-form.component';
+export { MJAIBridgeProviderFormComponentExtended } from './lib/custom/BridgeProviders/bridge-provider-form.component';
+export { RecordProcessFormComponentExtended } from './lib/custom/RecordProcesses/record-process-form.component';
+export { MJSearchScopeFormComponentExtended } from './lib/custom/SearchScopes/searchscope-form.component';
+export { MJSearchScopeProviderFormComponentExtended } from './lib/custom/SearchScopes/searchscopeprovider-form.component';
+export { MJAIAgentSessionBridgeFormComponentExtended } from './lib/custom/SessionBridges/session-bridge-form.component';
