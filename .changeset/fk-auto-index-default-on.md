@@ -21,3 +21,17 @@ is hard to diagnose; a surplus index is cheap and trivially reversible.
 
 `distribution.config.cjs` now ships the setting explicitly enabled so downstream installs are
 immune to future default drift.
+
+Additionally, `generateForeignKeyIndexes` moved from an `abstract` declaration to a template
+method on `CodeGenDatabaseProvider`. Every dialect-independent decision — which fields qualify
+as indexable foreign keys, and how the index name is composed and truncated — now lives in the
+base class once; dialects supply only `formatIndexStatement`, `tableToken`, `columnToken`,
+`indexPrefix`, and `maxIdentifierLength`.
+
+This fixes a drift bug: the primary-key and virtual-field exclusions existed only in the
+PostgreSQL provider, so SQL Server would emit a redundant index for a PK-that-is-also-FK (1:1
+extension tables) and an invalid `CREATE INDEX` for a virtual field with no underlying column.
+Both dialects now share the exclusions by construction. **Generated DDL is otherwise unchanged
+and byte-identical** — index naming is deliberately NOT converged across dialects (SQL Server
+names from `BaseTableCodeName`/`CodeName`, PostgreSQL from snake-cased `BaseTable`/`Name`), since
+renaming would orphan every existing index in deployed databases.

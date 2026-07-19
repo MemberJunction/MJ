@@ -937,20 +937,28 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
      * convention and are truncated to 63 characters (PostgreSQL's maximum identifier length).
      * Skips primary key columns and virtual fields.
      */
-    generateForeignKeyIndexes(entity: EntityInfo): string[] {
-        const indexes: string[] = [];
-        for (const field of entity.Fields) {
-            if (field.RelatedEntityID && !field.IsPrimaryKey && !field.IsVirtual) {
-                const indexName = `idx_auto_mj_fkey_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}`;
-                // Truncate to 63 chars (PG max identifier length)
-                const truncatedName = indexName.length > 63 ? indexName.substring(0, 63) : indexName;
-                indexes.push(
-                    `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(truncatedName)}\n` +
-                    `    ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${pgDialect.QuoteIdentifier(field.Name)});`
-                );
-            }
-        }
-        return indexes;
+    protected indexPrefix(): string {
+        return 'idx_auto_mj_fkey_';
+    }
+
+    /** PostgreSQL's maximum identifier length. */
+    protected maxIdentifierLength(): number {
+        return 63;
+    }
+
+    protected tableToken(entity: EntityInfo): string {
+        return this.toSnakeCase(entity.BaseTable);
+    }
+
+    protected columnToken(f: EntityFieldInfo): string {
+        return this.toSnakeCase(f.Name);
+    }
+
+    protected formatIndexStatement(entity: EntityInfo, f: EntityFieldInfo, indexName: string): string {
+        return (
+            `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(indexName)}\n` +
+            `    ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${pgDialect.QuoteIdentifier(f.Name)});`
+        );
     }
 
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────

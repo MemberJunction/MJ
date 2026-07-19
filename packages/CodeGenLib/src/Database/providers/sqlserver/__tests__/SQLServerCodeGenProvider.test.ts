@@ -600,3 +600,187 @@ describe('SQLServerCodeGenProvider — tolerant SP signatures', () => {
         });
     });
 });
+
+/** Shorthand for a normal, indexable FK field. */
+function fkField(name: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        ID: `fk-${name}`,
+        Name: name,
+        Type: 'uniqueidentifier',
+        Length: 16,
+        IsPrimaryKey: false,
+        AllowsNull: true,
+        AllowUpdateAPI: true,
+        IsVirtual: false,
+        AutoIncrement: false,
+        DefaultValue: '',
+        RelatedEntityID: 'related-entity-id',
+        ...extra,
+    };
+}
+
+const pkField = {
+    ID: 'pk-1',
+    Name: 'ID',
+    Type: 'uniqueidentifier',
+    Length: 16,
+    IsPrimaryKey: true,
+    AllowsNull: false,
+    AllowUpdateAPI: true,
+    IsVirtual: false,
+    AutoIncrement: false,
+    DefaultValue: '',
+    RelatedEntityID: null,
+};
+
+/**
+ * FK auto-index generation. The dialect-independent parts of this (which fields
+ * qualify, and how the name is composed/truncated) live in CodeGenDatabaseProvider
+ * as a template method; SQL Server contributes only the token spelling and the
+ * statement format. These tests pin the SQL Server-visible behavior.
+ */
+describe('SQLServerCodeGenProvider — foreign key indexes', () => {
+    let provider: SQLServerCodeGenProvider;
+
+    beforeEach(() => {
+        provider = new SQLServerCodeGenProvider();
+    });
+
+    describe('name composition', () => {
+        it('names the index IDX_AUTO_MJ_FKEY_{BaseTableCodeName}_{CodeName}', () => {
+            const entity = createMockEntity({}, [pkField, fkField('CategoryID')]);
+
+            const indexes = provider.generateForeignKeyIndexes(entity);
+
+            expect(indexes.length).toBe(1);
+            expect(indexes[0]).toContain('CREATE INDEX IDX_AUTO_MJ_FKEY_TestEntity_CategoryID');
+        });
+
+        it('builds the NAME from code names while indexing the REAL column name', () => {
+            // BaseTable and the field Name contain spaces. The index name uses the code-name
+            // spelling (CodeNameFromString maps invalid identifier chars to '_'), while the
+            // indexed column and the table reference use the real, spaced names.
+            const entity = createMockEntity({ BaseTable: 'Odd Name Table', BaseTableCodeName: 'OddNameTable' }, [
+                fkField('Weird Column ID'),
+            ]);
+
+            const indexes = provider.generateForeignKeyIndexes(entity);
+
+            expect(indexes.length).toBe(1);
+            expect(indexes[0]).toContain('CREATE INDEX IDX_AUTO_MJ_FKEY_OddNameTable_Weird_Column_ID');
+            expect(indexes[0]).toContain('([Weird Column ID])');
+            expect(indexes[0]).toContain('[__mj].[Odd Name Table]');
+        });
+
+        it('generates one index per FK field, preserving field order', () => {
+            const entity = createMockEntity({}, [pkField, fkField('TemplateID'), fkField('TypeID')]);
+
+            const indexes = provider.generateForeignKeyIndexes(entity);
+
+            expect(indexes.length).toBe(2);
+            expect(indexes[0]).toContain('IDX_AUTO_MJ_FKEY_TestEntity_TemplateID');
+            expect(indexes[1]).toContain('IDX_AUTO_MJ_FKEY_TestEntity_TypeID');
+        });
+
+        it('returns an empty array when the entity has no FK fields', () => {
+            const entity = createMockEntity({}, [pkField]);
+
+            expect(provider.generateForeignKeyIndexes(entity)).toEqual([]);
+        });
+    });
+
+    describe('identifier truncation', () => {
+        it('truncates the index name to 128 characters (SQL Server limit)', () => {
+            const longSegment = 'VeryLongSegmentNamePaddingToForceTruncationOfTheIdentifier';
+            const entity = createMockEntity(
+                { BaseTable: `${longSegment}Table`, BaseTableCodeName: `${longSegment}Table` },
+                [fkField(`${longSegment}ColumnID`)]
+            );
+
+            const indexes = provider.generateForeignKeyIndexes(entity);
+
+            const indexName = indexes[0].match(/CREATE INDEX (\S+) ON/)![1];
+            expect(indexName.length).toBe(128);
+            expect(indexName.startsWith('IDX_AUTO_MJ_FKEY_')).toBe(true);
+        });
+
+        it('leaves names at or under 128 characters untouched', () => {
+            const entity = createMockEntity({}, [pkField, fkField('CategoryID')]);
+
+            const indexName = provider.generateForeignKeyIndexes(entity)[0].match(/CREATE INDEX (\S+) ON/)![1];
+
+            expect(indexName).toBe('IDX_AUTO_MJ_FKEY_TestEntity_CategoryID');
+            expect(indexName.length).toBeLessThan(128);
+        });
+    });
+
+    describe('IF NOT EXISTS idempotency guard', () => {
+        it('wraps CREATE INDEX in a sys.indexes existence check so re-runs are no-ops', () => {
+            const entity = createMockEntity({}, [pkField, fkField('CategoryID')]);
+
+            const sql = provider.generateForeignKeyIndexes(entity)[0];
+
+            expect(sql).toContain('IF NOT EXISTS (');
+            expect(sql).toContain('FROM sys.indexes');
+            expect(sql).toContain("AND object_id = OBJECT_ID('[__mj].[TestEntity]')");
+            // The guard must reference the SAME name that gets created
+            const createdName = sql.match(/CREATE INDEX (\S+) ON/)![1];
+            expect(sql).toContain(`WHERE name = '${createdName}'`);
+        });
+
+        it('emits a leading comment identifying the foreign key and table', () => {
+            const entity = createMockEntity({}, [pkField, fkField('CategoryID')]);
+
+            const sql = provider.generateForeignKeyIndexes(entity)[0];
+
+            expect(sql.startsWith('-- Index for foreign key CategoryID in table TestEntity')).toBe(true);
+        });
+
+        it('qualifies the target table with its schema', () => {
+            const entity = createMockEntity({ SchemaName: 'custom_schema' }, [pkField, fkField('OwnerID')]);
+
+            const sql = provider.generateForeignKeyIndexes(entity)[0];
+
+            expect(sql).toContain('ON [custom_schema].[TestEntity] ([OwnerID]);');
+        });
+    });
+
+    // B28: these exclusions previously existed only in the PostgreSQL provider. Hoisting the
+    // filter into CodeGenDatabaseProvider applies them to every dialect by construction.
+    describe('B28 — excludes fields that must not be indexed', () => {
+        it('does not index a primary key that is also a foreign key', () => {
+            // 1:1 extension-table pattern: the child PK is an FK to the parent. The PK already
+            // has its own index, so a second one would be pure overhead.
+            const entity = createMockEntity({}, [
+                { ...pkField, RelatedEntityID: 'parent-entity-id' },
+                fkField('OwnerID'),
+            ]);
+
+            const indexes = provider.generateForeignKeyIndexes(entity);
+
+            expect(indexes.length).toBe(1);
+            expect(indexes[0]).toContain('IDX_AUTO_MJ_FKEY_TestEntity_OwnerID');
+            expect(indexes.join('\n')).not.toContain('IDX_AUTO_MJ_FKEY_TestEntity_ID');
+        });
+
+        it('does not index a virtual FK field (no underlying column exists)', () => {
+            const entity = createMockEntity({}, [
+                pkField,
+                fkField('VirtualOwnerID', { IsVirtual: true }),
+                fkField('RealOwnerID'),
+            ]);
+
+            const indexes = provider.generateForeignKeyIndexes(entity);
+
+            expect(indexes.length).toBe(1);
+            expect(indexes[0]).toContain('IDX_AUTO_MJ_FKEY_TestEntity_RealOwnerID');
+            expect(indexes.join('\n')).not.toContain('VirtualOwnerID');
+        });
+
+        it('does not index a non-FK field', () => {
+            const entity = createMockEntity({}, [pkField, fkField('PlainColumn', { RelatedEntityID: null })]);
+
+            expect(provider.generateForeignKeyIndexes(entity)).toEqual([]);
+        });
+    });
+});
