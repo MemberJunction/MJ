@@ -16,9 +16,11 @@
  *    from durable watermarks/keyset checkpoints.
  *
  * Opt-in / preserving in-process default:
- *  - Deploy this worker with `scheduledJobs.enabled=true` (its own env) and set the
- *    MJAPI serving process's `scheduledJobs.enabled=false`. If the worker is NOT
- *    deployed, MJAPI keeps running the scheduler in-process — behavior unchanged.
+ *  - Deploying this worker IS the opt-in: once running it always polls (there is no
+ *    per-worker enable flag — it reads only its documented env vars via config.ts).
+ *    To OFFLOAD, set the MJAPI serving process's `scheduledJobs.enabled=false` so only
+ *    the worker claims jobs. If the worker is NOT deployed, MJAPI keeps running the
+ *    scheduler in-process — behavior unchanged.
  *
  * Not handled here (by design, PR 1 scope):
  *  - On-demand sync (the fire-and-forget GraphQL mutation) stays in-process.

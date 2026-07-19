@@ -12,7 +12,7 @@ This worker is a deployment *option* that a given operator (e.g. MJC) can choose
 | Scenario | MJAPI `scheduledJobs.enabled` | Deploy this worker? | Where scheduled sync runs |
 |---|---|---|---|
 | **Default (unchanged)** | `true` | No | In-process, in MJAPI |
-| **Offloaded (opt-in)** | `false` | Yes (`scheduledJobs.enabled=true` in the worker's env) | In this worker container |
+| **Offloaded (opt-in)** | `false` | Yes — deploying the worker *is* the opt-in; once running it always polls | In this worker container |
 
 Because job claiming goes through the **DB-atomic lease** (`spAcquireScheduledJobLock` + heartbeat), the two
 modes never double-dispatch — you could even run both during a migration. To actually offload, set MJAPI's
