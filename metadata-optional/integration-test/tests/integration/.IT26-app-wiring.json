@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT26 - Application Wiring (all shipped apps)",
+    "Description": "Client-first (GraphQL wire) proof that every shipped application is wired correctly, parameterized over ALL applications in metadata so new apps inherit the contract automatically. AW1: every Application row loads and the provider metadata cache matches the entity table exactly (no missing, no stale). AW2: DefaultNavItems is valid JSON and every item declares Label + ResourceType (+ DriverClass when ResourceType='Custom'). AW3: each Active app with nav items declares exactly one isDefault tab. AW4: DriverClass values are non-empty and GLOBALLY UNIQUE across all apps (two apps resolving the same component is the catalog's latent risk #1). AW5: non-null application Path values are globally unique (slug uniqueness). AW6: every MJ: Application Entities join row resolves to a real app and a real entity. AW7: every MJ: Application Roles row resolves and CanAdmin implies CanAccess. AW8: every app-scoped MJ: Application Settings row points at a real application (null ApplicationID = global, valid). AW9: every app's AgentSettings DefaultAgentID and RelevantAgents resolve to real MJ: AI Agents. AW10: non-Active (Deprecated/Disabled) apps are excluded from the Active set and never flagged DefaultForNewUser. Read-only: creates nothing, mutates nothing, no model calls. Every collection-iterating check first asserts the collection is non-empty so a failed load cannot pass vacuously. Note: G5 (DriverClass -> Angular @RegisterClass resolution) is NOT here — those registrations live in Angular bundles the server cannot observe, so it ships as the static CI gate .github/scripts/check-driverclass-registrations.sh.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Every application's nav items, DriverClass values, paths, entity/role/settings links, and agent references resolve and are unique; non-Active apps never fan out to new users."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "app-wiring"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "779A6F02-5ED0-4EFA-AE64-82DAC39A5887"
+  }
+}

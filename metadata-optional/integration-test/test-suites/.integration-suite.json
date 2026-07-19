@@ -278,6 +278,39 @@
           "primaryKey": {
             "ID": "DCF3FFDC-5304-423F-B8F2-F55EB7DB2B30"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT24 - Metadata/DB Consistency Audit",
+            "Sequence": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9D7CD25F-47C8-42E0-9554-7A02EB006125"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT25 - View Execution (client-first)",
+            "Sequence": 21,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D7EBE59F-E879-42F8-9E09-899340484DD7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT26 - Application Wiring (all shipped apps)",
+            "Sequence": 22,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BC2A96AD-CC56-4B42-9ACA-AB28290EBDE8"
+          }
         }
       ]
     },

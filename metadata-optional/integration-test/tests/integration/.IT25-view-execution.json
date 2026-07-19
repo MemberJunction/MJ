@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT25 - View Execution (client-first)",
+    "Description": "The deterministic tier of Domain 11 (Viewing System), driven CLIENT-FIRST over the real GraphQL wire (GraphQLDataProvider -> live MJAPI). Read-only: the bundle discovers its universe from existing MJ: Entity Fields rows and creates/updates/deletes nothing. V1 dynamic {EntityName, ExtraFilter} returns exactly the matching rows (PK set equality). V2 Filter-JSON compiles to the expected WHERE (nested groups parenthesized, operator + quoting by field type). V3 ExtraFilter injection guard rejects ;/--/block comments/UNION and accepts forbidden words inside string literals. V4 Fields projection returns the requested subset plus the PK and no extra columns. V9 OFFSET pagination: union of pages equals the full set, no duplicates, no gaps. V10 keyset (AfterKey) walk returns every row exactly once and ends on a short page. V11 keyset on a composite-PK entity is refused rather than silently degrading to OFFSET. V12 MaxRows honored, IgnoreMaxRows returns the full set, entity UserViewMaxRows fallback caps an unbounded read. V13 aggregates ignore pagination but honor the WHERE clause. MUT-tier (V5-V8, V16, V17) and LIVE (V18) are a later wave; V14/V15 (RLS AND-combination and per-user view isolation) need a SECOND authenticated identity, which a single-identity client provider cannot supply - those remain with the server-side rls-isolation bundle.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Filtering, projection, filter-JSON compilation, injection rejection, both pagination modes (union == full set, no dup/gap), MaxRows semantics and aggregate/pagination independence all hold over the GraphQL wire."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "view-execution"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "653D35C4-CF96-4CAB-AAA4-69F1ABC7E58B"
+  }
+}

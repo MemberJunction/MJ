@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT24 - Metadata/DB Consistency Audit",
+    "Description": "Read-only audit comparing MJ entity metadata against the physical SQL Server catalog (sys.objects / sys.check_constraints / sys.indexes / sys.columns / sys.extended_properties). Zero fixtures, zero mutation, no model calls. MC1: every non-virtual entity with BaseViewGenerated=1 has its BaseView in sys.objects. MC2: every entity with Allow*API + sp*Generated has its spCreate/spUpdate/spDelete present. MC3: every column CHECK constraint that parses as a value list matches its EntityFieldValue rows (alphabetized). MC4: every FK column has its IDX_AUTO_MJ_FKEY_{Table}_{Column} index (truncated to 128). MC5: field Sequences are gapless from 1, duplicate-free, and match base-view physical column order. MC6: every physical field in the core schema carries an MS_Description (non-core schemas reported, not gated). MC8: SchemaInfo covers every entity schema and CanonicalSchemaName, when set, names that same schema. MC7 (DriverClass ClassFactory resolution) is intentionally not implemented — the audit process does not load every driver package, so it could not distinguish a bad DriverClass from an unloaded provider. Uses the SERVER transport by documented exception: the physical catalog has no client/GraphQL surface. On PostgreSQL (no mssql pool) every check skips-as-pass.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Generated views and CRUD procedures physically exist; CHECK value lists, FK indexes, field sequences, column descriptions, and SchemaInfo coverage all agree with the physical database."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "metadata-consistency"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "DD414986-2531-4CC6-BF9D-50198C292B92"
+  }
+}

@@ -44,6 +44,9 @@ export * from './checks/remote-op-ai-authoring.checks';
 export * from './checks/lists.checks';
 export * from './checks/open-app-teardown.checks';
 export * from './checks/user-routines.checks';
+export * from './checks/view-execution.checks';
+export * from './checks/metadata-consistency.checks';
+export * from './checks/app-wiring.checks';
 
 // Side-effect only: the permanent Phase-0 smoke check (no exports of its own).
 import './checks/self-test.check';

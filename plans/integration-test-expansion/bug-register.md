@@ -64,6 +64,26 @@ Companion to **[README.md](README.md)** / **[test-catalog.md](test-catalog.md)**
 
 ---
 
+## Wave 1 — CONFIRMED by a live run (not audit-inferred)
+
+Everything above was surfaced by *reading* the codebase. The entries below were found by **executing** the new Wave-1 bundles against the live DB (MJ_5_48_0, 2026-07-19), so each is reproducible rather than suspected.
+
+| ID | Defect | Location | Severity | Fix approach | Disposition | Guarding test |
+|---|---|---|---|---|---|---|
+| B24 | **6 FK columns are missing their `IDX_AUTO_MJ_FKEY_*` index.** CodeGen is supposed to emit one per FK column; these have none. **Independently confirmed against `sys.indexes`** — not a naming mismatch, the indexes are absent. Two distinct causes: (a) `CompanyIntegration.ScheduledJobID` + `CompanyIntegrationRun.ScheduledJobRunID` are newer columns where the index was never emitted; (b) **`TemplateCategory` and `TemplateContent` carry only their PK — zero FK indexes at all**, predating the convention and never backfilled (`TemplateCategory.ParentID`/`.UserID`, `TemplateContent.TemplateID`/`.TypeID`). Impact is performance: FK joins/filters on these columns scan. | `TemplateCategory`, `TemplateContent`, `CompanyIntegration`, `CompanyIntegrationRun` | Med (perf) | One migration creating the 6 missing indexes using CodeGen's exact `IDX_AUTO_MJ_FKEY_{Table}_{Col}` naming. Low risk, additive, no data change. Worth a follow-up on *why* CodeGen skipped them, so it can't recur. | **FIX-NOW** | MC4 (currently RED — goes green when the migration lands) |
+| B25 | **270 core-schema columns carry no `MS_Description`.** Pre-existing documentation debt on ordinary business columns (`Actions.Description`, `Action Params.Name`, `AI Actions.Name`, …), not a regression. Note the raw count was **1003** until the check was corrected to exempt PK/FK columns, which `migrations/CLAUDE.md` explicitly assigns to CodeGen. | `__mj` schema (2,681 describable columns scanned) | Low (docs) | Burn down incrementally. MC6 is a **ratchet** (`MC6_DEBT_CEILING = 270`): new undescribed columns fail the build, existing debt does not block. Lower the ceiling as descriptions land — **never raise it**. | **GUARD** (ratchet in place) | MC6 |
+
+### Coverage caveats found in Wave 1 (not defects — honesty about what is *not* covered)
+
+| Item | Why it matters |
+|---|---|
+| **V11 always skips on a stock install** | The keyset composite-PK refusal (`AfterKeyNotSupportedError`) has no readable composite-PK entity to probe — every core entity uses a single `ID` PK. The check logs an explicit SKIP rather than passing silently, but it currently contributes **zero** real coverage. Either promote it to a MUT-tier check that creates a composite-PK fixture, or retire it. |
+| **V14/V15 omitted, not stubbed** | RLS AND-combination and per-user view isolation are two-identity invariants; a `GraphQLDataProvider` is bound to one authenticated identity, so any single-identity version could not fail. These stay with the server-side `rls-isolation` bundle (RLS8/RLS9/RLS10), which discovers two genuinely-scoped users. |
+| **MC7 not written** | `ClassFactory` exposes no all-registrations accessor, and `server-bootstrap-lite` deliberately excludes several provider packages — so a DriverClass-resolution check could not distinguish "bad metadata" from "package not loaded in this process". It would fail wholesale on legitimate data. Left unwritten rather than faked. |
+| **G5 is a static gate, not a wire check** | `@RegisterClass(BaseResourceComponent, 'X')` registrations live in Angular bundles the server cannot observe. Shipped as `.github/scripts/check-driverclass-registrations.sh`. AW4 covers the metadata half (non-empty + globally unique) — **77/77 distinct, zero collisions** measured. |
+
+---
+
 ## Recommended split for THIS PR
 
 **Land the quick, safe fixes now** (FIX-NOW, all low-risk + a guarding test each): **B2** (`since` injection), **B3** (console.log), **B6** (OAuth escaping), **B13** (seed samples), **B11** (PG variant, if PG is in scope).

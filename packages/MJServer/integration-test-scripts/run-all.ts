@@ -53,13 +53,14 @@ const GROUPS: { Tier: string; Gate: string; Enabled: boolean; Scripts: string[] 
             'ai-skills-tests.ts',
             'user-routines-tests.ts',
             'predictive-studio-tests.ts',
+            'metadata-consistency-tests.ts',
         ],
     },
     {
         Tier: 'Deterministic · client',
         Gate: 'needs a live MJAPI (skips if unreachable)',
         Enabled: true,
-        Scripts: ['remote-op-wire-progress-tests.ts'],
+        Scripts: ['remote-op-wire-progress-tests.ts', 'app-wiring-tests.ts', 'view-execution-tests.ts'],
     },
     {
         Tier: 'Predictive Studio flows',
