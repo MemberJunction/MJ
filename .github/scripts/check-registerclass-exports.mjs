@@ -66,8 +66,75 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const PACKAGES_DIR = join(REPO_ROOT, 'packages');
 const ALLOWLIST_PATH = join(REPO_ROOT, '.github/scripts/ci/registerclass-export-allowlist.txt');
 
-/** Entry-point filenames, in the precedence order MJ packages use. */
+/** Conventional root entry-point filenames, in the precedence order MJ packages use. */
 const ENTRY_CANDIDATES = ['src/public-api.ts', 'src/index.ts'];
+
+/**
+ * Every entry point through which a package publishes API: the conventional root
+ * entry PLUS every concrete subpath declared in package.json `exports`, mapped
+ * from its built `dist/**.js` target back to the owning `src/**.ts` source.
+ *
+ * Subpaths count as public API — that is the whole point of declaring them. Some
+ * MJ packages deliberately publish plugin classes ONLY through a subpath so that
+ * importing the root entry does not drag in a heavy pipeline (e.g.
+ * `@memberjunction/codegen-lib/plugins`, `@memberjunction/metadata-sync/plugins`,
+ * both of which document this intent in the barrel's header comment). Treating
+ * the root entry as the only public surface would report those as violations and
+ * "fixing" them would defeat the lazy-loading design they exist to preserve.
+ *
+ * Wildcard subpaths (`"./*"`) are skipped: they map to a pattern rather than a
+ * concrete module, and a package that re-exports everything by glob cannot make
+ * a class unreachable anyway.
+ */
+function findEntryPoints(pkgDir) {
+    const entries = ENTRY_CANDIDATES.map((c) => join(pkgDir, c)).filter((p) => existsSync(p));
+
+    let pkgJson;
+    try {
+        pkgJson = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
+    } catch {
+        return entries;
+    }
+
+    const exp = pkgJson.exports;
+    if (typeof exp === 'object' && exp !== null && !Array.isArray(exp)) {
+        for (const [key, value] of Object.entries(exp)) {
+            if (key === './package.json' || key.includes('*')) continue;
+            const target = pickExportTarget(value);
+            if (typeof target !== 'string') continue;
+            const src = distTargetToSource(target, pkgDir);
+            if (src && !entries.includes(src)) entries.push(src);
+        }
+    }
+    return entries;
+}
+
+/** Resolve an exports value (string, or a condition object) to a path string. */
+function pickExportTarget(value) {
+    if (typeof value === 'string') return value;
+    if (typeof value !== 'object' || value === null) return null;
+    for (const cond of ['import', 'node', 'default', 'types', 'require']) {
+        const v = value[cond];
+        if (typeof v === 'string') return v;
+        if (typeof v === 'object' && v !== null) {
+            const nested = pickExportTarget(v);
+            if (nested) return nested;
+        }
+    }
+    return null;
+}
+
+/** Map a built `./dist/x/y.js` (or `.d.ts`) export target back to `src/x/y.ts`. */
+function distTargetToSource(target, pkgDir) {
+    const rel = target.replace(/^\.\//, '');
+    if (!rel.startsWith('dist/')) return null;
+    const withoutDist = rel.slice('dist/'.length).replace(/\.d\.ts$/, '').replace(/\.(js|mjs|cjs)$/, '');
+    for (const candidate of [`${withoutDist}.ts`, join(withoutDist, 'index.ts')]) {
+        const abs = join(pkgDir, 'src', candidate);
+        if (existsSync(abs)) return abs;
+    }
+    return null;
+}
 
 /* ------------------------------------------------------------------ *
  * Allowlist
@@ -398,7 +465,8 @@ function analyzePackage(pkgDir) {
     }
     if (registered.length === 0) return null;
 
-    const entry = ENTRY_CANDIDATES.map((c) => join(pkgDir, c)).find((p) => existsSync(p));
+    const entryPoints = findEntryPoints(pkgDir);
+    const entry = entryPoints[0];
     if (!entry) {
         // Application packages (MJAPI, MJExplorer, CLIs) publish no library entry
         // point. They are bundled as leaves, never imported by a manifest, so a
@@ -406,12 +474,14 @@ function analyzePackage(pkgDir) {
         return { pkgName, pkgDir, noEntry: true, registeredCount: registered.length, violations: [], uncertain: [], passed: 0 };
     }
 
+    // A class is exported if it is reachable from ANY declared entry point (root
+    // entry or a declared subpath) — all of them are public API.
     const state = { cache: new Map(), unresolvableStar: false, namespaceOnly: new Set() };
-    const bindings = resolveExportedBindings(entry, state);
-
-    // Flatten every provenance reachable as a real named export from the entry.
     const exportedProvenance = new Set();
-    for (const prov of bindings.values()) for (const p of prov) exportedProvenance.add(p);
+    for (const ep of entryPoints) {
+        const bindings = resolveExportedBindings(ep, state);
+        for (const prov of bindings.values()) for (const p of prov) exportedProvenance.add(p);
+    }
 
     const violations = [];
     const uncertain = [];
@@ -460,16 +530,21 @@ function suggestFix(v) {
     if (!rel.startsWith('.')) rel = `./${rel}`;
     rel = rel.split(sep).join('/');
 
-    // Match the entry file's dominant style: star barrel vs explicit named exports.
+    // Match the entry file's dominant style: star barrel vs explicit named exports,
+    // and whether it writes NodeNext-style `.js` specifiers. A suggested line that
+    // doesn't compile in the target package is worse than no suggestion.
     let usesStar = true;
+    let usesJsExt = false;
     try {
         const text = readFileSync(entryAbs, 'utf8');
         const starCount = (text.match(/^export \* from/gm) ?? []).length;
         const namedCount = (text.match(/^export \{/gm) ?? []).length;
         usesStar = starCount >= namedCount;
+        usesJsExt = /from '\.[^']*\.js'/.test(text);
     } catch {
         /* default to the star convention */
     }
+    if (usesJsExt) rel = `${rel}.js`;
 
     const line = usesStar ? `export * from '${rel}';` : `export { ${v.className} } from '${rel}';`;
     const extra = v.isExportedLocally
