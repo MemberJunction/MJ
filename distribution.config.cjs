@@ -79,12 +79,18 @@ module.exports = {
   //   { name: 'recompile_mj_views', value: true },
   //   { name: 'auto_index_foreign_keys', value: true },
   // ]
-  // settings: [
-  //   { name: 'mj_core_schema', value: '__mj' },
-  //   { name: 'skip_database_generation', value: false },
-  //   { name: 'recompile_mj_views', value: true },
-  //   { name: 'auto_index_foreign_keys', value: true },
-  // ],
+  // NOTE: this block is intentionally ACTIVE (not commented out) so that
+  // `auto_index_foreign_keys` ships explicitly true to downstream installs rather than
+  // relying on the code default. The values below match the documented defaults above,
+  // so pinning them is behaviorally a no-op — it just makes FK auto-indexing immune to
+  // future default drift. See `autoIndexForeignKeys()` in
+  // packages/CodeGenLib/src/Config/config.ts for why FK indexes must be on by default.
+  settings: [
+    { name: 'mj_core_schema', value: '__mj' },
+    { name: 'skip_database_generation', value: false },
+    { name: 'recompile_mj_views', value: true },
+    { name: 'auto_index_foreign_keys', value: true },
+  ],
 
   // ---------------------------------------------------------------------------
   // Logging Overrides
