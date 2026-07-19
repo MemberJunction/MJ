@@ -105,19 +105,19 @@ BEGIN
             ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
         END AS IsUnique
     FROM
-        [__mj].EntityField ef
+        [${flyway:defaultSchema}].EntityField ef
     INNER JOIN
         #uef_cols fromSQL
         ON ef.EntityID = fromSQL.EntityID AND ef.Name = fromSQL.FieldName
     INNER JOIN
-        [__mj].Entity e ON ef.EntityID = e.ID
+        [${flyway:defaultSchema}].Entity e ON ef.EntityID = e.ID
     LEFT OUTER JOIN
         #uef_fk fk
         ON ef.Name = fk.[column]
            AND e.BaseTable = fk.[table]
            AND e.SchemaName = fk.[schema_name]
     LEFT OUTER JOIN
-        [__mj].Entity re
+        [${flyway:defaultSchema}].Entity re
         ON re.BaseTable = fk.referenced_table AND re.SchemaName = fk.[referenced_schema]
     LEFT OUTER JOIN
         #uef_pk pk
@@ -178,7 +178,7 @@ BEGIN
         ef.AllowUpdateAPI = IIF(fr.IsVirtual = 1 AND ef.IsVirtual = 0, 0, ef.AllowUpdateAPI),
         ef.__mj_UpdatedAt = GETUTCDATE()
     FROM
-        [__mj].EntityField ef
+        [${flyway:defaultSchema}].EntityField ef
     INNER JOIN
         @FilteredRows fr ON ef.ID = fr.EntityFieldID;
 
