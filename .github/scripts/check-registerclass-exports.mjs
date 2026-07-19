@@ -252,16 +252,33 @@ function findRegisteredClasses(sf) {
  *
  * `seen` guards re-entry so a circular barrel graph terminates.
  */
-function resolveExportedBindings(filePath, state, seen = new Set()) {
-    if (seen.has(filePath)) return new Map(); // cycle — contributes nothing new
-    seen.add(filePath);
+function resolveExportedBindings(filePath, state, stack = new Set()) {
+    // Memo hit: a fully-resolved (non-cycle-truncated) result is reusable anywhere.
+    if (state.cache.has(filePath)) return state.cache.get(filePath);
 
-    const cacheKey = filePath;
-    if (state.cache.has(cacheKey)) return state.cache.get(cacheKey);
+    // Re-entry on the CURRENT path is a genuine cycle: truncate. `stack` is unwound
+    // below so that a file merely *revisited* by a sibling branch (extremely common
+    // in barrel graphs) recomputes or hits the memo — it must NOT be mistaken for a
+    // cycle and silently resolved to "exports nothing", which would report every
+    // class behind it as unexported.
+    if (stack.has(filePath)) {
+        state.cycleHit = true;
+        return new Map();
+    }
+    stack.add(filePath);
+
+    // Track whether THIS subtree was truncated by a cycle; a truncated (possibly
+    // incomplete) result must not be memoized, or the truncation leaks globally.
+    const outerCycle = state.cycleHit;
+    state.cycleHit = false;
 
     const sf = parseFile(filePath);
     const bindings = new Map(); // exportedName -> Set<'<file>#<local>'>
-    if (!sf) return bindings;
+    if (!sf) {
+        stack.delete(filePath);
+        state.cycleHit = outerCycle;
+        return bindings;
+    }
 
     const addBinding = (name, provenance) => {
         if (!bindings.has(name)) bindings.set(name, new Set());
@@ -308,7 +325,7 @@ function resolveExportedBindings(filePath, state, seen = new Set()) {
                 state.unresolvableStar = true; // `export *` out to another package
                 continue;
             }
-            const inner = resolveExportedBindings(target, state, seen);
+            const inner = resolveExportedBindings(target, state, stack);
             for (const [name, prov] of inner) addBinding(name, prov);
             continue;
         }
@@ -318,7 +335,7 @@ function resolveExportedBindings(filePath, state, seen = new Set()) {
             if (!specText) continue;
             const target = resolveSpecifier(filePath, specText);
             if (!target) continue;
-            const inner = resolveExportedBindings(target, state, seen);
+            const inner = resolveExportedBindings(target, state, stack);
             for (const prov of inner.values()) for (const p of prov) state.namespaceOnly.add(p);
             continue;
         }
@@ -331,13 +348,13 @@ function resolveExportedBindings(filePath, state, seen = new Set()) {
             if (specText) {
                 const target = resolveSpecifier(filePath, specText);
                 if (!target) continue; // re-export from another package — not our class
-                const inner = resolveExportedBindings(target, state, seen);
+                const inner = resolveExportedBindings(target, state, stack);
                 addBinding(exportedName, inner.get(localName) ?? [`${target}#${localName}`]);
             } else if (importOrigins.has(localName)) {
                 const origin = importOrigins.get(localName);
                 const target = resolveSpecifier(filePath, origin.spec);
                 if (!target) continue;
-                const inner = resolveExportedBindings(target, state, seen);
+                const inner = resolveExportedBindings(target, state, stack);
                 addBinding(exportedName, inner.get(origin.importedName) ?? [`${target}#${origin.importedName}`]);
             } else {
                 // Declared in this file and exported via a clause.
@@ -346,7 +363,14 @@ function resolveExportedBindings(filePath, state, seen = new Set()) {
         }
     }
 
-    state.cache.set(cacheKey, bindings);
+    // Unwind: this file is no longer on the active path, so a later sibling branch
+    // that reaches it again resolves it properly instead of seeing a false cycle.
+    stack.delete(filePath);
+    const truncated = state.cycleHit;
+    state.cycleHit = outerCycle || truncated;
+    // Only memoize a result that was NOT cycle-truncated — an incomplete result
+    // must not be promoted to the global cache.
+    if (!truncated) state.cache.set(filePath, bindings);
     return bindings;
 }
 
