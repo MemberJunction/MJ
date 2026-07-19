@@ -153,12 +153,31 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     }
 
     private _data: Record<string, unknown>[] = [];
+
+    /**
+     * Per-row synthetic identity for rows that have no natural key column, so the
+     * `getRowId` fallback can never return duplicate ids (ag-Grid silently merges
+     * rows that share an id). Keyed by the row object reference; entries are added
+     * as Data is assigned. A WeakMap so it never retains rows past their lifetime.
+     */
+    private _syntheticRowIds = new WeakMap<object, string>();
+    private _syntheticRowIdSeq = 0;
+
     /**
      * The query result data to display in the grid.
      */
     @Input()
     set Data(value: Record<string, unknown>[]) {
         this._data = value || [];
+
+        // Assign a stable synthetic id to each row up front, so the getRowId
+        // fallback (used only when a row has no natural key column) is
+        // collision-proof — rows with identical column values must NOT be merged.
+        for (const row of this._data) {
+            if (row && !this._syntheticRowIds.has(row)) {
+                this._syntheticRowIds.set(row, `mjrow_${this._syntheticRowIdSeq++}`);
+            }
+        }
 
         // If we have data but no columns from metadata or explicit configs, build from data
         if (this._data.length > 0 && this.Columns.length === 0 && !this._columnConfigs) {
@@ -1136,13 +1155,11 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     }
 
     public GetRowId = (params: GetRowIdParams): string => {
-        // Use data index as ID since query results don't have a guaranteed unique key
-        // We use JSON stringify on a subset of the data to create a deterministic key
         const data = params.data as Record<string, unknown>;
-        if (!data) return String(Math.random());
+        if (!data) return `mjrow_${this._syntheticRowIdSeq++}`;
 
-        // Try to find a unique identifier in the data
-        // Common patterns: ID, Id, id, RowNumber, __row_index
+        // Prefer a natural unique key when the result exposes one — this keeps row
+        // identity (and selection) stable across data refreshes.
         const idFields = ['ID', 'Id', 'id', 'RowNumber', 'RowNum', '__row_index'];
         for (const field of idFields) {
             if (data[field] !== undefined && data[field] !== null) {
@@ -1150,9 +1167,20 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             }
         }
 
-        // Fallback: use first few fields to create a hash-like key
-        const keys = Object.keys(data).slice(0, 3);
-        return keys.map(k => String(data[k] ?? '')).join('_');
+        // No natural key — use the per-row synthetic id assigned when Data was set.
+        // The previous fallback hashed only the first 3 columns, so any rows that
+        // matched on those columns collided to the same id and ag-Grid dropped all
+        // but one (silently collapsing aggregate/GROUP BY results, or any query
+        // without an ID column). A per-row synthetic id can never collide.
+        // Trade-off: the id is per-object (not value-derived), so an id-less row
+        // loses its selection across a data refresh — acceptable for query results,
+        // where NOT dropping rows matters far more than preserving a selection.
+        let synthetic = this._syntheticRowIds.get(data);
+        if (!synthetic) {
+            synthetic = `mjrow_${this._syntheticRowIdSeq++}`;
+            this._syntheticRowIds.set(data, synthetic);
+        }
+        return synthetic;
     };
 
     // ========================================

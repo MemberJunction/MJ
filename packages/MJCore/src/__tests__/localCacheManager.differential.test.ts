@@ -8,6 +8,7 @@
  */
 
 import { LocalCacheManager, CacheCategory } from '../generic/localCacheManager';
+import { CompositeKey } from '../generic/compositeKey';
 import { RunViewParams } from '../views/runView';
 import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 import { GetGlobalObjectStore } from '@memberjunction/global';
@@ -571,6 +572,116 @@ describe('LocalCacheManager Differential Caching', () => {
             const cached = await cacheManager.GetRunViewResult(testFingerprint);
             expect(cached).not.toBeNull();
             expect(cached!.rowCount).toBe(15);
+        });
+    });
+
+    // Regression guard for the RunView TotalRowCount discrepancy: a fresh count_only read
+    // reported a LARGER TotalRowCount than a cached paginated read of the same entity because
+    // the cache maintained totalRowCount as the size of the cached SLICE, not the DB total.
+    describe('TotalRowCount preservation (paginated / MaxRows-limited slots)', () => {
+        test('ApplyDifferentialUpdate honors the server total on a subset slot (does not collapse to slice size)', async () => {
+            // A paginated slot: only 5 cached rows but the DB view has 70 matching rows.
+            await cacheManager.SetRunViewResult(
+                testFingerprint,
+                testParams,
+                generateTestRows(5),
+                '2024-06-15T00:00:00.000Z',
+                undefined,
+                70 // totalRowCount from the DB
+            );
+
+            // Server reports 71 after one insert (fresh COUNT(*) over the view).
+            const result = await cacheManager.ApplyDifferentialUpdate(
+                testFingerprint,
+                testParams,
+                generateTestRows(1, 11),
+                [],
+                'ID',
+                '2024-06-20T00:00:00.000Z',
+                71
+            );
+
+            expect(result).not.toBeNull();
+            // rowCount is still the cached slice size...
+            expect(result!.rowCount).toBe(6);
+            // ...but the TOTAL must reflect the DB, not collapse to 6.
+            expect(result!.totalRowCount).toBe(71);
+
+            const cached = await cacheManager.GetRunViewResult(testFingerprint);
+            expect(cached!.totalRowCount).toBe(71);
+        });
+
+        test('ApplyDifferentialUpdate leaves a full-dataset slot total equal to the merged length (no regression)', async () => {
+            await cacheManager.SetRunViewResult(
+                testFingerprint,
+                testParams,
+                generateTestRows(10),
+                '2024-06-15T00:00:00.000Z',
+                undefined,
+                10
+            );
+
+            const result = await cacheManager.ApplyDifferentialUpdate(
+                testFingerprint,
+                testParams,
+                generateTestRows(5, 11),
+                [],
+                'ID',
+                '2024-06-20T00:00:00.000Z',
+                15
+            );
+
+            expect(result!.totalRowCount).toBe(15);
+            expect(result!.rowCount).toBe(15);
+        });
+
+        test('UpsertSingleEntity maintains the DB total on a subset slot via the row delta', async () => {
+            await cacheManager.SetRunViewResult(
+                testFingerprint,
+                testParams,
+                generateTestRows(5),
+                '2024-06-15T00:00:00.000Z',
+                undefined,
+                70
+            );
+
+            const newRow = generateTestRows(1, 11)[0];
+            const key = new CompositeKey([{ FieldName: 'ID', Value: newRow['ID'] as string }]);
+            const ok = await cacheManager.UpsertSingleEntity(
+                testFingerprint,
+                newRow,
+                key,
+                '2024-06-20T00:00:00.000Z'
+            );
+
+            expect(ok).toBe(true);
+            const cached = await cacheManager.GetRunViewResult(testFingerprint);
+            expect(cached!.rowCount).toBe(6);   // cached slice grew by one
+            expect(cached!.totalRowCount).toBe(71); // DB total tracked the +1 delta, not collapsed to 6
+        });
+
+        test('RemoveSingleEntity maintains the DB total on a subset slot via the row delta', async () => {
+            const rows = generateTestRows(5);
+            await cacheManager.SetRunViewResult(
+                testFingerprint,
+                testParams,
+                rows,
+                '2024-06-15T00:00:00.000Z',
+                undefined,
+                70
+            );
+
+            const key = new CompositeKey([{ FieldName: 'ID', Value: rows[0]['ID'] as string }]);
+            const ok = await cacheManager.RemoveSingleEntity(
+                testFingerprint,
+                key,
+                '2024-06-20T00:00:00.000Z'
+            );
+
+            expect(ok).toBe(true);
+            const cached = await cacheManager.GetRunViewResult(testFingerprint);
+            expect(cached!.rowCount).toBe(4);
+            expect(cached!.totalRowCount).toBe(69); // 70 - 1
         });
     });
 

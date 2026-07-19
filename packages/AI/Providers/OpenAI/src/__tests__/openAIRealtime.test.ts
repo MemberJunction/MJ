@@ -485,8 +485,8 @@ describe('OpenAIRealtime', () => {
                 response_id: 'r',
             } as RealtimeServerEvent);
             expect(transcripts).toEqual([
-                { Role: 'assistant', Text: 'Hel', IsFinal: false },
-                { Role: 'assistant', Text: 'Hello', IsFinal: true },
+                { Role: 'assistant', Text: 'Hel', IsFinal: false, ReplacesPrevious: false },
+                { Role: 'assistant', Text: 'Hello', IsFinal: true, ReplacesPrevious: false },
             ]);
         });
 
@@ -508,8 +508,30 @@ describe('OpenAIRealtime', () => {
                 usage: { type: 'tokens', input_tokens: 1, output_tokens: 1, total_tokens: 2 },
             } as RealtimeServerEvent);
             expect(transcripts).toEqual([
-                { Role: 'user', Text: 'wha', IsFinal: false },
-                { Role: 'user', Text: 'what is the weather', IsFinal: true },
+                { Role: 'user', Text: 'wha', IsFinal: false, ReplacesPrevious: false },
+                { Role: 'user', Text: 'what is the weather', IsFinal: true, ReplacesPrevious: false },
+            ]);
+        });
+
+        it('flags the 2nd+ streamed user transcription completed ReplacesPrevious (one row, not duplicates); resets on the next turn', () => {
+            // Grok streams input_audio_transcription.completed repeatedly (full growing text). The first
+            // completed of a turn is a normal final; the rest REPLACE it in place. A new turn (marked by
+            // speech_started) resets, so its first completed is a normal final again.
+            const transcripts: Array<{ Role: string; Text: string; IsFinal: boolean; ReplacesPrevious?: boolean }> = [];
+            session.OnTranscript((t) => transcripts.push(t));
+            const completed = (transcript: string) => driver.Fake.Fire({
+                type: 'conversation.item.input_audio_transcription.completed', transcript, content_index: 0, event_id: 'e', item_id: 'i',
+            } as RealtimeServerEvent);
+            completed('set');            // turn 1, first caption
+            completed('set a');          // turn 1, growing → replaces
+            completed('set a timer');    // turn 1, growing → replaces
+            driver.Fake.Fire({ type: 'input_audio_buffer.speech_started', audio_start_ms: 1, event_id: 'e', item_id: 'i' } as RealtimeServerEvent); // new turn
+            completed('cancel');         // turn 2, first caption → NOT replacing
+            expect(transcripts).toEqual([
+                { Role: 'user', Text: 'set', IsFinal: true, ReplacesPrevious: false },
+                { Role: 'user', Text: 'set a', IsFinal: true, ReplacesPrevious: true },
+                { Role: 'user', Text: 'set a timer', IsFinal: true, ReplacesPrevious: true },
+                { Role: 'user', Text: 'cancel', IsFinal: true, ReplacesPrevious: false },
             ]);
         });
 
@@ -827,6 +849,9 @@ describe('OpenAIRealtime effort-level mapping (MJ-normalized → provider litera
         expect(MapEffortLevelToOpenAIRealtime('81')).toBe('xhigh');
         expect(MapEffortLevelToOpenAIRealtime('HIGH')).toBe('high');
         expect(MapEffortLevelToOpenAIRealtime('ultra')).toBeUndefined();
+        expect(MapEffortLevelToOpenAIRealtime('1')).toBe('minimal');
+        expect(MapEffortLevelToOpenAIRealtime('0')).toBeUndefined();   // non-positive dropped
+        expect(MapEffortLevelToOpenAIRealtime('-10')).toBeUndefined();
     });
 });
 
@@ -962,11 +987,10 @@ describe('OpenAIRealtime config extraction hardening', () => {
         expect(session.inputTranscriptionModel).toBeUndefined();
     });
 
-    it('a numeric effortLevel of 0 or negative is unmappable and dropped', async () => {
-        // Parse succeeds but the quintile mapping still yields 'minimal' for <=20 — including 0
-        // and negatives, which are treated as the floor rather than dropped (parseInt succeeds).
-        const session = await startAndGetSession({ effortLevel: 0 });
-        expect(session.reasoning).toEqual({ effort: 'minimal' });
+    it('a numeric effortLevel of 0 or negative is nonsensical for a 1-100 scale and is DROPPED (no override)', async () => {
+        expect((await startAndGetSession({ effortLevel: 0 })).reasoning).toBeUndefined();
+        driver = new TestableOpenAIRealtime('k2');
+        expect((await startAndGetSession({ effortLevel: -5 })).reasoning).toBeUndefined();
     });
 
     it('passes provider-native keys through the residual bag spread (tool_choice)', async () => {
@@ -1299,5 +1323,56 @@ describe('C5: MCP approval auto-deny (dead-air prevention)', () => {
         } as unknown as RealtimeServerEvent);
         expect(driver.Fake.Sent.slice(before).filter((e) => e.type === 'conversation.item.create')).toHaveLength(0);
         expect(errors).toHaveLength(1);
+    });
+});
+
+describe('S5: model is a protected wire field (client-direct)', () => {
+    it('a Config bag `model` cannot override the server-authoritative model in the minted session', async () => {
+        const cd = new ClientDirectTestable('k');
+        const cfg = await cd.CreateClientSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys', Config: { model: 'gpt-4o-cheap' } });
+        expect((cfg.SessionConfig as Record<string, unknown>).model).toBe('gpt-realtime-2.1');
+    });
+    it('a Config bag `model` is scrubbed on the server-bridged session.update too', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys', Config: { model: 'evil' } });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            expect((update.session as Record<string, unknown>).model).toBeUndefined();
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+    });
+});
+
+describe('SEAM-4: config-tuning bag → driver session payload (end-to-end shape contract)', () => {
+    it('a bag shaped like GetSessionTuningSettings output produces reasoning + parallel_tool_calls + MCP tools', async () => {
+        // This is the exact flat-key shape the Agents-layer GetSessionTuningSettings emits — proving
+        // the two halves (config projection ↔ driver extraction) agree on key names.
+        const tuningBag = {
+            effortLevel: 'high',
+            parallelToolCalls: true,
+            mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
+            inputTranscriptionModel: 'whisper-1',
+        };
+        const driver = new TestableOpenAIRealtime('k');
+        await driver.StartSession({
+            Model: 'gpt-realtime-2.1',
+            SystemPrompt: 'sys',
+            Tools: [{ Name: 'lookup', Description: 'x', ParametersSchema: { type: 'object' } }],
+            Config: tuningBag,
+        });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const session = update.session as Record<string, unknown>;
+            expect(session.reasoning).toEqual({ effort: 'high' });
+            expect(session.parallel_tool_calls).toBe(true);
+            const tools = session.tools as Array<Record<string, unknown>>;
+            expect(tools).toHaveLength(2); // function + mcp
+            expect(tools[1]).toMatchObject({ type: 'mcp', server_label: 'kb' });
+            const audio = session.audio as { input?: { transcription?: { model?: string } } };
+            expect(audio.input?.transcription?.model).toBe('whisper-1');
+        } else {
+            throw new Error('expected realtime session.update');
+        }
     });
 });
