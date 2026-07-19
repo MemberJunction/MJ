@@ -247,6 +247,8 @@ export class RealtimeSessionRunner {
     private abortListener: (() => void) | null = null;
     /** Fatal-transport reconnect attempts consumed so far (bounded by deps.MaxTransportReconnects). */
     private reconnectAttempts = 0;
+    /** True while a reconnect is IN FLIGHT — prevents concurrent reconnects at a budget >= 2. */
+    private reconnecting = false;
     /** Whether there is accumulated usage that has not yet been checkpointed. */
     private usageDirty = false;
     /** Pending debounce timer handle for usage checkpoints. */
@@ -405,6 +407,12 @@ export class RealtimeSessionRunner {
                 void this.Stop();
             };
             signal.addEventListener('abort', this.abortListener, { once: true });
+            // C4 window: the signal may have fired DURING the StartSession await above — an
+            // already-aborted signal never dispatches 'abort' again, so the listener alone would
+            // miss it. Re-check and finalize now.
+            if (signal.aborted) {
+                void this.Stop();
+            }
         }
 
         this.deps.LogStatus?.(
@@ -445,11 +453,23 @@ export class RealtimeSessionRunner {
      * @param session The active session to wire.
      */
     private wireHandlers(session: IRealtimeSession): void {
-        session.OnTranscript((t) => void this.handleTranscript(t));
-        session.OnToolCall((call) => void this.handleToolCall(call));
-        session.OnUsage((u) => this.handleUsage(u));
-        session.OnInterruption(() => this.handleInterruption());
-        session.OnError((error) => this.handleSessionError(error));
+        // Every handler is IDENTITY-GUARDED against `this.session`: after a transport reconnect
+        // (attemptTransportReconnect) the OLD session may still emit late events (a trailing fatal,
+        // a stale tool call carrying a call_id the new session never issued). Those must NEVER
+        // touch the runner state that now belongs to the FRESH session — otherwise an old-session
+        // fatal could tear down the healthy reconnected session, or a stale tool result could be
+        // relayed to a provider session that has no matching pending call.
+        session.OnTranscript((t) => { if (this.session === session) void this.handleTranscript(t); });
+        session.OnToolCall((call) => { if (this.session === session) void this.handleToolCall(call); });
+        // Usage is runner-GLOBAL (cumulative across the whole session lifetime incl. reconnects),
+        // NOT session-scoped — so a late usage frame from a just-superseded session must still
+        // accumulate (never dropped by the session-identity guard the other handlers use). The gate
+        // here is the RUNNER lifecycle instead: once Stop() has finalized (`stopped`), a trailing
+        // usage frame flushed on the closing socket must NOT accumulate — it would diverge from the
+        // already-returned FinalUsage AND arm a fresh debounce timer that checkpoints post-finalize.
+        session.OnUsage((u) => { if (!this.stopped) this.handleUsage(u); });
+        session.OnInterruption(() => { if (this.session === session) this.handleInterruption(); });
+        session.OnError((error) => { if (this.session === session) this.handleSessionError(error); });
     }
 
     /**
@@ -466,8 +486,9 @@ export class RealtimeSessionRunner {
         const code = error.Code ? ` [${error.Code}]` : '';
         if (error.Fatal) {
             const maxReconnects = this.deps.MaxTransportReconnects ?? 1;
-            if (!this.stopped && this.reconnectAttempts < maxReconnects) {
+            if (!this.stopped && !this.reconnecting && this.reconnectAttempts < maxReconnects) {
                 this.reconnectAttempts++;
+                this.reconnecting = true; // re-entrancy guard: no concurrent reconnect at budget >= 2
                 this.deps.LogError?.(`Fatal realtime session error${code} — attempting bounded reconnect ${this.reconnectAttempts}/${maxReconnects}: ${error.Message}`);
                 void this.attemptTransportReconnect();
                 return;
@@ -489,6 +510,17 @@ export class RealtimeSessionRunner {
      */
     private async attemptTransportReconnect(): Promise<void> {
         try {
+            // SEAM-2: the OLD session is dead — abort any in-flight delegation (its result would
+            // otherwise be relayed to the fresh session as a function_call_output carrying a
+            // call_id the new provider session never issued) and drop any queued (now-stale)
+            // progress-narration text. We do NOT blanket-reset activeDelegations: each in-flight
+            // delegation frame self-decrements via its own finally (AbortInFlight unwinds them), so
+            // zeroing the shared counter here would corrupt it for a CONCURRENT delegation that
+            // outlives the reconnect (its completion would decrement a count that now belongs to a
+            // newly-started delegation, suppressing the new one's narration).
+            this.toolBroker.AbortInFlight();
+            this.cancelPendingNarration();
+
             try {
                 await this.session?.Close();
             } catch {
@@ -499,6 +531,16 @@ export class RealtimeSessionRunner {
             const tools = this.BuildToolSet();
             const params: RealtimeSessionParams = { ...this.deps.SessionParams, Tools: tools };
             const fresh = await this.deps.Model.StartSession(params);
+
+            // SEAM-1: the runner may have been Stop()ed (consumer abort / a second fatal) WHILE we
+            // awaited StartSession. Stop() found this.session === null (a no-op close) and set
+            // stopped — so if we blindly adopted `fresh` we'd leak a live, never-closed session
+            // whose handlers fire into a finalized runner. Close the fresh session and bail.
+            if (this.stopped) {
+                try { await fresh.Close(); } catch { /* fresh may throw on close — irrelevant */ }
+                return;
+            }
+
             this.session = fresh;
             this.wireHandlers(fresh);
             this.attachRecording(fresh);
@@ -507,6 +549,8 @@ export class RealtimeSessionRunner {
         } catch (reconnectError) {
             this.logError(reconnectError, 'reconnecting after a fatal transport drop');
             void this.Stop();
+        } finally {
+            this.reconnecting = false; // reconnect settled (success/fail) — allow the next one
         }
     }
 
@@ -541,8 +585,12 @@ export class RealtimeSessionRunner {
      * @param call The tool-call request emitted by the model.
      */
     private async handleToolCall(call: RealtimeToolCall): Promise<void> {
+        // Capture the session the call originated on. Tool execution (esp. an invoke-target-agent
+        // DELEGATION) can span a transport reconnect; the result must NOT be relayed to a DIFFERENT
+        // (freshly-reconnected) provider session, which never issued this call_id.
+        const originatingSession = this.session;
         const executed = await this.toolBroker.ExecuteToolCall(call);
-        await this.dispatchToolResult(call.CallID, executed.ResultJson, 'sending tool result');
+        await this.dispatchToolResult(call.CallID, executed.ResultJson, 'sending tool result', originatingSession);
     }
 
     /**
@@ -552,8 +600,16 @@ export class RealtimeSessionRunner {
      * @param resultJson The JSON-stringified result to send.
      * @param operation A short description of the send operation, used in error logging.
      */
-    private async dispatchToolResult(callID: string, resultJson: string, operation: string): Promise<void> {
-        if (!this.session) {
+    private async dispatchToolResult(
+        callID: string,
+        resultJson: string,
+        operation: string,
+        originatingSession?: IRealtimeSession | null
+    ): Promise<void> {
+        // Relay only when the live session is STILL the one that issued the call (see handleToolCall).
+        // A result computed on a since-replaced session carries a call_id the current session never
+        // saw — sending it would confuse/reject the fresh turn.
+        if (!this.session || (originatingSession !== undefined && this.session !== originatingSession)) {
             return;
         }
         try {
@@ -687,7 +743,14 @@ export class RealtimeSessionRunner {
      * sequential tool calls seconds apart can never narrate faster than the interval).
      */
     private beginDelegationBurst(): void {
-        if (this.activeDelegations === 0) {
+        // Anchor a fresh burst either when nothing else is in flight OR when the burst state was reset
+        // (narrationBurstStartedAt === 0) by a {@link cancelPendingNarration} — e.g. a reconnect that
+        // aborted the prior delegation(s). The second condition matters when a prior delegation FAILED
+        // to honor its abort and left {@link activeDelegations} elevated: without it this new delegation
+        // would inherit the dead burst's stale anchor (collapsing the 5s first-narration delay) and its
+        // climbing update count. Decoupling the re-anchor from the counter keeps burst timing correct
+        // regardless of a stuck delegate.
+        if (this.activeDelegations === 0 || this.narrationBurstStartedAt === 0) {
             this.narrationBurstStartedAt = Date.now();
             this.narrationCount = 0;
             this.pendingNarrationMessages = [];
@@ -795,13 +858,22 @@ export class RealtimeSessionRunner {
         );
     }
 
-    /** Cancels any deferred spoken update and drops the digest buffer. */
+    /**
+     * Cancels any deferred spoken update, drops the digest buffer, and RESETS the burst-timing state
+     * (anchor time, spoken-update count, dedup tail). Callers invoke this exactly when the current
+     * burst is ending or being torn down (delegation done, barge-in, reconnect, Stop), so clearing the
+     * anchor to 0 marks "no active burst" — {@link beginDelegationBurst} then re-anchors the next
+     * delegation cleanly even if {@link activeDelegations} is still elevated by a stuck delegate.
+     */
     private cancelPendingNarration(): void {
         if (this.narrationTimer) {
             clearTimeout(this.narrationTimer);
             this.narrationTimer = null;
         }
         this.pendingNarrationMessages = [];
+        this.narrationBurstStartedAt = 0;
+        this.narrationCount = 0;
+        this.lastNarratedTail = '';
     }
 
     /**

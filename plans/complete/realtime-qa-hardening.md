@@ -111,9 +111,71 @@ Severity legend: 🔴 fix-critical · 🟠 medium · 🟡 low · ⚪ info/hygien
 
 ## Completion checklist
 
-- [ ] All A/B/C items checked off with tests
-- [ ] Package READMEs updated: ai-openai, ai-xai, ai-huggingface, ai-realtime-client, MJServer (proxy), Agents (realtime)
-- [ ] `guides/REALTIME_CO_AGENTS_GUIDE.md` updated (new config knobs, usage detail, reconnect, MCP deny, timeouts)
-- [ ] Changesets (minor) for all touched packages
-- [ ] Full repo build green; full repo unit tests green
-- [ ] Plan moved to `/plans/complete/realtime-qa-hardening.md`
+- [x] All A/B/C items checked off with tests
+- [x] Package READMEs updated: ai-openai, ai-xai, ai-huggingface (incl. proxy env), ai-realtime-client, Agents (realtime)
+- [x] `guides/REALTIME_CO_AGENTS_GUIDE.md` updated (new config knobs, usage detail, reconnect, MCP deny, timeouts, proxy hardening)
+- [x] Changesets for all touched packages (`.changeset/realtime-qa-hardening.md`)
+- [x] Full repo build green (299/299); full repo unit tests green (594/594)
+- [x] Plan moved to `/plans/complete/realtime-qa-hardening.md`
+
+**Completed 2026-07-18** on `fix/realtime-qa-hardening`. Suite totals: ai-openai 147 · ai-realtime-client 391 · ai-agents 1653 · ai-gemini 87 · ai-xai 50 · ai-huggingface 34 · MJServer proxy 8.
+
+---
+
+## Second-pass adversarial re-audit — findings fixed (2026-07-18)
+
+A three-reviewer re-audit of the hardening work itself found holes in several of the fixes (mostly untested edges the fixes introduced). All fixed with regression tests:
+
+- [x] **C1-DARK 🔴 CRIT** — `normalizeConfig` never propagated the new `realtime.session` field, so `GetSessionTuningSettings` always returned null in production → all tuning knobs were inert (C1 still dark). Added `normalizeSession` (typed validation) wired into the effective-config resolver; end-to-end propagation + service-fold + driver-shape tests.
+- [x] **S1 🔴 HIGH** — B2 counter (`pendingLocalResponseCreates`) wedged the client forever when a `response.create` was rejected (error frame, no `response.created`) — reachable via the ordinary SendText barge-in. Fix: decrement (floor 0) on an error frame (self-heals to pre-counter behavior). Test: reject-then-done → not stuck busy.
+- [x] **SEAM-1 🔴 HIGH** — C7 reconnect racing abort/Stop leaked a live session (no `this.stopped` re-check after the `StartSession` await). Fix: re-check + close the fresh session and bail. Test: gated StartSession + Stop mid-open.
+- [x] **SEAM-2 🔴 HIGH** — C7 reconnect relayed a stale `call_id` to the fresh session and didn't reset delegation/narration state. Fix: `AbortInFlight()` + narration reset at reconnect start, AND a session-identity guard on the tool-result relay (`handleToolCall` captures the originating session; `dispatchToolResult` drops if swapped). Test: in-flight delegation across reconnect → stale result not relayed.
+- [x] **C4-window 🟠** — an abort firing DURING the `StartSession` await was lost (listener attached post-await on an already-fired signal). Fix: `if (signal.aborted) Stop()` after attach. Test: gated StartSession + abort mid-open.
+- [x] **C7 re-entrancy + identity 🟠** — no re-entrancy flag (double reconnect at budget ≥ 2) and no session-identity guard (old session's late fatal killed the fresh one). Fix: `reconnecting` flag + identity-guarded `wireHandlers`. Tests: two-fatals-one-reconnect, late-old-fatal-ignored.
+- [x] **S2 🟠** — client connect deadline timer leaked + could reject a later Connect when `openProviderSocket` throws synchronously. Fix: socket build + wiring moved inside the try; `unref()` added.
+- [x] **S3 🟠** — reused-instance late `onclose`/`onerror` from the OLD socket corrupted the new session. Fix: reset `socketOpen` at Connect entry + identity-guard every socket handler. Test: old-socket-close-after-reconnect ignored.
+- [x] **S5 🟡** — `model` was not a protected wire field (a bag `model` could pin a different model in the client-direct pact). Fix: added `model` to the scrub. Tests: both topologies.
+- [x] **C8 🟡** — `persistRealtimeTranscript` ignored `ReplacesPrevious` → latent duplicate turns for future streamed-final server drivers. Fix: keep the in-flight key on a replacing final. Test: two replacing finals → one row.
+- [x] **W3 🟡** — `effortLevel: 0`/negative was floored to `'minimal'` instead of dropped (+ a contradictory test name). Fix: drop non-positive numerics; test asserts the corrected behavior.
+- [x] **W1/W2/SEAM-4 (test quality)** — strengthened the happy-reconnect usage test (fire before AND after the drop, assert the sum), rewrote the misleading HF "reconnection" reset test to actually prove queued-trigger reset on instance reuse, and added an end-to-end config-tuning-bag → driver-session-payload shape test proving the two halves agree on key names.
+
+**Re-audit verification**: full repo build 299/299, unit tests 594/594. Suite deltas: ai-openai 152 · ai-realtime-client 394 · ai-agents 1668 · ai-gemini 87 · ai-xai 50 · ai-huggingface 34 · MJServer proxy 8.
+
+## Third-pass adversarial re-audit — findings fixed (2026-07-18)
+
+A third pass against the latest `next` (post-#3183 merge) found three residual seams — each an incomplete edge of a prior fix. All fixed with regression tests that provably fail against the pre-fix code:
+
+- [x] **C8-completeness 🟠** — the C8 fix bound the in-flight key ONLY on the interim branch, so a FINALS-ONLY streamed provider (Grok user captions, ElevenLabs corrections) that never emits an interim delta still took the create+finalize branch and minted a duplicate `ConversationDetail` row per corrected final. Fix: bind the in-flight key in the create+finalize branch too when `ReplacesPrevious`. Test: `C8 finals-only` — first replacing final creates + binds, second updates the SAME row.
+- [x] **SEAM-2b 🟠** — the C7 reconnect blanket-reset `activeDelegations = 0`; combined with each aborted delegation's self-decrementing `finally` (`AbortInFlight` unwinds them), this double-decrements and can steal a CONCURRENT post-reconnect delegation's narration burst (its progress silently drops). Fix: remove the blanket reset — frames self-unwind. Test: `SEAM-2b` — old delegation unwinds AFTER a new one starts; new one still narrates.
+- [x] **W-usage 🟡** — `OnUsage` was identity-gated like every other handler, so a trailing usage frame flushed on the just-dropped socket was discarded. Usage is runner-GLOBAL (cumulative across reconnects), not session-scoped. Fix: un-gate `OnUsage` (every other handler stays guarded). Test: `W-usage` — late usage from the superseded session still sums into `FinalUsage`.
+- [x] **S1 bounded-worst-case (characterization)** — added a test pinning the documented bounded degradation: an UNRELATED error while a legitimate local create is outstanding under-protects exactly ONE `response.done` (releases the lock early) but NEVER wedges the session.
+
+**Third-pass verification**: `@memberjunction/ai-agents` build clean; ai-agents 1671 · ai-realtime-client 395 — all passing. Each new test verified to fail against the reverted (buggy) code, then pass with the fix restored.
+
+## Fourth-pass adversarial re-audit — findings fixed (2026-07-18)
+
+A fourth pass (four independent reviewers: runner concurrency, client protocol state machine, transcript/config data integrity, and the broader co-agent architecture) found one regression from the third-pass work plus several reachable pre-existing defects. All fixed with regression tests verified to fail against the reverted code.
+
+- [x] **Usage post-Stop 🔴 HIGH (regression)** — the third-pass usage un-gate also removed the only guard blocking a trailing usage frame (flushed on the closing socket) from accumulating AFTER `Stop()` returned `FinalUsage` and arming a debounce timer that checkpoints post-finalize. Fix: gate `handleUsage` on `!this.stopped` (preserves cross-reconnect accumulation, blocks post-finalize). Test: `W-usage post-Stop`.
+- [x] **Transcript `ReplacesPrevious` end-to-end 🔴 CRIT (pre-existing, C8 completion)** — the flag was only ever stamped client-side; the shared SERVER session never set it, so server-bridged Grok (which streams repeated `input_audio_transcription.completed`, full growing text) minted a duplicate `ConversationDetail` per caption. Fixed end-to-end: (a) `OpenAIRealtimeSession` now flags the 2nd+ user completed of a turn `ReplacesPrevious` (reset on `speech_started`), mirroring the client driver — safe for single-completed OpenAI; (b) `persistRealtimeTranscript` rewritten to status-disambiguated reuse (RP:true → reuse; RP:false → reuse only an In-Progress interim row, else a new turn) so all real shapes (OpenAI interim+final, Grok streamed captions, ElevenLabs corrections, assistant delta+done) yield exactly one row per turn with no cross-turn overwrite. Tests: driver (`xaiRealtime`/`openAIRealtime` streamed-caption) + persist (`C8 streamed captions` / `interim→final` / `correction` / `assistant delta→done`, multi-row store).
+- [x] **Client `onErrorFrame` phantom wedge 🟠 MED (pre-existing)** — the S1 self-heal cleared only the counter; the eagerly-set `responseActive`/`pendingNarrationKind`/`'speaking'` state survived a rejected local create (error, no `response.created`) with nothing to clear it → `IsBusy` wedged on compat endpoints. Fix: a `confirmedResponseActive` flag distinguishes an eager phantom from a genuinely-active (VAD) response; `onErrorFrame` clears the phantom without disturbing a live turn. Plus a `wasLocalCreate` guard so a VAD `response.created` (counter 0) never consumes a narration kind. Tests: `S1b` (phantom busy-flag clear), `S1c` (rejected narration → next turn tagged normal).
+- [x] **Broker aborts only the newest of concurrent delegations 🟠 MED (pre-existing)** — a single `currentDelegationController` meant a second `invoke-target-agent` call orphaned the first; barge-in left it running and its stale result could be relayed. Fix: track ALL in-flight controllers in a set; `AbortInFlight` cancels every one. Test: `aborts EVERY concurrent delegation`.
+- [x] **HuggingFace server sample rate 🟠 MED (pre-existing, architecture #3)** — the server session declared no `InputSampleRate`, so the bridge fell back to the 24 kHz contract default and fed it into HF's native 16 kHz pipeline (the documented "silent on the bridge" footgun). Fix: the HF session declares 16 kHz in/out (honoring the `Config.sampleRate` override), matching the client-direct pact. Test: `server-bridged session declares HF-native 16 kHz`.
+- [x] **Stuck-delegate narration burst leak 🟡 MED (self-inflicted trade-off from the 3rd-pass counter fix)** — removing the blanket `activeDelegations = 0` reset meant a delegate that never honors its abort pins the counter, leaking the dead burst's stale anchor/count into a fresh post-reconnect delegation. Fix: `cancelPendingNarration` now resets the burst-timing state and `beginDelegationBurst` re-anchors when unanchored — decoupling burst display from the counter. Test: `SEAM-2c`.
+
+Residual (documented, not fixed — larger architecture, out of this PR's scope): client-direct per-modality usage detail can't cross the 2-scalar relay (cost skew vs server-bridged); client-direct OpenAI/xAI drop `InitialContext`; client-direct has no reconnect equivalent; and the narration-kind mistag has an inherent residual under a genuine simultaneous narration-vs-VAD race (id-less protocol). These are pre-existing topology asymmetries flagged for a follow-up.
+
+**Fourth-pass verification**: full repo build **299/299**; suites — ai-openai 151 · ai-xai 51 · ai-huggingface 35 · ai-gemini 87 · ai-realtime-client 397 · ai-core 201 · ai-agents 1676 — all passing. Every new test verified to fail against the reverted (buggy) code.
+
+## Fifth-pass adversarial re-audit — findings fixed (2026-07-18)
+
+A fifth pass (four reviewers: transcript persist correctness, client/runner concurrency, a fresh broad audit, and a test-quality audit) verified the fourth-pass fixes and found one reachable correctness bug plus coverage gaps and two latent transcript fragilities. All actionable items fixed; residuals documented.
+
+- [x] **Narration-kind leak in `onErrorFrame` 🟠 MEDIUM (reachable, incompleteness in the pass-4 fix)** — the flag clearing `pendingNarrationKind` was gated inside the `!confirmedResponseActive` branch, so a narration create rejected while a cancelled response was still draining left the flag set and mistagged the NEXT delegated-answer turn as ephemeral narration (its transcript dropped). Fix: clear `pendingNarrationKind` UNCONDITIONALLY on the rejecting error (it belongs to the rejected create); keep the `responseActive`/`speaking` clear gated on `!confirmedResponseActive`. Test: `S1d`.
+- [x] **Transcript key lifecycle refactor 🟡 LOW (two latent fragilities → both closed)** — replaced the delete-on-non-replacing-final key logic with an `{id, open}` model: the tracked row carries whether it is an unfinalized interim, the entry is kept (closed) after finalize, and a new turn is detected via `open`. This fixes (a) the config-reachable duplicate when a provider emits BOTH an interim delta AND repeated `completed`s in one turn, and (b) an assistant `done`-without-`delta` leaking a key that suppressed the next turn's interim streaming row. Tests: `C8 robustness` (delta+multi-completed → one row), `C8 assistant final with NO interim` (next turn not suppressed). All prior C8 shapes still pass.
+- [x] **`confirmedResponseActive` guard was untested (test-quality finding) 🟠** — the flag's whole purpose (do NOT clear the busy lock when a real/draining response is active) had zero coverage; removing the guard left all client tests green. Added `S1e` (an error during a live/draining confirmed response must not drop `IsBusy`), verified to fail when the guard is removed.
+- [x] **Reset-on-`speech_started` coverage (test-quality finding)** — the xAI streamed-caption test now fires `speech_started` and asserts the per-turn reset (`[false,true,true,false]`); HuggingFace gained a streamed-caption `ReplacesPrevious` + reset test (was transitive-only).
+
+Residuals (documented, not blockers): the narration-kind tag has an inherent LOW mistag under a genuine simultaneous narration-vs-VAD race and when an unrelated error lands in a narration's create→created window (id-less protocol; the harm is benign — a disposable narration shown as a durable 'normal' message, never the reverse); a usage frame arriving in the brief `Stop()` flush→Close window is dropped (the deliberate `!stopped` tradeoff — a minor undercount that buys teardown safety); the reconnect-tail early-finalize (reviewer note) is NOT reachable — the tail between adopting the fresh session and clearing `reconnecting` is fully synchronous, so no inbound fatal can interleave; and the pass-2 client connect-deadline timer-leak fix remains covered only structurally.
+
+**Fifth-pass verification**: full repo build **299/299**; suites — ai-openai 151 · ai-xai 51 · ai-huggingface 36 · ai-gemini 87 · ai-realtime-client 399 · ai-core 201 · ai-agents 1678 — all passing. New tests (`S1d`, `S1e`, `C8 robustness`, `C8 assistant-no-interim`, xAI/HF reset) verified to fail against the reverted code.

@@ -330,8 +330,13 @@ export interface RealtimeToolBrokerDeps {
 export class RealtimeToolBroker {
     private deps: RealtimeToolBrokerDeps;
 
-    /** The abort controller for the currently in-flight delegated run, if any. */
-    private currentDelegationController: AbortController | null = null;
+    /**
+     * The abort controllers for ALL currently in-flight delegated runs. The realtime model can emit
+     * more than one `invoke-target-agent` call before the first resolves (parallel tool calls), so a
+     * single controller would leave the older delegation un-abortable — its stale result would then be
+     * relayed on barge-in. Tracking the full set lets {@link AbortInFlight} cancel every in-flight run.
+     */
+    private readonly inFlightDelegations = new Set<AbortController>();
 
     /**
      * @param deps The injected collaborators that execute tool calls.
@@ -366,10 +371,10 @@ export class RealtimeToolBroker {
      * conversation that has moved on. Safe no-op when no delegation is in flight.
      */
     public AbortInFlight(): void {
-        if (this.currentDelegationController) {
-            this.currentDelegationController.abort();
-            this.currentDelegationController = null;
+        for (const controller of this.inFlightDelegations) {
+            controller.abort();
         }
+        this.inFlightDelegations.clear();
     }
 
     /**
@@ -381,7 +386,7 @@ export class RealtimeToolBroker {
      */
     private async runInvokeTarget(call: RealtimeToolCall): Promise<ExecutedToolCall> {
         const controller = new AbortController();
-        this.currentDelegationController = controller;
+        this.inFlightDelegations.add(controller);
         try {
             const result = await this.deps.DelegateToTarget({
                 CallID: call.CallID,
@@ -393,10 +398,8 @@ export class RealtimeToolBroker {
             this.logError(error, 'delegating to target agent');
             return this.serializeError(error);
         } finally {
-            // Only clear if this is still the active controller (a later delegation may have replaced it).
-            if (this.currentDelegationController === controller) {
-                this.currentDelegationController = null;
-            }
+            // Remove THIS run's controller (AbortInFlight may already have cleared the whole set).
+            this.inFlightDelegations.delete(controller);
         }
     }
 

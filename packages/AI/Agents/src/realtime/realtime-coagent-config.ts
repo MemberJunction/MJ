@@ -640,7 +640,54 @@ function normalizeConfig(merged: JSONObjectLike): RealtimeCoAgentConfig {
         section.turnTaking = turnTaking;
     }
 
+    const sessionTuning = normalizeSession(rawRealtime['session']);
+    if (sessionTuning) {
+        section.session = sessionTuning;
+    }
+
     return Object.keys(section).length > 0 ? { realtime: section } : { realtime: {} };
+}
+
+/**
+ * Normalizes the `realtime.session` tuning sub-object from a merged config layer, keeping ONLY the
+ * recognized, correctly-typed knobs (the input is parsed JSON of unknown shape). Returns
+ * `undefined` when nothing valid is present so {@link normalizeConfig} omits the key entirely.
+ *
+ * Per-key deep-merge across layers is handled upstream by {@link DeepMergeConfigs} (plain-object
+ * layers merge; the merged blob is what this normalizer sees), so this only validates + projects.
+ *
+ * @param raw The raw `session` value from a merged config layer.
+ * @returns The normalized tuning config, or `undefined` when empty/invalid.
+ */
+function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined {
+    if (!isPlainObject(raw)) {
+        return undefined;
+    }
+    const tuning: RealtimeSessionTuningConfig = {};
+
+    const effort = raw['effortLevel'];
+    if (typeof effort === 'string' && effort.trim().length > 0) {
+        tuning.effortLevel = effort.trim();
+    }
+    else if (typeof effort === 'number' && Number.isFinite(effort)) {
+        tuning.effortLevel = effort;
+    }
+
+    if (typeof raw['parallelToolCalls'] === 'boolean') {
+        tuning.parallelToolCalls = raw['parallelToolCalls'];
+    }
+
+    const mcpTools = raw['mcpTools'];
+    if (Array.isArray(mcpTools) && mcpTools.length > 0 && mcpTools.every(isPlainObject)) {
+        tuning.mcpTools = mcpTools as JSONObjectLike[];
+    }
+
+    const itModel = raw['inputTranscriptionModel'];
+    if (typeof itModel === 'string' && itModel.trim().length > 0) {
+        tuning.inputTranscriptionModel = itModel.trim();
+    }
+
+    return Object.keys(tuning).length > 0 ? tuning : undefined;
 }
 
 /** Normalizes the `turnTaking` block (participation mode + room moderator); returns `null` when nothing usable survives. */
