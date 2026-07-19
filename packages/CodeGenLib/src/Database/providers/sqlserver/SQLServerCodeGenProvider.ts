@@ -493,24 +493,27 @@ GO`;
      * to 128 characters (SQL Server's identifier length limit). Wraps each statement in an
      * `IF NOT EXISTS` check against `sys.indexes` to avoid duplicate index creation.
      */
-    generateForeignKeyIndexes(entity: EntityInfo): string[] {
-        const indexes: string[] = [];
-        for (const f of entity.Fields) {
-            if (f.RelatedEntity && f.RelatedEntity.length > 0) {
-                let indexName = `IDX_AUTO_MJ_FKEY_${entity.BaseTableCodeName}_${f.CodeName}`;
-                if (indexName.length > 128) indexName = indexName.substring(0, 128);
+    protected tableToken(entity: EntityInfo): string {
+        return entity.BaseTableCodeName;
+    }
 
-                indexes.push(`-- Index for foreign key ${f.Name} in table ${entity.BaseTable}
+    protected columnToken(f: EntityFieldInfo): string {
+        return f.CodeName;
+    }
+
+    protected formatIndexStatement(entity: EntityInfo, f: EntityFieldInfo, indexName: string): string {
+        // NOTE: the trailing space after the index name below is intentional — it reproduces
+        // the historical output byte-for-byte. `writeFileIfChanged` compares generated file
+        // content, so altering even insignificant whitespace would rewrite every entity's
+        // .index.generated.sql on the next run for no functional gain.
+        return `-- Index for foreign key ${f.Name} in table ${entity.BaseTable}
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
     WHERE name = '${indexName}' 
     AND object_id = OBJECT_ID('[${entity.SchemaName}].[${entity.BaseTable}]')
 )
-CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.Name}]);`);
-            }
-        }
-        return indexes;
+CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.Name}]);`;
     }
 
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────
