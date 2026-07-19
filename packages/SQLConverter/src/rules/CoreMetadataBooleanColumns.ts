@@ -56,7 +56,7 @@ const CORE_METADATA_BOOLEAN_COLUMNS: Record<string, string[]> = {
   AIModelAction: ['IsActive'],
   AIModelModality: ['IsSupported', 'IsRequired'],
   AIModelType: ['SupportsPrefill'],
-  AIModelVendor: ['SupportsEffortLevel', 'SupportsStreaming', 'SupportsPrefill', 'SupportsStructuredOutput'],
+  AIModelVendor: ['SupportsEffortLevel', 'SupportsStreaming', 'SupportsPrefill'],
   AIPrompt: ['EnableCaching', 'CacheMustMatchModel', 'CacheMustMatchVendor', 'CacheMustMatchAgent', 'CacheMustMatchConfig', 'IncludeLogProbs', 'RequireSpecificModels'],
   AIPromptRun: ['Success', 'LogProbs', 'FinalValidationPassed', 'Cancelled', 'CacheHit', 'WasSelectedResult', 'StreamingEnabled'],
   APIApplication: ['IsActive'],
