@@ -176,6 +176,19 @@ export interface IPermissionProvider {
  * ```
  */
 export abstract class PermissionProviderBase implements IPermissionProvider {
+    /**
+     * Opt-in marker read by `ClassFactory` (see `ClassResolutionResult`): this class CANNOT
+     * function standalone — every member below is abstract, so a base instance is a method-less
+     * stub. TypeScript's `abstract` is erased at runtime, so the factory cannot detect that on its
+     * own; without this marker an unresolvable `ProviderClassName` would silently be handed back
+     * as a live "provider" and blow up later at the first method call.
+     *
+     * With the marker set, `CreateInstance` throws and `TryCreateInstance` returns
+     * `{Resolved: false, Instance: null}` — both of which `PermissionEngine` handles by skipping
+     * the domain.
+     */
+    public static readonly RequiresSubclass = true;
+
     abstract readonly DomainName: string;
     abstract readonly Description: string;
     abstract readonly SupportedGranteeTypes: GranteeType[];
