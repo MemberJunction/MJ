@@ -16,7 +16,6 @@
   "license": "ISC",
   "dependencies": {
     "@memberjunction/core": "5.48.0",
-    "@memberjunction/core-entities": "5.48.0",
     "@memberjunction/generic-database-provider": "5.48.0",
     "@memberjunction/integration-engine": "5.48.0",
     "@memberjunction/redis-provider": "5.48.0",
@@ -25,7 +24,7 @@
     "@memberjunction/sqlserver-dataprovider": "5.48.0",
     "dotenv": "^17.2.4",
     "env-var": "^7.3.0",
-    "mj_generatedentities": "5.48.0",
+    "mj_generatedentities": "1.0.0",
     "mssql": "^12.2.0"
   },
   "devDependencies": {
