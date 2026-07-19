@@ -63,6 +63,14 @@
     "./client": {
       "types": "./dist/bootstrap-client.d.ts",
       "default": "./dist/bootstrap-client.js"
+    },
+    "./registry": {
+      "types": "./dist/registry.d.ts",
+      "default": "./dist/registry.js"
+    },
+    "./checks/*": {
+      "types": "./dist/checks/*.d.ts",
+      "default": "./dist/checks/*.js"
     }
   }
 }

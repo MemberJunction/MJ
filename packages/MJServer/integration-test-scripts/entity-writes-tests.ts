@@ -26,9 +26,14 @@
  *
  * Exit code: 0 = passed (or skipped), 1 = failures, 2 = bootstrap error.
  */
+// BROWSER FIDELITY (B32): server-FREE subpaths only — the root barrel re-exports the
+// server bootstrap, which would resolve entities to their SERVER subclasses rather than
+// the client classes a browser actually loads.
 import { bootstrapIntegrationClient } from '@memberjunction/testing-integration/client';
-import { TestRunner, EmitOutcomes, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
-import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
+import { TestRunner, EmitOutcomes, IntegrationCheckRegistry } from '@memberjunction/testing-integration/registry';
+import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration/registry';
+// Side-effect import: registers THIS bundle's checks (and only this bundle's).
+import '@memberjunction/testing-integration/checks/entity-writes.checks';
 import { Metadata } from '@memberjunction/core';
 
 const BUNDLE = 'entity-writes';

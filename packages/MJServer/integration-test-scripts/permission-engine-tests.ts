@@ -36,6 +36,22 @@
  *
  * Exit code: 0 = passed (or skipped), 1 = failures, 2 = bootstrap error.
  */
+// TRANSPORT NOTE (B32 / B37) — this bundle DELIBERATELY imports the root barrel, unlike the
+// other client-first dispatchers, which use the server-free `/registry` + `/checks/*` subpaths.
+//
+// Why: unlike app-wiring / view-execution / entity-writes (which assert WIRE behavior), these
+// checks assert ENGINE INTERNALS — the `MJ: Permission Domains` catalog fanning out to
+// ClassFactory-registered `PermissionProviderBase` implementations, and the cached
+// AIAgent/AISkill permission helpers. Those registrations come from packages a headless
+// client process does not otherwise load, so importing only this bundle's checks leaves the
+// ClassFactory under-populated and the checks silently degrade (PE6 flips to a false failure;
+// PE7/PE8 downgrade to skips — i.e. they stop asserting anything).
+//
+// That degradation is the symptom of a REAL open question (B37): a browser loads the full
+// client class manifest (`@memberjunction/ng-bootstrap`), whereas the integration client
+// bootstrap registers only `@memberjunction/core-entities`. Until that gap is closed, this
+// bundle is honest as an ENGINE-side check rather than a wire check, and the barrel import is
+// the documented transport exception. Revisit when the client bootstrap loads a real manifest.
 import { bootstrapIntegrationClient } from '@memberjunction/testing-integration/client';
 import { TestRunner, EmitOutcomes, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';

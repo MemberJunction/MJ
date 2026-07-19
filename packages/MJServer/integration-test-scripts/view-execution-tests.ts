@@ -23,9 +23,15 @@
  *
  * Exit code: 0 = passed (or skipped), 1 = failures, 2 = setup error.
  */
+// BROWSER FIDELITY (B32): import from the server-FREE subpaths only. `./lib/harness`
+// re-exports the package BARREL (including bootstrapIntegrationServer), which drags in
+// @memberjunction/core-entities-server and makes entities resolve to their SERVER
+// subclasses — silently defeating the point of a client-first check.
 import { bootstrapIntegrationClient } from '@memberjunction/testing-integration/client';
-import { LoadEnv, LoadClientConfig, TestRunner, EmitOutcomes, IntegrationCheckRegistry } from './lib/harness';
-import type { IntegrationCheckContext } from './lib/harness';
+import { LoadEnv, LoadClientConfig, TestRunner, EmitOutcomes, IntegrationCheckRegistry } from '@memberjunction/testing-integration/registry';
+import type { IntegrationCheckContext } from '@memberjunction/testing-integration/registry';
+// Side-effect import: registers THIS bundle's checks (and only this bundle's).
+import '@memberjunction/testing-integration/checks/view-execution.checks';
 import { Metadata } from '@memberjunction/core';
 
 const BUNDLE = 'view-execution';
