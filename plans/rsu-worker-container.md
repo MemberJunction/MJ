@@ -35,7 +35,7 @@ unless an operator opts in.**
 
 ## DB schema (this migration — Phase 0)
 
-`migrations/v5/V202607202000__v5.49.x__RSU_Worker_Tables.sql` (+ PG twin) — plain infrastructure tables (NOT
+`migrations/v5/V202607202000__v5.49.x__RuntimeSchemaUpdate_Worker_Tables.sql` (+ PG twin) — plain infrastructure tables (NOT
 CodeGen'd entities; RSU must not depend on entity metadata for its own bookkeeping):
 
 - `__mj.RSUJob` — the durable job queue (Status/InputJSON/claim + heartbeat columns/step-progress/result).
