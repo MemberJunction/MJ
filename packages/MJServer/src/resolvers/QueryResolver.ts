@@ -202,7 +202,6 @@ export class RunQueryResolver extends ResolverBase {
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const md = provider as unknown as IMetadataProvider;
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
-    console.log('GetQueryData called with:', { QueryID, Parameters, MaxRows, StartRow, ForceAuditLog, AuditLogDescription });
     const result = await rq.RunQuery(
       {
         QueryID: QueryID,
@@ -216,12 +215,7 @@ export class RunQueryResolver extends ResolverBase {
         Enrichment: Enrichment
       },
       context.userPayload.userRecord);
-    console.log('RunQuery result:', { 
-      Success: result.Success, 
-      ErrorMessage: result.ErrorMessage,
-      AppliedParameters: result.AppliedParameters 
-    });
-    
+
     // If QueryName is not populated by the provider, use efficient lookup
     let queryName = result.QueryName;
     if (!queryName) {

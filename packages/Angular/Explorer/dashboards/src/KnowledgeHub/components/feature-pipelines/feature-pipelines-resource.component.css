@@ -1,6 +1,12 @@
 /**
  * Feature Pipelines (Knowledge Hub) — card-grid layout.
  * All colors use semantic design tokens (dark-mode + white-label safe).
+ *
+ * NOTE: this package builds with bare `ngc` (no Sass step) — component styles
+ * are embedded RAW into the compiled JS. Keep this file FLAT, plain CSS.
+ * Sass nesting / BEM selector concatenation would be silently dropped by the
+ * browser and the rules would be DEAD. See .github/scripts/check-ngc-scss.sh
+ * (CI gate) and MemberJunction/MJ#3105.
  */
 
 .fp-loading {
@@ -28,15 +34,15 @@
   border-radius: var(--mj-radius-lg, 10px);
   background: var(--mj-bg-surface-card);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
 
-  &:hover {
-    border-color: var(--mj-border-strong);
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
-  }
+.fp-card:hover {
+  border-color: var(--mj-border-strong);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
 
-  &--disabled {
-    opacity: 0.65;
-  }
+.fp-card--disabled {
+  opacity: 0.65;
 }
 
 .fp-card__head {
@@ -61,16 +67,16 @@
 .fp-card__title {
   flex: 1 1 auto;
   min-width: 0;
+}
 
-  h3 {
-    margin: 0;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+.fp-card__title h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fp-card__worktype {
@@ -108,30 +114,30 @@
   justify-content: space-between;
   gap: 12px;
   font-size: 13px;
+}
 
-  &__k {
-    flex: 0 0 auto;
-    color: var(--mj-text-muted);
+.fp-meta-row__k {
+  flex: 0 0 auto;
+  color: var(--mj-text-muted);
+}
 
-    i {
-      width: 14px;
-      margin-right: 4px;
-    }
-  }
+.fp-meta-row__k i {
+  width: 14px;
+  margin-right: 4px;
+}
 
-  &__v {
-    flex: 1 1 auto;
-    text-align: right;
-    color: var(--mj-text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+.fp-meta-row__v {
+  flex: 1 1 auto;
+  text-align: right;
+  color: var(--mj-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-  &__sub {
-    color: var(--mj-text-muted);
-    font-size: 12px;
-  }
+.fp-meta-row__sub {
+  color: var(--mj-text-muted);
+  font-size: 12px;
 }
 
 .fp-card__actions {
@@ -149,29 +155,29 @@
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
+}
 
-  &.status--never {
-    background: var(--mj-bg-surface-sunken);
-    color: var(--mj-text-muted);
-  }
+.fp-status.status--never {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-muted);
+}
 
-  &.status--running {
-    background: var(--mj-status-info-bg);
-    color: var(--mj-status-info-text);
-  }
+.fp-status.status--running {
+  background: var(--mj-status-info-bg);
+  color: var(--mj-status-info-text);
+}
 
-  &.status--completed {
-    background: var(--mj-status-success-bg);
-    color: var(--mj-status-success-text);
-  }
+.fp-status.status--completed {
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success-text);
+}
 
-  &.status--failed {
-    background: var(--mj-status-error-bg);
-    color: var(--mj-status-error-text);
-  }
+.fp-status.status--failed {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+}
 
-  &.status--cancelled {
-    background: var(--mj-status-warning-bg);
-    color: var(--mj-status-warning-text);
-  }
+.fp-status.status--cancelled {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
 }

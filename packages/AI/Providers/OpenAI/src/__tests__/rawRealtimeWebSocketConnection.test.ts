@@ -225,3 +225,45 @@ describe('RawRealtimeWebSocketConnection', () => {
         });
     });
 });
+
+describe('QA hardening regressions (adapter A-items)', () => {
+    beforeEach(() => {
+        FakeNativeWebSocket.Instances = [];
+    });
+
+    it('A1: a BODYLESS error frame still carries a synthesized provider payload (recoverable downstream)', () => {
+        const { conn, ws } = makeConnection();
+        const errors: OpenAIRealtimeError[] = [];
+        conn.on('error', (e) => errors.push(e));
+        ws.Receive({ type: 'error' });
+        expect(errors).toHaveLength(1);
+        expect(errors[0].error).toBeDefined(); // payload PRESENT → downstream classifies non-fatal
+        ws.Receive({ type: 'error', message: 'flat message style' });
+        expect(errors[1].error).toBeDefined();
+        expect(errors[1].message).toBe('flat message style');
+    });
+
+    it('A1: transport failures still carry NO payload (fatal downstream)', () => {
+        const { conn, ws } = makeConnection();
+        const errors: OpenAIRealtimeError[] = [];
+        conn.on('error', (e) => errors.push(e));
+        ws.Fail();
+        expect(errors[0].error).toBeUndefined();
+    });
+
+    it('A7: a transport error before open clears the pending send buffer', () => {
+        const { conn, ws } = makeConnection();
+        conn.send({ type: 'response.create' } as RealtimeClientEvent);
+        ws.Fail();
+        ws.Open(); // pathological late open must not flush dead frames
+        expect(ws.Sent).toHaveLength(0);
+    });
+
+    it('A7: send after server-initiated close is a safe no-op', () => {
+        const { conn, ws } = makeConnection();
+        ws.Open();
+        ws.CloseFromServer();
+        expect(() => conn.send({ type: 'response.create' } as RealtimeClientEvent)).not.toThrow();
+        expect(ws.Sent).toHaveLength(0);
+    });
+});

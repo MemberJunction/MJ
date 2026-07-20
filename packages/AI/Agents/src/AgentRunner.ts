@@ -398,6 +398,11 @@ export class AgentRunner {
 
             const modifiedParams: ExecuteAgentParams<C> = {
                 ...params,
+                // First-class conversationId gates the cross-turn context features
+                // (persistent summary compaction + history retrieval tools) in BaseAgent.
+                // data.conversationId stays populated as well — prompt templates and agent
+                // context consumers read it from the data bag.
+                conversationId,
                 data: {
                     ...params.data,
                     conversationId,

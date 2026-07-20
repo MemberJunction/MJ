@@ -28,20 +28,21 @@
  */
 
 import { LogError } from '@memberjunction/core';
-import type {
-  TrainRequest,
-  TrainResponse,
-  ValidationConfig,
-  MatrixData,
-  FeatureSchemaEntry,
-  PreprocessingOp,
-  SourceBinding,
-  AsOfStrategy,
-  LeakageGuard,
-  ValidationStrategy,
-  ProblemType,
-  FittedPreprocessing,
-  FeatureStepGraph,
+import {
+  DOMINANCE_THRESHOLD_DEFAULT,
+  type TrainRequest,
+  type TrainResponse,
+  type ValidationConfig,
+  type MatrixData,
+  type FeatureSchemaEntry,
+  type PreprocessingOp,
+  type SourceBinding,
+  type AsOfStrategy,
+  type LeakageGuard,
+  type ValidationStrategy,
+  type ProblemType,
+  type FittedPreprocessing,
+  type FeatureStepGraph,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
@@ -139,7 +140,7 @@ export class TrainingEngine {
       sourceBindings: parseJson<SourceBinding[]>(pipeline.SourceBindings, []),
       featureSteps: parseJson<FeatureStepGraph>(pipeline.FeatureSteps, { Steps: [] }),
       asOf: parseJson<AsOfStrategy>(pipeline.AsOfStrategy, { Mode: 'none' }),
-      leakageGuard: parseJson<LeakageGuard>(pipeline.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: 0.6 }),
+      leakageGuard: parseJson<LeakageGuard>(pipeline.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT }),
       validation: parseJson<ValidationStrategy>(pipeline.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.1 }),
     };
   }

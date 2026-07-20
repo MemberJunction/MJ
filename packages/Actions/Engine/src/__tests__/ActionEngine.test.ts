@@ -83,6 +83,9 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     // BaseEntitySaveQueue that ActionEngine's action-log queue now uses) — pulled from the actual module.
     MJLruCache: (await importOriginal<typeof import('@memberjunction/global')>()).MJLruCache,
     KeyedSerialTaskQueue: (await importOriginal<typeof import('@memberjunction/global')>()).KeyedSerialTaskQueue,
+    // Real RequiresSubclass decorator — imported transitively through the ActionEngine
+    // module graph; the mocked module must re-export it or the suite fails to load.
+    RequiresSubclass: (await importOriginal<typeof import('@memberjunction/global')>()).RequiresSubclass,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,
@@ -96,6 +99,9 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
         }
     }),
     RegisterClass: () => (target: Function) => target,
+    // No-op decorator factory — some classes in the ActionEngine module graph declare
+    // `@RequiresSubclass()`; the mock must expose it or module init throws on the missing export.
+    RequiresSubclass: () => (target: Function) => target,
     // Case-insensitive UUID equality. Used by ActionEngineServer when
     // matching action result codes and by EntityActionInvocation*.MapParams.
     UUIDsEqual: (a: unknown, b: unknown): boolean =>
