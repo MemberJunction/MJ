@@ -99,6 +99,30 @@ export type ConversationContextMetadata = {
  */
 export type ConversationContextMessage = ChatMessage<ConversationContextMetadata>;
 
+/**
+ * The minimal row shape {@link ConversationEngine.AssembleContextWindow} needs —
+ * satisfied by full `MJConversationDetailEntity` instances AND by
+ * `ResultType: 'simple'` RunView rows selecting {@link ConversationWindowFields}.
+ * Server-side callers use the latter to load fresh per request (entity RLS via
+ * contextUser, per-request provider) without instantiating entities or touching the
+ * engine's process-global cache.
+ */
+export interface ConversationWindowSourceRow {
+    ID: string;
+    Sequence: number;
+    Role: string | null;
+    Message: string | null;
+    SummaryOfEarlierConversation: string | null;
+}
+
+/**
+ * The Fields list a fresh per-request load must select to satisfy
+ * {@link ConversationWindowSourceRow} — single-sourced so server callers cannot drift
+ * from the assembler's requirements.
+ */
+export const ConversationWindowFields: readonly (keyof ConversationWindowSourceRow)[] =
+    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation'];
+
 export interface SharedByInfo {
     /** Grantor user ID. Null when the share predates the `SharedByUserID` column. */
     UserID: string | null;
@@ -1404,19 +1428,74 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     ): Promise<ConversationContextMessage[]> {
         await this.Config(false, contextUser);
         const cache = await this.LoadConversationDetails(conversationId, contextUser);
+        return ConversationEngine.AssembleContextWindow(cache.Details, options);
+    }
 
+    /**
+     * Loads a conversation's window source rows FRESH — one RunView through the given
+     * provider with the contextUser (entity RLS applies), never touching this engine's
+     * process-global detail cache. The single source of the fresh-load query shape
+     * (entity name, filter, order, fields) for every server-side caller: the agent
+     * resolver's history loader and the cross-turn compaction pass both consume this,
+     * so the two can never drift apart. THROWS on load failure — servers must fail
+     * loudly rather than proceed against an empty history.
+     *
+     * @param conversationId - The conversation whose detail rows to load
+     * @param contextUser - The requesting user (entity RLS is applied under this user)
+     * @param provider - Optional per-request metadata provider; falls back to the global default
+     * @returns The conversation's rows in Sequence order, shaped for {@link AssembleContextWindow}
+     * @throws When the underlying RunView reports failure (never returns a silent empty set)
+     */
+    public static async LoadWindowRowsFresh(
+        conversationId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<ConversationWindowSourceRow[]> {
+        const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+        const rows = await rv.RunView<ConversationWindowSourceRow>({
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `ConversationID='${conversationId}'`,
+            OrderBy: 'Sequence ASC',
+            Fields: [...ConversationWindowFields],
+            ResultType: 'simple',
+        }, contextUser);
+        if (!rows.Success) {
+            throw new Error(`Failed to load conversation window for conversation ${conversationId}: ${rows.ErrorMessage}`);
+        }
+        return rows.Results || [];
+    }
+
+    /**
+     * Pure window assembly over already-loaded rows: exclude → sort by Sequence →
+     * summary-boundary fold → tail cap. Extracted from {@link GetAgentContextWindow} so
+     * SERVER-SIDE callers (agent resolver, cross-turn compaction) can load rows fresh
+     * per request — via {@link LoadWindowRowsFresh} with the per-request provider and
+     * contextUser, applying entity RLS and never populating this engine's
+     * process-global detail cache — and still share the exact same fold math the
+     * cache-backed client path uses.
+     *
+     * Accepts the minimal {@link ConversationWindowSourceRow} shape, satisfied by full
+     * entities AND `ResultType: 'simple'` rows selecting {@link ConversationWindowFields}.
+     */
+    public static AssembleContextWindow(
+        details: ReadonlyArray<ConversationWindowSourceRow>,
+        options?: {
+            excludeDetailIds?: string[];
+            maxTailMessages?: number;
+        }
+    ): ConversationContextMessage[] {
         const excluded = new Set((options?.excludeDetailIds || []).map(id => NormalizeUUID(id)));
-        const ordered = cache.Details
+        const ordered = details
             .filter(d => !excluded.has(NormalizeUUID(d.ID)))
             .sort((a, b) => a.Sequence - b.Sequence);
 
-        const boundary = this.findSummaryBoundary(ordered);
+        const boundary = ConversationEngine.findSummaryBoundary(ordered);
         if (boundary) {
             const tail = ordered.filter(d => d.Sequence >= boundary.Sequence);
-            return [this.buildSummaryMessage(boundary), ...tail.map(d => this.detailToContextMessage(d))];
+            return [ConversationEngine.buildSummaryMessage(boundary), ...tail.map(d => ConversationEngine.detailToContextMessage(d))];
         }
 
-        const all = ordered.map(d => this.detailToContextMessage(d));
+        const all = ordered.map(d => ConversationEngine.detailToContextMessage(d));
         const cap = options?.maxTailMessages;
         return cap && all.length > cap ? all.slice(-cap) : all;
     }
@@ -1426,7 +1505,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * `SummaryOfEarlierConversation` is non-blank. Older summaries below it simply stop
      * being selected (recursive-summary pattern). Returns undefined when no summary exists.
      */
-    private findSummaryBoundary(orderedDetails: MJConversationDetailEntity[]): MJConversationDetailEntity | undefined {
+    private static findSummaryBoundary(orderedDetails: ReadonlyArray<ConversationWindowSourceRow>): ConversationWindowSourceRow | undefined {
         for (let i = orderedDetails.length - 1; i >= 0; i--) {
             const summary = orderedDetails[i].SummaryOfEarlierConversation;
             if (summary && summary.trim().length > 0) {
@@ -1437,7 +1516,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /** Wraps the boundary row's persisted summary as the window's synthetic first message. */
-    private buildSummaryMessage(boundary: MJConversationDetailEntity): ConversationContextMessage {
+    private static buildSummaryMessage(boundary: ConversationWindowSourceRow): ConversationContextMessage {
         return {
             role: 'user',
             content: boundary.SummaryOfEarlierConversation || '',
@@ -1450,9 +1529,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /** Converts a raw ConversationDetail row into a context message with sequence metadata. */
-    private detailToContextMessage(detail: MJConversationDetailEntity): ConversationContextMessage {
+    private static detailToContextMessage(detail: ConversationWindowSourceRow): ConversationContextMessage {
         return {
-            role: this.mapDetailRoleToChatRole(detail.Role),
+            role: ConversationEngine.mapDetailRoleToChatRole(detail.Role),
             content: detail.Message || '',
             metadata: {
                 sequence: detail.Sequence,
@@ -1466,7 +1545,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * server resolver has always used for history assembly ('AI'/'Agent' → assistant,
      * unknown → user).
      */
-    private mapDetailRoleToChatRole(role: string | null): 'user' | 'assistant' | 'system' {
+    private static mapDetailRoleToChatRole(role: string | null): 'user' | 'assistant' | 'system' {
         const r = (role || '').toLowerCase();
         if (r === 'assistant' || r === 'agent' || r === 'ai') {
             return 'assistant';
@@ -1862,9 +1941,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             } else if (entity) {
                 // New detail from local event — append the entity
                 cached.Details.push(entity);
+            } else {
+                // Remote NEW-row save: we can't hydrate an entity from event data alone,
+                // and the warm cache would keep serving without this row forever (loads
+                // short-circuit on a cache hit) — evict so the next load re-queries.
+                this.removeDetailCache(conversationId);
             }
-            // For new details from remote events, we can't construct a full entity here
-            // — the next loadMessages will pick it up from the engine cache
         } else if (action === 'delete') {
             cached.Details = cached.Details.filter(d => !UUIDsEqual(d.ID, id));
             cached.AgentRunsByDetailId.delete(id);

@@ -148,6 +148,54 @@ describe('ConversationToolManager', () => {
             expect(data.hits).toHaveLength(2);
             expect(data.totalMatches).toBe(4);
         });
+
+        it('rejects regex patterns over the 256-char cap (ReDoS surface control)', async () => {
+            const longPattern = 'a'.repeat(257);
+            const r = await manager.ExecuteSingleToolCall({ tool: 'searchConversation', input: { query: longPattern, isRegex: true } });
+            expect(r.result.success).toBe(false);
+            expect(r.result.errorMessage).toContain('max 256');
+            // At the cap it still compiles
+            const ok = await manager.ExecuteSingleToolCall({ tool: 'searchConversation', input: { query: 'a'.repeat(256), isRegex: true } });
+            expect(ok.result.success).toBe(true);
+        });
+
+        it('regex mode matches only the first 20k chars of a long message (with warning); keyword mode stays uncapped', async () => {
+            const needlePastCap = 'ZQXNEEDLE';
+            mockCache.Details = [
+                detail(1, 'User', 'x'.repeat(25_000) + needlePastCap),
+            ] as never;
+            const regexResult = await manager.ExecuteSingleToolCall({ tool: 'searchConversation', input: { query: needlePastCap, isRegex: true } });
+            const regexData = regexResult.result.data as { hits: unknown[]; warning?: string };
+            expect(regexData.hits).toHaveLength(0);
+            expect(regexData.warning).toContain('20,000');
+
+            const keywordResult = await manager.ExecuteSingleToolCall({ tool: 'searchConversation', input: { query: needlePastCap } });
+            const keywordData = keywordResult.result.data as { hits: Array<{ sequence: number }> };
+            expect(keywordData.hits).toHaveLength(1);
+        });
+
+        it('bails with partial results + warning when the scan exceeds the time budget', async () => {
+            mockCache.Details = [
+                detail(1, 'User', 'budget row one'),
+                detail(2, 'User', 'budget row two'),
+                detail(3, 'User', 'budget row three'),
+            ] as never;
+            // First Date.now() sets the deadline; advance past it before message 2's check.
+            const realNow = Date.now();
+            let calls = 0;
+            const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => {
+                calls++;
+                return calls <= 2 ? realNow : realNow + 10_000;
+            });
+            try {
+                const r = await manager.ExecuteSingleToolCall({ tool: 'searchConversation', input: { query: 'budget' } });
+                const data = r.result.data as { hits: unknown[]; totalMatches: number; warning?: string };
+                expect(data.warning).toContain('results are partial');
+                expect(data.hits.length).toBeLessThan(3);
+            } finally {
+                nowSpy.mockRestore();
+            }
+        });
     });
 
     describe('summarizeRange (recursive sub-call via host seam)', () => {
@@ -199,10 +247,11 @@ describe('ConversationToolManager', () => {
         expect(r.result.errorMessage).toContain('Unknown conversation tool');
     });
 
-    it('documentation lists every tool', () => {
+    it('documentation lists every tool and teaches the per-turn call cap', () => {
         const docs = manager.GetToolDocumentation();
         for (const tool of ['getMessageBySequence', 'getMessagesByRange', 'searchConversation', 'summarizeRange']) {
             expect(docs).toContain(tool);
         }
+        expect(docs).toContain('Max 8 tool calls per response');
     });
 });

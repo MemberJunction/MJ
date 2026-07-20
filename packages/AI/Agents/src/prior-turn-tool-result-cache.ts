@@ -2,9 +2,9 @@ import { BaseSingleton, MJLruCache, NormalizeUUID } from '@memberjunction/global
 import { CarryForwardStepRecord } from './tool-result-format';
 
 /**
- * Process-wide cache of the most recent completed root run's Tool-step results per
- * conversation, keeping the prior-turn carry-forward check off the database on the
- * agent hot path.
+ * Process-wide cache of the most recent settled root run's Tool-step results per
+ * conversation + agent, keeping the prior-turn carry-forward check off the database on
+ * the agent hot path.
  *
  * The completing run is the one source that already holds this data with zero I/O:
  * `BaseAgent.finalizeAgentRun` projects its in-memory `Steps` into
@@ -14,19 +14,22 @@ import { CarryForwardStepRecord } from './tool-result-format';
  * consults this cache first and only falls back to its RunView pair on a miss.
  *
  * Consistency contract — same row predicate as the DB path (single-sourced in
- * `BaseAgent.carryForwardPredicate`):
- * - Only runs that finalize with `Status='Completed'` are stored, so a failed or
- *   feedback-awaiting run leaves the previous completed run's entry in place, just as
- *   the DB query would return it.
+ * `BaseAgent.carryForwardPredicate` + `BaseAgent.settledRunStatuses`):
+ * - Only runs that settle as Completed OR AwaitingFeedback (the normal chat-turn
+ *   ending) are stored, so a failed run leaves the previous settled run's entry in
+ *   place, just as the DB query would return it.
+ * - Entries are keyed by conversation AND agent, mirroring the DB path's `AgentID`
+ *   filter — in a multi-agent conversation, agent B must never inherit agent A's
+ *   results labeled "your previous turn".
  * - Values are the raw completed-`Tool`-step `OutputData` projections; eligibility is
  *   still decided downstream by `BuildPriorTurnToolResultsMessage` via `toolFamily`,
  *   identical for cached and DB-loaded records.
  * - Two benign same-node edges where in-memory truth wins over what the DB fallback
  *   would return: a Tool step whose fire-and-forget INSERT failed is still published
  *   (the result genuinely existed; the DB would omit the lost row), and when two root
- *   runs complete concurrently for one conversation the LAST-completed run's projection
- *   is kept here while the DB orders by creation time. Both only affect which
- *   optimization payload gets carried one turn forward.
+ *   runs of the same agent complete concurrently for one conversation the
+ *   LAST-completed run's projection is kept here while the DB orders by creation time.
+ *   Both only affect which optimization payload gets carried one turn forward.
  *
  * Multi-node tradeoff (accepted by design): when a conversation's next turn lands on a
  * different server than the one that completed the prior run, this node either misses
@@ -60,17 +63,26 @@ export class PriorTurnToolResultCache extends BaseSingleton<PriorTurnToolResultC
     });
 
     /**
-     * Returns the carry-forward records of the conversation's most recent completed
-     * root run on this node — `[]` means "completed with no tool results" (a valid,
-     * query-skipping answer); `undefined` means "not known here, ask the database".
+     * Cache key: normalized conversation + agent, so agent B never inherits agent A's
+     * results in a multi-agent conversation. `::` is safe (UUIDs cannot contain it).
      */
-    public Get(conversationId: string): CarryForwardStepRecord[] | undefined {
-        return this.cache.Get(NormalizeUUID(conversationId));
+    private static buildKey(conversationId: string, agentId: string): string {
+        return `${NormalizeUUID(conversationId)}::${NormalizeUUID(agentId)}`;
     }
 
-    /** Records a completed root run's carry-forward projections (empty array included). */
-    public Set(conversationId: string, steps: CarryForwardStepRecord[]): void {
-        this.cache.Set(NormalizeUUID(conversationId), steps);
+    /**
+     * Returns the carry-forward records of this agent's most recent settled root run in
+     * the conversation on this node — `[]` means "settled with no tool results" (a
+     * valid, query-skipping answer); `undefined` means "not known here, ask the
+     * database".
+     */
+    public Get(conversationId: string, agentId: string): CarryForwardStepRecord[] | undefined {
+        return this.cache.Get(PriorTurnToolResultCache.buildKey(conversationId, agentId));
+    }
+
+    /** Records a settled root run's carry-forward projections (empty array included). */
+    public Set(conversationId: string, agentId: string, steps: CarryForwardStepRecord[]): void {
+        this.cache.Set(PriorTurnToolResultCache.buildKey(conversationId, agentId), steps);
     }
 
     /** Drops every entry — test isolation hook. */

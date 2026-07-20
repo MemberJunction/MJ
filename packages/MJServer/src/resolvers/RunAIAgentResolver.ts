@@ -1340,10 +1340,12 @@ export class RunAIAgentResolver extends ResolverBase {
      * passes conversationId down.
      *
      * Opt #8: Switched from ResultType 'entity_object' to 'simple' with explicit Fields.
-     * The history query only needs ID, Role, and Message from each ConversationDetail record.
-     * Using 'entity_object' created full BaseEntity instances with getters/setters, dirty tracking,
-     * and validation — none of which are needed for read-only history assembly. The 'simple' result
-     * type returns plain JS objects, reducing per-record overhead (~30ms total savings).
+     * The history query only needs the window-assembly fields (ConversationWindowFields:
+     * ID, Sequence, Role, Message, SummaryOfEarlierConversation) from each
+     * ConversationDetail record. Using 'entity_object' created full BaseEntity instances
+     * with getters/setters, dirty tracking, and validation — none of which are needed for
+     * read-only history assembly. The 'simple' result type returns plain JS objects,
+     * reducing per-record overhead (~30ms total savings).
      */
     private async loadConversationHistoryWithAttachments(
         conversationId: string,
@@ -1352,12 +1354,21 @@ export class RunAIAgentResolver extends ResolverBase {
         provider: IMetadataProvider,
         excludeDetailIds?: string[]
     ): Promise<ChatMessage[]> {
-        // Context windowing (summary boundary + raw tail, or legacy last-N when no summary
-        // exists) is owned by ConversationEngine.GetAgentContextWindow — ONE code path
-        // shared with programmatic callers. This method only enriches the window with
-        // attachment/artifact content, which is server-side-only work. The engine serves
-        // warm calls from its per-conversation cache (no per-run DB query).
-        const window = await ConversationEngine.Instance.GetAgentContextWindow(conversationId, contextUser, {
+        // Context windowing (summary boundary + raw tail, or legacy last-N when no
+        // summary exists) shares ONE fold implementation with all other callers —
+        // ConversationEngine.AssembleContextWindow — and the ROWS come from the
+        // single-sourced fresh-per-request loader (same one the compaction pass uses).
+        // Three deliberate properties vs. the engine's cached GetAgentContextWindow:
+        //   1. Entity RLS applies (the engine path loads via a stored query with no
+        //      row-level security — wrong for guest/widget-scoped users), and the
+        //      process-global per-conversation cache — keyed by conversation, not user —
+        //      can't leak the first toucher's row visibility to later callers.
+        //   2. No server-side population of the engine's unbounded detail cache, and no
+        //      cross-server staleness (a warm cache misses rows written by other nodes).
+        //   3. Load failure THROWS → the mutation fails, instead of silently running
+        //      the agent against zero history.
+        const rows = await ConversationEngine.LoadWindowRowsFresh(conversationId, contextUser, provider);
+        const window = ConversationEngine.AssembleContextWindow(rows, {
             maxTailMessages: maxMessages,
             excludeDetailIds
         });

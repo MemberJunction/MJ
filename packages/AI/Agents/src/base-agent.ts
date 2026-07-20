@@ -49,7 +49,7 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
 import { ConversationCompactionManager, CompactionOutcome, EffectiveContextBudget } from './ConversationCompactionManager';
-import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult, ConversationToolSummaryHost, ConversationToolNames } from './ConversationToolManager';
+import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult, ConversationToolSummaryHost, ConversationToolNames, MAX_CONVERSATION_TOOL_CALLS_PER_TURN } from './ConversationToolManager';
 import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts, CarryForwardToolFamily, CarryForwardToolStepOutput, CarryForwardStepRecord } from './tool-result-format';
 import { PriorTurnToolResultCache } from './prior-turn-tool-result-cache';
 import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
@@ -128,6 +128,20 @@ import _ from 'lodash';
  * Base iteration context for tracking loop execution in BaseAgent.
  * This is agent-type agnostic and handles both ForEach and While loops.
  */
+/**
+ * The six denormalized token/cost figures rolled up from a run's steps — the single
+ * shape shared by `calculateTokenStats` (producer) and `applyTokenStatsToRun`
+ * (consumer) so a new stat added to one cannot silently be dropped by the other.
+ */
+interface AgentRunTokenStats {
+    totalTokens: number;
+    promptTokens: number;
+    completionTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    totalCost: number;
+}
+
 /**
  * Compact representation of a single action's execution result, used for
  * building the markdown summary that goes into conversation messages.
@@ -5557,7 +5571,8 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Loads the previous completed root run's Tool steps for this conversation.
+     * Loads this agent's previous settled root run's Tool steps for this conversation
+     * (settled = {@link settledRunStatuses}: Completed or AwaitingFeedback).
      * Deliberately loads ALL completed Tool steps — eligibility for carry-forward is
      * decided structurally by {@link BuildPriorTurnToolResultsMessage} via the
      * `toolFamily` field the executors stamp into OutputData, never by StepName
@@ -5570,17 +5585,20 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private async loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<CarryForwardStepRecord[]> {
-        const cached = PriorTurnToolResultCache.Instance.Get(params.conversationId!);
+        const cached = PriorTurnToolResultCache.Instance.Get(params.conversationId!, params.agent.ID);
         if (cached) {
             this.logStatus(`[PriorTurnToolResults] Prior-run tool results served from cache (${cached.length} step(s), no DB lookup)`, true, params);
             return cached;
         }
 
         const predicate = BaseAgent.carryForwardPredicate;
+        const statusList = predicate.runStatuses.map(s => `'${s}'`).join(', ');
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        // AgentID scopes provenance: in a multi-agent conversation, agent B must never
+        // inherit agent A's results labeled "your previous turn".
         const priorRun = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `ConversationID='${params.conversationId}' AND Status='${predicate.runStatus}' AND ParentRunID IS NULL`,
+            ExtraFilter: `ConversationID='${params.conversationId}' AND Status IN (${statusList}) AND ParentRunID IS NULL AND AgentID='${params.agent.ID}'`,
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
             Fields: ['ID'],
@@ -5605,24 +5623,27 @@ The context is now within limits. Please retry your request with the recovered c
      * Publishes this run's completed Tool-step results to {@link PriorTurnToolResultCache}
      * so the conversation's next turn skips the prior-run DB lookups. Applies the same
      * row predicate as the DB path ({@link carryForwardPredicate}): root runs only, and
-     * only when the run row was persisted with `Status='Completed'` — a failed/feedback
-     * run leaves the previous completed run's entry standing, just as the RunView filter
-     * would. An empty projection is cached too (the negative-cache case that spares
-     * tool-free conversations the queries every turn). Same-node edge semantics (failed
-     * step INSERTs, concurrent completions) are documented on the cache class. Called
-     * from {@link finalizeAgentRun}.
+     * only when the run row settled as {@link settledRunStatuses} (Completed OR
+     * AwaitingFeedback — the normal chat-turn ending) — a failed run leaves the previous
+     * settled run's entry standing, just as the RunView filter would. Scoped to this
+     * run's agent (cache key = conversation + agent) so parallel agents in one
+     * conversation never cross-pollinate. An empty projection is cached too (the
+     * negative-cache case that spares tool-free conversations the queries every turn).
+     * Same-node edge semantics (failed step INSERTs, concurrent completions) are
+     * documented on the cache class. Called from {@link finalizeAgentRun}.
      * @private
      */
     private cachePriorTurnToolResults(): void {
         const predicate = BaseAgent.carryForwardPredicate;
         const conversationId = this._executeParams?.conversationId;
-        if (!conversationId || this._depth !== 0 || this._agentRun?.Status !== predicate.runStatus) {
+        if (!conversationId || this._depth !== 0 || !this._agentRun
+            || !predicate.runStatuses.includes(this._agentRun.Status)) {
             return;
         }
         const records: CarryForwardStepRecord[] = (this._agentRun.Steps || [])
             .filter(s => s.StepType === predicate.stepType && s.Status === predicate.stepStatus)
             .map(s => ({ OutputData: s.OutputData || null }));
-        PriorTurnToolResultCache.Instance.Set(conversationId, records);
+        PriorTurnToolResultCache.Instance.Set(conversationId, this._agentRun.AgentID, records);
     }
 
     /**
@@ -5634,21 +5655,45 @@ The context is now within limits. Please retry your request with the recovered c
     public static readonly CarryForwardToolFamilies: readonly string[] = Object.values(CarryForwardToolFamily);
 
     /**
+     * Run statuses that count as a successfully settled root turn. 'AwaitingFeedback' is
+     * included because a Chat final step is the NORMAL per-turn completion for
+     * conversational agents — {@link finalizeAgentRun} maps `step === 'Chat'` to
+     * `Status='AwaitingFeedback'` with `Success=true`, so gating on 'Completed' alone
+     * silently disables post-turn compaction and carry-forward for the most common
+     * agent shape (a chat agent in a long conversation).
+     *
+     * Deliberately `ReadonlyArray<Union>` rather than an `as const` tuple: a narrowed
+     * tuple type would make `.includes(status)` fail to typecheck against the wider
+     * entity union, while this form keeps the compile-time check that each literal is a
+     * valid status (a CHECK-constraint change still surfaces here). Do not "tighten" it.
+     *
+     * Single source for the consumers that must agree: the carry-forward predicate
+     * ({@link carryForwardPredicate} → DB filter + cache-population gate) and the
+     * post-turn compaction gate ({@link startPostTurnCompaction}).
+     */
+    private static readonly settledRunStatuses: ReadonlyArray<MJAIAgentRunEntityExtended['Status']> =
+        ['Completed', 'AwaitingFeedback'];
+
+    /**
      * The carry-forward row predicate — the SINGLE source shared by the two places that
      * must select the same rows or the cache diverges from the DB path: the RunView
      * `ExtraFilter`s in {@link loadPriorTurnToolResultSteps} (DB fallback) and the
      * in-memory gate/projection in {@link cachePriorTurnToolResults} (cache population).
      * Values are typed from the entity unions so a CHECK-constraint change surfaces here
      * at compile time instead of silently desynchronizing the two loaders.
+     *
+     * The executing agent's ID also scopes both paths (SQL `AgentID=` clause + cache
+     * key) but is per-run data, not a literal contract — it lives at the call sites,
+     * not here.
      */
     private static readonly carryForwardPredicate = {
         stepType: 'Tool',
         stepStatus: 'Completed',
-        runStatus: 'Completed',
+        runStatuses: BaseAgent.settledRunStatuses,
     } as const satisfies {
         stepType: MJAIAgentRunStepEntityExtended['StepType'];
         stepStatus: MJAIAgentRunStepEntityExtended['Status'];
-        runStatus: MJAIAgentRunEntityExtended['Status'];
+        runStatuses: ReadonlyArray<MJAIAgentRunEntityExtended['Status']>;
     };
 
     /**
@@ -5752,6 +5797,11 @@ The context is now within limits. Please retry your request with the recovered c
                 // Keys are the summarize-range.template.md contract ({{ lens }}, {{ messages }})
                 promptParams.data = { lens, messages: rangeText };
                 promptParams.contextUser = params.contextUser;
+                if (this._agentRun) {
+                    // Link the sub-call's AIPromptRun to this agent run (AgentRunID) so
+                    // per-run cost rollups include the recursive summarization spend.
+                    promptParams.agentRunId = this._agentRun.ID;
+                }
                 const result = await this._promptRunner.ExecutePrompt<string>(promptParams);
                 const text = ExtractPromptResultText(result);
                 if (!result.success || text.length === 0) {
@@ -5768,14 +5818,28 @@ The context is now within limits. Please retry your request with the recovered c
      * per-call observability shape as artifact tools. Reads are served from the
      * ConversationEngine cache; per-call failures are contained in the result.
      *
+     * At most {@link MAX_CONVERSATION_TOOL_CALLS_PER_TURN} calls execute per response;
+     * the excess come back as skipped failure-shaped results (no run steps recorded)
+     * telling the model to re-request them next turn.
+     *
      * @protected
      */
     protected async executeConversationToolCallsAsSteps(
         calls: ConversationToolCall[],
         params: ExecuteAgentParams,
     ): Promise<ConversationToolExecutionResult[]> {
-        return Promise.all(
-            calls.map(async (call) => {
+        // Per-turn fan-out cap: each call is a run step (summarizeRange a full LLM
+        // sub-call) — excess calls are reported back as skipped failure-shaped results
+        // through the normal rendering path so the model can re-request them next turn.
+        // Deliberately no DB rows for skipped calls (zero I/O for work not done; the
+        // Status union has no 'Skipped' and Failed steps would pollute failure metrics).
+        const callsToExecute = calls.slice(0, MAX_CONVERSATION_TOOL_CALLS_PER_TURN);
+        const skippedCalls = calls.slice(MAX_CONVERSATION_TOOL_CALLS_PER_TURN);
+        if (skippedCalls.length > 0) {
+            this.logStatus(`[ConversationTools] ${calls.length} calls requested — executing first ${callsToExecute.length}, skipping ${skippedCalls.length} (per-turn cap)`, true, params);
+        }
+        const executedResults = await Promise.all(
+            callsToExecute.map(async (call) => {
                 const toolStep = await this.createStepEntity({
                     stepType: 'Tool',
                     stepName: `Conversation Tool: ${call.tool}`,
@@ -5816,6 +5880,17 @@ The context is now within limits. Please retry your request with the recovered c
                 return executed;
             }),
         );
+
+        const skippedResults: ConversationToolExecutionResult[] = skippedCalls.map(call => ({
+            tool: call.tool,
+            input: call.input,
+            result: {
+                success: false,
+                errorMessage: `Skipped — per-turn cap of ${MAX_CONVERSATION_TOOL_CALLS_PER_TURN} conversation tool calls reached. Re-request this call on your next turn.`,
+            },
+            durationMs: 0,
+        }));
+        return [...executedResults, ...skippedResults];
     }
 
     /**
@@ -12906,17 +12981,11 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.ErrorMessage = errorMessage;
             
             // Calculate total tokens even for failed runs
-            const tokenStats = this.calculateTokenStats();
-            this._agentRun.TotalTokensUsed = tokenStats.totalTokens;
-            this._agentRun.TotalPromptTokensUsed = tokenStats.promptTokens;
-            this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
-            this._agentRun.TotalCacheReadTokensUsed = tokenStats.cacheReadTokens;
-            this._agentRun.TotalCacheWriteTokensUsed = tokenStats.cacheWriteTokens;
-            this._agentRun.TotalCost = tokenStats.totalCost;
-            
+            this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
+
             await this._agentRun.Save();
         }
-        
+
         return {
             success: false,
             agentRun: this._agentRun!
@@ -12925,7 +12994,7 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Creates a cancelled result.
-     * 
+     *
      * @private
      * @param {string} message - The cancellation message
      * @returns {Promise<ExecuteAgentResult>} The cancelled result
@@ -12938,14 +13007,8 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.ErrorMessage = message;
             
             // Calculate total tokens even for cancelled runs
-            const tokenStats = this.calculateTokenStats();
-            this._agentRun.TotalTokensUsed = tokenStats.totalTokens;
-            this._agentRun.TotalPromptTokensUsed = tokenStats.promptTokens;
-            this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
-            this._agentRun.TotalCacheReadTokensUsed = tokenStats.cacheReadTokens;
-            this._agentRun.TotalCacheWriteTokensUsed = tokenStats.cacheWriteTokens;
-            this._agentRun.TotalCost = tokenStats.totalCost;
-            
+            this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
+
             await this._agentRun.Save();
         }
         
@@ -13023,14 +13086,8 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.FinalPayload = finalPayloadJson;
             
             // Calculate total tokens from all prompts and sub-agents
-            const tokenStats = this.calculateTokenStats();
-            this._agentRun.TotalTokensUsed = tokenStats.totalTokens;
-            this._agentRun.TotalPromptTokensUsed = tokenStats.promptTokens;
-            this._agentRun.TotalCompletionTokensUsed = tokenStats.completionTokens;
-            this._agentRun.TotalCacheReadTokensUsed = tokenStats.cacheReadTokens;
-            this._agentRun.TotalCacheWriteTokensUsed = tokenStats.cacheWriteTokens;
-            this._agentRun.TotalCost = tokenStats.totalCost;
-            
+            this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
+
             const ok = await this._agentRun.Save();
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
@@ -13079,7 +13136,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns Token statistics including totals and costs
      * @private
      */
-    private calculateTokenStats(): { totalTokens: number; promptTokens: number; completionTokens: number; cacheReadTokens: number; cacheWriteTokens: number; totalCost: number } {
+    private calculateTokenStats(): AgentRunTokenStats {
         let totalTokens = 0;
         let promptTokens = 0;
         let completionTokens = 0;
@@ -13114,8 +13171,24 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Applies a {@link calculateTokenStats} result to a run entity's six denormalized
+     * token/cost columns — the single source for the assignment shape shared by the
+     * failure/cancel/finalize paths AND the post-turn compaction top-up
+     * ({@link recordCompactionRunStep}).
+     * @private
+     */
+    private applyTokenStatsToRun(run: MJAIAgentRunEntityExtended, tokenStats: AgentRunTokenStats): void {
+        run.TotalTokensUsed = tokenStats.totalTokens;
+        run.TotalPromptTokensUsed = tokenStats.promptTokens;
+        run.TotalCompletionTokensUsed = tokenStats.completionTokens;
+        run.TotalCacheReadTokensUsed = tokenStats.cacheReadTokens;
+        run.TotalCacheWriteTokensUsed = tokenStats.cacheWriteTokens;
+        run.TotalCost = tokenStats.totalCost;
+    }
+
+    /**
      * Gets the count of how many times a specific action has been executed in this agent run.
-     * 
+     *
      * @param agentRunId - The agent run ID (not used anymore, kept for signature compatibility)
      * @param actionId - The action ID to count
      * @returns The number of times the action has been executed
@@ -13429,13 +13502,17 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Post-turn hook (the primary path), called from {@link finalizeAgentRun} after the
      * run row is saved. Fire-and-forget by design: the caller's completion event never
-     * waits on the summary LLM call. Only fires for successfully completed root runs
-     * with a conversation.
+     * waits on the summary LLM call. Fires for settled root runs with a conversation —
+     * {@link settledRunStatuses}: 'Completed' AND 'AwaitingFeedback', because a Chat
+     * final step (→ AwaitingFeedback) is the NORMAL ending of a conversational turn;
+     * gating on 'Completed' alone silently disabled post-turn compaction for exactly
+     * the long-chat scenario this feature targets.
      * @protected
      */
     protected startPostTurnCompaction(): void {
         const params = this._executeParams;
-        if (!params?.conversationId || this._depth !== 0 || this._agentRun?.Status !== 'Completed') {
+        if (!params?.conversationId || this._depth !== 0 || !this._agentRun
+            || !BaseAgent.settledRunStatuses.includes(this._agentRun.Status)) {
             return;
         }
         const config = this._agentConfig;
@@ -13469,7 +13546,12 @@ The context is now within limits. Please retry your request with the recovered c
             ContextUser: params.contextUser,
             Provider: this.ProviderToUse,
             EstimateTokens: (messages) => this.estimateConversationTokens(messages),
-            Verbose: params.verbose
+            Verbose: params.verbose,
+            // The in-flight agent-response placeholder row: a post-turn pass runs while
+            // the resolver may still be writing its Message — keep it out of the window
+            // so the boundary can never land on it.
+            ExcludeDetailIds: params.conversationDetailId ? [params.conversationDetailId] : undefined,
+            AgentRunId: this._agentRun.ID
         });
 
         if (outcome.Fired || outcome.ErrorMessage) {
@@ -13482,7 +13564,11 @@ The context is now within limits. Please retry your request with the recovered c
      * Persists the Compaction run step for a fired or failed pass — as a SINGLE INSERT:
      * the pass is already over when this is called, so the step is created pre-finalized
      * via `createStepEntity`'s `completed` option instead of paying a second UPDATE
-     * round trip. @private
+     * round trip. The summary AIPromptRun rides on the step's transient `PromptRun` so
+     * {@link calculateTokenStats}'s Compaction branch counts it: pre-turn fires are
+     * picked up by finalizeAgentRun's normal rollup for free; post-turn fires happen
+     * AFTER that rollup ran, so this method tops the run's token columns up itself.
+     * @private
      */
     private async recordCompactionRunStep(
         phase: 'pre-turn' | 'post-turn',
@@ -13491,7 +13577,7 @@ The context is now within limits. Please retry your request with the recovered c
         outcome: CompactionOutcome
     ): Promise<void> {
         try {
-            await this.createStepEntity({
+            const stepEntity = await this.createStepEntity({
                 stepType: 'Compaction',
                 stepName: `Cross-Turn Conversation Compaction (${phase})`,
                 contextUser: params.contextUser,
@@ -13516,12 +13602,43 @@ The context is now within limits. Please retry your request with the recovered c
                     }
                 }
             });
+            if (outcome.PromptRun) {
+                stepEntity.PromptRun = outcome.PromptRun;
+            }
             if (phase === 'post-turn') {
                 // finalizeAgentRun's flush has already run — drain this step's INSERT now.
                 await this._stepSaveQueue.Flush();
+                await this.topUpRunTokenTotalsAfterPostTurnCompaction(outcome, params.contextUser);
             }
         } catch (error) {
             LogError(`Failed to record Compaction run step (compaction itself ${outcome.Fired ? 'succeeded' : 'failed'}): ${error instanceof Error ? error.message : error}`);
+        }
+    }
+
+    /**
+     * After a fired POST-turn compaction, folds the summary prompt's tokens/cost into
+     * the run row — finalizeAgentRun's rollup ran before the pass, so without this the
+     * recursive summary spend would be missing from the run's denormalized totals.
+     * Uses a FRESH-loaded run entity for the write: the persisted run may be
+     * 'AwaitingFeedback' and a quick user reply could have resumed it — re-Saving the
+     * stale in-memory `_agentRun` would clobber the resumed row's Status. Residual: the
+     * token columns are last-writer-wins in the tiny Load→Save window (self-healing at
+     * the resumed run's own finalize). Failures are contained (LogError only).
+     * @private
+     */
+    private async topUpRunTokenTotalsAfterPostTurnCompaction(outcome: CompactionOutcome, contextUser: UserInfo): Promise<void> {
+        if (!outcome.Fired || !outcome.PromptRun || !this._agentRun) {
+            return;
+        }
+        const tokenStats = this.calculateTokenStats();
+        const runUpdate = await this._activeProvider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        if (!(await runUpdate.Load(this._agentRun.ID))) {
+            LogError(`Post-turn compaction token top-up: failed to load run ${this._agentRun.ID}`);
+            return;
+        }
+        this.applyTokenStatsToRun(runUpdate, tokenStats);
+        if (!(await runUpdate.Save())) {
+            LogError(`Post-turn compaction token top-up: save failed for run ${this._agentRun.ID}: ${runUpdate.LatestResult?.CompleteMessage || 'unknown error'}`);
         }
     }
 

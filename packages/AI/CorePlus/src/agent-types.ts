@@ -1077,8 +1077,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /**
      * Optional conversation ID — the PREFERRED input for conversation-driven runs.
      * All durable cross-turn context features (persistent summary compaction, the
-     * summary-windowed context assembly via `ConversationEngine.GetAgentContextWindow`,
-     * and conversation-history retrieval tools) are gated on this being present.
+     * summary-windowed context assembly via `ConversationEngine.AssembleContextWindow`
+     * over `LoadWindowRowsFresh` rows, and conversation-history retrieval tools) are
+     * gated on this being present.
      * When absent, the agent behaves exactly as before: the caller supplies
      * `conversationMessages` and only in-turn (per-run) context management applies —
      * programmatic runs, internal sub-agent invocations, and tests need no change.
@@ -1648,7 +1649,7 @@ export type AgentChatMessageMetadata = {
     subAgentId?: string;
     /**
      * `ConversationDetail.Sequence` of the row this message came from. Stamped by
-     * `ConversationEngine.GetAgentContextWindow` (kept assignment-compatible with its
+     * `ConversationEngine.AssembleContextWindow` (kept assignment-compatible with its
      * locally-defined `ConversationContextMetadata` — that package cannot import this
      * type without creating a cycle). The symbolic handle for conversation-history
      * retrieval tools.

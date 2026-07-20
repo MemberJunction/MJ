@@ -349,13 +349,15 @@ describe('BaseAgent.finalizeAgentRun — pending-save drain + run status', () =>
   it('a successful root finalize publishes the run tool results to the carry-forward cache', async () => {
     PriorTurnToolResultCache.Instance.Clear();
     const conversationId = 'F1F2F3F4-0000-0000-0000-000000000001';
-    const { agent } = makeFinalizeAgent({ failures: 0, rejections: 0 });
+    const agentId = 'F1F2F3F4-0000-0000-0000-0000000000AA';
+    const { agent, run } = makeFinalizeAgent({ failures: 0, rejections: 0 });
+    run.AgentID = agentId;
     const a = agent as unknown as { _executeParams: Record<string, unknown>; startPostTurnCompaction(): void };
     a._executeParams = { conversationId };
     a.startPostTurnCompaction = () => undefined; // compaction is out of scope here
 
     await finalize(agent, { step: 'Success', message: 'done' });
     // Steps is empty → the cached [] is the negative-cache entry that spares the next turn its DB lookups.
-    expect(PriorTurnToolResultCache.Instance.Get(conversationId)).toEqual([]);
+    expect(PriorTurnToolResultCache.Instance.Get(conversationId, agentId)).toEqual([]);
   });
 });

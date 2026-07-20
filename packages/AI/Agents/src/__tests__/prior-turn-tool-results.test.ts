@@ -96,20 +96,28 @@ describe('BaseAgent.BuildPriorTurnToolResultsMessage', () => {
 });
 
 const CONV_ID = 'A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D';
+const AGENT_A = '11111111-1111-1111-1111-111111111111';
+const AGENT_B = '22222222-2222-2222-2222-222222222222';
 
 describe('PriorTurnToolResultCache', () => {
     beforeEach(() => PriorTurnToolResultCache.Instance.Clear());
 
-    it('round-trips records and normalizes conversation-id casing (SQL Server upper vs PG lower)', () => {
+    it('round-trips records and normalizes id casing on both key components (SQL Server upper vs PG lower)', () => {
         const records: CarryForwardStepRecord[] = [{ OutputData: 'payload' }];
-        PriorTurnToolResultCache.Instance.Set(CONV_ID, records);
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID.toLowerCase())).toEqual(records);
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, records);
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID.toLowerCase(), AGENT_A.toLowerCase())).toEqual(records);
+    });
+
+    it('scopes entries per agent — agent B never sees agent A\'s results in the same conversation', () => {
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, [{ OutputData: 'agent-a-result' }]);
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_B)).toBeUndefined(); // miss → DB (agent-scoped)
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toEqual([{ OutputData: 'agent-a-result' }]);
     });
 
     it('treats an empty array as a valid negative-cache entry, distinct from a miss', () => {
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID)).toBeUndefined(); // miss → ask the DB
-        PriorTurnToolResultCache.Instance.Set(CONV_ID, []);
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID)).toEqual([]); // known-empty → skip the DB
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toBeUndefined(); // miss → ask the DB
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, []);
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toEqual([]); // known-empty → skip the DB
     });
 });
 
@@ -128,43 +136,53 @@ describe('BaseAgent.loadPriorTurnToolResultSteps — cache consumption', () => {
     beforeEach(() => PriorTurnToolResultCache.Instance.Clear());
     afterEach(() => vi.restoreAllMocks());
 
+    const loadParams = { conversationId: CONV_ID, contextUser: { ID: 'u1' }, agent: { ID: AGENT_A } };
+
     it('cache hit returns the cached records with zero database calls', async () => {
         const fromProvider = vi.spyOn(RunView, 'FromMetadataProvider');
         const records: CarryForwardStepRecord[] = [{ OutputData: 'cached-result' }];
-        PriorTurnToolResultCache.Instance.Set(CONV_ID, records);
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, records);
 
-        const loaded = await carryForwardInternals(new BaseAgent()).loadPriorTurnToolResultSteps({
-            conversationId: CONV_ID,
-            contextUser: { ID: 'u1' },
-        });
+        const loaded = await carryForwardInternals(new BaseAgent()).loadPriorTurnToolResultSteps(loadParams);
         expect(loaded).toEqual(records);
         expect(fromProvider).not.toHaveBeenCalled();
     });
 
     it('negative-cache hit (prior run made no tool calls) also skips the database', async () => {
         const fromProvider = vi.spyOn(RunView, 'FromMetadataProvider');
-        PriorTurnToolResultCache.Instance.Set(CONV_ID, []);
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, []);
 
-        const loaded = await carryForwardInternals(new BaseAgent()).loadPriorTurnToolResultSteps({
-            conversationId: CONV_ID,
-            contextUser: { ID: 'u1' },
-        });
+        const loaded = await carryForwardInternals(new BaseAgent()).loadPriorTurnToolResultSteps(loadParams);
         expect(loaded).toEqual([]);
         expect(fromProvider).not.toHaveBeenCalled();
     });
 
-    it('cache miss falls back to the RunView pair (prior run lookup, then its Tool steps)', async () => {
+    it("another agent's warm entry is NOT a hit — the loader falls through to the DB", async () => {
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_B, [{ OutputData: 'other-agent-result' }]);
+        const runViewFn = vi.fn().mockResolvedValue({ Success: true, Results: [] });
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runViewFn } as unknown as RunView);
+
+        const loaded = await carryForwardInternals(new BaseAgent()).loadPriorTurnToolResultSteps(loadParams);
+        expect(loaded).toEqual([]); // no prior run found for AGENT_A — NOT agent B's payload
+        expect(runViewFn).toHaveBeenCalled();
+    });
+
+    it('cache miss falls back to the RunView pair with the settled-status + agent provenance filter', async () => {
         const runViewFn = vi.fn()
             .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'prior-run-1' }] })
             .mockResolvedValueOnce({ Success: true, Results: [{ OutputData: 'db-result' }] });
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runViewFn } as unknown as RunView);
 
-        const loaded = await carryForwardInternals(new BaseAgent()).loadPriorTurnToolResultSteps({
-            conversationId: CONV_ID,
-            contextUser: { ID: 'u1' },
-        });
+        const loaded = await carryForwardInternals(new BaseAgent()).loadPriorTurnToolResultSteps(loadParams);
         expect(loaded).toEqual([{ OutputData: 'db-result' }]);
         expect(runViewFn).toHaveBeenCalledTimes(2);
+
+        // The prior-run filter: settled statuses (Completed AND AwaitingFeedback — the
+        // normal chat-turn ending), root runs only, and THIS agent's runs only.
+        const priorRunFilter = (runViewFn.mock.calls[0][0] as { ExtraFilter: string }).ExtraFilter;
+        expect(priorRunFilter).toContain(`Status IN ('Completed', 'AwaitingFeedback')`);
+        expect(priorRunFilter).toContain('ParentRunID IS NULL');
+        expect(priorRunFilter).toContain(`AgentID='${AGENT_A}'`);
     });
 });
 
@@ -175,11 +193,11 @@ describe('BaseAgent.cachePriorTurnToolResults — population at run completion',
         const a = carryForwardInternals(new BaseAgent());
         a._executeParams = { conversationId: CONV_ID };
         a._depth = overrides.depth || 0;
-        a._agentRun = { Status: overrides.status || 'Completed', Steps: overrides.steps || [] };
+        a._agentRun = { Status: overrides.status || 'Completed', AgentID: AGENT_A, Steps: overrides.steps || [] };
         return a;
     }
 
-    it('projects completed Tool steps — and only those — into the cache, in order', () => {
+    it('projects completed Tool steps — and only those — into the cache, in order, under the run agent\'s key', () => {
         agentWith({
             steps: [
                 { StepType: 'Prompt', Status: 'Completed', OutputData: 'prompt-out' },
@@ -189,32 +207,40 @@ describe('BaseAgent.cachePriorTurnToolResults — population at run completion',
                 { StepType: 'Compaction', Status: 'Completed', OutputData: 'compaction-out' },
             ],
         }).cachePriorTurnToolResults();
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID)).toEqual([
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toEqual([
             { OutputData: 'tool-1' },
             { OutputData: null },
         ]);
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_B)).toBeUndefined();
     });
 
     it('caches an empty projection for a tool-free run (the negative-cache case)', () => {
         agentWith({ steps: [{ StepType: 'Prompt', Status: 'Completed', OutputData: 'x' }] }).cachePriorTurnToolResults();
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID)).toEqual([]);
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toEqual([]);
+    });
+
+    it("publishes for AwaitingFeedback runs too — the normal chat-turn ending (settled-status symmetry with the DB filter)", () => {
+        agentWith({ status: 'AwaitingFeedback', steps: [{ StepType: 'Tool', Status: 'Completed', OutputData: 'chat-turn-tool' }] }).cachePriorTurnToolResults();
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toEqual([{ OutputData: 'chat-turn-tool' }]);
     });
 
     it('sub-agent runs never publish (mirrors the ParentRunID IS NULL filter of the DB path)', () => {
         agentWith({ depth: 1, steps: [{ StepType: 'Tool', Status: 'Completed', OutputData: 'sub' }] }).cachePriorTurnToolResults();
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID)).toBeUndefined();
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toBeUndefined();
     });
 
-    it("non-Completed runs leave the previous completed run's entry standing (mirrors the Status='Completed' filter)", () => {
-        PriorTurnToolResultCache.Instance.Set(CONV_ID, [{ OutputData: 'from-run-N' }]);
-        agentWith({ status: 'Failed', steps: [{ StepType: 'Tool', Status: 'Completed', OutputData: 'from-run-N+1' }] }).cachePriorTurnToolResults();
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID)).toEqual([{ OutputData: 'from-run-N' }]);
+    it("unsettled runs leave the previous settled run's entry standing (mirrors the Status IN (...) filter)", () => {
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, [{ OutputData: 'from-run-N' }]);
+        for (const status of ['Failed', 'Running', 'Cancelled', 'Paused']) {
+            agentWith({ status, steps: [{ StepType: 'Tool', Status: 'Completed', OutputData: 'from-run-N+1' }] }).cachePriorTurnToolResults();
+        }
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toEqual([{ OutputData: 'from-run-N' }]);
     });
 
     it('skips runs without a conversationId (programmatic runs)', () => {
         const a = agentWith({ steps: [{ StepType: 'Tool', Status: 'Completed', OutputData: 'x' }] });
         a._executeParams = undefined;
         a.cachePriorTurnToolResults();
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID)).toBeUndefined();
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toBeUndefined();
     });
 });

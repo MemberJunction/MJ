@@ -29,6 +29,14 @@ against the dev database. Re-run these after any change to the compaction/retrie
   raw sqlcmd UPDATE alone. Also: heavy delegation chains (Marketing → Brand Guardian →
   Editor) can OOM MJAPI at Node's default ~4GB heap — start with
   `NODE_OPTIONS=--max-old-space-size=8192` when scripting delegation turns.
+- Post-turn-fire staging note: with an EXPLICIT agent/type budget, the pre-turn fallback
+  always evaluates the same window first (the post-turn window excludes the in-flight
+  placeholder, so it is byte-identical to the pre-turn one) — a post-turn-ONLY fire
+  cannot be staged live for such agents. Post-turn fires belong to agents WITHOUT an
+  explicit budget (BoundedBy=Model), which needs a near-model-max conversation; the
+  settled-status gate (`AwaitingFeedback` fires) is covered deterministically by the
+  unit + integration tiers instead, and its filter is observable live in the
+  carry-forward RunView fingerprints.
 
 ## Scenario intents and assertions
 
@@ -56,6 +64,7 @@ Full transcripts (including stored summaries and edit flags) exported to
 | 2027 Leadership Summit Venue | `E1E58550-30F4-4150-A1EF-FE96C3DBF110` | 2026-07-15 | Post-refactor regression R1–R6: pre-turn fire (3749→1204 tok, no clamp spam), stamped tool step, reuse in 1s, summarizeRange lineage, 500k-budget clamp silent, edit → $6,500 re-read |
 | 2027 Membership Dues Revenue | `6973EE39-6EFC-467A-928B-8ED97DD93F18` | 2026-07-16 | Found-state config (trigger 600): min-gain guard correctly refuses unprofitable fires; verbatim recall + reuse (640) still work without any compaction |
 | 2028 Regional Conference Budget | `42A8C345-033F-4F1E-A033-FA8381AD89EA` | 2026-07-16 | PR-#2732 review follow-ups, live: carry-forward LRU cache hit on both paths (log: "served from cache (0/1 step(s), no DB lookup)"), reuse turn 0:02 vs 0:06 tool turn; pre-turn fire 5596→1204 tok recorded as a SINGLE-WRITE Compaction step (`__mj_CreatedAt = __mj_UpdatedAt`), boundary seq 16 + SummaryPromptRunID lineage |
+| 2028 Regional Conference Budget (round 2) | same | 2026-07-17 | rkihm-review fixes, live: inverted found-state config (target 30 ≥ trigger 10) caught by the new warn-once clamp ("clamped target to 9"); compaction window loaded FRESH per pass (RunView "MJ: Conversation Details", 32 rows — no engine cache); carry-forward loader fingerprints show the widened settled-status + provenance filter `Status IN ('Completed', 'AwaitingFeedback') … AND AgentID='…'` for BOTH Sage and Marketing Agent (the conversation contains a real `AwaitingFeedback`/`Chat` root run the old `Status='Completed'` gate skipped); turn answered correctly, no message corruption |
 
 Prior-session seeded corpora: "Compaction Tests — Project Nightingale", "Compaction Demo —
 Project Falcon" (contour testing that produced the three fixes in commit `3a38f65fc7`).

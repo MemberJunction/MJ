@@ -35,6 +35,14 @@ ALTER TABLE [${flyway:defaultSchema}].[ConversationDetail] ADD
 GO
 
 -- Backfill Sequence for all existing rows, ordered by creation time within each conversation.
+-- The __mj_UpdatedAt maintenance trigger is disabled around the backfill: this is a
+-- metadata-only ordinal assignment, and stamping a new UpdatedAt on every historical
+-- ConversationDetail row would double the write volume of a full-table rewrite and
+-- destroy "modified since" semantics for sync consumers.
+DISABLE TRIGGER [${flyway:defaultSchema}].[trgUpdateConversationDetail]
+    ON [${flyway:defaultSchema}].[ConversationDetail];
+GO
+
 ;WITH numbered AS (
     SELECT [ID],
            ROW_NUMBER() OVER (PARTITION BY [ConversationID]
@@ -45,6 +53,10 @@ UPDATE cd
     SET cd.[Sequence] = numbered.rn
 FROM [${flyway:defaultSchema}].[ConversationDetail] cd
 JOIN numbered ON numbered.[ID] = cd.[ID];
+GO
+
+ENABLE TRIGGER [${flyway:defaultSchema}].[trgUpdateConversationDetail]
+    ON [${flyway:defaultSchema}].[ConversationDetail];
 GO
 
 -- Now that every row has a value, enforce NOT NULL and provide a DEFAULT (0) so inserts
@@ -62,6 +74,17 @@ ALTER TABLE [${flyway:defaultSchema}].[ConversationDetail]
     ADD CONSTRAINT [FK_ConversationDetail_SummaryPromptRun]
         FOREIGN KEY ([SummaryPromptRunID])
         REFERENCES [${flyway:defaultSchema}].[AIPromptRun]([ID]);
+GO
+
+-- Composite index supporting: the assignment trigger's MAX(Sequence) read (turns the
+-- UPDLOCK/HOLDLOCK scan into a single-range seek, collapsing the lock window and the
+-- deadlock surface under concurrent same-conversation inserts), the retrieval tools'
+-- (ConversationID, Sequence) lookups, and window ordering. Requested in PR review —
+-- a sanctioned exception to the no-hand-authored-indexes rule. Deliberately NON-unique:
+-- the trigger serializes assignment, and a UNIQUE index would turn any exotic bypass
+-- (bulk insert with triggers disabled leaving Sequence=0 duplicates) into a hard failure.
+CREATE NONCLUSTERED INDEX [IX_ConversationDetail_ConversationID_Sequence]
+    ON [${flyway:defaultSchema}].[ConversationDetail] ([ConversationID], [Sequence]);
 GO
 
 -- =====================================================================================
@@ -138,6 +161,35 @@ ALTER TABLE [${flyway:defaultSchema}].[AIAgent]
     ADD CONSTRAINT [FK_AIAgent_ConversationSummaryPrompt]
         FOREIGN KEY ([ConversationSummaryPromptID])
         REFERENCES [${flyway:defaultSchema}].[AIPrompt]([ID]);
+GO
+
+-- =====================================================================================
+-- 3b. Range CHECKs on the compaction knobs (requested in PR review). NULLs pass CHECKs
+--     automatically, preserving AIAgent's NULL => "inherit from type" semantics.
+--     Target < Trigger is enforced on AIAgentType ONLY: both columns are NOT NULL there,
+--     so the cross-column comparison is total. On AIAgent the nullable inherit semantics
+--     mean the DB cannot see the EFFECTIVE (inherited) counterpart value — a partial
+--     CHECK would give false confidence; the real invariant lives in the code-side
+--     clamp (ConversationCompactionManager.ResolveEffectiveBudget).
+-- =====================================================================================
+ALTER TABLE [${flyway:defaultSchema}].[AIAgentType] ADD
+    CONSTRAINT [CK_AIAgentType_CompactionTriggerPercent]
+        CHECK ([CompactionTriggerPercent] >= 1 AND [CompactionTriggerPercent] <= 100),
+    CONSTRAINT [CK_AIAgentType_CompactionTargetPercent]
+        CHECK ([CompactionTargetPercent] >= 1 AND [CompactionTargetPercent] <= 100),
+    CONSTRAINT [CK_AIAgentType_CompactionTargetLtTrigger]
+        CHECK ([CompactionTargetPercent] < [CompactionTriggerPercent]),
+    CONSTRAINT [CK_AIAgentType_ContextWindowMaxTokens]
+        CHECK ([ContextWindowMaxTokens] > 0);
+GO
+
+ALTER TABLE [${flyway:defaultSchema}].[AIAgent] ADD
+    CONSTRAINT [CK_AIAgent_CompactionTriggerPercent]
+        CHECK ([CompactionTriggerPercent] >= 1 AND [CompactionTriggerPercent] <= 100),
+    CONSTRAINT [CK_AIAgent_CompactionTargetPercent]
+        CHECK ([CompactionTargetPercent] >= 1 AND [CompactionTargetPercent] <= 100),
+    CONSTRAINT [CK_AIAgent_ContextWindowMaxTokens]
+        CHECK ([ContextWindowMaxTokens] > 0);
 GO
 
 -- =====================================================================================
@@ -8865,3 +8917,47 @@ SET
 WHERE 
    ID = '1C9957C7-A851-4C05-83B3-F49A5FC3FE4D' AND AutoUpdateCategory = 1;
 
+
+
+-- =====================================================================================
+-- =====================================================================================
+--  HAND-AUTHORED CORRECTIONS TO THE GENERATED SECTION ABOVE (do not fold into CodeGen
+--  output — if the generated section is regenerated, KEEP this block below it).
+--  Two fixes, both flagged in PR review:
+--
+--  (1) ConversationDetail.Sequence is trigger-owned; it must not be settable through
+--      the API (any client could overwrite it and silently corrupt ordering). CodeGen
+--      emitted AllowUpdateAPI = 1; flip to 0. Runtime enforcement is complete from the
+--      flag alone: EntityFieldInfo.ReadOnly blocks client-side sets, and
+--      IsSPParameter excludes the field from BOTH the spCreate and spUpdate EXEC
+--      parameter lists, so the generated procs above stay compatible (@Sequence
+--      defaults to NULL -> ISNULL no-op); the next CodeGen run drops the parameter
+--      from the procs naturally.
+--
+--  (2) The generated "Set categories" UPDATEs above regress ExtendedType/CodeType to
+--      NULL on 12 fields that carried ExtendedType='Code', CodeType='Other' in the
+--      v5.46 baseline (the AI-categorization step is nondeterministic) — downgrading
+--      their forms from code editors to plain textareas. Restore the baseline values.
+--      Audited as NOT touched by this migration (no correction needed):
+--      AI Agents.ScopeConfig / RerankerConfiguration / TypeConfiguration.
+-- =====================================================================================
+-- =====================================================================================
+
+-- (1) Sequence is trigger-assigned: block API updates
+UPDATE [${flyway:defaultSchema}].[EntityField]
+   SET AllowUpdateAPI = 0
+ WHERE ID = 'BC484D90-8CB0-4568-8F0D-E02713DFF744';  -- MJ: Conversation Details.Sequence
+
+-- (2) Restore ExtendedType='Code' / CodeType='Other' (values from the v5.46 baseline)
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ExtendedType = 'Code', CodeType = 'Other' WHERE ID = '27C830A6-A889-4A9C-908C-33BB7A6CDB37'; -- AI Agent Types.AssignmentStrategy
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ExtendedType = 'Code', CodeType = 'Other' WHERE ID = '41DA3898-26C0-4AE9-B934-84EA97C726B7'; -- AI Agent Types.PromptParamsSchema
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ExtendedType = 'Code', CodeType = 'Other' WHERE ID = 'FD82EBC4-4921-4C5B-A0A8-A8F0A50201CA'; -- AI Agent Types.DefaultConfiguration
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ExtendedType = 'Code', CodeType = 'Other' WHERE ID = 'A1045C5B-01CE-47D7-8738-ED980447B714'; -- AI Agent Types.ConfigSchema
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ExtendedType = 'Code', CodeType = 'Other' WHERE ID = '1C7959AE-F48B-4858-8383-28C3F4706314'; -- AI Agents.FinalPayloadValidation
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ExtendedType = 'Code', CodeType = 'Other' WHERE ID = 'B7A2371C-A22C-48EA-827E-824F8A40DA3D'; -- AI Agents.StartingPayloadValidation
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ExtendedType = 'Code', CodeType = 'Other' WHERE ID = '85B6AA86-796D-4970-9E35-5A483498B517'; -- AI Agents.PayloadDownstreamPaths
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ExtendedType = 'Code', CodeType = 'Other' WHERE ID = 'DA784B76-66CD-434B-90BD-DEC808917E68'; -- AI Agents.PayloadUpstreamPaths
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ExtendedType = 'Code', CodeType = 'Other' WHERE ID = 'FD515BF1-7E8A-4CB0-A8CE-D5C0C8C132D7'; -- AI Agents.AgentTypePromptParams
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ExtendedType = 'Code', CodeType = 'Other' WHERE ID = '811099AE-EFF5-4BAE-BFD1-66F68F95C36E'; -- Conversation Details.ResponseForm
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ExtendedType = 'Code', CodeType = 'Other' WHERE ID = '2433C81E-0921-404B-969F-7A37DBF23D4A'; -- Conversation Details.ActionableCommands
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ExtendedType = 'Code', CodeType = 'Other' WHERE ID = '5D185550-A536-43BD-8A45-1324F35B7BA1'; -- Conversation Details.AutomaticCommands

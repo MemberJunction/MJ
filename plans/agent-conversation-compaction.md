@@ -239,10 +239,11 @@ The `summarizeRange` retrieval tool (§5.3) likewise records an `AIAgentRunStep`
 
 ### 3.4 Migration checklist (single file, `migrations/v5/`)
 
-> **Implemented:** `migrations/v5/V202607131200__v5.48.x__Agent_Conversation_Compaction.sql`
-> *(renamed from `V202606012156__v5.40.x` after merging `next` — the old timestamp was
-> out-of-order vs. `next`'s v5.47.x migrations; the re-added StepType CHECK also now includes
-> `'Plan'` and `'Skill'`, which `next` added in v5.44.)*
+> **Implemented:** `migrations/v5/V202607151500__v5.49.x__Agent_Conversation_Compaction.sql`
+> *(renamed twice: from `V202606012156__v5.40.x` after merging `next` — the old timestamp was
+> out-of-order vs. `next`'s v5.47.x migrations — then renumbered to v5.49.x post-5.48 release,
+> commit `2cf0213185`; the re-added StepType CHECK also now includes `'Plan'` and `'Skill'`,
+> which `next` added in v5.44.)*
 
 - `ALTER TABLE ConversationDetail ADD Sequence INT NULL, SummaryPromptRunID UNIQUEIDENTIFIER NULL` (single consolidated ALTER).
 - Backfill `Sequence` (§3.1).
@@ -324,20 +325,25 @@ them.)
 Inline tool results live only in the run that produced them — the next turn rebuilds its
 messages from the conversation window, so a result paged in on turn N is gone on turn
 N+1 and the agent would have to re-call the tool. `injectPriorTurnToolResults` re-injects
-the immediately previous completed root run's successful read-tool results (eligibility
-decided structurally by the `toolFamily` stamped in each Tool step's `OutputData`) as one
-transient message (`expirationTurns: 2`, compactable). One-turn memory by construction —
-context never compounds.
+the same agent's immediately previous settled root run's successful read-tool results
+(eligibility decided structurally by the `toolFamily` stamped in each Tool step's
+`OutputData`) as one transient message (`expirationTurns: 2`, compactable). One-turn
+memory by construction — context never compounds.
 
 The lookup is kept off the hot path by `PriorTurnToolResultCache` (a `BaseSingleton`
-wrapping `MJLruCache`, 500 conversations / 30-min TTL): the completing root run publishes
-its own completed Tool-step projections from memory at `finalizeAgentRun` — **including
-an empty array** for tool-free runs, the common case, which then costs zero DB queries
-per turn — and the loader falls back to the original RunView pair only on a cache miss
-(first turn, restart, other node). Freshness on a node is mutation-driven (each completed
-run replaces the entry); the TTL only bounds idle memory and the multi-node staleness
-window, and both loaders share one typed predicate (`carryForwardPredicate`) so the SQL
-filter and the in-memory projection cannot drift.
+wrapping `MJLruCache`, 500 entries / 30-min TTL, keyed by **conversation + agent** so in
+a multi-agent conversation agent B never inherits agent A's results): the settling root
+run publishes its own completed Tool-step projections from memory at `finalizeAgentRun`
+— **including an empty array** for tool-free runs, the common case, which then costs
+zero DB queries per turn — and the loader falls back to the original RunView pair only
+on a cache miss (first turn, restart, other node). "Settled" means `Completed` OR
+`AwaitingFeedback` (`BaseAgent.settledRunStatuses`): a Chat final step is the normal
+per-turn ending for conversational agents, so gating on `Completed` alone would disable
+carry-forward (and post-turn compaction, which shares the constant) for the most common
+agent shape. Freshness on a node is mutation-driven (each settled run replaces the
+entry); the TTL only bounds idle memory and the multi-node staleness window, and both
+loaders share one typed predicate (`carryForwardPredicate` + the AgentID scoping at the
+call sites) so the SQL filter and the in-memory projection cannot drift.
 
 ---
 
@@ -382,21 +388,43 @@ filter and the in-memory projection cannot drift.
 > **STATUS: ALL PHASES SHIPPED (2026-07-13).** Implementation notes below record where
 > the build deliberately refined the sketch; the sections above remain the design rationale.
 
-1. **Migration** ✅ — `V202607131200__v5.48.x__Agent_Conversation_Compaction.sql`:
-   `Sequence` (+ backfill + trigger), `SummaryPromptRunID`, agent context-control fields on
-   `AIAgentType`/`AIAgent`, `StepType='Compaction'` (CHECK re-added with next's full value
-   set incl. `'Plan'`/`'Skill'`). PostgreSQL variant in `migrations-pg/v5/` (SQLConverter
-   toolchain + hand-authored PL/pgSQL trigger: BEFORE ROW with a per-conversation advisory
-   xact lock as the UPDLOCK/HOLDLOCK analog).
+1. **Migration** ✅ — `V202607151500__v5.49.x__Agent_Conversation_Compaction.sql`:
+   `Sequence` (+ backfill wrapped in `DISABLE TRIGGER trgUpdateConversationDetail` so the
+   ordinal assignment doesn't stamp UpdatedAt on every historical row + AFTER INSERT
+   trigger), `SummaryPromptRunID`, composite index
+   `IX_ConversationDetail_ConversationID_Sequence` (trigger MAX-read seek + retrieval
+   lookups; review-requested), agent context-control fields on `AIAgentType`/`AIAgent`
+   with range CHECKs on the compaction knobs (percents 1–100; Target < Trigger on
+   AIAgentType only — AIAgent's NULL-inherit semantics push that invariant to the
+   code-side clamp), `StepType='Compaction'` (CHECK re-added with next's full value set
+   incl. `'Plan'`/`'Skill'`), and a hand-authored corrective tail (Sequence
+   `AllowUpdateAPI=0` — trigger-owned ordinal; 12 `ExtendedType='Code'` restores the
+   generated category sweep had nulled).
+   PostgreSQL variant `migrations-pg/v5/V202607151500__v5.49.x__Agent_Conversation_Compaction.pg.sql`,
+   produced in the PR-review round via the pg-migrate-v2 split-and-regenerate pipeline:
+   SQLConverter for the mechanical sections + hand-authored PL/pgSQL trigger — BEFORE
+   ROW with a per-conversation `pg_advisory_xact_lock` as the UPDLOCK/HOLDLOCK analog
+   (correct for batch inserts via PG's SPI command-visibility rule; documented caveat:
+   duplicate risk under SERIALIZABLE/RR isolation — MJ runs READ COMMITTED).
 2. **CodeGen** ✅ — output appended to the migration per the separator convention (single
-   artifact); fresh-DB migrate verified on SQL Server AND PostgreSQL, including batch-insert
-   Sequence assignment through the real `spCreateConversationDetail` SELECT-back.
-3. **Assembly layer** ✅ — `ConversationEngine.GetAgentContextWindow(conversationId, user,
-   { excludeDetailIds?, maxTailMessages? })` (the cap applies ONLY when no boundary exists —
-   legacy last-N parity; cutting a post-boundary tail would create a coverage gap);
-   `ExecuteAgentParams.conversationId`; the resolver's history loader routes through the
-   engine window and keeps only attachment enrichment; the in-flight agent-response
-   placeholder row is excluded from the window.
+   artifact); fresh-DB migrate verified on SQL Server. The PostgreSQL fresh-DB migrate +
+   batch-insert Sequence SELECT-back check run through the pg-migrate-v2 Phase 3/4 gates
+   (workbench + `pg-migrations.yml` CI) as part of the PR-review round.
+3. **Assembly layer** ✅ — the pure fold lives once in the static
+   `ConversationEngine.AssembleContextWindow(rows, { excludeDetailIds?, maxTailMessages? })`
+   (the cap applies ONLY when no boundary exists — legacy last-N parity; cutting a
+   post-boundary tail would create a coverage gap). The cache-backed instance method
+   (`GetAgentContextWindow`) delegates to it and remains the public API for
+   programmatic/cache-warm consumers (today exercised by the integration suite — no
+   production caller remains after the server paths moved off it); ALL server callers
+   (the agent resolver's history loader and the compaction manager) load rows FRESH per
+   request via the single-sourced `ConversationEngine.LoadWindowRowsFresh` (per-request
+   provider + contextUser: entity RLS applies; load failure fails the mutation loudly;
+   the process-global engine cache is never populated server-side — no unbounded MJAPI
+   growth, no cross-node staleness) and fold through the same function. `ExecuteAgentParams.conversationId`; the in-flight
+   agent-response placeholder row is excluded from BOTH the resolver window and the
+   compaction pass (`CompactIfNeededInput.ExcludeDetailIds`), and the boundary selector
+   additionally never picks the newest raw row.
 4. **Cross-turn compaction** ✅ — `ConversationCompactionManager` (static
    `ResolveEffectiveBudget` + `CompactIfNeeded`). Post-turn hook is **fire-and-forget after
    the run row saves** (an awaited pass would delay the caller's completion event); the

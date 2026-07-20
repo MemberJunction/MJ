@@ -1022,4 +1022,81 @@ describe('ConversationEngine', () => {
             });
         });
     });
+
+    // ========================================================================
+    // ASSEMBLE CONTEXT WINDOW (pure static fold — shared by the cached client
+    // path and the server-side fresh-per-request loaders)
+    // ========================================================================
+    describe('AssembleContextWindow', () => {
+        const row = (sequence: number, role: string, message: string, summary?: string) => ({
+            ID: `detail-${sequence}`,
+            Sequence: sequence,
+            Role: role,
+            Message: message,
+            SummaryOfEarlierConversation: summary || null,
+        });
+
+        it('no boundary → all messages, chronological, metadata stamped (plain rows, no entities)', () => {
+            const window = ConversationEngine.AssembleContextWindow([
+                row(2, 'AI', 'm2'), // deliberately out of order
+                row(1, 'User', 'm1'),
+                row(3, 'User', 'm3'),
+            ]);
+            expect(window.map(m => m.content)).toEqual(['m1', 'm2', 'm3']);
+            expect(window.map(m => m.role)).toEqual(['user', 'assistant', 'user']);
+            expect(window[0].metadata?.sequence).toBe(1);
+            expect(window[0].metadata?.conversationDetailId).toBe('detail-1');
+        });
+
+        it('maxTailMessages caps the no-boundary window only', () => {
+            const rows = [1, 2, 3, 4].map(n => row(n, 'User', `m${n}`));
+            expect(ConversationEngine.AssembleContextWindow(rows, { maxTailMessages: 2 }).map(m => m.content)).toEqual(['m3', 'm4']);
+
+            // With a boundary, the cap is deliberately ignored (post-boundary tail must stay whole)
+            const withBoundary = [1, 2, 3, 4].map(n => row(n, 'User', `m${n}`, n === 3 ? 'SUMMARY' : undefined));
+            const window = ConversationEngine.AssembleContextWindow(withBoundary, { maxTailMessages: 1 });
+            expect(window).toHaveLength(3); // summary + boundary raw + tail
+        });
+
+        it('folds at the highest-sequence summary and includes the boundary row raw', () => {
+            const rows = [1, 2, 3, 4].map(n => row(n, 'User', `m${n}`, n === 2 || n === 3 ? `SUMMARY@${n}` : undefined));
+            const window = ConversationEngine.AssembleContextWindow(rows);
+            expect(window[0].metadata?.isConversationSummary).toBe(true);
+            expect(window[0].content).toBe('SUMMARY@3'); // highest wins (recursive pattern)
+            expect(window.slice(1).map(m => m.content)).toEqual(['m3', 'm4']);
+        });
+
+        it('excludeDetailIds drops rows before boundary selection (UUID-case-insensitive)', () => {
+            const rows = [1, 2, 3].map(n => row(n, 'User', `m${n}`, n === 3 ? 'SUMMARY' : undefined));
+            const window = ConversationEngine.AssembleContextWindow(rows, { excludeDetailIds: ['DETAIL-3'] });
+            // With the boundary row excluded, no summary participates → plain passthrough
+            expect(window.every(m => !m.metadata?.isConversationSummary)).toBe(true);
+            expect(window.map(m => m.content)).toEqual(['m1', 'm2']);
+        });
+    });
+
+    // ========================================================================
+    // REMOTE NEW-ROW SAVE → CACHE EVICTION (a warm cache would otherwise keep
+    // serving without the row forever — loads short-circuit on cache hits)
+    // ========================================================================
+    describe('remote new-detail save eviction', () => {
+        it('evicts the warm detail cache when a remote save arrives for an uncached row', async () => {
+            enqueueDetailsResults([
+                createMockDetail({ ID: 'd1', ConversationID: 'conv-1' }),
+            ]);
+            await engine.LoadConversationDetails('conv-1', contextUser);
+            expect(engine.GetCachedDetails('conv-1')).toBeDefined();
+
+            // Remote event: no baseEntity, new row ID not in the cache
+            const internals = engine as unknown as {
+                handleConversationDetailEntityEvent(event: Record<string, unknown>, action: string): boolean;
+            };
+            internals.handleConversationDetailEntityEvent({
+                baseEntity: null,
+                payload: { recordData: JSON.stringify({ ID: 'd-new', ConversationID: 'conv-1' }) },
+            }, 'save');
+
+            expect(engine.GetCachedDetails('conv-1')).toBeUndefined(); // next load re-queries
+        });
+    });
 });

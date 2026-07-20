@@ -7,7 +7,8 @@
  * into a new summary, persisted on the boundary row's
  * `ConversationDetail.SummaryOfEarlierConversation` (with `SummaryPromptRunID` linking
  * the producing `AIPromptRun` for cost/model audit). Subsequent runs assemble
- * `[summary, boundary row, ...tail]` via `ConversationEngine.GetAgentContextWindow`.
+ * `[summary, boundary row, ...tail]` via `ConversationEngine.AssembleContextWindow`
+ * over rows from the single-sourced `ConversationEngine.LoadWindowRowsFresh` loader.
  *
  * This class owns the trigger math, boundary selection, prompt invocation, and the
  * boundary-row write. BaseAgent owns run-step recording and when the check fires
@@ -22,6 +23,7 @@ import {
     ConversationContextMessage,
     ConversationEngine,
     MJAIAgentTypeEntity,
+    MJAIPromptRunEntity,
     MJConversationDetailEntity
 } from '@memberjunction/core-entities';
 import { AIPromptParams, ExtractPromptResultText, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -69,6 +71,18 @@ export interface CompactIfNeededInput {
     Verbose?: boolean;
     /** Fires with the summary AIPromptRun ID as soon as the run record exists (step TargetLogID wiring) */
     OnPromptRunCreated?: (promptRunId: string) => void | Promise<void>;
+    /**
+     * Detail rows to omit from the assembled window — e.g. the in-flight agent-response
+     * placeholder row, whose Message the resolver may still be writing concurrently with
+     * a post-turn pass. Without this, the boundary could land on that row and the
+     * summary write's Load→Save (generated spUpdate writes all columns) could clobber it.
+     */
+    ExcludeDetailIds?: string[];
+    /**
+     * The executing agent run's ID — stamped onto the summary AIPromptRun (AgentRunID)
+     * so per-run cost rollups include the summary sub-call this feature generates.
+     */
+    AgentRunId?: string;
 }
 
 /** Result of a {@link ConversationCompactionManager.CompactIfNeeded} call. */
@@ -93,6 +107,12 @@ export interface CompactionOutcome {
     Warnings: string[];
     /** Set when the attempt failed — the conversation is left untouched */
     ErrorMessage?: string;
+    /**
+     * The summary AIPromptRun entity (rollup fields populated by the runner) — threaded
+     * into the Compaction run step's transient PromptRun so calculateTokenStats can
+     * include the summary sub-call's tokens/cost in the agent run's totals.
+     */
+    PromptRun?: MJAIPromptRunEntity;
 }
 
 /** Name of the system-default cross-turn summary prompt (seeded metadata). */
@@ -132,6 +152,9 @@ export class ConversationCompactionManager {
 
     /** Conversations already warned (once per process) about an unsatisfiable trigger budget. */
     private static warnedConversationBudgets = new Set<string>();
+
+    /** Agents already warned (once per process) about an inverted target/trigger percent pair. */
+    private static warnedAgentPercentConfigs = new Set<string>();
 
     /**
      * Resolves the effective context budget for a run.
@@ -176,8 +199,26 @@ export class ConversationCompactionManager {
             clampedToModel = true;
         }
 
-        const triggerPercent = agent.CompactionTriggerPercent || agentType?.CompactionTriggerPercent || DEFAULT_TRIGGER_PERCENT;
-        const targetPercent = agent.CompactionTargetPercent || agentType?.CompactionTargetPercent || DEFAULT_TARGET_PERCENT;
+        // Defense-in-depth clamps mirroring the DB CHECK constraints (percents 1-100,
+        // target strictly under trigger). The DB enforces these on AIAgentType (both
+        // NOT NULL there); AIAgent's nullable inherit semantics mean the EFFECTIVE pair
+        // can only be validated here, after resolution — an inverted pair would make
+        // every pass select a no-progress boundary and churn.
+        const rawTriggerPercent = agent.CompactionTriggerPercent || agentType?.CompactionTriggerPercent || DEFAULT_TRIGGER_PERCENT;
+        const rawTargetPercent = agent.CompactionTargetPercent || agentType?.CompactionTargetPercent || DEFAULT_TARGET_PERCENT;
+        const triggerPercent = Math.min(Math.max(rawTriggerPercent, 1), 100);
+        let targetPercent = Math.min(Math.max(rawTargetPercent, 1), 100);
+        if (targetPercent >= triggerPercent) {
+            targetPercent = Math.max(1, triggerPercent - 1);
+            // Warn once per agent per process — this re-resolves every turn while the
+            // config stays wrong, and the operator only needs telling once (§8: don't
+            // spam logs, don't lose the diagnostic either).
+            const agentKey = NormalizeUUID(agent.ID);
+            if (!this.warnedAgentPercentConfigs.has(agentKey)) {
+                this.warnedAgentPercentConfigs.add(agentKey);
+                LogStatusEx({ message: `⚠️ [CrossTurnCompaction] CompactionTargetPercent (${rawTargetPercent}) >= CompactionTriggerPercent (${rawTriggerPercent}) for agent '${agent.Name}' — clamped target to ${targetPercent}. Fix the agent/type configuration.` });
+            }
+        }
 
         return {
             MaxTokens: maxTokens,
@@ -219,7 +260,7 @@ export class ConversationCompactionManager {
             warnings.push(`Configured ContextWindowMaxTokens exceeded the model's MaxInputTokens — clamped to ${input.Budget.MaxTokens}`);
         }
 
-        const window = await ConversationEngine.Instance.GetAgentContextWindow(input.ConversationId, input.ContextUser);
+        const window = await this.loadWindowFresh(input);
         const tokensBefore = input.EstimateTokens(window);
 
         if (tokensBefore < input.Budget.TriggerTokens) {
@@ -254,11 +295,34 @@ export class ConversationCompactionManager {
             BoundarySequence: boundaryMessage.metadata!.sequence,
             PromptId: promptResult.promptId,
             PromptRunId: promptResult.promptRunId,
+            PromptRun: promptResult.promptRun,
             TokensBefore: tokensBefore,
             TokensAfter: tokensAfter,
             SummaryText: promptResult.summaryText,
             Warnings: warnings
         };
+    }
+
+    /**
+     * Loads the conversation window FRESH for this pass — via the single-sourced
+     * {@link ConversationEngine.LoadWindowRowsFresh} query (entity RLS via ContextUser,
+     * provider-scoped) assembled through the engine's pure fold — never the engine's
+     * process-global detail cache. Server-side compaction must see rows written by
+     * other servers (a warm cache can be stale across nodes) and must not grow an
+     * unbounded per-conversation cache in MJAPI. Honors `input.ExcludeDetailIds` (the
+     * in-flight placeholder row). Load failures throw — caught by
+     * {@link CompactIfNeeded}'s wrapper → ErrorMessage outcome, so the conversation is
+     * left untouched and the pass re-triggers later.
+     */
+    private static async loadWindowFresh(input: CompactIfNeededInput): Promise<ConversationContextMessage[]> {
+        const rows = await ConversationEngine.LoadWindowRowsFresh(
+            input.ConversationId,
+            input.ContextUser,
+            input.Provider || Metadata.Provider
+        );
+        return ConversationEngine.AssembleContextWindow(rows, {
+            excludeDetailIds: input.ExcludeDetailIds
+        });
     }
 
     /**
@@ -354,8 +418,17 @@ export class ConversationCompactionManager {
             accumulated += messageTokens;
             boundaryIndex = i;
         }
+        // The newest raw row must never be the boundary (possible when it alone exceeds
+        // the tail budget — the walk breaks on iteration one leaving boundaryIndex at
+        // length-1): it may be an in-flight row whose Message a resolver is still
+        // writing, and the boundary write's Load→Save would race it. Defense-in-depth
+        // alongside ExcludeDetailIds; the retained tail may then exceed TargetTokens
+        // (correctness over compression — the next turn simply re-triggers).
+        // MIN_MESSAGES_TO_COMPACT >= 4 guarantees length-2 >= 2, so the clamp never
+        // nulls a previously valid selection.
+        const clamped = Math.min(boundaryIndex, rawMessages.length - 2);
         // boundaryIndex 0 would fold nothing (delta empty) — no progress, skip.
-        return boundaryIndex > 0 ? boundaryIndex : null;
+        return clamped > 0 ? clamped : null;
     }
 
     /** Renders the delta and runs the summary prompt. */
@@ -363,7 +436,7 @@ export class ConversationCompactionManager {
         input: CompactIfNeededInput,
         priorSummary: string,
         delta: ConversationContextMessage[]
-    ): Promise<{ success: boolean; summaryText: string; promptId?: string; promptRunId?: string; errorMessage?: string }> {
+    ): Promise<{ success: boolean; summaryText: string; promptId?: string; promptRunId?: string; promptRun?: MJAIPromptRunEntity; errorMessage?: string }> {
         const prompt = this.resolveSummaryPrompt(input);
         if (!prompt) {
             return { success: false, summaryText: '', errorMessage: `No conversation summary prompt found (agent/type ConversationSummaryPromptID unset and no '${CONVERSATION_SUMMARY_PROMPT_NAME}' system prompt)` };
@@ -377,6 +450,11 @@ export class ConversationCompactionManager {
             deltaMessages: delta.map(m => this.renderDeltaMessage(m)).join('\n')
         };
         promptParams.contextUser = input.ContextUser;
+        if (input.AgentRunId) {
+            // Links the summary AIPromptRun to the agent run (AgentRunID) so per-run
+            // cost rollups include the recursive summary sub-call.
+            promptParams.agentRunId = input.AgentRunId;
+        }
         if (input.OnPromptRunCreated) {
             promptParams.onPromptRunCreated = input.OnPromptRunCreated;
         }
@@ -388,7 +466,7 @@ export class ConversationCompactionManager {
         if (!result.success || summaryText.length === 0) {
             return { success: false, summaryText: '', promptId: prompt.ID, promptRunId: result.promptRun?.ID, errorMessage: result.errorMessage || 'Summary prompt returned no content' };
         }
-        return { success: true, summaryText, promptId: prompt.ID, promptRunId: result.promptRun?.ID };
+        return { success: true, summaryText, promptId: prompt.ID, promptRunId: result.promptRun?.ID, promptRun: result.promptRun };
     }
 
     /** Prompt resolution: agent override, else type override, else the seeded system prompt by name. */

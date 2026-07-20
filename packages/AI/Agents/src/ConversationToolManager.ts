@@ -116,6 +116,33 @@ const DEFAULT_SEARCH_RESULTS = 20;
 const MAX_SEARCH_RESULTS = 50;
 /** Snippet length around a search match. */
 const SNIPPET_CHARS = 300;
+/**
+ * Max characters for a searchConversation regex pattern. The pattern is model-authored
+ * (and thus prompt-injection-steerable) — a length cap is the first line of ReDoS
+ * surface control before it ever reaches `new RegExp`.
+ */
+const MAX_SEARCH_PATTERN_CHARS = 256;
+/**
+ * Per-message haystack cap for REGEX matching: patterns run against at most this many
+ * characters of a message body (keyword search stays uncapped — indexOf is linear-safe).
+ * Bounds the per-call work a pathological pattern can do against one huge message.
+ */
+const MAX_SEARCH_HAYSTACK_CHARS = 20_000;
+/**
+ * Total wall-clock budget for one search scan. Checked between messages — it cannot
+ * interrupt a single pathological `match()` call (that would need RE2 or a worker
+ * thread, both disproportionate here); together with the pattern/haystack caps it
+ * bounds the blast radius to "one slow call, contained per-call".
+ */
+const MAX_SEARCH_SCAN_MS = 2_000;
+
+/**
+ * Max conversationToolCalls executed per LLM response. Each call is a run step (and
+ * summarizeRange is a full LLM sub-call) — an unbounded Promise.all would let a single
+ * response fan out arbitrary work/cost. Excess calls are reported back to the model as
+ * skipped so it can re-request them next turn. Consumed by BaseAgent's executor.
+ */
+export const MAX_CONVERSATION_TOOL_CALLS_PER_TURN = 8;
 
 /**
  * Per-run manager for conversation-history retrieval tools. Initialized with the run's
@@ -178,6 +205,9 @@ export class ConversationToolManager {
             `| \`getMessagesByRange\` | \`{ "startSequence": 10, "endSequence": 20 }\` | the messages in the inclusive range (max ${MAX_RANGE_MESSAGES}) |`,
             `| \`searchConversation\` | \`{ "query": "text or regex", "isRegex"?: true, "role"?: "User"\\|"AI", "startSequence"?, "endSequence"?, "maxResults"? }\` | matching hits as \`{sequence, role, agent, snippet}\` (default ${DEFAULT_SEARCH_RESULTS}) — then page the hits you need |`,
             `| \`summarizeRange\` | \`{ "startSequence": 1, "endSequence": 120, "lens": "what the summary should focus on" }\` | a focused summary of the range through YOUR lens (max ${MAX_SUMMARIZE_RANGE_MESSAGES} messages) — use when a range is too big to page in raw |`,
+            '',
+            '',
+            `Max ${MAX_CONVERSATION_TOOL_CALLS_PER_TURN} tool calls per response — excess calls are skipped and reported back; re-request them on your next turn.`,
             '',
             'Example: `"conversationToolCalls": [{ "tool": "searchConversation", "input": { "query": "budget approval" } }]`'
         ].join('\n');
@@ -250,7 +280,7 @@ export class ConversationToolManager {
             const line = FormatSequencedHistoryLine(detail.Sequence, detail.Role, detail.Message || '');
             usedChars += line.length;
             if (usedChars > MAX_SUMMARIZE_INPUT_CHARS && lines.length > 0) {
-                lines.push(`[input capped at ~${MAX_SUMMARIZE_INPUT_CHARS.toLocaleString()} characters — messages from sequence ${detail.Sequence} onward omitted; summarize a narrower range to cover them]`);
+                lines.push(`[input capped at ~${MAX_SUMMARIZE_INPUT_CHARS.toLocaleString('en-US')} characters — messages from sequence ${detail.Sequence} onward omitted; summarize a narrower range to cover them]`);
                 break;
             }
             lines.push(line);
@@ -297,7 +327,7 @@ export class ConversationToolManager {
             if (usedChars > MAX_RANGE_TOTAL_CHARS && messages.length > 0) {
                 return {
                     messages,
-                    truncated: `Result capped at ~${MAX_RANGE_TOTAL_CHARS.toLocaleString()} characters — ${inRange.length - messages.length} message(s) from sequence ${message.sequence} onward omitted. Request a narrower range to read them.`
+                    truncated: `Result capped at ~${MAX_RANGE_TOTAL_CHARS.toLocaleString('en-US')} characters — ${inRange.length - messages.length} message(s) from sequence ${message.sequence} onward omitted. Request a narrower range to read them.`
                 };
             }
             messages.push(message);
@@ -305,7 +335,7 @@ export class ConversationToolManager {
         return { messages };
     }
 
-    private searchConversation(details: MJConversationDetailEntity[], input: ConversationToolCall['input']): { hits: ConversationSearchHit[]; totalMatches: number } {
+    private searchConversation(details: MJConversationDetailEntity[], input: ConversationToolCall['input']): { hits: ConversationSearchHit[]; totalMatches: number; warning?: string } {
         if (!input.query || input.query.trim().length === 0) {
             throw new Error(`searchConversation requires a non-empty 'query'`);
         }
@@ -316,12 +346,29 @@ export class ConversationToolManager {
 
         const hits: ConversationSearchHit[] = [];
         let totalMatches = 0;
+        let anyHaystackCapped = false;
+        let warning: string | undefined;
+        const deadline = Date.now() + MAX_SEARCH_SCAN_MS;
         for (const detail of details) {
+            // Wall-clock budget checked between messages — bounds the total scan a
+            // model-authored pattern can consume on the event loop (see the
+            // MAX_SEARCH_SCAN_MS doc for what this deliberately cannot bound).
+            if (Date.now() > deadline) {
+                warning = `Search stopped after ${MAX_SEARCH_SCAN_MS}ms — results are partial (stopped before sequence ${detail.Sequence}). Narrow the sequence range or simplify the pattern.`;
+                break;
+            }
             if (!this.passesSearchFilters(detail, input)) continue;
 
             const text = detail.Message || '';
+            // Regex mode matches a capped slice of long messages (keyword indexOf is
+            // linear-safe and stays uncapped); snippets still render from full text.
+            let haystack = text;
+            if (regex && text.length > MAX_SEARCH_HAYSTACK_CHARS) {
+                haystack = text.slice(0, MAX_SEARCH_HAYSTACK_CHARS);
+                anyHaystackCapped = true;
+            }
             // `??` (not the usual `||` fallback) — a match at index 0 is a valid hit
-            const matchIndex = regex ? (text.match(regex)?.index ?? -1) : text.toLowerCase().indexOf(needle);
+            const matchIndex = regex ? (haystack.match(regex)?.index ?? -1) : text.toLowerCase().indexOf(needle);
             if (matchIndex < 0) continue;
 
             totalMatches++;
@@ -335,13 +382,19 @@ export class ConversationToolManager {
                 });
             }
         }
-        return { hits, totalMatches };
+        if (anyHaystackCapped && !warning) {
+            warning = `Regex matching was limited to the first ${MAX_SEARCH_HAYSTACK_CHARS.toLocaleString('en-US')} characters of long messages — a match deeper in such a message would not be found. Page the message in by sequence to inspect it fully.`;
+        }
+        return warning ? { hits, totalMatches, warning } : { hits, totalMatches };
     }
 
     /** Compiles the query as a case-insensitive regex in regex mode; null in keyword mode. */
     private compileSearchRegex(query: string, isRegex: boolean | undefined): RegExp | null {
         if (!isRegex) {
             return null;
+        }
+        if (query.length > MAX_SEARCH_PATTERN_CHARS) {
+            throw new Error(`Regex pattern is ${query.length} characters — max ${MAX_SEARCH_PATTERN_CHARS}. Use a shorter pattern or keyword search.`);
         }
         try {
             return new RegExp(query, 'i');

@@ -25,7 +25,7 @@
 import { TestRunner, Assert, AssertEqual } from './lib/harness';
 import { bootstrapAI, AICtx } from './lib/ai-bootstrap';
 import { RunView } from '@memberjunction/core';
-import { ConversationEngine, MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, ConversationWindowFields, ConversationWindowSourceRow, MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent, ConversationToolManager, ConversationSearchHit, ConversationToolMessage, PriorTurnToolResultCache } from '@memberjunction/ai-agents';
 import type { CarryForwardStepRecord } from '@memberjunction/ai-agents';
@@ -253,10 +253,11 @@ async function main(): Promise<void> {
         AssertEqual(new Date(row.__mj_UpdatedAt).getTime(), new Date(row.__mj_CreatedAt).getTime(), 'no UPDATE followed the INSERT');
     });
 
-    runner.Test('carry-forward loader: DB fallback on cache miss, cache precedence on hit', async () => {
+    runner.Test('carry-forward loader: DB fallback on cache miss, cache precedence on hit, agent-scoped provenance', async () => {
         const fixture = await CreateConversationFixture(ctx, [{ role: 'User', text: 'cf-1' }]);
         fixtures.push(fixture);
         const run = await CreateAgentRunFixture(fixture.conversation.ID);
+        const agentId = run.AgentID;
 
         // A real completed Tool step on the prior run (direct entity save — the DB-side shape).
         const toolStep = await ctx.provider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', ctx.user);
@@ -268,37 +269,91 @@ async function main(): Promise<void> {
         toolStep.OutputData = JSON.stringify({ marker: 'from-db' });
         Assert(await toolStep.Save(), `tool step fixture save: ${toolStep.LatestResult?.CompleteMessage}`);
         stepFixtures.push(toolStep);
-        run.Status = 'Completed';
-        Assert(await run.Save(), `run completion save: ${run.LatestResult?.CompleteMessage}`);
+        // AwaitingFeedback (not Completed) — the normal chat-turn ending. The loader's
+        // settled-status filter must find it (this exact status is what the PR-review
+        // gate fix exists for).
+        run.Status = 'AwaitingFeedback';
+        Assert(await run.Save(), `run settle save: ${run.LatestResult?.CompleteMessage}`);
 
         const agent = new BaseAgent();
         const internals = agent as unknown as BaseAgentStepInternals;
         internals._activeProvider = ctx.provider;
-        const loadParams = { conversationId: fixture.conversation.ID, contextUser: ctx.user };
+        const loadParams = { conversationId: fixture.conversation.ID, contextUser: ctx.user, agent: { ID: agentId } };
 
-        // Miss → the RunView pair against the real run/step rows.
+        // Miss → the RunView pair against the real run/step rows (AwaitingFeedback found).
         PriorTurnToolResultCache.Instance.Clear();
         const fromDb = await internals.loadPriorTurnToolResultSteps(loadParams);
-        AssertEqual(fromDb.length, 1, 'DB fallback found the prior run tool step');
+        AssertEqual(fromDb.length, 1, 'DB fallback found the AwaitingFeedback prior run tool step');
         Assert((fromDb[0].OutputData || '').includes('from-db'), 'DB fallback returned the stored OutputData');
 
+        // Provenance: a DIFFERENT agent in the same conversation must not see this run.
+        const otherAgentParams = { ...loadParams, agent: { ID: '00000000-0000-0000-0000-00000000BEEF' } };
+        const otherAgentSteps = await internals.loadPriorTurnToolResultSteps(otherAgentParams);
+        AssertEqual(otherAgentSteps.length, 0, "another agent's loader finds no prior run (AgentID filter)");
+
         // Hit → the cache wins without touching the DB (distinct marker proves the source).
-        PriorTurnToolResultCache.Instance.Set(fixture.conversation.ID, [{ OutputData: JSON.stringify({ marker: 'from-cache' }) }]);
+        PriorTurnToolResultCache.Instance.Set(fixture.conversation.ID, agentId, [{ OutputData: JSON.stringify({ marker: 'from-cache' }) }]);
         const fromCache = await internals.loadPriorTurnToolResultSteps(loadParams);
         AssertEqual(fromCache.length, 1, 'cache hit returned one record');
         Assert((fromCache[0].OutputData || '').includes('from-cache'), 'cache took precedence over the DB rows');
 
-        // Population path: a completing root run publishes its in-memory steps for the next turn.
+        // Population path: a settling root run publishes its in-memory steps for the next turn.
         PriorTurnToolResultCache.Instance.Clear();
-        internals._agentRun = run; // Status='Completed', Steps holds the in-memory tool step
+        internals._agentRun = run; // Status='AwaitingFeedback', Steps holds the in-memory tool step
         run.Steps.push(toolStep);
         internals._executeParams = { conversationId: fixture.conversation.ID };
         internals._depth = 0;
         internals.cachePriorTurnToolResults();
-        const populated = PriorTurnToolResultCache.Instance.Get(fixture.conversation.ID);
+        const populated = PriorTurnToolResultCache.Instance.Get(fixture.conversation.ID, agentId);
         Assert(!!populated && populated.length === 1 && (populated[0].OutputData || '').includes('from-db'),
-            'run completion populated the cache from in-memory steps');
+            'AwaitingFeedback run completion populated the cache from in-memory steps');
+        AssertEqual(PriorTurnToolResultCache.Instance.Get(fixture.conversation.ID, '00000000-0000-0000-0000-00000000BEEF'), undefined,
+            "population is agent-scoped — another agent's key stays cold");
         PriorTurnToolResultCache.Instance.Clear();
+    });
+
+    runner.Test('AssembleContextWindow parity: fresh RunView rows fold identically to the engine window', async () => {
+        const fixture = await CreateConversationFixture(ctx, [
+            { role: 'User', text: 'p1' },
+            { role: 'AI', text: 'p2' },
+            { role: 'User', text: 'p3' },
+            { role: 'AI', text: 'p4' },
+        ]);
+        fixtures.push(fixture);
+        // Give it a boundary so the fold path (not just passthrough) is compared.
+        const boundary = fixture.details[2];
+        boundary.SummaryOfEarlierConversation = 'PARITY SUMMARY of 1-2';
+        Assert(await boundary.Save(), `parity summary save: ${boundary.LatestResult?.CompleteMessage}`);
+
+        const engineWindow = await engine.GetAgentContextWindow(fixture.conversation.ID, ctx.user);
+
+        // Deliberately an INDEPENDENT hand-built query (not ConversationEngine.
+        // LoadWindowRowsFresh): this parity probe exists to verify that a fresh
+        // ConversationWindowFields load folds identically to the cached engine window —
+        // routing it through the production loader would make the comparison circular.
+        const rows = await new RunView().RunView<ConversationWindowSourceRow>({
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `ConversationID='${fixture.conversation.ID}'`,
+            OrderBy: 'Sequence ASC',
+            Fields: [...ConversationWindowFields],
+            ResultType: 'simple',
+        }, ctx.user);
+        Assert(rows.Success, `fresh row load: ${rows.ErrorMessage}`);
+        const assembled = ConversationEngine.AssembleContextWindow(rows.Results || []);
+
+        AssertEqual(assembled.length, engineWindow.length, 'window lengths match');
+        for (let i = 0; i < assembled.length; i++) {
+            AssertEqual(assembled[i].content as string, engineWindow[i].content as string, `content[${i}] matches`);
+            AssertEqual(assembled[i].role, engineWindow[i].role, `role[${i}] matches`);
+            AssertEqual(assembled[i].metadata?.sequence, engineWindow[i].metadata?.sequence, `sequence[${i}] matches`);
+        }
+
+        // Exclusion parity: excluding the newest row produces identical windows too.
+        const newestId = fixture.details[3].ID;
+        const engineExcluded = await engine.GetAgentContextWindow(fixture.conversation.ID, ctx.user, { excludeDetailIds: [newestId] });
+        const assembledExcluded = ConversationEngine.AssembleContextWindow(rows.Results || [], { excludeDetailIds: [newestId] });
+        AssertEqual(assembledExcluded.length, engineExcluded.length, 'excluded window lengths match');
+        Assert(assembledExcluded.every(m => m.metadata?.conversationDetailId !== newestId), 'excluded row absent from assembled window');
     });
 
     let failures = 0;
