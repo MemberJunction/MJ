@@ -3969,6 +3969,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return true; // subclass is telling us not to do any refresh ops right now
     }
 
+    /**
+     * MetadataInfo.Type values (dataset-item ENTITY names) of the entity family a scoped refresh
+     * reloads — the per-Type timestamps it may legitimately stamp current afterward.
+     */
+    private static readonly _entityFamilyTimestampTypes: readonly string[] = [
+        'MJ: Entities', 'MJ: Entity Fields', 'MJ: Entity Field Values', 'MJ: Entity Permissions',
+        'MJ: Entity Relationships', 'MJ: Entity Settings', 'MJ: Entity Organic Keys',
+        'MJ: Entity Organic Key Related Entities',
+    ];
+
+    /** In-flight scoped refreshes keyed by normalized schema set — concurrent callers share one fetch. */
+    private _inflightScopedRefreshes = new Map<string, Promise<boolean>>();
+
     /** MJ_Metadata dataset item codes that are children of Entities (keyed by EntityID). */
     private static readonly _mjMetadataEntityChildCodes: readonly string[] = [
         'EntityFieldValues', 'EntityPermissions', 'EntityRelationships', 'EntitySettings',
@@ -4018,7 +4031,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         ) {
             return this.Refresh(providerToUse); // full-refresh fallback
         }
+        // Coalesce: concurrent scoped refreshes of the SAME schema set (e.g. two syncs of one
+        // connector finishing together) share a single fetch+merge instead of racing duplicates.
+        const key = [...cleaned].map(s => s.toLowerCase()).sort().join('|');
+        const inflight = this._inflightScopedRefreshes.get(key);
+        if (inflight) return inflight;
+        const run = this.executeScopedRefresh(cleaned, providerToUse)
+            .finally(() => { this._inflightScopedRefreshes.delete(key); });
+        this._inflightScopedRefreshes.set(key, run);
+        return run;
+    }
+
+    /** The actual scoped fetch + atomic merge behind {@link RefreshSchemas} (post-coalescing). */
+    private async executeScopedRefresh(cleaned: string[], providerToUse?: IMetadataProvider): Promise<boolean> {
         try {
+            // t0 — BEFORE the scoped fetch: snapshot the remote per-Type timestamps. Stamping local
+            // timestamps with t0 values after the merge can never mask a concurrent change: anything
+            // changing after t0 bumps remote PAST the snapshot and is still detected as obsolete.
+            await this.RefreshRemoteMetadataTimestamps(providerToUse);
+            const t0Remote: MetadataInfo[] | null = this.LatestRemoteMetadata
+                ? this.LatestRemoteMetadata.map(m => ({ ...m }))
+                : null;
             const esc = (s: string) => s.replace(/'/g, "''");
             const inList = (vals: string[]) => vals.map(v => `'${esc(v)}'`).join(',');
             const zero = (codes: readonly string[]): DatasetItemFilterType[] =>
@@ -4087,11 +4120,52 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const next = Object.assign(new AllMetadata(), this._localMetadata);
             next.AllEntities = MergeScopedEntities(this._localMetadata.AllEntities, freshEntities, cleaned);
             this.UpdateLocalMetadata(next);
+            // Reconcile per-Type timestamps from the t0 snapshot so the next staleness check does
+            // NOT schedule a redundant full reload for the entity-family types we just refreshed.
+            this.reconcileScopedRefreshTimestamps(t0Remote);
             LogStatus(`[ScopedRefresh] Refreshed ${freshEntities.length} entities across schema(s) [${cleaned.join(', ')}] without a full metadata reload`);
             return true;
         } catch (e) {
             LogError(`RefreshSchemas([${cleaned.join(', ')}]) failed — falling back to full Refresh(): ${e instanceof Error ? e.message : e}`);
             return this.Refresh(providerToUse);
+        }
+    }
+
+    /**
+     * Post-scoped-refresh timestamp reconcile. Stamps the entity-family Types with their t0
+     * (pre-fetch) remote values — factually current, since the scoped refresh just reloaded them
+     * and t0 precedes the read. The 'All Entity Metadata' rollup (which gates the whole graph in
+     * {@link LocalMetadataObsolete}) is stamped ONLY when every NON-entity type is individually
+     * current vs t0 — if a Roles/Queries/etc. change is pending, a genuine full refresh is due and
+     * must not be masked. Comparison semantics mirror LocalMetadataObsolete exactly
+     * (trim+lowercase Type match, Date.getTime() equality, strict RowCount).
+     */
+    private reconcileScopedRefreshTimestamps(t0Remote: MetadataInfo[] | null): void {
+        const local = this._latestLocalMetadataTimestamps;
+        if (!t0Remote || !local || local.length === 0) return;
+        const family = new Set(ProviderBase._entityFamilyTimestampTypes.map(t => t.trim().toLowerCase()));
+        const typeEq = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+        const entryCurrent = (l: MetadataInfo, r: MetadataInfo): boolean => {
+            if (!l.UpdatedAt && !r.UpdatedAt) return true;
+            if (!l.UpdatedAt || !r.UpdatedAt) return false;
+            return new Date(l.UpdatedAt).getTime() === new Date(r.UpdatedAt).getTime() && l.RowCount === r.RowCount;
+        };
+        const upsert = (r: MetadataInfo) => {
+            const idx = local.findIndex(l => typeEq(l.Type, r.Type));
+            if (idx >= 0) local[idx] = { ...r }; else local.push({ ...r });
+        };
+        for (const r of t0Remote) {
+            if (family.has(r.Type.trim().toLowerCase())) upsert(r);
+        }
+        const nonEntityStale = t0Remote.some(r => {
+            const t = r.Type.trim().toLowerCase();
+            if (t === 'all entity metadata' || family.has(t)) return false;
+            const l = local.find(x => typeEq(x.Type, r.Type));
+            return !l || !entryCurrent(l, r);
+        });
+        if (!nonEntityStale) {
+            const roll = t0Remote.find(r => r.Type.trim().toLowerCase() === 'all entity metadata');
+            if (roll) upsert(roll);
         }
     }
 
