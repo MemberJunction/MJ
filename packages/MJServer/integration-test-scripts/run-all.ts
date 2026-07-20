@@ -53,6 +53,7 @@ const GROUPS: { Tier: string; Gate: string; Enabled: boolean; Scripts: string[] 
             'ai-skills-tests.ts',
             'user-routines-tests.ts',
             'predictive-studio-tests.ts',
+            'conversation-compaction-tests.ts',
             'metadata-consistency-tests.ts',
             'cache-gauntlet-tests.ts',
         ],
