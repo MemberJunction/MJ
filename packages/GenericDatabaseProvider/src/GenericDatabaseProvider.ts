@@ -2640,6 +2640,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 ? ProjectRowsToFields(updatedRows as Record<string, unknown>[], callerFields) as T[]
                 : updatedRows;
 
+            // Never OFFER a differential the client is structurally unable to merge.
+            //
+            // The client refuses a delta merge for MaxRows/StartRow (subset) and aggregate-bearing
+            // slots — the row window and the aggregate are not derivable from a row delta in JS.
+            // But its decline path THROWS, inside a Promise.all over the whole batch, with no
+            // refetch available (a differential reply carries only a delta). So one such slot
+            // fails the caller's entire RunViews call.
+            //
+            // Verified reachable, not theoretical: a CacheLocal slot with `Aggregates`, and one
+            // with a merely DEFENSIVE `MaxRows: 50` over 3 rows (a cap that does not even
+            // truncate), both threw after a single external change. A returning browser with a
+            // persistent IndexedDB slot is the ordinary path in.
+            //
+            // Deciding it HERE is the right seam: the server is the only party that can still
+            // produce full data at this point, and runFullQueryAndCacheResult is the same
+            // fallback the implied-deletes validation above already uses. The client then takes
+            // its 'stale' branch, which carries a complete result set.
+            const isSubsetShape = (params.MaxRows != null && params.MaxRows > 0)
+                || (params.StartRow != null && params.StartRow > 0);
+            const hasAggregateShape = !!params.Aggregates && params.Aggregates.length > 0;
+            if (isSubsetShape || hasAggregateShape) {
+                LogStatus(`Differential skipped for ${entityInfo.Name}: ${isSubsetShape ? 'subset (MaxRows/StartRow)' : 'aggregate-bearing'} params cannot be merged from a delta. Falling back to full refresh.`);
+                return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
+            }
+
             return {
                 viewIndex,
                 status: 'differential',

@@ -91,6 +91,11 @@ export type ClassResolutionResult<T> = {
 export class ClassFactory {
     private _registrations: ClassRegistration[] = [];
 
+    /** Per-base fallback-warning counter, backing the volume cap in reportResolutionFailure. */
+    private _fallbackCountByBase = new Map<string, number>();
+    /** Fallback warnings emitted per base class before summarising and going quiet. */
+    private static readonly MAX_FALLBACK_REPORTS_PER_BASE = 3;
+
     /**
      * Memoized results of {@link GetRegistration}, keyed by `baseClassName|normalizedKey`.
      * GetRegistration is on extremely hot paths (every `CreateInstance`, including one call
@@ -334,7 +339,21 @@ export class ClassFactory {
         // ── Fallback path: the requested key did not resolve to any registered subclass. ──
         const requiresSubclass = ClassRequiresSubclass(baseClass);
         const reason = this.describeResolutionFailure(baseClass, key, requiresSubclass);
-        this.reportResolutionFailure(baseClass, key, requiresSubclass, reason);
+
+        // Only REPORT when the caller actually asked for something specific.
+        //
+        // A null/empty key means "give me the default implementation for this base" — landing on
+        // the base is the INTENDED outcome, not a failed lookup, so warning about it is a false
+        // positive. This fired on every `CreateInstance(LoggerBase, null)` and made the
+        // instrumentation noisy enough to obscure real resolution failures during a full repo
+        // build, which is the opposite of what it was added for.
+        //
+        // A marker-bearing base is always reported: there, landing on the base IS an error
+        // regardless of whether a key was supplied.
+        const keyWasSupplied = key !== null && key !== undefined && String(key).trim().length > 0;
+        if (keyWasSupplied || requiresSubclass) {
+            this.reportResolutionFailure(baseClass, key, requiresSubclass, reason);
+        }
 
         if (requiresSubclass) {
             return { Resolved: false, Instance: null, Reason: reason };
@@ -378,6 +397,30 @@ export class ClassFactory {
      * A captured stack is included so the offending call site is identifiable.
      */
     private reportResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean, reason: string): void {
+        // Volume cap, PER BASE CLASS (not per base+key).
+        //
+        // The existing dedup keys on base+key, which is useless for callers whose key varies per
+        // item: every EntityField hydration passes '<entity>.<field>', so a full repo build
+        // emitted thousands of distinct warnings and buried the real ones. Suppressing by
+        // "base has no registrations" was tried and REVERTED — that is exactly the B34/B35 shape
+        // (a tree-shaken registration leaves zero registrations), so it would hide the case this
+        // instrumentation exists to catch.
+        //
+        // Capping keeps the signal — you still learn which base is falling back, with examples —
+        // while bounding the output. Marker-bearing bases are never capped: those are hard errors.
+        if (!requiresSubclass) {
+            const baseName = (baseClass as NamedClass).name;
+            const seen = (this._fallbackCountByBase.get(baseName) ?? 0) + 1;
+            this._fallbackCountByBase.set(baseName, seen);
+            if (seen === ClassFactory.MAX_FALLBACK_REPORTS_PER_BASE + 1) {
+                console.warn(`ClassFactory: further '${baseName}' fallback warnings suppressed (${ClassFactory.MAX_FALLBACK_REPORTS_PER_BASE} shown). This base resolves to itself by design on hot paths such as EntityField hydration.`);
+                return;
+            }
+            if (seen > ClassFactory.MAX_FALLBACK_REPORTS_PER_BASE) {
+                return;
+            }
+        }
+
         const logKey = `${(baseClass as NamedClass).name}|${key == null ? '' : key.trim().toLowerCase()}`;
         if (this._reportedResolutionFailures.has(logKey)) return;
         this._reportedResolutionFailures.add(logKey);

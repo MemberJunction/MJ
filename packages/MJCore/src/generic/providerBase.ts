@@ -2347,6 +2347,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 if (!entity) {
                     throw new Error(`Entity ${param.EntityName} not found in metadata`);
                 }
+                // NOTE (R2-GAP-1, logged as B44): widening to an explicit full field list makes
+                // the client fingerprint carry `f:<every field>` rather than `f:*`, so the cache
+                // classifier reads the slot as a NARROW projection and stops maintaining it in
+                // place. entity_object is the BaseEngine default, so this costs in-place
+                // maintenance on the client's most common slot shape. It is a PERF gap only —
+                // the slot is invalidated and refetched, never served wrong.
+                //
+                // Deliberately NOT "fixed" by clearing Fields here: that would change what the
+                // provider FETCHES, not just how the slot is keyed, and I could not verify the
+                // downstream fetch behavior tonight. The safe fix is to normalize a full-coverage
+                // field list to `*` in the FINGERPRINT only, which cannot affect fetching.
                 param.Fields = entity.Fields.map(f => f.Name);
             }
 
