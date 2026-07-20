@@ -39,20 +39,27 @@
  * MUTATION TIER — every check creates and deletes its own `MJ: User Settings` rows, matching the
  * S17/S23 fixture convention. Rows are tagged so a crashed run leaves identifiable debris.
  *
- * ## KNOWN GAP — schema-drift staleness is still not covered live
+ * ## CG6 — schema-drift staleness (post-migration)
  * `isSchemaStaleCacheEntry` rejects a slot whose stored `schemaHash` no longer matches the
  * entity's current field list — the post-migration case. Verified by hand that slots DO carry a
  * hash (e.g. `MJ: User Settings|_|_|-1|0|_|_|mssql://…` → `schemaHash: "1bd8ea31"`), and there are
  * 12 unit tests over the mechanism, but there is no LIVE check.
  *
- * An attempt to cover it by poking the stored payload (read the slot, rewrite its `schemaHash`,
- * assert the next read re-executes) was removed rather than shipped: it failed for reasons that
- * did not reproduce cleanly, and a check nobody can explain is worse than an acknowledged gap.
- * A better approach is probably to drive the REAL trigger — add a column via migration + CodeGen
- * and assert a pre-existing slot is rejected — which belongs in a migration-aware harness rather
- * than here. Tracked as a follow-up.
+ * CG6 is currently RED, and legitimately so — it found B38. In-place maintenance
+ * (`UpsertSingleEntity` / `RemoveSingleEntity` → `storeCachedResults`) carries `totalRowCount`
+ * forward but NOT `schemaHash`, so a single save strips the hash and
+ * `isSchemaStaleCacheEntry` (which short-circuits on a missing hash) never fires for that slot
+ * again. Verified: cold read → hash `1bd8ea31`; after one SAVE → `NONE`. Schema-drift protection
+ * therefore covers only slots that have never been written to. This is the SAME class of omission
+ * as #3195, which fixed `totalRowCount` being lost on this exact write path.
+ *
+ * CG6 covers the guard by rewriting the stored `schemaHash` on EVERY slot for the entity and
+ * asserting the next read re-executes. Two earlier attempts drifted only the first slot carrying a hash and
+ * proved nothing — several slots coexist that differ only in trailing fingerprint segments (e.g.
+ * `imr:1` for IgnoreMaxRows), so the read was served from an untouched slot. Drifting all of them
+ * removes that ambiguity.
  */
-import { RunView, Metadata } from '@memberjunction/core';
+import { RunView, Metadata, CacheCategory } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJUserSettingEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '../test-runner';
@@ -61,6 +68,8 @@ import type { NamedCheck, IntegrationCheckContext } from '../check';
 
 const ENTITY = 'MJ: User Settings';
 const TAG = 'mj.cachegauntlet';
+/** RunView slots live in this cache category. */
+const CACHE_CATEGORY = CacheCategory.RunViewCache;
 
 /** The cache maintains asynchronously off BaseEntity events; S17/S23 use the same settle window. */
 const SETTLE_MS = 2000;
@@ -268,6 +277,54 @@ export const CacheGauntletChecks: NamedCheck[] = [
             } finally {
                 await destroy(created);
             }
+        }
+    },
+    {
+        Id: 'cache-gauntlet.CG6',
+        Name: 'CG6 (mutation): ⚠ KNOWN-RED (B38) — a cached slot whose schemaHash no longer matches the entity is rejected, not served',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const rv = new RunView();
+            const params = { EntityName: ENTITY, Fields: ['ID', 'Setting'], ResultType: 'simple' as const };
+
+            // Precondition: the slot must genuinely be served from cache, or "it re-executed after
+            // drift" proves nothing — it would have re-executed anyway.
+            await rv.RunView(params, ctx.User);
+            const hit = await rv.RunView(params, ctx.User);
+            Assert(hit.Success, `warm repeat failed: ${hit.ErrorMessage}`);
+            AssertEqual(hit.ExecutionTime, 0, 'the slot must be served from cache before drift can be shown to reject it');
+
+            // Drift EVERY slot for this entity, not just the first one carrying a hash.
+            // Several coexist that differ only in trailing fingerprint segments (e.g. `imr:1` for
+            // IgnoreMaxRows), and drifting the wrong one silently proves nothing: the read is
+            // served from an untouched slot and the check "fails" for the wrong reason. Two
+            // earlier versions of this check died exactly there.
+            const storage = ctx.Storage;
+            const keys: string[] = await storage.GetCategoryKeys(CACHE_CATEGORY);
+            const candidates = keys.filter((k: string) => k.startsWith(`${ENTITY}|`));
+            Assert(candidates.length > 0, `no cached slot found for '${ENTITY}' (of ${keys.length} slots)`);
+
+            let drifted = 0;
+            for (const k of candidates) {
+                const payload = await storage.GetItem<{ schemaHash?: string }>(k, CACHE_CATEGORY);
+                if (payload?.schemaHash) {
+                    await storage.SetItem(k, { ...payload, schemaHash: `${payload.schemaHash}-DRIFTED` }, CACHE_CATEGORY);
+                    drifted++;
+                }
+            }
+            // If NO slot carries a hash the guard is unreachable by construction
+            // (`isSchemaStaleCacheEntry` short-circuits on a missing hash) — say so, don't pass.
+            Assert(drifted > 0,
+                `none of the ${candidates.length} cached '${ENTITY}' slots carry a schemaHash — schema-drift detection would be unreachable`);
+
+            // A slot whose stored hash no longer matches the entity's field list must be rejected
+            // and the query re-run. This is the post-migration case: rows cached before a column
+            // was added must never be served with the stale column set.
+            const after = await rv.RunView(params, ctx.User);
+            Assert(after.Success, `post-drift read failed: ${after.ErrorMessage}`);
+            Assert((after.ExecutionTime ?? 0) > 0,
+                'a slot whose schemaHash no longer matches the entity was served from cache — post-migration reads would return a stale column set');
+            console.log(`      → drifted ${drifted}/${candidates.length} slots; the stale slot was rejected and re-executed`);
         }
     }
 ];
