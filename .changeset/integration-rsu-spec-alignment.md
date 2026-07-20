@@ -4,7 +4,7 @@
 "@memberjunction/server": minor
 "@memberjunction/integration-schema-builder": minor
 "@memberjunction/scheduling-engine": patch
-"@memberjunction/codegen-lib": patch
+"@memberjunction/codegen-lib": minor
 "@memberjunction/postgresql-dataprovider": patch
 ---
 
