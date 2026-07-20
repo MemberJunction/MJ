@@ -18,6 +18,7 @@ vi.mock('@memberjunction/global', () => {
   }
   return {
     RegisterClass: () => (_target: unknown) => {},
+    RequiresSubclass: () => (_target: unknown) => {},
     MJGlobal: { Instance: { ClassFactory: { GetRegistration: vi.fn() } } },
     UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
     BaseSingleton: MockBaseSingleton,
