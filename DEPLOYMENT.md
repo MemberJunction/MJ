@@ -100,6 +100,14 @@ Check if there are any pending metadata changes (new/updated records in `metadat
    ```bash
    mj sync push --dir ./metadata
    ```
+   > This push includes the inert **"Integration Test" TestType** (it lives in the normal
+   > `metadata/test-types/` tree) — that's fine, it's just a type definition. But **do NOT push
+   > `metadata-optional/integration-test/` here.** That optional sibling root holds the actual
+   > test-only records — the IT01–IT23 Tests, the integration suite, and the RLS principals (three
+   > synthetic `it-*@integration.test` users + the "Integration Test: RLS Scoped Reader" role + its
+   > grant). It is deliberately kept out of `metadata/` so none of it enters the generated
+   > `Metadata_Sync.sql` migration — and thus never reaches production. It exists only for the
+   > Step 4 smoke test.
 6. **Grab the generated SQL** from `metadata/sql_logging/` — find the most recent `MetadataSync_Push_*.sql` file
 7. **Copy it to the migrations folder** and rename using the naming convention:
    ```
@@ -132,7 +140,32 @@ Check if there are any pending metadata changes (new/updated records in `metadat
 #### If no metadata changes:
 - Skip this step. Changesets will determine patch vs minor based on what's already been added.
 
-### Step 4: Check for New Packages
+### Step 4: Run the Full Integration Suite
+
+The database from Step 3 is now at the latest schema **and** metadata, so this is the point in the release where the schema, generated types, and engines should all agree. Run the headless integration suite against that database as a full-stack smoke test that they actually do.
+
+```bash
+# From the repo root — deterministic + mutation + live-model (agent) tiers, all required
+RUN_MUTATION_TESTS=1 RUN_AGENT_TESTS=1 npm run test:integration
+```
+
+- All three tiers below **must pass** before proceeding — set both flags so they run together (the aggregator spawns each suite in its own process and collapses the per-suite results into one exit code):
+  - **Deterministic tier** (always on) — credential-light, self-cleaning fixtures, no LLM cost.
+  - **Mutation tier** (`RUN_MUTATION_TESTS=1`) — exercises real create/update/delete cache-invalidation paths with self-cleaning fixtures.
+  - **Live-model / agent tier** (`RUN_AGENT_TESTS=1`) — runs real agent/prompt executions, so it requires valid model-provider credentials in `.env` and incurs LLM cost.
+- Predictive Studio flows (`PS_INTEGRATION`) are intentionally **not** part of this gate.
+
+> ⚠️ **The suite runs against the compiled packages (`dist/`), not source.** Ensure the repo has been built (`npm run build`) before running — a stale `dist/` can produce spurious failures. Run this only **after** migrations + metadata sync (Step 3) so it exercises the current schema. See [Integration Testing Quickstart](guides/INTEGRATION_TESTING_QUICKSTART.md) for full tier/gating details.
+
+**Optional — seed the RLS fixtures so the multi-user checks execute (instead of skip-as-pass).** The `rls-isolation` deterministic checks (RLS8/9/10) skip-as-pass unless the integration-test principals are present in the DB. To upgrade that coverage from *skipped* to *executed*, push the optional integration root into the **throwaway Step-3 database** before running the suite (this covers the IT tests/suite AND the RLS principals; the TestType itself already came in with the Step-3 `metadata/` push):
+
+```bash
+mj sync push --dir ./metadata-optional/integration-test
+```
+
+> ⚠️ Only against the scratch Step-3 DB — **never a production database.** These are synthetic test accounts (plus MJ-internal test records); that is the entire reason they live outside `metadata/`. Skipping this step keeps the suite green (the RLS checks pass as skips and log the exact command above); seeding it just makes the multi-user isolation checks run for real.
+
+### Step 5: Check for New Packages
 
 **This must be done for every release.**
 
@@ -156,7 +189,7 @@ Follow [NEW_PACKAGE_SETUP.md](NEW_PACKAGE_SETUP.md):
 
 > If you skip this step and a new package exists, the `publish.yml` workflow will fail.
 
-### Step 5: Verify Changesets
+### Step 6: Verify Changesets
 
 Make sure the changeset entries accurately reflect the release:
 
@@ -168,7 +201,7 @@ Make sure the changeset entries accurately reflect the release:
 
 ## Local Build Validation
 
-### Step 6: Full Repo Build
+### Step 7: Full Repo Build
 
 **This must be done before creating the release PR.** A full local build validates compilation across all packages and regenerates bootstrap manifest files that may have drifted across merged PRs.
 
@@ -207,13 +240,13 @@ git push origin next
 
 ## PostgreSQL Migration Conversion
 
-### Step 7: Convert New Migrations to PostgreSQL (`/pg-migrate-v2`)
+### Step 8: Convert New Migrations to PostgreSQL (`/pg-migrate-v2`)
 
 **This must be done for every release that adds new migrations** (including the metadata-sync migration from Step 3).
 
 MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migrations in `migrations/v5/` are authored first; each needs a validated PostgreSQL counterpart (`.pg.sql`) in `migrations-pg/v5/`. Producing those counterparts is now a standard part of the release process, run via the **`/pg-migrate-v2`** skill (the "split-and-regenerate" pipeline) or its successor runbook **`/pg-migrate-experimental`**, which carries the latest field-tested gotchas (converter dedup mutating committed files, workbench memory limits, scheduled-job OOM, `provisioningGuard`, correct `mj_api`/`mj_explorer` workspace names — see the Gotchas section in `.claude/commands/pg-migrate-experimental.md`). Whichever variant runs, the non-negotiables are the same: **the real gate is a clean `mj migrate` on a fresh PG database**, committed `.pg.sql` files are immutable, and no `.needs-hand` files may remain.
 
-> ⚠️ **Do this after the full build (Step 6) and before the release PR (Step 8).** Every new SS migration in this release must have a committed, verified `.pg.sql` counterpart on `next` before the PR is opened — otherwise PostgreSQL deployments of the release are missing migrations.
+> ⚠️ **Do this after the full build (Step 7) and before the release PR (Step 9).** Every new SS migration in this release must have a committed, verified `.pg.sql` counterpart on `next` before the PR is opened — otherwise PostgreSQL deployments of the release are missing migrations.
 
 **What the skill does** (see `.claude/commands/pg-migrate-v2.md` for the full runbook):
 
@@ -232,7 +265,7 @@ MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migra
 
 ## Creating the Release
 
-### Step 8: Create PR from `next` → `main`
+### Step 9: Create PR from `next` → `main`
 
 > **Important:** All changes from the previous steps (metadata migration scripts, new changesets, AI model updates) must already be committed and pushed to `next` before creating this PR.
 
@@ -245,7 +278,7 @@ MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migra
    - `dependency-check.yml` — checks for missing npm dependencies
    - `claude.yml` — reviews migration files for hardcoded UUIDs
 
-### Step 9: Merge the PR
+### Step 10: Merge the PR
 
 Once all checks pass, merge the PR into `main`.
 
@@ -255,21 +288,21 @@ Once all checks pass, merge the PR into `main`.
 
 Merging to `main` triggers a chain of automated workflows. Monitor each one.
 
-### 9a. `publish.yml` — Build & Publish Packages
+### 10a. `publish.yml` — Build & Publish Packages
 
 **Triggered by:** push to `main`
 
 This workflow:
 1. Runs migration tests against a fresh SQL Server container
 2. Validates package-lock.json case sensitivity
-3. Validates all `@memberjunction/*` packages exist on npm (see Step 4)
+3. Validates all `@memberjunction/*` packages exist on npm (see Step 5)
 4. Determines version bump (minor if new migrations, patch otherwise)
 5. Builds all packages
 6. Publishes to npm via OIDC
 7. Tags the release
 8. **Auto-merges `main` back into `next`** and updates lock files
 
-### 9b. `docker.yml` — Build & Publish Docker Images
+### 10b. `docker.yml` — Build & Publish Docker Images
 
 **Triggered by:** `publish.yml` completion
 
@@ -279,7 +312,7 @@ Builds and pushes multi-platform Docker images (`linux/amd64`, `linux/arm64`):
 
 > **Known issue:** This workflow sometimes fails because it tries to install the newly published npm packages before they've fully propagated on the npm registry. If it fails, **re-run the failed job** — it usually succeeds on the second attempt.
 
-### 9c. `docs.yml` — Update Package Documentation
+### 10c. `docs.yml` — Update Package Documentation
 
 **Triggered by:** `publish.yml` completion
 
@@ -297,7 +330,7 @@ Builds TypeDoc documentation and deploys to GitHub Pages.
 
 ## Post-Release Updates
 
-### Step 10: Update MJ Documentation Site
+### Step 11: Update MJ Documentation Site
 
 Go to [ReadMe Dashboard](https://dash.readme.com/):
 
@@ -308,7 +341,7 @@ Go to [ReadMe Dashboard](https://dash.readme.com/):
 
 > **Note:** The legacy per-version distribution zip (`Distributions/MemberJunction_Code_Bootstrap.zip`) has been retired. `mj install` now sparse-fetches and assembles the project from the tagged source on demand, so there is no longer a version-specific zip URL to update each release.
 
-### Step 11: Update Changelog
+### Step 12: Update Changelog
 
 **Wait until ALL of the following are complete before saving:**
 - [ ] npm packages published
@@ -358,6 +391,11 @@ mj migrate
 
 # Push metadata to database
 mj sync push --dir ./metadata
+
+# Push the optional integration metadata (IT tests/suite + RLS principals; the TestType
+# itself lives in normal metadata/) —
+# TEST/CI databases ONLY, never production (kept out of ./metadata on purpose)
+mj sync push --dir ./metadata-optional/integration-test
 
 # SQL logs appear in
 metadata/sql_logging/MetadataSync_Push_*.sql

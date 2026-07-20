@@ -29,7 +29,7 @@ import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
  * ```
  */
 @RegisterClass(BaseAction, "Find Candidate Agents")
-export class FindBestAgentAction extends BaseAction {
+export class FindCandidateAgentsAction extends BaseAction {
     // Singleton initialization removed - AIEngine handles embedding lifecycle
 
     /**
