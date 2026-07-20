@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T169 - Human Review Queue Submission",
+    "Description": "Exercises the accordion-based review-queue write path (SubmitReview → instrumentation submitFeedback) with reason badges — a distinct human-in-the-loop form, different code from the Runs detail-panel feedback form.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher next to the logo, choose \"Testing\", then click the \"Review\" tab. The Human Review view shows a KPI summary and a Review Queue. If pending items exist, expand one accordion item, pick a Rating number, click a correctness button (Correct or Incorrect), optionally type a note, then click Submit and verify the item is accepted (it leaves the queue or shows a submitted state). If the queue is empty, confirming the \"All caught up!\" empty state renders correctly is also success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Review tab shows a KPI summary row and a Review Queue (with pending accordion items OR an 'All caught up!' empty state)",
+        "If items exist: expanding one reveals a rating scale, correctness buttons, and a notes field, and Submit becomes enabled once a rating/correctness is chosen",
+        "Submitting removes/updates the item, or the empty-state path renders cleanly",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,testing"
+  },
+  "primaryKey": {
+    "ID": "A73D5137-A99D-4FFD-BB55-8835E40735B1"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.701Z",
+    "checksum": "fa0e6548630da1b3a1e49f98d81db0c9cef8aeee62ca54bd93dd5506b8b658cf"
+  }
+}

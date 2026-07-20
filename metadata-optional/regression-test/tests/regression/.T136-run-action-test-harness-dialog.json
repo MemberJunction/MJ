@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T136 - Run Action Test Harness Dialog",
+    "Description": "The action execution harness (parameter collection + Execute + result surface) — a unique, side-effect-bearing surface deliberately kept user-driven; no other test opens it.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, switch to the 'Actions' application, and open the 'Explorer' nav item. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Find an action whose status is 'Active' (its card shows a green/Active chip; the Run/play button is enabled only for Active actions). Click that action's Run button (a play icon). A test-harness dialog should open showing a 'Test Harness for ...' title, an Input Parameters section, and an 'Execute Action' button. Verify the harness renders with its parameter inputs and the Execute button. Seeing the harness dialog render is success — do NOT click 'Execute Action' (running has real side effects). Close the dialog when done.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "An Active action exposes an enabled Run (play) button; the harness dialog opens when clicked",
+        "The dialog shows a Test Harness title, an Input Parameters section, and an 'Execute Action' button",
+        "The dialog can be closed and returns to the Explorer",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,actions"
+  },
+  "primaryKey": {
+    "ID": "C96643E0-3F3D-4622-B70E-93B3C4D180C4"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.705Z",
+    "checksum": "c79a8f6f2986bea431d8923de1cdc587fc086a29d567a2e40af6114f0c95175a"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T264 - Vectors AI Suggest Document Dialog",
+    "Description": "Exercises the AI entity-document suggestion flow (OpenSuggestDialog/RunSuggestion) with its entity picker and use-case selection — a distinct AI-authoring dialog separate from the sync table and edit panel.",
+    "InputDefinition": {
+      "goal": "In the Knowledge Hub 'Vectors' screen (via application switcher then Vectors), click the 'Suggest Document' button in the Entity Sync Status panel header. Success is that an 'AI Document Suggestion' slide-in panel opens with an entity picker (searchable dropdown) and a use-case selector (Duplicate Detection / Search / Classification), plus a 'Generate Template' button. Pick an entity and choose a use case; you may click Generate to confirm it enters a 'Generating with AI…' state, but you do NOT need to wait for or save the result. Confirm the panel renders its controls and can be closed. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking 'Suggest Document' opens an AI Document Suggestion panel with an entity picker and use-case options",
+        "Selecting an entity/use-case and (optionally) clicking Generate produces a generating state or a suggested-template result; the panel can be closed",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,knowledge-hub"
+  },
+  "primaryKey": {
+    "ID": "A0C70B15-691B-4B98-BFE3-5A3F53C0E8FD"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.447Z",
+    "checksum": "58699579ed9214fa6f9eb692ccdb4844ddd1ee49174cfd25da3dbd4bdb1233d3"
+  }
+}

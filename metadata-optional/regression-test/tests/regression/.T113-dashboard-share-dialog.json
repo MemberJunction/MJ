@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T113 - Dashboard Share Dialog",
+    "Description": "Exercises the openShareDialog gate (CanShare) and the dedicated dashboard-share-dialog component (user search, owner row, per-user permission checkboxes) — a bespoke sharing UI not covered by any generic form or the read-only agent share tools.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo, open Data Explorer, then the Dashboards section. Create or open a dashboard you own so you can view it, then in the view toolbar (top-right) click the Share button (a person-plus / share icon). A share dialog titled 'Share \"<dashboard name>\"' should open with a 'Add people by name or email...' search box, a 'People with access' section listing the Owner, and per-person permission toggles (view/edit/delete/share). Success is the share dialog rendering with these controls — you do NOT need to actually add a user or save. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A Share action is available in the dashboard view toolbar for an owned dashboard",
+        "Clicking it opens a share dialog with a people search input and a 'People with access' section showing the Owner",
+        "Permission toggle controls (view/edit/delete/share) and Save/Cancel buttons are visible in the dialog",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "BDE4C424-0B0D-4E5A-AEE4-B8F0CD9AD732"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.009Z",
+    "checksum": "f930663fd0ec73be5bb4a540f0364bada07d40104ec3017673ae4a9be6797077"
+  }
+}

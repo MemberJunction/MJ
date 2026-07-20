@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T347 - Diff Viewer Run Comparison",
+    "Description": "Triggers RunDiff/computeDiffToCurrentState which compares snapshot RecordChangeIDs against live data and builds the summary stats + entity groups, gated by CanRunDiff — the core diff engine of this surface.",
+    "InputDefinition": {
+      "goal": "In the Version History app → Diff Viewer (left nav), keep 'Label vs Current' mode. If the 'Compare label' dropdown has labels, select one and click Compare; confirm a diff summary with Added / Removed / Modified / Unchanged counts renders (or a 'No differences found' state). If the dropdown is empty, confirm the Compare button stays disabled and the 'Select labels to compare' prompt is shown. Either responsive outcome is success. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Selecting a label and clicking Compare produces a diff summary with Added/Removed/Modified/Unchanged counts, or a 'No differences found' state",
+        "If no labels exist, the Compare button is disabled and a 'Select labels to compare' prompt is shown",
+        "The comparison workflow responds and completes without hanging indefinitely",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,version-history"
+  },
+  "primaryKey": {
+    "ID": "2795BFF4-3F7F-4BE8-A52F-B14AC340FC01"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.378Z",
+    "checksum": "3794ced04477851fc993b74e7016c5ff57210e12de1172756715ae15a6e99742"
+  }
+}

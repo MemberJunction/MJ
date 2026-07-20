@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T214 - Developer Tools Event Monitor Pause and Clear Controls",
+    "Description": "Exercises the live-capture control state machine (TogglePause/Clear + LIVE/PAUSED indicator), a deterministic behavior no other inspector has and not covered by any render-only test.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo and choose the Admin app. Open the 'Developer Tools' section, then in its left sub-navigation click 'Event Monitor'. Observe the live status indicator reads 'LIVE' (capturing events) and a 'Total captured' counter. Click the 'Pause' button and confirm the status flips to 'PAUSED' (Capture suspended) and the button now offers 'Resume'; click 'Resume' to return to LIVE. Then click the 'Clear' button and confirm the in-buffer count resets. Success is these capture controls responding correctly. Pages can take 10-30s to load in this resource-constrained environment - wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Event Monitor shows a LIVE/PAUSED status and captured-event stats",
+        "Clicking Pause switches the status to PAUSED and the control to Resume (and Resume restores LIVE); Clear resets the buffered-event count",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "6991B076-CCA1-45D1-9B0D-C40631DA5A8E"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:00.243Z",
+    "checksum": "5b514740e84411e9eba5f99312e845e1b116ff0b0d876136b91a7a79ac323214"
+  }
+}

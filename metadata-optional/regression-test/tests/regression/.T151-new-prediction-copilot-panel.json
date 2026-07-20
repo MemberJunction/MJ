@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T151 - New Prediction Copilot Panel",
+    "Description": "Exercises the docked Model Dev Agent co-pilot embed (mj-conversation-chat-area inside the Predictions resource) and its open/close chrome — distinct from the main chat overlay and from the Studio copilot.",
+    "InputDefinition": {
+      "goal": "In the Predictive Studio app (open via the application switcher dropdown next to the logo, scroll if needed), on the 'Predictions' door, click the '+ New prediction' button (or the 'Build your first prediction' button in the empty state). Pages can take 10-30s to load — wait, don't navigate away. Success is a docked co-pilot chat panel sliding in on the right, titled 'New prediction' with a Model Development Agent conversation area and a message composer. You do NOT need to send a message — seeing the docked agent chat panel render is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking '+ New prediction' opens a docked chat panel titled 'New prediction' on the right side",
+        "The panel contains a conversation/message input area for the Model Development Agent",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,predictive-studio"
+  },
+  "primaryKey": {
+    "ID": "67B8AE15-541B-4CCF-8F5E-DD54D81B628C"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.149Z",
+    "checksum": "f8deda3c6b69c1377b98d056168bc30675b473b7fec2698b629c3b6a8b0bfbc1"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T320 - Scheduling Activity Time Range Chips",
+    "Description": "Tests the OnTimeRangeChange chip control that re-drives the service date range and reloads executions/trends — a scheduling-specific time-window selector with no analogue in the generic grid tests.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to the 'Scheduling' application, then open its 'Activity' section. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. In the toolbar there are time-range chips: '24 Hours', '7 Days', '30 Days', '90 Days' (7 Days is active by default). Click a different range chip (e.g. '30 Days') and verify the chip becomes the active/selected one and the activity view reloads for that window (the executions list and/or trends chart refresh). Seeing the selected chip change and the view respond is success — the exact number of rows is irrelevant and an empty state is acceptable.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Time-range chips (24 Hours / 7 Days / 30 Days / 90 Days) are visible with one marked active",
+        "Clicking a different range makes it the active chip and the activity content refreshes for that window (rows/trends update or a valid empty-state shows)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,scheduling"
+  },
+  "primaryKey": {
+    "ID": "9A5B05FD-71E8-4F05-A76C-29DB6F96D9F0"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.778Z",
+    "checksum": "5c8d337cb15410186110299be3fdb374c37e0d853523a98782e8ceae5e9d06bc"
+  }
+}

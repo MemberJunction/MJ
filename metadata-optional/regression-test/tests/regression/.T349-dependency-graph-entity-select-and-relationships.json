@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T349 - Dependency Graph Entity Select and Relationships",
+    "Description": "Exercises entity-relationship derivation from live metadata (buildReferencedByList/buildDependsOnList/countReferencedBy) on SelectEntity — fully data-agnostic since it reads always-present entity metadata, not seed rows.",
+    "InputDefinition": {
+      "goal": "In the Version History app → 'Dependency Graph' (left nav), confirm stat badges (entities / with dependents / relationships) and a scrollable entity list. Select an entity from the list (use the filter box to find a common one like 'Users' if needed) and confirm the detail panel populates with 'Referenced By' and 'Depends On' sections listing related entities (one side may show a valid 'no relationships' state). Pages can take 10-30s to load — wait, don't navigate away. This works regardless of stored data.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Dependency Graph shows entity stat badges and a list of entities",
+        "Selecting an entity populates a detail panel with 'Referenced By' and 'Depends On' sections",
+        "Each section lists related entities or shows a valid 'no relationships' empty state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,version-history"
+  },
+  "primaryKey": {
+    "ID": "D2C019A1-B34B-4CDE-908C-A2054639F7A4"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.408Z",
+    "checksum": "55e146839453a7ececd8a7bc0bc28a2b0bcc80745a0fa354fba7c2f1d3642a2a"
+  }
+}

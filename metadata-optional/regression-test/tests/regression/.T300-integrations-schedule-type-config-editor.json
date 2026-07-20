@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T300 - Integrations Schedule Type Config Editor",
+    "Description": "Exercises the per-card schedule editor's reactive type-switching (SetScheduleType/SetInterval/SetCronExpression + GetCronDescription + HasChanges gating the Save button) — a bespoke in-card config editor unique to Schedules.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, find and open the Integrations application, and open its 'Schedules' section. On a schedule card, ensure the 'Auto-sync' toggle is on so the schedule config controls are visible, then click the 'Interval' type pill and confirm interval preset buttons (e.g. 15m/hourly) plus a custom-minutes input appear. Then click the 'Cron' type pill and confirm cron preset buttons and a cron expression input appear, with a human-readable cron description shown when an expression is set. Note that changing config surfaces a 'Save' button on the card. You do NOT need to click Save. Seeing the schedule-type pills switch the config UI reactively is success. If no schedules exist, the 'No integrations found' empty state is acceptable. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "With Auto-sync enabled, selecting the Interval pill reveals interval preset buttons and a custom-minutes input",
+        "Selecting the Cron pill reveals cron preset buttons and a cron expression input (with a description when an expression is present)",
+        "A Save button appears once the schedule configuration is changed",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,integrations"
+  },
+  "primaryKey": {
+    "ID": "B1241A3E-43AB-40C3-848F-4885E4BBDB81"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.190Z",
+    "checksum": "ace839543c98e72a89c330bc2da1754c1b1ff385360e9ac4177b26721bf34b2e"
+  }
+}

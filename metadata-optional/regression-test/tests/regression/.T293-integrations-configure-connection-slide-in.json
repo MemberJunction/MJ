@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T293 - Integrations Configure Connection Slide-In",
+    "Description": "Exercises the OpenEditPanel slide-in with its own name/status/credential editor (EditName/EditIsActive/EditCredentials) — a bespoke panel distinct from the generic entity form and the wizard.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, find and open the Integrations application, and open its 'Integrations' (Connections) section. On a connection card, click the 'Configure' button in the card footer. Verify a slide-in edit panel opens from the side titled 'Configure Integration' with a 'Connection Name' text field, a 'Status' Active/Inactive toggle, a 'Credential' section, and read-only Integration/Company fields, plus 'Save Changes' and 'Cancel' buttons. Click Cancel and confirm the panel closes without changes. Seeing the edit slide-in render and close is success — you do NOT need to save. If no connections exist, a clear empty state is acceptable. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking Configure opens a slide-in panel titled 'Configure Integration' with a Connection Name field and a Status toggle",
+        "The panel shows a Credential section and Save Changes / Cancel buttons",
+        "Clicking Cancel closes the panel",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,integrations"
+  },
+  "primaryKey": {
+    "ID": "74C10AB3-AE57-4FDD-AD1C-1FE2F6165902"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.089Z",
+    "checksum": "ac4193116ecedf8f50c59e2bc72652c11deda99fb88e650f5ed61bc4117f60a0"
+  }
+}

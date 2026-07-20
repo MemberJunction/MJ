@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T222 - Resource Access Lookup Requires Type And ID",
+    "Description": "Exercises the client-side required-field guard in OnLookupResource ('Resource type and resource ID are both required.') before any engine call. This is a distinct validation-block behavior, data-agnostic, and separate from the successful-lookup path.",
+    "InputDefinition": {
+      "goal": "You are logged in at http://localhost:4200. Open the Permissions app via the application switcher next to the logo, then click 'Resource Access' in the left nav. Pages can take 10-30s to load — wait, don't navigate away. Without filling in the 'Resource Type:' combobox and 'Resource ID:' field (leave at least one blank), click the 'Lookup' button. Success is that the lookup is BLOCKED with a validation error message stating that resource type and resource ID are both required (an error alert appears at the top of the page) — the grantee results table does NOT appear. Seeing the guard prevent the empty lookup with a clear message is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking 'Lookup' with a blank Resource Type and/or Resource ID surfaces a validation error message indicating both fields are required",
+        "No grantee results table is shown for the empty/invalid lookup",
+        "No error messages, blank screens, or crash pages (the validation notice is expected and is not a crash)"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,permissions"
+  },
+  "primaryKey": {
+    "ID": "509D0B75-1D81-4011-9B66-C5CF02CD75AC"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:00.450Z",
+    "checksum": "7366b8e9275fe3bce798efecc2227b578b35e674be9d4ed3cd3192904fd39f77"
+  }
+}

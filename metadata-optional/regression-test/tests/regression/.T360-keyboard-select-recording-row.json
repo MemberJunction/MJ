@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T360 - Keyboard Select Recording Row",
+    "Description": "Tests the accessibility keyboard-activation path OnRowKeydown() (Enter/Space -> SelectSession) on the role=option/tabindex=0 list rows — a distinct interaction handler from the mouse (click) selection path.",
+    "InputDefinition": {
+      "goal": "In the 'Realtime Recordings' application (reach it via the application switcher dropdown next to the logo), wait for the recordings list to load — pages can take 10-30s here, so wait and don't navigate away. If at least one recording row is present, use the keyboard to interact: press Tab to move focus onto a recording row in the list (rows are keyboard-focusable list options), then press Enter (or Space) to activate it. Success is that keyboard activation selects the recording and the right pane begins loading/showing its playback (player or 'Loading recording...'). If the list is empty, the empty state is an acceptable pass. Do NOT rely on clicking with the mouse for the activation step.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A recording row can receive keyboard focus (via Tab) and pressing Enter or Space selects it — the right pane responds by loading/showing playback (player, transcript, or a loading indicator)",
+        "OR, if no recordings exist, a clear empty state is shown and the test passes",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,realtime"
+  },
+  "primaryKey": {
+    "ID": "12BB42DD-E290-4537-9135-6BC355D6E1F8"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.671Z",
+    "checksum": "ffbb624041c4cfb364c0af56195a9714be97a9742abc367630035ab5fe197f85"
+  }
+}

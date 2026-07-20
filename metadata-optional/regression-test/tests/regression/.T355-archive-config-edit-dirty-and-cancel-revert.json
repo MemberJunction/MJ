@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T355 - Archive Config Edit Dirty and Cancel Revert",
+    "Description": "Exercises the custom component's dirty-tracking + Cancel() revert (re-clones the original from Configs and reloads its entities) — a bespoke discard path distinct from the generic entity form's discard.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and select 'Archiving'. On the 'Configuration' tab, select an existing configuration card so its detail panel loads. Change the value in the 'Name' text field (type some extra characters). Then click the 'Cancel' button in the action bar at the bottom of the detail panel. Success is that the Name field reverts back to its original saved value (your edit is discarded) — nothing is persisted. If there are no existing configurations to select, seeing the 'No configurations found' empty state is acceptable. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "After editing the Name field and clicking Cancel, the Name reverts to its original value (the edit is discarded)",
+        "No save-success message appears and the detail panel remains usable (or a valid 'No configurations found' empty state is shown when there is no data)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,archiving"
+  },
+  "primaryKey": {
+    "ID": "B72705A1-784C-45B1-9071-4DA14418D1E5"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.586Z",
+    "checksum": "c32694a8e7da91dcfe24f227cb05f461d448f7c04152e5a350c1ab9ac0455f8c"
+  }
+}

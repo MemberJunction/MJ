@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T221 - Resource Access Domain Switch Populates Resource Types",
+    "Description": "Exercises OnDomainChanged -> loadResourceTypesForDomain, which repopulates the ResourceTypes list from PermissionEngine.GetResourceTypes for the newly chosen domain and clears an invalid ResourceTypeInput. This domain->resource-type dependency is unique to Resource Access and has no analog in the other tabs.",
+    "InputDefinition": {
+      "goal": "You are logged in at http://localhost:4200. Open the Permissions app via the application switcher next to the logo, then click the 'Resource Access' item in the left nav. Pages can take 10-30s to load — wait, don't navigate away. The surface shows a 'Domain:' dropdown, a 'Resource Type:' combobox, and a 'Resource ID:' text input. Open the 'Domain:' dropdown and select a different permission domain. Success is that the 'Resource Type:' combobox RESPONDS to the domain change — its selectable options update to that domain's resource types (open the combobox to confirm it lists options, or note it auto-fills a single type), and any previously-typed resource type that doesn't belong to the new domain is cleared. Seeing the combobox react to the domain selection is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Resource Access surface renders with Domain dropdown, Resource Type combobox, and Resource ID input",
+        "Changing the Domain selection updates the Resource Type combobox options (or auto-selects a single type / clears a now-invalid prior value)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,permissions"
+  },
+  "primaryKey": {
+    "ID": "23820F34-99B6-4EC7-98AC-20EC0E44B48C"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:00.432Z",
+    "checksum": "de71da65d722805832517d90570fc1ce069d647dad4d3c6c832183f2f99170c5"
+  }
+}

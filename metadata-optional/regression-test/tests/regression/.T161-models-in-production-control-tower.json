@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T161 - Models in Production Control Tower",
+    "Description": "Exercises the PSProduction reactive control tower (ObserveProperty-driven model list + deployment-state derivation + on-demand run history) — distinct from the immutable-model Registry panel.",
+    "InputDefinition": {
+      "goal": "In the Predictive Studio app, open the 'Models' door and select the 'Models in Production' section. Pages can take 10-30s to load — wait, don't navigate away. Success is the production control tower rendering: a KPI strip (Published / Scheduled / Bound / Idle counts), a list of published models each with a deployment-state badge (Bound / Scheduled / Idle), and on selecting one, a Deployment detail card plus a Run history section. If no published models exist, the 'No models in production yet' empty state is a pass. You do NOT need to run or schedule a model.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Either the KPI strip + published-model list with deployment-state badges + deployment detail renders, OR the 'No models in production yet' empty state renders",
+        "When a published model is selected, its deployment status and a run-history section are shown",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,predictive-studio"
+  },
+  "primaryKey": {
+    "ID": "4038E7BC-DBB3-4FE4-8912-1C3CA7C5BCBF"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.439Z",
+    "checksum": "9237d2262cbc391f71bcd5b67740147f10de844c8ca86367441b32593d73def6"
+  }
+}

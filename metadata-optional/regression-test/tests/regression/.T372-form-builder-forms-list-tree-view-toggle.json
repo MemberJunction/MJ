@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T372 - Form Builder Forms List Tree View Toggle",
+    "Description": "Exercises the FormsViewMode 'list' vs 'tree' branch (treeGroups schema/entity grouping) — a distinct rendering path from the flat forms list.",
+    "InputDefinition": {
+      "goal": "In Component Studio → Form Studio, find the view-mode toggle button in the Forms rail header (a list/folder-tree icon, tooltip 'Switch to tree view (Schema → Entity → Form)'). Click it to switch the forms list from the flat list into the grouped tree view. Verify the list re-groups by Schema → Entity → Form (schema headers with database icons, entity sub-groups with per-entity form counts) — or, if there are no forms, that a clean empty state is shown. Toggle back to the flat list to confirm it round-trips. Pages can take 10-30s to load — wait, don't navigate away. Seeing the list restructure between flat and tree layouts is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking the forms-list view toggle switches between the flat list and a Schema → Entity → Form grouped tree",
+        "The tree view shows schema group headers and entity sub-groups with form counts (or a valid empty state if no forms exist)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,component-studio"
+  },
+  "primaryKey": {
+    "ID": "86CCCFB7-3081-4890-AE3D-C6118CB9F57C"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.941Z",
+    "checksum": "357f4fc4cd9a8b14d2a87e00d6d5460bab3c963c03506a19f9d334fe20061109"
+  }
+}

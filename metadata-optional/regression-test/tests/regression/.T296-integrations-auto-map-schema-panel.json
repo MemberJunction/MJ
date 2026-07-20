@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T296 - Integrations Auto-Map Schema Panel",
+    "Description": "Exercises the ToggleAutoMapPanel schema-wide auto-mapping config UI (LoadSchemas + AutoMapDirection) — a distinct toolbar panel separate from the manual Add-Map form.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, find and open the Integrations application, and open its 'Integrations' (Connections) section. Click a connection card body to open its detail view, then click the 'Auto-Map Schema' button in the entity-maps toolbar. Verify an inline panel opens explaining it will auto-map all entities in a schema with 1:1 field mappings, showing a 'Target Schema' dropdown and Pull/Bidirectional/Push direction buttons plus an Auto-Map action and a close (X) button. Do NOT run the auto-map. Seeing the panel render with its schema selector and direction controls is success. If no connection exists, a clear empty state is acceptable. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking Auto-Map Schema opens a panel with a Target Schema dropdown and direction (Pull/Bidirectional/Push) buttons",
+        "The panel presents an Auto-Map action and a close/cancel control",
+        "OR a valid empty state is shown when no connection is available",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,integrations"
+  },
+  "primaryKey": {
+    "ID": "8DE4BF39-F46D-47C3-9752-A92E638CD7E0"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.132Z",
+    "checksum": "d281dd91f086ddbda513ca4668c9e4bfcbe2d4504d19cc165e483b00f66b8fa0"
+  }
+}

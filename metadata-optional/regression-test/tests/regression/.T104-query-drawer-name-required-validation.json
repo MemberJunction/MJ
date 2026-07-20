@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T104 - Query Drawer Name-Required Validation",
+    "Description": "Exercises the drawer's required-field guard (Save [disabled]=\"!DrawerName.trim()\" + DrawerNameError) — a validation code path specific to the query drawer, distinct from generic entity-form required-field validation.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo, switch to Data Explorer, and open the Queries section. Open the New Query drawer via the '+' (New Query) icon button. Leave the Name field blank and attempt to Save. Success is that the save is BLOCKED — the Save button stays disabled while Name is empty (and/or a 'Name is required' hint appears on the Name field). Then type any Name and confirm the Save button becomes enabled. If the create '+' button is absent due to permissions, report that instead. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "With the Name field empty, the Save button is disabled (and/or a 'Name is required' validation hint is shown)",
+        "After entering a Name, the Save button becomes enabled",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,query"
+  },
+  "primaryKey": {
+    "ID": "6B8B4943-6151-4209-A95A-D20CAA4F419E"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:56.733Z",
+    "checksum": "3b78483846fda315c9201a562b474dbfd098e0a9484e39920dc8a133de5d7436"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T117 - Dashboard Open In New Tab",
+    "Description": "Exercises openInNewTab() → NavigationService.OpenDashboard(forceNewTab) which spawns a standalone dashboard Explorer tab — a distinct navigation/tab-management path from opening a dashboard inline in the browser pane (T104).",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo, open Data Explorer, then the Dashboards section. Open any dashboard so you are in its view mode. In the view toolbar (top-right) there is an 'Open in its own tab' button (an up-right-from-square / external-link icon). Click it and confirm the dashboard opens in its own dedicated Explorer workspace tab (a new tab appears in the tab strip showing the dashboard). Success is the dashboard opening as a standalone Explorer tab. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "An 'open in its own tab' (external-link icon) button is present in the dashboard view toolbar",
+        "Clicking it opens the dashboard in a dedicated Explorer tab (a new tab representing the dashboard appears)",
+        "The opened dashboard renders in the new tab without error",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "3C50858C-A836-43C7-955B-68BBEF0B8EF3"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.100Z",
+    "checksum": "1533b99c4570be2bcd5fb84924f4784e5c158070cea2adebe8866c40258da687"
+  }
+}

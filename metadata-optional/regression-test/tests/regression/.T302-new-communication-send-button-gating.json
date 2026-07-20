@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T302 - New Communication Send Button Gating",
+    "Description": "Tests the canPreview/canSend getter-driven [disabled] validation gating on the compose action buttons — a bespoke gating rule with no equivalent in the generic form's required-field validation.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open the Communication app, then open its New Communication (New Message) section. Observe the 'Preview Audience' and 'Send' buttons in the header before choosing any channel or audience. Success = both buttons are visibly DISABLED in the initial empty state, and they remain disabled while required inputs (channel, audience, recipient field, from-address) are missing — demonstrating the form gates actions until it is valid. You may type into From/Subject/Body and confirm Send stays disabled; do NOT actually send anything. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Preview Audience and Send buttons render and are disabled in the initial empty state",
+        "The buttons stay disabled while required inputs (channel / audience / recipient field) are absent",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,communication"
+  },
+  "primaryKey": {
+    "ID": "B6726DAA-1CE0-4A68-9652-9B1E6505261D"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.223Z",
+    "checksum": "af902243f87dfd97e8762f120f3c5c45338c2d48681ebcb4499aeefc13cc872b"
+  }
+}

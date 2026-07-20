@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T318 - Scheduling Job Delete Confirmation",
+    "Description": "Tests the inline delete-confirmation overlay gate (ShowDeleteConfirm/CancelDelete) on the card — a bespoke confirm UX distinct from the generic form delete.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to the 'Scheduling' application, then open its 'Jobs' section. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. On a job card footer, click the red 'Delete' (trash) button and verify an inline confirmation overlay appears over that card asking 'Delete this scheduled job?' with 'Delete' and 'Cancel' buttons. Click 'Cancel' and verify the overlay dismisses and the card remains (do NOT confirm the deletion — we only want to verify the confirmation gate). If NO job cards exist, the empty state is acceptable instead.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking a card's Delete button shows an inline 'Delete this scheduled job?' confirmation with Delete and Cancel options, OR a valid empty-state if no jobs exist",
+        "Clicking Cancel dismisses the confirmation and the job card is still present (no deletion occurs)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,scheduling"
+  },
+  "primaryKey": {
+    "ID": "A5ACF0FA-358B-4C07-B91C-73C88DDA7E6B"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.744Z",
+    "checksum": "6cdd33655d2bd63286af9484c6cdd3e1715bd4e5312797354b9bd6897bdd9947"
+  }
+}

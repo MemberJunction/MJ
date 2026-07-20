@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T251 - Tags Taxonomy Tree Navigation",
+    "Description": "Exercises the custom taxonomy tree + master/detail governance panel (SelectTaxNode), a bespoke hierarchical UI distinct from generic grids and other left-nav sections.",
+    "InputDefinition": {
+      "goal": "Switch to the Knowledge Hub app via the application switcher dropdown next to the logo, then click 'Tags' in the left nav (fa-sitemap icon). On the Tags screen, ensure the 'Taxonomy' section is active and the 'Tree' sub-tab is selected, then click a tag node in the tree on the left. Success is that selecting a tree node populates the details panel on the right with that tag's stats (Items Tagged, Avg Weight, Children, Depth) and its action toolbar (Add Child / Rename / Move / Merge Into). If the taxonomy is empty, seeing the tree panel render with an empty-state and the 'Add root tag' (+) control is also success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Tags screen loads and the Taxonomy Tree view shows a tree panel plus a details/empty panel",
+        "Clicking a tree node populates the right details panel with tag stats and an action toolbar, OR an empty taxonomy shows the tree + 'Add root tag' control",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,knowledge-hub"
+  },
+  "primaryKey": {
+    "ID": "D3212965-1587-4A96-9F58-F98B6A2D821D"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.227Z",
+    "checksum": "3f8d78c82223d03d95038da01282f79d4d839d2e3a997fa0432a1b781d2ad420"
+  }
+}

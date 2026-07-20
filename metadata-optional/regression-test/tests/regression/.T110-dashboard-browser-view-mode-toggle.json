@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T110 - Dashboard Browser View Mode Toggle",
+    "Description": "Exercises the ViewMode='cards' vs 'list' branch in the generic browser template (two entirely separate render blocks: dashboard-grid vs dashboard-list with a column header row) and the SetViewMode toggle + persistence path — not the generic grid or open/create paths already covered.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open the Data Explorer app, then go to its Dashboards section. In the browser toolbar there is a two-button view toggle on the right (a grid/'grip' icon for Card View and a lines/'list' icon for List View). Click the List View button, then click the Card View button. Success is seeing the dashboard listing re-render in the two different layouts as you toggle (cards laid out in a grid vs. rows with Name / Type / Modified columns), and the active toggle button highlighting the current mode. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Both a Card View and a List View toggle button are visible in the Dashboards toolbar",
+        "Clicking List View re-renders the listing as rows with column headers (Name / Type / Modified), and Card View re-renders it as a grid of cards (either layout may show an empty-state if there are no dashboards)",
+        "The toggle button for the currently-active mode is visually highlighted/selected",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "391A3D49-67A7-415A-A1A4-FB6B36598B5D"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:56.931Z",
+    "checksum": "c1582dfeb02e6e9deb2ff3f03b13bd998f0a785c1914e4720e4cec7576547c11"
+  }
+}

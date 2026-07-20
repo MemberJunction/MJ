@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T124 - AI Analytics Compare Toggle",
+    "Description": "Exercises the toggleable Compare button (compareActive / toggleCompare, gated by FilterBarConfig.ShowCompareToggle) - a stateful toggle distinct from chips, section nav, and popover filters.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the AI application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), then open the Analytics section and select a section whose toolbar shows a 'Compare' button (e.g. Executive Summary or Prompt Runs). Click the 'Compare' toggle button (code-compare icon) to turn comparison mode on, then click it again to turn it off. Pages can take 10-30s to load in this resource-constrained environment - wait, don't navigate away. Success is that the Compare button visibly toggles its selected/pressed state and the view acknowledges comparison mode (a compare/period-over-period affordance appears or the button state changes); if a section has no Compare button, note that and treat the toolbar rendering correctly as acceptable.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A 'Compare' toggle button is present in at least one analytics section's toolbar",
+        "Clicking it toggles its selected state (pressed/active) and toggling again releases it, with the view reflecting comparison mode",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,ai"
+  },
+  "primaryKey": {
+    "ID": "0FF898B7-F0C4-448D-9A68-E28A3C403E68"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.306Z",
+    "checksum": "ab1276d464e2a11bd5ac28bf4fc9e3119d0329e07b17da20f0d719466838617d"
+  }
+}

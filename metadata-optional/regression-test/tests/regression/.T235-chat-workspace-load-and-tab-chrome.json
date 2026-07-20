@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T235 - Chat Workspace Load and Tab Chrome",
+    "Description": "Exercises ConversationWorkspaceComponent bootstrap including the isWorkspaceReady agent-preload gate and the three-tab navigation chrome — a code path no generic dashboard or entity grid touches.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and choose the 'Chat' application. Wait for the conversations workspace to finish initializing (it shows a 'Loading agents...' spinner first). Confirm the workspace chrome renders: a top navigation bar with three tabs labeled 'Chats', 'Collections', and 'Tasks', a left sidebar containing a 'New Conversation' button, and either a conversation chat area or a welcome/empty state on the right. Seeing this three-tab workspace render is success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Chat application opens and its workspace finishes loading past the 'Loading agents...' spinner",
+        "The top navigation shows three tabs: Chats, Collections, and Tasks",
+        "A 'New Conversation' button is visible in the left sidebar and the main area shows a chat/empty state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,chat"
+  },
+  "primaryKey": {
+    "ID": "C227BBD2-6CBB-41C9-A131-6333C7B3E206"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:00.913Z",
+    "checksum": "1c57c56b8f8c48027e46bda65684e9d72030f220f1356b8992a9a1070bd521fa"
+  }
+}

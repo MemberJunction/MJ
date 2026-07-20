@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T203 - System Diagnostics Engine Registry Refresh",
+    "Description": "Exercises the engine-card grid rendering plus the refreshAllEngines() action that re-queries BaseEngineRegistry — a live in-memory registry read/refresh path, not a generic entity grid.",
+    "InputDefinition": {
+      "goal": "You are already logged in at http://localhost:4200. Via the application switcher dropdown next to the logo, switch to the Admin application, open 'Monitoring', and select System Diagnostics. On the Engine Registry section you should see a grid of engine cards each showing memory and item-count stats (or a clear empty-state if none are loaded). Click the 'Refresh All Engines' button and confirm it responds — a spinning refresh indicator appears and the engine cards remain rendered afterward. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Seeing the refresh action run and the engine cards render is success; you do NOT need to inspect specific engine values.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Engine Registry section shows engine cards with Memory and Items stats, OR a valid 'No engines registered yet' empty-state",
+        "Clicking 'Refresh All Engines' triggers a visible response (spinning icon and/or the button disabling briefly)",
+        "After the refresh completes the engine card grid (or empty-state) is still rendered intact",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "7391A3A0-265A-429C-AEE2-BA7434763171"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:59.875Z",
+    "checksum": "2013799efbb29e05a14604e1ebdd87b762674face4baa4711799f33ad354a93c"
+  }
+}

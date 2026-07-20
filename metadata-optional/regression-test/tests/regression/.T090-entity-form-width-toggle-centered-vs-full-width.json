@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T090 - Entity Form Width Toggle Centered vs Full-Width",
+    "Description": "Tests the per-form width-mode toggle (WidthMode centered↔full-width, OnToggleWidthMode, mj-forms-panels--full-width class) — a distinct layout-preference feature not covered by any existing form test.",
+    "InputDefinition": {
+      "goal": "Open the 'Members' entity via the LEFT sidebar 'Search entities...' box, click a member row, then 'Open Full Record'. In the form toolbar (right-side section controls) there is a width-toggle icon button whose tooltip reads 'Expand to full width' (or 'Center content' when already expanded). Click it and confirm the form content layout changes width (the panels widen to fill the area or re-center). Success is a visible change in the form's content width when the toggle is clicked. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A width-toggle button is present in the form toolbar with an 'Expand to full width' / 'Center content' tooltip",
+        "Clicking it visibly changes the form content layout width (widen to full-width or re-center)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,form"
+  },
+  "primaryKey": {
+    "ID": "E3F95873-C62B-4E4C-A481-4E58FAC00481"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:56.375Z",
+    "checksum": "58d582449fbd8c1dbafbb95a8c94f32d7b716f503f22359952116ca499f11f17"
+  }
+}

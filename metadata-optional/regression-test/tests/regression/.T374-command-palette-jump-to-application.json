@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T374 - Command Palette Jump To Application",
+    "Description": "Exercises the CommandPaletteComponent fuzzy application-name scoring + SelectApp navigation — distinct from the Ctrl+K entity/record search and from clicking the app-switcher dropdown.",
+    "InputDefinition": {
+      "goal": "You are logged in at http://localhost:4200. Press Ctrl+/ (on Windows/Linux) or Cmd+/ (on Mac) to open the command palette (a centered modal search box with an application list). Type an application name such as 'Admin'. Verify the results list narrows to matching applications as you type. Then click the matching application (or press Enter with it highlighted) and confirm the app opens/loads. Seeing the palette filter to matches and navigate to the chosen app is success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The command palette modal opens showing a search input and a list of applications",
+        "Typing an app name narrows the list to matching application(s) (fuzzy/relevance filtered)",
+        "Selecting a result navigates to that application (its landing/section renders)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,shell"
+  },
+  "primaryKey": {
+    "ID": "EB673D6F-DA3B-40D1-AC38-F1E7AF2AA96C"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:04.059Z",
+    "checksum": "12186b21fa1223c77412666c4eb07372e1393159b9f48fc02d330f36dc02b01e"
+  }
+}

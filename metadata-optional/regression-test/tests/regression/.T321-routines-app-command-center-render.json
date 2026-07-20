@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T321 - Routines App Command Center Render",
+    "Description": "Exercises the standalone UserRoutines BaseResourceComponent host wrapping the generic UserRoutinesCommandCenter — a bespoke card-list command center, not the generic AG-Grid entity browser or a dashboard.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to the Routines app (icon: a business-time / clock-with-arrow icon). Wait for it to load — pages can take 10-30s to load in this resource-constrained environment, so wait and do not navigate away. Success is seeing the Routines command center render: a header titled 'Routines' with a 'New Routine' button and a search box, and below it EITHER a grid of routine cards OR a 'No Routines Yet' empty-state inviting you to create your first routine. You do NOT need to create anything — seeing the surface render is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Routines app opens with a header titled 'Routines' and a visible 'New Routine' button",
+        "The body shows either routine cards OR a 'No Routines Yet' empty state (either is a valid pass)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,routines"
+  },
+  "primaryKey": {
+    "ID": "0A943060-FC27-44E0-B904-D9A3E385588F"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.795Z",
+    "checksum": "a31a2f7ea3ff5234a081f5cebf102bb5cddc83a9580160ee08fe94da4eab7d23"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T079 - Configure View Column Format Editor",
+    "Description": "Per-column formatting (type/decimals/currency/date-format/alignment/colors + live preview) is a distinct rich sub-feature; existing column-management coverage only exercises show/hide/reorder.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and go to Data Explorer > Data. Open the 'Products' entity via the LEFT sidebar 'Search entities...' box (type 'Products', click the exact match). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Open Configure View (sliders icon in the view toolbar) and stay on the 'Columns' tab. Each visible column row has a paintbrush 'Format column' button — click it for any column. Success is the column format-editor sub-panel opening with a 'Format Type' dropdown (Text / Number / Currency / Date / Boolean / etc.), an alignment toggle, header/cell style buttons, and a live Preview. Seeing the format editor render is success — you do NOT need to save formatting.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking a column's paintbrush button opens the format-editor sub-panel",
+        "The editor shows a Format Type selector plus alignment/style controls and a Preview section",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,grid"
+  },
+  "primaryKey": {
+    "ID": "0B711748-ACF7-4BB5-8304-251558D20C8C"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:56.030Z",
+    "checksum": "a5dd42ae6f19b94af8beb17d58ae49b643d7f5f5dec4c1c75c5f22d7daaedfae"
+  }
+}

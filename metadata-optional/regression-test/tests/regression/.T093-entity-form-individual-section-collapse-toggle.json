@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T093 - Entity Form Individual Section Collapse Toggle",
+    "Description": "Exercises the per-panel collapse Toggle() on a single collapsible-panel header — distinct from bulk expand/collapse-all and from section navigation; verifies the individual chevron/Expanded state machine.",
+    "InputDefinition": {
+      "goal": "Open the 'Members' entity via the LEFT sidebar 'Search entities...' box, click a member row, then 'Open Full Record'. The form is organized into collapsible section panels, each with a header showing an icon, a title, and a chevron on the right. Click a single section's header (or its chevron) and confirm ONLY that one section collapses (its body hides and the chevron flips); click it again and confirm it re-expands. Success is a single section responding to its own header toggle. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Form sections render as collapsible panels with a header and a chevron indicator",
+        "Clicking a single section header collapses just that section's body, and clicking again re-expands it (chevron direction flips)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,form"
+  },
+  "primaryKey": {
+    "ID": "9961B649-8212-4DF4-A667-5871A090DC11"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:56.442Z",
+    "checksum": "310f004db1dcb67d1a6b31355c4fb2e4404d244a7979c4271ee07a5b63b97ee0"
+  }
+}

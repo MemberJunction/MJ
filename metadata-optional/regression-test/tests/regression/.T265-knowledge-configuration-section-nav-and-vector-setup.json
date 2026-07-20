@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T265 - Knowledge Configuration Section Nav and Vector Setup",
+    "Description": "Exercises the KH configuration left-nav sections and the vector-setup progress stepper — a bespoke multi-section settings surface distinct from the analytics rail and other KH tools.",
+    "InputDefinition": {
+      "goal": "Switch to the Knowledge Hub app (application switcher dropdown next to the logo) and click 'Configuration' in the left nav (fa-cogs icon). The Configuration screen has an inner settings rail (Pipeline, Vector Database, Full-Text Indexes, Embedding Models, Thresholds, Search Scopes, etc.). Confirm the default section renders, then click 'Vector Database' and confirm it shows the 3-step setup progress (Providers / Embedding Model / Vector Indexes) with a completion count. Then click another section (e.g. Pipeline) and confirm the inner content swaps while the outer header stays. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Configuration screen loads with an inner settings rail and swaps inner content when a different section is clicked",
+        "The Vector Database section shows the 3-step setup progress (Providers / Embedding Model / Vector Indexes) with a step completion count",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,knowledge-hub"
+  },
+  "primaryKey": {
+    "ID": "321FADF6-8207-47D5-9CDA-EB60359AEA9F"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.463Z",
+    "checksum": "dda7fba8b83f1726eeb499a1254612fd82a302491403a32c825127197b2af034"
+  }
+}

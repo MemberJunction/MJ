@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T114 - Dashboard Multi Select Bulk Actions",
+    "Description": "Exercises the AllowMultiSelect selection-mode branch (EnterSelectionMode, per-item checkboxes, SelectedCount, bulk Move/Delete toolbar) — a distinct interaction mode absent from single-record grid/form tests.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo, open Data Explorer, then the Dashboards section. In the toolbar click the 'Select' button (check-double icon) to enter multi-select mode. Selection checkboxes should appear on the dashboard cards/rows and the toolbar should switch to a selection toolbar showing an 'N selected' count plus Select-all, Move-to-folder, Delete-selected, and Exit buttons. Select one or more dashboards and confirm the selected count updates. Success is the selection mode UI appearing and responding to selection — you do NOT need to actually delete or move. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A 'Select' button is present and clicking it enters selection mode (checkboxes appear on items and a selection toolbar replaces the normal actions)",
+        "The selection toolbar shows a selected-count and Select-all / Move / Delete / Exit controls",
+        "Selecting an item updates the 'N selected' count (or a valid empty-state shows if there are no dashboards to select)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "CBDDC645-38BE-4DFD-B7BA-1EB3FC4F9D13"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.028Z",
+    "checksum": "304ef78d866926167107ea5155bd1480ed9c869f9fc035979d5721091800e314"
+  }
+}

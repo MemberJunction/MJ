@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T259 - Feature Pipelines List and Search",
+    "Description": "Exercises the feature-pipeline card list + client-side search (SearchQuery/FilteredPipelines) with its status-aware Run buttons — a bespoke card grid distinct from other KH surfaces.",
+    "InputDefinition": {
+      "goal": "Switch to the Knowledge Hub app (application switcher dropdown next to the logo) and click 'Feature Pipelines' in the left nav (fa-diagram-project icon). Success is that the pipelines screen renders as a card grid (each card showing target entity, output attribute, last-run status, and Run/Edit buttons) OR a clear empty-state inviting you to create a pipeline. Then type into the 'Search by name, entity, or attribute…' box and confirm the card grid narrows to matching pipelines (or shows a 'No matching pipelines' state). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Feature Pipelines screen renders a pipeline card grid OR a valid 'No feature pipelines yet' empty state",
+        "Typing in the search box narrows the cards to matches OR shows a 'No matching pipelines' no-results state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,knowledge-hub"
+  },
+  "primaryKey": {
+    "ID": "D89A69C7-257F-4600-ADA0-79736889E37A"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.368Z",
+    "checksum": "b48909ae254cb58df832dcf4feb82af7bd292aa99f98981db85deef80bfff21f"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T196 - Admin ERD Filter Panel Toggle",
+    "Description": "Exercises the EntityAdmin dashboard-to-ERD-composite filter-panel toggle plumbing (toggleFilterPanel → erdComposite.onToggleFilterPanel, filterPanelVisible split-area) — distinct from in-diagram search/zoom.",
+    "InputDefinition": {
+      "goal": "In MJ Explorer, switch to the Admin application via the application switcher dropdown next to the logo. Open 'Data & Schema' and open the ERD (Entity Relationship Diagram) viewer. Wait for the diagram to render (10-30s possible — wait, don't navigate away). The page header has a 'Filters' button (funnel icon). Note whether the left-hand filter panel is currently shown, then click the 'Filters' button. Success is that clicking the button TOGGLES the left filter panel — it hides if shown, or shows if hidden — and the button reflects an active/inactive state accordingly. Toggle it once more to confirm it flips back. Seeing the panel show/hide in response is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Entity Admin header shows a 'Filters' toggle button and the ERD layout adjusts (left filter panel appears/disappears) when clicked",
+        "Toggling again flips the panel back and the button's active state reflects the current visibility",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "64761612-E73D-4418-A919-F74C2D8BD836"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:59.677Z",
+    "checksum": "2732eb3d7ca60432925a23c9ba085ca3cfb9a955729fe2c801a9ad1a19822448"
+  }
+}

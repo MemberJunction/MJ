@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T179 - API Key Overview KPI Drilldown",
+    "Description": "Tests the overview dashboard's KPI-card-to-filtered-list drilldown (showListView(filter) + CurrentView switch), a dashboard-navigation behavior unique to this surface.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Switch to the Admin application via the application switcher dropdown next to the logo, open 'Identity & Access', and select the 'API Keys' sub-section. The overview shows a health-score banner and a row of clickable KPI cards (Total Keys, Active, Expiring Soon, Revoked, Scope Categories). Click the 'Active' KPI card (or the 'Total Keys' card). Verify this drills down into the key list view with that filter pre-applied (a 'Back to Overview' control appears and the list shows the corresponding filter tab active). Success is the overview-to-list drilldown transition. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The API Keys overview renders with a health-score banner and clickable KPI cards showing counts",
+        "Clicking a KPI card transitions to the list view (a 'Back to Overview' control is visible) with the matching filter applied",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "BE777651-3EAC-4421-89D6-E7F6A5FF7DD5"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:59.055Z",
+    "checksum": "ea1b2e03a7996684fb1f9154b0f5e580bfdf083ee8f7c0819b65586838d5d62f"
+  }
+}

@@ -208,9 +208,15 @@ function actionLabel(a) {
   }
 }
 
-function buildOverlaySvg(actions) {
-  // All coordinates are in a 1000x1000 normalized space.
-  // The SVG viewBox matches, so it scales to the image automatically.
+function buildOverlaySvg(actions, ys) {
+  // The controller's coordinate space is ANISOTROPIC: X 0-1000 spans the full
+  // width and Y 0-1000 spans the full height, independent of the 16:9 viewport.
+  // A square viewBox (0 0 1000 1000) over a 16:9 image therefore letterboxes or
+  // skews every marker. Instead we render into a viewBox whose aspect matches
+  // the image (height = 1000*ys, ys = imageHeight/imageWidth) and scale every
+  // grid-Y by ys — so markers land on target AND stay round.
+  ys = ys || 0.5625; // default 720/1280
+  var VH = 1000 * ys;
   var els = [];
   els.push('<defs><marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#a855f7"/></marker></defs>');
   var labelIdx = 0;
@@ -220,13 +226,20 @@ function buildOverlaySvg(actions) {
     labelIdx++;
     switch (a.type) {
       case 'Click': {
-        var cx = a.x || 0, cy = a.y || 0;
-        els.push('<circle cx="'+cx+'" cy="'+cy+'" r="18" class="ov-click"/>');
+        // Click position lives in bbox (target element box); x/y are usually 0.
+        // Prefer explicit x/y, else the bbox center. Grid-Y is scaled by ys into
+        // the aspect-matched viewBox so the marker lands on target.
+        var cx, gy;
+        if (a.x || a.y) { cx = a.x; gy = a.y; }
+        else if (a.bbox) { cx = (a.bbox.xMin + a.bbox.xMax) / 2; gy = (a.bbox.yMin + a.bbox.yMax) / 2; }
+        else { cx = 0; gy = 0; }
+        var cy = gy * ys;
+        els.push('<circle cx="'+cx+'" cy="'+cy+'" r="16" class="ov-click"/>');
         els.push('<circle cx="'+cx+'" cy="'+cy+'" r="4" fill="#ef4444"/>');
         if (a.bbox) {
-          els.push('<rect x="'+a.bbox.xMin+'" y="'+a.bbox.yMin+'" width="'+(a.bbox.xMax-a.bbox.xMin)+'" height="'+(a.bbox.yMax-a.bbox.yMin)+'" class="ov-bbox"/>');
+          els.push('<rect x="'+a.bbox.xMin+'" y="'+(a.bbox.yMin*ys)+'" width="'+(a.bbox.xMax-a.bbox.xMin)+'" height="'+((a.bbox.yMax-a.bbox.yMin)*ys)+'" class="ov-bbox"/>');
         }
-        var ly = Math.max(cy - 28, 16);
+        var ly = Math.max(cy - 24, 14);
         els.push('<text x="'+cx+'" y="'+ly+'" text-anchor="middle" class="ov-click-label">'+labelIdx+'. '+label+'</text>');
         break;
       }
@@ -273,7 +286,7 @@ function buildOverlaySvg(actions) {
       }
     }
   }
-  return '<svg viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet">' + els.join('') + '</svg>';
+  return '<svg viewBox="0 0 1000 ' + VH + '" preserveAspectRatio="xMidYMid meet">' + els.join('') + '</svg>';
 }
 
 function renderLightbox() {
@@ -296,7 +309,14 @@ function renderLightbox() {
   document.getElementById('lb-next').disabled = lbIdx === lbData.length - 1;
 
   var ov = document.getElementById('action-overlay');
-  ov.innerHTML = buildOverlaySvg(d.actions);
+  var lbImg = document.getElementById('lb-img');
+  var drawOverlay = function() {
+    // Aspect scale from the actual image so the overlay matches any viewport.
+    var ys = (lbImg.naturalWidth > 0) ? (lbImg.naturalHeight / lbImg.naturalWidth) : 0.5625;
+    ov.innerHTML = buildOverlaySvg(d.actions, ys);
+  };
+  lbImg.onload = drawOverlay;
+  drawOverlay();
   if (overlayVisible) ov.classList.add('visible'); else ov.classList.remove('visible');
   var btn = document.getElementById('lb-overlay-btn');
   if (overlayVisible) btn.classList.add('active'); else btn.classList.remove('active');

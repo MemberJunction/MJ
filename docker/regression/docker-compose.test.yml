@@ -194,7 +194,7 @@ services:
       AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
       BASE_URL: "http://mjexplorer:4200"
       API_URL: "http://mjapi:4000"
-      MAX_PARALLEL_WORKERS: "${MAX_PARALLEL_WORKERS:-4}"
+      MAX_PARALLEL_WORKERS: "${MAX_PARALLEL_WORKERS:-3}"
       # Optional archive flow — when ARCHIVE_DB_DATABASE is set, the entrypoint
       # generates a transient mj.config.cjs from the ARCHIVE_DB_* vars below,
       # pulls the suite run + children, and pushes them to that destination MJ

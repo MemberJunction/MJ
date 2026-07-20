@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T361 - Component Studio Browser Loads",
+    "Description": "Loads the ComponentStudioResource dashboard shell and its bespoke mj-component-browser card list + 'X of Y' count — a custom surface, not the generic entity grid.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to the 'Component Studio' application. It opens on the 'Components' section. Wait for the component browser to render in the left panel — a 'New Component' button, an 'Import' dropdown, a 'Search components...' box, and a component count reading 'X of Y'. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Seeing the browser chrome and the count render is success — you do NOT need to open any component.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Component Studio app opens to the Components section with the component browser panel visible",
+        "The browser shows a 'New Component' button, an 'Import' control, and a 'Search components...' input",
+        "A component count in the form 'X of Y' (or an empty-state message if there are no components) is shown",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,component-studio"
+  },
+  "primaryKey": {
+    "ID": "B0DD4D2F-0EE3-4E33-9B30-386645C389D9"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.686Z",
+    "checksum": "3a6075abf78b9925836a15a656b9b780df4d89c8093844568f6a23292067a01c"
+  }
+}

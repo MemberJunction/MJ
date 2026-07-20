@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T295 - Integrations Sync Direction Menu",
+    "Description": "Exercises the ToggleSyncMenu directional-sync dropdown (RunSyncWithDirection wiring) UI without executing it — a distinct menu code path from the plain Sync-Now button.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, find and open the Integrations application, and open its 'Integrations' (Connections) section. On an ACTIVE connection card, click the 'Sync' button's caret/chevron to open its dropdown menu. Verify a dropdown appears grouping sync options: 'Pull (External → MJ)' with Incremental Pull / Full Pull, 'Push (MJ → External)' with Incremental Push / Full Push, and 'Bidirectional' with Incremental Both / Full Both. IMPORTANT: only verify the menu renders — do NOT click any sync option, as that would trigger a live external data sync. Seeing the multi-direction sync menu render is success. If no active connection exists, a clear empty/inactive state is acceptable. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking the Sync caret opens a dropdown with Pull, Push, and Bidirectional groups",
+        "Each group offers Incremental and Full variants",
+        "The menu is only opened, not acted on (no sync is triggered)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,integrations"
+  },
+  "primaryKey": {
+    "ID": "74A80588-D45C-42E2-8359-0B5273AFC406"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.117Z",
+    "checksum": "f3833a1e85b51f22145a570ace21ca630e6298a3430df721547fa27d6aab43de"
+  }
+}

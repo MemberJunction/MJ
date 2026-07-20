@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T193 - Admin ERD Layout Algorithm Toggle",
+    "Description": "Exercises the ERD layout-engine switch (setLayoutAlgorithm 'schema-grid' vs 'dagre') that recomputes node coordinates — a code path with no analog in grid/form tests.",
+    "InputDefinition": {
+      "goal": "In MJ Explorer, switch to the Admin application via the application switcher dropdown next to the logo. Open 'Data & Schema' and open the ERD (Entity Relationship Diagram) viewer. Wait for the diagram to render (10-30s possible in this resource-constrained environment — wait, don't navigate away). The diagram header has a layout-mode toggle group with two buttons: a 'Schema grid' layout (table-cells icon) and a 'Hierarchical' layout (sitemap icon). Note the current arrangement of entity cards, then click the OTHER layout button. Success is that the diagram re-lays-out the entity cards in response — the node positions visibly rearrange and the newly-clicked layout button shows an active/selected state. Seeing the relayout is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The ERD renders with a layout toggle offering Schema-grid and Hierarchical modes",
+        "Clicking the alternate layout button visibly rearranges the entity-card positions and marks that button active",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "513CAB6D-7072-40B3-B54B-93BA3DC771DD"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:59.526Z",
+    "checksum": "93177331f50d6bdcf5580aae977f8ff7600971bfe476c8716b38e6b28a89cdd4"
+  }
+}

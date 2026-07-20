@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T167 - Test Runs Search And Time Range",
+    "Description": "Combines client-side name search (filterBySearch) with the time-range control that re-drives the server date range (updateServiceDateRange → setDateRange) — two Runs-specific data paths distinct from the status chips.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher next to the logo, choose \"Testing\", then click the \"Runs\" tab. In the filter bar type a term into the \"Search by test name...\" box and confirm the runs table narrows to name matches (or shows the no-results empty state), then clear it with the X. Next change the time-range dropdown (Today / This Week / This Month / Last 90 Days) to a different value and confirm the table/results respond. Success is that both the search box and the time-range dropdown drive the visible runs. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Typing in the search box narrows the runs table to matching test names or shows a clear empty state",
+        "Clearing the search restores the previous run list",
+        "Changing the time-range dropdown re-queries and updates the runs table/results",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,testing"
+  },
+  "primaryKey": {
+    "ID": "5B502BD1-C8EE-4366-BD18-A12F94D5503C"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.618Z",
+    "checksum": "ad307eb57f90bb208cf5b60f1c568871aa24c10819f5505908a3110bc77ecdff"
+  }
+}

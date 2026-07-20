@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T236 - New Conversation Empty State",
+    "Description": "Renders the ConversationEmptyStateComponent branch (isNewConversation/!conversationId) with suggested prompts and greeting — distinct from the populated message-list view.",
+    "InputDefinition": {
+      "goal": "Open the application switcher next to the logo, choose 'Chat', and wait for the workspace to load. Click the 'New Conversation' button in the left sidebar. Confirm the empty-state welcome renders in the main area: a 'Welcome to Conversations' greeting, one or more suggested prompt cards, a message composer input, and footer tips mentioning using '@AgentName' and pressing Enter to send. Seeing the welcome empty state with its composer is success — you do NOT need to send anything. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking 'New Conversation' shows the welcome empty state ('Welcome to Conversations' or similar greeting)",
+        "Suggested prompt cards and/or footer tips (e.g. '@AgentName', 'Enter to send') are visible",
+        "A message composer/input box is present and ready for typing",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,chat"
+  },
+  "primaryKey": {
+    "ID": "30F9D51C-BBFF-420C-A256-18B281C666F3"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:00.931Z",
+    "checksum": "cb24c658dd545c48ae43065f133904a057bc45e0a649782cd7bf17261b52aeeb"
+  }
+}

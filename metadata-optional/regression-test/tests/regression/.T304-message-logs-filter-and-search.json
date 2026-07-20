@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T304 - Message Logs Filter And Search",
+    "Description": "Exercises the bespoke hand-rolled <table> with client-side applyFilter (Status exact-match chips + multi-field substring search across provider/type/status/error) — a different code path from the generic ag-grid filter.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open the Communication app, then open its Message Logs section. Open the Filter control (funnel icon) and apply a Status filter such as 'Failed' (or 'Sent'/'Pending'), and/or type a term in the 'Search messages, providers, recipients...' box. Success = the log table RESPONDS — rows narrow to matches OR a clear 'No logs found' empty state appears. Then clear the filter/search and confirm the fuller list returns. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Applying a Status filter and/or a search term changes the log table (rows narrow OR a no-results empty state appears)",
+        "Clearing the filter and search restores the fuller list",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,communication"
+  },
+  "primaryKey": {
+    "ID": "B8412ADB-D63B-4D11-ADB7-30567AEB80AC"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.252Z",
+    "checksum": "a18ec5c97685acd1e587fd7aec75c2e2bd5452d4345194426e618e4f5c29f0dd"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T254 - Tags Library Search and Drilldown",
+    "Description": "Exercises the custom tag-library table search (FilterTags) plus per-tag drill-down (DrillDownTag) — a bespoke table, not the generic entity grid quick-search.",
+    "InputDefinition": {
+      "goal": "In the Knowledge Hub app (application switcher dropdown next to the logo), open 'Tags' and go to the 'Tag Library' (tags) section. Type a term into the 'Search tags...' box in the section toolbar and confirm the tag table narrows to matching rows (or shows a clear empty result). Then clear the search and click a tag row. Success is that clicking a tag opens a drill-down panel listing content items tagged with that tag (or a 'No content items found for this tag' empty state). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Typing in the tag search box narrows the tag table to matching rows OR shows a valid no-match state",
+        "Clicking a tag row opens a drill-down listing its content items OR a clear empty state for that tag",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,knowledge-hub"
+  },
+  "primaryKey": {
+    "ID": "958D1BC9-A08A-43E3-BCF0-2AA39021C128"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.276Z",
+    "checksum": "b6d1014f31a59a34b987d748b3e2492b5a9cf9d62232563dde28637845ad7412"
+  }
+}

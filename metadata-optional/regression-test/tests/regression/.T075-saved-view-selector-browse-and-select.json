@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T075 - Saved View Selector Browse and Select",
+    "Description": "Exercises the saved-view (mj-view-selector) read/select lifecycle over the User Views entity — distinct from saved QUERIES (already covered) and from all AG-Grid interactions.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and go to Data Explorer > Data. Open the 'Products' entity via the LEFT sidebar 'Search entities...' box (type 'Products', click the exact match). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. In the view toolbar at the top-left of the records area, click the saved-view selector button (a layer-group icon labeled with the current view name or '(Default)') to open the Views panel. Verify the panel opens listing at least a '(Default)' option (plus any 'My Views' / 'Shared With Me' sections). Click the '(Default)' option (or any listed view). Success is the panel opening and the chosen option applying (a checkmark on it and the grid reloading).",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking the saved-view selector opens a Views panel showing at least the '(Default)' entry",
+        "Selecting a view applies it — a check indicator appears on the chosen view and the grid reloads (or a valid empty-state renders)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,grid"
+  },
+  "primaryKey": {
+    "ID": "59E89EE7-16A9-4276-84F7-979F33DE15FC"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:55.870Z",
+    "checksum": "0ad132cca33fb0048e989befa124299bc9030f112ed9eea0a5608c550579d91c"
+  }
+}

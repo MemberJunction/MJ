@@ -73,7 +73,19 @@ echo ""
 
 # Sync test definitions + suite mapping. Tests must process before suites
 # because suites reference tests by name.
-echo "Syncing test metadata..."
+# Clear the regression suite's baseline-seeded members BEFORE any test push:
+# (a) makes the metadata suite-member push authoritative — the baseline seeds
+# different PKs for the same (SuiteID,TestID) pairs, which would UQ-collide and
+# roll back the whole member transaction; and (b) drops suite members holding an
+# FK to a Computer Use test that the delete records below prune.
+echo "Clearing baseline-seeded regression suite members..."
+node "$SCRIPTS/clear-baseline-suite-members.cjs" 2>&1 || echo "  WARNING: suite-member clear failed (non-fatal)"
+echo ""
+
+# Default metadata/ tree: research-agent tests/suites + the Computer Use delete
+# records (metadata/tests/regression/.deleted-computer-use-tests.json) that prune
+# the pre-consolidation regression tests from the instance.
+echo "Syncing test metadata (incl. Computer Use delete records)..."
 npx mj sync push --dir=metadata --include="tests" 2>&1 || {
     echo "  WARNING: Test metadata sync failed"
 }
@@ -81,6 +93,15 @@ echo ""
 echo "Syncing test suites..."
 npx mj sync push --dir=metadata --include="test-suites" 2>&1 || {
     echo "  WARNING: Suite metadata sync failed"
+}
+echo ""
+
+# Regression tests + suite live in the opt-in metadata-optional sibling root
+# (kept out of the base instance, like integration-test). directoryOrder pushes
+# tests before the suite so @lookup suite members resolve.
+echo "Syncing regression tests + suite from metadata-optional/regression-test..."
+npx mj sync push --dir=metadata-optional/regression-test 2>&1 || {
+    echo "  WARNING: Regression metadata sync failed"
 }
 echo ""
 fi  # end: standard (non-bacpac) metadata seeding
@@ -180,7 +201,7 @@ fi
 # TEST_SUITE_NAME defaults to "MJ Explorer Regression Suite" but Mode D
 # overlays (e.g., the BYO example app) override this to point at their own
 # suite — e.g., TEST_SUITE_NAME="BYO Regression Suite".
-WORKERS=${MAX_PARALLEL_WORKERS:-4}
+WORKERS=${MAX_PARALLEL_WORKERS:-3}
 SUITE_NAME="${TEST_SUITE_NAME:-MJ Explorer Regression Suite}"
 # Retry a failed test up to N extra times (pass-if-any) to absorb the inherent
 # non-determinism of LLM-driven Computer Use tests; a test that fails then passes

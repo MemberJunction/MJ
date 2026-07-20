@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T144 - MCP Tools Scale Mode Virtual List",
+    "Description": "Exercises the useScalablePagination virtual-scroll/pagination branch — a completely separate rendering path (native virtual scroll with paged loading) that no other test touches.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the AI app via the application switcher dropdown next to the logo (NOT Ctrl+K), open the MCP section, then go to the Tools tab. Click the 'Scale: OFF' button in the header to enable scale mode (it should change to 'Scale: ON'). Confirm the tools view switches to the scalable/virtualized presentation, which shows a 'Showing X of Y tools' summary above a single scrollable virtual list (instead of the server-grouped card/list layout). Toggle scale mode back OFF and confirm it returns to the grouped view. Seeing the scale-mode toggle change the layout is success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A 'Scale: OFF' / 'Scale: ON' toggle button is visible in the Tools tab header",
+        "Enabling scale mode shows the 'Showing X of Y tools' summary and a single scrollable virtual list layout distinct from the default grouped view",
+        "Toggling scale mode back OFF restores the grouped card/list layout",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,mcp"
+  },
+  "primaryKey": {
+    "ID": "961BAD74-1A11-4C4E-BE79-4B7005513674"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.020Z",
+    "checksum": "043b889cfe3423d46eacb55e4fc0b58d931c40dbcfaa3e8d4a08f5b27507e99b"
+  }
+}

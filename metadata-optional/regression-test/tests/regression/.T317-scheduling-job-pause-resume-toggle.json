@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T317 - Scheduling Job Pause Resume Toggle",
+    "Description": "Tests ToggleJobStatus (updateJobStatus) — an in-place operational state mutation on the card, distinct from any form save/edit round-trip test.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to the 'Scheduling' application, then open its 'Jobs' section. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. On a job card footer there is a 'Pause' or 'Resume' button (pause/play icon). Click it on one job and verify the job responds: an 'Active' job's status chip changes to 'Paused' and its button relabels to 'Resume' (or vice-versa). This is a real state round-trip. If NO job cards exist, seeing the empty state ('Create your first scheduled job') is acceptable instead. Toggling it back to the original state afterward is a bonus.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A job card footer shows a Pause/Resume button, OR a valid empty-state if no jobs exist",
+        "Clicking Pause/Resume flips that job's status chip (Active<->Paused) and relabels the button accordingly",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,scheduling"
+  },
+  "primaryKey": {
+    "ID": "10D759E9-8F8F-44FF-85DE-3FC54C2972FB"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.726Z",
+    "checksum": "a642f181b09ececc9d6b376a7b82bc9256fcc59d6518c8bc4131ef1e562b3d96"
+  }
+}

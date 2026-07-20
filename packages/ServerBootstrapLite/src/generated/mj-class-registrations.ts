@@ -953,7 +953,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (35 classes)
+// @memberjunction/core-entities-server (36 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -993,7 +993,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (142 classes)
+// @memberjunction/core-actions (144 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1047,6 +1047,8 @@ import {
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
+    FindCandidateActionsAction,
+    FindCandidateAgentsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -1932,6 +1934,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
+    FindCandidateActionsAction,
+    FindCandidateAgentsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -2029,7 +2033,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 872;
+export const CLASS_REGISTRATIONS_COUNT = 875;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

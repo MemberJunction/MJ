@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T377 - Close Tab Via Context Menu",
+    "Description": "Exercises the tab teardown path (context menu onContextClose -> WorkspaceStateManager.CloseTab + component cache cleanup) — the open-tab tests never close one.",
+    "InputDefinition": {
+      "goal": "You are logged in at http://localhost:4200. Open at least two resources so multiple tabs are showing in the tab bar: for example use the LEFT sidebar 'Search entities...' box to open one entity (type its name and click the exact match), then open a second entity the same way (or open a record's full form) so you have 2+ tabs. Right-click on one of the tab headers to open its context menu, then choose 'Close Tab'. Verify that tab is removed from the tab bar and at least one other tab remains and stays usable. Seeing the tab count decrease by one with the remaining tab intact is success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "At least two tabs are open in the tab bar before closing",
+        "Right-clicking a tab shows a context menu that includes 'Close Tab'",
+        "Choosing 'Close Tab' removes that specific tab and a remaining tab is still shown/active",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,shell"
+  },
+  "primaryKey": {
+    "ID": "2F84A4D6-7389-4F6B-80A6-EA9F4DACB45C"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:04.157Z",
+    "checksum": "4ac7fb69db31f5529a7f5b6605a18e3735596e47315521d92d17647d655f5296"
+  }
+}

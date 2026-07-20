@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T137 - Execution Monitor Metrics and Trends Chart",
+    "Description": "Bespoke Monitor dashboard with a computed success-rate and a custom stacked bar trend chart — not a grid; unique aggregation/visualization code.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, switch to the 'Actions' application, and open the 'Monitor' nav item (Execution Monitor). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Verify the monitor renders its execution metric cards (Total Executions, Success Rate as a percentage, Failed Executions, Avg Duration, Today, Currently Running) and a '7-Day Execution Trends' chart section (stacked success/failed bars) — or, if there is no execution data, valid empty-states for the chart and the executions list. Seeing the metrics cards and the trends chart section render is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Execution Monitor shows metric cards including a Success Rate percentage and Failed/Total counts",
+        "A '7-Day Execution Trends' chart section renders with bars OR a clear 'No execution trends available' empty-state",
+        "A recent-executions list section is present (populated or with a valid empty-state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,actions"
+  },
+  "primaryKey": {
+    "ID": "F980A3DC-B01A-4F9A-9D5C-4F0531334426"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.787Z",
+    "checksum": "6a0a5bc55d23c4a9b8adc19073d8c1e03e66127c789f28960419b3cec921c47d"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T192 - Admin ERD Zoom and Fit Controls",
+    "Description": "Exercises the SVG pan/zoom transform pipeline (zoomBy / fitToView / zoomPercent) unique to the ERD canvas — no other tested surface has an interactive zoomable canvas.",
+    "InputDefinition": {
+      "goal": "In MJ Explorer, switch to the Admin application via the application switcher dropdown next to the logo. Open 'Data & Schema' and open the ERD (Entity Relationship Diagram) viewer. Wait for the diagram to render — pages can take 10-30s in this resource-constrained environment, so wait and do NOT navigate away. In the diagram header top-right there is a zoom toolbar: a zoom-in (magnifying-glass-plus) button, a zoom-out (magnifying-glass-minus) button, a fit-to-view (expand) button, and a zoom-percentage readout. Click zoom-in once or twice, then click fit-to-view. Success is that the zoom-percentage readout changes in response to your clicks (increases on zoom-in) and the diagram re-scales/re-centers when you click fit-to-view. You do NOT need any particular zoom value.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The ERD renders with a visible zoom toolbar (zoom in/out/fit) and a zoom-percent readout",
+        "Clicking zoom controls changes the zoom-percent readout and visibly re-scales the diagram; fit-to-view re-frames it",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "21494FE7-862B-4AF4-BF88-B176903D6754"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:59.469Z",
+    "checksum": "b935be0d855c0e0a0049acecb154b1d3fb66f98331276c5c3545ab5cea613361"
+  }
+}

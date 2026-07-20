@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T263 - Vector Management Sync and View Mode",
+    "Description": "Exercises the vector-index management table with per-entity re-embedding sync (SyncEntity) and the view-mode toggle — distinct from the vector-setup config and other KH surfaces.",
+    "InputDefinition": {
+      "goal": "Switch to the Knowledge Hub app (application switcher dropdown next to the logo) and click 'Vectors' in the left nav (fa-cubes icon). Success is that the Vector Management screen renders its KPI cards, an 'Entity Sync Status' table (Entity / Document / Vectors / Last Synced / Status / Actions), and a sidebar with Vector DB Health + Embedding Model info — OR a clear 'No entity documents configured for vectorization' empty state. Then use the view-toggle in the header to switch view modes and confirm the view responds. If a sync row exists, click its 'Sync' (play) button and confirm it enters a syncing/disabled state (you do NOT need it to finish). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Vectors screen shows KPI cards + an Entity Sync Status table + a health/model sidebar, OR a valid empty state",
+        "Toggling the view mode changes the view, and (if a row exists) clicking Sync enters a syncing/disabled state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,knowledge-hub"
+  },
+  "primaryKey": {
+    "ID": "C8EBEBC4-0238-4CBB-B782-32E1E7B53C09"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.431Z",
+    "checksum": "5e5e5cfd96b79dee2eede7ba254ec076f72b7a2b4abf403a6a528aebf54cfd6d"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T340 - Version History App Load and Labels Landing",
+    "Description": "Exercises the custom Version History app entry and VersionHistoryLabelsResource's own KPI computation (computeStats) plus card/list rendering — not the generic entity grid path.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo and select 'Version History'. The default 'Labels' surface should open. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Confirm the 'Version Labels' page renders with its header, a 'Create Label' button, four KPI stat cards, and either a list of labels or a valid empty state. Seeing the page render is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Version History app opens and the 'Version Labels' page renders with a header and a Create Label button",
+        "Four KPI stat cards are visible (Total Labels, Active, Archived, Restored) each showing a numeric value",
+        "Either a card/list of version labels OR a 'No labels found' empty state is shown (data-agnostic)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,version-history"
+  },
+  "primaryKey": {
+    "ID": "B3852024-151D-41C2-9280-4E3EA7770915"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.180Z",
+    "checksum": "73935c5db4c115ae4fd9ec55afe5cdc58416e43a77a700f7a80d8f9b4da955da"
+  }
+}

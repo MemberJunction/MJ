@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T206 - System Diagnostics Telemetry Enable Toggle",
+    "Description": "Exercises toggleTelemetry() flipping the client TelemetryManager on/off and the reactive warning alert — a stateful control-plane toggle distinct from any read/display feature.",
+    "InputDefinition": {
+      "goal": "You are already logged in at http://localhost:4200. Using the application switcher dropdown next to the logo, switch to the Admin application, open 'Monitoring', select System Diagnostics, then click the 'Performance' section tab. Make sure the source toggle is on 'Client'. Find the telemetry Enabled/Disabled toggle button in the panel header and click it to flip its state. Confirm the UI responds: the button label switches between Enabled and Disabled, and a warning banner ('Telemetry is disabled. Enable telemetry to track...') appears when disabled and disappears when enabled. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Observing the toggle flip its state and the corresponding warning banner appear/disappear is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Performance panel (Client source) shows a telemetry Enabled/Disabled toggle button",
+        "Clicking the toggle flips its label between 'Enabled' and 'Disabled'",
+        "The 'Telemetry is disabled' warning banner appears when disabled and is absent when enabled (state and banner stay consistent)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "E634DB0B-EE55-47DB-B88F-963D3A112853"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:00.002Z",
+    "checksum": "031e05be928f92282324dce6fdf9b2d5db3d33a807bbd3133cd0267138ab19d7"
+  }
+}

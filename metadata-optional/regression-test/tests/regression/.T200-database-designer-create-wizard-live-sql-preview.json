@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T200 - Database Designer Create Wizard Live SQL Preview",
+    "Description": "Exercises the wizard's reactive preview binding (WizardState.tableDefinition$ → mj-database-preview-pane) plus auto-table-name derivation — a live schema-preview code path unique to Database Designer.",
+    "InputDefinition": {
+      "goal": "In MJ Explorer, switch to the Admin application via the application switcher dropdown next to the logo. Open 'Data & Schema' > Database Designer, and click '+ New Entity' to open the New Entity wizard (wait for panels to load; 10-30s possible — wait, don't navigate away). The wizard shows the Basics step on the left and a live preview pane on the right. In the Basics step, type an Entity Name such as 'Regression Test Widget' and observe the preview pane. Success is that the preview pane on the right UPDATES to reflect what you typed (e.g. it derives/shows a table name or DDL/SQL preview reflecting the entity name — the Table Name field auto-populates with an 'auto' badge and the preview reflects the change). Seeing the preview react to your input is success — do NOT complete or submit the wizard.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The New Entity wizard shows a Basics form and a separate live preview pane",
+        "Typing an Entity Name updates the preview pane and/or auto-derives the Table Name (auto badge), demonstrating the preview reacts to input",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "BD6EA9EC-3DF0-4689-BD3F-F69966966209"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:59.777Z",
+    "checksum": "5d83713a80e3cea193ed64e22898a9c8edb32321d78afeffb6a6cacc6911b27e"
+  }
+}

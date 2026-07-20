@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T081 - Grid View-Type Switch to Timeline",
+    "Description": "The timeline-view-renderer plots records on a date axis — a distinct renderer code path from both the AG-Grid table and the cards renderer, gated by the entity having a date field.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and go to Data Explorer > Data. Open the 'Events' entity (or 'Products') via the LEFT sidebar 'Search entities...' box (type the name, click the exact match). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Open the view-type switcher dropdown in the view toolbar. If 'Timeline' is offered, select it and confirm the records re-render along a chronological timeline axis. (Timeline only appears for entities that expose a date field; if it is not offered, selecting another type such as 'Cards' and seeing the view re-render is an acceptable outcome.)",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The view-type switcher lists multiple types; if 'Timeline' is offered, selecting it renders a chronological/timeline layout",
+        "If Timeline is not available, an alternate type (e.g. Cards) is selectable and the view re-renders, OR a valid empty-state shows",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,grid"
+  },
+  "primaryKey": {
+    "ID": "316CA202-AF0D-4315-9727-635D46298C3E"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:56.136Z",
+    "checksum": "30723f3e8d5b965adc8e475e8248011d50b02ca91e74545c573aaba0fb026e88"
+  }
+}

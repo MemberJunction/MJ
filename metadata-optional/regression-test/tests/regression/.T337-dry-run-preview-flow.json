@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T337 - Dry-Run Preview Flow",
+    "Description": "Exercises the flagship RecordProcessRunnerUX two-step safety flow (server dry-run → diff preview → user-gated Apply) via the editor Preview path — the signature bulk-operations behavior, exercised nowhere else.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open 'Bulk Operations', click 'New operation'. Build a minimal valid operation: type a Name (e.g. 'Test preview op'), select any Entity, then in the Rules section click 'Add rule', pick a target field, and give it a fixed value (leave source as 'a fixed value' and type something). Once 'Preview changes' is enabled, click it. A dry-run runner dialog should open showing a safe-preview message such as 'Computing a safe preview — no changes have been made yet…', then resolve to either a per-record diff preview (a summary like 'N of M will change' with an 'Apply … change(s)' button), a 'Nothing to change' empty state, or an error message about the preview. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Seeing the dry-run preview dialog open and resolve is success — you must NOT click Apply.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking 'Preview changes' opens the runner dialog with a safe-preview / 'no changes have been made yet' indication",
+        "The dialog resolves to a preview outcome — a change summary with an 'Apply' action, a 'Nothing to change' state, or a clear error — without applying anything automatically",
+        "No error messages, blank screens, or crash pages beyond an in-dialog preview error"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,bulk"
+  },
+  "primaryKey": {
+    "ID": "9717B74A-4174-490B-BC21-7B8E65D4EC2B"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.133Z",
+    "checksum": "646b184d8ae895227c5aaf9f7b2e79ccf1b7d2daa0ac475379d1dc69ceb63530"
+  }
+}

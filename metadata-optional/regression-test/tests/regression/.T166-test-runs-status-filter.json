@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T166 - Test Runs Status Filter",
+    "Description": "Exercises the bespoke chip-based client-side status filter (filterByStatus over TestRunWithFeedbackSummary from the instrumentation service), not the generic entity-grid column filter.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher next to the logo, choose \"Testing\", then click the \"Runs\" tab. The Runs view shows a filter bar with status chips: All, Running, Passed, Failed, Error. Click the \"Passed\" chip, then the \"Failed\" chip, observing that the chip becomes highlighted/active and the runs table plus the result count respond each time — narrowing to matching runs, or showing a clear \"No test runs found\" empty state when nothing matches. Then click \"All\" to restore. Success is that the status chips visibly drive the table contents. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Runs view shows status filter chips (All, Running, Passed, Failed, Error)",
+        "Clicking a status chip marks it active and updates the runs table and/or the results count",
+        "When a filter yields nothing, a clear 'No test runs found' empty state appears instead of a broken table",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,testing"
+  },
+  "primaryKey": {
+    "ID": "32057B80-B9D1-49D7-B4EF-A3DA58CC6885"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.596Z",
+    "checksum": "32ad67aa58bc4daab7d130d8b862649826ac35c000643e16f12740ea95e065cc"
+  }
+}

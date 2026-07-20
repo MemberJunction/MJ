@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T219 - User Access Switch User Reloads Report",
+    "Description": "Exercises OnUserChanged -> loadPermissionsForSelectedUser: re-hydrating the target user's roles from MJ: User Roles and re-running GetAllUserPermissions for a non-current user. Different code branch from the initial current-user load (resolvePermissionsUser role-fetch path) and distinct from any generic grid interaction.",
+    "InputDefinition": {
+      "goal": "You are logged in at http://localhost:4200. Open the application switcher next to the logo, choose 'Permissions', and stay on the 'User Access' tab. Pages can take 10-30s to load — wait, don't navigate away. Open the 'User:' dropdown at the top and select a DIFFERENT user than the one currently selected. Success is that the report RESPONDS to the change: a brief 'Loading permissions...' state may appear, then the domain accordion groups / summary count update to reflect the newly selected user (or a valid 'No permissions' empty-state appears for that user). If the user has assigned roles, a roles badge (user-tag icon) shows their role names next to the picker. Seeing the report re-query and re-render for the new user is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Selecting a different user in the 'User:' dropdown triggers a reload (loading indicator and/or updated summary/accordion content)",
+        "The report content reflects the newly selected user — either updated permission domain groups OR a valid 'No permissions' empty-state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,permissions"
+  },
+  "primaryKey": {
+    "ID": "BF4AD539-F409-4C17-815D-F259C52F7659"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:00.389Z",
+    "checksum": "f9c4fb7e5d36e5eea4edf88e5700dacb612f0862ec10a9b790d62ef27629d6fc"
+  }
+}

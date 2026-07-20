@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T339 - Editor Cancel Returns To List",
+    "Description": "Exercises the editor Cancel → Cancelled emitter → studio backToList() Mode flip (discard-draft escape path), distinct from the generic form's discard-unsaved-edits flow.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open 'Bulk Operations', click 'New operation' to open the editor. Optionally type a Name. Then click the 'Cancel' button in the editor toolbar (or the 'Back' button in the top edit bar). Verify you are returned to the Operations list view (the search bar, 'New operation' button, and the operations table or empty state reappear) without any save occurring. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Returning cleanly to the list is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking 'Cancel' (or 'Back') from the editor returns to the Operations list view (search bar + 'New operation' button visible again)",
+        "The unsaved draft is discarded — you land on the list, not a persisted record",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,bulk"
+  },
+  "primaryKey": {
+    "ID": "7249EA7E-2E8F-48A1-8340-8C3EEFDF81A2"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.164Z",
+    "checksum": "7a68b85f4554ed6f4bd79b7a88d0b40295e1effec2b565057b3994830d6c6649"
+  }
+}

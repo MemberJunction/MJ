@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T334 - FieldRules Builder Add Rule and Source Switch",
+    "Description": "Exercises the FieldRulesBuilderComponent AddRule + the @switch(SourceKind) that renders distinct source editors (static / field / formula / lookup / prompt) — the core visual authoring feature unique to bulk operations.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open 'Bulk Operations', click 'New operation', and in the editor pick any entity from the 'Entity' dropdown so the '3 Rules' builder appears. Click 'Add rule'. A rule row should appear reading 'Set [field] from [source]' with a target-field dropdown and a 'from' source dropdown offering options like 'a fixed value', 'another field', 'a formula', 'a lookup', 'an AI prompt'. Change the 'from' dropdown from 'a fixed value' to 'a formula' (and optionally to 'a lookup') and verify the source input area BELOW changes shape accordingly (e.g. a formula text box, or the multi-field lookup inputs). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Seeing a rule row added and its source inputs re-render when the source kind changes is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking 'Add rule' adds a rule row with a target-field dropdown and a 'from' source-kind dropdown",
+        "Changing the source kind (e.g. to 'a formula' or 'a lookup') changes the source input area rendered beneath the rule",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,bulk"
+  },
+  "primaryKey": {
+    "ID": "D1F142FE-8E8F-4A34-BE3C-A857A8E0C408"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.045Z",
+    "checksum": "a561a8dd126b3710745345faee37939953092c9e9d2dbe23e928b56ece79ea4c"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T224 - Audit Log Timeline Query Renders Entries",
+    "Description": "Exercises OnRunQuery -> PermissionEngine.GetAuditTimeline, rendering a chronological Create/Update/Delete/Snapshot change log with per-type icons (ChangeIcon) and a 500-row cap notice. This timeline surface is a distinct code path from the two access-report tabs.",
+    "InputDefinition": {
+      "goal": "You are logged in at http://localhost:4200. Open the Permissions app via the application switcher next to the logo, then click 'Audit Log' in the left nav. Pages can take 10-30s to load — wait, don't navigate away. Initially you should see a 'No query yet' empty-state. Optionally set a Domain filter or leave all filters (Domain, Changed by, From, To) at their defaults, then click the 'Query' button. Success is that the timeline query RUNS and shows one of two valid outcomes: an entries table with columns When, Who, Change, Domain, Entity, Record, and Summary (each Change cell shows a change-type chip like Create/Update/Delete with an icon) plus an entry count, OR a 'No audit entries found' no-results empty-state. Either outcome proves the query feature works.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Audit Log surface shows a 'No query yet' state before querying, and clicking 'Query' transitions out of it",
+        "The result is either an audit entries table (When / Who / Change / Domain / Entity / Record / Summary columns with change-type chips) plus a count, OR a valid 'No audit entries found' empty-state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,permissions"
+  },
+  "primaryKey": {
+    "ID": "5E90CCCA-039F-4454-9142-BF179395B0FB"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:00.495Z",
+    "checksum": "cdde8f732b9a15b2810fdb0dd59fcbf53b08eeda67d5fe490e6e5694538e2c17"
+  }
+}

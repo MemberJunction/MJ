@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T336 - Editor Save and Preview Validation Gating",
+    "Description": "Exercises the CanSave (Name + EntityID + RulesValid) and CanPreview (CanSave + rules>0) getters that disable the toolbar — a validation-gating behavior, not a generic required-field save block.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open 'Bulk Operations', click 'New operation' to open a blank editor. Before filling anything in, observe the toolbar: the 'Save' button should be DISABLED (a new operation needs at least a Name and an Entity), and 'Preview changes' should also be disabled (it additionally needs at least one rule). Now type a Name in Basics and choose an Entity in 'What it acts on'; verify 'Save' becomes ENABLED. 'Preview changes' should remain disabled until at least one field rule is added. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Seeing the buttons gate on required inputs (disabled → enabled) is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "On a blank new operation, 'Save' and 'Preview changes' are both disabled",
+        "After entering a Name and selecting an Entity, 'Save' becomes enabled while 'Preview changes' stays disabled until a rule exists",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,bulk"
+  },
+  "primaryKey": {
+    "ID": "95A829D5-03F0-4327-8D94-34A5D752A858"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.116Z",
+    "checksum": "94ca45a7b5da0eb7eaa200272472fafac60301823dd12ea0352a0c5161f2ae9d"
+  }
+}

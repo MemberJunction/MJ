@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T080 - Configure View Add Aggregate Dialog",
+    "Description": "Exercises aggregate CREATION via the setup dialog (function + field + display type), distinct from the existing test that only verifies an aggregate summary row renders.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and go to Data Explorer > Data. Open the 'Products' entity via the LEFT sidebar 'Search entities...' box (type 'Products', click the exact match). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Open Configure View (sliders icon) and click the 'Aggregates' tab. Click the 'Add Aggregate' button. Success is the aggregate setup dialog opening, letting you choose an aggregate function (sum / average / count / etc.) and a field, plus a display type (card vs column footer). Seeing the setup dialog render is success — you do NOT need to save the aggregate.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Aggregates tab renders with an 'Add Aggregate' button",
+        "Clicking it opens an aggregate setup dialog offering a function/field choice and a display-type option",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,grid"
+  },
+  "primaryKey": {
+    "ID": "6AD52C8E-7BF3-4E37-BF85-D6381962998A"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:56.108Z",
+    "checksum": "585899533fd4c8e1cb4ac248ce0d0c6180b2185f6d837fcb343d5cd4ce270cf3"
+  }
+}

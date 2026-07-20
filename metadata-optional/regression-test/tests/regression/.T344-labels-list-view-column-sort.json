@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T344 - Labels List View Column Sort",
+    "Description": "Exercises the component's own OnSortChange/sortLabels/GetSortIcon sorting over the in-memory list (custom sortable headers), not the generic AG-grid column sort.",
+    "InputDefinition": {
+      "goal": "In the Version History app → Labels surface, switch to list view, then click a sortable column header such as 'Name' or 'Created'. Confirm a sort direction indicator (arrow) appears on that column and clicking the same header again toggles the direction. Pages can take 10-30s to load — wait, don't navigate away. If multiple labels exist the row order should change; seeing the sort indicator respond is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "In list view the column headers (Name/Status/Items/Created) are clickable",
+        "Clicking a header shows a sort direction indicator and (if multiple labels exist) reorders rows",
+        "Clicking the same header again toggles the sort direction indicator",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,version-history"
+  },
+  "primaryKey": {
+    "ID": "4866FE72-C2F2-438D-9E1B-EB1FAF18B40B"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.287Z",
+    "checksum": "1f59abd23c179cb53dea0a5f7f8b33f7074f335b8ad9aa6e65d0bee9a0cb78ba"
+  }
+}

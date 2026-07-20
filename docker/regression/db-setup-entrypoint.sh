@@ -56,9 +56,14 @@ if [ -n "${BACPAC_FILE:-}" ]; then
         echo "  ✓ Migrations complete"
         echo ""
 
-        echo "Step 3: Running CodeGen (regenerate views/procs/metadata to match current code)..."
+        # Two passes: pass 2 reconciles special-date EntityField metadata for any
+        # entities newly registered by pass 1 (see standard-mode note below).
+        echo "Step 3: Running CodeGen (pass 1/2 — regenerate views/procs/metadata to match current code)..."
         npx mj codegen
-        echo "  ✓ CodeGen complete"
+        echo "  ✓ CodeGen pass 1 complete"
+        echo "Step 3b: Running CodeGen (pass 2/2 — reconcile special-date EntityField metadata)..."
+        npx mj codegen
+        echo "  ✓ CodeGen pass 2 complete"
         echo ""
     else
         echo "Step 2-3: Upgrade disabled (BACPAC_UPGRADE=false) — using imported DB as-is"
@@ -96,13 +101,27 @@ echo "  ✓ Migrations complete"
 echo ""
 
 # Step 3: CodeGen — generates entity classes, views, stored procedures, and
-# the matching EntityField metadata rows in a single pass.
-# CodeGen handles the __mj_CreatedAt/__mj_UpdatedAt/__mj_DeletedAt EntityField
-# rows itself via ensureSpecialDateEntityFieldsExist (see CodeGenLib's
-# manage-metadata.ts) — no post-codegen patching is required.
-echo "Step 3: Running CodeGen..."
+# the matching EntityField metadata rows.
+#
+# TWO PASSES ARE REQUIRED for a freshly-bootstrapped schema (AssociationDemo).
+# The FIRST pass registers the new entities, adds the
+# __mj_CreatedAt/__mj_UpdatedAt/__mj_DeletedAt columns to the tables, and
+# generates the views + CRUD procs — but does NOT populate the special-date
+# EntityField metadata rows for those brand-new entities in the same pass.
+# The SECOND pass reconciles them (the __mj columns now physically exist, so the
+# special-date field sync picks them up).
+#
+# Without pass 2, every WRITE (create/edit/delete) against the demo entities
+# fails at runtime ("Field __mj_CreatedAt does not exist on <Entity>") even
+# though the tables/views/procs are correct and all READS succeed — because the
+# server builds its save path from EntityField metadata, which was missing the
+# system fields for all 58 AssociationDemo entities. Reads passed, writes failed.
+echo "Step 3: Running CodeGen (pass 1/2 — schema, entities, views, procs)..."
 npx mj codegen
-echo "  ✓ CodeGen complete"
+echo "  ✓ CodeGen pass 1 complete"
+echo "Step 3b: Running CodeGen (pass 2/2 — reconcile special-date EntityField metadata for new entities)..."
+npx mj codegen
+echo "  ✓ CodeGen pass 2 complete"
 echo ""
 
 # Step 4: Sync application metadata (baseline migration only seeds 2 of ~20 apps)

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T107 - Query Category Expand All and Collapse All",
+    "Description": "Exercises the expandAll()/collapseAll() bulk-tree toolbar actions on the query category hierarchy — distinct from clicking an individual folder or the entity tree sidebar.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo, switch to Data Explorer, and open the Queries section. In the query panel header find the folder toolbar icons: 'Expand all' (open-folder icon) and 'Collapse all' (folder icon). Click 'Expand all' and confirm the category folders in the tree expand to reveal their queries. Then click 'Collapse all' and confirm the folders collapse back to just their category headers. If the catalog has no nested categories, seeing the buttons present and the tree remain stable (or a valid empty state) is acceptable. Success is the tree visibly responding to the toolbar actions. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "'Expand all' and 'Collapse all' toolbar controls are present in the query panel header",
+        "Clicking 'Expand all' expands the category folders to reveal queries and 'Collapse all' collapses them back — OR, if no nested categories exist, a valid empty/flat-tree state renders without error",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,query"
+  },
+  "primaryKey": {
+    "ID": "15C9CFB9-A366-46ED-A5B4-AA3E4625993E"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:56.814Z",
+    "checksum": "fa3477663445f4df1092b5ae81b6fb5aa5c4e56bbae6dddefe8868b04c8faf7d"
+  }
+}

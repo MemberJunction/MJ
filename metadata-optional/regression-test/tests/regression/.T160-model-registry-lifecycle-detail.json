@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T160 - Model Registry Lifecycle Detail",
+    "Description": "Exercises the PSRegistry model-lifecycle detail (stepper + metric parse + feature-importance bars + leakage gate) — a distinct model-management panel.",
+    "InputDefinition": {
+      "goal": "Open the Predictive Studio app via the application switcher dropdown next to the logo (scroll if needed), then open the 'Models' door and select the 'Model Registry' section. Pages can take 10-30s to load — wait, don't navigate away. Success is the registry rendering: a master list of trained ML models, and on selecting one, a detail pane with a lifecycle stepper (Draft → Validated → Published → Archived), a Train-vs-Holdout AUC comparison, feature-importance bars, and a leakage sign-off callout. If no models exist yet, the 'No trained models yet' empty state is a pass. You do NOT need to promote or archive a model.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Either the model master list + detail pane (lifecycle stepper, performance metrics, feature-importance bars) renders, OR the 'No trained models yet' empty state renders",
+        "When a model is selected, its lifecycle stage and holdout metric are shown in the detail pane",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,predictive-studio"
+  },
+  "primaryKey": {
+    "ID": "F7FC4726-1D17-49F7-8AE7-50B11D4D219A"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.419Z",
+    "checksum": "3aa7a42906ab372eb430065dda237570a89e26e310338003b912699c4c3d5b9e"
+  }
+}

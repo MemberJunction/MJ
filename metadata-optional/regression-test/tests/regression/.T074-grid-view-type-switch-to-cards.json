@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T074 - Grid View-Type Switch to Cards",
+    "Description": "Exercises the cards-view-renderer plug-in code path, which is entirely separate from the default AG-Grid table renderer; switching renderers is not touched by any existing grid test.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and go to Data Explorer, then its Data section. Open the 'Products' entity via the LEFT sidebar 'Search entities...' box (type 'Products', click the exact match). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Once the records grid renders, find the view-type switcher dropdown in the view toolbar at the top of the records area (a button showing the current type like 'Grid' with a chevron, next to the saved-view selector). Open it and choose 'Cards'. Success is the records re-rendering as a grid of cards instead of a table — you do NOT need to interact with the cards.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The view-type switcher dropdown opens and lists more than one view type, including a 'Cards' option",
+        "After selecting Cards, the records re-render as cards (a card grid) rather than the tabular AG-Grid, OR a valid empty-state is shown for that view",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,grid"
+  },
+  "primaryKey": {
+    "ID": "1DA575B3-D192-4DA2-A76F-AD5C22DAF068"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:55.852Z",
+    "checksum": "24a234bccc7075c25df1890e8a5a7699e497de6f7713d5efe6d653d5bf200eb5"
+  }
+}

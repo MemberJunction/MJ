@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T367 - Form Studio Cockpit Loads",
+    "Description": "Loads the separate FormBuilderResource cockpit (4-pane splitter shell) — a distinct resource component from the ComponentStudioResource browser.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to 'Component Studio', then click the 'Form Studio' section in the left navigation. Wait for the Form Builder cockpit to render: a left 'Forms' rail with a '+ New' button, a 'Search forms…' box, an entity filter (All entities) control, and status filter chips (Active / Pending / Inactive), plus a center pane showing a 'Form Builder' landing empty state. Pages can take 10-30s to load — wait, don't navigate away. Seeing the cockpit chrome (forms rail + landing) render is success — you do NOT need to open a form.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The 'Form Studio' section opens the Form Builder cockpit with a left 'Forms' rail (search box, '+ New', entity filter, status chips)",
+        "The center pane shows a Form Builder landing/empty state inviting the user to pick or create a form",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,component-studio"
+  },
+  "primaryKey": {
+    "ID": "5429B29F-FB04-463B-8640-7C4F1572F1E8"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.863Z",
+    "checksum": "56670fe3876624f8fbb262cfba0f01f10e3b73f148301fcc34996aca6a01d918"
+  }
+}

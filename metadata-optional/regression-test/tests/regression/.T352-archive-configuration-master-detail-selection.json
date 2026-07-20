@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T352 - Archive Configuration Master-Detail Selection",
+    "Description": "Exercises the custom mj-archive-config-admin two-panel master-detail (SelectConfig → per-selection async loadConfigEntities), not the generic entity grid/form; each selection fires a distinct RunView for that config's entities.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and select 'Archiving'. It opens on the 'Configuration' tab, which shows a left-hand list of archive configuration cards and a right-hand detail panel. Click one of the configuration cards in the left list. Success is seeing the right detail panel populate with that configuration's editable fields (Name, a Storage section with a Storage Account dropdown and Root Path, a Defaults section with Retention Days / Batch Size / Archive Mode, and an Entities table) — you do NOT need to edit or save anything. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Archiving app opens on the Configuration tab showing a list of configuration cards on the left (or a clear 'No configurations found' empty state)",
+        "Clicking a configuration card loads a detail panel on the right showing that config's Name field plus Storage, Defaults, and Entities sections",
+        "The clicked card appears visually selected/highlighted while its details are shown",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,archiving"
+  },
+  "primaryKey": {
+    "ID": "EB52263A-DD9E-43B0-84F8-6FE04E4C1CBE"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.496Z",
+    "checksum": "a8264bc6e867c744711dc9611aa696d587089e24dc2278f9f4fd023e48ebc077"
+  }
+}

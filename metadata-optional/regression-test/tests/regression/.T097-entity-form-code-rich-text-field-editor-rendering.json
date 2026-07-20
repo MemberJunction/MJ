@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T097 - Entity Form Code/Rich-Text Field Editor Rendering",
+    "Description": "Exercises the RichTextMode='code'/'markdown'/'html' rendering path (mj-code-editor, mj-markdown, CodeEditorLanguage) for long-text fields — a distinct field-type editor branch from textbox/textarea/number/date/checkbox/select and from FK search.",
+    "InputDefinition": {
+      "goal": "Open an entity whose records contain a large code, SQL, JSON, or markdown field via the LEFT sidebar 'Search entities...' box — good candidates are 'Templates' (template text), 'MJ: Queries' (SQL), or 'Email Templates'. Click a row and 'Open Full Record'. Locate the long code/markdown field: in read mode it should render in a formatted way (syntax-highlighted code block or rendered markdown, NOT a single plain input line). Then click Edit and confirm that field becomes a multi-line code editor (syntax-highlighted textarea) rather than a one-line text box. Success is the long/code field using the rich code-editor rendering in at least one mode. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A long code/SQL/JSON/markdown field renders with rich formatting (syntax-highlighted code editor or rendered markdown), not a plain single-line input",
+        "In edit mode the field presents as a multi-line code/rich editor",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,form"
+  },
+  "primaryKey": {
+    "ID": "94B49AA3-DB65-4724-B48C-E26A6B5E5E3C"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:56.539Z",
+    "checksum": "40729688462b447480b6a0250b66777d344d962fd537ab752476b8b60a73b6e7"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T333 - Rules Builder Gated On Entity Selection",
+    "Description": "Exercises the @if(SelectedEntityName) conditional that mounts FieldRulesBuilderComponent, plus the onEntityChange → resolveEntityName wiring — a branch that renders nothing until an entity is chosen.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open 'Bulk Operations', click 'New operation' to open the editor. Before choosing an entity, confirm the Rules section shows a hint like 'choose an entity first' and no rule builder. Then, in the '2 What it acts on' section, pick any entity from the 'Entity' dropdown. After selecting an entity, verify the '3 Rules' section now renders the visual field-rules builder (a 'Field rules' heading with an 'Add rule' button and a 'No rules yet' hint). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Seeing the builder appear only after an entity is chosen is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Before an entity is selected, the Rules section shows a 'choose an entity first' style hint (no builder)",
+        "After selecting an entity, the field-rules builder appears with an 'Add rule' button",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,bulk"
+  },
+  "primaryKey": {
+    "ID": "9B0199BA-0D0A-438E-A2C2-E31B3EFCE09E"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.030Z",
+    "checksum": "f6ff2d66ce0dec00744dccbc1dedd00c2bf95553d5a2a3568b78edcd93930e84"
+  }
+}

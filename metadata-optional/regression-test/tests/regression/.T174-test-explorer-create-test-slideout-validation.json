@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T174 - Test Explorer Create Test Slideout Validation",
+    "Description": "Exercises the bespoke create-Test/Suite slideout with a type toggle and client-side IsFormValid gate — a hand-built form separate from the generic entity create form and its validation.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher next to the logo, choose \"Testing\", and reach the Test Explorer. Click the \"New Test\" button to open the create slideout panel. With the Name left blank and no Test Type selected, verify the \"Create Test\" button is disabled (validation gate). Then type a Name and pick a Test Type from the dropdown and confirm the Create button becomes enabled. You do NOT need to actually save — observing the required-field validation gate toggle the Create button is success. Close the slideout with Cancel or the X. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking New Test opens a slideout create panel with a Name field and a Test Type selector",
+        "With required fields blank, the Create Test button is disabled",
+        "Filling in Name and selecting a Test Type enables the Create button",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,testing"
+  },
+  "primaryKey": {
+    "ID": "94FB329C-89CD-4D2B-8528-F85E4DFD2655"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.899Z",
+    "checksum": "e76caf62fb2742dc9148113e02656ddc21597c074744ffc7be2abfb571d5d6d2"
+  }
+}

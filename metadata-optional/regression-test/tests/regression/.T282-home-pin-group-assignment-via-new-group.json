@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T282 - Home Pin Group Assignment via New Group",
+    "Description": "Exercises the group-selector '__new__' branch (AddPanelNewGroupName), getSelectedGroup(), and the PinGroups/GetPinsInGroup grouped-render path — pin grouping logic distinct from ungrouped pin creation.",
+    "InputDefinition": {
+      "goal": "You are already logged in at http://localhost:4200. Go to the Home landing page (Home icon/logo or application switcher dropdown). In the 'Pinned' section click 'Add Pin' to open the slide-in panel. In the 'Add to group' selector, choose the '+ New group...' option and verify a text input appears for the new group name; type a group name (e.g. 'Test Group'). Then expand 'Applications' and click 'Pin' on any nav item. Close the panel and verify the Pinned section now renders a group header labeled with your group name (with a pin count) and the pinned card grouped beneath it. Success is that pinning into a newly-named group produces a grouped section on the Home page. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Selecting '+ New group...' in the group selector reveals a new-group name input",
+        "After pinning an item into the named group, the Pinned section shows a group header with that name and the item grouped under it",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,home"
+  },
+  "primaryKey": {
+    "ID": "318DF44B-7CBC-4CB8-984D-CF2F285A38E5"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.834Z",
+    "checksum": "1eea8dec442676252e1fb3fca58cef12034cc924f023205b49a173d93f35b578"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T286 - File Browser New Folder Dialog",
+    "Description": "Exercises FileGridComponent's new-folder dialog flow (onNewFolderClick / showNewFolderDialog / onCancelNewFolder → CreateDirectory), a bespoke modal + GraphQL storage mutation path unique to file storage, not the generic record create form.",
+    "InputDefinition": {
+      "goal": "In the File Browser (open via the application switcher dropdown next to the logo, then 'Browse Files'), find the 'New Folder' button in the bottom toolbar of the file listing panel and click it. Success is seeing a 'Create New Folder' dialog open with a folder-name text input and Create / Cancel buttons; then click Cancel and confirm the dialog closes without creating anything. You do NOT need to actually create a folder. If no storage account is configured (no toolbar visible), the 'No storage accounts configured' state is an acceptable pass. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking 'New Folder' opens a 'Create New Folder' dialog containing a name input and Create + Cancel actions",
+        "Clicking Cancel closes the dialog and returns to the file listing with no error — OR a clear 'No storage accounts configured' empty state is shown instead of the toolbar",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,files"
+  },
+  "primaryKey": {
+    "ID": "26C46896-8224-4510-A48B-D284323D0BAE"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.941Z",
+    "checksum": "586d7101b4124fd49ce430fbf3750d098422d8e2001053a05e1665df13ae1429"
+  }
+}

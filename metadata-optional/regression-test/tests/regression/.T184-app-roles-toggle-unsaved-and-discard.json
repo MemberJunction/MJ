@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T184 - App Roles Toggle Unsaved and Discard",
+    "Description": "Tests the dirty-state chrome of the ApplicationRoles resource (HasUnsavedChanges badge + ToggleCanAccess/ToggleCanAdmin + DiscardChanges) — bespoke per-app role matrix logic.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Switch to the Admin application via the application switcher dropdown next to the logo, open 'Identity & Access', and select the 'App Roles' sub-section. The Application Roles view lists applications as accordion panels. Expand any application group; if it has role rows they show 'Can Access' and 'Can Admin' checkboxes. Toggle one of the 'Can Access' or 'Can Admin' checkboxes and verify an 'Unsaved changes' badge appears in the header along with 'Discard' and 'Save Changes' buttons. Then click 'Discard' and verify the unsaved state clears (badge and buttons disappear). Do NOT click Save. Success is the unsaved-state chrome appearing then clearing on discard. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The App Roles view renders applications as expandable accordion panels with role assignment rows (or an open-access message)",
+        "Toggling a Can Access / Can Admin checkbox surfaces an 'Unsaved changes' badge plus Discard and Save Changes buttons",
+        "Clicking Discard clears the unsaved-changes indicators",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "1D237A07-ED1D-4803-B0CB-F3D4B035C368"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:59.216Z",
+    "checksum": "1e3163f390ceb8fceb1b1cbbec877edec590e6d9929828cf77d11a24027022a0"
+  }
+}

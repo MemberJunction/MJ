@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T086 - Entity Form FK Search Inline Create-New Footer",
+    "Description": "Targets the CanCreateFK create-new footer inside the FK search dropdown — a distinct permission-gated affordance separate from the search itself and from the New-Record button on the grid.",
+    "InputDefinition": {
+      "goal": "Open the 'Event Registrations' entity via the LEFT sidebar 'Search entities...' box, open a record's full form, and click Edit to enter edit mode. Click a foreign-key field (e.g. 'Member') and type a value unlikely to match anything (e.g. 'ZZQX Nonexistent'). At the bottom of the FK search dropdown a sticky 'Create new...' footer button (with a plus icon), prefilled with the typed text, should appear. Success is seeing that 'Create new' footer render (you do NOT click it), OR — if the current user lacks create permission on the related entity — the footer being deliberately absent while the dropdown still shows a no-match state. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Typing a non-matching value in a foreign-key field renders the FK search dropdown",
+        "A 'Create new...' footer button with a plus icon appears at the bottom of the dropdown, prefilled with the typed text (OR is deliberately absent when the user lacks create permission on the related entity)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,form"
+  },
+  "primaryKey": {
+    "ID": "F1FF99F2-6A3E-4460-A4A7-11A903F791F6"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:56.263Z",
+    "checksum": "8202f22cbaa55faf0ac97d2b583b61becb899831aed59c5b20d2a7b9b7e2a013"
+  }
+}

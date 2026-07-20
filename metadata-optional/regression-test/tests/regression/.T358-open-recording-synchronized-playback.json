@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T358 - Open Recording Synchronized Playback",
+    "Description": "The core value path unique to this dashboard: SelectSession() loads transcript turns via a second RunView on 'MJ: Conversation Details', builds time-aligned MediaTranscriptCues, and hands FileID + cues to mj-storage-media-player — not reachable through any generic grid/form flow.",
+    "InputDefinition": {
+      "goal": "In the 'Realtime Recordings' application (reach it via the application switcher dropdown next to the logo), wait for the recordings list to load — pages can take 10-30s in this environment, so wait, don't navigate away. If at least one recording row is present, click it and wait for the right-hand playback pane to load; success is that the detail pane mounts an audio/media player (play controls / scrubber) together with a transcript view, or shows a 'Loading recording...' then the player. If the list is empty, seeing the 'No recorded sessions yet' empty state is also a pass. You do NOT need to actually hear audio play — the player and transcript rendering is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking a recording row loads the right playback pane with a media/audio player (play button or scrubber visible) and/or a transcript panel — OR a valid empty state if no recordings exist",
+        "The previously-shown 'Select a session to replay' prompt is replaced by the player once a recording is selected",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,realtime"
+  },
+  "primaryKey": {
+    "ID": "D8071214-7FD8-4376-A339-FD44829EC962"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.640Z",
+    "checksum": "57772edcfdb1592cfb8a5302f549eb3ecc9e486da052404da5ab317a2fbd9924"
+  }
+}

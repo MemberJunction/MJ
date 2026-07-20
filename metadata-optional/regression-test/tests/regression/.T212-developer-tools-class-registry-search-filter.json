@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T212 - Developer Tools Class Registry Search Filter",
+    "Description": "Exercises the OnSearchChange/FilteredGroups filtering logic, not the mere-render check T194 performs.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo and choose the Admin app. Open the 'Developer Tools' section, then in its left sub-navigation click 'Class Registry'. Note the initial 'Total registrations' stat and the list of base-class groups. Type a term into the 'Search base class, subclass, or key...' box - first something broad like 'Entity' and observe the group list narrow, then something that will not match like 'zzzznotaclass'. Success is the search FEATURE responding: the grouped list narrows to matching base classes for a real term, and shows a clear 'No registrations match' empty state for the nonsense term. Pages can take 10-30s to load in this resource-constrained environment - wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Typing a real search term visibly narrows the class-registry group list to matching entries",
+        "Typing a nonsense term shows a no-results empty state (rather than the full list or a crash), confirming the filter is live",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "4F7EB2DC-6421-45C2-AF96-36DF1F687B76"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:00.157Z",
+    "checksum": "848f4637e9711521db607c1ae537e5212e5bcaeabcbae8e6a2ea1864363e5a77"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T141 - MCP Add Server Dialog Conditional Transport Fields",
+    "Description": "Tests the @if (ServerForm.TransportType === ...) conditional-field-rendering branches inside the inline server dialog — a real branching code path distinct from generic entity forms and from other MCP tests.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the AI app via the application switcher dropdown next to the logo (NOT Ctrl+K) and open the MCP section, then go to the Servers tab. Click the 'Add Server' button (or the 'Add Your First Server' button in the empty state) to open the Add MCP Server dialog. In the dialog, change the 'Transport Type' dropdown between options and confirm the form adapts: choosing an HTTP-based transport (Streamable HTTP / Server-Sent Events / WebSocket) reveals a 'Server URL' field, while choosing 'Standard I/O' reveals a 'Command' field instead. Seeing the dialog render and the transport-dependent field swap is success — you do NOT need to actually save a server. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Add MCP Server dialog opens with Name, Description, Transport Type, and Status fields",
+        "Selecting an HTTP transport (Streamable HTTP/SSE/WebSocket) shows a 'Server URL' input; selecting 'Standard I/O' shows a 'Command' input instead",
+        "The conditional field visibly changes when the Transport Type dropdown value changes",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,mcp"
+  },
+  "primaryKey": {
+    "ID": "26CDFEE2-7B0A-4260-9DEC-5B2D56418C81"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.913Z",
+    "checksum": "7f8aa913e83e27fece03ca5c092b3f9a68655f13abeffdf43d958cab07d42996"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T122 - AI Analytics Section Switching",
+    "Description": "Exercises the analytics resource's left-nav + @switch(ActiveSection) that mounts distinct child components per section - a section-router pattern not covered by the generic 'analytics renders' test.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the AI application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), then open the Analytics section. The Analytics screen has a left navigation rail listing sections (Executive Summary, Prompt Runs, Agent Runs, Model Performance, Cost & Budget, Error Analysis, Usage Patterns). Click through at least two different sections - for example switch from Executive Summary to Cost & Budget, then to Model Performance. Pages can take 10-30s to load in this resource-constrained environment - wait, don't navigate away. Success is that the content area swaps to a different analytics view for each section you select while the outer chrome stays put.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A left navigation rail with multiple analytics section labels is visible",
+        "Selecting a different section (e.g. Cost & Budget, Model Performance) swaps the main content area to that section's view without a full page reload",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,ai"
+  },
+  "primaryKey": {
+    "ID": "DD439331-D53B-4854-86E4-D81DC7CCBBF8"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.246Z",
+    "checksum": "55f3e6a0d9a34aa5b0314ce68d7c01083ac8c85ec1c346bc42052cf04df8299e"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T207 - System Diagnostics Telemetry Source Client/Server Toggle",
+    "Description": "Exercises setTelemetrySource() switching between the in-memory client telemetry branch and the server-telemetry-config branch — two distinct data-source code paths behind the same panel.",
+    "InputDefinition": {
+      "goal": "You are already logged in at http://localhost:4200. Via the application switcher dropdown next to the logo, switch to the Admin application, open 'Monitoring', select System Diagnostics, then open the 'Performance' section tab. In the panel header there is a source toggle with two buttons: 'Client' and 'Server'. Click 'Server' and confirm the header switches to server-telemetry mode — the client Enable/Clear buttons are replaced by a server status indicator (Enabled/Disabled with a '(config)' note), possibly a brief loading spinner. Then click 'Client' to switch back and confirm the client controls return. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Seeing the header controls change between Client and Server modes is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Performance panel header shows a Client / Server source toggle",
+        "Selecting 'Server' switches the header to a server status indicator (Enabled/Disabled with a config note) instead of the client Enable/Clear buttons",
+        "Selecting 'Client' restores the client-mode controls",
+        "No error messages, blank screens, or crash pages (a server-telemetry error banner shown gracefully is acceptable, but not a crash)"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "DDF8D635-04FC-4DC6-AABE-97F35AFE31E3"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:00.024Z",
+    "checksum": "eab66e2f7486a33fcad05c443fcb832aeaf17db6d715d7d601f4423a349d1fac"
+  }
+}

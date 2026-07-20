@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T281 - Home Quick Access Sidebar Toggle",
+    "Description": "Exercises toggleSidebar() and the hasSidebarContent-gated quick-access sidebar (Notifications/Favorites/Recents) plus the FAB toggle — a distinct collapsible-panel behavior separate from the always-visible favorites/recent render test.",
+    "InputDefinition": {
+      "goal": "You are already logged in at http://localhost:4200. Go to the Home landing page (Home icon/logo or application switcher dropdown). Look for the Quick Access toggle — a fixed circular button with a bolt icon (bottom/side of the page). Click it to open the right-hand 'Quick Access' sidebar, which shows sections like Notifications, Favorites, and Recent (or a compact 'No quick access items' empty state if you have none). Then click the sidebar's close (x) button and verify the sidebar collapses back. Success is opening and closing the Quick Access sidebar; if the FAB is absent because there is no quick-access content, seeing the Home page render cleanly with no sidebar is an acceptable pass. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking the Quick Access bolt button opens the right sidebar showing Favorites/Recent/Notifications sections OR a valid 'No quick access items' empty state (or the FAB is legitimately absent when there is no content)",
+        "Clicking the sidebar close (x) collapses the sidebar again",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,home"
+  },
+  "primaryKey": {
+    "ID": "ED3E804B-2189-4D65-8DBA-FB60D2C2B4BD"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.818Z",
+    "checksum": "4414f46e83914816bba65dfb97c64d642985be1a09e2a7aaafbc334cf16f8052"
+  }
+}

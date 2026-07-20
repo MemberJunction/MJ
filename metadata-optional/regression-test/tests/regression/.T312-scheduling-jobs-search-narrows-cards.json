@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T312 - Scheduling Jobs Search Narrows Cards",
+    "Description": "Exercises SchedulingJobsComponent.applyFilters free-text search over its custom card grid (matches name/type/description) — a different code path from ag-grid quick-search on the generic entity grid.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to the 'Scheduling' application, then open its 'Jobs' left-nav section. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. The Jobs view shows scheduled jobs as CARDS (each with a status chip, Type/Schedule/Last-Run/Next-Run meta and a Success Rate bar). Type a query into the 'Search jobs...' box and verify the card grid RESPONDS — the visible cards narrow to matches, OR a clear 'No jobs found' no-results state appears. Then clear the search and confirm the fuller list returns. Seeing the grid react to the search input is success regardless of how many jobs exist.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Jobs section renders scheduled jobs as cards (status chip + Schedule/Success-Rate details) or a valid empty-state",
+        "Typing in 'Search jobs...' narrows the visible cards to matches OR shows a 'No jobs found' no-results message",
+        "Clearing the search restores the previous set of cards",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,scheduling"
+  },
+  "primaryKey": {
+    "ID": "69D915EE-83DD-4F80-AEFE-4A6FD1E6FF89"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.512Z",
+    "checksum": "e7291c1dbd1bd98a35d8f4a2545fae7c25992c5844322018c78c17afd0b82702"
+  }
+}

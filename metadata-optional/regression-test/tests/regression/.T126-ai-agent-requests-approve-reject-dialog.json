@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T126 - AI Agent Requests Approve Reject Dialog",
+    "Description": "Exercises the human-in-the-loop request flow: agent-requests-resource card click → mj-agent-request-dialog → agent-request-panel with OnApprove/OnReject/OnRespond - a bespoke approval UX not covered by any list/section-nav test.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the AI application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), then open the Agent Requests section. If any request cards are listed, click a request card to open its detail dialog. Pages can take 10-30s to load in this resource-constrained environment - wait, don't navigate away. Success is that clicking a request card opens a detail dialog/panel showing the full request, and for an actionable (pending/'Requested') request it presents response controls such as Approve / Reject / Respond. Seeing the request detail dialog render with its action controls is success - you do NOT need to actually approve or reject. If there are no requests, a valid 'No agent requests yet' empty state counts.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Agent Requests list renders (cards with type/priority/status), OR a valid empty state ('No agent requests yet')",
+        "Clicking a request card opens a detail dialog/panel; for an actionable request, Approve/Reject/Respond controls are visible",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,ai"
+  },
+  "primaryKey": {
+    "ID": "FE899F58-3D9C-4AD8-AF53-D2F332CC4A27"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.361Z",
+    "checksum": "1e841fcc9874f8b698bca7f55679b9d386463bd4a7ac5087e8007d7b3091fcc4"
+  }
+}

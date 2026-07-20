@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T353 - Add Archive Configuration Draft",
+    "Description": "Exercises the AddConfiguration() in-memory draft-creation path (client-side new record with seeded defaults, no DB round-trip) — fully data-agnostic, works even with an empty config list.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and select 'Archiving'. On the 'Configuration' tab, click the '+ Add Configuration' button in the header of the left-hand configuration list. Success is seeing a new draft configuration named 'New Configuration' appear at the top of the list AND the right detail panel render with editable form fields pre-filled with defaults (e.g. Retention Days, Batch Size, an Archive Mode dropdown). Do NOT click Save — verifying the draft form renders is enough. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking 'Add Configuration' adds a new 'New Configuration' entry to the config list and selects it",
+        "The detail panel renders editable fields including Name, Retention Days / Batch Size, and an Archive Mode selector populated with default values",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,archiving"
+  },
+  "primaryKey": {
+    "ID": "B820B7B4-C154-4812-A95F-D6727B77E88B"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.512Z",
+    "checksum": "859e18f91a6a9e687d144e5ef17a8503c6aededdc6995d3c8ae6760d9a2354a6"
+  }
+}

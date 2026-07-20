@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T197 - Database Designer Entity Search Narrows Table",
+    "Description": "Exercises Database Designer's bespoke HTML-table filter pipeline (applyFilterAndSort over name/table/schema with its own zero-state), not the generic AG-Grid grid search covered by Data Explorer tests.",
+    "InputDefinition": {
+      "goal": "In MJ Explorer, switch to the Admin application via the application switcher dropdown next to the logo. Open 'Data & Schema' and open the Database Designer. Wait for the entity table to load (10-30s possible in this resource-constrained environment — wait, don't navigate away). Database Designer shows a table of user-defined entities with columns Entity Name, Schema, Table, Owner, Created. There is a search box with placeholder 'Search by name, table, or schema...'. Type a partial term into it. Success is that the entity table RESPONDS: the rows narrow to matching entities and the count line below the table updates (or, if nothing matches, a 'No entities match ...' zero-state with a 'Clear search' button appears). Seeing the table respond to the search is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Database Designer renders an entity table with a name/table/schema search box",
+        "Typing in the search box narrows the rows to matches and updates the count line, OR shows a valid 'No entities match' zero-state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "033910B5-534D-47C5-8B9F-D8556B48F6CB"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:59.704Z",
+    "checksum": "06e7dbdc40a8f24352d9468b533b81e1d585d55ea812d2a2f65fd212afa08911"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T324 - Routine Type Scheduled vs Monitoring Toggle",
+    "Description": "Exercises the RoutineType segmented control and its reactive RoutineTypeHelp text inside the advanced section — a domain concept (report-on-schedule vs watch-for-change) unique to routines.",
+    "InputDefinition": {
+      "goal": "In the Routines app, click 'New Routine', then expand the 'Advanced options' section (a collapsible toggle with a chevron near the bottom of the editor). Inside the Details area find the 'Routine type' segmented control with 'Scheduled' and 'Monitoring' options. Click 'Monitoring' and observe the help/hint text below the control change to describe monitoring (watch-for-change) behavior, then click 'Scheduled' and observe it change back. Success is seeing the two-option toggle switch and the accompanying help text update — you do NOT need to save.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The 'Advanced options' section expands to reveal a 'Routine type' control with 'Scheduled' and 'Monitoring' options",
+        "Switching between Scheduled and Monitoring updates the descriptive help/hint text below the control",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,routines"
+  },
+  "primaryKey": {
+    "ID": "C71EFFAA-320B-4AD9-87B0-78FB7DF74351"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.848Z",
+    "checksum": "31e79a32914cbd97cbd37a586252b8a3215560be183aaf1356569718136ff2f5"
+  }
+}

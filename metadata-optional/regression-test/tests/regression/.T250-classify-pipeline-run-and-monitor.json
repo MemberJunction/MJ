@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T250 - Classify Pipeline Run and Monitor",
+    "Description": "Exercises the autotagging classification pipeline run path (RunPipeline) and the live pipeline-monitor rendering — a bespoke KPI/feed/progress UI, not the generic grid.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to the Knowledge Hub app. The default landing is the Classify screen (fa-tags icon). In the left nav within Classify, click the 'Pipeline' section, then click the primary 'Run Pipeline' button in the top-right header. Success is that the Pipeline Monitor renders its KPI strip and 'Recent Processing' feed, AND that clicking Run Pipeline puts the pipeline into a running/monitoring state (a progress bar with a stage label and percent appears, OR the run kicks off with pause/cancel controls) — you do NOT need to wait for the run to finish. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Classify screen loads with a left-nav rail and the Pipeline section shows a KPI strip and a 'Recent Processing' feed",
+        "Clicking 'Run Pipeline' transitions to a running state — a progress bar with a stage label and percentage, OR pause/cancel controls appear (a valid already-running or empty-source state also counts)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,knowledge-hub"
+  },
+  "primaryKey": {
+    "ID": "1B5A6380-8407-477C-82C9-EEE5C275D93F"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.209Z",
+    "checksum": "40a3bc8223a688abde2fa56654d92bb1f1db8bc677635dff30c708cc2c8f5e2e"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T175 - Run Test Execution Dialog",
+    "Description": "Renders the ng-testing test-run-dialog execution panel (tags, variables, verbose/parallel options) opened via TestingDialogService — a distinct configuration surface, not test execution itself.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher next to the logo, choose \"Testing\", then click the \"Runs\" tab and click the \"Run Test\" button (or, in the Test Explorer, the Run button on a test card). Verify a \"Run Test\" slide panel opens showing the test-run configuration UI — options like a Verbose checkbox, an optional Run Tags section, and (when applicable) a Test Variables or test-selection section. Seeing the run-configuration dialog render is success — do NOT actually start/execute a run. Close the panel afterward. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking Run Test opens a slide panel titled for running a test",
+        "The panel shows run-configuration controls (e.g. a Verbose option and/or a Run Tags section, or a test-selection/variables area)",
+        "The panel can be closed without starting a run",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,testing"
+  },
+  "primaryKey": {
+    "ID": "FE40F58B-57EF-4257-B31D-B0C662D1FF61"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.929Z",
+    "checksum": "e4a82027391e808e07ee56e05072121c60c76f16c7ae918c1000f01c443a7f3e"
+  }
+}

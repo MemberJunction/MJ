@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T309 - Communication Bulk Runs Timeline",
+    "Description": "Exercises the bespoke runs surface: three count_only summary aggregations plus a hand-rolled status-dot timeline (getRunDotClass/getStatusClass) with its own Refresh — not a grid or generic detail view.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open the Communication app, then open its Bulk Runs (Runs) section. Success = the runs view renders a summary row (Active Runs, Completed 24h, Success Rate %) and a run timeline listing runs with status badges/dots (Complete/Failed/In-Progress/Pending) — OR a 'No communication runs found' empty state. Then click the 'Refresh' button and confirm the view reloads and stays functional. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The summary stats (Active / Completed 24h / Success Rate %) render",
+        "The run timeline lists runs with status indicators OR shows a valid 'No communication runs found' empty state",
+        "Clicking Refresh reloads the view without error; no error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,communication"
+  },
+  "primaryKey": {
+    "ID": "8DA23133-C8E3-4A05-9DD8-9696616A2EFE"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.466Z",
+    "checksum": "05d7fb471b1b49c676c395a61a47db566caced6409497eda97d30102f2fd406c"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T204 - System Diagnostics Engine Detail Panel Drilldown",
+    "Description": "Exercises the openEngineDetailPanel drill-down (slide-in overlay + config-item accordion with sample-data paging) — a distinct rich detail UI, not the card grid itself.",
+    "InputDefinition": {
+      "goal": "You are already logged in at http://localhost:4200. Using the application switcher dropdown next to the logo, switch to the Admin application, open 'Monitoring', and select System Diagnostics (Engine Registry section). On a loaded engine card, click the details arrow button (the right-arrow icon in the card's action area) to open the engine detail slide-in panel. Confirm the panel opens showing the engine's summary (Status / Memory / Items) and a 'Data Configs' list of its cached properties. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Seeing the detail panel slide in with the engine summary and Data Configs section is success — you do NOT need to expand every config item.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking the details/arrow button on an engine card opens a slide-in detail panel for that engine",
+        "The panel shows a summary block with Status, Memory, and Items, plus a 'Data Configs' section (with config items or a 'No config items found' empty-state)",
+        "The panel can be closed via its close (X) button, returning to the engine grid",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "53B345FB-A904-4161-BE7B-7386332E082E"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:59.901Z",
+    "checksum": "6a2abf04a4cf53f4fa19df7e69194af70bf873aba4403c8650e72f551de8100c"
+  }
+}

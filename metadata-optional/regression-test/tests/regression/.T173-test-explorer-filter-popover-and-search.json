@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T173 - Test Explorer Filter Popover And Search",
+    "Description": "Exercises the explorer's mj-filter-popover (view/status/sort) plus highlightSearch over a card grid — a distinct filter surface, not the generic grid filter/sort.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher next to the logo, choose \"Testing\", and reach the Test Explorer (the card-grid view with a search box, a Filters button, and a card/list view toggle). Type a term into the \"Search tests and suites...\" box and confirm cards narrow with matched text highlighted (or a no-results empty state appears). Then open the \"Filters\" popover and change the View (All/Suites/Tests), a Status chip, or the Sort dropdown, and confirm the card grid responds. Success is that search and the filter popover both drive the visible cards. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Test Explorer shows a search box, a Filters popover button, and a card/list view toggle",
+        "Typing in the search narrows the cards (matches highlighted) or shows a no-results empty state",
+        "Opening the Filters popover and changing View/Status/Sort updates the displayed cards",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,testing"
+  },
+  "primaryKey": {
+    "ID": "F12BE2A9-416E-44A8-9788-4915AFEC5C11"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.840Z",
+    "checksum": "94ae57be7ae9222bd8cf012579229435100a010909232b2a30463459e37adf27"
+  }
+}

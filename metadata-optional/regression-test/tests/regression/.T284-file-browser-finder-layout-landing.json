@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T284 - File Browser Finder Layout Landing",
+    "Description": "Exercises the custom FileBrowserResource (BaseResourceComponent) hosting the bespoke FileBrowserComponent three-panel shell (StorageProvidersList + FolderTree + FileGrid), all backed by GraphQLFileStorageClient — an entirely separate code path from the generic entity data grid.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to the File Browser application, then open its 'Browse Files' section. Success is seeing the File Browser render its Mac-Finder-style three-panel shell: a left sidebar listing storage accounts (or a clear 'No storage accounts configured' message), a folder-tree/breadcrumb panel, and a file listing area on the right — you do NOT need to open any actual file. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The File Browser opens with a header titled 'File Browser' and a folder-tree icon",
+        "The three-panel Finder layout is visible: a storage-accounts sidebar, a folder/breadcrumb area, and a file listing area — OR a clear 'No storage accounts configured' empty state is shown",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,files"
+  },
+  "primaryKey": {
+    "ID": "228A46A1-A816-49D6-BFA1-1CB8C21FE60D"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.909Z",
+    "checksum": "39d1af4e5da6b575b29ade9ef03df8dda382c661d08e31b18631904f707aa2e4"
+  }
+}

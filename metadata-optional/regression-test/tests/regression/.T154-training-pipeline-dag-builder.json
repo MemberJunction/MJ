@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T154 - Training Pipeline DAG Builder",
+    "Description": "Exercises the PSPipelines visual DAG editor (node/edge layout + inspector + spec parse) — a bespoke graph-builder code path found nowhere else in Explorer.",
+    "InputDefinition": {
+      "goal": "In the Predictive Studio app, open the 'Studio' door and select the 'Training Pipelines' section. Pages can take 10-30s to load — wait, don't navigate away. Success is the visual pipeline builder rendering: a pipeline picker row of pills, a toolbar (Save / Validate / Train / Agent), a DAG canvas with connected nodes (sources, feature steps, target, algorithm, model output), and an inspector panel on the right that shows the selected node's editable fields. If no pipelines exist yet, the documented empty state ('No training pipelines yet' with an 'Ask the agent to build one' button) is also a pass. You do NOT need to build or save a pipeline.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Either the DAG builder renders with a canvas of nodes/edges plus a right-hand inspector, OR the 'No training pipelines yet' empty state with an ask-the-agent button renders",
+        "When a pipeline is present, a Save/Validate/Train toolbar is visible above the canvas",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,predictive-studio"
+  },
+  "primaryKey": {
+    "ID": "0CD7B10A-A3FF-4C8C-9BFF-AF47F240FB2C"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.260Z",
+    "checksum": "01ae09b866fd813af3d96aa26e47966e4b7c6a32eae52114e052fa5d2286571d"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T180 - API Key Revoke Confirmation Gate",
+    "Description": "Exercises the edit slide-out's type-to-confirm revoke gate (ShowRevokeConfirm + RevokeConfirmText !== 'REVOKE' disables the button) — a bespoke destructive-action confirmation distinct from generic delete.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Switch to the Admin application via the application switcher dropdown next to the logo, open 'Identity & Access', and select the 'API Keys' sub-section, then open the full key list. Click any existing key row to open the 'API Key Details' slide-out. It has Details / Permissions / Usage tabs. On the Details tab, if the key is Active, find the 'Danger Zone' and click 'Revoke Key'; a confirmation appears asking you to type REVOKE to confirm, with the confirm button disabled until the exact text is entered. Verify the button stays disabled with wrong text and enables only when 'REVOKE' is typed — do NOT actually confirm the revoke. If no keys exist, confirming the empty state is acceptable. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking a key row opens the 'API Key Details' slide-out with Details / Permissions / Usage tabs",
+        "For an active key, the Revoke flow shows a 'type REVOKE to confirm' input with the confirm button disabled until REVOKE is entered exactly (or a valid empty state is shown when no keys exist)",
+        "No destructive revoke needs to be completed to pass",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "1BB823AB-F918-4606-BA6E-4F5A97030E83"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:59.079Z",
+    "checksum": "ee0e4e0b76c32f948002d98ff1b7165e093a6ff596a40889279ee485f846abb5"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T168 - Test Run Detail Panel",
+    "Description": "Opens the Runs detail slide-in panel with the expanded evaluation-badge, score-indicator, and execution-context widgets — a distinct read/inspect surface separate from the generic record preview panel.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher next to the logo, choose \"Testing\", then click the \"Runs\" tab. If any test run rows are present, click a run row (or its eye/View-details icon) and verify a slide-in detail panel opens on the right showing the test name, a metrics grid (Score, Duration, Cost, Started), an expanded Evaluation section, and a Human Feedback area. Close it with the X or the Escape key. Seeing the detail panel render for a run is success; if there are genuinely no runs, confirming the \"No test runs found\" empty state renders is also acceptable. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking a run row opens a slide-in detail panel (or a valid empty state confirms there are no runs to open)",
+        "The detail panel shows the test name plus a metrics grid (Score/Duration/Cost/Started) and an Evaluation section",
+        "The panel can be dismissed (close button or Escape)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,testing"
+  },
+  "primaryKey": {
+    "ID": "A31675BE-D02A-48A9-8A53-F4E3A0DCF391"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.678Z",
+    "checksum": "5ea804469b8826aa7172541a918ec0bfc2314b7376493b5dcffa0aefed37e9bc"
+  }
+}

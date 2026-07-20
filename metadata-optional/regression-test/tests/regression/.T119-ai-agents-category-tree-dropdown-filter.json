@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T119 - AI Agents Category Tree-Dropdown Filter",
+    "Description": "Tests the bespoke mj-tree-dropdown projected as a custom widget inside mj-filter-panel (Category), a unique filter control not present in the generic entity grid advanced-filter panel.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the AI application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), then open the Agents section. Click the Filter button/icon in the toolbar to open the filter popover. Inside the popover, find the Category filter - it is a tree-style dropdown (folder-tree). Open it and pick a category value, then confirm the agents list responds. Pages can take 10-30s to load in this resource-constrained environment - wait, don't navigate away. Success is that the filter popover renders its fields (including the Category tree-dropdown) and applying a category either narrows the agent list to matches OR shows a clear no-match/empty state.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The filter popover opens and displays filter fields including a Category tree-style dropdown widget",
+        "Selecting a category value causes the agent list to update (narrow to matches) or show a clear no-results state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,ai"
+  },
+  "primaryKey": {
+    "ID": "B4387C19-DEEF-41B9-8C5D-E1E559C4E46E"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.143Z",
+    "checksum": "bccca0a45252a8ebe0eab451e1f8d270d5b2ed25f12969ccbc08cbae5698ab64"
+  }
+}

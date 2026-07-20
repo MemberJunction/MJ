@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T158 - Experiments Kanban and Leaderboard",
+    "Description": "Exercises the PSExperiments kanban + leaderboard + budget-gauge derivations over Experiment Sessions/Iterations — a distinct visualization panel.",
+    "InputDefinition": {
+      "goal": "In the Predictive Studio app, open the 'Studio' door and select the 'Experiments' section. Pages can take 10-30s to load — wait, don't navigate away. Success is the experiment session view rendering: a session header with a status badge, a Leaderboard strip ranked by score, and a kanban with three columns (Running / Completed / Pruned) of iteration cards. If there are no experiment sessions yet, the documented empty state ('No experiment sessions yet') is also a pass. You do NOT need to launch or control an experiment.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Either the session header + leaderboard strip + Running/Completed/Pruned kanban columns render, OR the 'No experiment sessions yet' empty state renders",
+        "When a session is present, the three kanban columns are each labeled and show counts",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,predictive-studio"
+  },
+  "primaryKey": {
+    "ID": "CC594FB8-46CF-441A-B4C6-1F15F0372B30"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.378Z",
+    "checksum": "a60f42182efba11ce5de36952f3a248dccdee49685ddbb13bc1c7c572d6021bd"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T164 - Testing App Tab Navigation",
+    "Description": "Exercises the TestingDashboardComponent mj-tab-nav lazy tab switching with hasVisited() gating — a bespoke 4-tab shell, not the generic app landing or app-switcher navigation.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo and choose the \"Testing\" app. Once it loads, the Testing dashboard shows a top tab bar with four tabs: Dashboard, Runs, Analytics, and Review. Click each of the Runs, Analytics, and Review tabs in turn, then return to Dashboard. Success is that each tab switch swaps the main content region to that tab's distinct view (e.g. Runs shows a runs table/filter bar, Analytics shows trend charts, Review shows a review queue) without the page breaking. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Testing dashboard loads with a tab bar containing Dashboard, Runs, Analytics, and Review",
+        "Clicking each tab changes the main content to a visibly different view for that tab",
+        "Returning to the Dashboard tab restores the overview content",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,testing"
+  },
+  "primaryKey": {
+    "ID": "F44D83EC-08DD-48AA-99D5-B0738D250267"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.543Z",
+    "checksum": "1a4ab3d5ebd8f720ca15470d125b9f048e7db4c292b561ae31a54a88f4e2aef1"
+  }
+}

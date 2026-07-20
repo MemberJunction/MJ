@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T276 - Home Add Pin Panel Opens and Catalog Renders",
+    "Description": "Exercises OpenAddPinPanel() + loadAvailableResources(), which lazily configures DashboardEngine/UserViewEngine/QueryEngine/ActionEngineBase and renders the mj-accordion-panel catalog — a code path untouched by the pins/favorites/recent section-render tests.",
+    "InputDefinition": {
+      "goal": "You are already logged in at http://localhost:4200. Navigate to the Home landing page using the Home icon/logo or the application switcher dropdown next to the logo. On the Home page, find the 'Pinned' section and click its 'Add Pin' button (thumbtack/plus icon). A slide-in panel titled 'Add Pin' should appear on the right. Verify the panel renders a search box ('Search apps, dashboards, views, queries...'), an 'Add to group' selector, and one or more collapsible accordion sections such as 'Applications', 'Dashboards', 'Views', 'Queries', or 'Quick Actions' containing pinnable items. Seeing the panel and at least the Applications section render is success — you do NOT need to actually pin anything. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The 'Add Pin' slide-in panel opens with a search box and an 'Add to group' selector",
+        "At least one resource accordion section (e.g. Applications, Dashboards, Views, Queries, Quick Actions) renders with pinnable items or a 'Pin'/'Configure' button",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,home"
+  },
+  "primaryKey": {
+    "ID": "C673905A-CEA7-4523-ACFD-E15D15D9BAE1"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.729Z",
+    "checksum": "5677f5c4497756a26da5ccdc2e678acc155ff34d591c7e8feae8a45c970ae21e"
+  }
+}

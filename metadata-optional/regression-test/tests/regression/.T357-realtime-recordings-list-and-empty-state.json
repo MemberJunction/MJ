@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T357 - Realtime Recordings List and Empty State",
+    "Description": "Exercises the LoadData() RunView on 'MJ: AI Agent Sessions' filtered by RecordingFileID plus the row projection and the two mutually-exclusive master-pane branches (populated list vs the 'No recorded sessions yet' empty state) — a bespoke dashboard render, not the generic entity grid.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to the 'Realtime Recordings' application (its default 'Recordings' screen). Wait for it to finish loading — pages can take 10-30s to load in this resource-constrained environment, so wait and do NOT navigate away. Success is that the Realtime Recordings surface renders its master list of recorded sessions (each row showing an agent name plus a date/time, and optionally a duration or conversation) OR a clear empty state such as 'No recorded sessions yet' — either outcome is a pass. You do NOT need to play anything.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Realtime Recordings screen loads with its 'Realtime Recordings' title/header and a circle-play icon",
+        "Either a list of recorded-session rows is shown (agent name + date, optionally duration/conversation) OR a clear empty state like 'No recorded sessions yet' is displayed",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,realtime"
+  },
+  "primaryKey": {
+    "ID": "59009E95-CF07-4399-BAAF-ABB987E358BC"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.625Z",
+    "checksum": "0038cdca3e6b19759814a99afcf10a2712792bfdfb5f46b2d4f1f04c36273bf2"
+  }
+}

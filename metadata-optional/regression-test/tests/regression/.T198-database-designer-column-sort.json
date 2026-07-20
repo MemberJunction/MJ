@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T198 - Database Designer Column Sort",
+    "Description": "Exercises Database Designer's custom multi-field sort (OnSortChange toggling SortField/SortDirection with chevron rendering) — a hand-rolled table sort distinct from AG-Grid's column sort.",
+    "InputDefinition": {
+      "goal": "In MJ Explorer, switch to the Admin application via the application switcher dropdown next to the logo. Open 'Data & Schema' and open the Database Designer. Wait for the entity table to load (10-30s possible — wait, don't navigate away). The table has clickable sortable column headers (Entity Name, Schema, Table, Owner, Created), each with a chevron sort indicator. Click a column header such as 'Entity Name' (or 'Schema'), then click the SAME header again. Success is that the row order changes when you click, an up/down chevron sort indicator appears on that column, and clicking the same header a second time flips the sort direction (ascending ↔ descending). Seeing the order change and the indicator flip is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Database Designer table has sortable column headers with sort-direction chevron indicators",
+        "Clicking a header reorders the rows and shows a sort indicator; clicking the same header again flips ascending/descending",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "5D624621-ED24-4048-A549-58B5463B28C3"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:59.725Z",
+    "checksum": "fbe17f0a5941b6b4d73887ee2e199e10303ec04af9de9aa2ba36a2874d9794a2"
+  }
+}

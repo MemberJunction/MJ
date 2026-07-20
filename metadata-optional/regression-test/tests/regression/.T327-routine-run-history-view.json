@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T327 - Routine Run History View",
+    "Description": "Exercises the RoutineHistory command-center view (list vs No-Runs-Yet empty-state, run status chips, linked-record buttons) — a bespoke per-routine audit panel, not the generic related-records grid.",
+    "InputDefinition": {
+      "goal": "In the Routines app, if at least one routine card is present, click its run-history icon (a timeline icon among the card's action buttons) to open the History view. Wait for it to load (10-30s possible). Success is the History view rendering — a header showing 'History' for that routine and EITHER a list of run rows (each with a status chip and a start time) OR a 'No Runs Yet' empty state explaining the routine has not run yet. If there are no routine cards at all, that is acceptable: report that the list is empty. You do NOT need to open any linked run record.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Opening a routine's history shows a History view for that routine (or the routines list is legitimately empty)",
+        "The history shows either run rows with status chips and timestamps OR a 'No Runs Yet' empty state (either is a valid pass)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,routines"
+  },
+  "primaryKey": {
+    "ID": "DF3892BF-D028-4649-B4B5-48FAB72754C6"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.938Z",
+    "checksum": "5aba9a5e59541871cfec628c3a173ca4834af67306b9ec0903473c5d0ffab71f"
+  }
+}

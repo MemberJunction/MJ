@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T076 - Create New Saved View Round-Trip",
+    "Description": "Exercises the view CREATE + server-persist path (quick-save dialog / config-panel Settings tab -> OnSaveAsNew), a write round-trip distinct from read-only view selection and from record CRUD.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and go to Data Explorer > Data. Open the 'Products' entity via the LEFT sidebar 'Search entities...' box (type 'Products', click the exact match). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Open the saved-view selector (layer-group icon) and click 'New View' in the panel footer (this opens a quick-save / configure dialog). Enter a unique view name such as 'CU Grid Test 4821' and confirm creation (Create View / Save). Success is the new view being created and becoming the active view — its name shows on the selector button and/or appears under 'My Views'. You do NOT need to configure columns or filters; naming and saving is enough.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A create/quick-save dialog appears with an editable view-name field after clicking 'New View'",
+        "After saving, the newly named view becomes the selected view (name shown on selector button) or appears in the 'My Views' list",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,grid"
+  },
+  "primaryKey": {
+    "ID": "1FED700C-8F58-43FE-94C0-9D4ECE40E02B"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:55.909Z",
+    "checksum": "5bd9443e54e7fb2ff324942a93e0e2818013529a06c5231a952d9c19adca7c54"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T292 - Integrations Visual Field Mapping Editor",
+    "Description": "Exercises the bespoke SVG connect-the-fields visual editor (app-visual-field-editor) with connection-path rendering and field filtering — a unique code path unlike any generic form or grid.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, find and open the Integrations application, and open its 'Integrations' (Connections) section. Click a connection card body to open its detail view, then click one of the entity-map rows in the maps table to open the visual field-mapping editor. Verify a two-column field-mapping canvas renders: a 'Source Fields' column on the left, an 'MJ Entity Fields' column on the right, SVG connection lines/badges between them, header stats (mapped / key / required counts), and per-column 'Filter fields' search inputs. Type in one of the field filter boxes and confirm the field list narrows. Seeing the SVG mapping canvas render is success — you do NOT need to create or save a mapping. If the connection has no entity maps or none exist, a clear empty state is acceptable. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking an entity-map row opens a field-mapping editor with Source Fields and MJ Entity Fields columns",
+        "Header stats (mapped / key / required) and SVG connection lines/badges are visible between the columns",
+        "A per-column field filter input narrows its field list when typed into",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,integrations"
+  },
+  "primaryKey": {
+    "ID": "A910458A-335B-4F1A-B5A4-E7B780DB1286"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.074Z",
+    "checksum": "1ac022e2526cbe8455ff7f1273f2dde50fa5b4be7c3768dbe327b709fa5c234a"
+  }
+}

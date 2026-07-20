@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T103 - Edit Query Drawer and Open Full Record",
+    "Description": "Exercises OpenEditDrawer (Load existing record into the drawer) + the edit-mode-only 'Open full record' branch — distinct from the create-drawer path which starts blank and has no full-record link.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo, switch to Data Explorer, and open the Queries section. Hover/select a query and click its edit (pencil) icon — either the per-query edit button in the tree or the edit button in the viewer header — to open the Edit Query drawer. Confirm the drawer is pre-populated with the query's existing Name, SQL, Category, and Status. Note the 'Open full record' link (shown only in edit mode) that lets you manage Parameters, Fields, and Permissions. Success is seeing the drawer pre-filled with the existing query's values and the 'Open full record' link present — you do NOT need to save changes. If no edit (pencil) icon appears you lack update permission; report that. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Edit Query drawer opens pre-populated with the selected query's Name and SQL (and Category/Status)",
+        "An 'Open full record' link is visible in the drawer (edit mode only)",
+        "No error messages, blank screens, or crash pages, OR the edit icon is legitimately absent due to permissions"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,query"
+  },
+  "primaryKey": {
+    "ID": "BDCC50F5-0BAA-432C-9C95-E160E2CF46C7"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:56.705Z",
+    "checksum": "5ce2cbb9b070b1906a3a776658e3035ac658e2be00510137c09cb05b9ae4081c"
+  }
+}

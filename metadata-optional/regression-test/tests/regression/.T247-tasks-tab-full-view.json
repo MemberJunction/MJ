@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T247 - Tasks Tab Full View",
+    "Description": "Exercises the activeTab='tasks' branch rendering TasksFullViewComponent with the mj-task widget list — distinct from the top-nav tasks dropdown and from the Collections view.",
+    "InputDefinition": {
+      "goal": "Open the Chat application and wait for the workspace. Click the 'Tasks' tab in the top navigation. Confirm the main area switches to the tasks full view showing a list of task cards/widgets (with status and progress) OR a valid empty state if there are no tasks. Optionally click into a task to confirm a detail/breadcrumb view opens. Seeing the tasks view render is success regardless of task count. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Tasks tab swaps the main area to the tasks full view",
+        "Task widgets/cards render with status/progress OR a clear no-tasks empty state is shown",
+        "The view is stable (clicking a task, if present, opens its detail without crashing)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,chat"
+  },
+  "primaryKey": {
+    "ID": "50767A19-3027-4F5C-B7C9-0018C1ECD599"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.159Z",
+    "checksum": "3d152bbac846bd3ee307c201369a0d1414d51ebb6f14f5b96839ef03a7cb1686"
+  }
+}

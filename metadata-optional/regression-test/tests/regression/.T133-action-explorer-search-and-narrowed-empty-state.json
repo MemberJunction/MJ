@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T133 - Action Explorer Search and Narrowed Empty State",
+    "Description": "Debounced client-side search over the bespoke explorer list plus the distinct IsListNarrowed empty-state branch (no-results variant with Reset-filters CTA) — separate from grid quick-search.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, switch to the 'Actions' application, and open the 'Explorer' nav item. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Type a search term into the Explorer's 'Search actions...' box in the toolbar and verify the action list RESPONDS — it narrows to name/description matches. Then type a clearly nonsensical term like 'zzzznotanaction' and verify the narrowed empty-state renders with a 'No actions match your filters' message and a 'Reset filters' action. Clear/reset and confirm the list repopulates. The search narrowing and the narrowed empty-state are both success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Typing in the 'Search actions...' box narrows the action list to matches",
+        "A nonsense search term shows a 'no actions match' empty-state with a reset/clear affordance (not a crash or blank area)",
+        "Clearing the search (or clicking Reset) restores the list",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,actions"
+  },
+  "primaryKey": {
+    "ID": "5DD92785-9DED-4279-AC90-ECDB522D823F"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.565Z",
+    "checksum": "b1fcc1c8fa6e8e03a5b6dd37b9b15df04854f8aa1f86790662ddd50708a53040"
+  }
+}

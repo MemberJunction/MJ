@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T330 - Operations to Run History Section Navigation",
+    "Description": "Exercises the container's two-section switching AND the second resource component (BulkOperationsRunHistory → RecordProcessHistoryComponent), a separate query path (MJ: Process Runs) from the Operations studio.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo and choose 'Bulk Operations'. Once the Operations section renders, click the 'Run History' item in the left-nav rail. The Run History surface should render with a 'Run history' heading, a 'Refresh' button, and either a run list (columns When / Operation / Entity / By / Status / Counts) or a 'No runs yet.' message. Then click 'Operations' in the rail to switch back and confirm the operations studio returns. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Seeing both sections render when selected is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Selecting 'Run History' renders the run-history surface (run list with When/Operation/Status columns OR a 'No runs yet.' message)",
+        "Switching back to 'Operations' returns to the studio operations content",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,bulk"
+  },
+  "primaryKey": {
+    "ID": "F931DC5B-5216-47EB-995C-EA14459D3861"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:02.984Z",
+    "checksum": "2cc7d3c37adaa44d0b1f0d4895ab6087457df8e34eef53fb1cbc6472b01f68e5"
+  }
+}
