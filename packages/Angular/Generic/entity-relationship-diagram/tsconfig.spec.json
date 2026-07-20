@@ -11,7 +11,9 @@
     "src/lib/components/erd-composite/erd-composite.component.ts",
     "src/lib/components/erd-composite/erd-composite.component.dom.test.ts",
     "src/lib/components/mj-entity-erd.component.ts",
-    "src/lib/components/mj-entity-erd.component.dom.test.ts"
+    "src/lib/components/mj-entity-erd.component.dom.test.ts",
+    "src/lib/components/erd-diagram.component.ts",
+    "src/lib/components/erd-diagram.component.dom.test.ts"
   ],
   "exclude": [
     "node_modules",
