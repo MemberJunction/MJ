@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ComputeRemovedDependencyWarnings } from '../integration/EntityMapLifecycle.js';
+import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings } from '../integration/EntityMapLifecycle.js';
 
 /**
  * rsuplan "adding and removing tables": removing a table another table relies on must NOT
@@ -45,5 +45,47 @@ describe('ComputeRemovedDependencyWarnings', () => {
 
     it('tolerates objects absent from the dependency map (no persisted IO row)', () => {
         expect(ComputeRemovedDependencyWarnings(['UnknownThing'], ['Customers'], parents)).toEqual([]);
+    });
+});
+
+/**
+ * rsuplan force-remove: "a consumer may want the user to force remove those too" — the
+ * transitive closure of dependents that cascades with a removed object when the caller opts in.
+ */
+describe('ComputeCascadeRemovalSet', () => {
+    const parents = new Map<string, string[]>([
+        ['orders', ['Customers']],
+        ['orderitems', ['Orders', 'Products']],
+        ['shipments', ['OrderItems']],          // 3 levels deep
+        ['customers', []],
+        ['products', []],
+    ]);
+
+    it('cascades direct dependents of a removed object', () => {
+        const c = ComputeCascadeRemovalSet(['Orders', 'Products', 'Customers'], ['Products'], parents);
+        // Orders depends on Customers (kept) — only OrderItems-style dependents of Products cascade;
+        // here Orders does NOT depend on Products, so nothing cascades except true dependents.
+        expect(c).toEqual([]);
+    });
+
+    it('cascades the FULL transitive closure (removed → dependent → its dependent …)', () => {
+        const c = ComputeCascadeRemovalSet(['Orders', 'OrderItems', 'Shipments', 'Products'], ['Customers'], parents);
+        // Customers removed → Orders cascades → OrderItems (depends on Orders) → Shipments (depends on OrderItems)
+        expect(c).toEqual(['Orders', 'OrderItems', 'Shipments']);
+    });
+
+    it('is case-insensitive across edges', () => {
+        const c = ComputeCascadeRemovalSet(['ORDERS'], ['customers'], parents);
+        expect(c).toEqual(['ORDERS']);
+    });
+
+    it('returns nothing when nothing was removed or nothing depends on the removed', () => {
+        expect(ComputeCascadeRemovalSet(['Orders'], [], parents)).toEqual([]);
+        expect(ComputeCascadeRemovalSet(['Customers', 'Products'], ['Orders'], parents)).toEqual([]);
+    });
+
+    it('never cascades an object that is itself already removed', () => {
+        const c = ComputeCascadeRemovalSet(['Orders', 'OrderItems'], ['Customers', 'Orders'], parents);
+        expect(c).toEqual(['OrderItems']); // Orders already in the removed set — not double-listed
     });
 });

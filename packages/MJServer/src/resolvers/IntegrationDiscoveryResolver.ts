@@ -53,7 +53,7 @@ import { IntegrationProgressReader } from "@memberjunction/integration-progress-
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
-import { ComputeRemovedDependencyWarnings, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
+import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
@@ -227,6 +227,8 @@ class SchemaEvolutionOutput {
     @Field(() => [String], { nullable: true }) NewObjects?: string[];
     /** Refresh diff: objects absent from this resolution — their EM/EFMs were disabled (data kept). */
     @Field(() => [String], { nullable: true }) RemovedObjects?: string[];
+    /** DAG cascade (cascadeRemoveDependents=true): still-active dependents of removed objects that were force-disabled with them (transitive closure; data kept, re-add re-enables). */
+    @Field(() => [String], { nullable: true }) CascadeRemovedObjects?: string[];
     /** Continuing objects whose column set / constraints changed this run. */
     @Field(() => [String], { nullable: true }) ChangedObjects?: string[];
     /** U10 — objects whose Pull watermark was reset so the next sync backfills the schema change. */
@@ -5675,6 +5677,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
         @Arg("autoEnableNewObjects", { defaultValue: false, description: 'newly-appeared objects get their entity maps created DISABLED by default (the user enables them after the refresh). Pass true to auto-enable them instead.' }) autoEnableNewObjects: boolean,
         @Arg("deactivateAbsent", { nullable: true, description: 'Deactivate IO/IOF absent from this re-discovery (default true — comprehensive refresh; gated on the connector\'s authoritative-discovery getter).' }) deactivateAbsent: boolean | undefined,
+        @Arg("cascadeRemoveDependents", { defaultValue: false, description: 'When a removed object has still-active dependents (DAG parent edges), also disable the transitive dependent closure ("force remove those too"). Default false: dependents stay active and each broken edge is surfaced as a warning.' }) cascadeRemoveDependents: boolean,
         @Ctx() ctx: AppContext
     ): Promise<SchemaEvolutionOutput> {
         // sync lock: schema evolution rewrites the metadata, field maps and DDL a sync
@@ -5735,31 +5738,43 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // ── Phase 3 — REMOVED objects: disable EM + EFMs (data + tables KEPT) ──
             // Uses the same remove-as-disable helper as ApplyAll: everything not in the resolved
             // set is disabled; a later re-appearance re-enables (reactivate-on-rediscover).
-            // DAG advisory (rsuplan "adding and removing tables"): dependents of a removed object
-            // are NOT auto-removed — each broken parent edge is surfaced as a warning so a consumer
-            // can prompt the user to force-remove (or re-add). Edges come from the same dependency
-            // map the sync engine layers by.
-            const dagRemovalWarnings: string[] = removedObjects.length > 0
-                ? ComputeRemovedDependencyWarnings(
-                    activeIOs.map(io => io.Name),
-                    removedObjects,
-                    this.computeObjectDependencyNames(companyIntegration.IntegrationID),
-                  )
+            // DAG handling (rsuplan "adding and removing tables"): dependents of a removed object
+            // are NOT auto-removed by default — each broken parent edge is surfaced as a warning so
+            // a consumer can prompt the user. With cascadeRemoveDependents=true (the "force remove
+            // those too" affordance), the TRANSITIVE closure of still-active dependents is disabled
+            // alongside the removed objects (still remove-as-disable, reversible). Edges come from
+            // the same dependency map the sync engine layers by.
+            const depMap = removedObjects.length > 0
+                ? this.computeObjectDependencyNames(companyIntegration.IntegrationID)
+                : new Map<string, string[]>();
+            const cascadeRemoved: string[] = cascadeRemoveDependents && removedObjects.length > 0
+                ? ComputeCascadeRemovalSet(activeIOs.map(io => io.Name), removedObjects, depMap)
+                : [];
+            const cascadeLower = new Set(cascadeRemoved.map(n => n.toLowerCase()));
+            const keepNames = activeIOs.map(io => io.Name).filter(n => !cascadeLower.has(n.toLowerCase()));
+            const dagRemovalWarnings: string[] = removedObjects.length > 0 && !cascadeRemoveDependents
+                ? ComputeRemovedDependencyWarnings(keepNames, removedObjects, depMap)
                 : [];
             for (const w of dagRemovalWarnings) LogStatus(`[SchemaEvolution][DAG] ${w}`);
-            if (removedObjects.length > 0) {
-                await DisableUnselectedEntityMaps(companyIntegrationID, activeIOs.map(io => io.Name), user, md);
+            if (cascadeRemoved.length > 0) LogStatus(`[SchemaEvolution][DAG] cascade-removing ${cascadeRemoved.length} dependent object(s): ${cascadeRemoved.join(', ')}`);
+            if (removedObjects.length > 0 || cascadeRemoved.length > 0) {
+                await DisableUnselectedEntityMaps(companyIntegrationID, keepNames, user, md);
             }
 
-            // ── Phase 4 — schema build over continuing + new objects ──
-            const evolveNames = [...continuingMaps.map(m => m.ExternalObjectName as string), ...newObjects];
+            // ── Phase 4 — schema build over continuing + new objects (minus cascade-removed) ──
+            const evolveNames = [
+                ...continuingMaps.map(m => m.ExternalObjectName as string).filter(n => !cascadeLower.has(n.toLowerCase())),
+                ...newObjects,
+            ];
             if (evolveNames.length === 0) {
+                const removedTotal = removedObjects.length + cascadeRemoved.length;
                 return {
-                    Success: true, HasChanges: removedObjects.length > 0,
-                    Message: removedObjects.length > 0
-                        ? `No objects to evolve — ${removedObjects.length} removed object(s) disabled`
+                    Success: true, HasChanges: removedTotal > 0,
+                    Message: removedTotal > 0
+                        ? `No objects to evolve — ${removedTotal} removed object(s) disabled${cascadeRemoved.length > 0 ? ` (${cascadeRemoved.length} via cascade)` : ''}`
                         : 'No entity maps and no resolved objects — nothing to evolve',
                     RemovedObjects: removedObjects.length > 0 ? removedObjects : undefined,
+                    CascadeRemovedObjects: cascadeRemoved.length > 0 ? cascadeRemoved : undefined,
                     Warnings: dagRemovalWarnings.length > 0 ? dagRemovalWarnings : undefined,
                 };
             }
@@ -5987,6 +6002,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 APIRestarted: apiRestarted,
                 NewObjects: newObjects.length > 0 ? newObjects : undefined,
                 RemovedObjects: removedObjects.length > 0 ? removedObjects : undefined,
+                CascadeRemovedObjects: cascadeRemoved.length > 0 ? cascadeRemoved : undefined,
                 ChangedObjects: changedObjects.length > 0 ? changedObjects : undefined,
                 WatermarksReset: watermarksReset.length > 0 ? watermarksReset : undefined,
                 Warnings: (dagRemovalWarnings.length + schemaOutput.Warnings.length) > 0

@@ -149,6 +149,43 @@ export function ComputeRemovedDependencyWarnings(
 }
 
 /**
+ * DAG-aware FORCE-REMOVE (rsuplan "adding and removing tables": "a consumer may want the user
+ * to force remove those too"): computes the TRANSITIVE closure of still-active objects that
+ * depend — directly or through other dependents — on a removed object. Callers opting into
+ * cascade removal disable this set alongside the removed objects (still remove-as-disable,
+ * never delete; a re-add re-enables). Pure + deterministic for unit testing.
+ *
+ * @param activeObjectNames  objects remaining active after the (non-cascaded) removal
+ * @param removedObjectNames objects being removed/disabled this pass
+ * @param parentsByLowerName object name (lowercased) → its parent object names (the DAG edges)
+ * @returns the active objects to cascade-disable, in dependency-discovery order
+ */
+export function ComputeCascadeRemovalSet(
+    activeObjectNames: string[],
+    removedObjectNames: string[],
+    parentsByLowerName: Map<string, string[]>,
+): string[] {
+    if (removedObjectNames.length === 0 || activeObjectNames.length === 0) return [];
+    const gone = new Set(removedObjectNames.map(n => n.toLowerCase()));
+    const cascade: string[] = [];
+    let grew = true;
+    while (grew) {
+        grew = false;
+        for (const name of activeObjectNames) {
+            const lower = name.toLowerCase();
+            if (gone.has(lower)) continue; // already removed or already cascaded
+            const parents = parentsByLowerName.get(lower) ?? [];
+            if (parents.some(p => gone.has(p.toLowerCase()))) {
+                gone.add(lower);
+                cascade.push(name);
+                grew = true;
+            }
+        }
+    }
+    return cascade;
+}
+
+/**
  * U10 schema-change: resets the PULL watermark for the given entity maps so the
  * next sync ignores the incremental cursor, re-fetches the full object, and BACKFILLS rows
  * for newly-added columns (content-hash keeps genuinely-unchanged mapped values write-free
