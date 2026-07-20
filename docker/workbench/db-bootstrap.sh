@@ -1,6 +1,7 @@
 #!/bin/bash
 # ─── MJ Database Bootstrap ──────────────────────────────────────────────────
-# Creates the MJ database and runs Flyway migrations to set up the full schema.
+# Creates the MJ database and runs MJ's Skyway migrations (via `mj migrate`) to
+# set up the full schema.
 #
 # Usage:
 #   db-bootstrap                    # Uses DB_DATABASE from environment (default: MJ_Workbench)
@@ -45,12 +46,13 @@ if [ "$MIGRATE_ONLY" = false ]; then
     echo ""
 fi
 
-# ─── Run Flyway migrations directly ──────────────────────────────────────────
+# ─── Run migrations via MJ's Skyway engine (`mj migrate`) ────────────────────
 if [ -d "$MJ_DIR" ]; then
-    echo "Running Flyway migrations..."
+    echo "Running migrations (mj / Skyway)..."
     cd "$MJ_DIR"
 
-    # Ensure the .env points to the right database
+    # Ensure the .env points to the right database — `mj migrate` reads DB connection
+    # and baseline config from mj.config.cjs / .env in this directory.
     if [ -f .env ]; then
         # Update DB_DATABASE in .env if different
         if grep -q "^DB_DATABASE=" .env; then
@@ -60,23 +62,19 @@ if [ -d "$MJ_DIR" ]; then
         fi
     fi
 
-    # Run migrations using standalone Flyway CLI (already installed in Docker image).
-    # Uses the same parameters as `mj migrate` but avoids the node-flyway download step.
-    flyway migrate \
-        -url="jdbc:sqlserver://$SQL_HOST:1433;databaseName=$DB_NAME;trustServerCertificate=true" \
-        -user="$SQL_USER" \
-        -password="$SQL_PASS" \
-        -schemas=__mj \
-        -createSchemas=true \
-        -baselineVersion=202602061600 \
-        -baselineOnMigrate=true \
-        -locations="filesystem:$MJ_DIR/migrations" \
-        2>&1 || {
+    # Use MJ's Skyway engine (the current, supported migration path) rather than the
+    # raw Flyway CLI. Skyway leaves unknown ${...} template content in migration SQL
+    # literal; raw Flyway treats it as an unresolved placeholder and aborts (e.g.
+    # "No value provided for placeholder: ${dateFns.format(rangeStart, 'MMM d, yyyy')}").
+    # The globally-installed `mj` CLI auto-selects the highest baseline from the
+    # migrations folder — no need to pass baselineVersion/url/user explicitly.
+    mj migrate 2>&1 || {
         echo ""
-        echo "  Migration failed. Check the Flyway output above for details."
+        echo "  Migration failed. Check the mj migrate output above for details."
         echo "  Common issues:"
         echo "    - SQL Server not ready: wait a few seconds and retry"
         echo "    - Schema conflicts: check if __mj schema already has a different baseline"
+        echo "    - Stale global CLI: run 'npm update -g @memberjunction/cli'"
         exit 1
     }
 
