@@ -341,6 +341,17 @@ export abstract class SQLDialect implements SQLParserDialect {
     }
 
     /**
+     * Hard maximum number of parameters a stored procedure / function can declare, or `null` when
+     * effectively unbounded for our purposes. SQL Server: 2100. PostgreSQL: 100 (`FUNC_MAX_ARGS`).
+     * Consumed by CRUD-sproc CodeGen to fail loudly (or route to the single-JSON-argument shape)
+     * before emitting a procedure whose parameter count the engine will reject at CREATE time.
+     * Default: `null` (no parameter-count limit).
+     */
+    get MaxProcedureParams(): number | null {
+        return null;
+    }
+
+    /**
      * Minimum in-row byte footprint of a column of the given raw SQL type. Off-row-capable
      * variable-length / LOB types contribute only their in-row pointer; fixed-length types contribute
      * their full size. Only meaningful for dialects that report a {@link MaxInRowSizeBytes}.

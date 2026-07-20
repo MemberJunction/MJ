@@ -165,6 +165,9 @@ export class PostgreSQLDialect extends SQLDialect {
      */
     override get MaxColumnCount(): number { return 1600; }
 
+    /** PostgreSQL's hard per-function argument cap (`FUNC_MAX_ARGS`, default build). */
+    override get MaxProcedureParams(): number { return 100; }
+
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {

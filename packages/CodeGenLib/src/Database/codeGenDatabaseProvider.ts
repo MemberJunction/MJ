@@ -1,6 +1,7 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import { logWarning } from '../Misc/status_logging';
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
 
@@ -677,7 +678,48 @@ export abstract class CodeGenDatabaseProvider {
             const defaultClause = this.isParamRequired(ef, isUpdate) ? '' : nullDefault;
             parts.push(`${dialect.ParameterRef(ef.CodeName)} ${this.renderParameterType(ef)}${defaultClause}`);
         }
+        this.assertProcedureParamLimit(parts.length, entityFields, isUpdate);
         return parts.join(',\n    ');
+    }
+
+    /**
+     * Correctness floor for wide entities. A CRUD stored procedure whose parameter count exceeds the
+     * dialect's hard {@link SQLDialect.MaxProcedureParams} limit (SQL Server: 2100; PostgreSQL: 100)
+     * will FAIL to create. Because each nullable column contributes a `_Clear` companion, the emitted
+     * parameter count is roughly twice the writable-column count, so wide / sparse tables reach the
+     * ceiling. This guard throws at emit time — turning a late, cryptic "missing routine" pipeline
+     * failure (or a silently un-creatable procedure when execution errors are downgraded to warnings)
+     * into an immediate, diagnosed error — and warns as the count approaches the limit.
+     *
+     * Only fires on the typed-parameter path. Providers that route wide entities to a single
+     * JSON-argument procedure shape (PostgreSQL today) decide that BEFORE building the typed parameter
+     * list, so they never reach the limit here.
+     *
+     * @param paramCount number of parameters the procedure will declare (main params + `_Clear` companions)
+     * @param entityFields the entity's fields (used only to recover the entity name for the message)
+     * @param isUpdate true for the Update procedure, false for Create
+     */
+    protected assertProcedureParamLimit(paramCount: number, entityFields: EntityFieldInfo[], isUpdate: boolean): void {
+        const limit = this.Dialect.MaxProcedureParams;
+        if (limit == null) {
+            return;
+        }
+        const entityName = entityFields[0]?.Entity ?? '(unknown entity)';
+        const verb = isUpdate ? 'Update' : 'Create';
+        if (paramCount > limit) {
+            throw new Error(
+                `CodeGen: the ${verb} stored procedure for entity "${entityName}" would declare ${paramCount} ` +
+                `parameters, exceeding this database's ${limit}-parameter procedure limit — the generated procedure ` +
+                `would fail to create. Reduce the number of writable columns on this entity, or route wide entities ` +
+                `to the single-JSON-argument procedure shape.`,
+            );
+        }
+        if (paramCount > limit * 0.85) {
+            logWarning(
+                `CodeGen: the ${verb} stored procedure for entity "${entityName}" declares ${paramCount} parameters, ` +
+                `within 15% of this database's ${limit}-parameter procedure limit. Adding more writable columns risks exceeding it.`,
+            );
+        }
     }
 
     /**

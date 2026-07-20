@@ -784,3 +784,51 @@ describe('SQLServerCodeGenProvider — foreign key indexes', () => {
         });
     });
 });
+
+/**
+ * W1b — emit-time procedure parameter-limit guard for wide entities. SQL Server caps a procedure
+ * at 2100 parameters; because every nullable column contributes a `_Clear` companion (~2 params
+ * per column), a wide / sparse table can exceed it and produce an un-creatable CRUD procedure.
+ * The guard throws while building the parameter list — before any SQL is written — so the failure
+ * is immediate and diagnosed rather than a late "missing routine" error.
+ */
+function pkPlusNullableFields(count: number): Record<string, unknown>[] {
+    const fields: Record<string, unknown>[] = [
+        { ID: 'pk', Name: 'ID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
+    ];
+    for (let i = 0; i < count; i++) {
+        fields.push({ ID: `f${i}`, Name: `Col${i}`, Type: 'nvarchar', Length: 200, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' });
+    }
+    return fields;
+}
+
+describe('SQLServerCodeGenProvider — procedure parameter-limit guard (W1b)', () => {
+    let provider: SQLServerCodeGenProvider;
+
+    beforeEach(() => {
+        provider = new SQLServerCodeGenProvider();
+    });
+
+    it('throws when the emitted parameter count exceeds SQL Server 2100-param limit', () => {
+        // 1100 nullable columns → PK (1) + 1100 × 2 (_Clear + main) = 2201 params > 2100
+        const entity = createMockEntity({}, pkPlusNullableFields(1100));
+        expect(() => provider.generateCRUDParamString(entity.Fields, false))
+            .toThrow(/exceeding this database's 2100-parameter procedure limit/);
+    });
+
+    it('names the verb in the error (Update)', () => {
+        const entity = createMockEntity({}, pkPlusNullableFields(1100));
+        expect(() => provider.generateCRUDParamString(entity.Fields, true)).toThrow(/Update stored procedure/);
+    });
+
+    it('does not throw for a normal (narrow) entity', () => {
+        const entity = createMockEntity({}, pkPlusNullableFields(10));
+        expect(() => provider.generateCRUDParamString(entity.Fields, false)).not.toThrow();
+    });
+
+    it('does not throw in the warn band (below the hard limit)', () => {
+        // 900 nullable columns → 1 + 1800 = 1801 params: over the 85% warn threshold (1785), under 2100
+        const entity = createMockEntity({}, pkPlusNullableFields(900));
+        expect(() => provider.generateCRUDParamString(entity.Fields, false)).not.toThrow();
+    });
+});

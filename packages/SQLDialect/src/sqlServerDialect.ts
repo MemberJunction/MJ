@@ -237,6 +237,9 @@ export class SQLServerDialect extends SQLDialect {
     /** SQL Server's hard per-table column cap. */
     override get MaxColumnCount(): number { return 1024; }
 
+    /** SQL Server's hard per-procedure parameter cap. */
+    override get MaxProcedureParams(): number { return 2100; }
+
     /**
      * Minimum in-row byte footprint of a column. Off-row-capable variable-length / LOB types
      * (incl. `(N)VARCHAR(MAX)`) contribute only a 24-byte in-row pointer; fixed-length types

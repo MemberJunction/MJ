@@ -1537,7 +1537,25 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
                     await pool.request().query(batch);
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    logWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
+                    // Classify the failure. A failed CREATE/ALTER of a schema-bound object (procedure,
+                    // view, function, trigger) is a REAL, un-creatable object — e.g. a wide-entity CRUD
+                    // procedure past the parameter limit — and is logged at ERROR severity with the
+                    // object name so it stands out from a benign batch warning (a DROP of a
+                    // not-yet-existing object, an idempotent guard, etc.).
+                    //
+                    // Control flow is intentionally unchanged (batches still run to the end, method still
+                    // returns true): the downstream CRUD validator + self-heal in the codegen pipeline
+                    // depends on reaching the end, and returning false here would abort
+                    // `executeSQLFiles`' file loop and bypass that repair. Turning a DDL-object failure
+                    // into a hard failure is a separate behavior change (see the wide-table roadmap, W1c).
+                    // The primary correctness floor for the wide-entity case is the emit-time parameter
+                    // guard (`assertProcedureParamLimit`), which throws before this SQL is ever written.
+                    const ddl = this.describeFailedDDLObject(batch);
+                    if (ddl) {
+                        logError(`[CodeGen] Failed to create ${ddl} in ${path.basename(filePath)}: ${msg.substring(0, 300)}`);
+                    } else {
+                        logWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
+                    }
                 }
             }
 
@@ -1546,6 +1564,23 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
             logError(`[CodeGen] Failed to execute SQL file ${filePath}: ${e instanceof Error ? e.message : e}`);
             return false;
         }
+    }
+
+    /**
+     * If a SQL batch is a CREATE (or CREATE OR ALTER) of a schema-bound object — procedure, view,
+     * function, or trigger — returns a short `"<kind> <name>"` description for error logging; otherwise
+     * null. Used to raise a failed DDL-object batch (a real un-creatable object) above a benign batch
+     * warning. Deliberately does NOT match `DROP` (a failed drop of a not-yet-existing object is benign).
+     */
+    private describeFailedDDLObject(batch: string): string | null {
+        const m = batch.match(
+            /\bCREATE\s+(?:OR\s+ALTER\s+)?(PROC(?:EDURE)?|VIEW|FUNCTION|TRIGGER)\s+((?:\[[^\]]+\]|[A-Za-z0-9_]+)(?:\.(?:\[[^\]]+\]|[A-Za-z0-9_]+))?)/i,
+        );
+        if (!m) {
+            return null;
+        }
+        const kind = m[1].toUpperCase().startsWith('PROC') ? 'procedure' : m[1].toLowerCase();
+        return `${kind} ${m[2]}`;
     }
 
 }

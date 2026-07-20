@@ -1282,6 +1282,7 @@ END $$;
 
             parts.push(`${dialect.ParameterRef(ef.CodeName)} ${this.renderParameterType(ef)}${defaultClause}`);
         }
+        this.assertProcedureParamLimit(parts.length, entityFields, isUpdate);
         return parts.join(',\n    ');
     }
 
