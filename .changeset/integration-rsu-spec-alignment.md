@@ -23,7 +23,6 @@ Align the integrations framework with the RSU specification (rsuplan.md) — res
 - `IntegrationApplyAll`/`ApplyAllBatch`: `UnselectedAction` ('disable' default) — objects absent from the selection get their entity + field maps disabled; re-selection re-enables both. First-ever apply defaults to a FULL sync.
 - U7: schedule creation is unique per (connection, job kind) — update-in-place instead of duplicates.
 - U5: boot-time assert when RSU's additionalSchemaInfo write path diverges from CodeGen's read path.
-- RSU-spec multi-credential-type: new `IntegrationCredentialType` junction (migration) + connection-create validation against the allowed set (junction ∪ legacy column).
 - DAG exposure: `IntegrationListSourceObjects` items carry `DependsOn` parent names.
 - U11: RSU status/progress expose CurrentStepName/StepIndex/StepTotal; pipeline steps carry StepIndex/StepTotal.
 

@@ -2588,15 +2588,6 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const user = this.getAuthenticatedUser(ctx);
             const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
 
-            // 0. RSU-spec: an integration accepts ONE OR MORE credential types — the legacy
-            // Integration.CredentialTypeID plus any IntegrationCredentialType junction rows.
-            // Validate the supplied credential's type against that allowed set (an unconstrained
-            // integration — no legacy value and no junction rows — accepts any type).
-            const allowedCheck = await this.validateCredentialTypeAllowed(input.IntegrationID, input.CredentialTypeID, user);
-            if (!allowedCheck.Allowed) {
-                return { Success: false, Message: allowedCheck.Message };
-            }
-
             // 1. Create Credential record with encrypted values
             const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
             credential.NewRecord();
@@ -4279,52 +4270,6 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationCreateSchedule error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
-    }
-
-    /**
-     * RSU-spec multi-credential-type: the supplied credential type must be in the integration's
-     * ALLOWED set = legacy Integration.CredentialTypeID ∪ IntegrationCredentialType junction rows.
-     * An integration with NO declared types (legacy null + no junction rows) accepts any type —
-     * back-compat for integrations predating credential-type declaration. UUID comparisons via
-     * UUIDsEqual (SQL Server upper / PostgreSQL lower). The junction entity may not exist yet on
-     * deployments that haven't run CodeGen post-migration — treated as "no junction rows".
-     */
-    private async validateCredentialTypeAllowed(
-        integrationID: string,
-        credentialTypeID: string,
-        user: UserInfo
-    ): Promise<{ Allowed: boolean; Message: string }> {
-        const allowed: string[] = [];
-        const esc = (s: string) => s.replace(/'/g, "''");
-        const rv = new RunView();
-
-        const integ = await rv.RunView<{ CredentialTypeID: string | null }>({
-            EntityName: 'MJ: Integrations',
-            ExtraFilter: `ID='${esc(integrationID)}'`,
-            Fields: ['CredentialTypeID'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        }, user);
-        if (integ.Success && integ.Results[0]?.CredentialTypeID) allowed.push(integ.Results[0].CredentialTypeID);
-
-        try {
-            const junction = await rv.RunView<{ CredentialTypeID: string }>({
-                EntityName: 'MJ: Integration Credential Types',
-                ExtraFilter: `IntegrationID='${esc(integrationID)}'`,
-                Fields: ['CredentialTypeID'],
-                ResultType: 'simple',
-            }, user);
-            if (junction.Success) allowed.push(...junction.Results.map(r => r.CredentialTypeID));
-        } catch {
-            // Junction entity not registered yet (pre-CodeGen deployment) → legacy-only validation.
-        }
-
-        if (allowed.length === 0) return { Allowed: true, Message: '' };
-        if (allowed.some(id => UUIDsEqual(id, credentialTypeID))) return { Allowed: true, Message: '' };
-        return {
-            Allowed: false,
-            Message: `Credential type ${credentialTypeID} is not accepted by this integration — it declares ${allowed.length} allowed credential type(s). Supply one of the integration's declared credential types.`,
-        };
     }
 
     /**

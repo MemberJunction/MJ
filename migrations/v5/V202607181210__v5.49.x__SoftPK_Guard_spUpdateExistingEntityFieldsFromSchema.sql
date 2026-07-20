@@ -1,30 +1,16 @@
--- =============================================================================
--- RSU-spec alignment — consolidated migration.
--- Folds two INDEPENDENT, order-independent changes into a single file:
---   §1 (U2): SQL Server soft-PK guard in spUpdateExistingEntityFieldsFromSchema
---   §2 (D1): IntegrationCredentialType junction table + seed ("one or more"
---            credential types per integration)
--- Neither depends on the other; they were previously two separate migration
--- files (V202607181200 + V202607181210) and are combined here 1:1 with no
--- change to their SQL.
--- =============================================================================
-
-
--- =============================================================================
--- §1 (U2) — soft-PK guard for spUpdateExistingEntityFieldsFromSchema.
+-- U2 (RSU-spec alignment) — soft-PK guard for spUpdateExistingEntityFieldsFromSchema.
 --
 -- A SOFT primary key (EntityField.IsSoftPrimaryKey = 1, resolved from additionalSchemaInfo for
 -- integration tables) has NO physical PK/UNIQUE constraint in the database. The schema-sync
 -- sproc compared IsPrimaryKey/IsUnique against the PHYSICAL constraint catalog unconditionally,
 -- so every run (a) flagged each soft-PK field as a material change and (b) overwrote
--- IsPrimaryKey/IsUnique back to 0 — wiping the resolved soft PK (the ACGI keyless-entity root)
+-- IsPrimaryKey/IsUnique back to 0 — undoing the resolved soft PK (the ACGI keyless-entity root)
 -- despite the documented IsSoftPrimaryKey protection.
 --
 -- Fix: soft-PK rows are excluded from the PK/unique material-change predicate and their
 -- IsPrimaryKey/IsUnique values are frozen in the UPDATE. All other attributes still sync.
 -- (The PostgreSQL function receives the same guard via the CodeGenLib emitter, which
 -- re-creates it on every codegen run.)
--- =============================================================================
 
 CREATE OR ALTER PROC [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromSchema]
     @ExcludedSchemaNames NVARCHAR(MAX),
@@ -149,7 +135,7 @@ BEGIN
           ISNULL(LTRIM(RTRIM(ef.RelatedEntityFieldName)), '') <> ISNULL(LTRIM(RTRIM(fk.referenced_column)), '') OR
           -- U2 soft-PK guard: soft-PK rows are never a PK/unique "material change" — the physical
           -- catalog has no row for them, so the raw comparison fired on EVERY run and the update
-          -- wiped the resolved soft PK (ACGI keyless-entity root). Physical rows sync as before.
+          -- undid the resolved soft PK (ACGI keyless-entity root). Physical rows sync as before.
           (ef.IsSoftPrimaryKey = 0 AND ef.IsPrimaryKey <> CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END) OR
           (ef.IsSoftPrimaryKey = 0 AND ef.IsUnique <> CASE
               WHEN pk.ColumnName IS NOT NULL THEN 1
@@ -175,7 +161,7 @@ BEGIN
         ef.RelatedEntityID = IIF(ef.AutoUpdateRelatedEntityInfo = 1, fr.RelatedEntityID, ef.RelatedEntityID),
         ef.RelatedEntityFieldName = IIF(ef.AutoUpdateRelatedEntityInfo = 1, fr.RelatedEntityFieldName, ef.RelatedEntityFieldName),
         -- U2 soft-PK guard: @FilteredRows already carries the frozen flags for soft-PK rows
-        -- (see the INSERT above), so this assignment cannot wipe a resolved soft PK.
+        -- (see the INSERT above), so this assignment cannot undo a resolved soft PK.
         ef.IsPrimaryKey = fr.IsPrimaryKey,
         ef.IsUnique = fr.IsUnique,
         -- When a field transitions to virtual, it can no longer be written to.
@@ -190,65 +176,4 @@ BEGIN
 
     SELECT * FROM @FilteredRows;
 END;
-GO
-
-
--- =============================================================================
--- §2 (D1) — IntegrationCredentialType junction ("one or more" credential types).
---
--- RSU-spec §metadata modeling — an Integration's credential type "can be one or more".
--- Integration.CredentialTypeID is a single FK; this adds the additive junction
--- IntegrationCredentialType so an integration can declare MULTIPLE acceptable credential
--- types (e.g. API key OR OAuth2). Publish-no-break: the legacy single column is KEPT and
--- remains the primary/default; consumers treat the allowed set as junction ∪ legacy column.
--- CodeGen adds __mj timestamps + FK indexes — deliberately not included here.
--- =============================================================================
-
-CREATE TABLE [${flyway:defaultSchema}].[IntegrationCredentialType] (
-    [ID] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
-    [IntegrationID] UNIQUEIDENTIFIER NOT NULL,
-    [CredentialTypeID] UNIQUEIDENTIFIER NOT NULL,
-    [IsPrimary] BIT NOT NULL DEFAULT 0,
-    [Sequence] INT NOT NULL DEFAULT 0,
-    CONSTRAINT [PK_IntegrationCredentialType] PRIMARY KEY ([ID]),
-    CONSTRAINT [FK_IntegrationCredentialType_Integration] FOREIGN KEY ([IntegrationID]) REFERENCES [${flyway:defaultSchema}].[Integration] ([ID]),
-    CONSTRAINT [FK_IntegrationCredentialType_CredentialType] FOREIGN KEY ([CredentialTypeID]) REFERENCES [${flyway:defaultSchema}].[CredentialType] ([ID]),
-    CONSTRAINT [UQ_IntegrationCredentialType] UNIQUE ([IntegrationID], [CredentialTypeID])
-);
-GO
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Junction between an Integration and the credential types it accepts (RSU-spec: one or more per integration). The legacy Integration.CredentialTypeID remains the primary/default type; the allowed set a connection-create validates against is this junction unioned with that column.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'IntegrationCredentialType';
-GO
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'When 1, this is the integration''s preferred/default credential type (mirrors the legacy Integration.CredentialTypeID). At most one row per integration should be primary.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'IntegrationCredentialType',
-    @level2type = N'COLUMN', @level2name = N'IsPrimary';
-GO
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Display/preference order of the credential types offered for this integration (lower first).',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'IntegrationCredentialType',
-    @level2type = N'COLUMN', @level2name = N'Sequence';
-GO
-
--- Seed: one junction row per existing Integration that already declares a credential type.
--- Data migration over tenant rows (IDs are inherently per-install; NEWID() is correct here —
--- these are NOT fixed metadata rows that must share an ID across installs).
-INSERT INTO [${flyway:defaultSchema}].[IntegrationCredentialType] ([ID], [IntegrationID], [CredentialTypeID], [IsPrimary], [Sequence])
-SELECT NEWID(), i.[ID], i.[CredentialTypeID], 1, 0
-FROM [${flyway:defaultSchema}].[Integration] i
-WHERE i.[CredentialTypeID] IS NOT NULL
-  AND NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[IntegrationCredentialType] j
-      WHERE j.[IntegrationID] = i.[ID] AND j.[CredentialTypeID] = i.[CredentialTypeID]
-  );
 GO
