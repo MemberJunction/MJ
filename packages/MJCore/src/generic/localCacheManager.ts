@@ -108,6 +108,13 @@ export interface CachedRunViewResult {
     aggregateResults?: AggregateResult[];
     /** Total row count from the database — may differ from rowCount for paginated queries */
     totalRowCount?: number;
+    /**
+     * Schema fingerprint captured when these rows were cached, surfaced from the stored payload
+     * so in-place maintenance can carry it FORWARD when rewriting the slot (B38). Without it the
+     * rewrite drops the hash, and `isSchemaStaleCacheEntry` short-circuits on a missing hash —
+     * permanently disabling post-migration drift detection for that slot.
+     */
+    schemaHash?: string;
 }
 
 /**
@@ -1674,6 +1681,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             maxUpdatedAt: parsed.maxUpdatedAt,
             rowCount: results.length,
             totalRowCount: parsed.totalRowCount,
+            // Surfaced so in-place maintenance can carry it forward on rewrite (B38).
+            schemaHash: parsed.schemaHash,
         };
         if (parsed.aggregateResults) {
             result.aggregateResults = parsed.aggregateResults;
@@ -1891,7 +1900,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 const updatedResults = Array.from(resultMap.values());
 
                 return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt,
-                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length });
+                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash });
             } catch (e) {
                 LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
                 return false;
@@ -1943,7 +1952,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 const updatedResults = Array.from(resultMap.values());
 
                 return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt,
-                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length });
+                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash });
             } catch (e) {
                 LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
                 return false;
@@ -1969,12 +1978,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         fingerprint: string,
         updatedResults: unknown[],
         newMaxUpdatedAt: string,
-        prior?: { totalRowCount?: number; rowCount: number }
+        prior?: { totalRowCount?: number; rowCount: number; schemaHash?: string }
     ): Promise<boolean> {
         const data: CachedRunViewData = {
             results: updatedResults,
             maxUpdatedAt: newMaxUpdatedAt
         };
+        // Carry the schemaHash FORWARD — never recompute it here (B38).
+        //
+        // Omitting it silently disabled schema-drift protection for the slot: rewriting a slot
+        // without a hash makes `isSchemaStaleCacheEntry` short-circuit (`if (!data.schemaHash)
+        // return false`), so a single save left that slot permanently unable to detect a
+        // post-migration column change. Same class of omission as the totalRowCount loss fixed
+        // in #3195, on this same write path.
+        //
+        // CARRY, don't RECOMPUTE: these rows were fetched under the OLD schema. Stamping the
+        // CURRENT hash onto them would assert they match today's field list — actively masking
+        // the very drift the guard exists to catch.
+        if (prior?.schemaHash) {
+            data.schemaHash = prior.schemaHash;
+        }
         if (prior?.totalRowCount != null) {
             const delta = updatedResults.length - prior.rowCount;
             data.totalRowCount = Math.max(updatedResults.length, prior.totalRowCount + delta);

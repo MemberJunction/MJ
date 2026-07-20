@@ -45,13 +45,15 @@
  * hash (e.g. `MJ: User Settings|_|_|-1|0|_|_|mssql://…` → `schemaHash: "1bd8ea31"`), and there are
  * 12 unit tests over the mechanism, but there is no LIVE check.
  *
- * CG6 is currently RED, and legitimately so — it found B38. In-place maintenance
+ * CG6 found B38 (now FIXED — the maintenance write carries the hash forward). In-place maintenance
  * (`UpsertSingleEntity` / `RemoveSingleEntity` → `storeCachedResults`) carries `totalRowCount`
  * forward but NOT `schemaHash`, so a single save strips the hash and
  * `isSchemaStaleCacheEntry` (which short-circuits on a missing hash) never fires for that slot
- * again. Verified: cold read → hash `1bd8ea31`; after one SAVE → `NONE`. Schema-drift protection
- * therefore covers only slots that have never been written to. This is the SAME class of omission
- * as #3195, which fixed `totalRowCount` being lost on this exact write path.
+ * again. Verified before the fix: cold read → hash `1bd8ea31`; after one SAVE → `NONE`. Schema-drift
+ * protection therefore covered only slots never written to. Same class of omission as #3195, which
+ * fixed `totalRowCount` on this exact write path. The fix CARRIES the hash forward rather than
+ * recomputing it — recomputing would stamp today's schema onto rows fetched under the old one,
+ * masking the very drift the guard exists to catch.
  *
  * CG6 covers the guard by rewriting the stored `schemaHash` on EVERY slot for the entity and
  * asserting the next read re-executes. Two earlier attempts drifted only the first slot carrying a hash and
@@ -281,7 +283,7 @@ export const CacheGauntletChecks: NamedCheck[] = [
     },
     {
         Id: 'cache-gauntlet.CG6',
-        Name: 'CG6 (mutation): ⚠ KNOWN-RED (B38) — a cached slot whose schemaHash no longer matches the entity is rejected, not served',
+        Name: 'CG6 (mutation): a cached slot whose schemaHash no longer matches the entity is rejected, not served',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
             const rv = new RunView();

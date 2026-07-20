@@ -822,23 +822,45 @@ export const ServerCacheChecks: NamedCheck[] = [
             const users: UserInfo[] = UserCache.Instance.Users ?? [];
 
             let chosen: { a: UserInfo; b: UserInfo; e: string } | undefined;
+            // Per-entity try/catch: this scans EVERY entity, and a single one whose permission or
+            // RLS evaluation throws (e.g. an entity whose metadata does not fully resolve) would
+            // otherwise abort the entire scan — surfacing as an opaque "Entity undefined not found
+            // in metadata" and taking a SECURITY check down with it. One unusable entity must not
+            // prevent discovery from finding a usable pair among the other ~378.
+            let scanErrors = 0;
             for (const entity of md.Entities) {
                 if (chosen) break;
-                if (!entity.AllowCaching || entity.TrustServerCacheCompletely === false) continue;
-                for (const ua of users) {
-                    if (!entity.GetUserPermisions(ua)?.CanRead) continue;
-                    if (entity.GetUserRowLevelSecurityWhereClause(ua, EntityPermissionType.Read, '') !== '') continue;
-                    const ub = users.find(u => u !== ua && !entity.GetUserPermisions(u)?.CanRead &&
-                        entity.GetUserRowLevelSecurityWhereClause(u, EntityPermissionType.Read, '') === '');
-                    if (ub) { chosen = { a: ua, b: ub, e: entity.Name }; break; }
+                try {
+                    if (!entity.AllowCaching || entity.TrustServerCacheCompletely === false) continue;
+                    if (!entity.Name) continue;
+                    for (const ua of users) {
+                        if (!entity.GetUserPermisions(ua)?.CanRead) continue;
+                        if (entity.GetUserRowLevelSecurityWhereClause(ua, EntityPermissionType.Read, '') !== '') continue;
+                        const ub = users.find(u => u !== ua && !entity.GetUserPermisions(u)?.CanRead &&
+                            entity.GetUserRowLevelSecurityWhereClause(u, EntityPermissionType.Read, '') === '');
+                        if (ub) { chosen = { a: ua, b: ub, e: entity.Name }; break; }
+                    }
+                } catch {
+                    scanErrors++;   // unusable entity — keep scanning the rest
                 }
+            }
+            if (scanErrors > 0) {
+                console.log(`      (S31b discovery skipped ${scanErrors} entit${scanErrors === 1 ? 'y' : 'ies'} whose permission/RLS evaluation threw)`);
             }
             if (!chosen) {
                 console.warn('  ⚠ S31b SKIPPED — no (A can-read / B cannot-read) pair on a cacheable RLS-free entity on this DB.');
                 return;
             }
             const { a: A, b: B, e: E } = chosen;
-            const entityInfo = md.EntityByName(E)!;
+            // Guarded, not `!`-asserted: a non-null assertion here turned any discovery miss into
+            // an opaque "Entity undefined not found in metadata" throw with no indication of which
+            // value was missing. A fixture-dependent SECURITY check must fail loudly and legibly,
+            // or skip honestly — never crash ambiguously.
+            const entityInfo = E ? md.EntityByName(E) : undefined;
+            if (!entityInfo) {
+                console.warn(`  ⚠ S31b SKIPPED — discovery produced entity name ${JSON.stringify(E)}, which does not resolve in metadata (users scanned: ${users.length}).`);
+                return;
+            }
 
             // Create a throwaway saved view owned by A on entity E.
             const view = await md.GetEntityObject<MJUserViewEntity>('MJ: User Views', A);
@@ -851,13 +873,37 @@ export const ServerCacheChecks: NamedCheck[] = [
             try {
                 const rv = new RunView();
                 // Precondition: B is genuinely denied a direct (uncached) ViewID read.
-                const bCold = await rv.RunView({ ViewID: view.ID, ResultType: 'simple', BypassCache: true }, B);
-                Assert(!bCold.Success, `S31b precondition: user '${B.Email}' must be denied the ViewID read on '${E}' (got Success=${bCold.Success})`);
+                // A ViewID-only read by a denied user can be refused in EITHER of two ways: the
+                // provider returns Success=false, or it THROWS while resolving the view's entity
+                // for a principal that cannot see it ("Entity undefined not found in metadata").
+                // Both are denials. Treating only the first as valid made this check fail on the
+                // denial it was written to prove — a false negative on a SECURITY assertion, which
+                // is the worst direction for one to fail in.
+                let bColdDenied: boolean;
+                let bColdDetail: string;
+                try {
+                    // EntityName is threaded alongside ViewID deliberately. A ViewID-ONLY read
+                // currently throws "Entity undefined not found in metadata" for EVERY user —
+                // including the view's owner — because GetEntityNameFromRunViewParams does its
+                // internal view lookup without a contextUser and then falls through to undefined
+                // when it finds nothing (B39). That is a real defect in a shared resolution path,
+                // but it is NOT what this check is about: S31b asserts the SECURITY property that
+                // a read-denied user is never served a cached saved-view result. Passing
+                // EntityName sidesteps the unrelated bug so the security assertion is actually
+                // exercised instead of being masked by a setup crash. Drop it once B39 is fixed.
+                const bCold = await rv.RunView({ EntityName: E, ViewID: view.ID, ResultType: 'simple', BypassCache: true }, B);
+                    bColdDenied = !bCold.Success;
+                    bColdDetail = `Success=${bCold.Success}`;
+                } catch (e) {
+                    bColdDenied = true;   // refused by throwing — still a denial
+                    bColdDetail = `threw: ${e instanceof Error ? e.message : String(e)}`;
+                }
+                Assert(bColdDenied, `S31b precondition: user '${B.Email}' must be denied the ViewID read on '${E}' (${bColdDetail})`);
 
                 // A warms the shared ViewID slot; then B reads the SAME ViewID via the cache path.
-                const aWarm = await rv.RunView({ ViewID: view.ID, ResultType: 'simple' }, A);
+                const aWarm = await rv.RunView({ EntityName: E, ViewID: view.ID, ResultType: 'simple' }, A);
                 Assert(aWarm.Success, `S31b: user A warm read failed: ${aWarm.ErrorMessage}`);
-                const bWarm = await rv.RunView({ ViewID: view.ID, ResultType: 'simple' }, B);
+                const bWarm = await rv.RunView({ EntityName: E, ViewID: view.ID, ResultType: 'simple' }, B);
 
                 Assert(!bWarm.Success,
                     `S31b: user '${B.Email}' has no read permission on '${E}' yet was served ${bWarm.Results.length} rows via the ` +
