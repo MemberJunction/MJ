@@ -718,6 +718,112 @@ describe('ConversationEngine', () => {
     // ========================================================================
     // SAVE CONVERSATION
     // ========================================================================
+    describe('GetAgentContextWindow', () => {
+        /**
+         * Enqueue GetConversationComplete rows preserving each row's Role/Sequence/
+         * SummaryOfEarlierConversation (enqueueDetailsResults force-overrides Role).
+         */
+        function enqueueWindowRows(rows: Array<Record<string, unknown>>) {
+            runQueryResultQueue.push({
+                Success: true,
+                Results: rows.map((r) => ({
+                    AgentRunsJSON: null,
+                    ArtifactsJSON: null,
+                    RatingsJSON: null,
+                    SummaryOfEarlierConversation: null,
+                    ...r,
+                })),
+            });
+        }
+
+        function makeRow(id: string, seq: number, role: string, message: string, summary: string | null = null) {
+            return {
+                ID: id,
+                ConversationID: 'conv-1',
+                Sequence: seq,
+                Role: role,
+                Message: message,
+                SummaryOfEarlierConversation: summary,
+            };
+        }
+
+        it('returns all messages chronologically with metadata when no summary exists', async () => {
+            enqueueWindowRows([
+                makeRow('d-2', 2, 'AI', 'answer one'),
+                makeRow('d-1', 1, 'User', 'question one'),
+                makeRow('d-3', 3, 'User', 'question two'),
+            ]);
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser);
+            expect(window).toHaveLength(3);
+            expect(window.map((m) => m.metadata?.sequence)).toEqual([1, 2, 3]);
+            expect(window.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+            expect(window[0].content).toBe('question one');
+            expect(window[0].metadata?.conversationDetailId).toBe('d-1');
+            expect(window.every((m) => !m.metadata?.isConversationSummary)).toBe(true);
+        });
+
+        it('caps to the most recent maxTailMessages when no summary exists', async () => {
+            enqueueWindowRows([1, 2, 3, 4, 5].map((n) => makeRow(`d-${n}`, n, 'User', `msg ${n}`)));
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser, { maxTailMessages: 2 });
+            expect(window.map((m) => m.metadata?.sequence)).toEqual([4, 5]);
+        });
+
+        it('windows at the HIGHEST-sequence summary: summary message + boundary row raw + tail', async () => {
+            enqueueWindowRows([
+                makeRow('d-1', 1, 'User', 'old question'),
+                makeRow('d-2', 2, 'AI', 'old answer', 'stale older summary'),
+                makeRow('d-3', 3, 'User', 'mid question'),
+                makeRow('d-4', 4, 'AI', 'mid answer', 'covers sequences 1-3'),
+                makeRow('d-5', 5, 'User', 'new question'),
+            ]);
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser);
+            expect(window).toHaveLength(3);
+            // Synthetic summary first — carries the boundary's summary text + metadata
+            expect(window[0].role).toBe('user');
+            expect(window[0].content).toBe('covers sequences 1-3');
+            expect(window[0].metadata?.isConversationSummary).toBe(true);
+            expect(window[0].metadata?.summaryBoundarySequence).toBe(4);
+            // Boundary row itself is included RAW (no gap, no overlap), then the tail
+            expect(window[1].metadata?.sequence).toBe(4);
+            expect(window[1].content).toBe('mid answer');
+            expect(window[2].metadata?.sequence).toBe(5);
+        });
+
+        it('ignores maxTailMessages when a summary boundary exists (no coverage gap)', async () => {
+            enqueueWindowRows([
+                makeRow('d-1', 1, 'User', 'old', null),
+                makeRow('d-2', 2, 'AI', 'boundary answer', 'the summary'),
+                makeRow('d-3', 3, 'User', 'tail 1'),
+                makeRow('d-4', 4, 'AI', 'tail 2'),
+            ]);
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser, { maxTailMessages: 1 });
+            // summary + boundary + 2 tail rows — the cap must NOT cut into the tail
+            expect(window).toHaveLength(4);
+        });
+
+        it('excludes rows listed in excludeDetailIds (in-flight placeholder)', async () => {
+            enqueueWindowRows([
+                makeRow('d-1', 1, 'User', 'question'),
+                makeRow('d-2', 2, 'AI', '⏳ Starting...'),
+            ]);
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser, {
+                excludeDetailIds: ['d-2'],
+            });
+            expect(window).toHaveLength(1);
+            expect(window[0].metadata?.conversationDetailId).toBe('d-1');
+        });
+
+        it('treats blank summaries as no boundary', async () => {
+            enqueueWindowRows([
+                makeRow('d-1', 1, 'User', 'q', '   '),
+                makeRow('d-2', 2, 'AI', 'a'),
+            ]);
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser);
+            expect(window).toHaveLength(2);
+            expect(window[0].metadata?.isConversationSummary).toBeUndefined();
+        });
+    });
+
     describe('SaveConversation', () => {
         it('should save updates and update the in-memory list', async () => {
             runViewResultQueue.push({ Success: true, Results: [createMockConversation({ ID: 'c1', Name: 'Original' })] });
@@ -914,6 +1020,83 @@ describe('ConversationEngine', () => {
                 engine.ClearCache();
                 expect(engine.Projects).toHaveLength(0);
             });
+        });
+    });
+
+    // ========================================================================
+    // ASSEMBLE CONTEXT WINDOW (pure static fold — shared by the cached client
+    // path and the server-side fresh-per-request loaders)
+    // ========================================================================
+    describe('AssembleContextWindow', () => {
+        const row = (sequence: number, role: string, message: string, summary?: string) => ({
+            ID: `detail-${sequence}`,
+            Sequence: sequence,
+            Role: role,
+            Message: message,
+            SummaryOfEarlierConversation: summary || null,
+        });
+
+        it('no boundary → all messages, chronological, metadata stamped (plain rows, no entities)', () => {
+            const window = ConversationEngine.AssembleContextWindow([
+                row(2, 'AI', 'm2'), // deliberately out of order
+                row(1, 'User', 'm1'),
+                row(3, 'User', 'm3'),
+            ]);
+            expect(window.map(m => m.content)).toEqual(['m1', 'm2', 'm3']);
+            expect(window.map(m => m.role)).toEqual(['user', 'assistant', 'user']);
+            expect(window[0].metadata?.sequence).toBe(1);
+            expect(window[0].metadata?.conversationDetailId).toBe('detail-1');
+        });
+
+        it('maxTailMessages caps the no-boundary window only', () => {
+            const rows = [1, 2, 3, 4].map(n => row(n, 'User', `m${n}`));
+            expect(ConversationEngine.AssembleContextWindow(rows, { maxTailMessages: 2 }).map(m => m.content)).toEqual(['m3', 'm4']);
+
+            // With a boundary, the cap is deliberately ignored (post-boundary tail must stay whole)
+            const withBoundary = [1, 2, 3, 4].map(n => row(n, 'User', `m${n}`, n === 3 ? 'SUMMARY' : undefined));
+            const window = ConversationEngine.AssembleContextWindow(withBoundary, { maxTailMessages: 1 });
+            expect(window).toHaveLength(3); // summary + boundary raw + tail
+        });
+
+        it('folds at the highest-sequence summary and includes the boundary row raw', () => {
+            const rows = [1, 2, 3, 4].map(n => row(n, 'User', `m${n}`, n === 2 || n === 3 ? `SUMMARY@${n}` : undefined));
+            const window = ConversationEngine.AssembleContextWindow(rows);
+            expect(window[0].metadata?.isConversationSummary).toBe(true);
+            expect(window[0].content).toBe('SUMMARY@3'); // highest wins (recursive pattern)
+            expect(window.slice(1).map(m => m.content)).toEqual(['m3', 'm4']);
+        });
+
+        it('excludeDetailIds drops rows before boundary selection (UUID-case-insensitive)', () => {
+            const rows = [1, 2, 3].map(n => row(n, 'User', `m${n}`, n === 3 ? 'SUMMARY' : undefined));
+            const window = ConversationEngine.AssembleContextWindow(rows, { excludeDetailIds: ['DETAIL-3'] });
+            // With the boundary row excluded, no summary participates → plain passthrough
+            expect(window.every(m => !m.metadata?.isConversationSummary)).toBe(true);
+            expect(window.map(m => m.content)).toEqual(['m1', 'm2']);
+        });
+    });
+
+    // ========================================================================
+    // REMOTE NEW-ROW SAVE → CACHE EVICTION (a warm cache would otherwise keep
+    // serving without the row forever — loads short-circuit on cache hits)
+    // ========================================================================
+    describe('remote new-detail save eviction', () => {
+        it('evicts the warm detail cache when a remote save arrives for an uncached row', async () => {
+            enqueueDetailsResults([
+                createMockDetail({ ID: 'd1', ConversationID: 'conv-1' }),
+            ]);
+            await engine.LoadConversationDetails('conv-1', contextUser);
+            expect(engine.GetCachedDetails('conv-1')).toBeDefined();
+
+            // Remote event: no baseEntity, new row ID not in the cache
+            const internals = engine as unknown as {
+                handleConversationDetailEntityEvent(event: Record<string, unknown>, action: string): boolean;
+            };
+            internals.handleConversationDetailEntityEvent({
+                baseEntity: null,
+                payload: { recordData: JSON.stringify({ ID: 'd-new', ConversationID: 'conv-1' }) },
+            }, 'save');
+
+            expect(engine.GetCachedDetails('conv-1')).toBeUndefined(); // next load re-queries
         });
     });
 });

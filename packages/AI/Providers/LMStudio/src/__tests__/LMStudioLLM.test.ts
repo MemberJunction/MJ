@@ -28,6 +28,7 @@ vi.mock('@memberjunction/ai', () => {
       this._additionalSettings = { ...this._additionalSettings, ...settings };
     }
     protected initializeThinkingStreamState() {}
+    protected resetStreamingState() {}
     protected processStreamChunkWithThinking(content: string) { return content; }
     protected get thinkingStreamState() {
       return { accumulatedThinking: '' };
@@ -188,6 +189,69 @@ describe('LMStudioLLM', () => {
       const result = await fn(params) as Record<string, unknown>;
       expect(result.success).toBe(false);
       expect(result.errorMessage).toContain('Model not loaded');
+    });
+  });
+
+  /* ---- cancellationToken ---- */
+  describe('cancellationToken', () => {
+    const callNonStreaming = (params: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion']
+        .bind(llm);
+      return fn(params) as Promise<Record<string, unknown>>;
+    };
+
+    it('should not touch the model when the token is already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const result = await callNonStreaming({
+        model: 'local-model',
+        messages: [{ role: 'user', content: 'Hello' }],
+        cancellationToken: controller.signal,
+      });
+
+      expect(mockModel).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('cancelled');
+    });
+
+    it('should forward the token to model() and respond()', async () => {
+      const mockRespond = vi.fn().mockResolvedValue({
+        nonReasoningContent: 'Hi',
+        reasoningContent: undefined,
+        stats: {},
+      });
+      mockModel.mockResolvedValue({ respond: mockRespond });
+      const controller = new AbortController();
+
+      await callNonStreaming({
+        model: 'local-model',
+        messages: [{ role: 'user', content: 'Hello' }],
+        cancellationToken: controller.signal,
+      });
+
+      expect(mockModel).toHaveBeenCalledWith('local-model', { signal: controller.signal });
+      const respondOptions = mockRespond.mock.calls[0][1] as { signal?: AbortSignal };
+      expect(respondOptions.signal).toBe(controller.signal);
+    });
+
+    it('should report a cancellation when LM Studio resolves after an abort (userStopped)', async () => {
+      const controller = new AbortController();
+      // LM Studio stops the prediction rather than throwing, so it resolves with partial content
+      const mockRespond = vi.fn().mockImplementation(async () => {
+        controller.abort();
+        return { nonReasoningContent: 'partial', reasoningContent: undefined, stats: {} };
+      });
+      mockModel.mockResolvedValue({ respond: mockRespond });
+
+      const result = await callNonStreaming({
+        model: 'local-model',
+        messages: [{ role: 'user', content: 'Hello' }],
+        cancellationToken: controller.signal,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('cancelled');
     });
   });
 
