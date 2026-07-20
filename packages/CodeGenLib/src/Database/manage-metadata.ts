@@ -3967,7 +3967,8 @@ export class ManageMetadataBase {
                // which terminates + joins the statements and sends each chunk as a
                // single round-trip + single log append while preserving the exact
                // per-row SQL and the replayable migration-file output. Both dialects.
-               const CHUNK_SIZE = 250;
+               // Batch size is configurable via `metadataInsertBatchSize` (default 250).
+               const CHUNK_SIZE = configInfo.metadataInsertBatchSize ?? 250;
                const inserts: string[] = [];
                for (let i = 0; i < newEntityFields.length; ++i) {
                   const n = newEntityFields[i];
