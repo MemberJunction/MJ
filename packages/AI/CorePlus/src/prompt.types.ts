@@ -406,6 +406,21 @@ export class AIPromptParams {
   cancellationToken?: AbortSignal;
 
   /**
+   * Optional wall-clock bound, in milliseconds, applied to EACH model call this prompt makes
+   * (per failover candidate / per validation retry / per parallel task — mirroring the parallel
+   * coordinator's existing `taskTimeoutMS` semantics).
+   *
+   * When set, AIPromptRunner composes this with `cancellationToken` (if any) into a single abort
+   * signal: BOTH bounds apply and whichever fires first aborts the call. Exceeding the timeout
+   * rejects with a typed `AIPromptTimeoutError` (classified as a retriable NetworkError), so it
+   * flows into the normal failover/retry machinery instead of hanging forever.
+   *
+   * When omitted (and the runner declares no `DefaultPromptTimeoutMS`), the model call is bounded
+   * ONLY by `cancellationToken` — i.e. unbounded if no token is supplied.
+   */
+  timeoutMS?: number;
+
+  /**
    * Optional callback for receiving execution progress updates
    * Provides real-time information about the execution progress
    */

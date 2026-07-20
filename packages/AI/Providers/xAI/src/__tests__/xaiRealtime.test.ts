@@ -479,8 +479,8 @@ describe('xAIRealtime', () => {
                 response_id: 'r',
             } as RealtimeServerEvent);
             expect(transcripts).toEqual([
-                { Role: 'assistant', Text: 'Hel', IsFinal: false },
-                { Role: 'assistant', Text: 'Hello', IsFinal: true },
+                { Role: 'assistant', Text: 'Hel', IsFinal: false, ReplacesPrevious: false },
+                { Role: 'assistant', Text: 'Hello', IsFinal: true, ReplacesPrevious: false },
             ]);
         });
 
@@ -502,9 +502,28 @@ describe('xAIRealtime', () => {
                 usage: { type: 'tokens', input_tokens: 1, output_tokens: 1, total_tokens: 2 },
             } as RealtimeServerEvent);
             expect(transcripts).toEqual([
-                { Role: 'user', Text: 'wha', IsFinal: false },
-                { Role: 'user', Text: 'what is the weather', IsFinal: true },
+                { Role: 'user', Text: 'wha', IsFinal: false, ReplacesPrevious: false },
+                { Role: 'user', Text: 'what is the weather', IsFinal: true, ReplacesPrevious: false },
             ]);
+        });
+
+        it('flags Grok streamed user captions ReplacesPrevious (2nd+ completed of a turn) so they collapse to one row', () => {
+            // Grok STREAMS input transcription — repeated completeds, each the full growing text. This is
+            // the actual provider behavior the client driver (userTurnTranscribed) handles; the SERVER
+            // session must stamp the same flag so the server-bridged persist path de-duplicates too.
+            const transcripts: Array<{ Role: string; Text: string; IsFinal: boolean; ReplacesPrevious?: boolean }> = [];
+            session.OnTranscript((t) => transcripts.push(t));
+            const completed = (transcript: string) => driver.Fake.Fire({
+                type: 'conversation.item.input_audio_transcription.completed', transcript, content_index: 0, event_id: 'e', item_id: 'i',
+            } as RealtimeServerEvent);
+            completed('what');
+            completed('what is');
+            completed('what is the weather');
+            // A new user turn (speech_started) resets the per-turn flag so its first caption is a fresh
+            // non-replacing final again — otherwise every subsequent turn would replace turn 1's row.
+            driver.Fake.Fire({ type: 'input_audio_buffer.speech_started', audio_start_ms: 1, event_id: 'e', item_id: 'i' } as RealtimeServerEvent);
+            completed('and the forecast');
+            expect(transcripts.map((t) => t.ReplacesPrevious)).toEqual([false, true, true, false]);
         });
 
         it('translates a function call to OnToolCall', () => {

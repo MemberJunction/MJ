@@ -566,7 +566,17 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       // selection, ChatParams construction (temperature/topP/effort/stop/response-format/prefill),
       // media handling, and streaming. The coordinator only layers the per-task timeout on top;
       // cancellation is handled inside executeModel via the task's cancellation token.
+      //
+      // TIMEOUT: a caller-supplied `AIPromptParams.timeoutMS` (or a runner-level
+      // DefaultPromptTimeoutMS) is the authoritative bound for a model call — the inherited
+      // executeModel enforces it on the composed abort signal. The coordinator's `taskTimeoutMS` is
+      // only a DEFAULT backstop for callers that request no timeout, so when a timeout IS requested
+      // we use that value here too. Otherwise a caller asking for 120s would still be truncated at
+      // the coordinator's 30s default — exactly the kind of divergence between the two paths we're
+      // eliminating.
       const perTaskParams = this.buildPerTaskParams(params, task);
+      const effectiveTimeoutMS = this.getEffectiveTimeoutMS(perTaskParams) ?? timeoutMS;
+      let taskTimer: ReturnType<typeof setTimeout> | undefined;
       const modelResult = (await Promise.race([
         this.executeModel(
           task.model,
@@ -580,8 +590,10 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
           task.vendorDriverClass,
           task.vendorApiName,
         ),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Task execution timeout')), timeoutMS)),
-      ])) as ChatResult;
+        new Promise<never>((_, reject) => {
+          taskTimer = setTimeout(() => reject(new Error('Task execution timeout')), effectiveTimeoutMS);
+        }),
+      ]).finally(() => clearTimeout(taskTimer))) as ChatResult;
 
       if (streamCbs?.OnComplete) {
         streamCbs.OnComplete(modelResult);

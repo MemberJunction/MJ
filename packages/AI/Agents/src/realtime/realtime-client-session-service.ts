@@ -72,6 +72,7 @@ import {
     GetDisclosureForTarget,
     GetNarrationPaceMs,
     GetProviderVoiceSettings,
+    GetSessionTuningSettings,
     JSONObjectLike,
     RealtimeAllowedAgent,
     RealtimeCoAgentConfig,
@@ -1696,8 +1697,12 @@ export class RealtimeClientSessionService {
         driverClass?: string
     ): JSONObject | undefined {
         const providerVoice = GetProviderVoiceSettings(effectiveConfig, driverClass ?? null);
-        let bag: JSONObject | undefined = providerVoice
-            ? (DeepMergeConfigs(providerVoice, input.Config as JSONObjectLike | undefined) as JSONObject)
+        // Session-tuning knobs (realtime.session: effortLevel / parallelToolCalls / mcpTools /
+        // inputTranscriptionModel) merge UNDER the provider voice UNDER the runtime bag — the
+        // exact cascade precedence every other config entry follows (runtime wins per key).
+        const sessionTuning = GetSessionTuningSettings(effectiveConfig);
+        let bag: JSONObject | undefined = (sessionTuning || providerVoice)
+            ? (DeepMergeConfigs(sessionTuning, providerVoice, input.Config as JSONObjectLike | undefined) as JSONObject)
             : input.Config;
         // Multi-agent meeting: carry the host-NEUTRAL disable-auto-response flag in the open config bag so
         // each provider translates it its own way (OpenAI → turn_detection.create_response=false) — the

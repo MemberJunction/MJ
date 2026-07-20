@@ -9,6 +9,7 @@ import { CredentialEngine } from '@memberjunction/credentials';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
+import { AIPromptTimeoutError } from './AIPromptTimeoutError';
 import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -33,6 +34,25 @@ function mimeFromBlockType(type: string): string {
         case 'file_url': return 'application/octet-stream';
         default: return 'application/octet-stream';
     }
+}
+
+/**
+ * The composed bound applied to a single model call: the caller's cancellation token (if any) merged
+ * with the prompt's configured `AIPrompt.TimeoutMS` (if any).
+ *
+ * Produced by `AIPromptRunner.createExecutionBound` and consumed by the bounded ChatCompletion race.
+ * `Dispose()` MUST be called when the call settles so the timeout timer and abort listener are
+ * released.
+ */
+export interface ExecutionBound {
+    /** Merged abort signal; `undefined` when there is neither a caller token nor a prompt timeout. */
+    Signal?: AbortSignal;
+    /** The prompt-configured timeout in ms, when one applies. */
+    TimeoutMS?: number;
+    /** True once the TIMEOUT (not the caller's token) fired — used to build the right error. */
+    TimedOut: () => boolean;
+    /** Releases the timer and the caller-token listener. Safe to call multiple times. */
+    Dispose: () => void;
 }
 
 
@@ -892,7 +912,10 @@ export class AIPromptRunner {
         errorMessage: error.message,
         promptRun,
         executionTimeMS,
-        chatResult: { success: false, errorMessage: error.message, errorInfo } as ChatResult,
+        // Preserve the original exception on the ChatResult so typed failures (e.g.
+        // AIPromptTimeoutError from an exceeded AIPrompt.TimeoutMS) survive to the caller
+        // instead of being flattened into a string.
+        chatResult: { success: false, errorMessage: error.message, errorInfo, exception: error } as ChatResult,
         tokensUsed: 0,
         combinedTokensUsed: 0
       };
@@ -3427,6 +3450,12 @@ export class AIPromptRunner {
     let llm: BaseLLM;
     let chatParams: ChatParams;
 
+    // Compose the caller's cancellation token (if any) with the resolved model-call timeout (if any)
+    // into a SINGLE signal that bounds this model call. Both bounds always apply — whichever fires
+    // first aborts the call. This is the ONE place the timeout is enforced, so the single-model path
+    // and the parallel path (which delegates here) can never diverge.
+    const executionBound = this.createExecutionBound(prompt, params, cancellationToken);
+
     try {
       // Get verbose flag for logging
       const verbose = params.verbose === true || IsVerboseLoggingEnabled();
@@ -3485,7 +3514,10 @@ export class AIPromptRunner {
         throw new Error(`No API name found for model ${model.Name}. Please ensure the model or its vendor configuration includes an APIName.`);
       }
       chatParams.model = apiName;
-      chatParams.cancellationToken = cancellationToken;
+      // Hand the driver the COMPOSED signal (caller token ∪ prompt timeout), not the raw caller
+      // token, so any driver that learns to honor ChatParams.cancellationToken aborts the HTTP
+      // request on timeout too — not just on caller cancellation.
+      chatParams.cancellationToken = executionBound.Signal;
 
       // Apply scalar inference params (prompt defaults overridden by additionalParameters) via the
       // shared resolver so ChatParams and the persisted AIPromptRun never drift.
@@ -3587,25 +3619,8 @@ export class AIPromptRunner {
         };
       }
 
-      // Execute the model with cancellation support
-      if (cancellationToken) {
-        // If cancellation token is provided, wrap the execution to handle cancellation
-        return await Promise.race([
-          llm.ChatCompletion(chatParams),
-          new Promise<never>((_, reject) => {
-            if (cancellationToken.aborted) {
-              reject(new Error('Chat completion was cancelled'));
-            } else {
-              cancellationToken.addEventListener('abort', () => {
-                reject(new Error('Chat completion was cancelled'));
-              });
-            }
-          }),
-        ]);
-      } else {
-        // No cancellation token, execute normally
-        return await llm.ChatCompletion(chatParams);
-      }
+      // Execute the model bounded by the composed abort signal (caller cancellation + prompt TimeoutMS)
+      return await this.runChatCompletionBounded(llm, chatParams, executionBound);
     } catch (error) {
       const errorInfo = ErrorAnalyzer.analyzeError(error, driverClass)
       this.logError(error, {
@@ -3618,7 +3633,142 @@ export class AIPromptRunner {
         maxErrorLength: params.maxErrorLength
       });
       throw error;
+    } finally {
+      // Always release the timeout timer + abort listener, whether the call succeeded, failed,
+      // timed out, or was cancelled. Without this a long-lived process would accumulate timers.
+      executionBound.Dispose();
     }
+  }
+
+  /**
+   * Engine-level default model-call timeout, in milliseconds, applied when the caller supplies no
+   * `AIPromptParams.timeoutMS`. `undefined` (the default) means NO implicit bound — a prompt run
+   * with neither a timeout nor a cancellation token stays unbounded, exactly as before, so this
+   * change is behavior-preserving for existing callers.
+   *
+   * Subclasses (or a host application's runner subclass) can override this to impose a global
+   * safety ceiling on every prompt call.
+   */
+  protected get DefaultPromptTimeoutMS(): number | undefined {
+    return undefined;
+  }
+
+  /**
+   * Resolves the per-model-call timeout: the caller's `AIPromptParams.timeoutMS`, else the runner's
+   * {@link DefaultPromptTimeoutMS}. Non-positive / non-numeric values mean "no timeout".
+   *
+   * The bound is applied PER MODEL CALL (not per prompt execution), which mirrors the parallel
+   * path's existing `taskTimeoutMS` semantics: each failover candidate / validation retry gets a
+   * fresh budget rather than sharing one wall-clock window.
+   *
+   * NOTE (issue #3064): there is deliberately NO prompt-entity source here yet — the `AIPrompt`
+   * table has no `TimeoutMS` column today. Once a migration adds one and CodeGen regenerates the
+   * entity, this becomes `prompt.TimeoutMS ?? params.timeoutMS ?? this.DefaultPromptTimeoutMS`
+   * and every bound below starts honoring the per-prompt configuration with no other change.
+   */
+  protected getEffectiveTimeoutMS(params: AIPromptParams): number | undefined {
+    const timeoutMS = params.timeoutMS ?? this.DefaultPromptTimeoutMS;
+    return typeof timeoutMS === 'number' && timeoutMS > 0 ? timeoutMS : undefined;
+  }
+
+  /**
+   * Composes the caller-supplied cancellation token with the resolved model-call timeout into a
+   * single {@link AbortSignal} that bounds one model call. NEITHER bound is discarded:
+   *
+   * - caller token only  → the caller's signal is used directly (behavior unchanged)
+   * - timeout only       → an internal controller aborts after the timeout elapses
+   * - both               → an internal controller relays the caller's abort AND fires on timeout;
+   *                        whichever happens first wins
+   * - neither            → `Signal` is undefined and the call runs unbounded (legacy behavior)
+   *
+   * Implemented with an AbortController + relay listener rather than `AbortSignal.any()` so it works
+   * on Node 18 (where `AbortSignal.any` does not exist — it landed in Node 20.3).
+   */
+  protected createExecutionBound(prompt: MJAIPromptEntityExtended, params: AIPromptParams, cancellationToken?: AbortSignal): ExecutionBound {
+    const timeoutMS = this.getEffectiveTimeoutMS(params);
+    if (timeoutMS === undefined) {
+      // No prompt timeout: use the caller's token as-is (or nothing at all).
+      return { Signal: cancellationToken, TimeoutMS: undefined, TimedOut: () => false, Dispose: () => { /* nothing to release */ } };
+    }
+
+    const controller = new AbortController();
+    let timedOut = false;
+
+    const relayCallerAbort = () => {
+      if (!controller.signal.aborted) {
+        controller.abort(cancellationToken?.reason ?? 'Chat completion was cancelled');
+      }
+    };
+    if (cancellationToken) {
+      if (cancellationToken.aborted) {
+        relayCallerAbort();
+      } else {
+        cancellationToken.addEventListener('abort', relayCallerAbort, { once: true });
+      }
+    }
+
+    const timer = setTimeout(() => {
+      if (!controller.signal.aborted) {
+        timedOut = true;
+        controller.abort(new AIPromptTimeoutError(prompt.Name, timeoutMS));
+      }
+    }, timeoutMS);
+
+    return {
+      Signal: controller.signal,
+      TimeoutMS: timeoutMS,
+      TimedOut: () => timedOut,
+      Dispose: () => {
+        clearTimeout(timer);
+        cancellationToken?.removeEventListener('abort', relayCallerAbort);
+      },
+    };
+  }
+
+  /**
+   * Runs the model call, racing it against the composed execution bound so a hung provider surfaces
+   * as a rejected promise the caller's failover/retry logic can act on.
+   *
+   * A timeout rejects with a typed {@link AIPromptTimeoutError} (classified by ErrorAnalyzer as a
+   * retriable NetworkError); a caller cancellation rejects with the same
+   * `'Chat completion was cancelled'` error the previous implementation produced, so cancellation
+   * semantics are unchanged.
+   *
+   * CAVEAT: the losing `ChatCompletion()` promise is abandoned, not aborted — no shipped driver
+   * currently forwards `ChatParams.cancellationToken` to its SDK/HTTP layer, so the underlying
+   * socket may stay open until the provider closes it. The composed signal is already on
+   * `ChatParams.cancellationToken`, so drivers become fully abortable the moment they honor it.
+   */
+  private async runChatCompletionBounded(llm: BaseLLM, chatParams: ChatParams, bound: ExecutionBound): Promise<ChatResult> {
+    const signal = bound.Signal;
+    if (!signal) {
+      // Neither a caller token nor a prompt timeout — execute unbounded (legacy behavior).
+      return await llm.ChatCompletion(chatParams);
+    }
+
+    return await Promise.race([
+      llm.ChatCompletion(chatParams),
+      new Promise<never>((_, reject) => {
+        const fail = () => reject(this.buildAbortError(signal, bound));
+        if (signal.aborted) {
+          fail();
+        } else {
+          signal.addEventListener('abort', fail, { once: true });
+        }
+      }),
+    ]);
+  }
+
+  /**
+   * Builds the rejection error for an aborted model call — a typed {@link AIPromptTimeoutError} when
+   * the prompt's TimeoutMS fired, otherwise the legacy cancellation error.
+   */
+  private buildAbortError(signal: AbortSignal, bound: ExecutionBound): Error {
+    if (bound.TimedOut()) {
+      const reason = signal.reason;
+      return reason instanceof AIPromptTimeoutError ? reason : new Error('Chat completion timed out');
+    }
+    return new Error('Chat completion was cancelled');
   }
 
   /**
