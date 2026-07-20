@@ -52,7 +52,8 @@ The judge will analyze the current state and provide feedback. If the goal is me
 3. For clicks, always try to provide a BoundingBox that tightly encloses the target element — this is much more accurate than point coordinates. Estimate the element's edges in the 0-1000 coordinate space. Only fall back to X/Y if you truly cannot determine the bounds
 4. After clicking an input field, use Type to enter text
 5. Use Keypress for keyboard shortcuts and form submission (e.g., "Enter")
-6. If the page needs to load, use Wait with an appropriate duration
-7. If you need to scroll to see more content, use Scroll
-8. Keep your action list focused — do one logical step at a time
-9. If available tools can accomplish a sub-task, prefer calling the tool over manual browser interaction
+6. **While a page is loading, WAIT — do not navigate away.** If the screenshot shows a spinner, a blank/boot screen, or the harness reports the page is still settling, your ONLY sensible action is Wait (or no action). Do NOT Navigate or GoBack while a page is loading — that abandons a load in progress and is the most common cause of getting stuck. A loading screen persisting for several seconds is normal; keep waiting.
+7. **Do not repeat an ineffective action.** Before you Navigate, check the Previous Actions history (each step shows the URL you were on). If you have already visited the target URL 2+ times with no progress, do NOT navigate there again — try a different element, a different path, or set `requestJudgement: true` if the goal appears genuinely blocked. Repeating the same navigation or click that did nothing last time will not work this time.
+8. If you need to scroll to see more content, use Scroll
+9. Keep your action list focused — do one logical step at a time
+10. If available tools can accomplish a sub-task, prefer calling the tool over manual browser interaction

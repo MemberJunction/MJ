@@ -127,8 +127,12 @@ export class RunContext {
      * Format a single step into a human-readable summary line.
      */
     private formatStepSummary(step: StepRecord): string {
+        // Include the step's URL (CU-E1) so the controller can see navigation
+        // history in-context — "you have been on /app/x 4 times" becomes a
+        // lookup, the prompt-side complement to engine loop detection (CU-B1).
+        const url = this.compactUrl(step.UrlAfter || step.Url);
         const parts: string[] = [
-            `Step ${step.StepNumber}: ${step.ControllerReasoning || 'No reasoning'}`,
+            `Step ${step.StepNumber}${url ? ` [${url}]` : ''}: ${step.ControllerReasoning || 'No reasoning'}`,
         ];
 
         // Browser actions
@@ -153,6 +157,17 @@ export class RunContext {
         }
 
         return parts.join(' | ');
+    }
+
+    /** Compact URL for the step summary — path + query, origin dropped for brevity (CU-E1). */
+    private compactUrl(url: string): string {
+        if (!url) return '';
+        try {
+            const u = new URL(url);
+            return `${u.pathname}${u.search}`;
+        } catch {
+            return url;
+        }
     }
 
     /**

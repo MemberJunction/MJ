@@ -542,6 +542,8 @@ mabl's confidence gate applies: a low-confidence heal (ambiguous target) should 
 
 **Risks / open questions.** Prompt changes shift behavior distribution suite-wide — roll out pinned (CU-E6) with an A/B slice.
 
+**Wave 1 status — LANDED.** (1) `formatStepSummary` now prefixes each line with the step's URL — `Step 7 [/app/ai/agents]: …` (path+query via a `compactUrl` helper, `UrlAfter` preferred) — so navigation history is in-context; this flows to the suite through the already-mapped `previousStepSummary`. (2) Two app-neutral rules added to the shared `controller-response-format.md` Rules block (regenerated into `prompt-parts.generated.ts`, so both the Layer-1 default prompt and the Layer-2 `{@include}`d template get them, and the CU-E7 gate confirms no app specifics leaked): a hardened wait-while-loading rule ("ONLY action is Wait; never Navigate/GoBack while loading") and an anti-loop rule ("check Previous Actions; don't re-navigate a URL visited 2+ times — try a different path or requestJudgement"). The drift guard stays green. App-specific timings remain in `applicationContext`; only the behavioral rules moved to where rules live. Turns loop/stall avoidance into a lookup over in-context evidence (the URL history + engine loop evidence from CU-B1).
+
 #### CU-E2. Structured output state: evaluation, memory, plan
 
 **Problem.** The controller's output is `{reasoning, actions, toolCalls, requestJudgement}` — no persistent self-tracked state; history is paraphrased reasoning the model must re-interpret. browser-use's contract (`evaluation_previous_goal`, `memory`, `next_goal`, plus a plan checklist) makes history self-describing and gives heuristics a machine-checkable progress signal (`next_goal` unchanged for 5 steps = stagnation).
