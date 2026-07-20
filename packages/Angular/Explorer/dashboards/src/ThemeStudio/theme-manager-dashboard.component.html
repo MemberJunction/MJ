@@ -1,0 +1,60 @@
+<div class="tm-root">
+  <div class="tm-header">
+    <div class="tm-titlebar">
+      <div class="tm-icon"><i class="fa-solid fa-swatchbook"></i></div>
+      <div>
+        <h1 class="tm-title">Manage Themes</h1>
+        <p class="tm-sub">Your organization's saved brand themes</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="tm-body">
+    <p class="tm-empty" *ngIf="!themes.length">No themes yet. Create one in the <b>Theme Studio</b> tab.</p>
+    <table class="tm-table" *ngIf="themes.length">
+      <thead>
+        <tr><th>Theme</th><th>Status</th><th>Default</th><th class="r">Actions</th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let t of themes">
+          <td class="name-cell">
+            <button type="button" class="star-btn" [class.on]="t.starred"
+                    [title]="t.starred ? 'Unstar' : 'Star (adds to your user menu)'" (click)="toggleStar(t)">
+              <i [class]="t.starred ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+            </button>
+            <span class="sw"><i *ngFor="let c of t.swatches" [style.background]="c"></i></span>
+            <b>{{ t.name }}</b>
+            <span class="builtin-badge" *ngIf="t.builtIn"><i class="fa-solid fa-lock"></i> Built-in</span>
+          </td>
+          <td><span class="status-pill" [class.inactive]="t.status !== 'Active'">{{ t.status }}</span></td>
+          <td>
+            <span class="badge" *ngIf="t.isDefault">DEFAULT</span>
+            <button type="button" class="link-btn" *ngIf="!t.isDefault" title="Make this the organization-wide default" (click)="setDefault(t)">Set as org default</button>
+          </td>
+          <td class="r actions">
+            <button type="button" class="tm-btn sm primary" [class.applied]="isApplied(t.id)" [disabled]="isApplied(t.id)" title="Apply this theme to your workspace now" (click)="applyToMe(t)">{{ isApplied(t.id) ? 'Applied' : 'Apply' }}</button>
+            <button type="button" class="tm-btn sm" (click)="duplicate(t)">Duplicate</button>
+            <ng-container *ngIf="!t.builtIn">
+              <button type="button" class="tm-btn sm" (click)="edit(t)">Edit</button>
+              <button type="button" class="tm-btn sm danger" (click)="deleteTarget = t">Delete</button>
+            </ng-container>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Delete confirmation dialog -->
+  <div class="tm-overlay" *ngIf="deleteTarget" (click)="deleteTarget = null">
+    <div class="tm-dialog" (click)="$event.stopPropagation()">
+      <h3 class="tm-dialog-title">Delete theme</h3>
+      <p class="tm-dialog-body">Delete “<b>{{ deleteTarget.name }}</b>”? This can’t be undone.</p>
+      <div class="tm-dialog-actions">
+        <button type="button" class="tm-btn" (click)="deleteTarget = null">Cancel</button>
+        <button type="button" class="tm-btn danger solid" (click)="remove(deleteTarget)">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tm-toast" [class.show]="!!toast">{{ toast }}</div>
+</div>

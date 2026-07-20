@@ -1,7 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
 
 body {
-    font-family: "Montserrat", sans-serif;
+    /* Chrome font follows the active theme (audit G1); Montserrat is the fallback
+       if the token is ever undefined. Brand themes override --mj-font-family. */
+    font-family: var(--mj-font-family, "Montserrat", sans-serif);
 }
 
 h1 {
