@@ -52,9 +52,13 @@ import {
     NavigateAction,
     ClickAction,
     ScrollAction,
+    ElementInfo,
 } from '../types/browser.js';
 import type { BrowserAction } from '../types/browser.js';
 import { ComputerUseAuthConfig } from '../types/auth.js';
+import { SettleConfig, DEFAULT_BUSY_MARKERS } from '../types/app-profile.js';
+import type { SettleReason } from '../types/app-profile.js';
+import { resolveSettleExit } from './settle-decision.js';
 import {
     JudgeContext,
     JudgeVerdict,
@@ -564,16 +568,21 @@ export class ComputerUseEngine {
         try {
             this.log(`Step ${stepNumber}/${context.Params.MaxSteps}`);
 
-            // 1. Settle: let the page render after the previous step's actions
-            //    before we perceive. Fixed delay for now; CU-A1 replaces this
-            //    with an adaptive settle loop. Timed separately (SettleMs) so
-            //    agent-time accounting can exclude environment wait (CU-F1/B4).
-            const settleStart = performance.now();
-            const delayMs = context.Params.ScreenshotDelayMs;
-            if (delayMs > 0) {
-                await new Promise<void>(resolve => setTimeout(resolve, delayMs));
+            // 1. Settle: wait for the page to actually finish rendering after the
+            //    previous step's actions before we perceive (CU-A1/A2). Adaptive —
+            //    networkidle fast path, then a poll loop over the readiness beacon,
+            //    busy markers, and perceptual-hash stability. Timed separately
+            //    (SettleMs) so agent-time accounting can exclude environment wait
+            //    (CU-F1/B4). Converts wasted LLM round-trips on a slow load into
+            //    free engine polling.
+            const settle = await this.settleBeforePerception(context);
+            step.SettleMs = settle.ms;
+            step.SettleReason = settle.reason;
+            if (settle.reason === 'budget') {
+                this.log(`Step ${stepNumber} — settle budget expired after ${Math.round(settle.ms)}ms (page still busy/unstable)`);
+            } else {
+                this.log(`Step ${stepNumber} — page settled in ${Math.round(settle.ms)}ms (${settle.reason})`);
             }
-            step.SettleMs = performance.now() - settleStart;
 
             // 2. Capture screenshot + perceptual hash (CU-F6)
             const screenshotStart = performance.now();
@@ -733,6 +742,112 @@ export class ComputerUseEngine {
         const screenshot = await this.browserAdapter.CaptureScreenshot();
         context.AddScreenshot(screenshot);
         return screenshot;
+    }
+
+    // ─── Settle Loop (CU-A1/A2) ────────────────────────────
+
+    /**
+     * Wait for the page to finish rendering before we perceive it. Adaptive:
+     * a `networkidle` fast path, then a poll loop that consults (in priority
+     * order) the app's readiness beacon, its busy markers, and perceptual-hash
+     * stability. Returns the elapsed ms and the reason it stopped.
+     *
+     * The engine is app-agnostic: beacon and extra busy markers come from the
+     * {@link AppProfile} the caller supplies; the engine only adds its own
+     * app-neutral markers and knows how to poll. Never throws — a probe failure
+     * degrades to "keep waiting until budget".
+     */
+    private async settleBeforePerception(context: RunContext): Promise<{ ms: number; reason: SettleReason }> {
+        const start = performance.now();
+        if (!this.browserAdapter?.IsOpen) {
+            return { ms: 0, reason: 'none' };
+        }
+
+        const profile = context.Params.AppProfile;
+        const cfg = profile?.Settle ?? new SettleConfig();
+        const markers = [...DEFAULT_BUSY_MARKERS, ...(profile?.BusyMarkers ?? [])];
+        const beacon = profile?.ReadinessBeacon;
+        // Floor: a profile governs its own MinWaitMs; without one, preserve the
+        // legacy ScreenshotDelayMs as the minimum wait so behavior is unchanged.
+        const floorMs = profile ? cfg.MinWaitMs : context.Params.ScreenshotDelayMs;
+
+        // Fast path: networkidle, capped (it can hang on long-poll / websocket
+        // apps like GraphQL subscriptions, so it must never be the sole signal).
+        const networkIdle = await this.raceWithTimeout(
+            this.browserAdapter.WaitForLoadState('networkidle'),
+            cfg.NetworkIdleCapMs
+        );
+
+        let lastHash = '';
+        let sawBusy = false;
+
+        while (performance.now() - start < cfg.MaxWaitMs) {
+            // 1. Readiness beacon (CU-A2) — the declared, deterministic signal.
+            const beaconPresent = beacon ? (await this.safeQuery(beacon)).Exists : false;
+            // 2. Busy markers — any present-and-visible marker means still loading.
+            const busy = await this.anyMarkerBusy(markers);
+            if (busy) {
+                sawBusy = true;
+            }
+            // 3. Perceptual-hash stability — two consecutive similar frames.
+            const hash = computePerceptualHash(await this.browserAdapter.CaptureScreenshot());
+            const hashStable = lastHash !== '' && hash !== '' && hashesSimilar(lastHash, hash);
+            lastHash = hash;
+
+            const reason = resolveSettleExit({
+                beaconDeclared: beacon !== undefined,
+                beaconPresent,
+                busy,
+                hashStable,
+                sawBusy,
+                networkIdle,
+                elapsedMs: performance.now() - start,
+                floorMs,
+            });
+            if (reason) {
+                return { ms: performance.now() - start, reason };
+            }
+
+            await this.delay(cfg.PollMs);
+        }
+
+        return { ms: performance.now() - start, reason: 'budget' };
+    }
+
+    /** QueryElement that never throws — an errored probe reports "absent". */
+    private async safeQuery(selector: string): Promise<ElementInfo> {
+        try {
+            return await this.browserAdapter.QueryElement(selector);
+        } catch {
+            return new ElementInfo();
+        }
+    }
+
+    /** True when any of the given selectors matches a visible element. */
+    private async anyMarkerBusy(markers: string[]): Promise<boolean> {
+        for (const marker of markers) {
+            const info = await this.safeQuery(marker);
+            if (info.Exists && info.Visible) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Resolve when `p` settles or `ms` elapses; returns true iff `p` won the race. */
+    private async raceWithTimeout(p: Promise<unknown>, ms: number): Promise<boolean> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), ms); });
+        const completed = p.then(() => true).catch(() => true);
+        const won = await Promise.race([completed, timeout]);
+        if (timer) {
+            clearTimeout(timer);
+        }
+        return won;
+    }
+
+    private delay(ms: number): Promise<void> {
+        return new Promise<void>(resolve => setTimeout(resolve, ms));
     }
 
     // ─── Coordinate Scaling ────────────────────────────────

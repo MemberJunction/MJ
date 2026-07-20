@@ -16,6 +16,7 @@ import { ComputerUseAuthConfig } from './auth.js';
 import { BrowserConfig } from './browser.js';
 import { ComputerUseTool } from './tools.js';
 import type { JudgeFrequency } from './judge.js';
+import type { AppProfile } from './app-profile.js';
 
 // ─── Model Config ──────────────────────────────────────────
 /**
@@ -90,8 +91,22 @@ export class RunComputerUseParams {
      * Gives the page time to render after actions (clicks, navigation, typing)
      * before the screenshot is taken for the next LLM reasoning step.
      * Set to 0 to disable. (default: 500)
+     *
+     * With CU-A1's adaptive settle loop this is now the *floor* fallback used
+     * only when no {@link AppProfile} is provided; when a profile is present the
+     * settle loop's `MinWaitMs` governs the floor instead.
      */
     public ScreenshotDelayMs: number = 500;
+
+    /**
+     * Application profile (CU-A1/A2): app-specific readiness/busy signals the
+     * adaptive settle loop consults before perceiving — busy-marker selectors,
+     * an optional readiness beacon, and settle tuning. The engine stays
+     * app-agnostic and merges these with its app-neutral defaults; Layer 2
+     * (driver / suite metadata) supplies the concrete values. Omit for
+     * zero-config heuristic settling.
+     */
+    public AppProfile?: AppProfile;
 
     /** Override for the controller system prompt */
     public ControllerPrompt?: string;

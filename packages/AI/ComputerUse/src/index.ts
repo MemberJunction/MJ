@@ -11,6 +11,7 @@ export * from './types/auth.js';
 export * from './types/params.js';
 export * from './types/results.js';
 export * from './types/controller.js';
+export * from './types/app-profile.js';
 
 // ─── Browser Adapter Exports ───────────────────────────────
 export * from './browser/BaseBrowserAdapter.js';

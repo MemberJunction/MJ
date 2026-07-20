@@ -13,6 +13,7 @@
 import { BrowserAction, ActionExecutionResult } from './browser.js';
 import { ToolCallRecord } from './tools.js';
 import { ComputerUseError } from './errors.js';
+import { SettleReason } from './app-profile.js';
 
 // ─── Judge Context ─────────────────────────────────────────
 /**
@@ -163,6 +164,8 @@ export class StepRecord {
     public StartedAt: number = 0;
     /** Time spent waiting for the page to settle before perceiving (engine-side; not agent reasoning). */
     public SettleMs: number = 0;
+    /** Why the settle loop stopped waiting this step (CU-A1/A2) — e.g. 'beacon-ready', 'stable', 'budget'. */
+    public SettleReason: SettleReason = 'none';
     /** Time spent capturing (and hashing) the screenshot. */
     public ScreenshotMs: number = 0;
     /** Time spent in the controller LLM call. */
