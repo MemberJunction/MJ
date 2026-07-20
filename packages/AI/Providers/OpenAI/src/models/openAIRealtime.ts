@@ -13,6 +13,7 @@ import {
     RealtimeUsageModalityDetail,
     RealtimeSessionError,
     RealtimeVoiceOption,
+    IsTranscriptContinuation,
     JSONObject,
 } from '@memberjunction/ai';
 import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
@@ -712,6 +713,22 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private userTurnTranscribed = false;
 
     /**
+     * Text of the CURRENT user turn's most recent finalized transcription, used to detect that a new
+     * `completed` is the same utterance continuing rather than a new turn.
+     *
+     * Streaming-transcription providers re-emit the FULL accumulated utterance on every `completed`,
+     * and their VAD fires `speech_started` on ordinary mid-sentence pauses. Keying the turn boundary
+     * solely off `speech_started` therefore splits one spoken thought into several turns, each a longer
+     * copy of the last. Comparing against this text (via {@link IsTranscriptContinuation}, which
+     * normalizes punctuation because ASR re-punctuates as a sentence grows) lets a post-pause caption
+     * be recognized as a continuation and REPLACE the turn in place instead.
+     *
+     * Cleared when the model starts responding (`response.created`), which is the real end of the
+     * user's turn — so two genuinely separate utterances can never be merged across a model reply.
+     */
+    private lastUserTranscript = '';
+
+    /**
      * @param connection The injectable provider-connection seam.
      * @param profile The provider profile (defaults to OpenAI's so existing direct construction keeps working).
      */
@@ -1061,11 +1078,18 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
                 return this.emitTranscript('user', event.delta ?? '', false);
             case 'conversation.item.input_audio_transcription.completed': {
                 // Streamed transcription (Grok): the 2nd+ completed of a turn REPLACES the turn's row
-                // in place rather than appending a duplicate. The first completed of the turn is a
-                // normal (non-replacing) final. Flag flips here and resets on the next speech_started.
-                const replacesPrevious = this.userTurnTranscribed;
+                // in place rather than appending a duplicate. Two ways a completed can be a replacement:
+                //   1. another completed already landed in THIS turn (userTurnTranscribed); or
+                //   2. it CONTINUES the previous utterance — the provider re-emitted the whole thing
+                //      with more words on the end. This second case is what rescues a mid-sentence
+                //      pause: the VAD fires speech_started (clearing the flag) even though the user
+                //      never stopped talking, and without the continuation test that one spoken thought
+                //      persists as several rows, each a longer copy of the last.
+                const text = event.transcript;
+                const replacesPrevious = this.userTurnTranscribed || IsTranscriptContinuation(this.lastUserTranscript, text);
                 this.userTurnTranscribed = true;
-                return this.emitTranscript('user', event.transcript, true, replacesPrevious);
+                this.lastUserTranscript = text;
+                return this.emitTranscript('user', text, true, replacesPrevious);
             }
             case 'response.function_call_arguments.done':
                 return this.handleFunctionCall(event.call_id, event.name, event.arguments);
@@ -1077,6 +1101,10 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
                 this.userTurnTranscribed = false;
                 return this.handleInterruption();
             case 'response.created':
+                // The model has taken the floor — the user's turn is definitively over. Clear the
+                // continuation anchor so a LATER utterance can never be merged into it just because it
+                // happens to start with the same words.
+                this.lastUserTranscript = '';
                 // A response is in flight (whether server-VAD-triggered or locally triggered).
                 this.responseActive = true;
                 return;
