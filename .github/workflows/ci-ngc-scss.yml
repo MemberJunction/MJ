@@ -1,0 +1,34 @@
+name: UI Sass trap — no .scss in ngc-only Angular packages
+
+# Most packages under packages/Angular/** build with bare `ngc` (no Sass step),
+# so styleUrls content is embedded RAW. Native CSS nesting makes `&:hover` work
+# by accident, but `&__elem` / `&--mod` concatenation is SILENTLY DROPPED — the
+# rules are dead in production. See MemberJunction/MJ#3105.
+#
+# This gate is a full-tree scan (fast — it only inspects styleUrls references),
+# so it does not need a base ref.
+
+on:
+  pull_request:
+    branches:
+      - next
+    paths:
+      - 'packages/Angular/**/*.scss'
+      - 'packages/Angular/**/*.css'
+      - 'packages/Angular/**/*.ts'
+      - 'packages/Angular/**/package.json'
+      - '.github/scripts/check-ngc-scss.sh'
+      - '.github/scripts/ci/ngc-scss-allowlist.txt'
+      - '.github/workflows/ci-ngc-scss.yml'
+
+jobs:
+  check-ngc-scss:
+    name: Check ngc-only packages for Sass in styleUrls
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Check for Sass constructs / .scss styleUrls in ngc-only packages
+        run: |
+          ./.github/scripts/check-ngc-scss.sh --all
