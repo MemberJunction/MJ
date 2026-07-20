@@ -18,6 +18,9 @@ vi.mock('@memberjunction/global', () => {
   }
   return {
     RegisterClass: () => (_target: unknown) => {},
+    // No-op decorator (same style as the RegisterClass mock above) — imported at load
+    // time by the real @memberjunction/core via this mocked module's export surface.
+    RequiresSubclass: () => (_target: unknown) => {},
     MJGlobal: { Instance: { ClassFactory: { GetRegistration: vi.fn() } } },
     UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
     BaseSingleton: MockBaseSingleton,

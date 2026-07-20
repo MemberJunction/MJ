@@ -318,7 +318,7 @@ export class ConversationCompactionManager {
         const rows = await ConversationEngine.LoadWindowRowsFresh(
             input.ConversationId,
             input.ContextUser,
-            input.Provider || Metadata.Provider
+            input.Provider || Metadata.Provider // global-provider-ok: caller-supplied provider preferred; global is the documented last-resort fallback
         );
         return ConversationEngine.AssembleContextWindow(rows, {
             excludeDetailIds: input.ExcludeDetailIds
@@ -507,7 +507,7 @@ export class ConversationCompactionManager {
         promptRunId: string | undefined
     ): Promise<void> {
         // Favor the caller-supplied provider; the global is the explicit last resort
-        const provider = input.Provider || Metadata.Provider;
+        const provider = input.Provider || Metadata.Provider; // global-provider-ok: caller-supplied provider preferred; global is the documented last-resort fallback
         const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', input.ContextUser);
         if (!(await detail.Load(boundaryDetailId))) {
             throw new Error(`Failed to load boundary ConversationDetail ${boundaryDetailId}`);
