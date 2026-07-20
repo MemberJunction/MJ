@@ -10,6 +10,7 @@ import {
     RealtimeSessionError,
     ClientRealtimeSessionConfig,
 } from '../generic/baseRealtime';
+import { IsTranscriptContinuation } from '../generic/transcriptContinuation';
 
 /**
  * In-test concrete session that stores registered handlers and tools so we can assert
@@ -333,5 +334,75 @@ describe('IRealtimeSession', () => {
         session = newSession();
         await session.Close();
         expect(session.Closed).toBe(true);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// IsTranscriptContinuation — streamed-transcription turn-boundary rescue
+// ════════════════════════════════════════════════════════════════════
+
+describe('IsTranscriptContinuation', () => {
+    // Verbatim strings from a live Grok session (session 72989D0A) where ONE spoken sentence was
+    // persisted as three growing rows because a mid-sentence pause fired speech_started.
+    const PROD_1 = 'Okay, fair enough. So hey, I want you to give me a really cool demo of all the features you have, including whiteboarding, uh, remote.';
+    const PROD_2 = 'Okay, fair enough. So hey, I want you to give me a really cool demo of all the features you have, including whiteboarding, uh, remote, so just get going.';
+    const PROD_3 = 'Okay, fair enough. So hey, I want you to give me a really cool demo of all the features you have, including whiteboarding, uh, remote, so just get going. Show me some cool stuff.';
+
+    it('detects the RE-PUNCTUATED continuation that a raw prefix test misses (the production case)', () => {
+        // "…uh, remote."  →  "…uh, remote, so just get going."  — the trailing '.' became ',', so
+        // PROD_1 is NOT a literal prefix of PROD_2. This is the case that made a naive startsWith
+        // check useless, and it must be caught.
+        expect(PROD_2.startsWith(PROD_1)).toBe(false); // documents WHY normalization is required
+        expect(IsTranscriptContinuation(PROD_1, PROD_2)).toBe(true);
+    });
+
+    it('detects a clean (already-prefix) continuation', () => {
+        expect(PROD_3.startsWith(PROD_2)).toBe(true);
+        expect(IsTranscriptContinuation(PROD_2, PROD_3)).toBe(true);
+    });
+
+    it('chains across the whole utterance (1→2→3 all continue)', () => {
+        expect(IsTranscriptContinuation(PROD_1, PROD_3)).toBe(true);
+    });
+
+    it('rejects a genuinely different utterance', () => {
+        expect(IsTranscriptContinuation(PROD_1, 'Actually, never mind — cancel that.')).toBe(false);
+    });
+
+    it('rejects identical text (no new words ⇒ nothing to extend)', () => {
+        expect(IsTranscriptContinuation(PROD_1, PROD_1)).toBe(false);
+    });
+
+    it('rejects a SHORTER text (a correction that drops words is not a continuation)', () => {
+        expect(IsTranscriptContinuation(PROD_2, PROD_1)).toBe(false);
+    });
+
+    it('rejects when only punctuation/casing changed but no words were added', () => {
+        expect(IsTranscriptContinuation('Turn on the lights.', 'turn on the lights!')).toBe(false);
+    });
+
+    it('is case-insensitive about the shared opening', () => {
+        expect(IsTranscriptContinuation('turn on the lights', 'Turn on the lights, please')).toBe(true);
+    });
+
+    it('tolerates collapsed/extra whitespace', () => {
+        expect(IsTranscriptContinuation('turn  on   the lights', 'turn on the lights and the fan')).toBe(true);
+    });
+
+    it('returns false for empty / missing input on either side', () => {
+        expect(IsTranscriptContinuation('', PROD_1)).toBe(false);
+        expect(IsTranscriptContinuation(PROD_1, '')).toBe(false);
+        expect(IsTranscriptContinuation(undefined, PROD_1)).toBe(false);
+        expect(IsTranscriptContinuation(PROD_1, undefined)).toBe(false);
+    });
+
+    it('returns false when normalization empties a side (punctuation-only text)', () => {
+        expect(IsTranscriptContinuation('...', '... and more')).toBe(false);
+    });
+
+    it('does NOT merge two different sentences that share an opening phrase', () => {
+        // Guarded in practice by clearing the anchor once the model replies, but the helper itself
+        // must not treat an unrelated longer sentence as a continuation unless it truly extends.
+        expect(IsTranscriptContinuation('Yes, do the first one.', 'Yes, do the second one instead.')).toBe(false);
     });
 });
