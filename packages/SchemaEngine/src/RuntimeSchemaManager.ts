@@ -81,6 +81,16 @@ class RSUConfig {
   get IsDBLockEnabled(): boolean {
     return process.env.RSU_DB_LOCK_ENABLED === '1';
   }
+  /**
+   * When the DB lock is enabled, a lock-acquire failure for a reason OTHER than
+   * "another instance holds it" (e.g. a transient DB error) fails CLOSED by default —
+   * RSU refuses to run rather than risk two instances mutating the schema concurrently.
+   * Set `RSU_DB_LOCK_LENIENT=1` to restore the legacy fail-OPEN behavior (proceed
+   * anyway, in-memory mutex only). Fail-open is unsafe in a multi-instance deployment.
+   */
+  get IsDBLockLenient(): boolean {
+    return process.env.RSU_DB_LOCK_LENIENT === '1';
+  }
   get IsAuditLogEnabled(): boolean {
     return process.env.RSU_AUDIT_LOG_ENABLED !== '0';
   }
@@ -1545,6 +1555,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     return rsuConfig.IsDBLockEnabled;
   }
 
+  /** Whether the DB lock fails OPEN on a non-held error (legacy behavior), via RSU_DB_LOCK_LENIENT=1. */
+  private get IsDBLockLenient(): boolean {
+    return rsuConfig.IsDBLockLenient;
+  }
+
   /**
    * Try to acquire a DB-backed lock by inserting a row into the RSULock table.
    * Uses SQLDialect for DDL generation and DBExecProvider for CLI execution.
@@ -1562,12 +1577,20 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      // Check if the error is our lock-held signal
+      // The lock-held signal means another instance holds the lock — not acquired.
       if (msg.includes(RSU_LOCK_HELD_SIGNAL)) {
         return false;
       }
-      // Other errors — fall through to in-memory only
-      return true;
+      // Any OTHER error (transient DB failure, permissions, etc.). The DB lock is
+      // enabled precisely to prevent two instances mutating the schema at once, so the
+      // safe default is to FAIL CLOSED — refuse to run rather than silently proceed with
+      // only the per-process mutex. The legacy fail-OPEN behavior (proceed anyway) was a
+      // latent multi-instance hazard; it is now opt-in via RSU_DB_LOCK_LENIENT=1.
+      if (this.IsDBLockLenient) {
+        this.rsuLog(`[RSU] DB lock acquire failed (${msg}); proceeding with in-memory mutex only (RSU_DB_LOCK_LENIENT=1).`);
+        return true;
+      }
+      throw new RSUError('LOCK_ERROR', `RSU could not acquire the database lock: ${msg}. Refusing to run to avoid concurrent schema mutation. Set RSU_DB_LOCK_LENIENT=1 to proceed with the in-process mutex only (unsafe in multi-instance deployments).`);
     }
   }
 

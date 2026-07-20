@@ -279,6 +279,48 @@ describe('RuntimeSchemaManager', () => {
         });
     });
 
+    describe('DB lock fail-closed (RSU worker Phase 0)', () => {
+        function setThrowingProvider(rsm: RuntimeSchemaManager, errMsg: string): void {
+            const mockProvider = { ExecuteSQL: vi.fn().mockRejectedValue(new Error(errMsg)) };
+            (rsm as unknown as { SetDDLProvider(p: unknown): void }).SetDDLProvider(mockProvider);
+        }
+        function callAcquire(rsm: RuntimeSchemaManager): Promise<boolean> {
+            return (rsm as unknown as { acquireDBLock(): Promise<boolean> }).acquireDBLock();
+        }
+
+        afterEach(() => {
+            // Reset the injected provider so the mock does not leak into later tests.
+            (RuntimeSchemaManager.Instance as unknown as { _ddlProvider: unknown })._ddlProvider = null;
+        });
+
+        it('exposes RSU_DB_LOCK_LENIENT via IsDBLockLenient', () => {
+            process.env.RSU_DB_LOCK_LENIENT = '1';
+            const rsm = RuntimeSchemaManager.Instance;
+            expect((rsm as unknown as Record<string, boolean>)['IsDBLockLenient']).toBe(true);
+        });
+
+        it('fails CLOSED (throws) when lock acquire errors for a non-held reason', async () => {
+            delete process.env.RSU_DB_LOCK_LENIENT;
+            const rsm = RuntimeSchemaManager.Instance;
+            setThrowingProvider(rsm, 'transient network error');
+            await expect(callAcquire(rsm)).rejects.toThrow(/could not acquire the database lock/);
+        });
+
+        it('fails OPEN (returns true) only with RSU_DB_LOCK_LENIENT=1', async () => {
+            process.env.RSU_DB_LOCK_LENIENT = '1';
+            const rsm = RuntimeSchemaManager.Instance;
+            setThrowingProvider(rsm, 'transient network error');
+            await expect(callAcquire(rsm)).resolves.toBe(true);
+        });
+
+        it('returns false (another instance holds it) on the lock-held signal', async () => {
+            delete process.env.RSU_DB_LOCK_LENIENT;
+            const rsm = RuntimeSchemaManager.Instance;
+            setThrowingProvider(rsm, 'RAISERROR RSU_LOCK_HELD');
+            await expect(callAcquire(rsm)).resolves.toBe(false);
+        });
+    });
+
     describe('Audit Logging', () => {
         it('should respect RSU_AUDIT_LOG_ENABLED=0 flag', () => {
             process.env.RSU_AUDIT_LOG_ENABLED = '0';
