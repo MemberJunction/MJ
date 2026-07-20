@@ -205,6 +205,23 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     /** Set when a tool result is ready while a response is active; sent on the next response.done. */
     protected pendingResultResponse = false;
     /**
+     * Count of locally-initiated `response.create`s whose `response.created` echo has not arrived
+     * yet. While non-zero, a `response.done` belongs to an EARLIER (typically just-cancelled)
+     * response — it must not clear the busy flag, flush the queued trigger, or flip the state for
+     * the response we just started (usage is still emitted). Consumed by `response.created`.
+     */
+    protected pendingLocalResponseCreates = 0;
+    /**
+     * True while a response the provider has CONFIRMED (`response.created` seen, `response.done` not
+     * yet) is in flight. Distinct from {@link responseActive}, which is set EAGERLY before a local
+     * `response.create` is even sent: if the provider REJECTS that create (an `error` frame with no
+     * `response.created`), `responseActive` would otherwise stay stuck true forever. This flag lets
+     * {@link onErrorFrame} tell "the eager flag is a phantom for a rejected create" (no confirmed
+     * response) from "a real response is genuinely active" (e.g. a concurrent VAD turn), so it clears
+     * the phantom without disturbing a live turn. Set on `response.created`, cleared on `response.done`.
+     */
+    protected confirmedResponseActive = false;
+    /**
      * Set by {@link RequestSpokenUpdate} just before it sends its `response.create`, and
      * CONSUMED by the very next `response.created` frame, which stamps
      * {@link activeResponseKind} for that turn. Narration is only requested while the model is
@@ -275,6 +292,10 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      */
     protected onSpeechStartedFrame(): void {
         if (this.responseActive || this.IsAudioPlaying) {
+            // The user took the floor. Drop the queued AUTO-trigger: the tool-result item is
+            // already in the conversation, so the user's next turn (server-VAD response) voices
+            // it contextually instead of a queued response.create stomping the fresh user turn.
+            this.pendingResultResponse = false;
             this.emitInterruption();
         }
         this.setState('listening');
@@ -404,6 +425,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         }
         this.responseActive = true;
         this.pendingNarrationKind = true;
+        this.pendingLocalResponseCreates++;
         this.sendEvent({ type: 'response.create', response: { instructions } });
     }
 
@@ -489,13 +511,25 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
             case 'input_audio_buffer.speech_started':
                 this.onSpeechStartedFrame();
                 break;
-            case 'response.created':
+            case 'response.created': {
                 this.responseActive = true;
+                this.confirmedResponseActive = true; // a real response is now in flight
+                // Only a LOCALLY-initiated create (counter-tracked) can be our narration. A VAD /
+                // unsolicited response.created arrives with the counter already at 0 — it must NOT
+                // consume the pending narration kind, or it would mistag a genuine user turn as
+                // ephemeral narration (and lose the flag meant for our own create).
+                const wasLocalCreate = this.pendingLocalResponseCreates > 0;
+                if (wasLocalCreate) {
+                    this.pendingLocalResponseCreates--;
+                }
                 // Stamp the kind of THIS response: 'narration' only when the flag was set by
-                // RequestSpokenUpdate immediately before its response.create (consumed here).
-                this.activeResponseKind = this.pendingNarrationKind ? 'narration' : 'normal';
-                this.pendingNarrationKind = false;
+                // RequestSpokenUpdate immediately before ITS OWN local response.create (consumed here).
+                this.activeResponseKind = (wasLocalCreate && this.pendingNarrationKind) ? 'narration' : 'normal';
+                if (wasLocalCreate) {
+                    this.pendingNarrationKind = false;
+                }
                 break;
+            }
             case 'output_audio_buffer.started':
                 this.onOutputAudioBufferStarted();
                 break;
@@ -504,6 +538,18 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
                 this.onOutputAudioBufferStopped();
                 break;
             case 'response.done':
+                // The confirmed response that was in flight has ended (whether this is its real done
+                // or the trailing done of a since-cancelled one) — no response.created is outstanding.
+                this.confirmedResponseActive = false;
+                // A STALE done (the trailing frame of a response we just cancelled while our own
+                // replacement response.create is in flight) must not release the lock, flush the
+                // queue, or flip the state out from under the response we just started — the real
+                // done for OUR response handles all of that. Usage is still emitted (the cancelled
+                // response consumed tokens).
+                if (this.pendingLocalResponseCreates > 0) {
+                    this.emitResponseUsage(event as OAIProtocolResponseDone);
+                    break;
+                }
                 // A turn finished — release the lock and speak any queued tool result so the
                 // model always voices the answer when delegated work comes back. The
                 // transcript-done frame for this turn has already arrived (it precedes
@@ -606,8 +652,41 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         });
     }
 
-    /** Surfaces a provider error frame (non-fatal; the session continues). */
+    /**
+     * Surfaces a provider error frame (non-fatal; the session continues).
+     *
+     * SELF-HEAL for the stale-response counter (see {@link pendingLocalResponseCreates}): a
+     * `response.create` the provider REJECTS (overlap, invalid params) produces an `error` frame
+     * and **no** `response.created`, so the counter would otherwise never decrement and every
+     * future `response.done` would take the stale branch — wedging the client (`IsBusy` stuck true,
+     * narration + tool results silently dropped). Decrementing here (floored at 0) reverts to the
+     * pre-counter self-healing behavior for that turn rather than leaving the session dead. An
+     * error unrelated to a local create at worst under-protects one `done` (the old default), never
+     * wedges.
+     */
     private onErrorFrame(event: OAIProtocolErrorEvent): void {
+        if (this.pendingLocalResponseCreates > 0) {
+            this.pendingLocalResponseCreates--;
+            // The counter dropping here means this error plausibly REJECTED one of our local
+            // response.creates (rejected creates emit an error and NO response.created). The rejected
+            // create's narration kind belongs to THAT create — it will never arrive, so drop the flag
+            // UNCONDITIONALLY, or it would arm the NEXT local create (e.g. a delegated tool-result
+            // reply) and mistag that durable turn as ephemeral narration. This must NOT be gated on
+            // confirmedResponseActive: a narration create can be rejected while a since-cancelled
+            // response is still draining (confirmedResponseActive still true), and the flag must die
+            // regardless.
+            this.pendingNarrationKind = false;
+            // The EAGER responseActive / 'speaking' state, by contrast, is only a phantom to clear
+            // when NO provider-CONFIRMED response is in flight; a genuinely-active response (concurrent
+            // VAD turn, or a cancelled one still draining) owns that state and its response.done clears
+            // it. Clearing it here would cut a live turn.
+            if (!this.confirmedResponseActive) {
+                this.responseActive = false;
+                if (this.currentState === 'speaking') {
+                    this.setState('listening');
+                }
+            }
+        }
         this.emitError({
             Message: event.error?.message ?? 'Unknown provider error',
             Code: event.error?.code,
@@ -634,6 +713,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         }
         this.pendingResultResponse = false;
         this.responseActive = true;
+        this.pendingLocalResponseCreates++;
         this.sendEvent({ type: 'response.create' });
         this.setState('speaking');
     }
@@ -645,6 +725,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         }
         this.pendingResultResponse = false;
         this.responseActive = true;
+        this.pendingLocalResponseCreates++;
         this.sendEvent({ type: 'response.create' });
         this.setState('speaking');
     }
@@ -653,7 +734,9 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     protected resetResponseState(): void {
         this.pendingAssistantText = '';
         this.responseActive = false;
+        this.confirmedResponseActive = false;
         this.pendingResultResponse = false;
+        this.pendingLocalResponseCreates = 0;
         this.pendingNarrationKind = false;
         this.activeResponseKind = 'normal';
     }
@@ -730,8 +813,12 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
     protected sessionObject: JSONObject = {};
     /** True once Disconnect ran — an expected socket close must not surface as fatal. */
     protected closedByConsumer = false;
+    /** True while the socket is OPEN — gates every send so a CONNECTING socket never throws. */
+    protected socketOpen = false;
     /** Resolver for the in-flight Connect's `session.created` wait (deferring providers only). */
     private sessionCreatedResolver: (() => void) | null = null;
+    /** Rejects the in-flight Connect (open OR created phase); null outside Connect. */
+    private failPendingConnect: ((error: Error) => void) | null = null;
 
     // ── Per-provider transport hooks ────────────────────────────────────────────
 
@@ -752,6 +839,15 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         return false;
     }
 
+    /**
+     * Connect-phase deadline in milliseconds, covering socket-open AND (when the provider
+     * defers) the `session.created` wait. On expiry `Connect` rejects with a fatal error
+     * instead of hanging forever against a silent endpoint. Override per driver/deployment.
+     */
+    protected get connectTimeoutMs(): number {
+        return 15_000;
+    }
+
     // ── Connection lifecycle ────────────────────────────────────────────────────
 
     /**
@@ -767,34 +863,79 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         this.setState('connecting');
 
         let openSocket: (() => void) | null = null;
-        let failOpen: ((error: Error) => void) | null = null;
-        const opened = new Promise<void>((resolve, reject) => {
+        const opened = new Promise<void>((resolve) => {
             openSocket = resolve;
-            failOpen = reject;
         });
         const created = this.waitsForSessionCreated
             ? new Promise<void>((resolve) => {
                   this.sessionCreatedResolver = resolve;
               })
             : null;
+        // ONE failure channel covers BOTH connect phases (open + created): socket error/close,
+        // a consumer Disconnect, and the connect deadline all reject the in-flight Connect —
+        // no phase can hang an awaited Connect() forever against a silent endpoint.
+        const failure = new Promise<never>((_, reject) => {
+            this.failPendingConnect = reject;
+        });
+        failure.catch(() => undefined); // consumed via Promise.race; guard stray-rejection noise
+        const deadline = setTimeout(
+            () => this.failPendingConnect?.(new Error(`${this.providerDebugLabel} connect timed out after ${this.connectTimeoutMs}ms`)),
+            this.connectTimeoutMs,
+        );
+        // Node parity with the server readiness timer — never hold the event loop for the deadline.
+        (deadline as { unref?: () => void }).unref?.();
 
-        const socket = this.openProviderSocket(config);
-        this.socket = socket;
-        socket.onopen = () => openSocket?.();
-        socket.onmessage = (data) => this.handleProtocolMessage(data);
-        socket.onerror = (message) => {
-            failOpen?.(new Error(message));
-            this.handleSocketError(message);
-        };
-        socket.onclose = () => {
-            failOpen?.(new Error(`${this.providerDebugLabel} socket closed during connect`));
-            this.handleSocketClose();
-        };
+        // S2: build the socket + wire handlers INSIDE the try so a synchronous throw from
+        // openProviderSocket (no global WebSocket, malformed URL) still clears the deadline timer
+        // and nulls failPendingConnect via the finally.
+        try {
+            this.socketOpen = false; // S3: never inherit a prior connect's open state on reuse
+            const socket = this.openProviderSocket(config);
+            this.socket = socket;
+            // S3: identity-guard every handler — a PREVIOUS socket's late onerror/onclose (they
+            // fire asynchronously after a Disconnect+reconnect on a reused instance) must not
+            // corrupt the NEW socket's state or drive the fresh session to error/closed.
+            socket.onopen = () => {
+                if (this.socket !== socket) { return; }
+                this.socketOpen = true;
+                openSocket?.();
+            };
+            socket.onmessage = (data) => {
+                if (this.socket !== socket) { return; }
+                this.handleProtocolMessage(data);
+            };
+            socket.onerror = (message) => {
+                if (this.socket !== socket) { return; }
+                this.socketOpen = false;
+                this.failPendingConnect?.(new Error(message));
+                this.handleSocketError(message);
+            };
+            socket.onclose = () => {
+                if (this.socket !== socket) { return; }
+                this.socketOpen = false;
+                this.failPendingConnect?.(new Error(`${this.providerDebugLabel} socket closed during connect`));
+                this.handleSocketClose();
+            };
 
-        await opened;
-        this.setState('connected');
-        if (created) {
-            await created;
+            await Promise.race([opened, failure]);
+            this.setState('connected');
+            if (created) {
+                await Promise.race([created, failure]);
+            }
+        } catch (error) {
+            // Deadline expiry reaches the host ONLY through this rejection — surface it as a
+            // fatal error + error state (socket error/close paths already emitted their own).
+            const message = error instanceof Error ? error.message : String(error);
+            if (message.includes('timed out')) {
+                this.emitError({ Message: message, Fatal: true });
+                this.setState('error');
+                try { this.socket?.close(); } catch { /* already closing */ }
+            }
+            throw error;
+        } finally {
+            clearTimeout(deadline);
+            this.failPendingConnect = null;
+            this.sessionCreatedResolver = null;
         }
         // The server-authored session config (the SessionConfig pact) is applied as the FIRST
         // frame — prompt and tool authority stay server-side (obligation #8).
@@ -818,6 +959,12 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      */
     public async Disconnect(): Promise<void> {
         this.closedByConsumer = true;
+        // Release an in-flight Connect (open or created phase) so the awaited promise cannot
+        // outlive the session the consumer just tore down.
+        this.failPendingConnect?.(new Error(`${this.providerDebugLabel} disconnected during connect`));
+        this.failPendingConnect = null;
+        this.sessionCreatedResolver = null;
+        this.socketOpen = false;
         this.closeAudioMeters();
         this.micStream?.getTracks().forEach((track) => track.stop());
         this.micStream = null;
@@ -842,9 +989,9 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
     // ── Brain seam implementations ─────────────────────────────────────────────
 
-    /** @inheritdoc */
+    /** @inheritdoc — requires an OPEN socket (a CONNECTING raw WebSocket throws on send). */
     protected canSendEvents(): boolean {
-        return this.socket !== null;
+        return this.socket !== null && this.socketOpen;
     }
 
     /** @inheritdoc */
@@ -880,6 +1027,8 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
     protected override onSpeechStartedFrame(): void {
         if (this.responseActive || this.IsAudioPlaying) {
             this.playback?.Flush();
+            // Floor to the user — drop the queued auto-trigger (see the brain's docstring).
+            this.pendingResultResponse = false;
             this.emitInterruption();
         }
         this.setState('listening');

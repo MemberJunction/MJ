@@ -1,3 +1,13 @@
+/**
+ * Realtime evidence playback — synced audio transport + transcript.
+ *
+ * NOTE: this package builds with bare `ngc` (no Sass step) — component styles
+ * are embedded RAW into the compiled JS. Keep this file FLAT, plain CSS.
+ * Sass nesting / BEM selector concatenation would be silently dropped by the
+ * browser and the rules would be DEAD. See .github/scripts/check-ngc-scss.sh
+ * (CI gate) and MemberJunction/MJ#3105.
+ */
+
 :host {
   display: block;
   height: 100%;
@@ -36,19 +46,19 @@
   cursor: pointer;
   font-size: 0.9375rem;
   transition: background 0.12s ease, transform 0.12s ease;
+}
 
-  &:hover {
-    background: var(--mj-brand-primary-hover, var(--mj-brand-primary));
-  }
+.evp-play:hover {
+  background: var(--mj-brand-primary-hover, var(--mj-brand-primary));
+}
 
-  &:active {
-    transform: scale(0.94);
-  }
+.evp-play:active {
+  transform: scale(0.94);
+}
 
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
-  }
+.evp-play:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
 }
 
 .evp-transport {
@@ -66,11 +76,11 @@
   height: 36px;
   cursor: pointer;
   border-radius: var(--mj-radius-sm, 4px);
+}
 
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
-  }
+.evp-scrubber:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
 }
 
 .evp-waveform {
@@ -89,10 +99,10 @@
   border-radius: 1px;
   background: var(--mj-border-strong);
   transition: background 0.1s ease;
+}
 
-  &--played {
-    background: var(--mj-brand-primary);
-  }
+.evp-bar--played {
+  background: var(--mj-brand-primary);
 }
 
 .evp-progress {
@@ -125,15 +135,15 @@
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
   color: var(--mj-text-secondary);
+}
 
-  &__current {
-    color: var(--mj-text-primary);
-    font-weight: 600;
-  }
+.evp-time__current {
+  color: var(--mj-text-primary);
+  font-weight: 600;
+}
 
-  &__sep {
-    color: var(--mj-text-disabled);
-  }
+.evp-time__sep {
+  color: var(--mj-text-disabled);
 }
 
 .evp-noaudio {
@@ -142,10 +152,10 @@
   gap: 8px;
   font-size: 0.8125rem;
   color: var(--mj-text-muted);
+}
 
-  i {
-    color: var(--mj-text-disabled);
-  }
+.evp-noaudio i {
+  color: var(--mj-text-disabled);
 }
 
 /* ---------- Transcript ---------- */
@@ -169,15 +179,15 @@
   gap: 6px;
   color: var(--mj-text-muted);
   font-size: 0.8125rem;
+}
 
-  i {
-    font-size: 1.75rem;
-    color: var(--mj-text-disabled);
-  }
+.evp-transcript-empty i {
+  font-size: 1.75rem;
+  color: var(--mj-text-disabled);
+}
 
-  p {
-    margin: 0;
-  }
+.evp-transcript-empty p {
+  margin: 0;
 }
 
 .evp-turn {
@@ -198,55 +208,55 @@
   color: inherit;
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease;
+}
 
-  &:hover {
-    background: var(--mj-bg-surface-hover);
-  }
+.evp-turn:hover {
+  background: var(--mj-bg-surface-hover);
+}
 
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-  }
+.evp-turn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
 
-  &--active {
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    border-left-color: var(--mj-brand-primary);
-  }
+.evp-turn--active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  border-left-color: var(--mj-brand-primary);
+}
 
-  &__meta {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-  }
+.evp-turn__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
 
-  &__speaker {
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-  }
+.evp-turn__speaker {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
 
-  &--user &__speaker {
-    color: var(--mj-status-info, var(--mj-brand-primary));
-  }
+.evp-turn--user .evp-turn__speaker {
+  color: var(--mj-status-info, var(--mj-brand-primary));
+}
 
-  &--agent &__speaker {
-    color: var(--mj-brand-primary);
-  }
+.evp-turn--agent .evp-turn__speaker {
+  color: var(--mj-brand-primary);
+}
 
-  &__time {
-    font-size: 0.6875rem;
-    font-variant-numeric: tabular-nums;
-    color: var(--mj-text-muted);
-  }
+.evp-turn__time {
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--mj-text-muted);
+}
 
-  &__text {
-    margin: 0;
-    font-size: 0.8125rem;
-    line-height: 1.45;
-    color: var(--mj-text-primary);
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
+.evp-turn__text {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--mj-text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (prefers-reduced-motion: reduce) {

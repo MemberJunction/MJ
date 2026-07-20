@@ -129,3 +129,9 @@ Registered as `xAILLM` via `@RegisterClass(BaseLLM, 'xAILLM')`.
 - `@memberjunction/ai` - Core AI abstractions
 - `@memberjunction/ai-openai` - OpenAI provider (parent class)
 - `@memberjunction/global` - Class registration
+
+## Grok Voice realtime driver (`GrokRealtime`)
+
+`xAIRealtime` **subclasses** the shared `OpenAIRealtime` protocol implementation (`@memberjunction/ai-openai`) — Grok Voice is OpenAI-Realtime-API compatible, so the driver is just `XAI_REALTIME_PROFILE` (api.x.ai base URL, `whisper-1` input transcription, always-explicit `server_vad` + `create_response` turn detection, immediate config send) on top of the shared session/tool/error machinery.
+
+**GA feature gates are OFF** (`supportsReasoningEffort` / `supportsParallelToolCalls` / `supportsMcpTools: false`) until xAI documents support on the Grok Voice endpoint — Config-bag feature keys are scrubbed, never sent raw, so shared co-agent configs are safe on Grok today. Flipping a gate (and, if Grok's effort vocabulary differs, overriding `mapEffortLevel`) is a one-line profile change with no protocol code edits.

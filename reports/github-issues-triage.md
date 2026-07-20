@@ -1,0 +1,208 @@
+# MJ Open GitHub Issues Triage Report
+
+Generated: 2026-07-12 UTC
+
+Source: GitHub Issues API for `MemberJunction/MJ`, open issues only, excluding pull requests. Open snapshot saved in `reports/github_open_issues_snapshot.json`.
+
+## Executive Summary
+
+- Open issues reviewed: **104**
+- A. Open but solved/superseded — **4, all closed 2026-07-12**
+- B. Irrelevant / no direct MJ build action — **2, both closed 2026-07-12** (a third, #2487, was re-categorized to C on review; see below)
+- C. Should be built: **98**
+
+Categories A and B have been reviewed and resolved, so the remaining inventory below is Category C only — the actionable backlog.
+
+### Category A resolution (closed)
+
+All four were auto-filed `🔴 Unit-test backstop failed on next` bot issues (#3079, #3082, #3088, #3119). Unit tests on `next` have been green continuously since the last failure (de3dec9, 2026-07-10 21:48 UTC): the following push passed, and every run since has passed, including the scheduled full-suite backstops on 07-10, 07-11, and 07-12. No open backstop issue was newer than #3119.
+
+These issues are auto-filed on failure but never auto-closed on recovery, which is why four accumulated. Adding a recovery step to the backstop workflow would prevent the backlog from re-forming.
+
+### Category B resolution (closed)
+
+- **#2451, #2452** — closed as not planned. Both were filed by `app/mj-feedback-bot` while exercising the in-app feedback pipeline ("Feedback Test: Hello Again", "Another Bug Test"); neither is a product defect.
+- **#2487 — re-categorized to C, left open.** The original triage called this "irrelevant / no direct MJ build action." That is wrong. Cross-application migration ordering (MJ + BAC + BCSaaS + SaaS) is an unresolved architecture decision with an active 7-comment thread, competing proposals (holistic ordering vs. dependency pinning), and an implementation-plan PR (#2488) that was **closed without merging**. Nothing was decided and nothing was built; it remains a stated blocker for lifting SaaS products onto BAC. It is scored Critical / High below.
+
+## Category C: status
+
+| | Count |
+|---|---:|
+| Addressed in PR #3129 | **3** (2 fully fixed, 1 partially — see below) |
+| Not yet started | **95** |
+| **Total** | **98** |
+
+### Done in PR #3129
+
+The three Low-effort items were taken first — the cheapest way to prove the backlog moves. Each was re-verified against the code before any fix was written, on the principle that **a triage rationale is a hypothesis, not a finding**. That discipline paid for itself immediately: one of the three had a false premise, and two of the three turned out to be bigger than reported.
+
+- **#3103 (Critical/Low) — FIXED.** Malformed `DenyFields` now rejected at save (`MJMLTrainingPipelineEntityServer.ValidateAsync`), the editor no longer manufactures the bad input, and the dominance threshold is clamped at enforcement time so already-saved values can't disarm the guard. Found and fixed an adjacent bug: `DEFAULT_DOMINANCE_THRESHOLD` was defined twice with different values (`0.85` vs `0.6`), so agent-authored pipelines were held to a materially laxer guard than hand-authored ones. *Closes on merge.*
+- **#3105 (High/Low) — FIXED.** Confirmed via the compiled `dist`, which shipped raw `&__` to the browser. The trap was in **three** files, not the one reported (two more in `ng-conversations`), plus a `styleUrl` pointing at a file that doesn't exist. New CI gate `check:ui-ngc-scss` prevents it re-arming, verified to fail on the original file and pass on the fixed tree. **Resurrects styling that never rendered in production** — needs a visual check before merge. *Closes on merge.*
+- **#3064 (High/Low) — PREMISE CORRECTED; PARTIALLY FIXED. Stays open.** `AIPrompt.TimeoutMS` **does not exist** (the column belongs to `MJ: Remote Operations`), so the runner was not ignoring a bound — none could be expressed at all. Shipped a per-request `AIPromptParams.timeoutMS` with a typed retriable error, and wired `ChatParams.cancellationToken` through **all 19 LLM drivers** so a timeout now tears down the socket instead of abandoning the promise. The prompt-level column is split to **#3133**; the driver-plumbing cleanup to **#3132**.
+
+**A bug none of this was looking for, affecting every provider:** `BaseLLM.handleStreamingChatCompletion` caught mid-stream errors, logged them, and then finalized the response as a **success** — so a dropped connection or provider fault part-way through a stream silently produced truncated content the caller was told was complete. Under all 19 drivers, for every streaming consumer. Now fixed in Core. This was not in the backlog at all; it surfaced only because four independent workstreams tripped over it.
+
+### Recommended next (for whoever picks this up)
+
+The matrix below is dominated by High/High (51) and Critical/High (16), which is not a work queue. A suggested order:
+
+**1. Finish what's half-done.** #3133 (the `AIPrompt.TimeoutMS` column — migration + CodeGen + a one-line change; the seam is already in place) and #3132 (absorb the duplicated per-driver cancellation plumbing into `BaseLLM`, and add a first-class `AIErrorType.Cancelled` — today an abort classifies as *retriable*, so a naive driver would retry a request the user cancelled). Both are small, both close loops this PR deliberately left open rather than half-wire.
+
+**2. Take the remaining Low/Medium-effort items with real severity.** These are the ones where impact and cost are most out of proportion:
+
+| Issue | Sev / Effort | What |
+|---|---|---|
+| #1964 | Critical / Med | Users on shared computers may authenticate as the **wrong user** |
+| #3093 | Critical / Med | `MergeRecords` FieldMap can't express NULL (`Value: String!` + client `.toString()` crash) |
+| #2356 | Critical / Med | `mj-tree-dropdown` search input **permanently freezes the page** |
+| #1939 | Critical / Med | `pdf-parse` crashes on Node 24+ at module init |
+| #503 | Medium / Low | Add a `Dimension` column to the VectorDatabase entity |
+| #125 | Low / Low | Compare/Merge dialog styling |
+
+**3. Re-verify before building — the scores here are not trustworthy on their own.** Of the three issues actually worked, one had a **false premise** (#3064: the field didn't exist), one was **understated by 3×** (#3105: three affected files, not one), and the B-category triage tried to close a **live architecture blocker** (#2487). Treat every row below as a lead to confirm, not a spec to implement. Check the issue against the code first; if the premise is wrong, say so on the issue rather than building to it.
+
+**4. #2487 needs a decision, not an implementation.** Cross-application migration ordering is blocked on a human call between competing proposals, with a plan PR already closed unmerged. It is scored Critical/High but no amount of engineering time moves it until that call is made.
+
+### Two security/correctness items worth pulling forward
+
+Not Low-effort, but they are the highest-consequence things in the list and have been open a while: **#2638** and **#2691** — GraphQL request logging and error responses both echo **plaintext variable values**, so any secret-bearing mutation leaks to stdout / to the client. Both Critical.
+
+## Category C Severity × Effort
+
+Counts below are the **original triage**, including the 3 issues addressed in this PR (#3103 at Critical/Low; #3064 and #3105 at High/Low). Subtract those to get the untouched backlog.
+
+| Severity | Low effort | Medium effort | High effort |
+|---|---:|---:|---:|
+| Critical | 1 | 3 | 17 |
+| High | 2 | 6 | 51 |
+| Medium | 1 | 5 | 5 |
+| Low | 1 | 5 | 1 |
+
+## Handoff notes for PR #3129
+
+**Verification already done.** Full repo build **298/298** and full test suite **592/592**, both forced uncached (`npx turbo run build --force` / `npx turbo run test --force`). ~50 new cancellation tests across the driver fleet, 36 new leakage-guard tests. A changeset is included (patch, 21 packages).
+
+**No migrations, no CodeGen.** Nothing in this PR touches schema. The one schema change the work implies (`AIPrompt.TimeoutMS`) was deliberately *not* shipped — writing code against a column CodeGen hasn't generated would mean `.Get('TimeoutMS')`, which the project rules forbid, and a dead column would recreate the exact "looks configured, does nothing" bug #3064 reports. It's #3133.
+
+**What still needs a human before merge:**
+
+1. **Visual check on the resurrected styling (#3105).** These rules have *never rendered* in production, so enabling them changes the UI. Specifically: the realtime **media-surface tab bar had no active-tab indicator**, and **evidence playback had no active-turn highlight and no played-progress color** on its waveform. They look intentional (they're functional affordances, not decoration), but nobody has seen them live. Worth 5 minutes in the browser.
+2. **Behavior change on #3103.** Existing pipeline rows with bracket-mangled `DenyFields` will now **fail to save until corrected**. That is the intended outcome — a guard protecting nothing should not be quietly tolerated — but if any live customer DB holds such a row, it surfaces as a validation error on next edit rather than silently continuing to train unprotected. The *runtime clamp* already covers already-saved bad thresholds without requiring a re-save.
+3. **#3064 stays open.** Only half of it shipped. Don't let the PR merge auto-close it.
+
+**Things a reviewer should not be surprised by:**
+
+- The diff is ~+14.5k lines, but ~9.8k of that is the raw `github_open_issues_snapshot.json`. The reviewable code is a small fraction of that number.
+- `changeset status` errors in this repo (it looks for a `main` baseline; this repo uses `next`). Pre-existing, unrelated to this PR.
+- `check:ui:all` reports pre-existing token violations in files this PR never touched. The CI gate only diffs *changed* files, and those are clean.
+
+## Methodology
+
+- Reviewed only issues whose GitHub state was `open` as of 2026-07-12; pull requests are excluded.
+- Category A was reserved for open issues that looked superseded or stale/resolved. Each was verified against current CI state before closing.
+- Category B was reserved for tests, non-actionable discussions, or items better represented outside the MJ issue tracker. Each was verified against its thread before closing — which is how #2487 was caught and moved to C.
+- Category C contains actionable work; severity estimates impact, while effort estimates implementation size and coordination complexity. Scores are heuristic starting points for prioritization, **not** final engineering sizing — and, as the three worked items showed, not reliable statements of the problem either.
+- **This report is a snapshot, not durable state.** It was generated 2026-07-12 and will drift as issues open and close. Re-pull the API snapshot before relying on the inventory.
+
+## Complete Open Issue Inventory
+
+| # | Category | Severity | Effort | Labels | Title | Rationale | URL |
+|---:|---|---|---|---|---|---|---|
+| 125 | C. Should be built | Low | Low | none | Update styling in Compare/Merge Dialog | Actionable but comparatively low-impact cleanup or niche improvement. | https://github.com/MemberJunction/MJ/issues/125 |
+| 164 | C. Should be built | Low | Medium | none | Look into ways we can optimize the way we create EntityRecordDocuments | Actionable but comparatively low-impact cleanup or niche improvement. | https://github.com/MemberJunction/MJ/issues/164 |
+| 406 | C. Should be built | Low | Medium | none | When a record is deleted, we should also delete any associated vector database records as well | Actionable but comparatively low-impact cleanup or niche improvement. | https://github.com/MemberJunction/MJ/issues/406 |
+| 417 | C. Should be built | Low | Medium | none | Prevent creating duplicates of the EntityDocumentRun record | Actionable but comparatively low-impact cleanup or niche improvement. | https://github.com/MemberJunction/MJ/issues/417 |
+| 503 | C. Should be built | Medium | Low | none | Add a Dimension column to the VectorDatabase Entity | Actionable enhancement/refactor/integration with meaningful product value but lower immediate risk. | https://github.com/MemberJunction/MJ/issues/503 |
+| 507 | C. Should be built | High | Medium | none | Vector sync package throws an error after processing a large batch of records | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/507 |
+| 508 | C. Should be built | High | Medium | none | Vector sync package does not upsert records to pinecone or create entity record documents with small batches | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/508 |
+| 518 | C. Should be built | Medium | Medium | none | Revamp Chunking with Chunking Base Class and Implementation Subclasses | Actionable enhancement/refactor/integration with meaningful product value but lower immediate risk. | https://github.com/MemberJunction/MJ/issues/518 |
+| 526 | C. Should be built | Low | Medium | none | Auto-tagging for other content modalities | Actionable but comparatively low-impact cleanup or niche improvement. | https://github.com/MemberJunction/MJ/issues/526 |
+| 527 | C. Should be built | High | High | none | Pull back Messaging Delivery/Open/Click Data into MJ | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/527 |
+| 632 | C. Should be built | High | High | none | Build Utility to Reorder SQL Table Columns via Migration Script | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/632 |
+| 667 | C. Should be built | High | High | none | User login/activity auditing: UserActivityLogger utility, Audit Log integration, and User rollup fields | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/667 |
+| 1186 | C. Should be built | Critical | High | none | Security: JSON Parsing Vulnerabilities in Loop Agent | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/1186 |
+| 1317 | C. Should be built | High | High | enhancement | Enhancement: Add metadata parameter to @RegisterClass decorator and ClassFactory | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/1317 |
+| 1415 | C. Should be built | Critical | High | none | Flow Agent redundant requirements for Actions and Sub-Agents | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/1415 |
+| 1430 | C. Should be built | Critical | High | none | Add support for Stripe Agentic Commerce Protocol (ACP) and Instant Checkout | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/1430 |
+| 1477 | C. Should be built | Medium | Medium | none | Enhancement: Send Email to User When Someone Share a Collection to Them | Actionable enhancement/refactor/integration with meaningful product value but lower immediate risk. | https://github.com/MemberJunction/MJ/issues/1477 |
+| 1509 | C. Should be built | Critical | High | none | Implement Automated User Provisioning and Deprovisioning from Directory Services | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/1509 |
+| 1591 | C. Should be built | Low | Medium | none | Advanced Prompt Pooling Improvements | Actionable but comparatively low-impact cleanup or niche improvement. | https://github.com/MemberJunction/MJ/issues/1591 |
+| 1700 | C. Should be built | Medium | Medium | none | Support multiple audiences per auth provider | Actionable enhancement/refactor/integration with meaningful product value but lower immediate risk. | https://github.com/MemberJunction/MJ/issues/1700 |
+| 1782 | C. Should be built | Medium | High | enhancement | MJStorage: File Browser & Per-Record Attachments UI | Actionable enhancement/refactor/integration with meaningful product value but lower immediate risk. | https://github.com/MemberJunction/MJ/issues/1782 |
+| 1787 | C. Should be built | Medium | Medium | none | Feature Request: Built-in Actions for Agent Media Management | Actionable enhancement/refactor/integration with meaningful product value but lower immediate risk. | https://github.com/MemberJunction/MJ/issues/1787 |
+| 1810 | C. Should be built | High | High | none | Issue: Image/Media Attachments in Conversation Need Placeholder System | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/1810 |
+| 1861 | C. Should be built | High | Medium | none | UI Bug: Navigation items duplicated after saving application configuration | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/1861 |
+| 1934 | C. Should be built | High | High | none | Replace SQL JSON_VALUE with in-memory filtering for agent notes scoping | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/1934 |
+| 1939 | C. Should be built | Critical | Medium | bug | pdf-parse dependency crashes on Node.js 24+ during module initialization | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/1939 |
+| 1943 | C. Should be built | Critical | High | none | Integrate Scheduling Engine notifications with NotificationEngine + CommunicationEngine | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/1943 |
+| 1963 | C. Should be built | Critical | High | enhancement | Server Modernization: Apollo Server v5, Middleware Extensibility, and Multi-Tenant Data Separation Framework | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/1963 |
+| 1964 | C. Should be built | Critical | Medium | none | SECURITY: Users on shared computers may authenticate as wrong user | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/1964 |
+| 2049 | C. Should be built | High | High | enhancement | Implement Component Feedback Panel in Artifact Viewer (Replacing Deleted skip-chat Version) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2049 |
+| 2063 | C. Should be built | Medium | High | none | Refactor: Protected methods use PascalCase instead of camelCase | Actionable enhancement/refactor/integration with meaningful product value but lower immediate risk. | https://github.com/MemberJunction/MJ/issues/2063 |
+| 2071 | C. Should be built | High | High | none | Add safe stale EntityRelationship cleanup to CodeGen | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2071 |
+| 2078 | C. Should be built | High | High | none | fix(codegen): Deduplicate EntityRelationship records in GraphQL codegen | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2078 |
+| 2079 | C. Should be built | Medium | Medium | none | codegen manifest: doesn't detect @RegisterClass in yalc-linked packages | Actionable enhancement/refactor/integration with meaningful product value but lower immediate risk. | https://github.com/MemberJunction/MJ/issues/2079 |
+| 2125 | C. Should be built | Critical | High | none | Feature: Configurable real-time entity change notifications (cross-tab, user, org scopes) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/2125 |
+| 2163 | C. Should be built | High | High | none | Client TenantContext lost when metadata loaded from cache | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2163 |
+| 2210 | C. Should be built | High | High | none | fix(CodeGen): CodeGen should emit GRANT EXECUTE when EntityPermission write flags are enabled | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2210 |
+| 2211 | C. Should be built | Low | High | none | Audit MJ core entity schema permissions | Actionable but comparatively low-impact cleanup or niche improvement. | https://github.com/MemberJunction/MJ/issues/2211 |
+| 2281 | C. Should be built | Critical | High | enhancement | Add OpenTelemetry support for production metrics and tracing | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/2281 |
+| 2298 | C. Should be built | High | High | none | Support arithmetic expressions in query template parameters and composition pass-throughs | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2298 |
+| 2353 | C. Should be built | High | Medium | none | Cached resource components don't refresh stale data on reattachment | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2353 |
+| 2356 | C. Should be built | Critical | Medium | none | mj-tree-dropdown search input permanently freezes page on large parent templates | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/2356 |
+| 2392 | C. Should be built | High | High | none | Gemini provider should classify fetch/network errors as transient for proper retry | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2392 |
+| 2396 | C. Should be built | High | High | none | CodeGen: SPs silently fail to create due to sqlcmd -V 17 severity threshold, with no recovery in subsequent runs | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2396 |
+| 2414 | C. Should be built | High | High | bug | [scheduling-actions] ExecuteJobNowAction creates orphan 'Running' ScheduledJobRun without dispatching job | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2414 |
+| 2435 | C. Should be built | High | High | enhancement | Publish MemberJunction as a native Zapier Platform integration (public directory listing) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2435 |
+| 2487 | C. Should be built | Critical | High | none | Architecture Discussion: Cross-Application Migration Ordering Across MJ + BAC + BCSaaS + SaaS Products | Unresolved architecture decision, not a discussion to archive: plan PR #2488 closed unmerged, competing proposals unreconciled, and it is a stated blocker for lifting SaaS products onto BAC. | https://github.com/MemberJunction/MJ/issues/2487 |
+| 2490 | C. Should be built | High | Medium | bug | LearnWorlds: FindUserByEmail unreliable on schools that ignore /v2/users search params | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2490 |
+| 2554 | C. Should be built | High | High | enhancement, important, priority: low | BaseEngine: lazy-load heavy columns with LRU cache to reduce cold-load payload | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2554 |
+| 2555 | C. Should be built | High | High | none | Expose SendGrid tracking, custom args, and event-webhook surface in @memberjunction/communication-sendgrid | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2555 |
+| 2568 | C. Should be built | High | High | none | Soft composite PK in additionalSchemaInfo can leave entity in broken state requiring manual DB fix | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2568 |
+| 2577 | C. Should be built | High | High | none | CodeGen truncates EntityFieldValue.Code when auto-detecting value lists from data | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2577 |
+| 2613 | C. Should be built | High | High | none | Semantic action search for agents with large action sets (>25 actions) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2613 |
+| 2618 | C. Should be built | Medium | High | none | Remove artifact-attachment backfill migration + mj-cli artifacts reclassify before next LTS baseline | Actionable enhancement/refactor/integration with meaningful product value but lower immediate risk. | https://github.com/MemberJunction/MJ/issues/2618 |
+| 2638 | C. Should be built | Critical | High | none | Security: MJAPI GraphQL request logger emits plaintext variables — any secret-bearing mutation leaks to stdout | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/2638 |
+| 2665 | C. Should be built | High | High | none | Migrate @memberjunction/ng-markdown to render from markdown-core AST (follow-up to #2617) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2665 |
+| 2691 | C. Should be built | Critical | High | bug | GraphQL error responses echo variable values in plaintext (schema-validation path) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/2691 |
+| 2697 | C. Should be built | High | High | enhancement | v6.x: Remove deprecated Query*Info classes, provider query getters, and MJ_Metadata dataset items | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2697 |
+| 2708 | C. Should be built | High | High | none | Refactor monolithic BaseAgent into a layered inheritance hierarchy | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2708 |
+| 2716 | C. Should be built | High | High | enhancement | feat: allow engines to declare required entity permissions for startup | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2716 |
+| 2754 | C. Should be built | High | High | none | Add KeyHint column to MJ: API Keys entity for key identification | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2754 |
+| 2793 | C. Should be built | High | High | none | Bug Report: Issue during MJ installation during the codegen phase due to key casing | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2793 |
+| 2817 | C. Should be built | High | High | enhancement | Communication: SendGridProvider should support customArgs, per-message tracking settings, and Headers passthrough | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2817 |
+| 2818 | C. Should be built | High | High | enhancement | Communication: MessageResult has no result-code field — per-row statuses like Skipped/Suppressed cannot be expressed | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2818 |
+| 2819 | C. Should be built | High | High | bug | Communication Engine: batch-send error semantics — log failures abort/discard sends, EndRun never marks runs Failed | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2819 |
+| 2820 | C. Should be built | Medium | High | enhancement | Communication: no unsubscribe/suppression capability anywhere in the framework | Actionable enhancement/refactor/integration with meaningful product value but lower immediate risk. | https://github.com/MemberJunction/MJ/issues/2820 |
+| 2821 | C. Should be built | High | High | enhancement | Lists/Communication: SendToAudience loads only PK + recipient + name — templates cannot see row fields | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2821 |
+| 2822 | C. Should be built | Medium | High | enhancement | Templates: RenderTemplateSimple exposes no autoescape control | Actionable enhancement/refactor/integration with meaningful product value but lower immediate risk. | https://github.com/MemberJunction/MJ/issues/2822 |
+| 2833 | C. Should be built | High | High | none | Memory writes: gate-off agents hallucinate saving memories | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2833 |
+| 2859 | C. Should be built | Critical | High | enhancement, priority: medium | Proposal: @memberjunction/metadata-graph — queryable typed dependency graph | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/2859 |
+| 2861 | C. Should be built | High | High | none | Migrate view-config-panel drawer onto the shared mj-slide-panel primitive | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2861 |
+| 2908 | C. Should be built | High | High | none | MJ at scale: metadata/UI/CodeGen/agents all materialize every entity all-at-once — decouple cost from entity count | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2908 |
+| 2910 | C. Should be built | High | High | none | Standardize AI model/vendor fallback — per-capability sufficiency guarantee + ModelResolver extraction | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2910 |
+| 2949 | C. Should be built | High | High | none | OpenApp lifecycle: follow-ups from PR #2931 review (non-blocking) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2949 |
+| 2954 | C. Should be built | High | High | none | SQLServerDataProvider re-queries view column order + logs on every GraphQL request (5.43) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2954 |
+| 2962 | C. Should be built | Critical | High | none | Plan: Realtime Video Avatars (Runway-first) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/2962 |
+| 2966 | C. Should be built | High | High | none | Plan: Admin-2 / County geo expansion | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2966 |
+| 2967 | C. Should be built | High | High | none | Typed JSON Extensions — Implementation Plan (Lists as first consumer) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2967 |
+| 2968 | C. Should be built | High | High | none | User-Behavior-Driven Search Ranking — Design & Implementation Plan | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2968 |
+| 2970 | C. Should be built | Critical | High | none | MJ Telemetry Sharing System ("Phone Home") | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/2970 |
+| 2977 | C. Should be built | High | High | none | T-SQL→Postgres migration translation lowercases unquoted mixed-case schema names (breaks BizApps Common + codegen on PG/BI) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2977 |
+| 2995 | C. Should be built | High | High | none | PostgreSQL Schema Casing for Entity Class Names | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/2995 |
+| 3030 | C. Should be built | High | High | none | PostgreSQL provider returns NUMERIC/BIGINT as strings — cost.toFixed console flood + string-concatenated token sums in Explorer | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3030 |
+| 3059 | C. Should be built | High | High | none | BaseEngine filtered caches can serve stale reads after a write — LocalCacheManager invalidation is unordered vs. the triggering read | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3059 |
+| 3064 | 🟡 PARTIAL in PR #3129 — premise was false; column split to #3133 | High | Low | none | AIPromptRunner does not enforce AIPrompt.TimeoutMS on the single-model execution path | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3064 |
+| 3065 | C. Should be built | High | Medium | none | Gemini: valid JSON body followed by stray trailing fragment despite ResponseFormat=JSON — runner should recover strict JSON centrally | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3065 |
+| 3066 | C. Should be built | High | High | none | vwAIModels flattened APIName is a cross-vendor footgun: adding an AIModelVendor row can silently change every consumer's model id | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3066 |
+| 3072 | C. Should be built | Critical | High | none | Task-mode startup: configurable `startup.mode` ('full' / 'task') for fast CLI/script boot | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3072 |
+| 3085 | C. Should be built | Critical | High | none | Sync engine: no lookback overlap for MonotonicWatermark connectors (late-committing rows can be permanently missed) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3085 |
+| 3093 | C. Should be built | Critical | High | none | MergeRecords FieldMap cannot express NULL values (Value: String! + client .toString() crash) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3093 |
+| 3095 | C. Should be built | High | High | enhancement | Fail-fast guard for the shared metadata graph: freeze Info objects (at least in dev) after Config | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3095 |
+| 3103 | ✅ FIXED in PR #3129 | Critical | Low | none | Predictive Studio: malformed LeakageGuard DenyFields silently disarms the leakage guard (G4) | High-impact correctness, security, data-integrity, or production-stability risk; prioritize before feature work. | https://github.com/MemberJunction/MJ/issues/3103 |
+| 3104 | C. Should be built | High | High | none | Predictive Studio: non-numeric feature columns silently become dead constant-0 features (G7) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3104 |
+| 3105 | ✅ FIXED in PR #3129 | High | Low | none | ng-dashboards: KnowledgeHub feature-pipelines .scss uses Sass nesting under a no-Sass build — &__/&-- rules are dead in production | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3105 |
+| 3106 | C. Should be built | High | High | none | Custom BaseResourceComponent nav items silently hang forever after successful data load (change-detection not re-running) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3106 |
+| 3109 | C. Should be built | High | High | none | [Explorer] Per-application / per-role shell chrome + application-scoped search — wiring the shell to configuration surfaces MJ already has | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3109 |
+| 3113 | C. Should be built | High | High | bug, good first issue | @memberjunction/server ships "types": "./src/index.ts" — consumers type-check MJ sources under their own compiler options | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3113 |
+| 3125 | C. Should be built | High | High | bug | CI: changes.yml "Check migration filenames" rejects all baselines (B-prefixed migrations) | Actionable bug/regression or reliability issue affecting developer or runtime behavior. | https://github.com/MemberJunction/MJ/issues/3125 |

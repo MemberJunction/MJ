@@ -17,7 +17,12 @@
  *    the deny-list at assembly time.
  */
 
-import type { LeakageGuard, FeatureImportance } from '@memberjunction/predictive-studio-core';
+import {
+  clampDominanceThreshold,
+  normalizeName,
+  type LeakageGuard,
+  type FeatureImportance,
+} from '@memberjunction/predictive-studio-core';
 
 /**
  * Assembly-time deny-list enforcer. Normalizes the guard's `DenyFields` /
@@ -32,8 +37,8 @@ export class LeakageGuardEnforcer {
    * @param guard the leakage-guard configuration (deny-list + dominance threshold)
    */
   constructor(guard: LeakageGuard) {
-    this.denyFields = new Set((guard.DenyFields ?? []).map(normalize));
-    this.denySources = new Set((guard.DenySources ?? []).map(normalize));
+    this.denyFields = new Set((guard.DenyFields ?? []).map(normalizeName));
+    this.denySources = new Set((guard.DenySources ?? []).map(normalizeName));
   }
 
   /**
@@ -42,7 +47,7 @@ export class LeakageGuardEnforcer {
    * @param fieldName candidate column/feature name
    */
   public isFieldAllowed(fieldName: string): boolean {
-    return !this.denyFields.has(normalize(fieldName));
+    return !this.denyFields.has(normalizeName(fieldName));
   }
 
   /**
@@ -51,7 +56,7 @@ export class LeakageGuardEnforcer {
    * @param sourceRef the source's `Ref` (entity name / Query id / etc.)
    */
   public isSourceAllowed(sourceRef: string): boolean {
-    return !this.denySources.has(normalize(sourceRef));
+    return !this.denySources.has(normalizeName(sourceRef));
   }
 
   /**
@@ -97,14 +102,22 @@ export interface DominanceResult {
  * logistic regression) are handled correctly. When all importances are zero (or
  * the map is empty), nothing is flagged.
  *
+ * The incoming threshold is passed through {@link clampDominanceThreshold} before
+ * use. Save-time validation already rejects out-of-range values, but rows written
+ * *before* that validation existed can still hold a guard-disabling value (a saved
+ * `0.95` can never flag anything), and this is the one chokepoint both callers —
+ * the training engine and the promote gate — go through. The clamped value is what
+ * gets reported back on `Threshold`, so the result reflects the bound actually applied.
+ *
  * @param featureImportance per-feature importance/contribution from the sidecar
  * @param threshold dominance threshold (e.g. `0.6` from `LeakageGuard.SingleFeatureDominanceThreshold`)
  * @returns the {@link DominanceResult}
  */
 export function detectSingleFeatureDominance(featureImportance: FeatureImportance, threshold: number): DominanceResult {
+  const effectiveThreshold = clampDominanceThreshold(threshold);
   const entries = Object.entries(featureImportance ?? {});
   if (entries.length === 0) {
-    return { Dominant: false, Threshold: threshold };
+    return { Dominant: false, Threshold: effectiveThreshold };
   }
 
   let total = 0;
@@ -120,19 +133,14 @@ export function detectSingleFeatureDominance(featureImportance: FeatureImportanc
   }
 
   if (total === 0) {
-    return { Dominant: false, TopFeature: topFeature, TopShare: 0, Threshold: threshold };
+    return { Dominant: false, TopFeature: topFeature, TopShare: 0, Threshold: effectiveThreshold };
   }
 
   const topShare = topMagnitude / total;
   return {
-    Dominant: topShare > threshold,
+    Dominant: topShare > effectiveThreshold,
     TopFeature: topFeature,
     TopShare: topShare,
-    Threshold: threshold,
+    Threshold: effectiveThreshold,
   };
-}
-
-/** Lowercase + trim for case/whitespace-insensitive name matching. */
-function normalize(name: string): string {
-  return name.trim().toLowerCase();
 }
