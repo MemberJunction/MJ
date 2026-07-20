@@ -88,6 +88,7 @@ import type {
 import { GoalCompletionOracle } from './oracles/GoalCompletionOracle.js';
 import { UrlMatchOracle } from './oracles/UrlMatchOracle.js';
 import { StepCountOracle } from './oracles/StepCountOracle.js';
+import { isOracleAdvisory, partitionGatingOracles } from './oracle-scoring.js';
 
 /**
  * Test driver for Computer Use browser automation tests.
@@ -199,7 +200,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             // Handle timeout
             if (timedOut) {
                 this.logToTestRun(context, 'error', `Test timed out after ${effectiveTimeout}ms`);
-                return this.buildTimeoutResult(result, input, expected, actualOutput, effectiveTimeout, context);
+                return await this.buildTimeoutResult(result, input, expected, actualOutput, effectiveTimeout, config, context);
             }
 
             // Handle cancellation (engine was stopped via Stop())
@@ -212,11 +213,14 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             this.logToTestRun(context, 'info', 'Running oracles for evaluation');
             const oracleResults = await this.runOracles(config, input, expected, actualOutput, context);
 
-            // 6. Calculate score and status
-            const score = this.calculateScore(oracleResults, config.scoringWeights);
-            const status = oracleResults.length === 0 && result.Success
-                ? 'Passed'
-                : this.determineStatus(oracleResults);
+            // 6. Calculate score and status. Advisory oracles (e.g. step-count)
+            // are scored for diagnostics but do NOT gate Passed/Failed (CU-D3),
+            // so status is determined only by gating oracles. With no gating
+            // oracle, fall back to engine success (the prior zero-oracle rule).
+            const { gating, score } = this.scoreOracleResults(oracleResults, config.scoringWeights);
+            const status = gating.length === 0
+                ? (result.Success ? 'Passed' : 'Failed')
+                : this.determineStatus(gating);
 
             const passedChecks = oracleResults.filter(r => r.passed).length;
             const totalChecks = oracleResults.length;
@@ -808,23 +812,40 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     /**
      * Build a timeout result with partial data.
      */
-    private buildTimeoutResult(
+    private async buildTimeoutResult(
         result: ComputerUseResult,
         input: ComputerUseTestInput,
         expected: ComputerUseExpectedOutcomes,
         actualOutput: Record<string, unknown>,
         timeoutMs: number,
+        config: ComputerUseTestConfig,
         context: DriverExecutionContext
-    ): DriverExecutionResult {
+    ): Promise<DriverExecutionResult> {
+        // CU-D4: a timeout is not a scoring blackout. The partial actualOutput
+        // (finalUrl / finalScreenshot / stepHistory) still exists, so run the
+        // oracles against it and attach the diagnostic score — a run that
+        // completed the goal at step 30 and got stopped mid-judge should not
+        // score identically to one that never logged in. Status stays 'Timeout'.
+        let oracleResults: OracleResult[] = [];
+        try {
+            oracleResults = await this.runOracles(config, input, expected, actualOutput, context);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.logToTestRun(context, 'warn', `Oracle evaluation on timeout partial failed: ${msg}`);
+        }
+
+        const { score } = this.scoreOracleResults(oracleResults, config.scoringWeights);
+        const passedChecks = oracleResults.filter(r => r.passed).length;
+
         return {
             targetType: 'Computer Use',
             targetLogId: context.testRun.ID,
             status: 'Timeout',
-            score: 0,
-            oracleResults: [],
-            passedChecks: 0,
-            failedChecks: 0,
-            totalChecks: 0,
+            score,
+            oracleResults,
+            passedChecks,
+            failedChecks: oracleResults.length - passedChecks,
+            totalChecks: oracleResults.length,
             inputData: input,
             expectedOutput: expected,
             actualOutput,
@@ -992,6 +1013,8 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         actualOutput: Record<string, unknown>,
         context: DriverExecutionContext
     ): Promise<OracleResult> {
+        const advisory = isOracleAdvisory(oracleConfig.type, oracleConfig.advisory);
+
         // Resolve oracle: built-in first, then global registry
         const oracle = ComputerUseTestDriver.builtInOracles.get(oracleConfig.type)
             ?? context.oracleRegistry.get(oracleConfig.type);
@@ -1002,7 +1025,8 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 oracleType: oracleConfig.type,
                 passed: false,
                 score: 0,
-                message: `Oracle type "${oracleConfig.type}" not found in built-in or global registry`
+                message: `Oracle type "${oracleConfig.type}" not found in built-in or global registry`,
+                advisory
             };
         }
 
@@ -1015,11 +1039,12 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             };
 
             const result = await oracle.evaluate(oracleInput, oracleConfig.config ?? {});
+            result.advisory = advisory;
 
             this.logToTestRun(
                 context,
                 result.passed ? 'info' : 'warn',
-                `Oracle ${oracleConfig.type}: ${result.passed ? 'PASSED' : 'FAILED'} (Score: ${result.score.toFixed(2)})`
+                `Oracle ${oracleConfig.type}${advisory ? ' (advisory)' : ''}: ${result.passed ? 'PASSED' : 'FAILED'} (Score: ${result.score.toFixed(2)})`
             );
 
             return result;
@@ -1030,9 +1055,25 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 oracleType: oracleConfig.type,
                 passed: false,
                 score: 0,
-                message: `Oracle execution failed: ${(error as Error).message}`
+                message: `Oracle execution failed: ${(error as Error).message}`,
+                advisory
             };
         }
+    }
+
+    /**
+     * Partition oracle results into gating (status-determining) and advisory,
+     * and compute the diagnostic score. Advisory results are excluded from the
+     * gating score unless *every* oracle is advisory (in which case they're all
+     * we have to score against). (CU-D3)
+     */
+    private scoreOracleResults(
+        oracleResults: OracleResult[],
+        weights?: Record<string, number>
+    ): { gating: OracleResult[]; score: number } {
+        const gating = partitionGatingOracles(oracleResults);
+        const scoringSet = gating.length > 0 ? gating : oracleResults;
+        return { gating, score: this.calculateScore(scoringSet, weights) };
     }
 
     // ═══════════════════════════════════════════════════════════

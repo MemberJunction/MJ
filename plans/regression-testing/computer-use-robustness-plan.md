@@ -472,6 +472,8 @@ mabl's confidence gate applies: a low-confidence heal (ambiguous target) should 
 
 **Risks / open questions.** Historical baselines need a few runs of CU-F1 data; bootstrap with static advisory thresholds.
 
+**Wave 0 status — (1)+(2) LANDED; (3)+(4) deferred.** Advisory oracles are in: `OracleResult.advisory` (shared, additive), `ComputerUseOracleConfig.advisory`, and the pure `oracle-scoring.ts` policy (`isOracleAdvisory` defaults `step-count` advisory; `partitionGatingOracles`). The driver now determines status from gating oracles only (falling back to engine success when all oracles are advisory), so `step-count` no longer floors failure scores or risks hard-failing a slow-but-successful run. Historical-p75 scoring (2) is bootstrapped as the existing static efficiency curve until CU-F1 telemetry accrues. **Deferred:** (3) the `Degraded` outcome and (4) zero-oracle→error escalation both need a new terminal state / regression-profile concept threaded through the shared cross-driver pipeline — grouped with CU-D4's Cancelled work below.
+
 #### CU-D4. Score what actually happened: oracles on timeout partials, distinct Cancelled, forced final verdict
 
 **Problem.** `buildTimeoutResult` (driver:800-826) runs zero oracles and scores 0 — a run that completed the goal at step 30 and got stopped mid-judge scores identically to one that never logged in (6 timeouts = total scoring blackout). `Cancelled` masquerades as `Timeout` (:841), polluting the metric. `MaxStepsReached` runs may carry a `FinalJudgeVerdict` up to 2 steps stale (or none).
@@ -481,6 +483,8 @@ mabl's confidence gate applies: a low-confidence heal (ambiguous target) should 
 **Expected impact.** The most expensive failure class becomes diagnosable; "timeout-progressing" vs "timeout-stuck" (different retry policies in the sibling plan) becomes computable.
 
 **Risks / open questions.** None material — this is strictly additive evidence.
+
+**Wave 0 status — (1) LANDED; (2) deferred.** `buildTimeoutResult` now runs all oracles against the partial `actualOutput` and attaches the diagnostic score (status stays `Timeout`), so the most expensive failure class is no longer a scoring blackout — "timeout-progressing" vs "timeout-stuck" becomes computable. **Deferred:** (2) giving `Cancelled` its own terminal status is more than a driver change — `DriverExecutionResult.status` is a shared union (`'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Timeout'`, no `Cancelled`) consumed by every driver and mapped downstream to the persisted TestRun status. That cross-driver surgery (plus the (3) forced-final-verdict which depends on CU-B4, and (4) which depends on CU-F5) is grouped into a focused follow-up rather than widening this wave. Today `buildCancelledResult` continues to report as `Timeout` (unchanged), so nothing regresses.
 
 #### CU-D5. Feed the judge real evidence; right-size its cost
 

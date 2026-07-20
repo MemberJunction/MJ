@@ -53,6 +53,15 @@ export interface ComputerUseOracleConfig {
 
     /** Weight for scoring (0.0 to 1.0) */
     weight?: number;
+
+    /**
+     * When true, this oracle is advisory — reported and scored for diagnostics
+     * but non-gating for Passed/Failed (CU-D3). Defaults per oracle type:
+     * `step-count` is advisory by default (it's an efficiency signal, and the
+     * engine already caps steps at the same limit, making a gating check a
+     * tautology); all other oracles gate by default. Set explicitly to override.
+     */
+    advisory?: boolean;
 }
 
 /**

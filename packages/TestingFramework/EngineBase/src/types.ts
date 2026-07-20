@@ -224,6 +224,15 @@ export interface OracleResult {
    * Additional details (oracle-specific)
    */
   details?: unknown;
+
+  /**
+   * When true, this oracle is *advisory*: its result is reported and scored for
+   * diagnostics but does NOT gate the test's Passed/Failed status (CU-D3). Used
+   * for efficiency/quality signals (e.g. step-count) that shouldn't fail an
+   * otherwise-successful run. Drivers set this from the oracle's config; absent
+   * or false means the oracle gates as normal.
+   */
+  advisory?: boolean;
 }
 
 /**
