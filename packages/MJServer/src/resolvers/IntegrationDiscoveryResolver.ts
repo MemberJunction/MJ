@@ -3724,7 +3724,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 fm.EntityMapID = entityMapID;
                 fm.SourceFieldName = field.Name;
                 fm.DestinationFieldName = field.Name.replace(/[^A-Za-z0-9_]/g, '_');
-                fm.IsKeyField = field.IsUniqueKey;
+                fm.IsKeyField = field.IsPrimaryKey ?? false; // key on the record's PRIMARY key (identity), consistent with processRSUPendingWork + U1 (PK ≠ unique)
                 fm.IsRequired = field.IsRequired;
                 fm.Direction = 'SourceToDest';
                 fm.Status = 'Active';
@@ -4292,7 +4292,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             EntityName: 'MJ: Scheduled Jobs',
             ExtraFilter:
                 `JobTypeID='${esc(jobTypeID)}' AND Status IN ('Active','Paused') AND ` +
-                `(Configuration LIKE '%${lower}%' OR Configuration LIKE '%${upper}%')`,
+                // Structured "CompanyIntegrationID":"<uuid>" predicate (same form as IntegrationListSchedules),
+                // NOT a bare-UUID substring — so this CI's id can't false-match the same UUID appearing in
+                // another config key (e.g. RelatedCompanyIntegrationID) and repurpose an unrelated job.
+                `(Configuration LIKE '%"CompanyIntegrationID":"${lower}"%' OR Configuration LIKE '%"CompanyIntegrationID":"${upper}"%')`,
             OrderBy: '__mj_CreatedAt DESC',
             Fields: ['ID'],
             MaxRows: 1,
@@ -6070,7 +6073,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             fm.EntityMapID = em.ID;
             fm.SourceFieldName = field.Name;
             fm.DestinationFieldName = field.Name.replace(/[^A-Za-z0-9_]/g, '_');
-            fm.IsKeyField = field.IsUniqueKey === true;
+            fm.IsKeyField = field.IsPrimaryKey ?? false; // key on the PRIMARY key (identity), consistent with the initial-apply path + U1 (PK ≠ unique)
             fm.IsRequired = field.IsRequired === true;
             fm.Direction = 'SourceToDest';
             fm.Status = mapEnabled ? 'Active' : 'Inactive';
