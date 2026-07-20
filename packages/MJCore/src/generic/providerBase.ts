@@ -3976,26 +3976,40 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _inflightScopedRefreshes = new Map<string, Promise<boolean>>();
 
     /**
-     * The ONE closed-world set the scoped refresh depends on — and it is closed-world BY
-     * DEFINITION, not by enumeration of today's dataset: these are exactly the MJ_Metadata item
-     * codes {@link PostProcessEntityMetadata} consumes (the 2 roots + its 6 stitched children).
-     * A scoped refresh maintains precisely what PostProcessEntityMetadata builds; anything else
-     * is out of scope by construction. Every OTHER partition (which items to zero-fill, which
-     * timestamp Types are entity-family) is DERIVED at runtime from the dataset's own item list
-     * ({@link _mjMetadataItemMeta}) so it can never drift, and {@link executeScopedRefresh}
-     * FAILS CLOSED (full Refresh) if the dataset ever grows an unrecognized `Entity*` item —
-     * see the tripwire there.
+     * THE single source of truth for scoped refresh — the entity-family MJ_Metadata items and HOW
+     * to scope-filter each. This mirrors {@link PostProcessEntityMetadata}'s inputs (same items,
+     * same order); the `filter` encodes each item's FK-to-Entity relationship, which is domain
+     * knowledge that exists NOWHERE else in metadata — so this table is the irreducible core.
+     * EVERYTHING else derives from it (+ the live dataset item list {@link _mjMetadataItemMeta}):
+     * the handled-code set, BOTH phases' fetch/zero-fill partitions, and the timestamp-family Type
+     * names. No other place re-lists these codes except the positional bridge into
+     * PostProcessEntityMetadata (whose fixed signature is shared with the full-load path).
+     *   'schema'     → WHERE SchemaName IN (…)      — roots, fetched in phase A
+     *   'byEntityID' → WHERE EntityID IN (…)         — children, phase B (from phase-A entity IDs)
+     *   'byFieldID'  → WHERE EntityFieldID IN (…)    — EntityFieldValues, phase B (from field IDs)
+     *   'grandchild' → load whole + filter client-side — no dialect-safe one-pass scope exists
+     * A scoped refresh maintains PRECISELY what this table declares; the drift tripwire in
+     * {@link executeScopedRefresh} FAILS CLOSED (full Refresh) if the live dataset ever grows an
+     * `Entity*` item absent from here (and not in {@link _entityPrefixedStandaloneCodes}).
      */
-    private static readonly _mjMetadataScopedHandledCodes: readonly string[] = [
-        'Entities', 'EntityFields',
-        'EntityFieldValues', 'EntityPermissions', 'EntityRelationships', 'EntitySettings',
-        'EntityOrganicKeys', 'EntityOrganicKeyRelatedEntities',
-    ];
+    private static readonly SCOPED_ENTITY_FAMILY = [
+        { code: 'Entities',                        filter: 'schema' },
+        { code: 'EntityFields',                    filter: 'schema' },
+        { code: 'EntityFieldValues',               filter: 'byFieldID' },
+        { code: 'EntityPermissions',               filter: 'byEntityID' },
+        { code: 'EntityRelationships',             filter: 'byEntityID' },
+        { code: 'EntitySettings',                  filter: 'byEntityID' },
+        { code: 'EntityOrganicKeys',               filter: 'byEntityID' },
+        { code: 'EntityOrganicKeyRelatedEntities', filter: 'grandchild' },
+    ] as const satisfies ReadonlyArray<{ code: string; filter: 'schema' | 'byEntityID' | 'byFieldID' | 'grandchild' }>;
+
     /**
-     * `Entity*`-prefixed item codes PROVEN standalone (not stitched by PostProcessEntityMetadata),
-     * exempted from the drift tripwire. Kept deliberately tiny + documented per entry.
+     * `Entity*`-prefixed item codes PROVEN standalone (NOT stitched by PostProcessEntityMetadata,
+     * so genuinely out of the scoped family) — exempted from the drift tripwire. Deliberately tiny,
+     * documented per entry. A distinct concern from {@link SCOPED_ENTITY_FAMILY} (which is fetched);
+     * these are only ever *recognized* so the tripwire doesn't false-fire on them.
      */
-    private static readonly _mjMetadataEntityPrefixedStandaloneCodes: readonly string[] = [
+    private static readonly _entityPrefixedStandaloneCodes: readonly string[] = [
         'EntityDocumentTypes', // standalone lookup list (AllEntityDocumentTypes) — no per-entity stitching
     ];
     /**
@@ -4077,92 +4091,85 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // drift as the MJ_Metadata dataset gains items. Not captured yet (e.g. metadata was
             // booted from the storage cache, no network load has run) → fail closed: full Refresh,
             // which captures it for the next scoped call (self-priming).
-            const handled = new Set<string>(ProviderBase._mjMetadataScopedHandledCodes);
+            const family = ProviderBase.SCOPED_ENTITY_FAMILY;
+            const familyCodes = new Set<string>(family.map(f => f.code));
             const itemMeta = this._mjMetadataItemMeta;
             if (!itemMeta || itemMeta.length === 0) {
                 LogStatus(`[ScopedRefresh] MJ_Metadata item list not yet captured — falling back to full Refresh (self-priming)`);
                 return this.Refresh(providerToUse);
             }
-            // ── DRIFT TRIPWIRE (fail closed): an `Entity*` item this code neither stitches nor has
-            // proven standalone means the entity family GREW past the scoped-refresh's definition —
+            // ── DRIFT TRIPWIRE (fail closed): an `Entity*` item the family table neither declares nor
+            // marks standalone means the entity family GREW past the scoped-refresh's definition —
             // scoping could silently half-maintain it. Refuse loudly and take the full reload.
-            const standalone = new Set<string>(ProviderBase._mjMetadataEntityPrefixedStandaloneCodes);
-            const unrecognized = itemMeta.filter(m => m.Code.startsWith('Entity') && !handled.has(m.Code) && !standalone.has(m.Code));
+            const standalone = new Set<string>(ProviderBase._entityPrefixedStandaloneCodes);
+            const unrecognized = itemMeta.filter(m => m.Code.startsWith('Entity') && !familyCodes.has(m.Code) && !standalone.has(m.Code));
             if (unrecognized.length > 0) {
                 LogError(
                     `[ScopedRefresh] Unrecognized Entity-family dataset item(s) [${unrecognized.map(m => m.Code).join(', ')}] — ` +
                     `the MJ_Metadata dataset grew past this scoped refresh's definition; failing closed to a full Refresh. ` +
-                    `Extend _mjMetadataScopedHandledCodes (if PostProcessEntityMetadata stitches it) or ` +
-                    `_mjMetadataEntityPrefixedStandaloneCodes (if standalone) to restore scoping.`
+                    `Add it to SCOPED_ENTITY_FAMILY (if PostProcessEntityMetadata stitches it) or ` +
+                    `_entityPrefixedStandaloneCodes (if standalone) to restore scoping.`
                 );
                 return this.Refresh(providerToUse);
             }
             const allCodes = itemMeta.map(m => m.Code);
+            // fetch the declared codes with `filter`; zero-fill EVERY other live item (roots handled
+            // by phase, non-entity + any future addition never fetched wholesale).
+            const zeroExcept = (fetched: Set<string>): DatasetItemFilterType[] => zero(allCodes.filter(c => !fetched.has(c)));
 
-            // ── Phase A — entities + fields of the scoped schemas (both views expose SchemaName).
-            // EVERY other item (children, non-entity, and any future addition) is zero-filled —
-            // derived as allCodes minus the two roots, so a new dataset item is never fetched
-            // wholesale by accident.
+            // ── Phase A — the 'schema'-filtered roots (Entities/EntityFields expose SchemaName).
+            const rootCodes = family.filter(f => f.filter === 'schema').map(f => f.code);
             const phaseA: DatasetItemFilterType[] = [
-                { ItemCode: 'Entities', Filter: schemaIn },
-                { ItemCode: 'EntityFields', Filter: schemaIn },
-                ...zero(allCodes.filter(c => c !== 'Entities' && c !== 'EntityFields')),
+                ...rootCodes.map(code => ({ ItemCode: code, Filter: schemaIn })),
+                ...zeroExcept(new Set(rootCodes)),
             ];
             const a = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, phaseA, this.CurrentUser, providerToUse, true);
             if (!a?.Success) return this.Refresh(providerToUse);
-            // Refresh the captured item list from this load's actual results — keeps the derived
-            // partition (and the tripwire) current with the live dataset.
+            // Keep the captured item list current with this load's actual results (drives the
+            // derived partition + the tripwire).
             this._mjMetadataItemMeta = a.Results.map(r => ({ Code: r.Code, EntityName: r.EntityName }));
-            const aByCode = new Map(a.Results.map(r => [r.Code, r.Results] as const));
-            const entityRows: EntityMetadataRow[] = aByCode.get('Entities') ?? [];
-            const fieldRows: EntityFieldMetadataRow[] = aByCode.get('EntityFields') ?? [];
+            const rows = new Map<string, unknown[]>(a.Results.map(r => [r.Code, r.Results] as const));
+            const entityRows = (rows.get('Entities') ?? []) as EntityMetadataRow[];
+            const fieldRows = (rows.get('EntityFields') ?? []) as EntityFieldMetadataRow[];
 
-            // ── Phase B — entity-child rows via dialect-safe literal ID lists (no view quoting /
-            // subselect differences between SQL Server + PostgreSQL to worry about).
-            let fieldValues: EntityFieldValueMetadataRow[] = [];
-            let permissions: EntityChildMetadataRow[] = [];
-            let relationships: EntityChildMetadataRow[] = [];
-            let settings: EntityChildMetadataRow[] = [];
-            let organicKeys: OrganicKeyMetadataRow[] = [];
+            // ── Phase B — the child items, each scoped by its declared FK filter (dialect-safe
+            // literal ID lists; grandchild loads whole + client-side filter). Built from the SAME
+            // table — no re-listed codes.
             let organicKeyRelated: OrganicKeyRelatedEntityMetadataRow[] = [];
             if (entityRows.length > 0) {
                 const idIn = `EntityID IN (${inList(entityRows.map(e => e.ID))})`;
-                // The explicitly-filtered children; OrganicKeyRelatedEntities keys off
-                // EntityOrganicKeyID (grandchild) — a dialect-safe one-pass scope isn't
-                // expressible, so that (tiny) table loads whole and is filtered client-side.
-                const phaseBFiltered: DatasetItemFilterType[] = [
-                    // EntityFieldValues key off EntityFieldID, not EntityID — scope by the fields just loaded.
-                    { ItemCode: 'EntityFieldValues', Filter: fieldRows.length > 0 ? `EntityFieldID IN (${inList(fieldRows.map(f => f.ID))})` : '1=0' },
-                    { ItemCode: 'EntityPermissions', Filter: idIn },
-                    { ItemCode: 'EntityRelationships', Filter: idIn },
-                    { ItemCode: 'EntitySettings', Filter: idIn },
-                    { ItemCode: 'EntityOrganicKeys', Filter: idIn },
-                ];
-                const phaseBExplicit = new Set([...phaseBFiltered.map(f => f.ItemCode), 'EntityOrganicKeyRelatedEntities']);
+                const fieldIdIn = fieldRows.length > 0 ? `EntityFieldID IN (${inList(fieldRows.map(f => f.ID))})` : '1=0';
+                const children = family.filter(f => f.filter !== 'schema');
+                const childFilter = (f: 'byEntityID' | 'byFieldID' | 'grandchild'): string =>
+                    f === 'byEntityID' ? idIn : f === 'byFieldID' ? fieldIdIn : '';  // grandchild: load whole
+                const fetchedB = new Set(children.map(c => c.code));
                 const phaseB: DatasetItemFilterType[] = [
-                    ...phaseBFiltered,
-                    // Everything else — roots, non-entity items, and any future addition — zero-filled
-                    // (derived from the live item list, same fail-safe posture as phase A).
-                    ...zero(allCodes.filter(c => !phaseBExplicit.has(c))),
+                    ...children.map(c => ({ ItemCode: c.code, Filter: childFilter(c.filter) })),
+                    ...zeroExcept(fetchedB),
                 ];
                 const b = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, phaseB, this.CurrentUser, providerToUse, true);
                 if (!b?.Success) return this.Refresh(providerToUse);
-                const bByCode = new Map(b.Results.map(r => [r.Code, r.Results] as const));
-                fieldValues = bByCode.get('EntityFieldValues') ?? [];
-                permissions = bByCode.get('EntityPermissions') ?? [];
-                relationships = bByCode.get('EntityRelationships') ?? [];
-                settings = bByCode.get('EntitySettings') ?? [];
-                organicKeys = bByCode.get('EntityOrganicKeys') ?? [];
-                const okIDs = new Set(organicKeys.map(k => NormalizeUUID(k.ID)));
-                const allOkRelated: OrganicKeyRelatedEntityMetadataRow[] = bByCode.get('EntityOrganicKeyRelatedEntities') ?? [];
-                organicKeyRelated = allOkRelated.filter(r => okIDs.has(NormalizeUUID(r.EntityOrganicKeyID)));
+                for (const r of b.Results) rows.set(r.Code, r.Results);
+                // Grandchild (EntityOrganicKeyRelatedEntities) was loaded whole → filter to the keys we fetched.
+                const okIDs = new Set(((rows.get('EntityOrganicKeys') ?? []) as OrganicKeyMetadataRow[]).map(k => NormalizeUUID(k.ID)));
+                organicKeyRelated = ((rows.get('EntityOrganicKeyRelatedEntities') ?? []) as OrganicKeyRelatedEntityMetadataRow[])
+                    .filter(r => okIDs.has(NormalizeUUID(r.EntityOrganicKeyID)));
             }
 
             // ── Build fresh EntityInfo instances (children stitched, Sequence-sorted) — never
-            // mutate existing shared Info objects.
+            // mutate existing shared Info objects. This positional call is the ONE unavoidable
+            // re-list of the codes: PostProcessEntityMetadata's fixed 8-arg signature is shared
+            // with the full-load path. Argument order matches SCOPED_ENTITY_FAMILY.
+            const pick = (code: string): unknown[] => rows.get(code) ?? [];
             const freshEntities = this.PostProcessEntityMetadata(
-                entityRows, fieldRows, fieldValues, permissions, relationships, settings,
-                organicKeys, organicKeyRelated,
+                entityRows,
+                fieldRows,
+                pick('EntityFieldValues') as EntityFieldValueMetadataRow[],
+                pick('EntityPermissions') as EntityChildMetadataRow[],
+                pick('EntityRelationships') as EntityChildMetadataRow[],
+                pick('EntitySettings') as EntityChildMetadataRow[],
+                pick('EntityOrganicKeys') as OrganicKeyMetadataRow[],
+                organicKeyRelated,
             );
 
             // ── Atomic merge: new container (unchanged arrays shared by reference), scoped
@@ -4204,9 +4211,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // from the captured item list by joining on the handled codes — never a hardcoded name list
         // that could drift from the dataset. No capture → skip stamping entirely (the SAFE direction:
         // the next staleness check may over-refresh, but nothing is ever masked).
-        const handledCodes = new Set<string>(ProviderBase._mjMetadataScopedHandledCodes);
+        const familyCodes = new Set<string>(ProviderBase.SCOPED_ENTITY_FAMILY.map(f => f.code));
         const familyNames = (this._mjMetadataItemMeta ?? [])
-            .filter(m => handledCodes.has(m.Code))
+            .filter(m => familyCodes.has(m.Code))
             .map(m => m.EntityName);
         if (familyNames.length === 0) return;
         const family = new Set(familyNames.map(t => t.trim().toLowerCase()));
