@@ -4,6 +4,10 @@
   "version": "5.48.0",
   "description": "Optional out-of-process worker that runs MemberJunction scheduled integration syncs off the serving MJAPI process. Reuses the SchedulingEngine + DB-atomic lease; no engine changes.",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
   "scripts": {
     "dev": "ts-node-dev --transpile-only --respawn --project tsconfig.json src/index.ts",
     "build": "tsc && tsc-alias -f",
