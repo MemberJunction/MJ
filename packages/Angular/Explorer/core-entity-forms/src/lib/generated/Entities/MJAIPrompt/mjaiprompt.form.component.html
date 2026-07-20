@@ -538,25 +538,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Types Section -->
+    <!-- AI Agent Types (System Prompt) Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentTypes"
-        SectionName="AI Agent Types"
+        SectionKey="mJAIAgentTypesSystemPromptID"
+        SectionName="AI Agent Types (System Prompt)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentTypes')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentTypesSystemPromptID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Types','SystemPromptID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Types')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentTypes')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentTypesSystemPromptID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentTypes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentTypesSystemPromptID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -815,23 +815,23 @@
 
     <!-- AI Agents Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgents"
+        SectionKey="mJAIAgentsContextCompressionPromptID"
         SectionName="AI Agents"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgents')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentsContextCompressionPromptID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','ContextCompressionPromptID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agents')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgents')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentsContextCompressionPromptID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgents', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentsContextCompressionPromptID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -957,6 +957,81 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJScopedPromptConfigs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agents (Conversation Summary Prompt ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentsConversationSummaryPromptID"
+        SectionName="AI Agents (Conversation Summary Prompt ID)"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentsConversationSummaryPromptID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','ConversationSummaryPromptID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agents')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentsConversationSummaryPromptID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentsConversationSummaryPromptID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Types (Context Compression Prompt ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentTypesContextCompressionPromptID"
+        SectionName="AI Agent Types (Context Compression Prompt ID)"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentTypesContextCompressionPromptID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Types','ContextCompressionPromptID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Types')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentTypesContextCompressionPromptID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentTypesContextCompressionPromptID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Types (Conversation Summary Prompt ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentTypesConversationSummaryPromptID"
+        SectionName="AI Agent Types (Conversation Summary Prompt ID)"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentTypesConversationSummaryPromptID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Types','ConversationSummaryPromptID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Types')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentTypesConversationSummaryPromptID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentTypesConversationSummaryPromptID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

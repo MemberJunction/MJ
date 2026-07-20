@@ -83,6 +83,9 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     // BaseEntitySaveQueue that ActionEngine's action-log queue now uses) — pulled from the actual module.
     MJLruCache: (await importOriginal<typeof import('@memberjunction/global')>()).MJLruCache,
     KeyedSerialTaskQueue: (await importOriginal<typeof import('@memberjunction/global')>()).KeyedSerialTaskQueue,
+    // Real RequiresSubclass decorator — imported transitively through the ActionEngine
+    // module graph; the mocked module must re-export it or the suite fails to load.
+    RequiresSubclass: (await importOriginal<typeof import('@memberjunction/global')>()).RequiresSubclass,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,

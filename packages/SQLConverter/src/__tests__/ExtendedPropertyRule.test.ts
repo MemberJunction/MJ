@@ -51,15 +51,33 @@ describe('ExtendedPropertyRule', () => {
   });
 
   describe('single quotes in value', () => {
-    it('should handle values containing escaped single quotes', () => {
-      // Note: The non-greedy regex in ExtendedPropertyRule truncates at the first
-      // single-quote boundary in doubled-quote sequences. This test documents the
-      // current behavior. Values with embedded single quotes may be truncated.
-      const sql = `EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Users table description',
+    it('should preserve the full value when it contains escaped single quotes (named params)', () => {
+      // Mirrors the real v5.48.x compaction migration description that a lazy value
+      // regex truncated at the first '' pair (fixed by making the group greedy).
+      const sql = `EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Null inherits the agent type''s value (which, if also null, falls back to the selected model''s MaxInputTokens)',
+        @level0type=N'SCHEMA', @level0name=N'__mj',
+        @level1type=N'TABLE', @level1name=N'AIAgent',
+        @level2type=N'COLUMN', @level2name=N'ContextWindowMaxTokens'`;
+      const result = convert(sql);
+      expect(result).toContain(
+        "COMMENT ON COLUMN __mj.\"AIAgent\".\"ContextWindowMaxTokens\" IS 'Null inherits the agent type''s value (which, if also null, falls back to the selected model''s MaxInputTokens)';"
+      );
+    });
+
+    it('should preserve the full value when it contains escaped single quotes (positional params)', () => {
+      const sql = `EXEC sp_addextendedproperty N'MS_Description', N'The user''s preferred display name', 'SCHEMA', N'__mj', 'TABLE', N'Users', 'COLUMN', N'DisplayName'`;
+      const result = convert(sql);
+      expect(result).toContain(
+        "COMMENT ON COLUMN __mj.\"Users\".\"DisplayName\" IS 'The user''s preferred display name';"
+      );
+    });
+
+    it('should still terminate the value at the true closing quote when other literals follow', () => {
+      const sql = `EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Plain description',
         @level0type=N'SCHEMA', @level0name=N'__mj',
         @level1type=N'TABLE', @level1name=N'Users'`;
       const result = convert(sql);
-      expect(result).toContain("COMMENT ON TABLE __mj.\"Users\" IS 'Users table description';");
+      expect(result).toContain("COMMENT ON TABLE __mj.\"Users\" IS 'Plain description';");
     });
   });
 
