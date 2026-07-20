@@ -39,6 +39,7 @@ import { HybridJudge } from '../judge/HybridJudge.js';
 import { ToolProvider } from '../tools/ToolProvider.js';
 import { ResponseParser } from './ResponseParser.js';
 import { RunContext } from './RunContext.js';
+import { computePerceptualHash, hashesSimilar } from '../utils/perceptual-hash.js';
 
 import { RunComputerUseParams, ModelConfig } from '../types/params.js';
 import { ComputerUseResult } from '../types/results.js';
@@ -59,6 +60,7 @@ import {
     JudgeVerdict,
     StepRecord,
     EveryStepFrequency,
+    OnStagnationFrequency,
 } from '../types/judge.js';
 import type { JudgeFrequency } from '../types/judge.js';
 import {
@@ -256,7 +258,13 @@ export class ComputerUseEngine {
      * the judge and the engine.
      */
     private initializeJudge(params: RunComputerUseParams): void {
-        const heuristicJudge = new HeuristicJudge();
+        // Wire the OnStagnation threshold through to the heuristic judge (CU-B2).
+        // Previously this parsed config was dropped on the floor and the judge
+        // always used its default threshold.
+        const frequency = params.JudgeFrequency;
+        const heuristicJudge = frequency instanceof OnStagnationFrequency
+            ? new HeuristicJudge(frequency.StagnationThreshold)
+            : new HeuristicJudge();
         const llmJudge = new LLMJudge(
             (request) => this.executeJudgePrompt(request),
             params.JudgePrompt
@@ -418,9 +426,12 @@ export class ComputerUseEngine {
     /** Max consecutive steps with 0 actions before the engine aborts */
     private static readonly MAX_CONSECUTIVE_EMPTY_STEPS = 3;
 
+    private static readonly MAX_CONSECUTIVE_JUDGE_DISAGREEMENTS = 3;
+
     private async executeMainLoop(context: RunContext): Promise<ComputerUseResult> {
         let lastVerdict: JudgeVerdict | undefined;
         let consecutiveEmptySteps = 0;
+        let consecutiveJudgeDisagreements = 0;
 
         for (let stepNumber = 1; stepNumber <= context.Params.MaxSteps; stepNumber++) {
             // Check cancellation
@@ -433,8 +444,12 @@ export class ComputerUseEngine {
             context.AddStep(step);
             this.onStepComplete(step, context.Params);
 
-            // Track consecutive steps with no actions and no tool calls
-            if (step.ActionsRequested.length === 0 && step.ToolCalls.length === 0) {
+            // Track consecutive steps where the controller produced NOTHING to do.
+            // A step that requested judgement (a deliberate "am I done?" checkpoint)
+            // or that errored is NOT a misconfigured/stuck empty step, so it must
+            // not count toward the "controller produced no actions" abort (CU-B3).
+            const producedNothing = step.ActionsRequested.length === 0 && step.ToolCalls.length === 0;
+            if (producedNothing && !step.RequestedJudgement && !step.Error) {
                 consecutiveEmptySteps++;
                 const abortResult = this.buildEmptyStepAbortResult(consecutiveEmptySteps, context, lastVerdict);
                 if (abortResult) return abortResult;
@@ -461,6 +476,23 @@ export class ComputerUseEngine {
                     this.onRunComplete(result);
                     return result;
                 }
+            }
+
+            // If the controller keeps parking on "I'm done / it's blocked" (no
+            // actions, requested judgement) but the judge keeps disagreeing, that
+            // is a genuine, truthful Failed outcome — not an infrastructure Error
+            // and not worth burning the rest of the step budget (CU-B3).
+            if (producedNothing && step.RequestedJudgement && step.JudgeVerdict &&
+                !step.JudgeVerdict.Done && !step.JudgeVerdict.Impossible) {
+                consecutiveJudgeDisagreements++;
+                if (consecutiveJudgeDisagreements >= ComputerUseEngine.MAX_CONSECUTIVE_JUDGE_DISAGREEMENTS) {
+                    this.log(`Step ${stepNumber} — controller declared completion ${consecutiveJudgeDisagreements}× but the judge disagreed each time; ending as Failed (CU-B3)`);
+                    const result = this.buildResult(context, 'Failed', false, lastVerdict);
+                    this.onRunComplete(result);
+                    return result;
+                }
+            } else {
+                consecutiveJudgeDisagreements = 0;
             }
         }
 
@@ -519,41 +551,87 @@ export class ComputerUseEngine {
         const stepStart = performance.now();
         const step = new StepRecord();
         step.StepNumber = stepNumber;
-        step.Url = this.browserAdapter.CurrentUrl;
+        step.StartedAt = Date.now();
+        step.UrlBefore = this.browserAdapter.CurrentUrl;
+        step.Url = step.UrlBefore;        // back-compat alias for UrlBefore
+        step.UrlAfter = step.UrlBefore;   // updated after actions run (CU-A8)
 
         try {
-            // 1. Capture screenshot
             this.log(`Step ${stepNumber}/${context.Params.MaxSteps}`);
+
+            // 1. Settle: let the page render after the previous step's actions
+            //    before we perceive. Fixed delay for now; CU-A1 replaces this
+            //    with an adaptive settle loop. Timed separately (SettleMs) so
+            //    agent-time accounting can exclude environment wait (CU-F1/B4).
+            const settleStart = performance.now();
+            const delayMs = context.Params.ScreenshotDelayMs;
+            if (delayMs > 0) {
+                await new Promise<void>(resolve => setTimeout(resolve, delayMs));
+            }
+            step.SettleMs = performance.now() - settleStart;
+
+            // 2. Capture screenshot + perceptual hash (CU-F6)
+            const screenshotStart = performance.now();
             const screenshot = await this.captureScreenshot(context);
             step.Screenshot = screenshot;
+            step.ScreenshotHash = computePerceptualHash(screenshot);
+            step.ScreenshotMs = performance.now() - screenshotStart;
             this.log(`Step ${stepNumber} — screenshot captured (${Math.round(screenshot.length / 1024)}KB base64)`);
 
-            // 2. Build controller request
+            // 3. Build controller request + call controller LLM (timed — CU-F1)
             const request = this.buildControllerRequest(context, stepNumber);
-
-            // 3. Call controller LLM
+            const llmStart = performance.now();
             const response = await this.executeControllerWithRetry(request);
+            step.LlmMs = performance.now() - llmStart;
             step.ControllerReasoning = response.Reasoning;
             step.ActionsRequested = response.Actions;
 
-            // Track if controller requested immediate judgement
+            // A step that asks for judgement is a deliberate checkpoint, not an
+            // empty/stuck step — record it so the main loop's empty-step abort
+            // does not misfire (CU-B3).
             const controllerRequestedJudgement = response.RequestJudgement ?? false;
+            step.RequestedJudgement = controllerRequestedJudgement;
             if (controllerRequestedJudgement) {
                 this.log(`Step ${stepNumber} — controller requested immediate judgement evaluation`);
             }
 
-            // 4. Log response details
             this.logControllerResponse(stepNumber, response);
 
-            // 5. Execute tool calls, browser actions, and update URL
+            // 4. Execute tool calls + browser actions (timed — CU-F1); record post-action URL (CU-A8)
+            const actionStart = performance.now();
             await this.executeStepActions(response, context, step, stepNumber);
+            step.ActionMs = performance.now() - actionStart;
+            step.UrlAfter = this.browserAdapter.CurrentUrl;
 
-            // 6. Evaluate judge (always evaluate if controller requested it, otherwise check frequency)
-            if (controllerRequestedJudgement || this.shouldEvaluateJudge(stepNumber, context.Params)) {
+            // 5. Evaluate judge. Gate (CU-G5): if the controller did not explicitly
+            //    request judgement and the visible state is unchanged since the last
+            //    judged step (same perceptual hash) with a non-terminal prior verdict,
+            //    skip the (expensive) re-judge — nothing changed, the prior verdict
+            //    still stands. This kills the ~12 redundant "still stuck" judge calls
+            //    on a stalled/looping run.
+            const scheduledJudge = this.shouldEvaluateJudge(stepNumber, context.Params);
+            const stateUnchanged =
+                context.LastJudgedHash !== undefined &&
+                step.ScreenshotHash !== '' &&
+                hashesSimilar(context.LastJudgedHash, step.ScreenshotHash) &&
+                context.LastJudgeVerdict !== undefined &&
+                !context.LastJudgeVerdict.Done &&
+                !context.LastJudgeVerdict.Impossible;
+            const runJudge = controllerRequestedJudgement || (scheduledJudge && !stateUnchanged);
+
+            if (scheduledJudge && stateUnchanged && !controllerRequestedJudgement) {
+                this.log(`Step ${stepNumber} — skipping judge: visible state unchanged since last judged step (CU-G5)`);
+            }
+
+            if (runJudge) {
                 if (controllerRequestedJudgement) {
                     this.log(`Step ${stepNumber} — evaluating judge (controller request)`);
                 }
-                step.JudgeVerdict = await this.evaluateJudge(context, stepNumber, controllerRequestedJudgement);
+                const judgeStart = performance.now();
+                step.JudgeVerdict = await this.evaluateJudge(context, stepNumber, controllerRequestedJudgement, step.ScreenshotHash);
+                step.JudgeMs = performance.now() - judgeStart;
+                context.LastJudgedHash = step.ScreenshotHash;
+                context.LastJudgeVerdict = step.JudgeVerdict;
                 if (step.JudgeVerdict) {
                     this.log(`Step ${stepNumber} — judge verdict: Done=${step.JudgeVerdict.Done}, Impossible=${step.JudgeVerdict.Impossible}, Confidence=${step.JudgeVerdict.Confidence}, Reason: ${step.JudgeVerdict.Reason}`);
                 }
@@ -564,7 +642,7 @@ export class ComputerUseEngine {
         }
 
         step.DurationMs = performance.now() - stepStart;
-        this.log(`Step ${stepNumber} — completed in ${Math.round(step.DurationMs)}ms`);
+        this.log(`Step ${stepNumber} — completed in ${Math.round(step.DurationMs)}ms (settle ${Math.round(step.SettleMs)}ms · llm ${Math.round(step.LlmMs)}ms · action ${Math.round(step.ActionMs)}ms · judge ${Math.round(step.JudgeMs)}ms)`);
         return step;
     }
 
@@ -645,12 +723,8 @@ export class ComputerUseEngine {
     // ─── Screenshot Capture ─────────────────────────────────
 
     private async captureScreenshot(context: RunContext): Promise<string> {
-        // Wait before capturing to let the page render after actions
-        const delayMs = context.Params.ScreenshotDelayMs;
-        if (delayMs > 0) {
-            await new Promise<void>(resolve => setTimeout(resolve, delayMs));
-        }
-
+        // The settle delay is owned and timed by executeSingleStep (SettleMs)
+        // so it is not conflated with capture time; here we only capture.
         const screenshot = await this.browserAdapter.CaptureScreenshot();
         context.AddScreenshot(screenshot);
         return screenshot;
@@ -775,25 +849,91 @@ export class ComputerUseEngine {
      * If the LLM returns unparseable output, we retry once with
      * stricter format instructions appended.
      */
+    private static readonly CONTROLLER_MAX_ATTEMPTS = 3;
+
+    /**
+     * Call the controller with bounded retry for transient failures (CU-B3).
+     *
+     * The controller LLM is nondeterministic and, under host/provider load,
+     * transiently fails (rate limits, transport errors) or returns an
+     * unparseable response. Previously this method retried nothing — a single
+     * hiccup produced an empty step, and three in a row killed the run as an
+     * infrastructure 'Error' precisely when the environment was worst. Now:
+     *  - a thrown transport/rate-limit error is retried with exponential
+     *    backoff + jitter;
+     *  - an empty response whose reasoning matches a transient/parse signature
+     *    is retried (a fresh sample may parse);
+     *  - a genuine, well-formed empty response (e.g. a config error, or an
+     *    intentional judgement request) is returned immediately — retrying it
+     *    would not help.
+     */
     private async executeControllerWithRetry(
         request: ControllerPromptRequest
     ): Promise<ControllerPromptResponse> {
-        const response = await this.executeControllerPrompt(request);
+        const maxAttempts = ComputerUseEngine.CONTROLLER_MAX_ATTEMPTS;
+        let lastResponse: ControllerPromptResponse | undefined;
+        let lastError: unknown;
 
-        // If we got actions or tool calls, the parse succeeded
-        if (response.Actions.length > 0 || response.ToolCalls.length > 0) {
-            return response;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                const response = await this.executeControllerPrompt(request);
+
+                // Actionable (or a deliberate judgement request) → success.
+                if (response.Actions.length > 0 || response.ToolCalls.length > 0 || (response.RequestJudgement ?? false)) {
+                    return response;
+                }
+
+                lastResponse = response;
+                if (attempt === maxAttempts || !this.isTransientControllerResponse(response)) {
+                    return response;
+                }
+                this.log(`Controller returned a transient/unparseable response (attempt ${attempt}/${maxAttempts}); retrying after backoff`);
+            } catch (error) {
+                lastError = error;
+                this.logError(`Controller call threw (attempt ${attempt}/${maxAttempts})`, error);
+                if (attempt === maxAttempts) {
+                    break;
+                }
+            }
+            await this.backoffDelay(attempt);
         }
 
-        // If reasoning suggests a parse failure, retry once
-        if (response.Reasoning.includes('parse error') ||
-            response.Reasoning.includes('Failed to extract JSON')) {
-            // Second attempt — the response already has a raw response,
-            // try re-parsing it before giving up
-            return response;
+        if (lastResponse) {
+            return lastResponse;
         }
-
+        // Every attempt threw — surface the failure as a controller response so
+        // the step records it (rather than throwing out of the loop, which the
+        // caller's try/catch would then log as a generic step error).
+        const response = new ControllerPromptResponse();
+        response.Reasoning = `Controller call failed after ${maxAttempts} attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`;
+        response.RawResponse = response.Reasoning;
         return response;
+    }
+
+    /**
+     * True for an empty controller response worth retrying — a transient LLM
+     * failure or an unparseable payload. A missing-model configuration error is
+     * NOT transient and returns false (retrying cannot fix configuration).
+     */
+    private isTransientControllerResponse(response: ControllerPromptResponse): boolean {
+        const reasoning = response.Reasoning ?? '';
+        if (reasoning.includes('No controller model configured')) {
+            return false;
+        }
+        return (
+            reasoning.includes('LLM call failed') ||
+            reasoning.includes('parse error') ||
+            reasoning.includes('Failed to extract JSON') ||
+            reasoning.includes('timeout') ||
+            reasoning.includes('rate limit')
+        );
+    }
+
+    /** Exponential backoff (250ms, 500ms, …) with jitter, bounded by attempt. */
+    private async backoffDelay(attempt: number): Promise<void> {
+        const base = 250 * Math.pow(2, attempt - 1);
+        const jitter = Math.random() * 100;
+        await new Promise<void>(resolve => setTimeout(resolve, base + jitter));
     }
 
     // ─── Tool Call Execution ────────────────────────────────
@@ -936,11 +1076,13 @@ export class ComputerUseEngine {
     private async evaluateJudge(
         context: RunContext,
         stepNumber: number,
-        controllerRequestedJudgement: boolean = false
+        controllerRequestedJudgement: boolean = false,
+        currentScreenshotHash: string = ''
     ): Promise<JudgeVerdict> {
         const judgeContext = new JudgeContext();
         judgeContext.Goal = context.Params.Goal;
         judgeContext.CurrentScreenshot = context.CurrentScreenshot;
+        judgeContext.CurrentScreenshotHash = currentScreenshotHash;
         judgeContext.ScreenshotHistory = context.ScreenshotHistory;
         judgeContext.StepHistory = context.StepHistory;
         judgeContext.StepNumber = stepNumber;

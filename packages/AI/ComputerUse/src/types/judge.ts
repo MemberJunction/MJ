@@ -25,6 +25,13 @@ export class JudgeContext {
     public Goal: string = '';
     /** Current screenshot as base64 PNG */
     public CurrentScreenshot: string = '';
+    /**
+     * Perceptual (dHash) fingerprint of the current screenshot (CU-F6). Lets the
+     * heuristic judge detect stagnation across near-identical frames — including
+     * animated spinners, which byte-equality never catches — without re-decoding
+     * the PNG (the engine computes the hash once at capture). '' when unavailable.
+     */
+    public CurrentScreenshotHash: string = '';
     /** Recent screenshots as base64 PNGs (bounded by ScreenshotHistoryDepth) */
     public ScreenshotHistory: string[] = [];
     /** History of all steps executed so far */
@@ -112,6 +119,13 @@ export class StepRecord {
     public StepNumber: number = 0;
     /** Screenshot captured at the start of this step (base64 PNG) */
     public Screenshot: string = '';
+    /**
+     * Perceptual (dHash) fingerprint of this step's screenshot (CU-F6).
+     * 16-char hex, or '' when the frame could not be hashed. Shared signal for
+     * loop/stagnation detection, screenshot dedupe, judge-call gating, and
+     * failure classification. App-agnostic — derived from pixels only.
+     */
+    public ScreenshotHash: string = '';
     /** The controller's reasoning for this step */
     public ControllerReasoning: string = '';
     /** Browser actions the controller requested */
@@ -122,10 +136,45 @@ export class StepRecord {
     public ToolCalls: ToolCallRecord[] = [];
     /** Judge verdict (if the judge was consulted this step) */
     public JudgeVerdict?: JudgeVerdict;
+    /**
+     * Whether the controller explicitly requested judgement this step (CU-B3).
+     * Such a step is a deliberate "am I done?" checkpoint, not a stuck/misconfigured
+     * empty step — the main loop must not count it toward the empty-step abort.
+     */
+    public RequestedJudgement: boolean = false;
     /** Total duration of this step in milliseconds */
     public DurationMs: number = 0;
     /** Error that occurred during this step (if applicable) */
     public Error?: ComputerUseError;
-    /** URL of the page at the start of this step */
+    /**
+     * URL of the page at the START of this step (before this step's actions ran).
+     * Retained as `Url` for back-compat; prefer `UrlBefore`/`UrlAfter`.
+     */
     public Url: string = '';
+
+    // ─── CU-A8: before/after URLs ──────────────────────────
+    /** URL at the start of the step (== `Url`). */
+    public UrlBefore: string = '';
+    /** URL after this step's actions executed. Use this for loop detection and judge context. */
+    public UrlAfter: string = '';
+
+    // ─── CU-F1: split-phase timings (ms), for "app slow vs LLM slow vs agent lost" ───
+    /** Wall-clock epoch (ms) when this step began. */
+    public StartedAt: number = 0;
+    /** Time spent waiting for the page to settle before perceiving (engine-side; not agent reasoning). */
+    public SettleMs: number = 0;
+    /** Time spent capturing (and hashing) the screenshot. */
+    public ScreenshotMs: number = 0;
+    /** Time spent in the controller LLM call. */
+    public LlmMs: number = 0;
+    /** Time spent executing this step's browser actions + tool calls. */
+    public ActionMs: number = 0;
+    /** Time spent in the judge (heuristic + LLM) this step. */
+    public JudgeMs: number = 0;
+
+    // ─── CU-F2: correlation IDs (opaque strings; populated by Layer 2) ───
+    /** Correlation id for the controller LLM invocation (e.g. an MJ AIPromptRun ID). */
+    public ControllerPromptRunId?: string;
+    /** Correlation id for the judge LLM invocation, when the judge ran this step. */
+    public JudgePromptRunId?: string;
 }

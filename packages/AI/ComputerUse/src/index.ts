@@ -40,3 +40,6 @@ export * from './engine/ComputerUseEngine.js';
 
 // ─── Tool Exports ──────────────────────────────────────────
 export * from './tools/ToolProvider.js';
+
+// ─── Utility Exports ───────────────────────────────────────
+export * from './utils/perceptual-hash.js';

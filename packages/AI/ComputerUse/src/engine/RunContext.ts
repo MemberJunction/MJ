@@ -15,7 +15,7 @@
  */
 
 import { RunComputerUseParams } from '../types/params.js';
-import { StepRecord } from '../types/judge.js';
+import { StepRecord, JudgeVerdict } from '../types/judge.js';
 
 export class RunContext {
     /** Immutable reference to the original run parameters */
@@ -29,6 +29,15 @@ export class RunContext {
 
     /** Judge feedback from the previous step (injected into the next controller prompt) */
     public LastJudgeFeedback?: string;
+
+    /**
+     * Perceptual hash of the screenshot the judge last evaluated (CU-G5).
+     * Used to skip re-judging an unchanged visible state.
+     */
+    public LastJudgedHash?: string;
+
+    /** The last judge verdict, reused when the state is unchanged (CU-G5). */
+    public LastJudgeVerdict?: JudgeVerdict;
 
     /** Run start timestamp (for total duration calculation) */
     public readonly StartTime: number;
