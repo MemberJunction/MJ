@@ -40,6 +40,14 @@ export class VectorSearchProvider extends BaseSearchProvider {
     private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
     /**
+     * Cache of vector index ID (lowercased) → fallback entity name resolved from the
+     * index's entity documents. `null` = unresolvable (no documents, or documents for
+     * multiple entities — ambiguous). Used when vector metadata omits the `Entity` key
+     * (e.g. indexes populated with fieldStrategy 'explicit').
+     */
+    private indexEntityNameCache = new Map<string, string | null>();
+
+    /**
      * Check and cache availability. Requires at least one vector index to be
      * configured. Called by SearchEngine during Config().
      */
@@ -319,7 +327,8 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 fusion: 'rrf',
                 includeMetadata: true,
             }, contextUser);
-            return this.convertMatches(colocated.matches, vectorIndex.Name);
+            const fallbackEntity = await this.getFallbackEntityName(colocated.matches, vectorIndex, contextUser);
+            return this.convertMatches(colocated.matches, vectorIndex.Name, fallbackEntity);
         }
 
         // contextUser is passed as the 2nd arg per VectorDBBase.QueryIndex's
@@ -340,17 +349,68 @@ export class VectorSearchProvider extends BaseSearchProvider {
             return [];
         }
 
-        return this.convertMatches(response.data.matches, vectorIndex.Name);
+        const fallbackEntity = await this.getFallbackEntityName(response.data.matches, vectorIndex, contextUser);
+        return this.convertMatches(response.data.matches, vectorIndex.Name, fallbackEntity);
+    }
+
+    /**
+     * Resolve a fallback entity name for matches whose metadata omits the `Entity` key
+     * (e.g. indexes populated with fieldStrategy 'explicit'). Only does the lookup when
+     * at least one match actually needs it; result is cached per index.
+     */
+    private async getFallbackEntityName(
+        matches: Array<{ metadata?: Record<string, unknown> }> | undefined,
+        vectorIndex: MJVectorIndexEntity,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        if (!matches?.some(m => !m.metadata?.['Entity'])) {
+            return null;
+        }
+        return this.resolveIndexEntityName(vectorIndex.ID, contextUser);
+    }
+
+    /**
+     * Resolve the entity name an index serves by inspecting its entity documents.
+     * Unambiguous only when every entity document targeting the index vectorizes
+     * the same entity — otherwise returns null and results stay 'Unknown'.
+     */
+    private async resolveIndexEntityName(vectorIndexID: string, contextUser: UserInfo): Promise<string | null> {
+        const cacheKey = vectorIndexID.toLowerCase();
+        const cached = this.indexEntityNameCache.get(cacheKey);
+        if (cached !== undefined) return cached;
+
+        let entityName: string | null = null;
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<{ Entity: string }>({
+                EntityName: 'MJ: Entity Documents',
+                Fields: ['Entity'],
+                ExtraFilter: `VectorIndexID='${vectorIndexID}'`,
+                ResultType: 'simple'
+            }, contextUser);
+            if (result.Success) {
+                const distinct = new Set(result.Results.map(r => r.Entity).filter(Boolean));
+                if (distinct.size === 1) {
+                    entityName = distinct.values().next().value ?? null;
+                }
+            }
+        } catch (error) {
+            LogError(`VectorSearchProvider: Failed to resolve entity name for vector index ${vectorIndexID}: ${error}`);
+        }
+
+        this.indexEntityNameCache.set(cacheKey, entityName);
+        return entityName;
     }
 
     /** Convert vector DB matches to SearchResultItem[] */
     private convertMatches(
         matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
-        indexName: string
+        indexName: string,
+        fallbackEntityName?: string | null
     ): SearchResultItem[] {
         return matches.map(match => {
             const meta = match.metadata ?? {};
-            const entityName = (meta['Entity'] as string) ?? 'Unknown';
+            const entityName = (meta['Entity'] as string) ?? fallbackEntityName ?? 'Unknown';
             // Vector metadata stores RecordID in CompositeKey URL format: "FieldName|Value" or "F1|V1||F2|V2"
             // Use CompositeKey to properly parse it, then extract just the values for consistent
             // matching with entity search results (which use plain record IDs)

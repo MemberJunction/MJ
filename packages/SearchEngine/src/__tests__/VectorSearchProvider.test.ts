@@ -276,6 +276,118 @@ describe('VectorSearchProvider', () => {
             expect(results[0].EntityName).toBe('Unknown');
         });
 
+        it('should use the fallback entity name when metadata has no Entity field', () => {
+            const convertFn = (provider as unknown as {
+                convertMatches: (
+                    matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
+                    indexName: string,
+                    fallbackEntityName?: string | null
+                ) => Array<{ EntityName: string }>
+            }).convertMatches;
+
+            const results = convertFn.call(provider, [
+                { id: 'match-1', score: 0.5, metadata: {} },
+                { id: 'match-2', score: 0.4, metadata: { Entity: 'Companies' } },
+            ], 'test-index', 'Content Items');
+
+            // Missing Entity → fallback; explicit Entity metadata always wins
+            expect(results[0].EntityName).toBe('Content Items');
+            expect(results[1].EntityName).toBe('Companies');
+        });
+
+        it('should resolve record identity from the vector ID when RecordID metadata is absent', () => {
+            const convertFn = (provider as unknown as {
+                convertMatches: (
+                    matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
+                    indexName: string
+                ) => Array<{ RecordID: string }>
+            }).convertMatches;
+
+            // Vector populated with vectorIdStrategy 'recordId' + fieldStrategy 'explicit':
+            // the vector ID IS the record's UUID and metadata carries no RecordID
+            const results = convertFn.call(provider, [
+                { id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', score: 0.5, metadata: {} },
+            ], 'test-index');
+
+            expect(results[0].RecordID).toBe('a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+        });
+    });
+
+    describe('getFallbackEntityName / resolveIndexEntityName', () => {
+        type GetFallback = (
+            matches: Array<{ metadata?: Record<string, unknown> }> | undefined,
+            vectorIndex: { ID: string },
+            contextUser: UserInfo
+        ) => Promise<string | null>;
+
+        function getFallbackFn(): GetFallback {
+            return (provider as unknown as { getFallbackEntityName: GetFallback }).getFallbackEntityName.bind(provider);
+        }
+
+        it('should skip the lookup entirely when every match carries Entity metadata', async () => {
+            const result = await getFallbackFn()(
+                [{ metadata: { Entity: 'People' } }, { metadata: { Entity: 'People' } }],
+                { ID: 'idx-1' },
+                contextUser
+            );
+            expect(result).toBeNull();
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('should resolve the entity name from the index entity documents when a match lacks Entity', async () => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ Entity: 'Content Items' }],
+            });
+
+            const result = await getFallbackFn()(
+                [{ metadata: {} }],
+                { ID: 'idx-1' },
+                contextUser
+            );
+            expect(result).toBe('Content Items');
+            expect(mockRunViewFn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    EntityName: 'MJ: Entity Documents',
+                    ExtraFilter: `VectorIndexID='idx-1'`,
+                }),
+                contextUser
+            );
+        });
+
+        it('should return null when the index serves multiple entities (ambiguous)', async () => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ Entity: 'Content Items' }, { Entity: 'People' }],
+            });
+
+            const result = await getFallbackFn()([{ metadata: {} }], { ID: 'idx-2' }, contextUser);
+            expect(result).toBeNull();
+        });
+
+        it('should cache the resolution per index (one lookup for repeated queries)', async () => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ Entity: 'Content Items' }],
+            });
+
+            const fn = getFallbackFn();
+            await fn([{ metadata: {} }], { ID: 'idx-3' }, contextUser);
+            await fn([{ metadata: {} }], { ID: 'idx-3' }, contextUser);
+            await fn([{ metadata: {} }], { ID: 'IDX-3' }, contextUser); // case-insensitive cache key
+
+            expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+        });
+
+        it('should return null (and not throw) when the lookup fails', async () => {
+            mockRunViewFn.mockRejectedValue(new Error('DB unavailable'));
+
+            const result = await getFallbackFn()([{ metadata: {} }], { ID: 'idx-4' }, contextUser);
+            expect(result).toBeNull();
+        });
+    });
+
+    describe('Search — score handling', () => {
         it('should handle zero score in metadata', () => {
             const convertFn = (provider as unknown as {
                 convertMatches: (
