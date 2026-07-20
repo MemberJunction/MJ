@@ -53,7 +53,7 @@ import { IntegrationProgressReader } from "@memberjunction/integration-progress-
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
-import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
+import { ComputeRemovedDependencyWarnings, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
@@ -5735,6 +5735,18 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // ── Phase 3 — REMOVED objects: disable EM + EFMs (data + tables KEPT) ──
             // Uses the same remove-as-disable helper as ApplyAll: everything not in the resolved
             // set is disabled; a later re-appearance re-enables (reactivate-on-rediscover).
+            // DAG advisory (rsuplan "adding and removing tables"): dependents of a removed object
+            // are NOT auto-removed — each broken parent edge is surfaced as a warning so a consumer
+            // can prompt the user to force-remove (or re-add). Edges come from the same dependency
+            // map the sync engine layers by.
+            const dagRemovalWarnings: string[] = removedObjects.length > 0
+                ? ComputeRemovedDependencyWarnings(
+                    activeIOs.map(io => io.Name),
+                    removedObjects,
+                    this.computeObjectDependencyNames(companyIntegration.IntegrationID),
+                  )
+                : [];
+            for (const w of dagRemovalWarnings) LogStatus(`[SchemaEvolution][DAG] ${w}`);
             if (removedObjects.length > 0) {
                 await DisableUnselectedEntityMaps(companyIntegrationID, activeIOs.map(io => io.Name), user, md);
             }
@@ -5748,6 +5760,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         ? `No objects to evolve — ${removedObjects.length} removed object(s) disabled`
                         : 'No entity maps and no resolved objects — nothing to evolve',
                     RemovedObjects: removedObjects.length > 0 ? removedObjects : undefined,
+                    Warnings: dagRemovalWarnings.length > 0 ? dagRemovalWarnings : undefined,
                 };
             }
             const objects = this.buildObjectInputsFromNames(evolveNames, schemaName);
@@ -5976,7 +5989,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 RemovedObjects: removedObjects.length > 0 ? removedObjects : undefined,
                 ChangedObjects: changedObjects.length > 0 ? changedObjects : undefined,
                 WatermarksReset: watermarksReset.length > 0 ? watermarksReset : undefined,
-                Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
+                Warnings: (dagRemovalWarnings.length + schemaOutput.Warnings.length) > 0
+                    ? [...dagRemovalWarnings, ...schemaOutput.Warnings]
+                    : undefined,
             };
         } catch (e) {
             LogError(`IntegrationSchemaEvolution error: ${e}`);

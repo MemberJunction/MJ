@@ -116,6 +116,39 @@ async function SetFieldMapsStatus(
 }
 
 /**
+ * DAG-aware removal advisory (rsuplan "adding and removing tables"): when a removal
+ * disables object X but a STILL-ACTIVE object depends on X (hard-FK or soft-FK parent edge —
+ * the same edges the sync engine layers by), the dependents are NOT auto-removed; instead each
+ * broken dependency is surfaced as a warning so a consumer can prompt the user to force-remove
+ * (or re-add) them. Pure + deterministic for unit testing: callers supply the parent map.
+ *
+ * @param activeObjectNames  objects remaining active after the removal
+ * @param removedObjectNames objects being removed/disabled this pass
+ * @param parentsByLowerName object name (lowercased) → its parent object names (the DAG edges)
+ * @returns one warning per active object that depends on ≥1 removed object
+ */
+export function ComputeRemovedDependencyWarnings(
+    activeObjectNames: string[],
+    removedObjectNames: string[],
+    parentsByLowerName: Map<string, string[]>,
+): string[] {
+    if (removedObjectNames.length === 0 || activeObjectNames.length === 0) return [];
+    const removedLower = new Set(removedObjectNames.map(n => n.toLowerCase()));
+    const warnings: string[] = [];
+    for (const name of activeObjectNames) {
+        const parents = parentsByLowerName.get(name.toLowerCase()) ?? [];
+        const cut = parents.filter(p => removedLower.has(p.toLowerCase()));
+        if (cut.length > 0) {
+            warnings.push(
+                `Object '${name}' remains active but depends on removed object(s) ${cut.map(c => `'${c}'`).join(', ')} — ` +
+                `its parent references cannot resolve until they return; review whether '${name}' should be removed too (force-remove) or the parent re-added.`
+            );
+        }
+    }
+    return warnings;
+}
+
+/**
  * U10 schema-change: resets the PULL watermark for the given entity maps so the
  * next sync ignores the incremental cursor, re-fetches the full object, and BACKFILLS rows
  * for newly-added columns (content-hash keeps genuinely-unchanged mapped values write-free
