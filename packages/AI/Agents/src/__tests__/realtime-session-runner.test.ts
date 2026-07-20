@@ -1424,6 +1424,56 @@ describe('QA re-audit: reconnect × abort × delegation interaction seams', () =
         expect(model.Sessions).toHaveLength(2); // exactly one reconnect, not two concurrent
     });
 
+    it('DRAIN: Stop() waits for queued transcript writes, and a turn that lands during the drain is counted', async () => {
+        // Transcript frames are fire-and-forget, so the last turns' writes can still be in flight at
+        // teardown. Stop() must drain them BEFORE building the result, or the tail is lost and the turn
+        // count undercounts.
+        let releaseWrite: (() => void) | null = null;
+        let resolvedTurnId: string | null = null;
+        const pending = new Promise<void>((resolve) => { releaseWrite = resolve; });
+        const h = buildHarness({
+            PersistTranscript: async () => { await pending; resolvedTurnId = 'detail-late'; return resolvedTurnId; },
+            FlushTranscripts: async () => { await pending; },
+        });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+        h.session.fireTranscript({ Role: 'user', Text: 'last words', IsFinal: true });
+        await Promise.resolve();
+        const stopPromise = runner.Stop();      // must NOT resolve while the write is still queued
+        let settled = false;
+        void stopPromise.then(() => { settled = true; });
+        await new Promise((r) => setTimeout(r, 0));
+        expect(settled).toBe(false);            // Stop is waiting on the drain
+        releaseWrite?.();                        // the write completes
+        const result = await stopPromise;
+        expect(resolvedTurnId).toBe('detail-late');
+        expect(result.TranscriptTurnCount).toBe(1); // counted because the drain ran before buildResult
+    });
+
+    it('DRAIN: a HUNG transcript write cannot wedge teardown — Stop() finalizes at the bound', async () => {
+        vi.useFakeTimers();
+        const h = buildHarness({
+            // Never settles — models a stuck DB call at teardown.
+            FlushTranscripts: () => new Promise<void>(() => { /* hangs forever */ }),
+            TranscriptFlushTimeoutMs: 5000,
+        });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+        const stopPromise = runner.Stop();
+        await vi.advanceTimersByTimeAsync(5001);   // cross the bound
+        const result = await stopPromise;          // finalizes anyway rather than hanging
+        expect(result.Success).toBe(true);
+        vi.useRealTimers();
+    });
+
+    it('DRAIN: a REJECTED drain is swallowed — teardown still finalizes', async () => {
+        const h = buildHarness({ FlushTranscripts: async () => { throw new Error('db exploded'); } });
+        const runner = new RealtimeSessionRunner(h.deps);
+        await runner.Start();
+        const result = await runner.Stop();
+        expect(result.Success).toBe(true);
+    });
+
     it('SEAM-3/W1: accumulated usage from BEFORE the drop survives the reconnect (summed with post-reconnect usage)', async () => {
         const model = new (class extends BaseRealtimeModel {
             public Sessions: MockRealtimeSession[] = [];
