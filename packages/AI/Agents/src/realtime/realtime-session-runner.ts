@@ -152,6 +152,29 @@ export interface RealtimeSessionRunnerDeps {
     FinalizeRecording?: () => Promise<void>;
 
     /**
+     * Drains any transcript writes still queued by {@link PersistTranscript}.
+     *
+     * Transcript frames are dispatched FIRE-AND-FORGET (so a slow write can never stall the
+     * conversation), which means writes for the final turns of a session can still be in flight when
+     * {@link RealtimeSessionRunner.Stop} runs. Without this drain those writes land AFTER the runner
+     * has returned its result — the turn count can undercount, and a process torn down promptly after
+     * the session (serverless / container stop) can lose the tail.
+     *
+     * Called during {@link RealtimeSessionRunner.Stop} AFTER the provider session is closed (so no new
+     * frames can arrive) and BEFORE the result is built. Bounded by
+     * {@link TranscriptFlushTimeoutMs} — a hung write must never wedge teardown. Optional: when
+     * omitted the drain is skipped entirely (existing behavior).
+     */
+    FlushTranscripts?: () => Promise<void>;
+
+    /**
+     * Upper bound (ms) on the {@link FlushTranscripts} drain during teardown. Defaults to 5000. On
+     * expiry the runner logs and finalizes anyway — losing a tail write is strictly better than
+     * hanging the session teardown on a stuck database call.
+     */
+    TranscriptFlushTimeoutMs?: number;
+
+    /**
      * Checkpoints the *accumulated* usage onto the single long-lived `AIPromptRun`. The runner
      * accumulates `OnUsage` deltas and invokes this on a debounced cadence and on close, so a
      * crash-driven janitor close finalizes from the last-persisted values and loses nothing.
@@ -223,6 +246,9 @@ export interface RealtimeSessionResult {
  * drive the session to completion, or {@link Start}/{@link Stop} to control it explicitly.
  */
 export class RealtimeSessionRunner {
+    /** Default upper bound (ms) on the teardown transcript drain — see `TranscriptFlushTimeoutMs`. */
+    private static readonly DefaultTranscriptFlushTimeoutMs = 5000;
+
     // ── Delegated-run progress narration (server-bridged B3) ──────────────────
     /** First spoken update fires no earlier than this long after a delegation burst starts. */
     private static readonly FirstNarrationDelayMs = 5000;
@@ -551,6 +577,43 @@ export class RealtimeSessionRunner {
             void this.Stop();
         } finally {
             this.reconnecting = false; // reconnect settled (success/fail) — allow the next one
+        }
+    }
+
+    /**
+     * Awaits the injected {@link RealtimeSessionRunnerDeps.FlushTranscripts} drain under a hard time
+     * bound, so queued transcript writes land before the result is built without letting a stuck write
+     * hang teardown. A timeout (or a rejected drain) is logged and swallowed — finalizing with a
+     * possibly-missing tail write is strictly better than never finalizing at all.
+     */
+    private async flushTranscriptsBounded(): Promise<void> {
+        const flush = this.deps.FlushTranscripts;
+        if (!flush) {
+            return;
+        }
+        const timeoutMs = this.deps.TranscriptFlushTimeoutMs ?? RealtimeSessionRunner.DefaultTranscriptFlushTimeoutMs;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        try {
+            await Promise.race([
+                flush(),
+                new Promise<void>((resolve) => {
+                    timer = setTimeout(() => {
+                        this.logError(
+                            `Timed out after ${timeoutMs}ms draining queued transcript writes; finalizing anyway (a tail write may be lost).`,
+                            'flushing transcripts'
+                        );
+                        resolve();
+                    }, timeoutMs);
+                    // Never hold the process open purely for this guard timer.
+                    (timer as unknown as { unref?: () => void }).unref?.();
+                }),
+            ]);
+        } catch (error) {
+            this.logError(error, 'flushing transcripts');
+        } finally {
+            if (timer) {
+                clearTimeout(timer);
+            }
         }
     }
 
@@ -918,6 +981,10 @@ export class RealtimeSessionRunner {
         } finally {
             this.session = null;
         }
+
+        // Drain queued transcript writes now that the socket is closed and no new frames can arrive.
+        // Bounded — a stuck write must not wedge teardown (see FlushTranscripts).
+        await this.flushTranscriptsBounded();
 
         // Finalize the recording AFTER the socket is closed: stop accumulating, then encode → store →
         // stamp the session. A recording failure is logged inside FinalizeRecording and must never fail

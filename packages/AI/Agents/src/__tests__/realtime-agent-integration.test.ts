@@ -326,6 +326,106 @@ describe('BaseAgent realtime (session-driven) integration', () => {
             expect(store.rows.get('detail-1')!.Message).toBe('set a timer'); // turn 1 preserved (not clobbered)
         });
 
+        it('CONCURRENCY: overlapping streamed captions (dispatched fire-and-forget) still collapse to ONE row', async () => {
+            // The runner dispatches transcript frames with `void this.handleTranscript(t)`, so frames for a
+            // role are processed CONCURRENTLY — nothing awaits the previous one. Reproduced in production:
+            // a Grok turn produced two byte-identical rows, the duplicate created 17ms BEFORE the first
+            // row's final update. Root cause: persist did a check-then-act on the in-flight map spanning
+            // awaits, so two captions both saw "no tracked row" and both took the create branch.
+            // NOTE: these are deliberately NOT awaited individually — that is the whole point.
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const params = makeParams({ provider: store.provider(), data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            const results = await Promise.all([
+                agent.callPersist(params, { Role: 'user', Text: 'set', IsFinal: true, ReplacesPrevious: false }),
+                agent.callPersist(params, { Role: 'user', Text: 'set a', IsFinal: true, ReplacesPrevious: true }),
+                agent.callPersist(params, { Role: 'user', Text: 'set a timer', IsFinal: true, ReplacesPrevious: true }),
+            ]);
+            expect(store.rows.size).toBe(1);                       // pre-fix: 2+ rows
+            expect(store.rows.get('detail-1')!.Message).toBe('set a timer'); // last caption wins, in place
+            expect(results.filter((r) => r !== null)).toEqual(['detail-1']); // exactly ONE new-turn signal
+        });
+
+        it('CONCURRENCY: an interim racing its own final still yields ONE row', async () => {
+            // The interim (create In-Progress) and the final (finalize in place) can also overlap. Pre-fix
+            // the final could start before the interim had written the tracked row, creating a second row.
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const params = makeParams({ provider: store.provider(), data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            await Promise.all([
+                agent.callPersist(params, { Role: 'user', Text: 'hel', IsFinal: false }),
+                agent.callPersist(params, { Role: 'user', Text: 'hello there', IsFinal: true }),
+            ]);
+            expect(store.rows.size).toBe(1);
+            expect(store.rows.get('detail-1')).toMatchObject({ Status: 'Complete', Message: 'hello there' });
+        });
+
+        it('CONCURRENCY: different roles are NOT serialized against each other (user + assistant overlap cleanly)', async () => {
+            // Roles own independent tracked rows, so they must not block each other — each still gets
+            // exactly one row.
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const params = makeParams({ provider: store.provider(), data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            await Promise.all([
+                agent.callPersist(params, { Role: 'user', Text: 'question', IsFinal: true, ReplacesPrevious: false }),
+                agent.callPersist(params, { Role: 'assistant', Text: 'answer', IsFinal: true, ReplacesPrevious: false }),
+                agent.callPersist(params, { Role: 'user', Text: 'question refined', IsFinal: true, ReplacesPrevious: true }),
+                agent.callPersist(params, { Role: 'assistant', Text: 'answer refined', IsFinal: true, ReplacesPrevious: true }),
+            ]);
+            expect(store.rows.size).toBe(2); // one user row, one assistant row
+            const messages = [...store.rows.values()].map((r) => r.Message).sort();
+            expect(messages).toEqual(['answer refined', 'question refined']);
+        });
+
+        it('CONCURRENCY: a HUNG write on one role does not block the OTHER role', async () => {
+            // The queues are per-ROLE, not global. A stuck user write must not stall assistant
+            // persistence — a single global queue would serialize them and silently couple the two,
+            // so this pins the isolation property rather than just the happy-path independence.
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const provider = {
+                GetEntityObject: async (_entityName?: string) => store.newEntity(),
+                EntityByName: () => undefined
+            } as unknown as IMetadataProvider;
+            const params = makeParams({ provider, data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            // Hang the USER role's write by making its Save never settle.
+            const hungEntity = store.newEntity();
+            hungEntity.Save = () => new Promise<boolean>(() => { /* never settles */ });
+            let servedHung = false;
+            (provider as unknown as { GetEntityObject: () => Promise<StoreBackedDetail> }).GetEntityObject =
+                async () => { if (!servedHung) { servedHung = true; return hungEntity; } return store.newEntity(); };
+
+            const userWrite = agent.callPersist(params, { Role: 'user', Text: 'hangs', IsFinal: true, ReplacesPrevious: false });
+            void userWrite; // deliberately never awaited — it never settles
+            // The assistant role must still complete despite the user queue being stuck:
+            const assistantId = await agent.callPersist(params, { Role: 'assistant', Text: 'answer', IsFinal: true, ReplacesPrevious: false });
+            expect(assistantId).not.toBeNull();
+            expect(store.rows.size).toBe(1); // only the assistant row landed; the user write is still hung
+        });
+
+        it('CONCURRENCY: a failing frame does not strand the rest of the role queue', async () => {
+            // The queue chains with `.then(run, run)`, so a rejected predecessor must not block later
+            // frames (a stuck chain would silently drop the rest of the conversation).
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            let failNext = true;
+            const provider = {
+                GetEntityObject: async () => {
+                    if (failNext) { failNext = false; throw new Error('transient metadata failure'); }
+                    return store.newEntity();
+                },
+                EntityByName: () => undefined
+            } as unknown as IMetadataProvider;
+            const params = makeParams({ provider, data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            const settled = await Promise.allSettled([
+                agent.callPersist(params, { Role: 'user', Text: 'first', IsFinal: true, ReplacesPrevious: false }),
+                agent.callPersist(params, { Role: 'user', Text: 'second', IsFinal: true, ReplacesPrevious: false }),
+            ]);
+            expect(settled[0].status).toBe('rejected');   // the frame that hit the failure
+            expect(settled[1].status).toBe('fulfilled');  // the queue kept running
+            expect(store.rows.size).toBe(1);
+        });
+
         it('C8 interim→final (OpenAI): one row per turn, and the next turn is a distinct row', async () => {
             const agent = new TestableRealtimeAgent();
             const store = new MockDetailStore();
