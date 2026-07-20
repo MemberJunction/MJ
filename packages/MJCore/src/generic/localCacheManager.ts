@@ -476,7 +476,87 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     protected isFilteredFingerprint(fingerprint: string): boolean {
         const parts = fingerprint.split('|');
-        return parts.length >= 2 && parts[1] !== '_' && parts[1] !== '';
+        return (parts.length >= 2 && parts[1] !== '_' && parts[1] !== '')
+            || this.hasNarrowingSegment(parts)
+            || this.hasAggregates(parts);
+    }
+
+    /**
+     * Returns true if the slot carries aggregate results (fingerprint segment [5], `aggHash`).
+     *
+     * ## Why an aggregate slot must be INVALIDATED, not maintained (H2)
+     * The aggregate was computed by the DATABASE over the pre-mutation row set. After an in-place
+     * upsert/remove there is no way to recompute it in JS for the general case: `COUNT(*)` shifts
+     * by one, `SUM`/`AVG` need the mutated row's contribution to the specific expression, and
+     * `MAX`/`MIN` may or may not move depending on the value.
+     *
+     * The first attempt at this fix CARRIED the cached aggregate forward — which was worse than
+     * the bug it replaced. Verified live: after a save the slot reported `rows=7` alongside
+     * `COUNT(*) = 6`. A caller can detect a MISSING aggregate; it cannot detect a stale one, and
+     * the read path reports `Success: true` / `cacheStatus: 'hit'` either way. Silently wrong
+     * beats loudly absent only if you never look.
+     *
+     * So: same treatment as subset slots. The value is not derivable in JS, therefore the slot is
+     * dropped and the next read recomputes it against the database.
+     *
+     * @param parts - the fingerprint already split on '|'
+     */
+    protected hasAggregates(parts: string[]): boolean {
+        const AGG_HASH_INDEX = 5;
+        const agg = parts[AGG_HASH_INDEX];
+        return !!agg && agg !== '_';
+    }
+
+    /**
+     * Returns true if the fingerprint carries any segment BEYOND the 7-part base that narrows the
+     * result set — i.e. the slot holds fewer rows than an unfiltered read of the same entity would.
+     *
+     * ## Why this exists (H1/H3)
+     * The base fingerprint is `Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch`, and the
+     * original filtered-check inspected ONLY `parts[1]`. But two later segments narrow the rows
+     * WITHOUT touching that segment:
+     *
+     *   - `vw:<id>`  — a saved view's `WhereClause` lives ON THE VIEW, not in `params.ExtraFilter`,
+     *                  so the filter segment stays `_`. The slot was therefore classified
+     *                  unfiltered and UPSERTED IN PLACE on save — serving rows the view's own
+     *                  WhereClause excludes. Views are how users are shown a restricted row set,
+     *                  so this reads as a data/permission leak, not merely stale data.
+     *   - `rls:<h>`  — the per-user Row-Level-Security predicate is appended AFTER the filter
+     *                  segment is built. Same misclassification, worse consequence: a save by
+     *                  user A was upserted into user B's RLS-scoped slot, injecting a row B's
+     *                  predicate excludes. That is an RLS bypass.
+     *
+     * ## Why it is written as a DENY-by-default allowlist
+     * Enumerating the narrowing segments would repeat the original mistake: the next segment
+     * someone appends is silently treated as maintainable until it causes a leak. So this
+     * enumerates only what is provably SAFE and treats everything else as narrowing:
+     *
+     *   - `imr:1`     — IgnoreMaxRows WIDENS the set (it removes a cap), so in-place maintenance
+     *                   remains valid.
+     *   - connection  — the `<driver>://host:port/` suffix is slot IDENTITY, not a predicate.
+     *
+     * Anything else — present or future — falls through to "narrowing", and the slot is
+     * conservatively invalidated on mutation rather than maintained. A new segment can therefore
+     * cost a cache refill, but it can never silently serve the wrong rows.
+     *
+     * @param parts - the fingerprint already split on '|'
+     */
+    protected hasNarrowingSegment(parts: string[]): boolean {
+        const BASE_SEGMENTS = 7;   // Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch
+        for (let i = BASE_SEGMENTS; i < parts.length; i++) {
+            const seg = parts[i];
+            if (!seg) {
+                continue;
+            }
+            if (seg.startsWith('imr:')) {
+                continue;          // widens the set — safe to maintain
+            }
+            if (seg.includes('://')) {
+                continue;          // connection identity — not a predicate
+            }
+            return true;           // unknown or known-narrowing segment → do not maintain
+        }
+        return false;
     }
 
     /**
@@ -918,6 +998,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // shrinks them below it. Drop the slot and let the next read repopulate it from the DB.
         if (this.isSubsetFingerprint(fingerprint)) {
             LogStatusVerbose(`LocalCacheManager: Invalidating subset (MaxRows/StartRow) cache "${fingerprint.substring(0, 60)}"`);
+            await this.InvalidateRunViewResult(fingerprint);
+        } else if (this.hasAggregates(fingerprint.split('|'))) {
+            // Aggregates go stale on EITHER mutation, so this must precede the delete branch.
+            // Removal is safe for the ROWS of a filtered/view slot (a deleted row matches no
+            // predicate), which is why delete otherwise maintains in place — but a cached
+            // COUNT/SUM/MAX computed by the DB cannot be adjusted in JS, so the slot would serve
+            // rows=6 alongside COUNT(*)=7. Drop it and let the next read recompute (H2, delete half).
+            LogStatusVerbose(`LocalCacheManager: Invalidating aggregate-bearing cache "${fingerprint.substring(0, 60)}"`);
             await this.InvalidateRunViewResult(fingerprint);
         } else if (eventType === 'delete') {
             LogStatusVerbose(`LocalCacheManager: Removing entity ${keyStr} from cache "${fingerprint.substring(0, 60)}"`);
@@ -1751,6 +1839,37 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
         try {
+            // Subset / narrowing slots are NOT differentially updatable (H5 / H4).
+            //
+            // H5 — the #3199 defect, third instance. Merging a delta into a MaxRows/StartRow slot
+            // shrinks it below the caller's limit on deletes and cannot know window membership on
+            // inserts, exactly as the BaseEntity-event path could not. #3199 fixed
+            // processEntityEventForFingerprint and HandleRemoteInvalidateEvent; this third write
+            // path was left unfixed and, critically, unpinned by any test.
+            //
+            // H4 — this path delegates its write to SetRunViewResult, which RECOMPUTES schemaHash
+            // from the CURRENT entity. That stamps today's schema onto a merged array containing
+            // rows fetched under the OLD schema — asserting they match a field list they may not,
+            // and masking the very drift the guard exists to catch. B38's fix was to CARRY the
+            // hash, never recompute it; refusing the merge here keeps that invariant intact
+            // instead of duplicating the carry logic on a second path.
+            //
+            // Aggregate slots are refused for a third reason: this path's own contract is "if
+            // aggregateResults are not provided, cached aggregates are cleared (they'd be stale)".
+            // A revalidation that carries only row deltas therefore SILENTLY STRIPS the aggregates
+            // from a slot the caller still expects them from — the caller asked for COUNT(*) and
+            // gets Success with nothing. Invalidating instead forces a clean refetch that returns
+            // them. (Diagnosed from client-cache C13.)
+            //
+            // Refusing the merge is safe: the caller falls back to a normal fetch, which
+            // repopulates the slot correctly. A missed optimization, never wrong data.
+            const fpParts = fingerprint.split('|');
+            if (this.isSubsetFingerprint(fingerprint) || this.hasNarrowingSegment(fpParts) || this.hasAggregates(fpParts)) {
+                LogStatusVerbose(`LocalCacheManager.ApplyDifferentialUpdate: refusing to merge into a subset/narrowing slot "${fingerprint.substring(0, 60)}" — invalidating instead`);
+                await this.InvalidateRunViewResult(fingerprint);
+                return null;
+            }
+
             // Get existing cached data
             const cached = await this.GetRunViewResult(fingerprint);
             if (!cached) {
@@ -1998,6 +2117,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (prior?.schemaHash) {
             data.schemaHash = prior.schemaHash;
         }
+        // Aggregates are deliberately NOT carried here — see hasAggregates(): an aggregate-bearing
+        // slot is invalidated on mutation rather than maintained, so this path never runs for one.
         if (prior?.totalRowCount != null) {
             const delta = updatedResults.length - prior.rowCount;
             data.totalRowCount = Math.max(updatedResults.length, prior.totalRowCount + delta);

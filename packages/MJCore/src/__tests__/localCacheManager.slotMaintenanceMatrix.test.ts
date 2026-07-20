@@ -102,6 +102,23 @@ const SLOT_TYPES: SlotType[] = [
         why: 'an offset window is not the head of the set; maintaining it in place silently shifts the page',
     },
     {
+        name: 'aggregates (aggHash segment)  <-- H2',
+        params: { EntityName: ENTITY, Aggregates: [{ expression: 'COUNT(*)', alias: 'Cnt' }] },
+        saveMaintains: false,
+        deleteMaintains: false,
+        why: 'the aggregate was computed by the DB over the pre-mutation set and is not derivable in JS — carrying it forward served COUNT(*)=6 alongside rows=7',
+    },
+    {
+        name: 'saved view (vw: segment)  <-- H1',
+        params: { EntityName: ENTITY, ViewID: '00000000-0000-0000-0000-0000000000AA' },
+        saveMaintains: false,
+        // DELETE stays maintainable — same reasoning as a filtered slot: a deleted row is gone
+        // from the view too, so removing it can never make the slot wrong. Only SAVE is unsafe
+        // (we cannot evaluate the view's WhereClause in JS to know whether the new row belongs).
+        deleteMaintains: true,
+        why: "a view's WhereClause lives ON THE VIEW, not in ExtraFilter, so the filter segment is '_' — maintaining a SAVE in place served rows the view excludes",
+    },
+    {
         name: 'filtered + MaxRows (both axes)',
         params: { EntityName: ENTITY, ExtraFilter: "Status='Active'", MaxRows: 2 },
         saveMaintains: false,
@@ -149,6 +166,26 @@ describe('LocalCacheManager — slot maintenance matrix (slot type x mutation)',
             // or truthiness-based, every ordinary unlimited slot would be misread as a subset
             // and the cache would stop maintaining anything — a silent perf cliff.
             expect(classify({ EntityName: ENTITY, MaxRows: -1, StartRow: 0 })).toBe(false);
+        });
+
+        it('treats an UNKNOWN trailing segment as narrowing (deny-by-default)', () => {
+            // The whole point of hasNarrowingSegment: `vw:` and `rls:` were BOTH misclassified as
+            // maintainable because the old check only read parts[1]. Enumerating the narrowing
+            // segments would repeat that mistake for the NEXT segment someone appends, so unknown
+            // segments must default to "do not maintain".
+            const hasNarrowing = (cache as unknown as { hasNarrowingSegment(p: string[]): boolean }).hasNarrowingSegment.bind(cache);
+            const base = ['E', '_', '_', '-1', '0', '_', '_'];
+            expect(hasNarrowing([...base, 'mssql://localhost:1433/'])).toBe(false);  // connection = identity
+            expect(hasNarrowing([...base, 'imr:1'])).toBe(false);                    // widens the set
+            expect(hasNarrowing([...base, 'rls:abc123'])).toBe(true);                // narrows (H3)
+            expect(hasNarrowing([...base, 'vw:some-view-id'])).toBe(true);           // narrows (H1)
+            expect(hasNarrowing([...base, 'futureSegment:whatever'])).toBe(true);    // UNKNOWN → deny
+        });
+
+        it('classifies an aggregate-bearing slot as non-maintainable (H2)', () => {
+            const hasAgg = (cache as unknown as { hasAggregates(p: string[]): boolean }).hasAggregates.bind(cache);
+            expect(hasAgg(['E', '_', '_', '-1', '0', '_', '_'])).toBe(false);
+            expect(hasAgg(['E', '_', '_', '-1', '0', 'a1b2c3', '_'])).toBe(true);
         });
 
         it('fails SAFE on a malformed fingerprint rather than over-invalidating', () => {

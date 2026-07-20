@@ -63,7 +63,7 @@
  */
 import { RunView, Metadata, CacheCategory } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import type { MJUserSettingEntity } from '@memberjunction/core-entities';
+import type { MJUserSettingEntity, MJUserViewEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '../test-runner';
 import { IntegrationCheckRegistry } from '../check-registry';
 import type { NamedCheck, IntegrationCheckContext } from '../check';
@@ -327,6 +327,98 @@ export const CacheGauntletChecks: NamedCheck[] = [
             Assert((after.ExecutionTime ?? 0) > 0,
                 'a slot whose schemaHash no longer matches the entity was served from cache — post-migration reads would return a stale column set');
             console.log(`      → drifted ${drifted}/${candidates.length} slots; the stale slot was rejected and re-executed`);
+        }
+    },
+    {
+        Id: 'cache-gauntlet.CG7',
+        Name: 'CG7 (mutation): a saved view must never gain a row its own WhereClause excludes (H1)',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const rv = new RunView();
+            const md = new Metadata(); // global-provider-ok: integration test — single-provider process by design
+            const tag = `${TAG}.cg7.${Date.now()}`;
+            const created: MJUserSettingEntity[] = [];
+            let view: MJUserViewEntity | undefined;
+            try {
+                const inRow = await makeSetting(ctx, 'cg7-IN');
+                created.push(inRow);
+                inRow.Value = `${tag}-IN`;
+                Assert(await inRow.Save(), `retag failed: ${inRow.LatestResult?.CompleteMessage}`);
+
+                const entityInfo = md.EntityByName(ENTITY);
+                Assert(!!entityInfo, `entity '${ENTITY}' does not resolve`);
+                view = await md.GetEntityObject<MJUserViewEntity>('MJ: User Views', ctx.User);
+                view.NewRecord();
+                view.Name = `${tag} (mj-integration-test — safe to delete)`;
+                view.EntityID = entityInfo!.ID;
+                view.UserID = ctx.User.ID;
+                view.WhereClause = `[Value] = '${tag}-IN'`;
+                Assert(await view.Save(), `creating view failed: ${view.LatestResult?.CompleteMessage}`);
+                await settle();
+
+                // EntityName is threaded alongside ViewID because a ViewID-ONLY read currently
+                // throws for every user, including the owner (B39). Unrelated to what this asserts.
+                const viewParams = { EntityName: ENTITY, ViewID: view.ID, ResultType: 'simple' as const };
+                const warm = await rv.RunView(viewParams, ctx.User);
+                Assert(warm.Success, `view warm failed: ${warm.ErrorMessage}`);
+                AssertEqual(warm.Results.length, 1, 'the view must hold exactly its one matching row when warmed');
+
+                // Save a row the view's WhereClause EXCLUDES. Pre-fix this was upserted into the
+                // view's slot: a view's WhereClause lives on the VIEW, not in ExtraFilter, so the
+                // fingerprint's filter segment is '_' and the slot looked unfiltered/maintainable.
+                const outRow = await makeSetting(ctx, 'cg7-OUT');
+                created.push(outRow);
+                outRow.Value = `${tag}-OUT`;
+                Assert(await outRow.Save(), `retag failed: ${outRow.LatestResult?.CompleteMessage}`);
+                await settle();
+
+                const after = await rv.RunView(viewParams, ctx.User);
+                Assert(after.Success, `post-save view read failed: ${after.ErrorMessage}`);
+                AssertEqual(after.Results.length, 1,
+                    `the view returned ${after.Results.length} rows — it was served a row its own WhereClause excludes (a data/permission leak, since views are how users are shown a restricted set)`);
+                console.log(`      → view held at 1 row after saving an excluded row`);
+            } finally {
+                if (view?.ID) { try { await view.Delete(); } catch { /* best-effort */ } }
+                await destroy(created);
+            }
+        }
+    },
+    {
+        Id: 'cache-gauntlet.CG8',
+        Name: 'CG8 (mutation): an aggregate slot never serves a COUNT that disagrees with its own rows (H2)',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const rv = new RunView();
+            const created: MJUserSettingEntity[] = [];
+            const aggParams = {
+                EntityName: ENTITY, ResultType: 'simple' as const,
+                Aggregates: [{ expression: 'COUNT(*)', alias: 'Cnt' }]
+            };
+            try {
+                const warm = await rv.RunView(aggParams, ctx.User);
+                Assert(warm.Success, `aggregate warm failed: ${warm.ErrorMessage}`);
+                const warmAgg = warm.AggregateResults?.[0]?.value;
+                Assert(warmAgg != null, 'the cold read must return an aggregate value to compare against');
+                AssertEqual(Number(warmAgg), warm.Results.length, 'precondition: COUNT(*) matches the returned rows on a cold read');
+
+                // A save must not leave the aggregate stale. The first attempt at this fix CARRIED
+                // the cached aggregate forward, which produced rows=7 alongside COUNT(*)=6 — worse
+                // than dropping it, since a caller can detect a missing aggregate but not a stale
+                // one (the read still reports Success + cacheStatus 'hit').
+                created.push(await makeSetting(ctx, 'cg8'));
+                await settle();
+
+                const after = await rv.RunView(aggParams, ctx.User);
+                Assert(after.Success, `post-save aggregate read failed: ${after.ErrorMessage}`);
+                const afterAgg = after.AggregateResults?.[0]?.value;
+                Assert(afterAgg != null,
+                    'the aggregate vanished after a save — the caller asked for COUNT(*) and got Success with no aggregate');
+                AssertEqual(Number(afterAgg), after.Results.length,
+                    `COUNT(*)=${afterAgg} disagrees with the ${after.Results.length} rows served alongside it — a stale aggregate presented as authoritative`);
+                console.log(`      → aggregate stayed consistent across a save (${warmAgg} → ${afterAgg}, rows ${warm.Results.length} → ${after.Results.length})`);
+            } finally {
+                await destroy(created);
+            }
         }
     }
 ];

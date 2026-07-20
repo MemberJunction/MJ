@@ -64,6 +64,15 @@ const GROUPS: { Tier: string; Gate: string; Enabled: boolean; Scripts: string[] 
         Scripts: ['remote-op-wire-progress-tests.ts', 'app-wiring-tests.ts', 'view-execution-tests.ts', 'permission-engine-tests.ts', 'entity-writes-tests.ts'],
     },
     {
+        // Documented in cross-server-invalidation-tests.ts as "run-all.ts only includes it when
+        // RUN_CROSS_SERVER=1" — that inclusion did not exist, so the suite had never run in the
+        // gate at all (H6). It needs Redis + two MJAPI processes, hence the tier gate.
+        Tier: 'Cross-Server',
+        Gate: process.env.RUN_CROSS_SERVER === '1' ? 'RUN_CROSS_SERVER=1 · Redis + 2 MJAPI' : 'RUN_CROSS_SERVER not set → skip',
+        Enabled: process.env.RUN_CROSS_SERVER === '1',
+        Scripts: ['cross-server-invalidation-tests.ts'],
+    },
+    {
         Tier: 'Predictive Studio flows',
         Gate: process.env.PS_INTEGRATION === '1' ? 'PS_INTEGRATION=1 · Python sidecar' : 'PS_INTEGRATION not set → skip',
         Enabled: process.env.PS_INTEGRATION === '1',
