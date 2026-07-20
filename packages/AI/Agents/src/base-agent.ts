@@ -2094,6 +2094,7 @@ export class BaseAgent {
             DelegateToTarget: (request) => this.delegateRealtimeToTarget(params, config, request),
             ExecuteTool: (call) => this.executeRealtimeTool(params, call),
             PersistTranscript: (transcript) => this.persistRealtimeTranscript(params, transcript),
+            FlushTranscripts: () => this.flushRealtimeTranscriptQueues(),
             Recording: this.realtimeRecording ?? undefined,
             FinalizeRecording: () => this.finalizeRealtimeRecording(params),
             CheckpointUsage: (usage) => this.checkpointRealtimeUsage(promptRun, usage),
@@ -2418,6 +2419,25 @@ export class BaseAgent {
         // parked in the map would surface as an unhandled promise rejection.
         this.realtimePersistQueues.set(roleKey, result.then(() => undefined, () => undefined));
         return result;
+    }
+
+    /**
+     * Waits for every role's queued transcript writes to settle.
+     *
+     * Transcript frames are dispatched fire-and-forget, so writes for the last turns of a session can
+     * still be in flight at teardown. The session runner calls this during `Stop()` — after the provider
+     * session is closed, so no new frames can arrive — under its own hard timeout, which is why this
+     * method itself is unbounded and simply awaits what is queued.
+     *
+     * Awaits the STORED queue links, which are outcome-swallowing by construction, so a failed write
+     * can never reject here and abort the drain for other roles.
+     */
+    private async flushRealtimeTranscriptQueues(): Promise<void> {
+        const pending = [...this.realtimePersistQueues.values()];
+        if (pending.length === 0) {
+            return;
+        }
+        await Promise.all(pending);
     }
 
     /**

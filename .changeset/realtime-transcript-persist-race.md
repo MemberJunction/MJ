@@ -11,3 +11,5 @@ Observed live against a streamed Grok session: one user utterance produced two b
 Transcript persistence is now serialized per role through a promise chain, making the read-modify-write atomic with respect to other frames of the same role. Roles remain independent and are not serialized against each other. A frame that fails no longer strands the rest of its role's queue.
 
 Adds regression coverage for concurrent (non-awaited) frames — overlapping streamed captions, an interim racing its final, cross-role independence, and failure isolation. This class of bug was invisible to the existing suite, which drove every persist call sequentially.
+
+Also bounds session teardown against a stuck write: `Stop()` now drains queued transcript writes after the provider session closes (so no new frames can arrive) and before the result is built — so tail writes land and the turn count doesn't undercount — under a hard timeout (`TranscriptFlushTimeoutMs`, default 5s). A hung or rejected drain is logged and teardown finalizes anyway; losing a tail write is strictly better than wedging the session.
