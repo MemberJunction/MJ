@@ -684,6 +684,8 @@ mabl's confidence gate applies: a low-confidence heal (ambiguous target) should 
 
 **Risks / open questions.** Anything late-reading `Steps[i].Screenshot` (judge history, outputs) must be audited to read the ring buffer or files.
 
+**Wave 0 status — DEFERRED to Wave 3.** Audit result: the Layer-1 loop is already safe (controller/judge read the bounded ring buffer `RunContext.ScreenshotHistory` and per-step `ScreenshotHash`, never old `StepHistory[i].Screenshot`). The blocker is the *output* path: the driver's `buildOutputs` emits one storyboard `TestRunOutputItem` per `step.Screenshot` across **all** steps at run end, so nulling old screenshots would silently drop every step beyond the ring-buffer depth from the storyboard. Doing G2 safely therefore requires `buildOutputs` to emit **references** to the G1-persisted media instead of inline base64 — which in turn needs G1 persistence reliably on plus a reference-carrying output schema. That is the same persistence-reference surface as the Wave-3 replay/caching work, so G2 moves there rather than shipping a speculative always-off flag (Simplicity-First) or risking an observability regression in Wave 0.
+
 #### CU-G3. Skip the teardown app-boot for doomed contexts
 
 **Problem.** In the suite's isolated mode, `closeBrowser` runs `ResetStatePreservingAuth(origin)` (SCBA:81-171) — navigating the page to the app origin *again* (starting another Angular boot + GraphQL metadata burst) to scrub storage in a context that `ReleaseIsolated` destroys moments later; in single-login mode even the storageState capture is skipped, making the cleanup 100% waste. ~380 extra partial app boots per run, hammering MJAPI exactly when saturated.
@@ -693,6 +695,8 @@ mabl's confidence gate applies: a low-confidence heal (ambiguous target) should 
 **Expected impact.** ~380 aborted app boots per run eliminated; one flag plus one conditional.
 
 **Risks / open questions.** None — the context is destroyed regardless.
+
+**Wave 0 status — LANDED.** `RunComputerUseParams.EphemeralContext` (Layer 1) gates the `ResetStatePreservingAuth` scrub in `ComputerUseEngine.closeBrowser`; the driver sets it `true` for the isolated/fresh strategies (`"new"` → `GetIsolated`, `"new-clean"` → engine-owned), `false` for recycled `shared:*`/literal-key modes.
 
 #### CU-G4. Warm-seed the app metadata cache: kill the per-test cold-boot refetch
 

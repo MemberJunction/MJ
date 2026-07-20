@@ -345,8 +345,13 @@ export class ComputerUseEngine {
             // cache from this test deadlocks the next test's app boot.
             // Auth tokens in localStorage are preserved so the next test
             // doesn't have to re-login.
+            //
+            // EXCEPTION (CU-G3): when the context is ephemeral (destroyed right
+            // after this run, not recycled), the scrub is pure waste — it
+            // re-navigates to the app origin, triggering another full app boot,
+            // in a context that's about to be thrown away. Skip it.
             const startUrl = this.activeParams?.StartUrl;
-            if (startUrl) {
+            if (startUrl && !this.activeParams?.EphemeralContext) {
                 try {
                     const origin = new URL(startUrl).origin;
                     await this.browserAdapter.ResetStatePreservingAuth(origin);

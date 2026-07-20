@@ -458,6 +458,15 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             engine.SetBrowserAdapter(adapter);
         }
 
+        // CU-G3: mark the context ephemeral for the isolated/fresh strategies
+        // ("new" → GetIsolated, released after the run; "new-clean" → engine
+        // owns and fully closes its own context). Both are destroyed rather
+        // than recycled, so teardown can skip the between-test state scrub
+        // (a wasted app boot). The legacy "shared:*"/literal-key modes recycle
+        // the context and still need the scrub, so they stay non-ephemeral.
+        const strategy = config.browserSession ?? 'new';
+        params.EphemeralContext = strategy === 'new' || strategy === 'new-clean';
+
         // Pre-flight: probe MJAPI health before starting the test
         const preflightHealth = await this.probeMjapiHealth();
         if (!preflightHealth.ok) {

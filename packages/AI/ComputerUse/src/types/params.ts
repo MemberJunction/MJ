@@ -137,4 +137,17 @@ export class RunComputerUseParams {
      * applicationContext` and optionally extended per-test.
      */
     public ApplicationContext?: string;
+
+    /**
+     * Signals that the browser context backing this run is disposable — it will
+     * be destroyed immediately after the run (e.g. a per-worker isolated context
+     * that the pool releases), rather than recycled for a subsequent test.
+     *
+     * When `true`, teardown skips the between-test state scrub
+     * (`ResetStatePreservingAuth`), which otherwise re-navigates to the app
+     * origin to clear storage — a wasted app boot in a context that is about to
+     * be thrown away (CU-G3). Leave `false`/unset for legacy recycled shared
+     * contexts, where the scrub is required so the next test starts clean.
+     */
+    public EphemeralContext?: boolean;
 }
