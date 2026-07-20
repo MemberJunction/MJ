@@ -377,6 +377,32 @@ describe('BaseAgent realtime (session-driven) integration', () => {
             expect(messages).toEqual(['answer refined', 'question refined']);
         });
 
+        it('CONCURRENCY: a HUNG write on one role does not block the OTHER role', async () => {
+            // The queues are per-ROLE, not global. A stuck user write must not stall assistant
+            // persistence — a single global queue would serialize them and silently couple the two,
+            // so this pins the isolation property rather than just the happy-path independence.
+            const agent = new TestableRealtimeAgent();
+            const store = new MockDetailStore();
+            const provider = {
+                GetEntityObject: async (_entityName?: string) => store.newEntity(),
+                EntityByName: () => undefined
+            } as unknown as IMetadataProvider;
+            const params = makeParams({ provider, data: { conversationId: 'conv-1' }, agentSessionID: 'sess-1' } as Partial<ExecuteAgentParams>);
+            // Hang the USER role's write by making its Save never settle.
+            const hungEntity = store.newEntity();
+            hungEntity.Save = () => new Promise<boolean>(() => { /* never settles */ });
+            let servedHung = false;
+            (provider as unknown as { GetEntityObject: () => Promise<StoreBackedDetail> }).GetEntityObject =
+                async () => { if (!servedHung) { servedHung = true; return hungEntity; } return store.newEntity(); };
+
+            const userWrite = agent.callPersist(params, { Role: 'user', Text: 'hangs', IsFinal: true, ReplacesPrevious: false });
+            void userWrite; // deliberately never awaited — it never settles
+            // The assistant role must still complete despite the user queue being stuck:
+            const assistantId = await agent.callPersist(params, { Role: 'assistant', Text: 'answer', IsFinal: true, ReplacesPrevious: false });
+            expect(assistantId).not.toBeNull();
+            expect(store.rows.size).toBe(1); // only the assistant row landed; the user write is still hung
+        });
+
         it('CONCURRENCY: a failing frame does not strand the rest of the role queue', async () => {
             // The queue chains with `.then(run, run)`, so a rejected predecessor must not block later
             // frames (a stuck chain would silently drop the rest of the conversation).
