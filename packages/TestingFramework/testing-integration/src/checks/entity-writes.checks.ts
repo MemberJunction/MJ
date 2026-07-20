@@ -179,7 +179,7 @@ export const EntityWritesChecks: NamedCheck[] = [
             const status = parseChanges(statusRow!, 'Status update').Status;
             AssertEqual(status.oldValue, 'Active', 'Status oldValue (before)');
             AssertEqual(status.newValue, 'Disabled', 'Status newValue (after)');
-            Assert(descRow!.ID !== statusRow!.ID, 'the two updates must be two DISTINCT Record Change rows');
+            Assert(!UUIDsEqual(descRow!.ID, statusRow!.ID), 'the two updates must be two DISTINCT Record Change rows');
 
             // The versioning table must not version itself — writing 3 RecordChanges above must not
             // have produced any RecordChange rows whose EntityID is 'MJ: Record Changes'.

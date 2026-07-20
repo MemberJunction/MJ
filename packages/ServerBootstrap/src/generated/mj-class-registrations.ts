@@ -187,10 +187,16 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/auth-providers (2 classes)
+// @memberjunction/auth-providers (8 classes)
 import {
+    Auth0Provider,
+    CognitoProvider,
+    GoogleProvider,
     HostIdentityProvider,
+    MSALProvider,
     MagicLinkProvider,
+    OktaProvider,
+    WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
 // @memberjunction/core-entities (405 classes)
@@ -1234,7 +1240,7 @@ import {
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
 
-// @memberjunction/core-actions (142 classes)
+// @memberjunction/core-actions (144 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1288,6 +1294,8 @@ import {
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
+    FindCandidateActionsAction,
+    FindCandidateAgentsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -1462,8 +1470,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     xAILLM,
     xAIRealtime,
     ZhipuLLM,
+    Auth0Provider,
+    CognitoProvider,
+    GoogleProvider,
     HostIdentityProvider,
+    MSALProvider,
     MagicLinkProvider,
+    OktaProvider,
+    WorkOSProvider,
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
@@ -2293,6 +2307,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
+    FindCandidateActionsAction,
+    FindCandidateAgentsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -2397,7 +2413,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 977;
+export const CLASS_REGISTRATIONS_COUNT = 985;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

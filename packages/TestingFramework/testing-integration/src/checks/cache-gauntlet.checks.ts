@@ -38,8 +38,22 @@
  *
  * MUTATION TIER — every check creates and deletes its own `MJ: User Settings` rows, matching the
  * S17/S23 fixture convention. Rows are tagged so a crashed run leaves identifiable debris.
+ *
+ * ## KNOWN GAP — schema-drift staleness is still not covered live
+ * `isSchemaStaleCacheEntry` rejects a slot whose stored `schemaHash` no longer matches the
+ * entity's current field list — the post-migration case. Verified by hand that slots DO carry a
+ * hash (e.g. `MJ: User Settings|_|_|-1|0|_|_|mssql://…` → `schemaHash: "1bd8ea31"`), and there are
+ * 12 unit tests over the mechanism, but there is no LIVE check.
+ *
+ * An attempt to cover it by poking the stored payload (read the slot, rewrite its `schemaHash`,
+ * assert the next read re-executes) was removed rather than shipped: it failed for reasons that
+ * did not reproduce cleanly, and a check nobody can explain is worse than an acknowledged gap.
+ * A better approach is probably to drive the REAL trigger — add a column via migration + CodeGen
+ * and assert a pre-existing slot is rejected — which belongs in a migration-aware harness rather
+ * than here. Tracked as a follow-up.
  */
 import { RunView, Metadata } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { MJUserSettingEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '../test-runner';
 import { IntegrationCheckRegistry } from '../check-registry';
@@ -131,7 +145,8 @@ export const CacheGauntletChecks: NamedCheck[] = [
                 AssertEqual(warm.Results.length, 1, 'MaxRows:1 must return exactly 1 row when warm');
                 const cachedId = String((warm.Results[0] as { ID: string }).ID);
 
-                const victim = created.find(c => c.ID === cachedId);
+                // UUIDsEqual, not === : SQL Server returns UUIDs uppercase and PostgreSQL lowercase.
+                const victim = created.find(c => UUIDsEqual(c.ID, cachedId));
                 if (victim) {
                     Assert(await victim.Delete(), `Delete failed: ${victim.LatestResult?.CompleteMessage ?? 'unknown'}`);
                     created.splice(created.indexOf(victim), 1);

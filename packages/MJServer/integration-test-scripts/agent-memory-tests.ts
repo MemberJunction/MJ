@@ -76,7 +76,7 @@ async function main(): Promise<void> {
     await bootstrapIntegrationClient();
     const md = new Metadata(); // global-provider-ok: dedicated single-provider client test process
     const user = md.CurrentUser;
-    const client = new GraphQLAIClient(Metadata.Provider as unknown as GraphQLDataProvider);
+    const client = new GraphQLAIClient(Metadata.Provider as unknown as GraphQLDataProvider);  // global-provider-ok: dedicated single-provider integration test process
 
     // Resolve the memory-enabled agent (Sage) + the Memory Manager.
     const rv = new RunView();

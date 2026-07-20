@@ -73,7 +73,7 @@ async function main(): Promise<void> {
     const md = new Metadata(); // global-provider-ok: dedicated single-provider client test process
     const ctx: IntegrationCheckContext = {
         User: md.CurrentUser,
-        Provider: Metadata.Provider,
+        Provider: Metadata.Provider,  // global-provider-ok: dedicated single-provider integration test process
         Storage: storage
     };
 
