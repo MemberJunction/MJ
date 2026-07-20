@@ -99,6 +99,9 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
         }
     }),
     RegisterClass: () => (target: Function) => target,
+    // No-op decorator factory — some classes in the ActionEngine module graph declare
+    // `@RequiresSubclass()`; the mock must expose it or module init throws on the missing export.
+    RequiresSubclass: () => (target: Function) => target,
     // Case-insensitive UUID equality. Used by ActionEngineServer when
     // matching action result codes and by EntityActionInvocation*.MapParams.
     UUIDsEqual: (a: unknown, b: unknown): boolean =>

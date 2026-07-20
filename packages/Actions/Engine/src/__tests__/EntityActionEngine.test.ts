@@ -16,6 +16,9 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
         },
     },
     RegisterClass: () => (target: Function) => target,
+    // No-op decorator factory — some classes in the ActionEngine module graph declare
+    // `@RequiresSubclass()`; the mock must expose it or module init throws on the missing export.
+    RequiresSubclass: () => (target: Function) => target,
     SafeJSONParse: vi.fn((str: string) => {
         try { return JSON.parse(str); } catch { return null; }
     }),
