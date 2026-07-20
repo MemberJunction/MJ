@@ -76,7 +76,7 @@ import { BaseBrowserAdapter } from '@memberjunction/computer-use';
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
 import { MJRunComputerUseParams, PromptEntityRef, ActionRef } from '../types/mj-params.js';
 import { parseJudgeFrequency } from '../utils/judge-frequency-parser.js';
-import { buildVariableValuesFromContext, substituteVariables, composeApplicationContext } from '../utils/variable-substitution.js';
+import { buildVariableValuesFromContext, substituteVariables, composeApplicationContext, findUnresolvedPlaceholders } from '../utils/variable-substitution.js';
 
 import type {
     ComputerUseTestConfig,
@@ -151,6 +151,22 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 config = substituteVariables(config, variableValues);
                 input = substituteVariables(input, variableValues);
                 expected = substituteVariables(expected, variableValues);
+            }
+
+            // CU-F7: fail fast on unresolved {{vars}} in the fields that would
+            // otherwise fail silently mid-run — a literal "{{baseUrl}}" left in
+            // startUrl becomes a navigation error 30s in, with no hint that a
+            // suite variable was simply never provided. Surface it here, up
+            // front, naming the missing keys.
+            const missingVars = [
+                ...findUnresolvedPlaceholders(input.startUrl).map(k => `startUrl:{{${k}}}`),
+                ...findUnresolvedPlaceholders(input.goal).map(k => `goal:{{${k}}}`),
+            ];
+            if (missingVars.length > 0) {
+                throw new Error(
+                    `Unresolved test variable(s) after substitution: ${missingVars.join(', ')}. ` +
+                    `Define them in the suite/test variables (or MJ_TEST_VAR_* env) before running.`
+                );
             }
 
             // 1c. Resolve application context (suite-level + per-test). Suite context

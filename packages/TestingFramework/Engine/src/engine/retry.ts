@@ -9,7 +9,7 @@
  *
  * Pure (no engine/DB coupling) so the retry policy is unit-testable in isolation.
  */
-import { TestRunResult } from '@memberjunction/testing-engine-base';
+import { TestRunResult, PriorAttemptSummary } from '@memberjunction/testing-engine-base';
 
 /**
  * Whether a result is a failure worth retrying. Transient/non-deterministic terminal
@@ -36,8 +36,12 @@ export async function runWithRetries(
 ): Promise<TestRunResult> {
     let result = await runOnce(1);
     let attempts = 1;
+    // CU-F3: preserve why each superseded attempt failed before it's overwritten,
+    // so flakiness (the suite's #1 signal) is diagnosable from the final result.
+    const priorAttempts: PriorAttemptSummary[] = [];
 
     while (maxRetries > 0 && attempts - 1 < maxRetries && isRetriableFailure(result)) {
+        priorAttempts.push(summarizeAttempt(result, attempts));
         const nextAttempt = attempts + 1;
         onBeforeRetry?.(nextAttempt, result);
         result = await runOnce(nextAttempt);
@@ -47,11 +51,26 @@ export async function runWithRetries(
             // Failed on an earlier attempt, passed now → green but flaky.
             result.attempts = attempts;
             result.flaky = true;
+            result.priorAttempts = priorAttempts;
             return result;
         }
     }
 
     result.attempts = attempts;
     result.flaky = false;
+    if (priorAttempts.length > 0) {
+        result.priorAttempts = priorAttempts;
+    }
     return result;
+}
+
+/** Capture a lightweight, payload-free summary of a superseded attempt (CU-F3). */
+function summarizeAttempt(result: TestRunResult, attempt: number): PriorAttemptSummary {
+    return {
+        attempt,
+        status: result.status,
+        score: result.score,
+        durationMs: result.durationMs,
+        errorMessage: result.errorMessage,
+    };
 }

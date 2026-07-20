@@ -238,6 +238,26 @@ export interface OracleResult {
 /**
  * Result from running a single test
  */
+/**
+ * Lightweight record of a single retry attempt that was superseded by a later
+ * one (CU-F3). Carries just enough to diagnose *why* an earlier attempt failed
+ * — flakiness is the suite's #1 signal — while deliberately omitting heavy
+ * payloads (screenshots, oracle results) so retaining attempt history does not
+ * reintroduce a per-run memory ramp.
+ */
+export interface PriorAttemptSummary {
+  /** 1-based attempt number. */
+  attempt: number;
+  /** Terminal status of this superseded attempt. */
+  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Timeout';
+  /** Score this attempt achieved. */
+  score: number;
+  /** How long this attempt ran, in ms. */
+  durationMs: number;
+  /** Error/diagnostic message from this attempt, if any. */
+  errorMessage?: string;
+}
+
 export interface TestRunResult {
   /**
    * Test Run ID
@@ -349,6 +369,14 @@ export interface TestRunResult {
    * Resolved variables that were used for this test run
    */
   resolvedVariables?: ResolvedTestVariables;
+
+  /**
+   * Lightweight summaries of each FAILED attempt that preceded the final
+   * result, oldest first (CU-F3). Present only when the test was retried.
+   * Preserves *why* earlier attempts failed so flakiness is diagnosable — the
+   * final `result` object no longer silently discards attempt 1's failure.
+   */
+  priorAttempts?: PriorAttemptSummary[];
 }
 
 /**

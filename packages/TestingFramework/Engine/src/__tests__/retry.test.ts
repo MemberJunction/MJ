@@ -96,4 +96,35 @@ describe('runWithRetries', () => {
         expect(onBeforeRetry.mock.calls[0][0]).toBe(2); // nextAttempt
         expect(onBeforeRetry.mock.calls[0][1].status).toBe('Failed'); // lastResult
     });
+
+    // CU-F3: superseded attempts must be preserved for flake diagnosis.
+    it('does not set priorAttempts when the first attempt passes', async () => {
+        const { fn } = sequence('Passed');
+        const r = await runWithRetries(fn, 2);
+        expect(r.priorAttempts).toBeUndefined();
+    });
+
+    it('preserves each superseded failure on a flaky pass', async () => {
+        const { fn } = sequence('Failed', 'Error', 'Passed');
+        const r = await runWithRetries(fn, 3);
+        expect(r.status).toBe('Passed');
+        expect(r.flaky).toBe(true);
+        expect(r.priorAttempts).toHaveLength(2);
+        expect(r.priorAttempts?.map(a => a.status)).toEqual(['Failed', 'Error']);
+        expect(r.priorAttempts?.map(a => a.attempt)).toEqual([1, 2]);
+    });
+
+    it('preserves all superseded attempts when retries are exhausted', async () => {
+        const { fn } = sequence('Failed', 'Error', 'Timeout');
+        const r = await runWithRetries(fn, 2);
+        expect(r.status).toBe('Timeout'); // final attempt, returned as the result
+        // The two attempts BEFORE the final one are preserved; the final is `r` itself.
+        expect(r.priorAttempts?.map(a => a.status)).toEqual(['Failed', 'Error']);
+    });
+
+    it('summaries carry the diagnostic score of each attempt', async () => {
+        const { fn } = sequence('Failed', 'Passed');
+        const r = await runWithRetries(fn, 2);
+        expect(r.priorAttempts?.[0]).toMatchObject({ attempt: 1, status: 'Failed', score: 0 });
+    });
 });

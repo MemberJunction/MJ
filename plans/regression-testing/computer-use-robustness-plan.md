@@ -624,6 +624,8 @@ mabl's confidence gate applies: a low-confidence heal (ambiguous target) should 
 
 **Risks / open questions.** Disk growth from per-attempt screenshots — bounded by CU-G1's file-based, retain-policy storage.
 
+**Wave 0 status — retry-harness slice LANDED; NDJSON/artifact-dir wiring deferred.** `runWithRetries` no longer discards superseded attempts: each failed attempt is captured as a lightweight, payload-free `PriorAttemptSummary` (attempt #, status, score, durationMs, errorMessage) and attached to the final `TestRunResult.priorAttempts`. So "the reason attempt 1 failed" survives — the suite's #1 signal is now present in the result object rather than overwritten. The summary is intentionally screenshot-free so retaining flake history doesn't reintroduce the CU-G2 memory ramp. **Deferred (sibling-plan-coupled):** the incremental per-test NDJSON append file, per-*attempt* artifact directories, and the heartbeat/report-generator consumers — those live with the Docker-plan aggregation surface and are wired there; this wave makes the underlying data non-lossy.
+
 #### CU-F4. First-class failure artifacts: Playwright trace, HAR/video, console log
 
 **Problem.** Failed runs ship final-attempt screenshots and prose. The "stuck/blank page" mysteries and the Auth0 hypothesis each needed hours of human mining that a `trace.zip` (full DOM snapshots + network + console, viewable in trace.playwright.dev) would have resolved directly; vendors treat run debuggability as an artifact produced *during* the run (Browserbase records every session by default).
@@ -663,6 +665,8 @@ mabl's confidence gate applies: a low-confidence heal (ambiguous target) should 
 **Expected impact.** Config mistakes surface at validation time with root causes, not mid-run as mysterious navigation failures.
 
 **Risks / open questions.** None material.
+
+**Wave 0 status — unresolved-variable fail-fast LANDED; rest deferred/N-A.** After `{{var}}` substitution, the driver now scans `startUrl` and `goal` for residual placeholders (new pure `findUnresolvedPlaceholders`) and fails fast naming the missing keys — so a never-provided suite variable surfaces up front instead of as a mysterious navigation error 30s in. **Not applicable in this code state:** `judgeValidationCriteria` / an `llm-judge` oracle don't exist here (the oracles are goal-completion / url-match / step-count), so there's no dead-criteria no-op to warn about — folded away rather than invented. **Deferred:** parameterizing the health-probe URL via `{{apiHealthUrl}}` and publishing probe latency belong with the sibling plan's health-gate work (the probe gates nothing today); case-insensitive prompt lookup is tracked under CU-E6.3.
 
 ---
 
