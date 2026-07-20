@@ -1715,6 +1715,21 @@ export class BaseAgent {
      * start of every realtime session so a prior run can never leak a row id into the next.
      */
     private realtimeInFlightTurns: Map<string, { id: string; open: boolean }> = new Map();
+    /**
+     * Per-role serialization queue for transcript persistence.
+     *
+     * The runner dispatches provider transcript frames FIRE-AND-FORGET (`void this.handleTranscript(t)`),
+     * so frames for the same role can be in flight CONCURRENTLY. {@link persistRealtimeTranscript} does a
+     * check-then-act on {@link realtimeInFlightTurns} that spans `await`s (GetEntityObject / Load / Save):
+     * without serialization, two captions arriving a few ms apart both observe "no tracked row yet", both
+     * take the create branch, and the turn is persisted TWICE. Observed in production against a streamed
+     * Grok session (two byte-identical rows, the second created 17ms before the first's final update).
+     *
+     * Each role's calls are therefore chained through this map so the read-modify-write is atomic with
+     * respect to other frames of the SAME role. Roles are independent (separate `realtimeInFlightTurns`
+     * entries), so they are not serialized against each other. Reset per session alongside the turn map.
+     */
+    private realtimePersistQueues: Map<string, Promise<void>> = new Map();
     /** Active audio recording controller for the current realtime session, or `null` when recording is off. */
     private realtimeRecording: RealtimeRecordingController | null = null;
     /** Storage account id the active recording stores to (RecordingStorageProviderID ?? AttachmentStorageProviderID). */
@@ -1742,6 +1757,7 @@ export class BaseAgent {
         // 3) Resolve recording (OFF by default; runtime > agent > off; consent + storage gated) and reset
         //    the per-session turn-lifecycle state, then build the injected deps and run the session.
         this.realtimeInFlightTurns = new Map();
+        this.realtimePersistQueues = new Map();
         const recording = await this.resolveRealtimeRecording(params);
         this.realtimeRecording = recording?.controller ?? null;
         this.realtimeRecordingAccountId = recording?.storageAccountId ?? null;
@@ -2388,7 +2404,28 @@ export class BaseAgent {
      * @param transcript The transcript turn (interim delta or final) emitted by the model.
      * @returns The created row id on first creation of a turn, else `null`.
      */
-    private async persistRealtimeTranscript(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<string | null> {
+    private persistRealtimeTranscript(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<string | null> {
+        // Serialize per role — see realtimePersistQueues. Transcript frames arrive fire-and-forget, so
+        // without this chain two concurrent captions can both pass the "is there a tracked row?" check
+        // before either has written one back, and the turn is persisted twice.
+        const roleKey = transcript.Role;
+        const run = () => this.persistRealtimeTranscriptSerialized(params, transcript);
+        const prior = this.realtimePersistQueues.get(roleKey) ?? Promise.resolve();
+        // `.then(run, run)` (not `.then(run)`) so a rejected predecessor never strands the rest of the
+        // queue — each frame runs regardless of how the previous one settled.
+        const result = prior.then(run, run);
+        // The stored link swallows outcomes: the queue only needs ordering, and an unhandled rejection
+        // parked in the map would surface as an unhandled promise rejection.
+        this.realtimePersistQueues.set(roleKey, result.then(() => undefined, () => undefined));
+        return result;
+    }
+
+    /**
+     * The actual persistence work for one transcript frame. Runs under the per-role queue established by
+     * {@link persistRealtimeTranscript}, so it may safely read-modify-write {@link realtimeInFlightTurns}
+     * across its `await`s without another frame of the same role interleaving.
+     */
+    private async persistRealtimeTranscriptSerialized(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<string | null> {
         if (!transcript.Text?.trim()) {
             return null;
         }
