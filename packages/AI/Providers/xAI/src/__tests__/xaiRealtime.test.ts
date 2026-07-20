@@ -12,7 +12,7 @@ vi.mock('@memberjunction/global', () => ({
 // TTS, image, realtime modules), so every base class those modules EXTEND at module-evaluation
 // time must exist here alongside BaseModel/BaseRealtimeModel. The realtime type aliases
 // (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
-vi.mock('@memberjunction/ai', () => {
+vi.mock('@memberjunction/ai', async () => {
     class BaseModel {
         protected _apiKey: string;
         constructor(apiKey: string) {
@@ -43,7 +43,11 @@ vi.mock('@memberjunction/ai', () => {
     }
     // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
     const RealtimeDiagLog = () => { /* no-op in tests */ };
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseImageGenerator, ErrorAnalyzer, RealtimeDiagLog };
+    // IsTranscriptContinuation is a PURE, dependency-free helper — pull in the REAL implementation
+    // rather than stubbing it, so this driver test asserts against shipped behavior. It lives in its
+    // own module precisely so importing it here can't cascade into other mocked packages.
+    const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
+    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseImageGenerator, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -524,6 +528,26 @@ describe('xAIRealtime', () => {
             driver.Fake.Fire({ type: 'input_audio_buffer.speech_started', audio_start_ms: 1, event_id: 'e', item_id: 'i' } as RealtimeServerEvent);
             completed('and the forecast');
             expect(transcripts.map((t) => t.ReplacesPrevious)).toEqual([false, true, true, false]);
+        });
+
+        it('a mid-sentence PAUSE does not split one Grok utterance into multiple turns (production regression)', () => {
+            // Grok's VAD fires speech_started on ordinary breaths, which used to reset the per-turn flag
+            // and split ONE spoken sentence into several persisted turns, each a longer copy of the last
+            // (observed live: three rows for one sentence). The continuation check keeps them collapsed.
+            // 'and the forecast' below is genuinely NEW text, so it correctly starts its own turn.
+            const transcripts: Array<{ Text: string; ReplacesPrevious?: boolean }> = [];
+            session.OnTranscript((t) => transcripts.push({ Text: t.Text, ReplacesPrevious: t.ReplacesPrevious }));
+            const completed = (transcript: string) => driver.Fake.Fire({
+                type: 'conversation.item.input_audio_transcription.completed', transcript, content_index: 0, event_id: 'e', item_id: 'i',
+            } as RealtimeServerEvent);
+            const pause = () => driver.Fake.Fire({ type: 'input_audio_buffer.speech_started', audio_start_ms: 1, event_id: 'e', item_id: 'i' } as RealtimeServerEvent);
+
+            completed('what is the weather');
+            pause();
+            completed('what is the weather in Tokyo');       // same sentence, extended → replaces
+            pause();
+            completed('and the forecast');                   // genuinely new → its own turn
+            expect(transcripts.map((t) => t.ReplacesPrevious)).toEqual([false, true, false]);
         });
 
         it('translates a function call to OnToolCall', () => {
