@@ -72,7 +72,7 @@ import {
     AppProfile,
     SettleConfig,
 } from '@memberjunction/computer-use';
-import type { AuthMethod, ComputerUseResult } from '@memberjunction/computer-use';
+import type { AuthMethod, ComputerUseResult, BrowserDiagnosticEvent } from '@memberjunction/computer-use';
 import { BaseBrowserAdapter } from '@memberjunction/computer-use';
 
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
@@ -512,7 +512,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         timeoutMs: number,
         context: DriverExecutionContext,
         config: ComputerUseTestConfig
-    ): Promise<{ result: ComputerUseResult; timedOut: boolean; browserDiagnostics: unknown[] }> {
+    ): Promise<{ result: ComputerUseResult; timedOut: boolean; browserDiagnostics: BrowserDiagnosticEvent[] }> {
         const engine = new MJComputerUseEngine();
 
         // Resolve browser session strategy. For the default "new" strategy,
@@ -560,14 +560,12 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             const result = await engine.Run(params);
 
             // Collect browser diagnostics (console errors, network failures, crashes).
-            // Cast via unknown: GetDiagnostics is on BaseBrowserAdapter but compiled
-            // types may not reflect it until the computer-use package is rebuilt.
-            const adapterObj = adapter as unknown as { GetDiagnostics?: () => unknown[] } | null;
-            const browserDiagnostics = adapterObj && typeof adapterObj.GetDiagnostics === 'function'
-                ? adapterObj.GetDiagnostics()
-                : [];
+            // The engine now drains them per step (CU-A7), so the authoritative
+            // source is each step's Diagnostics — the adapter's buffer is empty
+            // by now. Aggregate across steps (properly typed, no `unknown` cast).
+            const browserDiagnostics: BrowserDiagnosticEvent[] = result.Steps.flatMap(s => s.Diagnostics ?? []);
             if (browserDiagnostics.length > 0) {
-                this.logToTestRun(context, 'warn', `Browser captured ${browserDiagnostics.length} diagnostic event(s)`);
+                this.logToTestRun(context, 'warn', `Browser captured ${browserDiagnostics.length} diagnostic event(s) across ${result.Steps.length} step(s)`);
             }
 
             return { result, timedOut, browserDiagnostics };

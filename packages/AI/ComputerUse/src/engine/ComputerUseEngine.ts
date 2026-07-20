@@ -60,6 +60,7 @@ import { SettleConfig, DEFAULT_BUSY_MARKERS, LoopConfig } from '../types/app-pro
 import type { SettleReason } from '../types/app-profile.js';
 import { resolveSettleExit } from './settle-decision.js';
 import { computeStateSignature, detectLoop } from './loop-detection.js';
+import { formatDiagnosticsDigest } from './diagnostics-digest.js';
 import {
     JudgeContext,
     JudgeVerdict,
@@ -595,7 +596,7 @@ export class ComputerUseEngine {
             if (lastStep?.JudgeVerdict) {
                 return lastStep.JudgeVerdict;
             }
-            const verdict = await this.evaluateJudge(context, stepNumber, true, lastStep?.ScreenshotHash ?? '');
+            const verdict = await this.evaluateJudge(context, stepNumber, true, lastStep?.ScreenshotHash ?? '', context.LastDiagnosticsDigest ?? '');
             return verdict ?? lastVerdict;
         } catch (error) {
             this.logError('Forced final judge evaluation failed', error);
@@ -708,6 +709,18 @@ export class ComputerUseEngine {
             step.ActionMs = performance.now() - actionStart;
             step.UrlAfter = this.browserAdapter.CurrentUrl;
 
+            // 4b. Drain this step's browser diagnostics (CU-A7). GetDiagnostics()
+            //     clears the buffer, so each step gets exactly its own events.
+            //     A compact digest goes to the judge (this step) and the next
+            //     controller prompt so a blank/broken page becomes explainable
+            //     (ChunkLoadError, POST /graphql 500) instead of guessed at.
+            step.Diagnostics = this.browserAdapter.GetDiagnostics();
+            const diagnosticsDigest = formatDiagnosticsDigest(step.Diagnostics);
+            context.LastDiagnosticsDigest = diagnosticsDigest || undefined;
+            if (diagnosticsDigest) {
+                this.log(`Step ${stepNumber} — browser diagnostics: ${diagnosticsDigest.replace(/\n/g, ' | ')}`);
+            }
+
             // 5. Evaluate judge. Gate (CU-G5): if the controller did not explicitly
             //    request judgement and the visible state is unchanged since the last
             //    judged step (same perceptual hash) with a non-terminal prior verdict,
@@ -733,7 +746,7 @@ export class ComputerUseEngine {
                     this.log(`Step ${stepNumber} — evaluating judge (controller request)`);
                 }
                 const judgeStart = performance.now();
-                step.JudgeVerdict = await this.evaluateJudge(context, stepNumber, controllerRequestedJudgement, step.ScreenshotHash);
+                step.JudgeVerdict = await this.evaluateJudge(context, stepNumber, controllerRequestedJudgement, step.ScreenshotHash, diagnosticsDigest);
                 step.JudgeMs = performance.now() - judgeStart;
                 context.LastJudgedHash = step.ScreenshotHash;
                 context.LastJudgeVerdict = step.JudgeVerdict;
@@ -1036,6 +1049,11 @@ export class ComputerUseEngine {
             request.LoopEvidence = context.LoopEvidence;
         }
 
+        // Inject the previous step's browser-diagnostics digest (CU-A7)
+        if (context.LastDiagnosticsDigest) {
+            request.Diagnostics = context.LastDiagnosticsDigest;
+        }
+
         // Inject FormLogin credentials if configured for this domain
         const domain = NavigationGuard.ExtractDomain(context.CurrentUrl);
         const formCreds = this.authHandler.GetFormLoginCredentials(domain);
@@ -1293,7 +1311,8 @@ export class ComputerUseEngine {
         context: RunContext,
         stepNumber: number,
         controllerRequestedJudgement: boolean = false,
-        currentScreenshotHash: string = ''
+        currentScreenshotHash: string = '',
+        currentDiagnosticsDigest: string = ''
     ): Promise<JudgeVerdict> {
         const judgeContext = new JudgeContext();
         judgeContext.Goal = context.Params.Goal;
@@ -1305,6 +1324,7 @@ export class ComputerUseEngine {
         judgeContext.MaxSteps = context.Params.MaxSteps;
         judgeContext.CurrentUrl = context.CurrentUrl;
         judgeContext.ControllerRequestedJudgement = controllerRequestedJudgement;
+        judgeContext.CurrentDiagnosticsDigest = currentDiagnosticsDigest;
 
         return this.judge.Evaluate(judgeContext);
     }
@@ -1564,6 +1584,7 @@ export class ComputerUseEngine {
         sections.push(this.renderFormLoginSection(request.FormLoginCredentials));
         sections.push(this.renderJudgeFeedbackSection(request.JudgeFeedback));
         sections.push(this.renderLoopEvidenceSection(request.LoopEvidence));
+        sections.push(this.renderDiagnosticsSection(request.Diagnostics));
         sections.push(this.renderPreviousStepsSection(request.PreviousStepSummary));
 
         return sections.filter(Boolean).join('\n\n');
@@ -1602,6 +1623,12 @@ export class ComputerUseEngine {
         return `## ⚠️ Loop Detected\n${evidence}\nYou appear to be repeating actions without making progress. Do NOT repeat the same navigation or clicks. Try a DIFFERENT approach — a different element, a different route, or request judgement if you believe the goal is genuinely blocked.`;
     }
 
+    private renderDiagnosticsSection(diagnostics: string | undefined): string {
+        if (!diagnostics) return '';
+
+        return `## Browser Diagnostics (previous step)\nThe browser reported the following errors, which may explain a blank, broken, or unexpected page:\n${diagnostics}\nFactor these in — e.g. a failed script/chunk load or a failed API request means the page did not render, not that you clicked the wrong thing.`;
+    }
+
     private renderPreviousStepsSection(summary: string | undefined): string {
         if (!summary) return '';
 
@@ -1614,12 +1641,20 @@ export class ComputerUseEngine {
     private renderJudgePrompt(request: JudgePromptRequest): string {
         const template = this.getActiveParams()?.JudgePrompt ?? DEFAULT_JUDGE_PROMPT;
 
-        return template
+        const rendered = template
             .replace(/\{\{goal\}\}/g, request.Goal)
             .replace(/\{\{stepNumber\}\}/g, String(request.StepNumber))
             .replace(/\{\{maxSteps\}\}/g, String(request.MaxSteps))
             .replace(/\{\{currentUrl\}\}/g, request.CurrentUrl)
             .replace(/\{\{stepSummary\}\}/g, request.StepSummary);
+
+        // Append the current step's browser-diagnostics digest (CU-A7) so the
+        // judge can explain an infrastructure state instead of guessing. The
+        // generic prompt has no {{diagnostics}} slot, so this is appended.
+        if (request.Diagnostics) {
+            return `${rendered}\n\n## Browser Diagnostics (current step)\nThe browser reported the following errors this step — use them to explain the visible state instead of guessing:\n${request.Diagnostics}`;
+        }
+        return rendered;
     }
 
     // ═══════════════════════════════════════════════════════════

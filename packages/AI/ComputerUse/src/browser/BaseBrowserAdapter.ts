@@ -23,20 +23,12 @@ import {
     AudioCaptureChunk,
     AccessibilityNode,
     ElementInfo,
+    BrowserDiagnosticEvent,
 } from '../types/browser.js';
 
-/**
- * Diagnostic event captured from the browser (console messages, network
- * failures, page errors). Adapters that capture diagnostics push
- * events into an internal buffer and expose them via GetDiagnostics().
- */
-export interface BrowserDiagnosticEvent {
-    timestamp: string;
-    type: 'console' | 'pageerror' | 'requestfailed' | 'crash';
-    level?: string;
-    message: string;
-    url?: string;
-}
+// Re-exported for back-compat: the type now lives in types/browser.ts (CU-A7)
+// so StepRecord and other pure types can carry it without importing an adapter.
+export type { BrowserDiagnosticEvent } from '../types/browser.js';
 
 export abstract class BaseBrowserAdapter {
     // ─── Lifecycle ─────────────────────────────────────────

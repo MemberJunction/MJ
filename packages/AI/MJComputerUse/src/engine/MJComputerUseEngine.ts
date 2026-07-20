@@ -240,6 +240,8 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 screenshotHistory: request.ScreenshotHistory,
                 toolDefinitions: request.ToolDefinitions,
                 judgeFeedback: request.JudgeFeedback,
+                loopEvidence: request.LoopEvidence,
+                diagnostics: request.Diagnostics,
                 currentUrl: request.CurrentUrl,
                 stepNumber: request.StepNumber,
                 maxSteps: request.MaxSteps,
@@ -298,6 +300,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 stepNumber: request.StepNumber,
                 maxSteps: request.MaxSteps,
                 currentUrl: request.CurrentUrl,
+                diagnostics: request.Diagnostics,
             });
 
             if (!result.success) {

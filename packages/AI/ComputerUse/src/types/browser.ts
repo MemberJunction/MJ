@@ -342,6 +342,21 @@ export class ElementInfo {
     public BoundingBox?: BoundingBox;
 }
 
+// ─── Browser Diagnostics ───────────────────────────────────
+/**
+ * Diagnostic event captured from the browser (console errors/warnings, network
+ * failures, page errors, crashes). Adapters that capture diagnostics push these
+ * into an internal buffer and expose them via `GetDiagnostics()` (which drains
+ * the buffer). Timestamped at capture so events can be bucketed per step (CU-A7).
+ */
+export interface BrowserDiagnosticEvent {
+    timestamp: string;
+    type: 'console' | 'pageerror' | 'requestfailed' | 'crash';
+    level?: string;
+    message: string;
+    url?: string;
+}
+
 // ─── Action Execution Result ───────────────────────────────
 export class ActionExecutionResult {
     public Success: boolean = false;

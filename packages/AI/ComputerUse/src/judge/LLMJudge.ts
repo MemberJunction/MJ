@@ -62,6 +62,7 @@ export class LLMJudge extends BaseJudge {
         request.MaxSteps = context.MaxSteps;
         request.StepSummary = this.buildStepSummary(context);
         request.CurrentUrl = context.CurrentUrl;
+        request.Diagnostics = context.CurrentDiagnosticsDigest || undefined;
         return request;
     }
 

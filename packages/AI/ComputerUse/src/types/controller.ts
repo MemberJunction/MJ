@@ -44,6 +44,14 @@ export class ControllerPromptRequest {
      */
     public LoopEvidence?: string;
 
+    /**
+     * Compact digest of browser diagnostics from the previous step (console
+     * errors, failed requests, crashes) — CU-A7. Lets the controller see *why*
+     * a page is blank/broken (e.g. `ChunkLoadError`, `POST /graphql 500`)
+     * instead of guessing from pixels. Empty/undefined when the step was clean.
+     */
+    public Diagnostics?: string;
+
     /** Current URL the browser is on */
     public CurrentUrl: string = '';
 
@@ -160,6 +168,12 @@ export class JudgePromptRequest {
     public MaxSteps: number = 0;
     /** Current URL */
     public CurrentUrl: string = '';
+    /**
+     * Compact browser-diagnostics digest for the current step (CU-A7) — console
+     * errors, failed requests, crashes. Lets the judge explain an infrastructure
+     * state (a blank page = `ChunkLoadError`) instead of hallucinating a reason.
+     */
+    public Diagnostics?: string;
 }
 
 /**

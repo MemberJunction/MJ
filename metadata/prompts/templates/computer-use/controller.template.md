@@ -47,6 +47,19 @@ Type these values exactly as shown. Do not guess or substitute other credentials
 Take this feedback into account when planning your next actions.
 {% endif %}
 
+{% if loopEvidence %}
+## ⚠️ Loop Detected
+{{ loopEvidence }}
+You appear to be repeating actions without making progress. Do NOT repeat the same navigation or clicks. Try a DIFFERENT approach — a different element, a different route, or request judgement if you believe the goal is genuinely blocked.
+{% endif %}
+
+{% if diagnostics %}
+## Browser Diagnostics (previous step)
+The browser reported the following errors, which may explain a blank, broken, or unexpected page:
+{{ diagnostics }}
+Factor these in — e.g. a failed script/chunk load or a failed API request means the page did not render, not that you clicked the wrong thing.
+{% endif %}
+
 {% if previousStepSummary %}
 ## Previous Actions
 {{ previousStepSummary }}

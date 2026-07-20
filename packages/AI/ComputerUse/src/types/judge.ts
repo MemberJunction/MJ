@@ -10,7 +10,7 @@
  * - OnStagnation: only when heuristics detect potential stuckness
  */
 
-import { BrowserAction, ActionExecutionResult } from './browser.js';
+import { BrowserAction, ActionExecutionResult, BrowserDiagnosticEvent } from './browser.js';
 import { ToolCallRecord } from './tools.js';
 import { ComputerUseError } from './errors.js';
 import { SettleReason } from './app-profile.js';
@@ -45,6 +45,12 @@ export class JudgeContext {
     public CurrentUrl: string = '';
     /** Whether the controller explicitly requested this judgement evaluation. */
     public ControllerRequestedJudgement: boolean = false;
+    /**
+     * Compact digest of the current step's browser diagnostics (CU-A7) — console
+     * errors, failed requests, crashes. Lets the judge explain an infrastructure
+     * state (blank page = `ChunkLoadError`) instead of hallucinating a reason. '' when clean.
+     */
+    public CurrentDiagnosticsDigest: string = '';
 }
 
 // ─── Judge Verdict ─────────────────────────────────────────
@@ -166,6 +172,8 @@ export class StepRecord {
     public SettleMs: number = 0;
     /** Why the settle loop stopped waiting this step (CU-A1/A2) — e.g. 'beacon-ready', 'stable', 'budget'. */
     public SettleReason: SettleReason = 'none';
+    /** Browser diagnostics captured during this step (console errors, failed requests, crashes) — CU-A7. */
+    public Diagnostics: BrowserDiagnosticEvent[] = [];
     /** Time spent capturing (and hashing) the screenshot. */
     public ScreenshotMs: number = 0;
     /** Time spent in the controller LLM call. */

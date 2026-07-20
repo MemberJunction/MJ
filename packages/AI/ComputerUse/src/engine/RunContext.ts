@@ -33,6 +33,9 @@ export class RunContext {
     /** Engine-computed loop evidence, injected into the next controller prompt (CU-B1). */
     public LoopEvidence?: string;
 
+    /** Compact diagnostics digest from the previous step, injected into the next controller prompt (CU-A7). */
+    public LastDiagnosticsDigest?: string;
+
     /**
      * Perceptual hash of the screenshot the judge last evaluated (CU-G5).
      * Used to skip re-judging an unchanged visible state.
