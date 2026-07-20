@@ -6,7 +6,13 @@ import type { EntityDocumentConfiguration, EntityDocumentMetadataConfig } from '
 /*  Hoisted mocks                                                     */
 /* ------------------------------------------------------------------ */
 
-vi.mock('@memberjunction/global', () => {
+vi.mock('@memberjunction/global', async (importOriginal) => {
+  // Spread the REAL module (mirrors the @memberjunction/core mock below) so any export
+  // MJCore's real code needs at import time — decorators like @RequiresSubclass(), utility
+  // functions, etc. — stays available without this test needing to know about it. Only the
+  // three exports below are deliberately overridden, each for a specific reason:
+  const actual = await importOriginal<Record<string, unknown>>();
+
   class MockBaseSingleton<T> {
     private static _instances = new Map<string, unknown>();
     static getInstance<U>(): U {
@@ -17,13 +23,18 @@ vi.mock('@memberjunction/global', () => {
       return MockBaseSingleton._instances.get(key) as U;
     }
   }
-  const UUID_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   return {
+    ...actual,
+    // Real RegisterClass eagerly registers into the real ClassFactory the moment this test's
+    // module graph loads — avoid that side effect with a no-op.
     RegisterClass: () => (_target: unknown) => {},
+    // Real MJGlobal.Instance.ClassFactory would resolve against real registrations from every
+    // entity/action pulled in transitively; the test controls resolution itself instead.
     MJGlobal: { Instance: { ClassFactory: { GetRegistration: vi.fn() } } },
-    UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
-    NormalizeUUID: (u: string | null | undefined) => (u == null ? '' : u.trim().toLowerCase()),
-    IsValidUUID: (u: string | null | undefined) => u != null && UUID_FORMAT.test(u.trim()),
+    // Real BaseSingleton persists instances in a process-wide global object store
+    // (GetGlobalObjectStore()) — shared across every test file in the same vitest worker.
+    // A Map scoped to this mock module keeps each test file's singletons isolated.
     BaseSingleton: MockBaseSingleton,
   };
 });
