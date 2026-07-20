@@ -477,9 +477,35 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     protected isFilteredFingerprint(fingerprint: string): boolean {
         const parts = fingerprint.split('|');
         return (parts.length >= 2 && parts[1] !== '_' && parts[1] !== '')
+            || this.hasOrderBy(parts)
             || this.hasUserSearch(parts)
             || this.hasNarrowingSegment(parts)
             || this.hasAggregates(parts);
+    }
+
+    /**
+     * Returns true if the slot was cached under an ORDER BY (fingerprint segment [2]).
+     *
+     * An ordered slot's row SET can be maintained in place, but its ORDER cannot: an upsert
+     * appends the new row at map-insertion end and leaves re-sorted rows at their old positions,
+     * so the slot silently stops honoring the order the caller asked for — wrong for any
+     * "first row of the ordered set" consumer. Re-sorting in JS would require reimplementing SQL
+     * ORDER BY semantics (collations, NULL ordering, expression sorts), which is exactly the kind
+     * of "derive it in JS" shortcut this file keeps having to walk back.
+     *
+     * DELETE remains maintainable: removing a row preserves the relative order of the rest. This
+     * mirrors the filtered-slot asymmetry, and the branch order in
+     * processEntityEventForFingerprint (delete is checked before the filtered classification)
+     * delivers it without extra wiring. `BaseEngine` already refuses ordered configs for
+     * in-place mutation (`canUseImmediateMutation`); this closes the same gap in the raw
+     * provider cache. (B42)
+     *
+     * @param parts - the fingerprint already split on '|'
+     */
+    protected hasOrderBy(parts: string[]): boolean {
+        const ORDER_BY_INDEX = 2;
+        const orderBy = parts[ORDER_BY_INDEX];
+        return !!orderBy && orderBy !== '_';
     }
 
     /**
@@ -1343,7 +1369,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Generates a human-readable cache fingerprint for a RunView request.
      * This fingerprint uniquely identifies the query based on its parameters and connection.
      *
-     * Format: EntityName|filter|orderBy|resultType|maxRows|startRow|aggHash|connection
+     * Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|appended…][|connection]
+     * (the parts array below is the ground truth). NOTE: resultType is NOT a segment — an older
+     * version of this comment listed it, which put every index after [2] off by one; that exact
+     * off-by-one trap has already bitten a segment-indexing predicate once (see the note on
+     * extractEntityFromFingerprint).
      * Example: Users|Active=1|Name ASC|simple|100|0|a1b2c3d4|localhost
      *
      * @param params - The RunView parameters
@@ -1905,14 +1935,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Refusing the merge is safe: the caller falls back to a normal fetch, which
             // repopulates the slot correctly. A missed optimization, never wrong data.
             const fpParts = fingerprint.split('|');
-            // Deliberately does NOT include hasNarrowingSegment (R1). Every CLIENT fingerprint
-            // carries an `f:<fields>` segment, so including it classified 100% of client slots as
-            // unmergeable — and this method's only caller THROWS on a decline, inside a
-            // Promise.all over the batch, with no refetch path. That converted the client's
-            // primary staleness-reconciliation path into a hard failure for any returning browser
-            // holding a warm IndexedDB slot. H4/H5 only ever required the subset and aggregate
-            // refusals; the narrowing axis on THIS path is tracked separately (see B41).
-            if (this.isSubsetFingerprint(fingerprint) || this.hasAggregates(fpParts)) {
+            // hasNarrowingSegment is INCLUDED here again (B41 closed). It was removed under R1
+            // because the caller THREW on a decline with no refetch path — one undecidable slot
+            // failed the whole batch. The caller now performs a real full fetch on decline
+            // (processSingleSmartCacheResult), so declining a vw:/rls:/narrow-f: slot costs one
+            // plain query instead of correctness or availability. Note `f:*` is allowlisted in
+            // hasNarrowingSegment itself, so ordinary full-width client slots still merge.
+            if (this.isSubsetFingerprint(fingerprint) || this.hasAggregates(fpParts) || this.hasNarrowingSegment(fpParts)) {
                 LogStatusVerbose(`LocalCacheManager.ApplyDifferentialUpdate: refusing to merge into a subset/narrowing slot "${fingerprint.substring(0, 60)}" — invalidating instead`);
                 await this.InvalidateRunViewResult(fingerprint);
                 return null;
@@ -2277,12 +2306,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         maxUpdatedAt: string,
         rowCount?: number,
         queryId?: string,
-        ttlMs?: number
+        ttlMs?: number,
+        warmedForUserID?: string
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
         const actualRowCount = rowCount ?? results.length;
-        const data = { results, maxUpdatedAt, rowCount: actualRowCount, queryId };
+        // warmedForUserID records WHO ran the (fully authorized) miss that produced this slot.
+        // The B43 permission gate uses it as the tie-breaker when the query is not resolvable
+        // from cached metadata (runtime-created queries never are — the provider's Queries cache
+        // does not refresh in-process): the warmer proved their permission by executing; anyone
+        // ELSE falls through to an authorized execution rather than being served unchecked.
+        const data = { results, maxUpdatedAt, rowCount: actualRowCount, queryId, warmedForUserID };
         // Estimate size by sampling rows (eviction accounting only).
         const sizeBytes = this.estimateResultsSize(results);
 
@@ -2325,6 +2360,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         maxUpdatedAt: string;
         rowCount: number;
         queryId?: string;
+        /** User who executed the authorized miss that produced this slot (B43 tie-breaker). */
+        warmedForUserID?: string;
     } | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
@@ -2344,6 +2381,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 maxUpdatedAt: string;
                 rowCount?: number;
                 queryId?: string;
+                warmedForUserID?: string;
             }>(fingerprint, CacheCategory.RunQueryCache);
 
             if (parsed) {
@@ -2354,7 +2392,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     results: parsed.results,
                     maxUpdatedAt: parsed.maxUpdatedAt,
                     rowCount: parsed.rowCount ?? parsed.results?.length ?? 0,
-                    queryId: parsed.queryId
+                    queryId: parsed.queryId,
+                    // Pass-through, not optional garnish: the B43 gate serves an unresolvable-
+                    // metadata slot ONLY to its warmer. Rebuilding this object without the field
+                    // (the B38 omission pattern, which this session exists to stamp out — and
+                    // which the first version of this very fix repeated) silently disabled that
+                    // tie-break and with it TTL caching for runtime-created queries.
+                    warmedForUserID: parsed.warmedForUserID
                 };
             }
         } catch (e) {

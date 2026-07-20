@@ -102,6 +102,13 @@ const SLOT_TYPES: SlotType[] = [
         why: 'an offset window is not the head of the set; maintaining it in place silently shifts the page',
     },
     {
+        name: 'ordered (OrderBy, segment [2])  <-- B42',
+        params: { EntityName: ENTITY, OrderBy: 'Name ASC' },
+        saveMaintains: false,
+        deleteMaintains: true,   // removal preserves the relative order of the remaining rows
+        why: 'an upsert appends at map-insertion end and leaves re-sorted rows in old positions — the row SET stays right, the ORDER the caller asked for is violated',
+    },
+    {
         name: 'user search (UserSearchString, segment [6])  <-- N1',
         params: { EntityName: ENTITY, UserSearchString: 'annual gala' },
         saveMaintains: false,

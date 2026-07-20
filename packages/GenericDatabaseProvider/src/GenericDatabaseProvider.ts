@@ -2362,7 +2362,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return { viewIndex, status: 'error', errorMessage: result.ErrorMessage || 'Unknown error executing view' };
         }
         const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
-        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.TotalRowCount };
+        // aggregateResults must ride along (B40): InternalRunView computed them, the contract
+        // type declares the field, but this return omitted them — so every CacheLocal request
+        // that took the cache-check transport got Success with NO aggregates, even on a cold
+        // miss. The subset/aggregate differential gate routes aggregate-bearing params through
+        // THIS path, which makes the omission total rather than occasional.
+        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.TotalRowCount, aggregateResults: result.AggregateResults };
     }
 
     /**
@@ -2390,7 +2395,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
                     const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
                     const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
-                    await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this, ttlMs);
+                    // Pass the aggregates (B38-family omission #4). This slot is ALSO written by
+                    // InternalRunView's normal PostRunView path WITH aggregates — two writers,
+                    // one slot, and this one dropped them. Whichever write landed last won, so a
+                    // later server-cache hit served rows with or without aggregates depending on
+                    // a write race. That is exactly the standalone-passes / aggregator-fails
+                    // flake client-cache C13 exhibited.
+                    await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, result.aggregateResults, result.rowCount, this, ttlMs);
                 }
             }
             // Project the response down to the caller's requested shape AFTER the

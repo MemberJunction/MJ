@@ -61,7 +61,7 @@ const GROUPS: { Tier: string; Gate: string; Enabled: boolean; Scripts: string[] 
         Tier: 'Deterministic · client',
         Gate: 'needs a live MJAPI (skips if unreachable)',
         Enabled: true,
-        Scripts: ['remote-op-wire-progress-tests.ts', 'app-wiring-tests.ts', 'view-execution-tests.ts', 'permission-engine-tests.ts', 'entity-writes-tests.ts'],
+        Scripts: ['remote-op-wire-progress-tests.ts', 'client-cache-tests.ts', 'app-wiring-tests.ts', 'view-execution-tests.ts', 'permission-engine-tests.ts', 'entity-writes-tests.ts'],
     },
     {
         // Documented in cross-server-invalidation-tests.ts as "run-all.ts only includes it when

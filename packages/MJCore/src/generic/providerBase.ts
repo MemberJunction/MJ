@@ -1338,11 +1338,44 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return memoized;
         }
         const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
-        const fingerprint = `${base}|f:${ProviderBase.NormalizeFieldsKey(param.Fields)}`;
+        // Normalize a FULL-COVERAGE field list to '*' — in the FINGERPRINT only (B44).
+        //
+        // entity_object params get widened to an explicit list of every entity field
+        // (prepareSmartCacheCheckParams), which is semantically identical to "no Fields" — but
+        // it keyed the slot as f:<every field>, so the maintenance classifier read the client's
+        // most common slot shape (the BaseEngine default) as a NARROW projection and stopped
+        // maintaining it in place. Purely a hit-rate loss, but a pervasive one.
+        //
+        // This touches ONLY how the slot is keyed. param.Fields is left untouched, so what the
+        // provider FETCHES is unchanged — an earlier attempt cleared param.Fields instead and was
+        // reverted precisely because fetch behavior could not be verified.
+        const fieldsKey = this.isFullCoverageFieldList(param) ? '*' : ProviderBase.NormalizeFieldsKey(param.Fields);
+        const fingerprint = `${base}|f:${fieldsKey}`;
         this._clientFingerprintMemo.set(param, fingerprint);
         return fingerprint;
     }
     private _clientFingerprintMemo = new WeakMap<RunViewParams, string>();
+
+    /**
+     * True when `param.Fields` names EVERY field of the entity — i.e. an explicit list that is
+     * semantically "full width". Case-insensitive; order-independent. Returns false on any
+     * uncertainty (unknown entity, missing fields) so the fingerprint falls back to the explicit
+     * list — the safe direction, since misclassifying narrow-as-full would cross-serve shapes.
+     */
+    private isFullCoverageFieldList(param: RunViewParams): boolean {
+        if (!param.Fields || param.Fields.length === 0) {
+            return false;   // no Fields at all already normalizes to '*' downstream
+        }
+        const entity = param.EntityName ? this.EntityByName(param.EntityName) : undefined;
+        if (!entity || entity.Fields.length === 0) {
+            return false;
+        }
+        if (param.Fields.length < entity.Fields.length) {
+            return false;   // cheap reject: cannot cover every field with fewer names
+        }
+        const requested = new Set(param.Fields.map(f => f.trim().toLowerCase()));
+        return entity.Fields.every(f => requested.has(f.Name.trim().toLowerCase()));
+    }
 
     /**
      * Ranked search over **one** entity's records. See {@link IMetadataProvider.SearchEntity}
@@ -1747,8 +1780,49 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 });
                 const checker = (this as IRunQueryProvider).RunQueriesWithCacheCheck?.bind(this);
                 if (!checker || this.TrustLocalCacheCompletely) {
-                    // TTL mode (server providers / no validation transport)
-                    return serveFromSlot();
+                    // TTL mode (server providers / no validation transport).
+                    //
+                    // PERMISSION GATE (B43): the RunQuery fingerprint carries no user segment, so
+                    // user A's warmed slot is user B's cache hit — and this path previously served
+                    // it with NO UserCanRun check (the gate lived only on the miss path, in
+                    // ValidateQueryForExecution). Same shape as the RunView S31/S31b fix, which
+                    // was never applied here. The client transport is unaffected (its validation
+                    // round trip re-authorizes server-side); the exposure is server-side TTL mode
+                    // with per-request users — agents/actions running as different principals.
+                    //
+                    // Deny ⇒ fall through to normal execution, which resolves the query and
+                    // authorizes with the proper error message. Query metadata missing from the
+                    // provider cache ⇒ ALSO fall through (never serve rows we cannot authorize);
+                    // that costs one query run, not correctness.
+                    if (contextUser) {
+                        const qInfo = this.Queries.find(q =>
+                            (params.QueryID && UUIDsEqual(q.ID, params.QueryID))
+                            || (!params.QueryID && params.QueryName && q.Name?.trim().toLowerCase() === params.QueryName.trim().toLowerCase())
+                        );
+                        if (qInfo) {
+                            // Metadata can answer — enforce it.
+                            if (qInfo.UserCanRun(contextUser)) {
+                                return serveFromSlot();
+                            }
+                            LogStatusEx({ message: `RunQuery cache: user '${contextUser.Email}' lacks run permission on '${qInfo.Name}' — falling through to authorized execution.`, verboseOnly: true });
+                        } else if (cached.warmedForUserID && UUIDsEqual(cached.warmedForUserID, contextUser.ID)) {
+                            // Metadata CANNOT answer — runtime-created queries never appear in the
+                            // provider's Queries cache (it does not refresh in-process; verified:
+                            // a saved Query stays invisible, 21 -> 21). But a slot only exists
+                            // because its WARMER executed the fully-authorized miss path — so the
+                            // warmer's own permission is already proven. Serve the warmer;
+                            // anyone ELSE falls through and pays one authorized execution.
+                            //
+                            // The first version of this gate failed closed on unresolvable
+                            // metadata, which silently disabled TTL caching for every
+                            // runtime-created query — caught by Q2/Q5/Q10 going red.
+                            return serveFromSlot();
+                        } else {
+                            LogStatusEx({ message: `RunQuery cache: '${params.QueryID ?? params.QueryName}' not in cached metadata and requester is not the slot's warmer — falling through to authorized execution.`, verboseOnly: true });
+                        }
+                    } else {
+                        return serveFromSlot();
+                    }
                 }
                 // Client smart validation round trip
                 const response = await checker([{
@@ -1765,7 +1839,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         // Fire-and-forget slot rewrite — same pattern as the RunView client path
                         LocalCacheManager.Instance.SetRunQueryResult(
                             queryFingerprint, params.QueryName ?? '', freshRows,
-                            check.maxUpdatedAt ?? '', check.rowCount, check.queryId, params.CacheLocalTTL
+                            check.maxUpdatedAt ?? '', check.rowCount, check.queryId, params.CacheLocalTTL,
+                            contextUser?.ID
                         ).catch(e => LogError(`RunQuery cache rewrite failed: ${e}`));
                         return {
                             QueryID: check.queryId ?? params.QueryID ?? '',
@@ -1808,7 +1883,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (queryCacheEngaged && queryFingerprint && result.Success) {
             LocalCacheManager.Instance.SetRunQueryResult(
                 queryFingerprint, result.QueryName, result.Results,
-                '', result.TotalRowCount, result.QueryID, params.CacheLocalTTL
+                '', result.TotalRowCount, result.QueryID, params.CacheLocalTTL,
+                contextUser?.ID
             ).catch(e => LogError(`RunQuery cache write failed: ${e}`));
         }
 
@@ -1877,8 +1953,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param entityName 
      * @param callerName 
      */
-    protected async EntityStatusCheck(params: RunViewParams, callerName: string) {
-        const entityName = await RunView.GetEntityNameFromRunViewParams(params, this);
+    protected async EntityStatusCheck(params: RunViewParams, callerName: string, contextUser?: UserInfo) {
+        // contextUser threads into the ViewID->entity lookup (B39): without it, server-side
+        // ViewID-only reads failed for every caller because the inner User Views read was unscoped.
+        const entityName = await RunView.GetEntityNameFromRunViewParams(params, this, contextUser);
         const entity = entityName ? this.EntityByName(entityName) : undefined;
         if (!entity) {
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -2075,7 +2153,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Entity status check
         const entityCheckStart = performance.now();
-        await this.EntityStatusCheck(params, 'PreRunView');
+        await this.EntityStatusCheck(params, 'PreRunView', contextUser);
         const entityCheckTime = performance.now() - entityCheckStart;
 
         // Save the caller's original Fields request for post-cache filtering.
@@ -2229,7 +2307,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const param = params[i];
 
             // Entity status check
-            await this.EntityStatusCheck(param, 'PreRunViews');
+            await this.EntityStatusCheck(param, 'PreRunViews', contextUser);
 
             // Save caller's original Fields, then always fetch all fields from DB.
             // One cache entry per entity+filter satisfies all field subsets.
@@ -2340,7 +2418,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const cacheable: { paramIndex: number; fingerprint: string }[] = [];
         for (let i = 0; i < params.length; i++) {
             const param = params[i];
-            await this.EntityStatusCheck(param, 'PreRunViews');
+            await this.EntityStatusCheck(param, 'PreRunViews', contextUser);
 
             if (param.ResultType === 'entity_object') {
                 const entity = this.EntityByName(param.EntityName);
@@ -2595,22 +2673,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 }
             }
 
-            // Differential merge failed - this should not happen normally
-            // Throwing an exception rather than returning partial data which would be dangerous
-            // as the caller would have no way of knowing the data is incomplete
+            // Differential merge declined → fall back to a FULL FETCH of this one param (B41).
             //
-            // NOTE (R1): this throw is only safe while ApplyDifferentialUpdate declines RARELY.
-            // It runs inside a Promise.all over the whole batch, so one undecidable slot rejects
-            // the caller's entire RunViews call, and there is no refetch path here — a
-            // 'differential' server reply carries only a delta. The guard in
-            // ApplyDifferentialUpdate is therefore deliberately narrow (subset + aggregates only,
-            // NOT narrowing segments), so this stays effectively unreachable. Do not widen that
-            // guard without first giving this branch a real full-fetch fallback.
-            throw new Error(
-                `Differential cache merge failed for entity '${param.EntityName}'. ` +
-                `Cache fingerprint may be invalid or cache data corrupted. ` +
-                `Consider clearing the local cache and retrying.`
-            );
+            // History, because this exact spot has burned us twice:
+            //   - This used to THROW, inside a Promise.all over the batch, so ONE undecidable
+            //     slot rejected the caller's entire RunViews call. "Decline" is a legitimate
+            //     outcome (subset / aggregate / narrowing slots cannot be merged from a row
+            //     delta), not corruption — so throwing was the wrong contract.
+            //   - Returning null instead was attempted and REVERTED: the batch maps
+            //     `r.result` straight to the caller, so null became the caller's RESULT.
+            //
+            // The only correct remedy is what a cache miss does anyway: fetch in full. The
+            // declined slot was already invalidated by ApplyDifferentialUpdate, so the refetch
+            // repopulates it. CacheLocal is stripped and BypassCache set so this single call
+            // takes the plain path — it cannot re-enter the smart-cache transport, which is what
+            // makes the recursion impossible rather than merely unlikely.
+            LogStatusEx({ message: `Differential merge declined for '${param.EntityName}' — refetching in full.`, verboseOnly: true });
+            const fallbackParam: RunViewParams = { ...param, CacheLocal: false, BypassCache: true };
+            const freshFetch = await (this as unknown as IRunViewProvider).RunView<T>(fallbackParam, contextUser);
+            return { result: freshFetch, cacheHit: false, cacheMiss: true };
         } else if (checkResult.status === 'stale') {
             // Cache is stale - use fresh data and update cache (entity doesn't support differential)
             const staleResults = checkResult.results || [];
@@ -3218,7 +3299,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Store on params object for retrieval in PostProcessRunView
         (params as Record<string, unknown>)._telemetryEventId = eventId;
 
-        await this.EntityStatusCheck(params, 'PreProcessRunView');
+        await this.EntityStatusCheck(params, 'PreProcessRunView', contextUser);
 
         // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
         // so that we can get the data to populate the entity object with.

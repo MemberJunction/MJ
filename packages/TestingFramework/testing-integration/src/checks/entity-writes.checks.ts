@@ -155,7 +155,19 @@ export const EntityWritesChecks: NamedCheck[] = [
             cat.Status = 'Disabled';
             Assert(await cat.Save(), `update 2 failed: ${cat.LatestResult?.CompleteMessage ?? 'unknown error'}`);
 
-            const changes = await fetchRecordChanges(ctx, f.ActionCategoryEntityID, cat.ID);
+            // Record Changes persist through the server's FIRE-AND-FORGET queue, so their
+            // arrival lags the Save() acknowledgements — by milliseconds on a quiet server and
+            // by seconds when the aggregator has 17 mutating suites ahead of this one. Reading
+            // immediately raced that queue: standalone runs passed, run-all runs failed with
+            // "expected 3, got 0". Poll until the rows land (or 15s), THEN assert — the
+            // assertion is not weakened, it still demands exactly 3 with exact content below;
+            // only the race is removed.
+            let changes = await fetchRecordChanges(ctx, f.ActionCategoryEntityID, cat.ID);
+            const deadline = Date.now() + 15000;
+            while (changes.length < 3 && Date.now() < deadline) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                changes = await fetchRecordChanges(ctx, f.ActionCategoryEntityID, cat.ID);
+            }
             AssertEqual(changes.length, 3, `Record Change count for ${cat.ID}`);
 
             // --- identify rows by CONTENT, not by array position (two updates can share a timestamp) ---

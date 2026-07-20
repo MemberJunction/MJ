@@ -589,7 +589,7 @@ export class RunView  {
      * @param params 
      * @returns 
      */
-    public static async GetEntityNameFromRunViewParams(params: RunViewParams, provider: IMetadataProvider | null = null): Promise<string> {
+    public static async GetEntityNameFromRunViewParams(params: RunViewParams, provider: IMetadataProvider | null = null, contextUser?: UserInfo): Promise<string> {
         const p = provider ? provider : <IMetadataProvider><any>RunView.Provider;
 
         if (params.EntityName)
@@ -601,16 +601,33 @@ export class RunView  {
                 return entity.Name
         }
         else if (params.ViewID || params.ViewName) {
-            // we don't have a view entity loaded, so load it up now
+            // we don't have a view entity loaded, so load it up now.
+            //
+            // B39, two defects fixed here:
+            //   1. This inner lookup ran WITHOUT a context user. Server-side, an unscoped read of
+            //      'MJ: User Views' returns nothing, so a ViewID-only RunView failed for EVERY
+            //      caller — including the view's owner. The caller's user must be threaded in.
+            //   2. When the lookup found nothing, this branch FELL THROUGH with no return,
+            //      yielding undefined — which surfaced downstream as the opaque
+            //      "Entity undefined not found in metadata", naming neither the view nor the
+            //      cause. It now throws a descriptive error at the point of knowledge. (This is
+            //      not a semantic change: the undefined already produced a throw downstream —
+            //      just an unreadable one.)
             const rv = RunView.FromMetadataProvider(p);
             const result = await rv.RunView({
                 EntityName: "MJ: User Views",
                 ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${params.ViewName}'`,
                 ResultType: 'entity_object'
-            });
+            }, contextUser);
             if (result && result.Success && result.Results.length > 0) {
                 return result.Results[0].Entity; // virtual field in the User Views entity called Entity
             }
+            const viewRef = params.ViewID ? `ViewID '${params.ViewID}'` : `ViewName '${params.ViewName}'`;
+            throw new Error(
+                `RunView: ${viewRef} did not resolve to a User View — it does not exist, or is not readable ` +
+                `${contextUser ? `by user '${contextUser.Email}'` : 'without a context user (server-side callers must pass one)'}. ` +
+                `Pass EntityName alongside the view identifier to bypass this lookup.`
+            );
         }
         else
             return null;
