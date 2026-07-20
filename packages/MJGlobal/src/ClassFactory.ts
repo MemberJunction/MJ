@@ -8,6 +8,7 @@
 
 import { GetRootClass, IsRootClass } from './ClassUtils';
 import { ClassRequiresSubclass } from './RequiresSubclass';
+import { ClassIsOptionalKeyedSpecialization } from './OptionalKeyedSpecialization';
 
 /**
  * Type for constructor functions that have a name property
@@ -351,7 +352,14 @@ export class ClassFactory {
         // A marker-bearing base is always reported: there, landing on the base IS an error
         // regardless of whether a key was supplied.
         const keyWasSupplied = key !== null && key !== undefined && String(key).trim().length > 0;
-        if (keyWasSupplied || requiresSubclass) {
+        // A base marked '@OptionalKeyedSpecialization()' declares the opposite contract for keyed
+        // lookups: the key is a "specialize if registered" PROBE and landing on the base is the
+        // designed common case (EntityField hydration probes '<Entity>.<Field>' for every field of
+        // every entity). Reporting there is a false positive by construction, so such bases are
+        // exempt. Marker-bearing (@RequiresSubclass) bases are never exempt — fallback is a hard
+        // error there regardless.
+        const fallbackIsDesigned = !requiresSubclass && ClassIsOptionalKeyedSpecialization(baseClass);
+        if ((keyWasSupplied && !fallbackIsDesigned) || requiresSubclass) {
             this.reportResolutionFailure(baseClass, key, requiresSubclass, reason);
         }
 
@@ -413,7 +421,7 @@ export class ClassFactory {
             const seen = (this._fallbackCountByBase.get(baseName) ?? 0) + 1;
             this._fallbackCountByBase.set(baseName, seen);
             if (seen === ClassFactory.MAX_FALLBACK_REPORTS_PER_BASE + 1) {
-                console.warn(`ClassFactory: further '${baseName}' fallback warnings suppressed (${ClassFactory.MAX_FALLBACK_REPORTS_PER_BASE} shown). This base resolves to itself by design on hot paths such as EntityField hydration.`);
+                console.warn(`ClassFactory: further '${baseName}' fallback warnings suppressed (${ClassFactory.MAX_FALLBACK_REPORTS_PER_BASE} shown). If fallback is by design for this base, mark it '@OptionalKeyedSpecialization()'.`);
                 return;
             }
             if (seen > ClassFactory.MAX_FALLBACK_REPORTS_PER_BASE) {
