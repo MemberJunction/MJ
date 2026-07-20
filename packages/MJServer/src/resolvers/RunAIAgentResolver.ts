@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, AgentExecutionStreamingCallback } from '@memberjunction/ai-core-plus';
@@ -1018,7 +1018,10 @@ export class RunAIAgentResolver extends ResolverBase {
                 conversationId,
                 currentUser,
                 maxHistoryMessages || 20,
-                p
+                p,
+                // The UI creates the agent-response placeholder row ('⏳ ...') before invoking
+                // this mutation — exclude it so the model never sees an empty assistant turn.
+                [conversationDetailId]
             );
 
             // Convert to JSON string for the existing executeAIAgent method
@@ -1337,58 +1340,89 @@ export class RunAIAgentResolver extends ResolverBase {
      * passes conversationId down.
      *
      * Opt #8: Switched from ResultType 'entity_object' to 'simple' with explicit Fields.
-     * The history query only needs ID, Role, and Message from each ConversationDetail record.
-     * Using 'entity_object' created full BaseEntity instances with getters/setters, dirty tracking,
-     * and validation — none of which are needed for read-only history assembly. The 'simple' result
-     * type returns plain JS objects, reducing per-record overhead (~30ms total savings).
+     * The history query only needs the window-assembly fields (ConversationWindowFields:
+     * ID, Sequence, Role, Message, SummaryOfEarlierConversation) from each
+     * ConversationDetail record. Using 'entity_object' created full BaseEntity instances
+     * with getters/setters, dirty tracking, and validation — none of which are needed for
+     * read-only history assembly. The 'simple' result type returns plain JS objects,
+     * reducing per-record overhead (~30ms total savings).
      */
     private async loadConversationHistoryWithAttachments(
         conversationId: string,
         contextUser: UserInfo,
         maxMessages: number,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        excludeDetailIds?: string[]
     ): Promise<ChatMessage[]> {
-        const rv = RunView.FromMetadataProvider(provider);
-        const attachmentService = GetAttachmentService();
+        // Context windowing (summary boundary + raw tail, or legacy last-N when no
+        // summary exists) shares ONE fold implementation with all other callers —
+        // ConversationEngine.AssembleContextWindow — and the ROWS come from the
+        // single-sourced fresh-per-request loader (same one the compaction pass uses).
+        // Three deliberate properties vs. the engine's cached GetAgentContextWindow:
+        //   1. Entity RLS applies (the engine path loads via a stored query with no
+        //      row-level security — wrong for guest/widget-scoped users), and the
+        //      process-global per-conversation cache — keyed by conversation, not user —
+        //      can't leak the first toucher's row visibility to later callers.
+        //   2. No server-side population of the engine's unbounded detail cache, and no
+        //      cross-server staleness (a warm cache misses rows written by other nodes).
+        //   3. Load failure THROWS → the mutation fails, instead of silently running
+        //      the agent against zero history.
+        const rows = await ConversationEngine.LoadWindowRowsFresh(conversationId, contextUser, provider);
+        const window = ConversationEngine.AssembleContextWindow(rows, {
+            maxTailMessages: maxMessages,
+            excludeDetailIds
+        });
 
-        // Load recent conversation details (messages) for this conversation.
-        // Only fetch the three fields we actually use — ID for attachment lookups,
-        // Role for message routing, Message for content.
-        const detailsResult = await rv.RunView<{ ID: string; Role: string; Message: string }>({
-            EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}'`,
-            OrderBy: '__mj_CreatedAt DESC',
-            MaxRows: maxMessages,
-            Fields: ['ID', 'Role', 'Message'],
-            ResultType: 'simple'
-        }, contextUser);
-
-        if (!detailsResult.Success || !detailsResult.Results) {
-            throw new Error('Failed to load conversation history');
-        }
-
-        // Reverse to get chronological order (oldest first)
-        const details = detailsResult.Results.reverse();
-
-        // Get all message IDs for batch loading artifacts
-        const messageIds = details.map(d => d.ID);
-
-        // Batch load input artifacts for these messages. Since the backfill migration
+        // Batch load input artifacts for the windowed messages. Since the backfill migration
         // (V202605271400__Backfill_Attachment_Artifacts) converted all legacy
         // ConversationDetailAttachment rows to artifact pairs, the artifact junction
-        // is the single source of truth — no separate attachment query needed.
+        // is the single source of truth — no separate attachment query needed. The synthetic
+        // summary message has no detail row and needs no enrichment.
+        const messageIds = window
+            .map(m => m.metadata?.conversationDetailId)
+            .filter((id): id is string => !!id);
         const inputArtifactsByDetailId = await this.loadInputArtifactsBatch(messageIds, contextUser, provider);
 
         // Build ChatMessage array with attachments and input artifacts
         const messages: ChatMessage[] = [];
 
-        for (const detail of details) {
-            const role = this.mapDetailRoleToMessageRole(detail.Role);
-            const validAttachments: AttachmentData[] = [];
+        for (const windowMessage of window) {
+            const detailId = windowMessage.metadata?.conversationDetailId;
+            const baseText = typeof windowMessage.content === 'string' ? windowMessage.content : '';
+            const inputArtifacts = detailId ? (inputArtifactsByDetailId.get(detailId) || []) : [];
+            const validAttachments = await this.buildAttachmentsForArtifacts(inputArtifacts, contextUser, provider);
 
-            // Get input artifacts for this message — routing via RouteArtifact.
-            const inputArtifacts = inputArtifactsByDetailId.get(detail.ID) || [];
-            for (const artifactVersion of inputArtifacts) {
+            // Build message content (with or without attachments)
+            let content: ChatMessageContent;
+            if (validAttachments.length > 0) {
+                // Use ConversationUtility to build multimodal content blocks
+                content = await ConversationUtility.BuildChatMessageContent(baseText, validAttachments);
+            } else {
+                content = baseText;
+            }
+
+            messages.push({
+                role: windowMessage.role,
+                content,
+                metadata: windowMessage.metadata
+            });
+        }
+
+        return messages;
+    }
+
+    /**
+     * Converts a message's input artifact versions into inline attachment payloads,
+     * honoring each artifact's delivery routing (inline vs. tools-only) via RouteArtifact.
+     */
+    private async buildAttachmentsForArtifacts(
+        inputArtifacts: MJArtifactVersionEntity[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<AttachmentData[]> {
+        const validAttachments: AttachmentData[] = [];
+
+        for (const artifactVersion of inputArtifacts) {
                 const artifactMime = artifactVersion.MimeType || '';
                 const fileName = artifactVersion.FileName ?? '';
                 const ext = fileName.includes('.') ? fileName.split('.').pop() : undefined;
@@ -1477,37 +1511,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 }
             }
 
-            // Build message content (with or without attachments)
-            let content: ChatMessageContent;
-
-            if (validAttachments.length > 0) {
-                // Use ConversationUtility to build multimodal content blocks
-                content = await ConversationUtility.BuildChatMessageContent(
-                    detail.Message || '',
-                    validAttachments
-                );
-            } else {
-                content = detail.Message || '';
-            }
-
-            messages.push({
-                role,
-                content
-            });
-        }
-
-        return messages;
-    }
-
-    /**
-     * Map ConversationDetail Role to ChatMessage role
-     */
-    private mapDetailRoleToMessageRole(role: string): 'user' | 'assistant' | 'system' {
-        const roleLower = (role || '').toLowerCase();
-        if (roleLower === 'user') return 'user';
-        if (roleLower === 'assistant' || roleLower === 'agent' || roleLower === 'ai') return 'assistant';
-        if (roleLower === 'system') return 'system';
-        return 'user'; // Default to user
+        return validAttachments;
     }
 
     /**
