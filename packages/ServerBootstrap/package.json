@@ -141,6 +141,7 @@
     "@memberjunction/tag-engine-base": "5.48.0",
     "@memberjunction/templates": "5.48.0",
     "@memberjunction/testing-engine": "5.48.0",
+    "@memberjunction/testing-integration": "5.48.0",
     "cosmiconfig": "^9.0.0"
   },
   "devDependencies": {

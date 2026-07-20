@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT23 - RLS Client Smart-Cache Isolation",
+    "Description": "The client-transport companion to IT06 (rls-isolation): RLS7 proves the GraphQLDataProvider smart-cache does not cross-serve RLS-scoped rows between users. Runs the 'rls-isolation-client' bundle against a running MJAPI via GraphQLDataProvider; requires a separately-running MJAPI + MJ_API_KEY. CI provisioning of MJAPI is deferred (like IT03 / IT15), so this test is seeded Skip on the DB-only deterministic suite membership; it skips-as-pass when MJAPI is unreachable.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Over the GraphQL transport, a user's RLS-scoped read is never served another user's cached rows (smart-cache validation)."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "rls-isolation-client"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C699585A-E8A1-444E-969C-1DF04C2240AB"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT08 - Aggregates Through The Cache",
+    "Description": "Proves the cache invariants for RunView aggregates. AGG1: the Aggregates[] array participates in the cache fingerprint (the aggHash) — adding aggregates, and changing them, changes the fingerprint, so two views identical except for their aggregates never collide on a slot. AGG2: aggregate results round-trip through the cache — a cold aggregate RunView writes a slot AND returns AggregateResults; the warm hit is served (zero writes) and STILL returns AggregateResults. AGG3: AggregateResults are returned in the caller's requested order, including when a semantically-equivalent view with a different Aggregates[] order was cached first. Aggregates over 'MJ: User Settings'; no mutation.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Aggregates[] participates in the fingerprint (aggHash); AggregateResults round-trips through a warm cache hit and preserves the caller's requested order."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "aggregates-cache",
+          "config": {
+            "entityName": "MJ: User Settings"
+          }
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "B6BB8D80-80EF-4EF3-AAE2-14E6B2EAC4F0"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T18:38:01.245Z",
+    "checksum": "7617fa35e10d74bd30722f510e569db11deb513f3e78c82263e78184a9aca8a1"
+  }
+}

@@ -265,6 +265,8 @@ Handles persistent memory operations for agents:
 - Consolidation, decay, and protection-tier maintenance over the agent note pool (see below)
 - **Hardening pass** over agent-authored provisional notes — runs unconditionally at the start of every cycle (before the consolidation-gated phases): LLM-dedupes each `Status='Provisional'` note against hardened notes (duplicates archived with `ConsolidatedIntoNoteID` lineage), and hardens survivors to `Status='Active'` with `ExpiresAt=NULL` so they join importance scoring, consolidation, contradiction detection, and decay in the same cycle
 
+**Session tuning & resilience (v5.49)**: the effective config's `realtime.session` section (`effortLevel` — MJ-normalized, `parallelToolCalls`, `mcpTools`, `inputTranscriptionModel`) flows into the driver Config bag on both topologies via `GetSessionTuningSettings`. The session runner observes the chained cancellation signal (`AbortSignal` dep), performs bounded transport reconnects on fatal drops (`MaxTransportReconnects`, default 1), and accumulates per-modality usage detail (`RealtimeUsage.Input/OutputTokenDetails`) that the checkpoint persists for multi-channel cost attribution. See `guides/REALTIME_CO_AGENTS_GUIDE.md` § "Session tuning, cost attribution & resilience".
+
 #### Consolidation Pipeline
 
 When invoked in maintenance mode, MemoryManagerAgent runs an end-to-end pipeline over the agent's notes to keep the memory pool useful and bounded over time. The pipeline is a sequence of phases on the run, each emitting its own observability data.

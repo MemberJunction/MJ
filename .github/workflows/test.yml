@@ -16,6 +16,11 @@ on:
       - 'tsconfig*.json'
       - 'turbo.json'
       - '.github/workflows/test.yml'
+      # The native-ESM import guard + its vitest suite run in this workflow (see the
+      # "Native-ESM import guard" step), so changes to them must trigger it.
+      - '.github/scripts/check-esm-imports.mjs'
+      - '.github/scripts/vitest.config.mts'
+      - '.github/scripts/__tests__/**'
   # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
@@ -118,6 +123,12 @@ jobs:
 
       - name: Build + run unit tests
         run: |
+          # Angular DOM suites each spin heavy AOT-compile + jsdom workers (capped
+          # to 2/package by vitest.dom.shared.ts). The AFFECTED path touches only a
+          # few packages, so it runs at full turbo parallelism (fast — the common
+          # PR case). The FULL-suite backstop can fire all ~8 DOM packages at once,
+          # so it caps turbo `--concurrency` to keep peak workers (concurrency × 2)
+          # well under the 16 GB runner's limit (otherwise: OOM / exit 137).
           if [ -n "$TURBO_FILTER" ]; then
             echo "::group::Affected build"
             npx turbo run build --log-order=stream "$TURBO_FILTER"
@@ -125,8 +136,21 @@ jobs:
             npx turbo run test "$TURBO_FILTER"
           else
             npm run build
-            npm test
+            npm test -- --concurrency=4
           fi
+
+      # Native-ESM import guard (#3142, follow-up to #3137): import every BUILT
+      # "type": "module" package's entry point with Node's native ESM resolver and fail
+      # on the extensionless-relative-specifier signature in the package's own dist/ —
+      # the bug class that tsc + bundler builds tolerate but Vitest-externalized deps,
+      # plain Node, and non-symlinked installs reject with ERR_MODULE_NOT_FOUND.
+      # Packages without a built dist/ classify NOT_BUILT and are skipped, so PR-scoped
+      # affected runs check exactly what they built; the push/nightly full-suite backstop
+      # (which builds everything) sweeps all packages.
+      - name: Native-ESM import guard
+        run: |
+          npx vitest run --config .github/scripts/vitest.config.mts
+          node .github/scripts/check-esm-imports.mjs packages
 
       - name: Upload coverage
         if: always()

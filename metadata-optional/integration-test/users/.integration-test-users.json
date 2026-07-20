@@ -1,0 +1,90 @@
+[
+  {
+    "fields": {
+      "Name": "Integration Test RLS User A",
+      "FirstName": "Integration Test",
+      "LastName": "RLS User A",
+      "Email": "it-rls-a@integration.test",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "relatedEntities": {
+      "MJ: User Roles": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: RLS Scoped Reader"
+          },
+          "primaryKey": {
+            "ID": "5AF6FEF2-F40B-4FF7-A977-711E4CECF62D"
+          },
+          "sync": {
+            "lastModified": "2026-07-02T19:44:59.738Z",
+            "checksum": "1fc5899ae872ce5f41f32354b273ede4b2996375fc0d1bef2a02198c758eed9c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2A30293E-CC19-47AF-A2EB-9D478BBFF86A"
+    },
+    "sync": {
+      "lastModified": "2026-07-02T19:44:59.667Z",
+      "checksum": "f468f04d2fc84237e84c859b45be96c0bd3c47e32633a4ff2a8844898bda2b78"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Integration Test RLS User B",
+      "FirstName": "Integration Test",
+      "LastName": "RLS User B",
+      "Email": "it-rls-b@integration.test",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "relatedEntities": {
+      "MJ: User Roles": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: RLS Scoped Reader"
+          },
+          "primaryKey": {
+            "ID": "13767FA5-9209-4F53-A0FF-E31C967BC9FC"
+          },
+          "sync": {
+            "lastModified": "2026-07-02T19:44:59.753Z",
+            "checksum": "1fc5899ae872ce5f41f32354b273ede4b2996375fc0d1bef2a02198c758eed9c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B0A9039E-2EEE-495F-8CB3-3A2FD2B15F25"
+    },
+    "sync": {
+      "lastModified": "2026-07-02T19:44:59.688Z",
+      "checksum": "36eee25076c077bcc15139912cb24b42b259c5003d6144060f32b8b60900bfa6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Integration Test No-Grant User",
+      "FirstName": "Integration Test",
+      "LastName": "No-Grant User",
+      "Email": "it-nogrant@integration.test",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "primaryKey": {
+      "ID": "9E31EA4B-C619-4408-94E7-4ACA31606150"
+    },
+    "sync": {
+      "lastModified": "2026-07-02T19:44:59.705Z",
+      "checksum": "08e43a5c45da8d7c34ebd0fe1026b42b484c2ca11cc82b54a6d3b0e32345d8f1"
+    }
+  }
+]
