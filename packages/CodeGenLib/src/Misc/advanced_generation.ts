@@ -161,6 +161,34 @@ export class AdvancedGeneration {
         );
     }
 
+    /**
+     * True when a RETURNED result (not a throw) represents a credential/auth failure. `AIPromptRunner`
+     * does NOT throw for these — provider drivers catch internally and return `{ success:false }` with
+     * `chatResult.errorInfo.errorType = 'Authentication' | 'NoCredentials'` (and STOP failover) — so the
+     * circuit breaker must inspect the RESULT, not only the `catch` block.
+     */
+    private isCredentialFailureResult(result: AIPromptRunResult<unknown>): boolean {
+        if (result.success) {
+            return false;
+        }
+        const errorType = result.chatResult?.errorInfo?.errorType;
+        if (errorType === 'Authentication' || errorType === 'NoCredentials') {
+            return true;
+        }
+        // Fallback for providers that don't populate errorInfo but carry a message
+        // (e.g. "Invalid Vertex AI credentials").
+        return this.isCredentialError(result.errorMessage);
+    }
+
+    /** Increment the consecutive-failure counter and open the AI circuit once the threshold is reached. */
+    private recordAuthFailure(detail: unknown): void {
+        this._consecutiveAuthFailures++;
+        if (this._consecutiveAuthFailures >= AdvancedGeneration.AUTH_FAILURE_CIRCUIT_THRESHOLD && !this._aiCircuitOpen) {
+            this._aiCircuitOpen = true;
+            LogError(`AdvancedGeneration: opening AI circuit after ${this._consecutiveAuthFailures} consecutive credential/authentication failures (${detail}) — remaining entities will skip AI enrichment this run. Check the AI provider credentials (e.g. Vertex AI) or set advancedGeneration.enableAdvancedGeneration=false.`);
+        }
+    }
+
     public features(): AdvancedGenerationFeature[] | undefined {
         return configInfo.advancedGeneration?.features;
     }
@@ -203,8 +231,14 @@ export class AdvancedGeneration {
         const promptName = params.prompt?.Name ?? 'unknown';
         try {
             const result = await this._promptRunner.ExecutePrompt<T>(params);
-            // A successful call clears the consecutive-failure counter.
-            this._consecutiveAuthFailures = 0;
+            // Credential/auth failures come back as a RETURNED result (success:false), NOT a throw —
+            // provider drivers catch internally and stop failover for NoCredentials/Authentication. Detect
+            // them on the result and trip the breaker; only a genuinely successful call clears the counter.
+            if (result.success) {
+                this._consecutiveAuthFailures = 0;
+            } else if (this.isCredentialFailureResult(result)) {
+                this.recordAuthFailure(result.errorMessage ?? result.chatResult?.errorInfo?.errorType ?? 'credential failure');
+            }
             // Resilience: some models return the JSON payload as a raw string rather
             // than a parsed object (and Warn-mode validation lets it through with
             // success=true). If we got a string, try to recover a structured object
@@ -233,14 +267,10 @@ export class AdvancedGeneration {
             });
             return result;
         } catch (error) {
-            // Trip the circuit breaker on repeated credential/auth failures so a keyless or
-            // mis-credentialed run fails fast instead of attempting a doomed call per entity.
+            // A THROWN (rather than returned) credential/auth failure — trip the breaker here too,
+            // as a safety net for providers/paths that do throw.
             if (this.isCredentialError(error)) {
-                this._consecutiveAuthFailures++;
-                if (this._consecutiveAuthFailures >= AdvancedGeneration.AUTH_FAILURE_CIRCUIT_THRESHOLD && !this._aiCircuitOpen) {
-                    this._aiCircuitOpen = true;
-                    LogError(`AdvancedGeneration: opening AI circuit after ${this._consecutiveAuthFailures} consecutive credential/authentication failures — remaining entities will skip AI enrichment this run. Check the AI provider credentials (e.g. Vertex AI) or set advancedGeneration.enableAdvancedGeneration=false.`);
-                }
+                this.recordAuthFailure(error);
             }
             LogError(`AdvancedGeneration:Prompt execution failed: ${error}`);
             throw error;
