@@ -53,6 +53,24 @@ export class AppProfile {
 
     /** Settle tuning; engine defaults apply when omitted. */
     public Settle?: SettleConfig;
+
+    /** Loop-detection tuning (CU-B1); engine defaults apply when omitted. */
+    public Loop?: LoopConfig;
+}
+
+/** Loop-detection tuning (CU-B1). All values have engine defaults. */
+export class LoopConfig {
+    /**
+     * Query-param names that are volatile (per-visit tokens, timestamps, etc.)
+     * and must be stripped from the URL before it forms part of a state
+     * signature — otherwise every visit looks "new" and loops hide. App-specific,
+     * so it lives on the profile. The URL hash fragment is always stripped.
+     */
+    public VolatileParams: string[] = [];
+    /** Terminate the run once a loop has tripped this many times (default 3). */
+    public TerminateAfterTrips: number = 3;
+    /** A state signature seen this many times counts as a loop trip (default 3). */
+    public StateRepeatThreshold: number = 3;
 }
 
 /**

@@ -30,6 +30,9 @@ export class RunContext {
     /** Judge feedback from the previous step (injected into the next controller prompt) */
     public LastJudgeFeedback?: string;
 
+    /** Engine-computed loop evidence, injected into the next controller prompt (CU-B1). */
+    public LoopEvidence?: string;
+
     /**
      * Perceptual hash of the screenshot the judge last evaluated (CU-G5).
      * Used to skip re-judging an unchanged visible state.

@@ -36,6 +36,14 @@ export class ControllerPromptRequest {
     /** Feedback from the judge on the previous step (if available) */
     public JudgeFeedback?: string;
 
+    /**
+     * Engine-computed loop evidence for the previous step(s), when a repeated
+     * state has been detected (CU-B1). Injected into the controller prompt so
+     * the model can break out of the loop instead of repeating the same
+     * ineffective action. Empty/undefined when no loop is active.
+     */
+    public LoopEvidence?: string;
+
     /** Current URL the browser is on */
     public CurrentUrl: string = '';
 

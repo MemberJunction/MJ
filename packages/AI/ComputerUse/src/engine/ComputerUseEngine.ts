@@ -56,9 +56,10 @@ import {
 } from '../types/browser.js';
 import type { BrowserAction } from '../types/browser.js';
 import { ComputerUseAuthConfig } from '../types/auth.js';
-import { SettleConfig, DEFAULT_BUSY_MARKERS } from '../types/app-profile.js';
+import { SettleConfig, DEFAULT_BUSY_MARKERS, LoopConfig } from '../types/app-profile.js';
 import type { SettleReason } from '../types/app-profile.js';
 import { resolveSettleExit } from './settle-decision.js';
+import { computeStateSignature, detectLoop } from './loop-detection.js';
 import {
     JudgeContext,
     JudgeVerdict,
@@ -444,6 +445,10 @@ export class ComputerUseEngine {
         // Cumulative engine-side settle wait, excluded from the agent-time budget
         // so a slow app doesn't consume the agent's reasoning time (CU-B4/A1).
         let cumulativeSettleMs = 0;
+        // Loop detection (CU-B1): per-step state signatures + an escalating trip counter.
+        const loopCfg = context.Params.AppProfile?.Loop ?? new LoopConfig();
+        const stateSignatures: string[] = [];
+        let loopTrips = 0;
 
         for (let stepNumber = 1; stepNumber <= context.Params.MaxSteps; stepNumber++) {
             // Check cancellation
@@ -517,6 +522,34 @@ export class ComputerUseEngine {
                 }
             } else {
                 consecutiveJudgeDisagreements = 0;
+            }
+
+            // Loop detection (CU-B1): every step, free. Suppressed while the page
+            // is still booting (settle gave up as 'budget') — waiting on a boot
+            // screen is correct recovery, not a loop (the CU-B2 contradiction fix).
+            if (step.SettleReason !== 'budget') {
+                const signature = computeStateSignature(step.UrlAfter, step.ScreenshotHash, loopCfg.VolatileParams);
+                stateSignatures.push(signature);
+                const loop = detectLoop(stateSignatures, loopCfg.StateRepeatThreshold);
+                if (loop) {
+                    loopTrips++;
+                    if (loopTrips >= loopCfg.TerminateAfterTrips) {
+                        // A truthful early verdict beats 20 more wasted steps.
+                        this.log(`Step ${stepNumber} — loop persisted ${loopTrips} trips (${loop.kind}); terminating as Failed/LoopDetected (CU-B1)`);
+                        const verdict = await this.forceFinalJudge(context, stepNumber, lastVerdict);
+                        const result = this.buildResult(context, 'Failed', false, verdict);
+                        result.FailureReason = 'LoopDetected';
+                        this.onRunComplete(result);
+                        return result;
+                    }
+                    // Earlier trips: inject engine-computed evidence into the next prompt.
+                    context.LoopEvidence = loop.detail;
+                    this.log(`Step ${stepNumber} — loop trip ${loopTrips}/${loopCfg.TerminateAfterTrips} (${loop.kind}): ${loop.detail}`);
+                } else {
+                    // Progress made — clear loop state so stale evidence doesn't linger.
+                    loopTrips = 0;
+                    context.LoopEvidence = undefined;
+                }
             }
         }
 
@@ -996,6 +1029,11 @@ export class ComputerUseEngine {
         // Inject judge feedback from the previous step
         if (context.LastJudgeFeedback) {
             request.JudgeFeedback = context.LastJudgeFeedback;
+        }
+
+        // Inject loop evidence when the engine has detected a repeated state (CU-B1)
+        if (context.LoopEvidence) {
+            request.LoopEvidence = context.LoopEvidence;
         }
 
         // Inject FormLogin credentials if configured for this domain
@@ -1525,6 +1563,7 @@ export class ComputerUseEngine {
         sections.push(this.renderToolDefinitionsSection(request.ToolDefinitions));
         sections.push(this.renderFormLoginSection(request.FormLoginCredentials));
         sections.push(this.renderJudgeFeedbackSection(request.JudgeFeedback));
+        sections.push(this.renderLoopEvidenceSection(request.LoopEvidence));
         sections.push(this.renderPreviousStepsSection(request.PreviousStepSummary));
 
         return sections.filter(Boolean).join('\n\n');
@@ -1555,6 +1594,12 @@ export class ComputerUseEngine {
         if (!feedback) return '';
 
         return `## Feedback from Previous Evaluation\n${feedback}\nTake this feedback into account when planning your next actions.`;
+    }
+
+    private renderLoopEvidenceSection(evidence: string | undefined): string {
+        if (!evidence) return '';
+
+        return `## ⚠️ Loop Detected\n${evidence}\nYou appear to be repeating actions without making progress. Do NOT repeat the same navigation or clicks. Try a DIFFERENT approach — a different element, a different route, or request judgement if you believe the goal is genuinely blocked.`;
     }
 
     private renderPreviousStepsSection(summary: string | undefined): string {

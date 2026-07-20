@@ -38,6 +38,14 @@ export type ComputerUseStatus =
     | 'Error'
     | 'Cancelled';
 
+/**
+ * Machine-readable failure reason (CU-B1/F5). A finer-grained classification
+ * than {@link ComputerUseStatus} — grows as the engine and classifier learn to
+ * name more classes. `'LoopDetected'` is set when the engine terminates a run
+ * that was stuck repeating a state.
+ */
+export type ComputerUseFailureReason = 'LoopDetected';
+
 // ─── Run Result ────────────────────────────────────────────
 /**
  * Complete result of a Computer Use engine run.
@@ -72,6 +80,15 @@ export class ComputerUseResult {
 
     /** The last judge verdict (if the judge was consulted) */
     public FinalJudgeVerdict?: JudgeVerdict;
+
+    /**
+     * Machine-readable reason for a non-success terminal state, when the engine
+     * can name one (CU-B1). Distinct from the coarse {@link Status}: e.g. a
+     * `Failed` run may carry `'LoopDetected'`. Consumed by the failure
+     * classifier (CU-F5) and the retry policy (which can decline to retry known
+     * classes). Extended as more classes are detected.
+     */
+    public FailureReason?: ComputerUseFailureReason;
 
     /** Error details (populated when Status is 'Error') */
     public Error?: ComputerUseError;
