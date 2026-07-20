@@ -95,6 +95,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     private contextUser: UserInfo | undefined;
     private agentRunId: string | undefined;
     private lastPromptRunId: string | undefined;
+    private lastJudgePromptRunId: string | undefined;
     private _provider: IMetadataProvider | null = null;
 
     /**
@@ -142,6 +143,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         this.contextUser = params.ContextUser;
         this.agentRunId = params.AgentRunId;
         this.lastPromptRunId = undefined;
+        this.lastJudgePromptRunId = undefined;
 
         // When linked to a parent agent-run step, nest a child Prompt step per prompt under it.
         this.stepTracker = undefined;
@@ -305,6 +307,11 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 return response;
             }
 
+            // Track the judge prompt run ID for step-level correlation (CU-F2).
+            if (result.promptRun?.ID) {
+                this.lastJudgePromptRunId = result.promptRun.ID;
+            }
+
             const response = new JudgePromptResponse();
             response.RawResponse = result.rawResult ?? '';
             return response;
@@ -325,7 +332,21 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      * persistence errors are logged but don't fail the run.
      */
     protected override onStepComplete(step: StepRecord, params: MJRunComputerUseParams): void {
-        if (step.Screenshot && this.lastPromptRunId && this.contextUser) {
+        // Correlate the step with the LLM prompt runs it produced (CU-F2), so
+        // tokens/cost/serving-model can be joined from AIPromptRun. The controller
+        // runs every step; the judge only when this step was judged.
+        step.ControllerPromptRunId = this.lastPromptRunId;
+        if (step.JudgeVerdict) {
+            step.JudgePromptRunId = this.lastJudgePromptRunId;
+        }
+
+        // Persist the step screenshot as AIPromptRunMedia. Opt-OUT via
+        // PersistStepMedia=false (CU-G1): the regression suite disables this so
+        // it stops writing tens of GB of base64 PNGs, mid-run and unthrottled,
+        // into the very SQL Server serving the app under test (a direct
+        // contributor to second-half render degradation). Default preserves the
+        // prior always-persist behavior for other consumers.
+        if (params.PersistStepMedia !== false && step.Screenshot && this.lastPromptRunId && this.contextUser) {
             this.persistStepMedia(step, params.BrowserConfig?.ViewportHeight, params.BrowserConfig?.ViewportWidth).catch(err => {
                 LogError(`Failed to persist step ${step.StepNumber} media: ${err instanceof Error ? err.message : String(err)}`);
             });
@@ -511,8 +532,14 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     ): ChatMessage[] {
         const messages: ChatMessage[] = [];
 
-        // Include screenshot history if available
-        const historyImages = screenshotHistory?.filter(s => s.length > 0) ?? [];
+        // Include screenshot history if available. The engine's ring buffer ends
+        // with the CURRENT frame, which is also sent on its own below — so drop
+        // that trailing duplicate to avoid transmitting the current frame twice
+        // (CU-A5: ~25% of image payload at the fleet's history depth).
+        const allHistory = screenshotHistory?.filter(s => s.length > 0) ?? [];
+        const historyImages = (currentScreenshot && allHistory.length > 0 && allHistory[allHistory.length - 1] === currentScreenshot)
+            ? allHistory.slice(0, -1)
+            : allHistory;
         if (historyImages.length > 0) {
             const historyContent: ChatMessageContentBlock[] = [
                 {
